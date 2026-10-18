@@ -5,15 +5,15 @@ title: Game Flow
 
 ## Overview
 
-A FreeAction moves from player input through narration, scene quantification, the game rules, optional trigger continuation, and finalization. The busy display reads the generation-slot registry; the persisted status supplies the phase and the failure.
+A FreeAction moves from player input through narration, scene quantification, the game rules, optional trigger continuation, and finalization. The busy display reads the generation-slot registry; the persisted status supplies the step and the failure.
 
-## Granular Status Phases
+## Granular Status Steps
 
-`GenerationStatus` carries the coarse state (`Idle`, `Generating`, or `Error`). While it is `Generating`, `GenerationPhase` supplies the UI-facing stage: `Narrating`, `Quantifying`, `GeneratingEvent` or `Options`. `Error` carries a `GenerationFailure`.
+`GenerationStatus` carries the coarse state (`Idle`, `Generating`, or `Error`). While it is `Generating`, `Step` supplies the UI-facing stage: `Narrating`, `Quantifying`, `GeneratingEvent` or `Options`. `Error` carries a `GenerationFailure`.
 
-## Phase Flow
+## Step Flow
 
-Normal Actions and main retries run the same success-path phases. Event retry and retrigger enter at trigger continuation.
+Normal Actions and main retries run the same success-path steps. Event retry and retrigger enter at trigger continuation.
 
 ```mermaid
 flowchart TD

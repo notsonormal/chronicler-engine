@@ -388,7 +388,6 @@ fn deps_with_carla(room_id: &str) -> EngineDeps {
     )
 }
 
-/// The Quantifier result of a step that moves the player, with the Characters it names.
 fn make_quantifier_result_moving_to(destination: &str, npc_ids: &[&str]) -> QuantifierResult {
     QuantifierResult {
         npcs: QuantifierParseResult {
@@ -441,7 +440,7 @@ fn test_execute_freeaction_impl_puts_the_room_name_on_the_arriving_narration() {
             .narrative
             .history
             .last()
-            .and_then(Message::location_header),
+            .and_then(Message::room_report),
         Some("Test Room"),
         "the Narration that arrived in the room must report it"
     );
@@ -452,7 +451,7 @@ fn test_execute_freeaction_impl_puts_the_room_name_on_the_arriving_narration() {
             .narrative
             .history
             .last()
-            .and_then(Message::location_header),
+            .and_then(Message::room_report),
         None,
         "the Message after the movement must not take the room name"
     );
@@ -493,7 +492,7 @@ fn test_execute_freeaction_impl_puts_the_room_name_on_the_redo_swipe() {
         .as_ref()
         .expect("the redo keeps the Message it retries");
     assert_eq!(
-        retried.location_header(),
+        retried.room_report(),
         Some("Test Room"),
         "the redo's Swipe carries this generation's Narration"
     );
@@ -502,7 +501,7 @@ fn test_execute_freeaction_impl_puts_the_room_name_on_the_redo_swipe() {
             .narrative
             .history
             .last()
-            .and_then(Message::location_header),
+            .and_then(Message::room_report),
         None,
         "an older Message must not be relabelled"
     );
@@ -537,7 +536,7 @@ fn test_execute_freeaction_impl_queues_the_arriving_location_write_for_a_saved_m
             .narrative
             .history
             .last()
-            .and_then(Message::location_header),
+            .and_then(Message::room_report),
         Some("Test Room"),
         "the saved Narration reports the room it arrives in"
     );

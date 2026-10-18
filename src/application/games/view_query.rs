@@ -152,7 +152,7 @@ impl GameViewQuery {
             current_room_id: game_state.swipe.movement.current_room_id.clone(),
             npcs_in_area: npc_ids,
             generation_status: game_state.narrative.input_buffer.status.clone(),
-            generation_phase: game_state.narrative.input_buffer.phase.clone(),
+            step: game_state.narrative.input_buffer.step.clone(),
             npc_encounter_log: game_state.swipe.npc_encounter_log.npcs.clone(),
             narration_history_tail: history_tail,
             narration_history_length: game_state.narrative.history().len(),

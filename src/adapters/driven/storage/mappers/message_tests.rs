@@ -15,11 +15,21 @@ fn to_db_swipes(msg: &Message) -> Vec<DbSwipe> {
             swipe_index: idx as i64,
             text: swipe.text.clone(),
             snapshot_id: swipe.snapshot_id.map(|id| id as i64),
-            location_header: swipe.location_header.clone(),
+            room_report: swipe.room_report.clone(),
             event_header: swipe.event_header.clone(),
             impersonated: if swipe.impersonated { 1 } else { 0 },
             guide_text: swipe.guide_text.clone(),
             impersonate_direction: swipe.impersonate_direction.clone(),
+            state_json: crate::adapters::driven::storage::utils::to_json(
+                "swipe state",
+                swipe.state.as_ref(),
+            )
+            .unwrap(),
+            maker_json: crate::adapters::driven::storage::utils::to_json(
+                "swipe maker",
+                swipe.maker.as_ref(),
+            )
+            .unwrap(),
         })
         .collect()
 }
@@ -36,11 +46,13 @@ fn test_message_roundtrip() {
     original.swipes = vec![crate::domain::model::message::Swipe {
         text: "Hello world".to_string(),
         snapshot_id: Some(3),
-        location_header: Some("Room A".to_string()),
+        room_report: Some("Room A".to_string()),
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     }];
     let db = DbMessage::try_from((&original, 1)).unwrap();
     let swipes = to_db_swipes(&original);
@@ -50,7 +62,7 @@ fn test_message_roundtrip() {
     assert_eq!(original.text(), back.text());
     assert_eq!(original.message_type, back.message_type);
     assert_eq!(original.timestamp, back.timestamp);
-    assert_eq!(original.location_header(), back.location_header());
+    assert_eq!(original.room_report(), back.room_report());
     assert_eq!(original.event_header(), back.event_header());
     assert_eq!(original.snapshot_id(), back.snapshot_id());
     assert_eq!(db.game_id, 1);
@@ -67,11 +79,13 @@ fn test_message_unpersisted_roundtrip() {
     original.swipes = vec![crate::domain::model::message::Swipe {
         text: "Input text".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: Some("Event".to_string()),
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     }];
     let db = DbMessage::try_from((&original, 2)).unwrap();
     let swipes = to_db_swipes(&original);
@@ -88,11 +102,13 @@ fn test_message_log_type_json_serialization() {
     msg.swipes = vec![crate::domain::model::message::Swipe {
         text: "test".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     }];
     let db = DbMessage::try_from((&msg, 1)).unwrap();
     let _swipes = to_db_swipes(&msg);
@@ -113,20 +129,24 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
         crate::domain::model::message::Swipe {
             text: "First swipe".to_string(),
             snapshot_id: Some(1),
-            location_header: Some("Room A".to_string()),
+            room_report: Some("Room A".to_string()),
             event_header: None,
             impersonated: false,
             guide_text: None,
             impersonate_direction: None,
+            state: None,
+            maker: None,
         },
         crate::domain::model::message::Swipe {
             text: "Second swipe".to_string(),
             snapshot_id: Some(2),
-            location_header: Some("Room B".to_string()),
+            room_report: Some("Room B".to_string()),
             event_header: Some("Event B".to_string()),
             impersonated: false,
             guide_text: None,
             impersonate_direction: None,
+            state: None,
+            maker: None,
         },
     ];
     let db = DbMessage::try_from((&original, 1)).unwrap();
@@ -137,7 +157,7 @@ fn test_active_swipe_index_out_of_bounds_fallback() {
 
     let back = Message::try_from((&db_stale, &swipes[..])).unwrap();
     assert_eq!(back.text(), "First swipe");
-    assert_eq!(back.location_header(), Some("Room A"));
+    assert_eq!(back.room_report(), Some("Room A"));
     assert_eq!(back.snapshot_id(), Some(1));
 }
 
@@ -147,11 +167,13 @@ fn test_swipe_stored_inputs_roundtrip() {
     original.swipes = vec![crate::domain::model::message::Swipe {
         text: "I ask about the artifact.".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: true,
         guide_text: None,
         impersonate_direction: Some("as the player".to_string()),
+        state: None,
+        maker: None,
     }];
 
     let db = DbMessage::try_from((&original, 1)).unwrap();

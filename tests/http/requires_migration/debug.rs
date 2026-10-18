@@ -4,7 +4,7 @@ use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use chronicler_engine::domain::model::state::generation_status::{GenerationStatus, Step};
 
 #[tokio::test]
 async fn test_debug_state_endpoint_returns_json() {
@@ -26,7 +26,7 @@ async fn test_debug_state_endpoint_returns_json() {
     assert!(json.get("current_room_id").is_some());
     assert!(json.get("npcs_in_area").is_some());
     assert!(json.get("generation_status").is_some());
-    assert!(json.get("generation_phase").is_some());
+    assert!(json.get("step").is_some());
     assert!(json.get("npc_encounter_log").is_some());
     assert!(json.get("narration_history_tail").is_some());
 
@@ -55,15 +55,12 @@ async fn test_debug_state_endpoint_returns_json() {
             "Error variant should have 'Error' key"
         );
     }
-    let phase = &json["generation_phase"];
-    assert!(
-        phase.is_string(),
-        "generation_phase should be string (unit enum)"
-    );
+    let phase = &json["step"];
+    assert!(phase.is_string(), "step should be string (unit enum)");
     if let Some(p) = phase.as_str() {
         assert!(
             p == "Narrating" || p == "Quantifying" || p == "GeneratingEvent",
-            "generation_phase should be known variant, got: {p}"
+            "step should be known variant, got: {p}"
         );
     }
 }
@@ -89,7 +86,7 @@ async fn test_debug_state_endpoint_includes_all_documented_fields() {
         "current_room_id",
         "npcs_in_area",
         "generation_status",
-        "generation_phase",
+        "step",
         "npc_encounter_log",
         "narration_history_tail",
         "narration_history_length",
@@ -147,7 +144,7 @@ async fn test_debug_is_generating_returns_false_by_default() {
 #[tokio::test]
 async fn test_debug_is_generating_reflects_state() {
     let app = TestAppBuilder::default_test()
-        .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
+        .generation_status(GenerationStatus::Generating, Step::Narrating)
         .claim_generation_slot()
         .build();
 

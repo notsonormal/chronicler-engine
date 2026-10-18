@@ -1,9 +1,8 @@
 use std::sync::Arc;
 use std::sync::Barrier;
 
-/// The app plus a second, real Game, for the flippers in `retry_tests` and
-/// `retrigger_tests`. The app is left on the initial Game, so the work under
-/// test starts on that Game.
+/// The app is left on the initial Game, so the work under test starts on that
+/// Game.
 pub(super) fn app_with_second_game(
     app: &crate::adapters::driving::http::AppState,
 ) -> (GameId, GameId) {
@@ -40,7 +39,7 @@ use crate::domain::model::agent::{AgentSettings, AnalysisOutput, HookInput};
 use crate::domain::model::action::Action;
 use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::adapters::driven::storage::Storage;
@@ -181,10 +180,7 @@ fn test_execute_action_completes_and_persists_state() {
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
     );
-    assert_eq!(
-        final_state.narrative.input_buffer.phase,
-        GenerationPhase::default()
-    );
+    assert_eq!(final_state.narrative.input_buffer.step, Step::default());
     let has_narration = final_state
         .narrative
         .history()
@@ -355,8 +351,8 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     entered.wait();
     let mid_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
-        mid_state.narrative.input_buffer.phase,
-        GenerationPhase::Quantifying,
+        mid_state.narrative.input_buffer.step,
+        Step::Quantifying,
         "Phase should be Quantifying during post-generation, not stuck on Narrating"
     );
 
@@ -364,8 +360,8 @@ fn test_phase_transitions_to_quantifying_during_post_generation() {
     handle.join().expect("Action thread should complete");
     let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
-        final_state.narrative.input_buffer.phase,
-        GenerationPhase::default(),
+        final_state.narrative.input_buffer.step,
+        Step::default(),
         "Phase should reset to default after completion"
     );
 }
@@ -420,8 +416,8 @@ fn test_narration_saved_before_quantifying_phase() {
     );
     let mid_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
-        mid_state.narrative.input_buffer.phase,
-        GenerationPhase::Quantifying,
+        mid_state.narrative.input_buffer.step,
+        Step::Quantifying,
         "Phase should be Quantifying while quantifier runs"
     );
 
@@ -569,7 +565,7 @@ fn test_process_action_heals_stale_status_before_validation_error() {
 
     let mut state = app.message_service.load_or_fresh(bad_game_id);
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.step = Step::Narrating;
     storage
         .save_snapshot(bad_game_id, &GameStateSnapshot::from_game_state(&state))
         .expect("save stale snapshot should succeed");

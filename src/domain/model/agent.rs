@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
-use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state::message_types::{MessageEntry, MessageType, StoryRow};
+use crate::domain::model::state::trigger_context::EventRecord;
 
 /// A role's health is its newest LLM attempt across every game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +67,7 @@ pub enum Kind {
     Event,
 }
 
+/// One Message the Agents read: the kind of text it holds and its text.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoryEntry {
     pub message_type: MessageType,
@@ -82,26 +83,16 @@ impl From<&MessageEntry> for StoryEntry {
     }
 }
 
-pub const STORY_WINDOW: usize = 4;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct EventRecord {
-    pub npc_id: String,
-    pub trigger_idx: usize,
-    pub trigger_name: String,
-    pub direction: String,
-}
-
-impl From<&StoredTriggerContext> for EventRecord {
-    fn from(context: &StoredTriggerContext) -> Self {
+impl From<&StoryRow> for StoryEntry {
+    fn from(row: &StoryRow) -> Self {
         Self {
-            npc_id: context.npc_id.clone(),
-            trigger_idx: context.trigger_idx,
-            trigger_name: context.trigger_name.clone(),
-            direction: context.trigger_narration_prompt.clone(),
+            message_type: row.message_type.clone(),
+            text: row.text.clone(),
         }
     }
 }
+
+pub const STORY_WINDOW: usize = 4;
 
 pub struct WorldView<'a> {
     /// `None` when the state names a room the map does not know.
@@ -112,8 +103,7 @@ pub struct WorldView<'a> {
     pub present: &'a [NpcCard],
 }
 
-/// Carries no Game id, no storage, no dock record and no failure line: an Agent
-/// writes no game record, and the step owns every read and write.
+/// An Agent writes no game record: the hook step owns every read and write.
 pub struct HookInput<'a> {
     pub kind: Kind,
     /// The text the Job saved, for a hook that runs after the narrator call.
@@ -172,10 +162,8 @@ impl AgentConfig {
 }
 
 impl StatePatch {
-    /// Merges two Agents' patches into the one the game rules apply: the union of
-    /// their Characters, the first movement destination (a second one is a
-    /// contradiction between two Agents, so the first wins and the second is
-    /// logged), and the least confident of the two.
+    /// A second movement destination is a contradiction between two Agents, so the
+    /// first wins.
     pub fn merge(self, other: StatePatch) -> StatePatch {
         let mut npc_ids = self.npc_ids;
         let new_ids: Vec<String> = other

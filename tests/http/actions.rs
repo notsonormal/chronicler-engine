@@ -934,7 +934,7 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         .find(|m| m.message_type == MessageType::Narration)
         .expect("the Action appends a Narration");
     assert_eq!(
-        narration.location_header(),
+        narration.room_report(),
         Some("Room room2"),
         "the Narration that moved the player must report the room it arrived in"
     );
@@ -943,7 +943,7 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         .find(|m| m.message_type == MessageType::Input)
         .expect("the Action appends a player input");
     assert_eq!(
-        input.location_header(),
+        input.room_report(),
         None,
         "the player input that leaves a room must not carry the old room's name"
     );
@@ -969,12 +969,9 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         "the second Action adds a player input and a Narration"
     );
     assert!(
-        later.iter().all(|m| m.location_header().is_none()),
+        later.iter().all(|m| m.room_report().is_none()),
         "the room name must not leak onto the Action after the movement: {:?}",
-        later
-            .iter()
-            .map(|m| m.location_header())
-            .collect::<Vec<_>>()
+        later.iter().map(|m| m.room_report()).collect::<Vec<_>>()
     );
 }
 

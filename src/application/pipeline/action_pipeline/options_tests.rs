@@ -12,7 +12,7 @@ use crate::application::agents::AgentRunner;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::action::Action;
 use crate::domain::model::game::GameId;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{
     active_game_of, make_test_pipeline_app_with_storage as make_test_app_with_storage,
@@ -382,7 +382,7 @@ fn test_process_options_heals_stale_status_before_validation_error() {
 
     let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.step = Step::Narrating;
     storage
         .save_snapshot(
             active_game_of(&app),

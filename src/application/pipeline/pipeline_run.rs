@@ -4,19 +4,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::model::agent::{
-    AgentSettings, EventRecord, HookInput, Kind, StoryEntry, WorldView, STORY_WINDOW,
-};
+use crate::domain::model::agent::{AgentSettings, HookInput, Kind, StoryEntry, WorldView, STORY_WINDOW};
 use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::quantifier::{NpcEventList, QuantifierConfidence, QuantifierResult};
-use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state::trigger_context::{EventRecord, StoredTriggerContext};
 use crate::domain::model::utils::game_rules::TriggerMatch;
 use crate::domain::model::state::generation_status::{
-    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+    GenerationFailure, GenerationFailureKind, GenerationStatus, Step,
 };
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
@@ -146,16 +144,14 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    /// The room the generation happens in, as the map and the state resolve it.
     pub(super) fn room_of<'s>(state: &'s GameState, map: &'s MapDef) -> Option<&'s Room> {
         let room_id = &state.swipe.movement.current_room_id;
         map.get_room_by_id(room_id)
             .or_else(|| state.swipe.movement.dynamic_rooms.get(room_id))
     }
 
-    /// The kind of the generation that produced the scene on screen: an event
-    /// Narration when the last Message is one, else a Narration. The Options run
-    /// generates nothing itself, so it reports the generation whose scene it reads.
+    /// The Options run generates no scene of its own, so it reports the
+    /// generation whose scene it reads.
     pub(super) fn scene_kind(state: &GameState) -> Kind {
         match state.narrative.history().last() {
             Some(entry) if entry.event_header.is_some() => Kind::Event,
@@ -163,9 +159,8 @@ impl<'a> PipelineRun<'a> {
         }
     }
 
-    /// Builds the values one hook's Agents read from the state the Job holds,
-    /// and hands them to `run`. The story window, the event record and the world
-    /// view live here, so the `HookInput` can borrow them for the one call.
+    /// The story window, the event record and the world view live here, so the
+    /// `HookInput` can borrow them for the one call.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn with_hook_input<R>(
         state: &GameState,
@@ -205,7 +200,6 @@ impl<'a> PipelineRun<'a> {
         run(&input)
     }
 
-    /// Runs the analysis hook for one generation.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn run_analysis_hook(
         &self,
@@ -245,7 +239,7 @@ impl<'a> PipelineRun<'a> {
         kind: Kind,
     ) -> Result<QuantifierResult, PhaseError> {
         tracing::info!("Pipeline ▶ Quantifying");
-        state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
+        state.narrative.input_buffer.step = Step::Quantifying;
         self.persist_snapshot_or_err(state, "pre-quantifier phase update")?;
 
         let mut quantifier_result =
@@ -288,7 +282,7 @@ impl<'a> PipelineRun<'a> {
         npcs: &HashMap<String, NpcCard>,
     ) -> Result<String, PhaseError> {
         state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.phase = GenerationPhase::GeneratingEvent;
+        state.narrative.input_buffer.step = Step::GeneratingEvent;
         state.narrative.last_trigger = Some(trigger.clone());
         tracing::info!(
             "Pipeline ▶ GeneratingEvent (trigger={})",
@@ -354,7 +348,7 @@ impl<'a> PipelineRun<'a> {
         npcs: &HashMap<String, NpcCard>,
     ) -> Result<(), PhaseError> {
         tracing::info!("Pipeline ▶ Post-trigger reconcile");
-        state.narrative.input_buffer.phase = GenerationPhase::Quantifying;
+        state.narrative.input_buffer.step = Step::Quantifying;
 
         let previous_ids: Vec<String> = state
             .swipe
@@ -551,7 +545,7 @@ impl<'a> PipelineRun<'a> {
     pub(super) fn phase_pre_main_snapshot(&self, state: &mut GameState) -> Result<(), PhaseError> {
         tracing::info!("Pipeline ▶ Narrating");
         state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+        state.narrative.input_buffer.step = Step::Narrating;
         self.persist_snapshot_or_err(state, "pre-main snapshot")?;
         Ok(())
     }
@@ -565,7 +559,7 @@ impl<'a> PipelineRun<'a> {
         if state.narrative.input_buffer.status.failure().is_none() {
             state.narrative.input_buffer.status = GenerationStatus::Idle;
         }
-        state.narrative.input_buffer.phase = GenerationPhase::default();
+        state.narrative.input_buffer.step = Step::default();
         self.persist(state);
     }
 
@@ -576,7 +570,7 @@ impl<'a> PipelineRun<'a> {
             .message_service
             .load_or_fresh(self.started_for);
         state.narrative.input_buffer.status = GenerationStatus::Idle;
-        state.narrative.input_buffer.phase = GenerationPhase::default();
+        state.narrative.input_buffer.step = Step::default();
         self.persist(&state);
         PhaseError::Cancelled
     }

@@ -653,11 +653,13 @@ pub fn dummy_swipe(text: &str) -> Swipe {
     Swipe {
         text: text.to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     }
 }
 
@@ -699,7 +701,7 @@ pub fn insert_message_with_swipe(
         let mut swipe = swipe.clone();
         swipe.text = msg.text().to_string();
         swipe.snapshot_id = msg.snapshot_id();
-        swipe.location_header = msg.location_header().map(|s| s.to_string());
+        swipe.room_report = msg.room_report().map(|s| s.to_string());
         swipe.event_header = msg.event_header().map(|s| s.to_string());
         storage.insert_swipe(id, &swipe, 0)?;
     }

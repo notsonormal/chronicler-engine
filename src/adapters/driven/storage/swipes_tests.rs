@@ -323,11 +323,13 @@ fn test_swipe_with_text_only() {
     let swipe = Swipe {
         text: "text only".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -346,11 +348,13 @@ fn test_swipe_with_snapshot_id() {
     let swipe = Swipe {
         text: "with snapshot".to_string(),
         snapshot_id: Some(42),
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -359,7 +363,7 @@ fn test_swipe_with_snapshot_id() {
 }
 
 #[test]
-fn test_swipe_with_location_header() {
+fn test_swipe_with_room_report() {
     let storage = Storage::new_in_memory();
     let msg_id = storage
         .insert_message(GameId(1), &dummy_message("m"))
@@ -368,23 +372,22 @@ fn test_swipe_with_location_header() {
     let swipe = Swipe {
         text: "with location".to_string(),
         snapshot_id: None,
-        location_header: Some("Room-123".to_string()),
+        room_report: Some("Room-123".to_string()),
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
-    assert_eq!(
-        swipes[&msg_id][0].location_header,
-        Some("Room-123".to_string())
-    );
+    assert_eq!(swipes[&msg_id][0].room_report, Some("Room-123".to_string()));
 }
 
 #[test]
-fn test_update_swipe_location_header_writes_the_row() {
+fn test_update_swipe_room_report_writes_the_row() {
     let storage = Storage::new_in_memory();
     let msg_id = storage
         .insert_message(GameId(1), &dummy_message("m"))
@@ -392,12 +395,12 @@ fn test_update_swipe_location_header_writes_the_row() {
     storage.insert_swipe(msg_id, &dummy_swipe("s"), 0).unwrap();
 
     storage
-        .update_swipe_location_header(msg_id, 0, "Room room2")
+        .update_swipe_room_report(msg_id, 0, "Room room2")
         .unwrap();
 
     let swipes = storage.load_swipes_for_messages(&[msg_id]).unwrap();
     assert_eq!(
-        swipes[&msg_id][0].location_header,
+        swipes[&msg_id][0].room_report,
         Some("Room room2".to_string())
     );
 }
@@ -412,11 +415,13 @@ fn test_swipe_with_event_header() {
     let swipe = Swipe {
         text: "with event".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: Some("CombatStarted".to_string()),
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -455,7 +460,7 @@ fn test_update_swipe_text_failure() {
 }
 
 #[test]
-fn test_update_swipe_location_header_failure() {
+fn test_update_swipe_room_report_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     let msg_id = storage
         .insert_message(GameId(1), &dummy_message("m"))
@@ -463,11 +468,11 @@ fn test_update_swipe_location_header_failure() {
     storage.insert_swipe(msg_id, &dummy_swipe("s"), 0).unwrap();
 
     handle.set(
-        "update_swipe_location_header",
+        "update_swipe_room_report",
         TestOverride::internal("update failed"),
     );
 
-    let result = storage.update_swipe_location_header(msg_id, 0, "Room room2");
+    let result = storage.update_swipe_room_report(msg_id, 0, "Room room2");
     assert!(result.is_err());
 }
 
@@ -532,11 +537,13 @@ fn test_swipe_inputs_roundtrip_in_memory() {
     let swipe = Swipe {
         text: "guided".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: sample_guide_text(),
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -556,11 +563,13 @@ fn test_swipe_inputs_roundtrip_sqlite() {
     let swipe = Swipe {
         text: "guided".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: sample_guide_text(),
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 
@@ -580,11 +589,13 @@ fn test_swipe_inputs_impersonated_roundtrip_sqlite() {
     let swipe = Swipe {
         text: "impersonated".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: true,
         guide_text: None,
         impersonate_direction: sample_impersonate_direction(),
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(msg_id, &swipe, 0).unwrap();
 

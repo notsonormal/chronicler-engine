@@ -7,7 +7,7 @@ use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::game::GameId;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::narrative_state::ArrivingLocationWrite;
 use crate::test_support::fixtures::{TestMap, TestPersona, TestWorld};
@@ -195,11 +195,13 @@ fn swipe_with_snapshot(text: &str, snapshot_id: u64) -> Swipe {
     Swipe {
         text: text.to_string(),
         snapshot_id: Some(snapshot_id),
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     }
 }
 
@@ -209,7 +211,7 @@ fn test_switch_swipe_restores_a_settled_snapshot() {
 
     let mut generating = GameState::new("start");
     generating.narrative.input_buffer.status = GenerationStatus::Generating;
-    generating.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    generating.narrative.input_buffer.step = Step::Narrating;
     generating.narrative.current_options = vec!["a stale option".to_string()];
     let snapshot_id = service.save_state(game_id, &generating).unwrap();
 
@@ -231,10 +233,7 @@ fn test_switch_swipe_restores_a_settled_snapshot() {
         GenerationStatus::Idle,
         "a restored swipe must leave the game idle, not stuck generating"
     );
-    assert_eq!(
-        restored.narrative.input_buffer.phase,
-        GenerationPhase::default()
-    );
+    assert_eq!(restored.narrative.input_buffer.step, Step::default());
     assert!(
         restored.narrative.current_options.is_empty(),
         "a restored swipe must not offer another scene's option set"
@@ -351,7 +350,7 @@ fn test_save_message_and_snapshot_writes_the_arriving_room_onto_the_saved_swipe(
 
     let stored = service.load_messages(game_id).unwrap();
     assert_eq!(
-        stored[0].location_header(),
+        stored[0].room_report(),
         Some("Room start"),
         "the write lands on the Swipe row the Narration was saved in"
     );
@@ -379,7 +378,7 @@ fn test_a_failed_arriving_room_write_stays_for_the_next_save() {
     };
     state.narrative.arriving_location_write = Some(arriving.clone());
     storage.add_failure(
-        "update_swipe_location_header",
+        "update_swipe_room_report",
         crate::adapters::driven::storage::TestOverride::internal("write failed"),
     );
 

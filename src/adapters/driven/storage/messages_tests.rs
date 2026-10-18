@@ -38,11 +38,13 @@ fn test_insert_message_preserves_swipes() {
     msg.swipes.push(crate::domain::model::message::Swipe {
         text: "alt".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     });
 
     let _id = storage.insert_message(GameId(1), &msg).unwrap();

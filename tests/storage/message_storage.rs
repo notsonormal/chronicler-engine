@@ -67,11 +67,13 @@ fn test_insert_swipe_and_load() {
     let swipe = Swipe {
         text: "swiped text".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(id, &swipe, 0).unwrap();
 
@@ -92,11 +94,13 @@ fn test_update_swipe_text() {
     let swipe = Swipe {
         text: "before".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(id, &swipe, 0).unwrap();
     storage.update_swipe_text(id, 0, "after").unwrap();
@@ -114,11 +118,13 @@ fn test_shift_swipe_indices() {
     let swipe = Swipe {
         text: "first".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage.insert_swipe(id, &swipe, 0).unwrap();
     storage.shift_swipe_indices(id, 1).unwrap();
@@ -143,11 +149,13 @@ fn test_load_swipes_for_messages_multi() {
             &Swipe {
                 text: "a swipe".to_string(),
                 snapshot_id: None,
-                location_header: None,
+                room_report: None,
                 event_header: None,
                 impersonated: false,
                 guide_text: None,
                 impersonate_direction: None,
+                state: None,
+                maker: None,
             },
             0,
         )
@@ -158,11 +166,13 @@ fn test_load_swipes_for_messages_multi() {
             &Swipe {
                 text: "b swipe".to_string(),
                 snapshot_id: None,
-                location_header: None,
+                room_report: None,
                 event_header: None,
                 impersonated: false,
                 guide_text: None,
                 impersonate_direction: None,
+                state: None,
+                maker: None,
             },
             0,
         )

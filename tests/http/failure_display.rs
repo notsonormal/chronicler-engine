@@ -9,7 +9,7 @@ use tower::util::ServiceExt;
 use chronicler_engine::adapters::driven::storage::TestOverride;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::domain::model::state::generation_status::{
-    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+    GenerationFailure, GenerationFailureKind, GenerationStatus, Step,
 };
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::test_support::TestAppBuilder;
@@ -246,7 +246,7 @@ async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
                 kind: GenerationFailureKind::Unreachable,
                 raw: "LLM Error: connection refused".to_string(),
             }),
-            GenerationPhase::Narrating,
+            Step::Narrating,
         )
         .build_service();
     let app = build_router(state);
@@ -275,7 +275,7 @@ async fn test_missing_preset_failure_clamps_with_the_preset_line() {
                 kind: GenerationFailureKind::PresetMissing,
                 raw: "Prompt preset not found: system_default".to_string(),
             }),
-            GenerationPhase::Narrating,
+            Step::Narrating,
         )
         .build_service();
     let app = build_router(state);
@@ -307,7 +307,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
                 kind: GenerationFailureKind::TokenBudgetSpent,
                 raw: raw.to_string(),
             }),
-            GenerationPhase::Narrating,
+            Step::Narrating,
         )
         .build_service();
     let app = build_router(state);

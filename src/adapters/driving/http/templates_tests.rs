@@ -177,14 +177,14 @@ fn test_story_log_template_renders_event_header() {
 }
 
 #[test]
-fn test_story_log_template_renders_location_header() {
+fn test_story_log_template_renders_room_report() {
     let entries = vec![
         MessageEntry {
             id: 1,
             text: "You walk into the hall.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
-            location_header: Some("Entrance Hall".to_string()),
+            room_report: Some("Entrance Hall".to_string()),
             ..Default::default()
         },
         MessageEntry {

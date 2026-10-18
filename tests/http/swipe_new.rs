@@ -174,12 +174,12 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
         .find(|m| m.message_type == MessageType::Narration)
         .expect("the generation appends a Narration");
     assert_eq!(
-        narration.location_header(),
+        narration.room_report(),
         Some("Room room2"),
         "the redo's Swipe reports the room it moved the player into"
     );
     assert_eq!(
-        narration.swipes[0].location_header, None,
+        narration.swipes[0].room_report, None,
         "the first Swipe's own generation did not move, so it reports no room"
     );
 }
@@ -394,12 +394,12 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
         "the redo appends one Swipe to the Narration"
     );
     assert_eq!(
-        narration.location_header(),
+        narration.room_report(),
         None,
         "a redo that stays put must not keep the room its sibling arrived in"
     );
     assert_eq!(
-        narration.swipes[0].location_header.as_deref(),
+        narration.swipes[0].room_report.as_deref(),
         Some("Room room2"),
         "the first Swipe keeps the room its own generation arrived in"
     );
@@ -415,7 +415,7 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
         .find(|m| m.id == narration_id)
         .expect("the Narration survives the switch");
     assert_eq!(
-        switched.location_header(),
+        switched.room_report(),
         Some("Room room2"),
         "switching to the first Swipe shows the room it arrived in"
     );
@@ -430,7 +430,7 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
         .find(|m| m.id == narration_id)
         .expect("the Narration survives the switch back");
     assert_eq!(
-        switched.location_header(),
+        switched.room_report(),
         None,
         "switching to the redo's Swipe shows its own, room-less generation"
     );
@@ -813,7 +813,7 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
         .find(|m| m.id == event_id)
         .expect("the event Message exists");
     assert_eq!(
-        event_narration.location_header(),
+        event_narration.room_report(),
         None,
         "the event continuation must not carry the room the main Narration arrived in"
     );
@@ -822,7 +822,7 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
         .find(|m| m.message_type == MessageType::Narration && m.event_header().is_none())
         .expect("the Action's main Narration exists");
     assert_eq!(
-        main_narration.location_header(),
+        main_narration.room_report(),
         Some("Room room2"),
         "the movement into \"room2\" must report that room's display name"
     );
@@ -848,12 +848,12 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
         "event retry appends exactly one swipe"
     );
     assert_eq!(
-        event_narration.location_header(),
+        event_narration.room_report(),
         None,
         "the redo's Swipe must not invent a room its siblings do not carry"
     );
     assert_eq!(
-        event_narration.swipes[0].location_header, None,
+        event_narration.swipes[0].room_report, None,
         "switching between the event's Swipes must not add or remove a room name"
     );
 }
@@ -1633,7 +1633,7 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
         .find(|m| m.is_guided())
         .expect("the guided generation appends a guided Narration");
     assert_eq!(
-        guided.location_header(),
+        guided.room_report(),
         None,
         "a guided Narration that stayed put must not take the previous Action's room"
     );
@@ -1659,12 +1659,12 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
         "the redo appends one Swipe to the guided Narration"
     );
     assert_eq!(
-        guided.location_header(),
+        guided.room_report(),
         Some("Room room_1"),
         "the redo's Swipe reports the room its own generation arrived in"
     );
     assert_eq!(
-        guided.swipes[0].location_header, None,
+        guided.swipes[0].room_report, None,
         "the first Swipe keeps its own, room-less generation"
     );
 }

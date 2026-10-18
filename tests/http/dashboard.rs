@@ -1,6 +1,6 @@
 //! HTTP E2E tests for dashboard chrome: the shell's icon sprite and the registry-backed generating-status surfaces. Tagged against `docs/specs/dashboard.md`.
 
-use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use chronicler_engine::domain::model::state::generation_status::{GenerationStatus, Step};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::TestStoredTriggerContext;
 use chronicler_engine::TestAppBuilder;
@@ -18,7 +18,7 @@ async fn test_generating_status_answers_from_live_registry() {
         "default status should be idle"
     );
 
-    for phase in [GenerationPhase::Narrating, GenerationPhase::Quantifying] {
+    for phase in [Step::Narrating, Step::Quantifying] {
         let body = fetch_generating_status(
             &TestAppBuilder::default_test()
                 .generation_status(GenerationStatus::Generating, phase)
@@ -28,7 +28,7 @@ async fn test_generating_status_answers_from_live_registry() {
         assert_eq!(body, "idle", "stale Generating should answer idle");
     }
 
-    for phase in [GenerationPhase::Narrating, GenerationPhase::Quantifying] {
+    for phase in [Step::Narrating, Step::Quantifying] {
         let expected = phase.as_endpoint_str();
         let body = fetch_generating_status(
             &TestAppBuilder::default_test()
@@ -98,7 +98,7 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
 async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
     let (app, state) = TestAppBuilder::default_test()
         .claim_generation_slot()
-        .generation_status(GenerationStatus::Idle, GenerationPhase::default())
+        .generation_status(GenerationStatus::Idle, Step::default())
         .build_with_state();
     seed_offered_set(&state, &["Ask the bartender"]);
 
@@ -114,7 +114,7 @@ async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
     );
 
     let (app, state) = TestAppBuilder::default_test()
-        .generation_status(GenerationStatus::Generating, GenerationPhase::Narrating)
+        .generation_status(GenerationStatus::Generating, Step::Narrating)
         .build_with_state();
     seed_offered_set(&state, &["Ask the bartender"]);
 

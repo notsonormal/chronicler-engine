@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrite};
 use chronicler_engine::domain::model::game::{GameId, NewGame};
+use chronicler_engine::domain::model::message::SwipeAt;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 
 const WORLD_KEY: &str = "seam_world";
@@ -61,20 +62,27 @@ fn insert_message_at(storage: &Storage, game_id: GameId, stamp: &str) {
 fn tx_rollback_leaves_no_row_when_the_second_write_fails() {
     let (storage, handle) =
         chronicler_engine::test_support::empty_sqlite_storage().with_test_failures();
+    let game_id = create_game(&storage, "Rolled back");
     handle.set_write(
-        TxWrite::DeleteGame,
+        TxWrite::InsertSwipe,
         TestOverride::internal("the second write fails"),
     );
 
-    let result = storage.transaction(|tx| {
-        let game_id = tx.insert_game(&new_game("Rolled back", WORLD_KEY))?;
-        tx.delete_game(game_id)?;
-        Ok(())
+    let result = storage.transaction(game_id, |tx| {
+        let message = chronicler_engine::test_support::dummy_message("hello");
+        let message_id = tx.insert_message(&message)?;
+        tx.insert_swipe(
+            SwipeAt {
+                message: message_id,
+                swipe: 0,
+            },
+            &chronicler_engine::test_support::dummy_swipe("hello"),
+        )
     });
 
     assert!(result.is_err(), "the injected failure fails the unit");
     assert!(
-        storage.list_games().unwrap().is_empty(),
+        storage.load_message_rows(game_id).unwrap().is_empty(),
         "the first write must roll back with the failed unit"
     );
 }
@@ -108,7 +116,7 @@ fn transaction_new_game_rolls_back_when_a_later_write_fails() {
 
     let result =
         storage.transaction_new_game(&new_game("Rolled back", WORLD_KEY), |game_id, tx| {
-            tx.delete_game(game_id)?;
+            tx.delete_game()?;
             Ok(game_id)
         });
 
@@ -124,7 +132,7 @@ fn transaction_new_game_rolls_back_when_a_later_write_fails() {
 fn transaction_refuses_the_in_memory_backend() {
     let storage = Storage::new_in_memory();
 
-    let result = storage.transaction(|_tx| Ok(()));
+    let result = storage.transaction(GameId(1), |_tx| Ok(()));
 
     assert!(
         result.is_err(),

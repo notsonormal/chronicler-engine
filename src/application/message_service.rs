@@ -12,7 +12,7 @@ use crate::domain::model::game::GameId;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::template::TemplateVars;
 use crate::error::EngineError;
@@ -104,7 +104,7 @@ impl MessageService {
         let Some(arriving) = state.narrative.arriving_location_write.as_ref() else {
             return Ok(());
         };
-        self.storage.update_swipe_location_header(
+        self.storage.update_swipe_room_report(
             arriving.message_id,
             arriving.swipe_index,
             &arriving.room_name,
@@ -201,7 +201,7 @@ impl MessageService {
         // A Swipe's snapshot is taken while its narration still generates, and the
         // option set is regenerated each turn.
         snapshot.narrative.input_buffer.status = GenerationStatus::Idle;
-        snapshot.narrative.input_buffer.phase = GenerationPhase::default();
+        snapshot.narrative.input_buffer.step = Step::default();
         snapshot.narrative.current_options.clear();
 
         snapshot.created_at = Utc::now();

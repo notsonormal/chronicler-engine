@@ -23,10 +23,8 @@ impl SafeHtml {
 
 impl askama::filters::HtmlSafe for SafeHtml {}
 
-/// One `<option>` in a `<select>`: the value and label a template renders,
-/// and whether this is the current selection. `SelectOptionsTemplate` renders
-/// it so Askama escapes every value; the constructors here are the single
-/// source for which options each select offers.
+/// `SelectOptionsTemplate` renders it so Askama escapes every value; the
+/// constructors here are the single source for which options each select offers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectOptionView {
     pub value: String,
@@ -35,7 +33,6 @@ pub struct SelectOptionView {
 }
 
 impl SelectOptionView {
-    /// The narrator-mode options, marking `selected`.
     pub fn narrator_modes(selected: NarratorMode) -> Vec<Self> {
         [NarratorMode::Novel, NarratorMode::InteractiveFiction]
             .into_iter()
@@ -47,8 +44,6 @@ impl SelectOptionView {
             .collect()
     }
 
-    /// The LLM-connection provider options, marking the provider whose wire
-    /// id is `selected` (an unknown id selects none).
     pub fn providers(selected: &str) -> Vec<Self> {
         [
             ("openrouter", "OpenRouter"),
@@ -118,7 +113,7 @@ pub struct MessageEntryView {
     pub text: SafeHtml,
     pub raw_text: String,
     pub log_type: String,
-    pub location_header: Option<String>,
+    pub room_report: Option<String>,
     pub event_header: Option<String>,
     pub swipe_count: usize,
     pub active_swipe_index: usize,
@@ -142,7 +137,7 @@ impl From<&MessageEntry> for MessageEntryView {
                 MessageType::System => "system".to_string(),
                 MessageType::Input => "input".to_string(),
             },
-            location_header: entry.location_header.clone(),
+            room_report: entry.room_report.clone(),
             event_header: entry.event_header.clone(),
             swipe_count: count,
             active_swipe_index: active,
@@ -219,8 +214,6 @@ impl From<&LlmMessage> for LlmMessageView {
     }
 }
 
-/// View model for the options dock — the current pickable option set,
-/// rendered above the command input as part of the input surface.
 #[derive(Debug, Clone)]
 pub struct OptionsDockViewModel {
     pub options: Vec<String>,
@@ -233,14 +226,12 @@ impl OptionsDockViewModel {
     }
 }
 
-/// View model for a single NPC portrait in the visual sidebar.
 #[derive(Debug, Clone)]
 pub struct NpcPortraitView {
     pub image_path: String,
     pub name: String,
 }
 
-/// View model for the visual sidebar template.
 #[derive(Debug, Clone)]
 pub struct VisualSidebarViewModel {
     pub room_has_image: bool,

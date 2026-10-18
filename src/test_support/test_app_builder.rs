@@ -14,7 +14,7 @@ use crate::bootstrap::wiring::build_app_graph_for_tests;
 use crate::domain::model::game::GameId;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
@@ -27,7 +27,7 @@ pub struct TestAppBuilder {
     test_data: Option<TestData>,
     logs: Vec<(String, MessageType)>,
     last_trigger: Option<StoredTriggerContext>,
-    generation: Option<(GenerationStatus, GenerationPhase)>,
+    generation: Option<(GenerationStatus, Step)>,
     settings: AppSettings,
     storage: Option<Arc<Storage>>,
     pipeline: Option<ActionPipeline>,
@@ -82,7 +82,7 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn generation_status(mut self, status: GenerationStatus, phase: GenerationPhase) -> Self {
+    pub fn generation_status(mut self, status: GenerationStatus, phase: Step) -> Self {
         self.generation = Some((status, phase));
         self
     }
@@ -188,7 +188,7 @@ impl TestAppBuilder {
 
         if let Some((status, phase)) = self.generation.clone() {
             state.narrative.input_buffer.status = status;
-            state.narrative.input_buffer.phase = phase;
+            state.narrative.input_buffer.step = phase;
         }
 
         for (text, log_type) in self.logs {
@@ -243,7 +243,7 @@ impl TestAppBuilder {
         if let (Some(game_id), Some((status, phase))) = (game_id, self.generation.clone()) {
             let mut state = wired.message_service.load_or_fresh(game_id);
             state.narrative.input_buffer.status = status;
-            state.narrative.input_buffer.phase = phase;
+            state.narrative.input_buffer.step = phase;
             let _ = wired.message_service.save_state(game_id, &state);
         }
 

@@ -71,6 +71,7 @@ impl GameStateBuilder {
                 },
                 scene: self.scene.unwrap_or_default(),
                 npc_encounter_log: self.npc_encounter_log.unwrap_or_default(),
+                trigger_context: None,
             },
         }
     }
@@ -86,6 +87,7 @@ impl GameState {
                 movement: snapshot.movement.clone(),
                 scene: snapshot.scene.clone(),
                 npc_encounter_log: snapshot.npc_encounter_log.clone(),
+                trigger_context: None,
             },
         }
     }
@@ -110,7 +112,7 @@ impl GameState {
         guide_text: Option<String>,
         impersonate_direction: Option<String>,
     ) {
-        let location_header = self.narrative.pending_location.take();
+        let room_report = self.narrative.pending_location.take();
         let event_header = self.narrative.pending_event.take();
 
         if message_type == MessageType::Narration || message_type == MessageType::Input {
@@ -121,13 +123,15 @@ impl GameState {
                     let swipe = Swipe {
                         text: text.clone(),
                         snapshot_id: None,
-                        location_header: location_header.clone(),
+                        room_report: room_report.clone(),
                         event_header: event_header.clone(),
                         impersonated: target.impersonated(),
                         guide_text: target.guide_text().map(|d| d.to_string()),
                         impersonate_direction: target
                             .impersonate_direction()
                             .map(|d| d.to_string()),
+                        state: None,
+                        maker: None,
                     };
                     target.swipes.push(swipe);
                     target.set_active_swipe(target.swipes.len() - 1);
@@ -136,7 +140,7 @@ impl GameState {
             }
         }
 
-        let mut message = Message::new(text, message_type, location_header, event_header);
+        let mut message = Message::new(text, message_type, room_report, event_header);
         if impersonated || guide_text.is_some() || impersonate_direction.is_some() {
             message.set_stored_inputs(impersonated, guide_text, impersonate_direction);
         }
@@ -288,7 +292,7 @@ impl GameState {
         };
         self.narrative.pending_location = None;
         if let Some(arriving_message) = self.arriving_message_mut() {
-            arriving_message.set_location_header(room_name.clone());
+            arriving_message.set_room_report(room_name.clone());
             if !arriving_message.is_unpersisted() {
                 self.narrative.arriving_location_write = Some(ArrivingLocationWrite {
                     message_id: arriving_message.id,

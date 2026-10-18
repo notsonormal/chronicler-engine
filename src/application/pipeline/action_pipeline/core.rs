@@ -21,7 +21,7 @@ use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::trigger_context::StoredTriggerContext;
 use crate::domain::model::state::game_state::{ActionResult, FreeActionContext, GameState};
 use crate::domain::model::state::generation_status::{
-    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+    GenerationFailure, GenerationFailureKind, GenerationStatus, Step,
 };
 
 use crate::application::errors::ProcessActionResult;
@@ -139,7 +139,7 @@ impl ActionPipeline {
     pub fn reset_persisted_status(&self, game_id: GameId) -> Result<(), EngineError> {
         let mut game_state = self.message_service.load_or_fresh(game_id);
         game_state.narrative.input_buffer.status = GenerationStatus::Idle;
-        game_state.narrative.input_buffer.phase = GenerationPhase::default();
+        game_state.narrative.input_buffer.step = Step::default();
         self.message_service.save_state(game_id, &game_state)?;
         Ok(())
     }
@@ -439,7 +439,7 @@ impl ActionPipeline {
         match state {
             Some(state) => {
                 state.narrative.input_buffer.status = GenerationStatus::Error(failure);
-                state.narrative.input_buffer.phase = GenerationPhase::default();
+                state.narrative.input_buffer.step = Step::default();
                 if let Err(e) = run
                     .pipeline
                     .message_service
@@ -472,7 +472,7 @@ impl ActionPipeline {
     pub(crate) fn persist_generation_error(&self, game_id: GameId, failure: GenerationFailure) {
         let mut state = self.message_service.load_or_fresh(game_id);
         state.narrative.input_buffer.status = GenerationStatus::Error(failure);
-        state.narrative.input_buffer.phase = GenerationPhase::default();
+        state.narrative.input_buffer.step = Step::default();
         if let Err(e) = self.message_service.save_state(game_id, &state) {
             tracing::error!("Critical: failed to persist generation error state: {e}");
         }

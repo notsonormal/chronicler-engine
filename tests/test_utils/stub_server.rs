@@ -86,7 +86,7 @@ fn default_story_log_entries() -> Vec<MessageEntry> {
             text: NARRATIVE_TEXT.to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 8, 0).unwrap(),
-            location_header: Some("Test Tavern".to_string()),
+            room_report: Some("Test Tavern".to_string()),
             ..Default::default()
         },
     ]

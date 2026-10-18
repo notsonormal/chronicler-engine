@@ -7,7 +7,7 @@ use chronicler_engine::test_support::active_game_of;
 use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
 use chronicler_engine::TestAppBuilder;
-use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use chronicler_engine::domain::model::state::generation_status::{GenerationStatus, Step};
 use chronicler_engine::test_support::TestPersona;
 
 use crate::support::http_fixtures::seeded_storage_with_initial_game;
@@ -92,7 +92,7 @@ async fn test_switch_game_heals_stale_generating_status() {
 
     let mut stale = state.message_service.load_or_fresh(GameId(other_id));
     stale.narrative.input_buffer.status = GenerationStatus::Generating;
-    stale.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    stale.narrative.input_buffer.step = Step::Narrating;
     state
         .message_service
         .save_state(GameId(other_id), &stale)

@@ -49,6 +49,7 @@ fn swipe_in(room_id: &str) -> SwipeState {
 
 fn swipe_with(room_id: &str, present: Vec<NpcCard>, log: NpcEncounterLog) -> SwipeState {
     SwipeState {
+        trigger_context: None,
         movement: MovementState {
             current_room_id: room_id.to_string(),
             dynamic_rooms: HashMap::new(),
@@ -61,7 +62,6 @@ fn swipe_with(room_id: &str, present: Vec<NpcCard>, log: NpcEncounterLog) -> Swi
     }
 }
 
-/// The log of a Character met `times_met` times, in the scene or not.
 fn log_of(npc_id: &str, times_met: u32, currently_meeting: bool) -> NpcEncounterLog {
     let mut log = NpcEncounterLog::default();
     if times_met > 0 || currently_meeting {

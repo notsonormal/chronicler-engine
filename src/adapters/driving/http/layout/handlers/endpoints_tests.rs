@@ -3,7 +3,7 @@ use crate::adapters::driving::http::layout::handlers::endpoints::{
     character_headshots_fragment, generating_status_handler, header_fragment,
     llm_messages_fragment, reset_generating_handler, story_log_fragment, visual_sidebar_fragment,
 };
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{active_game_of, body_text, TestAppBuilder};
 
@@ -91,7 +91,7 @@ async fn test_generating_status_answers_from_live_registry() {
 
     let mut game_state = state.message_service.load_or_fresh(game_id);
     game_state.narrative.input_buffer.status = GenerationStatus::Generating;
-    game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    game_state.narrative.input_buffer.step = Step::Narrating;
     let _ = state.message_service.save_state(game_id, &game_state);
 
     let result = generating_status_handler(

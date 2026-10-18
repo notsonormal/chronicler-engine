@@ -10,7 +10,7 @@ use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::game::GameId;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::test_support::fixtures::{TestMap, TestWorld};
 use crate::test_support::{active_game_of, make_test_pipeline_with_backends, make_test_recorder};
 
@@ -25,7 +25,7 @@ fn test_heal_stale_resets_generating_status_when_no_active_slot() {
     let gate = GenerationGate::new();
     let mut state = GameState::new("room_1".to_string());
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.step = Step::Narrating;
 
     gate.heal_stale(GameId(1), &mut state);
 
@@ -34,8 +34,8 @@ fn test_heal_stale_resets_generating_status_when_no_active_slot() {
         "stale Generating status should be reset to Idle"
     );
     assert_eq!(
-        state.narrative.input_buffer.phase,
-        GenerationPhase::default(),
+        state.narrative.input_buffer.step,
+        Step::default(),
         "phase should be reset to default"
     );
 }
@@ -47,7 +47,7 @@ fn test_heal_stale_leaves_generating_status_when_slot_active() {
     let gate = GenerationGate::new();
     let mut state = GameState::new("room_1".to_string());
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.step = Step::Narrating;
 
     let (_game_id, _generation_id, result) = gate
         .try_claim(GameId(1), &mut state, message_service.as_ref())
@@ -59,7 +59,7 @@ fn test_heal_stale_leaves_generating_status_when_slot_active() {
 
     let mut fresh_state = GameState::new("room_1".to_string());
     fresh_state.narrative.input_buffer.status = GenerationStatus::Generating;
-    fresh_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    fresh_state.narrative.input_buffer.step = Step::Narrating;
     gate.heal_stale(GameId(1), &mut fresh_state);
 
     assert!(
@@ -128,7 +128,7 @@ fn test_boot_heal_resets_stale_generating_status() {
 
     let mut state = minimal_state();
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.step = Step::Narrating;
     let _ = storage.save_snapshot(NO_GAME, &GameStateSnapshot::from_game_state(&state));
 
     let mock: Arc<dyn LlmProvider> = Arc::new(MockBackend::default());
@@ -150,8 +150,5 @@ fn test_boot_heal_resets_stale_generating_status() {
         persisted.narrative.input_buffer.status,
         GenerationStatus::Idle
     );
-    assert_eq!(
-        persisted.narrative.input_buffer.phase,
-        GenerationPhase::default()
-    );
+    assert_eq!(persisted.narrative.input_buffer.step, Step::default());
 }

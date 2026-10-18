@@ -194,10 +194,7 @@ fn texts_of(state: &AppState, game: GameId, kind: MessageType) -> Vec<String> {
 
 /// The one narration answer both Jobs of a stop case script, so which Job takes
 /// which answer cannot change the assertions.
-/// The Narration the stopped Job of the stop case scripts.
 const STOPPED_NARRATION: &str = "The stopped Job's narration.";
-/// The Narration the Job that follows it scripts, so the test can name the text
-/// that follows the second Job's Input.
 const NEXT_NARRATION: &str = "The next Job's narration.";
 
 // [docs/specs/dashboard.md] SCENARIO: 39.5
@@ -510,14 +507,9 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
     );
 }
 
-/// The Narration Game A's Job writes.
 const GAME_A_NARRATION: &str = "Game A's narration.";
-/// The Narration Game B's Job writes.
 const GAME_B_NARRATION: &str = "Game B's narration.";
-
-/// The Narration a Job of the default test World writes.
 const MAIN_NARRATION: &str = "The main narration.";
-/// The event Narration the Trigger's Character writes.
 const EVENT_NARRATION: &str = "The NPC greets you warmly.";
 /// The preset the client sets while the Job's narrator call is held.
 const SECOND_PRESET_TEXT: &str = "SecondPresetMarker";
@@ -698,9 +690,6 @@ enum StoryLogAfterStop {
     MainNarrationOnly,
 }
 
-/// One row of the stop table: the kind of Job, the model call the stop comes
-/// during, the status that call shows, and what the story log holds after the
-/// stop.
 struct StopRow {
     kind: JobKind,
     held: ModelRole,
@@ -765,17 +754,12 @@ static STOP_ROWS: &[StopRow] = &[
     },
 ];
 
-/// The narration answer every stop row scripts.
 const SCRIPTED_NARRATION: &str = "The Job's narration.";
-/// The opening Narration of the always-on World the Narration rows run in.
 const WORLD_OPENING_TEXT: &str = "The World begins.";
 /// The room the scripted analysis moves the player to.
 const MOVED_ROOM: &str = "room2";
-/// The room the always-on World starts in.
 const STARTING_ROOM: &str = "room_1";
 
-/// What one row needs before its request: the app, the Game, the hold armed on
-/// the row's call, and the story log before the request.
 struct StopJob {
     app: axum::Router,
     state: AppState,
@@ -784,7 +768,6 @@ struct StopJob {
     story_before: Vec<Message>,
 }
 
-/// Builds the Job of one row and sends its request, with the row's call held.
 async fn start_stop_job(row: &StopRow) -> StopJob {
     match row.kind {
         JobKind::Narration { fires_trigger } => {
@@ -947,7 +930,6 @@ async fn test_a_stop_at_each_model_call_keeps_the_records_of_that_step() {
     );
 }
 
-/// Drives one row of the stop table: hold its call, stop, and check what stays.
 async fn run_stop_row(row: &'static StopRow) {
     let label = format!("{} at the {} call", row.kind.label(), row.held.label());
     let start = start_stop_job(row).await;
@@ -994,8 +976,6 @@ async fn run_stop_row(row: &'static StopRow) {
     assert_story_log_after_stop(row, &label, &start).await;
 }
 
-/// Checks what the story log holds after the stop ended the Job's call, per the
-/// row's outcome.
 async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob) {
     let after = messages_of(&start.state, start.game);
     let after_texts: Vec<String> = after
@@ -1047,7 +1027,7 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             );
             let narration = job_narration.expect("the text save wrote the Narration");
             assert_eq!(
-                narration.location_header(),
+                narration.room_report(),
                 None,
                 "{label}: the pre-analysis state names no room, so the player has not moved"
             );
@@ -1075,7 +1055,7 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             let narration = job_narration.expect("the text save wrote the Narration");
             let expected = format!("Room {room}");
             assert_eq!(
-                narration.location_header(),
+                narration.room_report(),
                 Some(expected.as_str()),
                 "{label}: the state update landed, so the Narration reports the room it arrived in"
             );
@@ -1100,7 +1080,7 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                 .find(|message| message.message_type == MessageType::Input)
                 .expect("the text save wrote the Input");
             assert_eq!(
-                impersonate_input.location_header(),
+                impersonate_input.room_report(),
                 None,
                 "{label}: the pre-analysis state reports no room"
             );

@@ -108,18 +108,18 @@ impl InMemoryData {
         }
     }
 
-    pub(crate) fn update_swipe_location_header(
+    pub(crate) fn update_swipe_room_report(
         &mut self,
         message_id: u64,
         swipe_index: usize,
-        location_header: &str,
+        room_report: &str,
     ) {
         if let Some(swipe) = self
             .swipes
             .get_mut(&message_id)
             .and_then(|vec| vec.get_mut(swipe_index))
         {
-            swipe.location_header = Some(location_header.to_string());
+            swipe.room_report = Some(room_report.to_string());
         }
     }
 

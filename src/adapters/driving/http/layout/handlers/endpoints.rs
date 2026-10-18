@@ -76,13 +76,13 @@ pub async fn generating_status_handler(
         Some(game_id) => match state.message_service.load_expecting_valid_state(game_id) {
             Ok(gs) => {
                 tracing::debug!(
-                    "generating_status_handler: loaded status={:?}, phase={:?}",
+                    "generating_status_handler: loaded status={:?}, step={:?}",
                     gs.narrative.input_buffer.status,
-                    gs.narrative.input_buffer.phase
+                    gs.narrative.input_buffer.step
                 );
                 (
                     gs.narrative.input_buffer.status.clone(),
-                    gs.narrative.input_buffer.phase.clone(),
+                    gs.narrative.input_buffer.step.clone(),
                 )
             }
             Err(e) => {

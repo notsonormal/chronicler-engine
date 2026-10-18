@@ -67,7 +67,7 @@ fn test_narrative_snapshot_roundtrips_current_options() {
 fn test_narrative_snapshot_without_current_options_deserializes_empty() {
     // A pre-options snapshot JSON must still load: the field is serde-defaulted.
     let legacy = r#"{
-        "generation": {"input": "", "status": "Idle", "phase": "Narrating"},
+        "generation": {"input": "", "status": "Idle", "step": "Narrating"},
         "last_trigger": null,
         "pending_location": null,
         "pending_event": null,

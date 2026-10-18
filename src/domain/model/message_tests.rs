@@ -13,7 +13,7 @@ fn test_message_new_sets_fields() {
     assert_eq!(msg.id, 0);
     assert_eq!(msg.text(), "Hello world");
     assert_eq!(msg.message_type, MessageType::Input);
-    assert_eq!(msg.location_header(), Some("Location"));
+    assert_eq!(msg.room_report(), Some("Location"));
     assert_eq!(msg.event_header(), Some("Event"));
 }
 
@@ -52,7 +52,7 @@ fn test_message_set_event_header() {
 #[test]
 fn test_message_from_db() {
     let timestamp = chrono::Utc::now();
-    let msg = Message::from_db(42, MessageType::Narration, timestamp, 0, false);
+    let msg = Message::from_db(42, MessageType::Narration, None, timestamp, 0, false);
     assert_eq!(msg.id, 42);
     assert_eq!(msg.message_type, MessageType::Narration);
     assert_eq!(msg.timestamp, timestamp);
@@ -64,7 +64,7 @@ fn test_message_from_db() {
 #[test]
 fn test_message_from_db_with_deleted() {
     let timestamp = chrono::Utc::now();
-    let msg = Message::from_db(99, MessageType::Input, timestamp, 2, true);
+    let msg = Message::from_db(99, MessageType::Input, None, timestamp, 2, true);
     assert_eq!(msg.id, 99);
     assert_eq!(msg.message_type, MessageType::Input);
     assert_eq!(msg.active_swipe_index, 2);
@@ -83,15 +83,17 @@ fn test_message_swipe_fields_roundtrip() {
     msg.swipes.push(Swipe {
         text: "Swiped text".to_string(),
         snapshot_id: None,
-        location_header: Some("Room B".to_string()),
+        room_report: Some("Room B".to_string()),
         event_header: Some("EventY".to_string()),
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     });
 
     assert_eq!(msg.text(), "Original text");
-    assert_eq!(msg.location_header(), Some("Room A"));
+    assert_eq!(msg.room_report(), Some("Room A"));
     assert_eq!(msg.event_header(), Some("EventX"));
     assert_eq!(msg.snapshot_id(), None);
 
@@ -101,7 +103,7 @@ fn test_message_swipe_fields_roundtrip() {
 
     msg.set_active_swipe(1);
     assert_eq!(msg.text(), "Swiped text");
-    assert_eq!(msg.location_header(), Some("Room B"));
+    assert_eq!(msg.room_report(), Some("Room B"));
     assert_eq!(msg.event_header(), Some("EventY"));
     assert_eq!(msg.snapshot_id(), None);
 
@@ -123,11 +125,13 @@ fn test_message_set_snapshot_id_writes_active_swipe() {
     msg.swipes.push(Swipe {
         text: "Alt".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     });
     msg.set_active_swipe(1);
 

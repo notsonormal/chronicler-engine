@@ -11,13 +11,10 @@ use crate::application::message_service::MessageService;
 use crate::application::generation::slot::GenerationSlot;
 use crate::application::generation::slot::release_owned_slot;
 use crate::domain::model::game::GameId;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::game_state::GameState;
 use crate::error::EngineError;
 
-/// The Job tasks a gate handed to the blocking pool, so a test can wait for a
-/// Job to end.
-///
 /// A stop and a reset end the *slot* of a Game at once, while the Job's thread
 /// lives on until its refusals return. A test that asserts what a Job's late
 /// answer wrote therefore waits here, and not for the slot.
@@ -29,14 +26,12 @@ pub struct JobTasks {
 
 #[cfg(feature = "testing")]
 impl JobTasks {
-    /// Keep one Job's task handle, and forget the tasks that have ended.
     pub fn watch(&self, handle: tokio::task::JoinHandle<()>) {
         let mut handles = self.handles.lock().unwrap_or_else(|e| e.into_inner());
         handles.retain(|handle| !handle.is_finished());
         handles.push(handle);
     }
 
-    /// Wait until every watched Job task has ended, or `timeout` passes.
     pub async fn wait(&self, timeout: std::time::Duration) -> bool {
         tokio::time::timeout(timeout, self.wait_for_each())
             .await
@@ -88,13 +83,11 @@ impl GenerationGate {
         }
     }
 
-    /// Watch one Job's task, so a test can wait for it to end.
     #[cfg(feature = "testing")]
     pub fn watch_job(&self, handle: tokio::task::JoinHandle<()>) {
         self.jobs.watch(handle);
     }
 
-    /// Wait until every Job this gate watched has ended, or `timeout_ms` passes.
     #[cfg(feature = "testing")]
     pub async fn wait_for_jobs(&self, timeout_ms: u64) -> bool {
         self.jobs
@@ -133,7 +126,7 @@ impl GenerationGate {
             "Found stale Generating status without active generation, resetting to Idle"
         );
         state.narrative.input_buffer.status = GenerationStatus::Idle;
-        state.narrative.input_buffer.phase = GenerationPhase::default();
+        state.narrative.input_buffer.step = Step::default();
     }
 
     pub fn try_claim(
@@ -162,7 +155,7 @@ impl GenerationGate {
         }
 
         state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+        state.narrative.input_buffer.step = Step::Narrating;
 
         if let Err(e) = message_service.save_message_and_snapshot(game_id, state) {
             tracing::debug!("try_claim: save failed; releasing slot");
@@ -181,7 +174,7 @@ impl GenerationGate {
         release_owned_slot(&self.registry, game_id, generation_id);
     }
 
-    /// Releases the slot only — the pipeline resets the persisted status.
+    /// Releases the slot; the pipeline resets the persisted status.
     pub fn release_generation_slot_for_game(&self, game_id: GameId) -> Option<u64> {
         let mut registry = self.registry.write().unwrap_or_else(|p| {
             tracing::warn!(

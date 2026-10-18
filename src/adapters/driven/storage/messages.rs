@@ -66,7 +66,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, game_id, message_type, timestamp, active_swipe_index
+                        "SELECT id, game_id, message_type, kind, timestamp, active_swipe_index
                          FROM messages
                          WHERE game_id = ?1 AND is_deleted = 0
                          ORDER BY id ASC",

@@ -658,11 +658,13 @@ async fn test_switch_swipe_handler_success() {
             &Swipe {
                 text: "first swipe".to_string(),
                 snapshot_id: Some(snap_id),
-                location_header: None,
+                room_report: None,
                 event_header: None,
                 impersonated: false,
                 guide_text: None,
                 impersonate_direction: None,
+                state: None,
+                maker: None,
             },
             0,
         )
@@ -673,11 +675,13 @@ async fn test_switch_swipe_handler_success() {
             &Swipe {
                 text: "second swipe".to_string(),
                 snapshot_id: Some(snap_id),
-                location_header: None,
+                room_report: None,
                 event_header: None,
                 impersonated: false,
                 guide_text: None,
                 impersonate_direction: None,
+                state: None,
+                maker: None,
             },
             1,
         )
@@ -736,11 +740,13 @@ async fn test_switch_swipe_handler_not_last() {
             &Swipe {
                 text: "swipe".to_string(),
                 snapshot_id: Some(snap_id),
-                location_header: None,
+                room_report: None,
                 event_header: None,
                 impersonated: false,
                 guide_text: None,
                 impersonate_direction: None,
+                state: None,
+                maker: None,
             },
             0,
         )
@@ -789,11 +795,13 @@ async fn test_switch_swipe_handler_concurrent() {
             &Swipe {
                 text: "swipe".to_string(),
                 snapshot_id: Some(snap_id),
-                location_header: None,
+                room_report: None,
                 event_header: None,
                 impersonated: false,
                 guide_text: None,
                 impersonate_direction: None,
+                state: None,
+                maker: None,
             },
             0,
         )

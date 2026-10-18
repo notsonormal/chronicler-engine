@@ -13,7 +13,7 @@ use crate::domain::model::message::Message;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
 use crate::domain::model::state::generation_status::{
-    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+    GenerationFailure, GenerationFailureKind, GenerationStatus, Step,
 };
 use crate::domain::model::state::message_types::MessageType;
 
@@ -225,7 +225,7 @@ impl ActionPipeline {
         }
         let mut state = GameState::from_snapshot(&state_at_click);
         state.narrative.input_buffer.status = GenerationStatus::Error(failure.clone());
-        state.narrative.input_buffer.phase = attempt.narrative.input_buffer.phase;
+        state.narrative.input_buffer.step = attempt.narrative.input_buffer.step;
         if let Err(e) = self.message_service.save_state(retry_game_id, &state) {
             tracing::error!("Failed to put the game state back after a failed retry: {e}");
         }
@@ -389,7 +389,7 @@ impl ActionPipeline {
             impersonate: None,
         };
         state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+        state.narrative.input_buffer.step = Step::Narrating;
 
         match crate::application::pipeline::narration_generation::NarrationGeneration::new(
             &run, inputs,

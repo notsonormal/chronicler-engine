@@ -29,6 +29,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `characters.rs` — Character storage backend operations
         - `core.rs` — Storage backend and core abstractions
         - `db.rs` — SQLite database connection pool
+        - `docks.rs` — The dock record reads: the offered set and the notice of one Game
         - `games.rs` — Game storage operations
         - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
         - `llm_messages.rs` — LLM message storage
@@ -38,6 +39,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `presets.rs` — Preset storage operations
         - `settings.rs` — Settings storage operations
         - `snapshots.rs` — Snapshot storage operations
+        - `stories.rs` — The story reads: the end of the story, one Swipe state, and the entries of a window
         - `swipes.rs` — Swipe data storage
         - `test_support.rs` — Test infrastructure types for storage failure injection
         - `transaction.rs` — The transaction: one unit of record writes that lands whole
@@ -63,6 +65,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - **utils/**
           - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
           - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
+          - `records.rs` — Shared helpers of the new records: the in-memory answer and the JSON columns
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -242,7 +245,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `action.rs` — Action enum and semantic command types (slash-command steering entry)
       - `agent.rs` — Agent definitions and behavior types
       - `character.rs` — Character sheet data and NPC card definitions
+      - `dock.rs` — The dock record: the offered set and the one notice of a Game
       - `game.rs` — Game state and session management
+      - `generation.rs` — The order of one generation: ids and texts only
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
@@ -253,13 +258,14 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `quantifier.rs` — Quantifier types for narrative evaluation
       - `scenario.rs` — Scenario definitions and world data
       - `settings.rs` — Settings and configuration types
+      - `tail.rs` — The end of the story, and the rules derived from it
       - `template.rs` — Template placeholder substitution for author-controlled text fields.
       - `trigger.rs` — Trigger conditions and event types
       - `world.rs` — World model definitions
       - **state/**
         - `game_state.rs` — Main game state and builder
         - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
-        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/` (`core.rs` orchestration, `phases.rs` implementations).
+        - `generation_status.rs` — Generation status enums and input buffer: the step and the status are independent axes; the pipeline in `application/pipeline/` drives them.
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state

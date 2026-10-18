@@ -6,10 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
+use crate::domain::model::state::generation_status::GenerationFailure;
 use crate::domain::model::utils::game_name::default_display_name;
 
-/// The id of a Game row: what the active-Game pointer, the request's
-/// `CurrentGame` and every game-scoped storage read and write carry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct GameId(pub u64);
@@ -28,8 +27,7 @@ pub struct Game {
     pub persona_key: String,
     pub persona_name: String,
     pub name: String,
-    /// Player-facing label shown in the header and Games tab. Distinct from
-    /// the stable generated `name`; display names may collide.
+    /// Player-facing label; display names may collide, unlike the unique `name`.
     pub display_name: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -43,10 +41,10 @@ pub struct Game {
     pub active_options_prompt_preset_id: String,
     /// Per-game override of the world's always-on options toggle.
     pub options_always_on: bool,
+    pub failure: Option<GenerationFailure>,
 }
 
 impl Game {
-    /// The preset id this game's active slot for `preset_type` holds.
     pub fn active_preset_id(&self, preset_type: PresetType) -> &str {
         match preset_type {
             PresetType::System => &self.active_system_prompt_preset_id,
@@ -89,8 +87,7 @@ impl PresetSelection {
         }
     }
 
-    /// The four slots paired with their type, so a rule over the selection
-    /// covers every preset type in one pass.
+    /// Pairs each slot with its type, so a rule can cover every type in one pass.
     pub fn slots(&self) -> [(PresetType, &str); 4] {
         [
             (PresetType::System, self.system_id.as_str()),
@@ -121,8 +118,8 @@ pub struct NewGame {
 }
 
 impl NewGame {
-    /// The player-facing label written with the row. Every storage backend
-    /// reads it, so the naming rule has one home.
+    /// The label written with the row. Every storage backend reads it, so the
+    /// naming rule has one home.
     pub fn display_name(&self) -> String {
         default_display_name(&self.name)
     }

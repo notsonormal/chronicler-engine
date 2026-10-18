@@ -51,7 +51,7 @@ fn test_pre_v21_database_restores_posture_and_keeps_rows() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 26,
+        version, 27,
         "the migration chain must land on the latest version"
     );
 }
@@ -68,7 +68,7 @@ fn test_fresh_database_has_game_posture_columns() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 27);
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn test_v19_defaults_posture_for_game_with_missing_world() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 27);
 }
 
 #[test]
@@ -154,7 +154,7 @@ fn test_v23_backfills_game_posture_from_world() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 27);
 }
 
 #[test]
@@ -257,8 +257,8 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 26,
-        "migration chain must land on the latest version"
+        version, 27,
+        "the migration chain must land on the latest version"
     );
 }
 
@@ -276,7 +276,7 @@ fn test_v22_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 27);
 }
 
 #[test]
@@ -355,8 +355,8 @@ fn test_v26_splits_merged_steering_instruction_into_its_two_columns() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 26,
-        "migration chain must land on the latest version"
+        version, 27,
+        "the migration chain must land on the latest version"
     );
 }
 
@@ -409,5 +409,5 @@ fn test_v25_backfills_game_display_name_from_stable_name() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 27);
 }

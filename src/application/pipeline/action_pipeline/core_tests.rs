@@ -10,9 +10,7 @@ use crate::domain::model::map::Room;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::state::generation_status::{
-    GenerationFailureKind, GenerationPhase, GenerationStatus,
-};
+use crate::domain::model::state::generation_status::{GenerationFailureKind, GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::adapters::driven::storage::{Storage, TestOverride};
 use crate::adapters::driven::llm::providers::MockBackend;
@@ -50,10 +48,7 @@ fn test_pipeline_runs_to_completion() {
         final_state.narrative.input_buffer.status,
         GenerationStatus::Idle
     );
-    assert_eq!(
-        final_state.narrative.input_buffer.phase,
-        GenerationPhase::default()
-    );
+    assert_eq!(final_state.narrative.input_buffer.step, Step::default());
 }
 
 #[test]
@@ -1115,8 +1110,8 @@ fn test_pipeline_phase_stays_narrating_on_narration_failure() {
 
     let final_state = app.message_service.load_or_fresh(active_game_of(&app));
     assert_eq!(
-        final_state.narrative.input_buffer.phase,
-        GenerationPhase::Narrating,
+        final_state.narrative.input_buffer.step,
+        Step::Narrating,
         "Phase should remain Narrating after failed narration"
     );
     assert!(
@@ -1367,8 +1362,8 @@ fn test_delayed_llm_completes_without_deadlock() {
         "Status should be Idle after delayed action completes"
     );
     assert_eq!(
-        final_state.narrative.input_buffer.phase,
-        GenerationPhase::default(),
+        final_state.narrative.input_buffer.step,
+        Step::default(),
         "Phase should be reset after completion"
     );
 }
@@ -1544,7 +1539,7 @@ fn test_switch_game_heals_stale_status_for_the_current_game() {
 
     let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.step = Step::Narrating;
     storage
         .save_snapshot(
             active_game_of(&app),

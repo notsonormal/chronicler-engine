@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/` (`core.rs` orchestration, `phases.rs` implementations).
+//! Generation status enums and input buffer: the step and the status are independent axes; the pipeline in `application/pipeline/` drives them.
 
 use serde::{Deserialize, Serialize};
 
@@ -29,8 +29,7 @@ impl GenerationStatus {
     }
 }
 
-/// What went wrong in a failed generation, coarse enough for the status
-/// display to name it in one line.
+/// Coarse enough for the status display to name it in one line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GenerationFailureKind {
     /// No answer arrived: a timeout, a transport failure, or a non-2xx response.
@@ -52,8 +51,8 @@ pub enum GenerationFailureKind {
     Other,
 }
 
-/// A failed generation: `kind` drives the one-line status sentence and `raw`
-/// is the classified error text behind the details disclosure.
+/// `kind` drives the one-line status sentence; `raw` fills the details
+/// disclosure.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerationFailure {
     pub kind: GenerationFailureKind,
@@ -98,8 +97,8 @@ impl GenerationFailure {
         }
     }
 
-    /// Prefixes `raw` with the pipeline step that failed, so the disclosure
-    /// keeps the context the classified error alone does not carry.
+    /// Keeps the failing step in the disclosure, which the classified error alone
+    /// does not carry.
     pub fn with_context(mut self, context: impl std::fmt::Display) -> Self {
         self.raw = format!("{context}: {}", self.raw);
         self
@@ -107,7 +106,7 @@ impl GenerationFailure {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub enum GenerationPhase {
+pub enum Step {
     /// Narrator LLM generating the scene response.
     #[default]
     Narrating,
@@ -119,7 +118,7 @@ pub enum GenerationPhase {
     Options,
 }
 
-impl GenerationPhase {
+impl Step {
     pub fn as_endpoint_str(&self) -> &'static str {
         match self {
             Self::Narrating => "narrating",
@@ -134,5 +133,5 @@ impl GenerationPhase {
 pub struct InputBuffer {
     pub input: String,
     pub status: GenerationStatus,
-    pub phase: GenerationPhase,
+    pub step: Step,
 }

@@ -17,7 +17,7 @@ use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::game::GameId;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
 
@@ -69,7 +69,7 @@ impl ActionPipeline {
         let mut state = self.message_service.load_or_fresh(game_id);
 
         state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.phase = GenerationPhase::Options;
+        state.narrative.input_buffer.step = Step::Options;
         if let Err(e) = run.persist_snapshot_or_err(&mut state, "pre-options snapshot") {
             Self::finalize_phase_error(&run, Some(&mut state), e);
             return;

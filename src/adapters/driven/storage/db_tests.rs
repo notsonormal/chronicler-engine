@@ -201,7 +201,7 @@ fn test_db_cascade_delete_game() {
     let message_id: i64 = conn.last_insert_rowid();
 
     conn.execute(
-        "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header)
+        "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, room_report, event_header)
          VALUES (?1, 0, 'hello', NULL, NULL, NULL)",
         rusqlite::params![message_id],
     )

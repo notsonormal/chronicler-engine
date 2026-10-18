@@ -8,7 +8,7 @@ use crate::application::errors::ProcessActionResult;
 use crate::application::pipeline::action_pipeline::retry_tests::{
     add_input_and_save, insert_message_with_swipe, save_pre_main, setup_event_flow,
 };
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
+use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{
     active_game_of, make_test_pipeline_app_with_storage as make_test_app_with_storage,
@@ -70,8 +70,8 @@ async fn test_retrigger_event_cancels_cleanly() {
         state.narrative.input_buffer.status
     );
     assert_eq!(
-        state.narrative.input_buffer.phase,
-        GenerationPhase::default(),
+        state.narrative.input_buffer.step,
+        Step::default(),
         "Cancelled retrigger should reset phase to default"
     );
 }
@@ -96,7 +96,6 @@ async fn test_retrigger_event_cancelled_at_phase_boundary() {
 
     setup_event_flow(&app, &storage);
 
-    // The flipper switches the app to a real second Game while the work runs.
     let (initial_game_id, other_game_id) = app_with_second_game(&app);
     let catalogue_for_thread = app.game_catalogue.clone();
     let backend_for_thread = Arc::clone(&mock_backend);
@@ -214,7 +213,7 @@ fn test_retrigger_heals_stale_status_before_validation_error() {
 
     let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.step = Step::Narrating;
     storage
         .save_snapshot(
             active_game_of(&app),

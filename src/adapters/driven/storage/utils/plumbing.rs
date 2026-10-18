@@ -721,6 +721,41 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
+    if version < 27 {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // The new columns are additive and backfill nothing. `room_report` renames
+        // today's `location_header`, so the existing rows survive with no reader
+        // picking between two columns.
+        if !column_exists(conn, "messages", "kind") {
+            exec("ALTER TABLE messages ADD COLUMN kind TEXT")?;
+        }
+        if !column_exists(conn, "message_swipes", "state") {
+            exec("ALTER TABLE message_swipes ADD COLUMN state TEXT")?;
+        }
+        if !column_exists(conn, "message_swipes", "maker") {
+            exec("ALTER TABLE message_swipes ADD COLUMN maker TEXT")?;
+        }
+        if column_exists(conn, "message_swipes", "location_header") {
+            exec("ALTER TABLE message_swipes RENAME COLUMN location_header TO room_report")?;
+        }
+        if !column_exists(conn, "games", "failure") {
+            exec("ALTER TABLE games ADD COLUMN failure TEXT")?;
+        }
+
+        // The dock is a table of its own, because the config routes write the Game
+        // record with no busy check.
+        exec(
+            "CREATE TABLE IF NOT EXISTS game_docks (\n                game_id INTEGER PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,\n                offered TEXT NOT NULL DEFAULT '[]',\n                notice TEXT\n            )",
+        )?;
+
+        conn.pragma_update(None, "user_version", 27)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
     tx.commit()
         .map_err(|e| EngineError::Config(format!("Failed to commit migrations: {e}")))?;
 

@@ -4,6 +4,7 @@
 pub mod characters;
 pub mod core;
 pub mod db;
+pub mod docks;
 pub mod games;
 pub mod in_memory_data;
 pub mod llm_messages;
@@ -14,6 +15,7 @@ pub mod personas;
 pub mod presets;
 pub mod settings;
 pub mod snapshots;
+pub mod stories;
 pub mod swipes;
 pub mod transaction;
 pub mod utils;

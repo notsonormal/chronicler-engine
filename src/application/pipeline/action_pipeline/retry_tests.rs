@@ -14,9 +14,7 @@ use crate::domain::model::map::Room;
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-use crate::domain::model::state::generation_status::{
-    GenerationFailureKind, GenerationPhase, GenerationStatus,
-};
+use crate::domain::model::state::generation_status::{GenerationFailureKind, GenerationStatus, Step};
 use crate::domain::model::state::message_types::MessageType;
 use crate::error::EngineError;
 use crate::application::agents::AgentRunner;
@@ -61,7 +59,7 @@ pub(super) fn insert_message_with_swipe(
         let mut swipe = swipe.clone();
         swipe.text = msg.text().to_string();
         swipe.snapshot_id = msg.snapshot_id();
-        swipe.location_header = msg.location_header().map(|s| s.to_string());
+        swipe.room_report = msg.room_report().map(|s| s.to_string());
         swipe.event_header = msg.event_header().map(|s| s.to_string());
         let _ = storage.insert_swipe(id, &swipe, 0);
     }
@@ -564,11 +562,13 @@ fn event_target_with_a_stale_active_swipe() -> (GameStateSnapshot, Vec<Message>,
     event_message.swipes.push(Swipe {
         text: "Stale event narration".to_string(),
         snapshot_id: None,
-        location_header: None,
+        room_report: None,
         event_header: Some("Event".to_string()),
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     });
     event_message.set_active_swipe(1);
 
@@ -609,7 +609,7 @@ fn test_event_retry_redo_swipe_names_no_room_of_its_own() {
         "the redo appends one Swipe to the event Message"
     );
     assert_eq!(
-        retried.location_header(),
+        retried.room_report(),
         None,
         "the redo's Swipe must not invent a room its siblings do not carry"
     );
@@ -1219,11 +1219,13 @@ async fn test_retry_appends_swipe_to_same_message() {
     let extra_swipe = crate::domain::model::message::Swipe {
         text: "Alt narration".to_string(),
         snapshot_id: Some(_pre_main_id),
-        location_header: None,
+        room_report: None,
         event_header: None,
         impersonated: false,
         guide_text: None,
         impersonate_direction: None,
+        state: None,
+        maker: None,
     };
     storage
         .insert_swipe(narration_msg.id, &extra_swipe, 1)
@@ -1419,10 +1421,10 @@ async fn test_retry_last_response_cancelled_at_phase_boundary() {
         state.narrative.input_buffer.status
     );
     assert_eq!(
-        state.narrative.input_buffer.phase,
-        GenerationPhase::default(),
+        state.narrative.input_buffer.step,
+        Step::default(),
         "Cancelled retry must reset phase to default, got {:?}",
-        state.narrative.input_buffer.phase
+        state.narrative.input_buffer.step
     );
 }
 
@@ -2198,7 +2200,7 @@ fn test_retry_heals_stale_status_before_validation_error() {
 
     let mut state = app.message_service.load_or_fresh(active_game_of(&app));
     state.narrative.input_buffer.status = GenerationStatus::Generating;
-    state.narrative.input_buffer.phase = GenerationPhase::Narrating;
+    state.narrative.input_buffer.step = Step::Narrating;
     storage
         .save_snapshot(
             active_game_of(&app),
