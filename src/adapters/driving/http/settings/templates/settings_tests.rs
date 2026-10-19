@@ -223,6 +223,30 @@ fn test_connection_form_template_escapes_the_name() {
 }
 
 #[test]
+fn test_connection_form_template_shows_the_stored_context_window() {
+    let mut settings = two_connection_settings();
+    settings.connections[0].max_context_tokens = Some(65536);
+
+    let edit = ConnectionFormTemplate::new(Some(&settings.connections[0]))
+        .render()
+        .unwrap();
+    assert!(
+        edit.contains(r#"name="conn_max_context_tokens" value="65536" min="1""#),
+        "the edit form must show the stored window: {edit}"
+    );
+
+    let add = ConnectionFormTemplate::new(None).render().unwrap();
+    assert!(
+        add.contains(r#"name="conn_max_context_tokens" value="""#),
+        "the add form must leave the window empty: {add}"
+    );
+    assert!(
+        add.contains("provider default"),
+        "the empty field must say that it follows the provider default: {add}"
+    );
+}
+
+#[test]
 fn test_text_check_card_disabled_mode_renders_the_checkbox_unchecked() {
     let settings = AppSettings {
         text_check: TextCheckSettings {

@@ -183,6 +183,10 @@ impl SettingsTemplate {
             <input type="text" id="conn_model" name="conn_model" value="{{ model }}" placeholder="openai/gpt-4o-mini" />
         </div>
         <div class="form-group">
+            <label for="conn_max_context_tokens">Context window (tokens)</label>
+            <input type="number" id="conn_max_context_tokens" name="conn_max_context_tokens" value="{{ max_context_tokens }}" min="1" placeholder="Empty uses the provider default" />
+        </div>
+        <div class="form-group">
             <label for="conn_api_key">API Key</label>
             <input type="password" id="conn_api_key" name="conn_api_key" value="{{ api_key }}" placeholder="(optional)" />
         </div>
@@ -213,6 +217,7 @@ pub struct ConnectionFormTemplate {
     pub name: String,
     pub provider_options: SafeHtml,
     pub model: String,
+    pub max_context_tokens: String,
     pub api_key: String,
     pub base_url: String,
     pub single_user_message: bool,
@@ -235,6 +240,10 @@ impl ConnectionFormTemplate {
             )),
             model: connection
                 .map(|conn| conn.model.clone())
+                .unwrap_or_default(),
+            max_context_tokens: connection
+                .and_then(|conn| conn.max_context_tokens)
+                .map(|tokens| tokens.to_string())
                 .unwrap_or_default(),
             api_key: connection
                 .and_then(|conn| conn.api_key.clone())

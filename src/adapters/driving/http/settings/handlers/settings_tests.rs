@@ -205,6 +205,7 @@ async fn test_add_connection_handler_adds_connection() {
         conn_model: "openai/gpt-4".into(),
         conn_api_key: "sk-test".into(),
         conn_base_url: "".into(),
+        conn_max_context_tokens: "".into(),
         single_user_message: false,
     };
 
@@ -232,6 +233,7 @@ async fn test_add_connection_handler_empty_base_url_is_none() {
         conn_model: "llama3".into(),
         conn_api_key: "".into(),
         conn_base_url: "".into(),
+        conn_max_context_tokens: "".into(),
         single_user_message: false,
     };
 
@@ -252,6 +254,7 @@ async fn test_add_connection_handler_non_empty_base_url_is_some() {
         conn_model: "llama3".into(),
         conn_api_key: "".into(),
         conn_base_url: "http://localhost:11434".into(),
+        conn_max_context_tokens: "".into(),
         single_user_message: false,
     };
 
@@ -277,6 +280,7 @@ async fn test_edit_connection_handler_updates_connection() {
         conn_model: "new-model".into(),
         conn_api_key: "new-key".into(),
         conn_base_url: "http://new.url".into(),
+        conn_max_context_tokens: "".into(),
         single_user_message: true,
     };
 
@@ -301,6 +305,7 @@ async fn test_edit_connection_handler_not_found() {
         conn_model: "model".into(),
         conn_api_key: "".into(),
         conn_base_url: "".into(),
+        conn_max_context_tokens: "".into(),
         single_user_message: false,
     };
 

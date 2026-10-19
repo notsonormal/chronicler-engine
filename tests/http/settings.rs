@@ -804,8 +804,8 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
             .turn("First narration.")
             .turn("Second narration."),
     );
-    // A mock connection resolves a 4096-token window; an Ollama connection
-    // resolves 8192, so the edit widens the window the narration fits into.
+    // An empty window on a mock connection resolves the provider default of
+    // 4096 tokens; the edit sets a window wide enough for the whole story log.
     let settings = AppSettings {
         connections: vec![mock_connection("narration-conn", "mock-model")],
         narration_connection_id: "narration-conn".into(),
@@ -838,7 +838,7 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
         .clone()
         .oneshot(post_form_request(
             "/connections/narration-conn/edit",
-            "conn_name=Wide&conn_provider=ollama&conn_model=mock-model&conn_api_key=&conn_base_url=",
+            "conn_name=Wide&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_context_tokens=131072",
         ))
         .await
         .unwrap();
@@ -867,11 +867,220 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
     let wide = prompts[1].matches("Story entry ").count();
     assert!(
         tight < 150,
-        "the small window must not carry the whole story log: {tight} entries"
+        "the default window must not carry the whole story log: {tight} entries"
     );
     assert!(
         wide > tight,
         "the window the Connection holds at that moment decides how much of the story \
          log reaches the prompt: {tight} entries before the edit, {wide} after"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.26
+#[tokio::test]
+async fn test_empty_context_window_field_uses_the_provider_default() {
+    let _guard = SettingsTestGuard::new();
+    let model = Arc::new(
+        ScriptedModel::new()
+            .turn("First narration.")
+            .turn("Second narration."),
+    );
+    let mut connection = mock_connection("narration-conn", "mock-model");
+    connection.max_context_tokens = Some(131_072);
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "narration-conn".into(),
+        quantifier_connection_id: "narration-conn".into(),
+        ..AppSettings::default()
+    };
+    let (app, state, storage) = app_with_model_and_storage(
+        Arc::new(empty_sqlite_storage()),
+        model,
+        settings,
+        chronicler_engine::test_support::configured_runner,
+    );
+    let game_id = chronicler_engine::test_support::active_game_of(&state);
+
+    append_narrations(&storage, game_id, 150, |index| {
+        format!(
+            "Story entry {index}: the long tale of the inn, told again at length \
+             for everyone who came to listen that evening."
+        )
+    });
+
+    assert!(post_action(&app, "first look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the first narration should settle"
+    );
+
+    let edited = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/narration-conn/edit",
+            "conn_name=Default&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_context_tokens=",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        edited.status(),
+        StatusCode::OK,
+        "an empty window field should save"
+    );
+
+    assert!(post_action(&app, "second look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the second narration should settle"
+    );
+
+    let prompts: Vec<String> = state
+        .game_view_query
+        .list_latest_llm_messages(20)
+        .expect("the recorded calls read back")
+        .into_iter()
+        .filter(|message| message.agent_name == "narrator")
+        .map(|message| message.user_prompt)
+        .collect();
+    assert_eq!(prompts.len(), 2, "each Action records one narrator call");
+    let wide = prompts[0].matches("Story entry ").count();
+    let narrow = prompts[1].matches("Story entry ").count();
+    assert!(
+        narrow < wide,
+        "an empty window field must fall back to the provider default: {wide} entries \
+         with the explicit window, {narrow} after it was cleared"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.27
+#[tokio::test]
+async fn test_edit_that_changes_the_provider_keeps_an_explicit_context_window() {
+    let _guard = SettingsTestGuard::new();
+    let mut connection = mock_connection("window-conn", "mock-model");
+    connection.max_context_tokens = Some(65_536);
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "window-conn".into(),
+        quantifier_connection_id: "window-conn".into(),
+        ..AppSettings::default()
+    };
+    let (state, _storage) = TestAppBuilder::default_test()
+        .settings(settings)
+        .build_service_with_storage();
+    let app = build_router(state.clone());
+
+    let response = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/window-conn/edit",
+            "conn_name=Wide&conn_provider=ollama&conn_model=llama3&conn_api_key=&conn_base_url=&conn_max_context_tokens=65536",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let stored = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    let edited = stored
+        .find_connection("window-conn")
+        .expect("the edited connection must still be stored");
+    assert_eq!(edited.provider, LlmBackendType::Ollama);
+    assert_eq!(
+        edited.max_context_tokens,
+        Some(65_536),
+        "the explicit window must survive the provider change"
+    );
+
+    let form = get_body(&app, "/fragment/connections/window-conn/edit").await;
+    assert!(
+        form.contains(r#"name="conn_max_context_tokens" value="65536""#),
+        "the edit form must show the explicit window: {form}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.28
+#[tokio::test]
+async fn test_context_window_that_is_not_a_positive_whole_number_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let mut connection = mock_connection("alpha-conn", "mock-model");
+    connection.name = "Alpha".into();
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "alpha-conn".into(),
+        quantifier_connection_id: "alpha-conn".into(),
+        ..AppSettings::default()
+    };
+    let (state, _storage) = TestAppBuilder::default_test()
+        .settings(settings)
+        .build_service_with_storage();
+    let app = build_router(state.clone());
+
+    for typed in ["wide", "0", "-5", "4294967296"] {
+        let response = app
+            .clone()
+            .oneshot(post_form_request(
+                "/connections/alpha-conn/edit",
+                &format!(
+                    "conn_name=Alpha&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_context_tokens={typed}"
+                ),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "the window '{typed}' must be refused"
+        );
+        let body = body_text(response).await;
+        assert!(
+            body.contains("Context window must be a positive whole number"),
+            "the refusal must name the window rule for '{typed}': {body}"
+        );
+    }
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert!(
+        panel.contains(r#"<span class="connection-name">Alpha</span>"#),
+        "the refused edit must leave the connection list intact: {panel}"
+    );
+    let stored = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    let connection_count = stored.connections.len();
+
+    let added = app
+        .clone()
+        .oneshot(post_form_request(
+            "/connections/add",
+            "conn_name=Refused&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_context_tokens=wide",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        added.status(),
+        StatusCode::BAD_REQUEST,
+        "a refused window must refuse the add too"
+    );
+    let after_add = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    assert_eq!(
+        after_add.connections.len(),
+        connection_count,
+        "a refused window must save no connection"
+    );
+
+    let untouched = after_add
+        .connections
+        .iter()
+        .find(|conn| conn.id == "alpha-conn")
+        .expect("the edited connection must still be stored");
+    assert_eq!(
+        untouched.max_context_tokens, None,
+        "a refused window must store nothing"
     );
 }

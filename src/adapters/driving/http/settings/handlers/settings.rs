@@ -68,13 +68,37 @@ pub struct ConnectionForm {
     pub conn_api_key: String,
     pub conn_base_url: String,
     #[serde(default)]
+    pub conn_max_context_tokens: String,
+    #[serde(default)]
     pub single_user_message: bool,
 }
 
 impl ConnectionForm {
+    /// A blank field follows the provider default: `resolve_max_context_tokens`
+    /// decides it. Anything but a positive whole number is refused.
+    fn resolved_max_context_tokens(&self) -> Result<Option<u32>, String> {
+        let typed = self.conn_max_context_tokens.trim();
+        if typed.is_empty() {
+            return Ok(None);
+        }
+        match typed.parse::<u32>() {
+            Ok(tokens) if tokens > 0 => Ok(Some(tokens)),
+            _ => Err(
+                "Context window must be a positive whole number, or empty for the provider \
+                 default"
+                    .to_string(),
+            ),
+        }
+    }
+
     /// `id` is the stored connection id, or empty for testing unsaved form values.
-    fn into_config(self, id: String, provider: LlmBackendType) -> LlmProviderConfig {
-        LlmProviderConfig {
+    fn into_config(
+        self,
+        id: String,
+        provider: LlmBackendType,
+    ) -> Result<LlmProviderConfig, String> {
+        let max_context_tokens = self.resolved_max_context_tokens()?;
+        Ok(LlmProviderConfig {
             id,
             name: self.conn_name,
             provider,
@@ -83,8 +107,8 @@ impl ConnectionForm {
             base_url: opt_string(&self.conn_base_url),
             single_user_message: self.single_user_message,
             max_tokens: None,
-            max_context_tokens: None,
-        }
+            max_context_tokens,
+        })
     }
 }
 
@@ -154,7 +178,10 @@ pub async fn add_connection_handler(
         Err(e) => return action_refusal_response(e.to_string()),
     };
 
-    let connection = form.into_config(generate_storage_id("conn"), provider);
+    let connection = match form.into_config(generate_storage_id("conn"), provider) {
+        Ok(connection) => connection,
+        Err(message) => return action_refusal_response(message),
+    };
 
     match app_state.settings_service.add_connection(connection) {
         Ok(_) => render_settings_panel(&app_state, None).into_response(),
@@ -174,6 +201,10 @@ pub async fn edit_connection_handler(
 
     let api_key = opt_string(&form.conn_api_key);
     let base_url = opt_string(&form.conn_base_url);
+    let max_context_tokens = match form.resolved_max_context_tokens() {
+        Ok(tokens) => tokens,
+        Err(message) => return action_refusal_response(message),
+    };
     let outcome = app_state
         .settings_service
         .update_connection(&id, move |connection| {
@@ -182,6 +213,7 @@ pub async fn edit_connection_handler(
             connection.model = form.conn_model;
             connection.api_key = api_key;
             connection.base_url = base_url;
+            connection.max_context_tokens = max_context_tokens;
             connection.single_user_message = form.single_user_message;
         });
 
@@ -262,7 +294,10 @@ pub async fn test_form_connection_handler(
         Err(e) => return connection_test_error(&e.to_string(), ConnectionTestSurface::Form),
     };
 
-    let connection = form.into_config(String::new(), provider);
+    let connection = match form.into_config(String::new(), provider) {
+        Ok(connection) => connection,
+        Err(message) => return connection_test_error(&message, ConnectionTestSurface::Form),
+    };
     let service = app_state.connection_test_service.clone();
     let outcome = run_connection_test(move || service.test_connection(&connection)).await;
     match outcome {
