@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narration::{Narrated, Narrator};
-use crate::application::prompting::token_budget::{TokenBudget, MAX_CONTEXT_TOKENS};
+use crate::application::prompting::token_budget::{TokenBudget, MAX_CONTEXT_TOKENS, MAX_HISTORY_TOKENS};
 use crate::application::prompting::{NpcContext, PromptAssembler, PromptContext};
 use crate::domain::model::agent::Role;
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard, Relationship};
@@ -399,6 +399,29 @@ fn test_the_default_window_carries_the_whole_history() {
         "and the newest: {}",
         call.user_prompt
     );
+}
+
+// CASE narrator-history-cap: a history past the history cap keeps its newest text within the cap.
+#[test]
+fn test_a_history_past_the_cap_keeps_its_newest_text() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+    let call = sent_prompt(&fixture.context(&history, "I look around."), &preset());
+
+    let kept = layer(
+        &call.user_prompt,
+        "<ConversationHistory>",
+        "</ConversationHistory>",
+    );
+    let tags = "<ConversationHistory>\n</ConversationHistory>".len();
+    let cap_chars = MAX_HISTORY_TOKENS as usize * 4;
+    assert!(
+        kept.chars().count() <= cap_chars + tags,
+        "the history stays within the cap: {} characters",
+        kept.chars().count()
+    );
+    assert!(kept.contains("Entry 1999 "), "the newest entry must stay");
+    assert!(!kept.contains("Entry 0 "), "the oldest entry goes first");
 }
 
 // CASE narrator-response-cap: the call asks for the budget's response length.

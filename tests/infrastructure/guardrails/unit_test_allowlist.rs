@@ -60,8 +60,6 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
     "application/ports/llm_provider_tests.rs",
     "application/ports/text_checker_tests.rs",
     "application/prompt_preset_service_tests.rs",
-    "application/prompting/token_budget_tests.rs",
-    "application/prompting/utils/context_tests.rs",
     "application/settings_service_tests.rs",
     "application/text_check_service_tests.rs",
     "application/world_catalogue_tests.rs",
