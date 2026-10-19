@@ -6,7 +6,6 @@ use axum::response::{Html, IntoResponse, Response};
 
 use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error};
 use crate::application::errors::ApplicationError;
-use crate::domain::model::state::generation_status::GenerationFailureKind;
 use crate::error::EngineError;
 
 pub(crate) fn error_fragment(message: impl std::fmt::Display) -> String {
@@ -35,12 +34,6 @@ pub fn raw_error_detail(raw: &str) -> String {
     format!("<pre class=\"error-detail-raw\">{}</pre>", html_escape(raw))
 }
 
-/// The 240px status column clamps this sentence to two lines, so any remedy it
-/// names has to be one the dashboard can carry out.
-pub fn generation_failure_summary(kind: GenerationFailureKind, raw: &str) -> String {
-    kind.line(raw)
-}
-
 pub(crate) fn error_fragment_response(message: impl std::fmt::Display) -> Response<Body> {
     Html(error_fragment(message)).into_response()
 }
@@ -66,7 +59,8 @@ pub(crate) fn refusal_message_without_layer_prefix_for_validation_and_config(
     }
 }
 
-/// A non-2xx so htmx never swaps the region the failure describes.
+/// A 500 for an error the request cannot correct; htmx still never swaps the
+/// region the failure describes.
 pub(crate) fn action_failure_response(message: impl std::fmt::Display) -> Response<Body> {
     internal_error(error_fragment(message))
 }

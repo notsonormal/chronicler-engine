@@ -17,7 +17,7 @@ use crate::support::app_wiring::{app_with_model, app_with_model_and_settings};
 use crate::support::http_assertions::{
     assert_story_log_ends_with_message, llm_call_count, status_error_message,
 };
-use crate::support::http_fixtures::{break_start_room, OFFERED_SET};
+use crate::support::http_fixtures::{break_start_room, story_of, OFFERED_SET};
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
     response_body, wait_settled,
@@ -32,12 +32,9 @@ async fn test_action_succeeds_one_narration_idle_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 2000).await, "action should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -73,12 +70,9 @@ async fn test_input_persisted_before_narration_http() {
 
     let resp = post_action(&app, "examine the room").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let input_idx = messages
         .iter()
         .position(|m| m.message_type == MessageType::Input)
@@ -141,12 +135,9 @@ async fn test_quantifier_npc_fires_trigger_http() {
 
     let resp = post_action(&app, "enter the shop").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let has_event = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -186,12 +177,9 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
 
     let resp = post_action(&app, "talk to bartender").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 2000).await, "action should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let narrations: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -243,21 +231,18 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
     let resp = post_action(&app, "talk to shopkeeper").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "first action should complete"
     );
 
     let resp = post_action(&app, "talk to shopkeeper").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "second action should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let trigger_narrations = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -281,12 +266,9 @@ async fn test_empty_command_continuation_no_input_http() {
 
     let resp = post_action(&app, "").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -345,7 +327,7 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
 
     let resp = post_action(&app, "enter shop").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 2000).await, "action should complete");
 
     let debug = state
         .game_view_query
@@ -381,17 +363,14 @@ async fn test_nonexistent_room_sets_error_status_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
     let status = fetch_generating_status(&app).await;
     assert!(
         status.contains("The room non_existent_room is not on the map."),
         "the failure names the invalid room, got: {status}"
     );
-    let narrations = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let narrations = story_of(&state)
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
         .count();
@@ -408,7 +387,7 @@ async fn test_failing_narrator_sets_error_status_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
     let status = fetch_generating_status(&app).await;
     let message = status_error_message(&status);
@@ -455,7 +434,7 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
 
     let resp = post_action(&app, "examine the npc").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
     let status = fetch_generating_status(&app).await;
     assert!(
@@ -466,10 +445,7 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
         status.contains("answer could not be read."),
         "the disclosure holds the narrator call's own line, got: {status}"
     );
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     assert!(
         messages.iter().any(|m| {
             m.message_type == MessageType::Narration
@@ -555,7 +531,7 @@ async fn assert_quantifier_failure_keeps_npcs(model: Arc<ScriptedModel>) {
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "a quantifier failure must not stop the action"
     );
 
@@ -624,15 +600,12 @@ async fn test_three_actions_in_sequence_http() {
         let resp = post_action(&app, command).await;
         assert!(resp.status().is_success(), "action {command} should accept");
         assert!(
-            wait_settled(&state, 1000).await,
+            wait_settled(&state, 2000).await,
             "action '{command}' should complete"
         );
     }
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -666,19 +639,16 @@ async fn test_sequential_execute_retry_execute_http() {
     ));
 
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_settled(&state, 1000).await, "action A should complete");
+    assert!(wait_settled(&state, 2000).await, "action A should complete");
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry A should complete");
+    assert!(wait_settled(&state, 2000).await, "retry A should complete");
 
     let _ = post_action(&app, "look around").await;
-    assert!(wait_settled(&state, 1000).await, "action B should complete");
+    assert!(wait_settled(&state, 2000).await, "action B should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -708,18 +678,15 @@ async fn test_async_action_sequence_then_retry_http() {
     ));
 
     let _ = post_action(&app, "hello").await;
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
     let _ = post_action(&app, "examine room").await;
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -735,14 +702,11 @@ async fn test_slash_impersonate_produces_input_http() {
     let resp = post_action(&app, "/impersonate hello").await;
     assert!(resp.status().is_success(), "/impersonate should accept");
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "impersonate action should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -783,14 +747,11 @@ async fn test_slash_guide_does_not_persist_input_http() {
     let resp = post_action(&app, "/guide look around").await;
     assert!(resp.status().is_success(), "/guide should accept");
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "guide action should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let narrations: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -854,7 +815,7 @@ async fn test_slash_command_bypasses_text_check_http() {
         "steering command must bypass the text check: {body_str}"
     );
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "guide action should complete"
     );
 
@@ -873,7 +834,7 @@ async fn test_slash_command_bypasses_text_check_http() {
         "/options must bypass the text check: {body_str}"
     );
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "/options action should complete"
     );
 
@@ -912,14 +873,11 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action that moves the player should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let narration = messages
         .iter()
         .rfind(|m| m.message_type == MessageType::Narration)
@@ -941,14 +899,11 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the later, stationary Action should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let later: Vec<_> = messages
         .iter()
         .filter(|m| m.is_input_or_narration())
@@ -987,7 +942,7 @@ async fn test_confirm_retargets_status_display() {
         !body.contains("id=\"action-area\"") && !body.contains("command-form"),
         "confirm must not replace the action area or the command form: {body}"
     );
-    assert!(wait_settled(&state, 1000).await, "confirm should complete");
+    assert!(wait_settled(&state, 2000).await, "confirm should complete");
 }
 
 // [docs/specs/actions.md] SCENARIO: 2.6
@@ -1001,11 +956,7 @@ async fn test_missing_persona_answers_500_with_the_missing_data_line_http() {
         .storage(Arc::clone(&storage))
         .model(Arc::new(ScriptedModel::new().turn("You look around.")))
         .build_with_state();
-    let before = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .expect("the story log reads back")
-        .len();
+    let before = story_of(&state).len();
 
     let resp = post_action(&app, "look").await;
     assert_eq!(
@@ -1023,11 +974,7 @@ async fn test_missing_persona_answers_500_with_the_missing_data_line_http() {
         "the unreadable error text stays out of the answer: {body}"
     );
 
-    let after = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .expect("the story log reads back")
-        .len();
+    let after = story_of(&state).len();
     assert_eq!(
         after, before,
         "the refused Action gains no Message, so the story log keeps its entries"

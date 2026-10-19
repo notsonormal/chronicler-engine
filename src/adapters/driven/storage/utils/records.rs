@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! Shared helpers of the new records: the in-memory answer and the JSON columns
+//! Shared helpers of the story records: the in-memory refusal and the JSON columns
 
 use rusqlite::Connection;
 use serde::de::DeserializeOwned;
@@ -8,11 +8,11 @@ use serde::Serialize;
 use crate::domain::model::game::GameId;
 use crate::error::{EngineError, InternalError};
 
-/// The new records run on SQLite only: tier 1 runs on SQLite, and the in-memory
-/// backend holds no record of the rebuild.
+/// The story records run on SQLite only: the in-memory backend stores no story
+/// records, so a record operation there is a programming error.
 pub(crate) fn no_in_memory(operation: &'static str) -> EngineError {
     EngineError::Internal(InternalError::new(format!(
-        "{operation}: the in-memory backend holds no new record; tier 1 runs on SQLite"
+        "{operation}: the in-memory backend stores no story records"
     )))
 }
 
@@ -23,7 +23,6 @@ pub(crate) fn to_json<T: Serialize>(label: &str, value: &T) -> Result<String, En
         .map_err(|e| EngineError::Config(format!("Failed to serialize {label}: {e}")))
 }
 
-/// The JSON a nullable column holds, or none.
 pub(crate) fn to_optional_json<T: Serialize>(
     label: &str,
     value: Option<&T>,
@@ -38,7 +37,6 @@ pub(crate) fn from_json<T: DeserializeOwned>(label: &str, json: &str) -> Result<
         .map_err(|e| EngineError::Config(format!("Failed to parse {label}: {e}")))
 }
 
-/// The value a nullable column holds, or none.
 pub(crate) fn from_optional_json<T: DeserializeOwned>(
     label: &str,
     json: Option<&str>,

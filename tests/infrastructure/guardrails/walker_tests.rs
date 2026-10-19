@@ -14,7 +14,9 @@ const FIXTURE_RULE: u8 = 99;
 pub struct WalkerCase<Row> {
     pub row: Row,
     pub files: &'static [(&'static str, &'static str)],
-    pub expected: usize,
+    /// The item each expected violation must name. A case that expects more
+    /// than one proves which items the walker flagged, not only how many.
+    pub names: &'static [&'static str],
 }
 
 fn files_of(fixtures: &[(&str, &str)]) -> Vec<SourceFile> {
@@ -36,10 +38,21 @@ fn run_cases<Row>(
         let violations = walker(&files_of(case.files), std::slice::from_ref(&case.row));
         assert_eq!(
             violations.len(),
-            case.expected,
+            case.names.len(),
             "{label} fixture over {} files: {violations:?}",
             case.files.len()
         );
+        for name in case.names {
+            let flagged: Vec<&crate::Violation> = violations
+                .iter()
+                .filter(|violation| violation.message.contains(name))
+                .collect();
+            assert_eq!(
+                flagged.len(),
+                1,
+                "{label} fixture must flag `{name}` once: {violations:?}"
+            );
+        }
     }
 }
 
@@ -60,7 +73,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
                 "pub struct Storage {\n    id: AtomicU64,\n}\n",
             ),
         ],
-        expected: 2,
+        names: &["static item `GAME_ID`", "type `AtomicU64`"],
     },
     WalkerCase {
         row: BannedNameRow {
@@ -72,7 +85,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             "adapters/driven/storage/core.rs",
             "static GAME_ID: u64 = 0;\n",
         )],
-        expected: 1,
+        names: &["static item `GAME_ID`"],
     },
     WalkerCase {
         row: BannedNameRow {
@@ -84,7 +97,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             "adapters/driven/storage/core.rs",
             "pub struct Holder {\n    id: AtomicU64,\n}\n",
         )],
-        expected: 1,
+        names: &["type `AtomicU64`"],
     },
     WalkerCase {
         row: BannedNameRow {
@@ -96,7 +109,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             "adapters/driven/storage/core.rs",
             "use std::sync::atomic::AtomicBool;\n",
         )],
-        expected: 1,
+        names: &["import `AtomicBool`"],
     },
     WalkerCase {
         row: BannedNameRow {
@@ -108,7 +121,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             "adapters/driven/storage/core.rs",
             "fn make() -> bool {\n    AtomicBool::new(false).load(SeqCst)\n}\n",
         )],
-        expected: 1,
+        names: &["path `AtomicBool`"],
     },
     WalkerCase {
         row: BannedNameRow {
@@ -120,7 +133,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             "adapters/driven/storage/core.rs",
             "pub fn get(game: GameId) -> GameId {\n    game\n}\n",
         )],
-        expected: 0,
+        names: &[],
     },
     WalkerCase {
         row: BannedNameRow {
@@ -132,7 +145,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             "adapters/driven/storage/core.rs",
             "pub struct Holder {\n    id: GameId,\n}\n",
         )],
-        expected: 0,
+        names: &[],
     },
     // The case mirrors the rule-6 row: the writer file names no narrator and no
     // Agent, not even behind a trait object.
@@ -167,7 +180,12 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
                 "fn write(&self, text: String) {\n    let kind = MessageKind::Narration;\n}\n",
             ),
         ],
-        expected: 4,
+        names: &[
+            "type `Narrator`",
+            "import `AgentRunner`",
+            "trait bound `AnalysisAgent`",
+            "type `OptionsAgent`",
+        ],
     },
     // The `NameContains` kind catches a family of names that share one word, and
     // leaves other names alone.
@@ -181,7 +199,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             "application/generation/gate.rs",
             "fn draft(&self) -> Draft {\n    let draft = Draft::new();\n    draft\n}\n",
         )],
-        expected: 0,
+        names: &[],
     },
     // The trait-bound walk reaches a bound's own path, which is not a type path.
     WalkerCase {
@@ -194,7 +212,7 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             "application/generation/gate.rs",
             "fn analyse(hook: Box<dyn AnalysisAgent>) {\n    hook.run();\n}\n",
         )],
-        expected: 1,
+        names: &["trait bound `AnalysisAgent`"],
     },
 ];
 
@@ -220,7 +238,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
                 "fn move_it(&self, game: GameId) {\n    self.active_game.set(game);\n}\n",
             ),
         ],
-        expected: 2,
+        names: &["call to `ActiveGame::get`", "call to `ActiveGame::set`"],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -233,7 +251,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             "application/pipeline/job.rs",
             "fn run() {\n    let state = ActiveGame::get(&app);\n}\n",
         )],
-        expected: 1,
+        names: &["call to `ActiveGame::get`"],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -246,7 +264,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             "application/games/catalogue.rs",
             "fn run() {\n    let state = ActiveGame::get(&app);\n}\n",
         )],
-        expected: 0,
+        names: &[],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -259,7 +277,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             "application/games/view.rs",
             "fn run() {\n    let state = ActiveGame::get(&app);\n}\n",
         )],
-        expected: 0,
+        names: &[],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -272,7 +290,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             "application/pipeline/job.rs",
             "fn run(active_game: &ActiveGame) {\n    let id = active_game.get();\n}\n",
         )],
-        expected: 1,
+        names: &["call to `ActiveGame::get`"],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -285,7 +303,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             "application/pipeline/job.rs",
             "fn run(state: &State) {\n    state.narrator.narrate(&request);\n}\n",
         )],
-        expected: 1,
+        names: &["call to `Narrator::narrate`"],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -298,7 +316,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             "application/pipeline/job.rs",
             "fn run(job: &Job) {\n    let id = job.get();\n}\n",
         )],
-        expected: 0,
+        names: &[],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -311,7 +329,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             "application/generation/gate.rs",
             "fn run() {\n    self.entries.hold(game);\n}\n",
         )],
-        expected: 1,
+        names: &["call to `hold`"],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -321,7 +339,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             allowed: &[],
         },
         files: &[("adapters/driving/http/action.rs", "pub fn run() {}\n")],
-        expected: 1,
+        names: &["matches no file under `application/`"],
     },
     WalkerCase {
         row: CallSiteRow {
@@ -344,7 +362,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
                 "pub fn tx_token() -> TxToken {\n    TxToken::new()\n}\n",
             ),
         ],
-        expected: 1,
+        names: &["call to `TxToken::new`"],
     },
     // The case mirrors the rule-13 row: only `job.rs` calls the narrator and the
     // hooks of the Agent runner, by path or through a receiver named for the type.
@@ -376,7 +394,11 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
                 "fn rogue(&self) {\n    self.agent_runner.options(&input);\n    AgentRunner::analysis(&runner, &input);\n}\n",
             ),
         ],
-        expected: 3,
+        names: &[
+            "call to `Narrator::narrate`",
+            "call to `AgentRunner::options`",
+            "call to `AgentRunner::analysis`",
+        ],
     },
 ];
 
@@ -392,7 +414,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
             "application/pipeline/job.rs",
             "pub struct Job {\n    state: SwipeState,\n}\n",
         )],
-        expected: 1,
+        names: &["field type `SwipeState`"],
     },
     WalkerCase {
         row: TypeCheckRow {
@@ -405,7 +427,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
             "application/pipeline/job.rs",
             "pub fn run(state: &Tail) {\n    let _ = state;\n}\n",
         )],
-        expected: 1,
+        names: &["parameter type `Tail`"],
     },
     WalkerCase {
         row: TypeCheckRow {
@@ -418,7 +440,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
             "application/pipeline/job.rs",
             "pub struct Job {\n    state: Tail,\n}\n",
         )],
-        expected: 0,
+        names: &[],
     },
     WalkerCase {
         row: TypeCheckRow {
@@ -428,7 +450,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
             position: TypeCheckPosition::Fields,
         },
         files: &[("application/games/catalogue.rs", "pub struct Job {}\n")],
-        expected: 1,
+        names: &["matches no file under `application/pipeline/`"],
     },
     // The case mirrors the rule-7 row: a Job field of a record type is caught, a
     // field of an id or a text is not.
@@ -456,7 +478,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
                 "pub struct Job {\n    writer: JobWriter,\n    game: GameId,\n    tail: Tail,\n}\n",
             ),
         ],
-        expected: 2,
+        names: &["field type `SwipeState`", "field type `Tail`"],
     },
 ];
 
@@ -479,7 +501,7 @@ pub const CALL_COUNT_CASES: &[WalkerCase<CallCountRow>] = &[
                 "fn save(&self) {\n    self.hold(|entries| check(entries));\n    self.hold(|entries| write(entries));\n}\n",
             ),
         ],
-        expected: 1,
+        names: &["calls `hold` 2 times (max 1)"],
     },
     WalkerCase {
         row: CallCountRow {
@@ -493,7 +515,7 @@ pub const CALL_COUNT_CASES: &[WalkerCase<CallCountRow>] = &[
             "application/generation/gate.rs",
             "fn save() {\n    hold(game);\n    hold(game);\n}\n",
         )],
-        expected: 1,
+        names: &["calls `hold` 2 times (max 1)"],
     },
     WalkerCase {
         row: CallCountRow {
@@ -507,7 +529,7 @@ pub const CALL_COUNT_CASES: &[WalkerCase<CallCountRow>] = &[
             "application/generation/gate.rs",
             "fn save() {\n    hold(game);\n}\n\nfn other() {}\n",
         )],
-        expected: 0,
+        names: &[],
     },
     WalkerCase {
         row: CallCountRow {
@@ -521,7 +543,7 @@ pub const CALL_COUNT_CASES: &[WalkerCase<CallCountRow>] = &[
             "application/generation/gate.rs",
             "fn save() {\n    with(|entries| {\n        hold(entries);\n        hold(entries);\n    });\n}\n",
         )],
-        expected: 1,
+        names: &["calls `hold` 2 times (max 1)"],
     },
     WalkerCase {
         row: CallCountRow {
@@ -532,7 +554,7 @@ pub const CALL_COUNT_CASES: &[WalkerCase<CallCountRow>] = &[
             max_calls: 1,
         },
         files: &[("application/games/catalogue.rs", "fn save() {}\n")],
-        expected: 1,
+        names: &["matches `application/generation/gate.rs`"],
     },
 ];
 

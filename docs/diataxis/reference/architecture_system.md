@@ -27,7 +27,7 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 ## Storage Direct Access
 
-`Storage` is a concrete adapter with a `Backend` enum (SQLite / InMemory), wrapped by `BackendKind` (Direct / Test). Every game-scoped method takes the Game as its first argument. The active-Game pointer is not storage state. Application code may call `Storage` directly when the call is part of the persistence boundary; a `StateRepository` port would be a single-impl trait with no real substitution seam, so the boundary is concrete-by-design. Architectural review owns the discipline for which files sit on the boundary.
+`Storage` is a concrete adapter with a `Backend` enum (SQLite / InMemory), wrapped by `BackendKind` (Direct / Test). Every game-scoped method takes the Game as its first argument. The active-Game pointer is not storage state. Application code may call `Storage` directly when the call is part of the persistence boundary. Architectural review owns the discipline for which files sit on the boundary.
 
 The record writes of a Game's story exist only on `Tx`, and only `GameWriter` opens a unit of them (see *Who Owns What*).
 
@@ -79,7 +79,7 @@ An inherent `impl` of a type lives in the file that defines the type, or in a fo
 
 - **HTTP port** — binds a single HTTP port (configurable); serves dashboard + action + polling endpoints. TLS termination and reverse proxying are workspace-operator concerns.
 - **SQLite database** — one file per instance (e.g. `chronicler_3000.db`); auto-created on first access.
-- **File system** — reads JSON seeds from `data/`; writes runtime data to `saves/`; reads/writes prompt presets to `prompts/`.
+- **File system** — reads JSON seeds from `data/`; writes the SQLite database file. Prompt presets and settings are database rows.
 - **Outbound LLM calls** — HTTPS to the configured backend (OpenRouter / DeepSeek / Ollama); endpoint URL configurable.
 - **In-process text check** — `harper_core` linked into the engine binary.
 

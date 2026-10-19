@@ -105,3 +105,21 @@ When the client GET /fragment/story-log
 Then the rendered log holds the Narration's text
 And the client GET /status/generating answers "quantifying"
 ```
+
+#### Scenario 8.9: An edit of a Message that does not exist is refused
+
+```gherkin
+Given a Game whose story log holds its opening Narration
+When the client POST /history/999999 with a new text
+Then the response is 400 Bad Request carrying "Message not found"
+And the story log holds every Message it held before
+```
+
+#### Scenario 8.10: A delete on the opening alone is refused
+
+```gherkin
+Given a Game whose story log holds only its opening Narration
+When the client POST /history/delete
+Then the response is 400 Bad Request carrying "The story keeps its last message"
+And the story log still holds the opening Narration
+```

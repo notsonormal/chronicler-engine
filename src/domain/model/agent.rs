@@ -13,9 +13,9 @@ use crate::domain::model::state::trigger_context::EventRecord;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
-    /// Writes the turn's narration.
+    /// Writes a generation's Narration.
     Narrator,
-    /// Evaluates the turn and patches narrative state.
+    /// Evaluates a generation's Narration and patches the Swipe state.
     Quantifier,
     /// Offers the pickable next actions.
     Options,
@@ -55,7 +55,7 @@ pub enum Hook {
 pub enum Kind {
     /// A player Action or a Retry of one.
     Narration,
-    /// The player dictating their own character's turn.
+    /// The player dictating their own Persona's Message.
     Impersonate,
     /// A Retry that regenerates the player's own message.
     UserRegen,

@@ -16,14 +16,12 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_script};
-use crate::support::http_assertions::llm_call_count;
-use crate::support::http_fixtures::OFFERED_SET;
+use crate::support::http_assertions::{assert_still_thinking, llm_call_count, STILL_THINKING};
+use crate::support::http_fixtures::{story_of, OFFERED_SET};
 use crate::support::http_requests::{
     fetch_body, post_action, post_empty, post_form, response_body, wait_for_jobs, wait_idle,
     wait_settled,
 };
-
-const STILL_THINKING: &str = "Still thinking...";
 
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
@@ -50,10 +48,7 @@ async fn test_action_while_job_runs_is_refused_http() {
     let refused = post_action(&app, "listen").await;
     assert_eq!(refused.status(), StatusCode::OK);
     let body = response_body(refused).await;
-    assert!(
-        body.contains(STILL_THINKING),
-        "the refused Action must answer the wait state, got: {body}"
-    );
+    assert_still_thinking(&body);
     assert_eq!(
         texts_of(&state, active_game_of(&state), MessageType::Input),
         vec!["look".to_string()],
@@ -70,10 +65,7 @@ async fn test_action_while_job_runs_is_refused_http() {
         vec!["look".to_string()],
         "the held Action's own input is the only one saved"
     );
-    let narrations = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .expect("the story log reads back")
+    let narrations = story_of(&state)
         .into_iter()
         .filter(|message| message.message_type == MessageType::Narration)
         .count();
@@ -155,10 +147,7 @@ async fn test_options_while_job_runs_is_refused_http() {
     let refused = post_action(&app, "/options").await;
     assert_eq!(refused.status(), StatusCode::OK);
     let body = response_body(refused).await;
-    assert!(
-        body.contains(STILL_THINKING),
-        "the refused /options must answer the wait state, got: {body}"
-    );
+    assert_still_thinking(&body);
 
     hold.release();
     assert!(
@@ -333,18 +322,12 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
     let edit = post_form(&app, &format!("/history/{target}"), "text=An+edited+text").await;
     assert_eq!(edit.status(), StatusCode::OK);
     let edit_body = response_body(edit).await;
-    assert!(
-        edit_body.contains(STILL_THINKING),
-        "an edit while the Game is busy must answer the wait state, got: {edit_body}"
-    );
+    assert_still_thinking(&edit_body);
 
     let delete = post_empty(&app, "/history/delete").await;
     assert_eq!(delete.status(), StatusCode::OK);
     let delete_body = response_body(delete).await;
-    assert!(
-        delete_body.contains(STILL_THINKING),
-        "a delete while the Game is busy must answer the wait state, got: {delete_body}"
-    );
+    assert_still_thinking(&delete_body);
 
     let after = messages_of(&state, game);
     assert_eq!(
@@ -407,10 +390,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
     let resp = post_empty(&app, &format!("/message/{}/swipe/{target}", narration.id)).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body = response_body(resp).await;
-    assert!(
-        body.contains(STILL_THINKING),
-        "a swipe switch while the Game is busy must answer the wait state, got: {body}"
-    );
+    assert_still_thinking(&body);
 
     let after = messages_of(&state, game)
         .into_iter()

@@ -12,6 +12,8 @@ use chronicler_engine::test_support::{
     active_game_of, TestMap, TestPersona, TestWorld, empty_sqlite_storage,
 };
 
+use crate::support::http_fixtures::story_of;
+
 // [docs/specs/games.md] SCENARIO: 17.1
 #[tokio::test]
 async fn test_create_game_handler() {
@@ -78,10 +80,7 @@ async fn test_create_game_handler() {
         "Should have switched to the new game"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     assert!(
         !messages.is_empty(),
         "New game should have at least one message (scenario introduction)"

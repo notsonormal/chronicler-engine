@@ -1,4 +1,4 @@
-//! HTTP test fixtures: storage seeding and world-card builders for the endpoint tests.
+//! HTTP test fixtures: storage seeding, story reads and world-card builders for the endpoint tests.
 
 use std::sync::Arc;
 
@@ -7,14 +7,22 @@ use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::dock::DockRecord;
 use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::message::{Maker, Message, Swipe, SwipeAt};
-use chronicler_engine::domain::model::state::swipe_state::SwipeState;
 use chronicler_engine::domain::model::state::message_types::{MessageKind, MessageType};
+use chronicler_engine::domain::model::state::swipe_state::SwipeState;
 use chronicler_engine::domain::model::map::MapDef;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
     active_game_of, empty_sqlite_storage, tx_token, TestMap, TestPersona, TestWorld,
 };
+
+/// The whole story of the active Game, read through the view seam.
+pub fn story_of(state: &AppState) -> Vec<Message> {
+    state
+        .game_view_query
+        .story_messages(active_game_of(state))
+        .expect("the story log reads back")
+}
 
 /// The offered set an Options call installs, in the shape the parser reads.
 pub const OFFERED_SET: &str = "<suggestion>Search the desk</suggestion>\

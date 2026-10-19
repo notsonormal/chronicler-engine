@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
 use crate::application::games::active::ActiveGame;
-use crate::domain::model::game::{Game, GameId, PresetSelection};
+use crate::adapters::driven::storage::worlds::WorldWithMap;
+use crate::domain::model::character::PersonaCard;
+use crate::domain::model::game::{Game, GameId, NewGame, PresetSelection};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::generate_game_name;
 use crate::adapters::driven::storage::Storage;
@@ -40,40 +42,17 @@ impl GameCatalogue {
         let world_with_map = storage
             .get_world(world_key)?
             .ok_or_else(|| ApplicationError::validation("World not found"))?;
-        let world_name = world_with_map.world_card.name.clone();
-        let world_card = &world_with_map.world_card;
         let player = storage
             .get_persona(persona_key)?
             .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
-        let games = storage.list_games()?;
-        let existing_names: Vec<String> = games.iter().map(|g| g.name.clone()).collect();
-        let name = generate_game_name(&world_name, &existing_names);
-
-        let (bundle, options_preset_id) = {
-            let settings = self.storage.get_settings()?;
-            (
-                settings
-                    .mode_preset_registry
-                    .bundle_for(world_card.narrator_mode),
-                settings.active_options_prompt_preset_id.clone(),
-            )
-        };
-
-        let request = crate::domain::model::game::NewGame {
-            world_name: world_name.clone(),
-            world_key: world_key.to_string(),
-            persona_key: persona_key.to_string(),
-            persona_name: player.sheet.name.clone(),
-            name: name.clone(),
-            narrator_mode: world_card.narrator_mode,
-            narrative_perspective: world_card.narrative_perspective,
-            narrative_tense: world_card.narrative_tense,
-            system_prompt_preset_id: bundle.system_prompt_preset_id,
-            quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id,
-            impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id,
-            options_prompt_preset_id: options_preset_id,
-            options_always_on: world_card.options_always_on,
-        };
+        let existing_names: Vec<String> = storage
+            .list_games()?
+            .iter()
+            .map(|g| g.name.clone())
+            .collect();
+        let name = generate_game_name(&world_with_map.world_card.name, &existing_names);
+        let request =
+            self.new_game_request(&world_with_map, &player, world_key, persona_key, name)?;
 
         // One create unit: the Game, its empty dock record and the opening Narration.
         let new_id = self.game_writer.create(&request)?;
@@ -238,8 +217,6 @@ impl GameCatalogue {
         let world_with_map = storage
             .get_world(&world_key)?
             .ok_or_else(|| ApplicationError::validation("World not found"))?;
-        let world_name = world_with_map.world_card.name.clone();
-        let world_card = &world_with_map.world_card;
         let player = storage
             .get_persona(&persona_key)?
             .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
@@ -254,36 +231,46 @@ impl GameCatalogue {
             .map(|g| g.name)
             .collect();
 
-        let new_name = generate_game_name(&world_name, &existing_names);
-        let (bundle, options_preset_id) = {
-            let settings = self.storage.get_settings()?;
-            (
-                settings
-                    .mode_preset_registry
-                    .bundle_for(world_card.narrator_mode),
-                settings.active_options_prompt_preset_id.clone(),
-            )
-        };
-        let request = crate::domain::model::game::NewGame {
-            world_name: world_name.clone(),
-            world_key: world_key.clone(),
-            persona_key: persona_key.clone(),
-            persona_name: player.sheet.name.clone(),
-            name: new_name.clone(),
-            narrator_mode: world_card.narrator_mode,
-            narrative_perspective: world_card.narrative_perspective,
-            narrative_tense: world_card.narrative_tense,
-            system_prompt_preset_id: bundle.system_prompt_preset_id,
-            quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id,
-            impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id,
-            options_prompt_preset_id: options_preset_id,
-            options_always_on: world_card.options_always_on,
-        };
+        let new_name = generate_game_name(&world_with_map.world_card.name, &existing_names);
+        let request =
+            self.new_game_request(&world_with_map, &player, &world_key, &persona_key, new_name)?;
         // The reset creates the fresh Game first and then removes the old one, in
         // one hold of the writer's guard, so a refused create leaves the old Game
         // and the pointer as they were.
         let new_id = self.game_writer.replace(current_id, &request)?;
         self.active_game.set(new_id);
         Ok(())
+    }
+
+    /// The create request both `create_game` and `reset` write. The caller picks the
+    /// name, because the two name scans differ.
+    fn new_game_request(
+        &self,
+        world: &WorldWithMap,
+        persona: &PersonaCard,
+        world_key: &str,
+        persona_key: &str,
+        name: String,
+    ) -> Result<NewGame, ApplicationError> {
+        let world_card = &world.world_card;
+        let settings = self.storage.get_settings()?;
+        let bundle = settings
+            .mode_preset_registry
+            .bundle_for(world_card.narrator_mode);
+        Ok(NewGame {
+            world_name: world_card.name.clone(),
+            world_key: world_key.to_string(),
+            persona_key: persona_key.to_string(),
+            persona_name: persona.sheet.name.clone(),
+            name,
+            narrator_mode: world_card.narrator_mode,
+            narrative_perspective: world_card.narrative_perspective,
+            narrative_tense: world_card.narrative_tense,
+            system_prompt_preset_id: bundle.system_prompt_preset_id,
+            quantifier_prompt_preset_id: bundle.quantifier_prompt_preset_id,
+            impersonate_prompt_preset_id: bundle.impersonate_prompt_preset_id,
+            options_prompt_preset_id: settings.active_options_prompt_preset_id.clone(),
+            options_always_on: world_card.options_always_on,
+        })
     }
 }

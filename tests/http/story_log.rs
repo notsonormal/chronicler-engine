@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::test_support::active_game_of;
 use axum::http::StatusCode;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
@@ -14,8 +13,10 @@ use chronicler_engine::test_support::{
 use crate::support::http_assertions::{
     icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
 };
+use crate::support::http_fixtures::story_of;
 use crate::support::http_requests::{
-    fetch_body, fetch_generating_status, post_action, post_empty, wait_settled,
+    fetch_body, fetch_generating_status, post_action, post_empty, post_form, response_body,
+    wait_settled,
 };
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
@@ -33,10 +34,7 @@ async fn test_delete_last_between_actions_http() {
     let resp = post_action(&app, "examine room").await;
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await, "action A should complete");
-    let narration_a = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let narration_a = story_of(&state)
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
         .map(|m| m.text().to_string())
@@ -50,10 +48,7 @@ async fn test_delete_last_between_actions_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await, "action B should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -91,10 +86,7 @@ async fn test_delete_mid_sequence_http() {
     assert!(wait_settled(&state, 1000).await);
     let _ = post_action(&app, "look around").await;
     assert!(wait_settled(&state, 1000).await);
-    let narration_b = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let narration_b = story_of(&state)
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
         .map(|m| m.text().to_string())
@@ -107,10 +99,7 @@ async fn test_delete_mid_sequence_http() {
     let _ = post_action(&app, "check door").await;
     assert!(wait_settled(&state, 1000).await);
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -122,6 +111,58 @@ async fn test_delete_mid_sequence_http() {
             .filter(|m| m.message_type == MessageType::Narration)
             .any(|m| m.text() == narration_b),
         "deleted narration B should not reappear"
+    );
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.9
+#[tokio::test]
+async fn test_edit_of_an_unknown_message_is_refused_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let before: Vec<(u64, String)> = story_of(&state)
+        .into_iter()
+        .map(|message| (message.id, message.text().to_string()))
+        .collect();
+
+    let resp = post_form(&app, "/history/999999", "text=Changed.").await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("Message not found"),
+        "the refusal names what the edit could not find: {body}"
+    );
+
+    let after: Vec<(u64, String)> = story_of(&state)
+        .into_iter()
+        .map(|message| (message.id, message.text().to_string()))
+        .collect();
+    assert_eq!(after, before, "the refused edit changes no Message");
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.10
+#[tokio::test]
+async fn test_delete_of_the_only_message_is_refused_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let before = story_of(&state);
+    assert_eq!(
+        before.len(),
+        1,
+        "the seeded Game holds only its opening Narration"
+    );
+
+    let resp = post_empty(&app, "/history/delete").await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The story keeps its last message"),
+        "the refusal says why the delete cannot run: {body}"
+    );
+
+    let after = story_of(&state);
+    assert_eq!(after.len(), 1, "the refused delete drops no Message");
+    assert_eq!(
+        after[0].text(),
+        before[0].text(),
+        "the opening Narration stays"
     );
 }
 

@@ -47,3 +47,13 @@ When the client switches to the second Swipe
 Then the player stands in "room_1"
 And that Narration reports no room
 ```
+
+#### Scenario 36.5: A swipe index past the last Swipe is refused
+
+```gherkin
+Given a Game whose last Message has two Swipes
+When the client POST /message/:id/swipe/2
+Then the response is 400 Bad Request carrying "Swipe index out of bounds"
+And the last Message keeps the active Swipe it had
+And the last Message keeps its two Swipes
+```

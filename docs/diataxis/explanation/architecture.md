@@ -75,7 +75,7 @@ A small set of guarantees follow from the shape above. Each is machine-checked o
 - Domain purity — domain code has no `tokio`, no I/O, no HTTP types. Tested without a runtime.
 - Single-process deployment — one engine, one database; the registry of job entries is process-local.
 - Tokio-only concurrency — `spawn_blocking` for synchronous services; no `std::thread::spawn` anywhere in `src/`.
-- Lock-poison recovery — every `Mutex`/`RwLock` site recovers via `into_inner()`; a panic does not corrupt the lock.
+- Lock-poison recovery — every `Mutex` site recovers via `into_inner()`; a panic does not corrupt the lock.
 - Restart safety — the busy mark lives in memory, and each save unit lands whole, so a restart leaves every Game idle and no record half-written.
 - One Job per Game — a second request for a busy Game is refused with "Still thinking...", matching single-player semantics.
 

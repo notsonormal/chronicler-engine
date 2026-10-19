@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::ScriptedModel;
 use chronicler_engine::TestAppBuilder;
 
+use crate::support::http_fixtures::story_of;
 use crate::support::http_requests::{post_action, post_empty, wait_settled};
 
 // [docs/specs/reset.md] SCENARIO: 7.1
@@ -18,10 +18,7 @@ async fn test_reset_clears_history_http() {
 
     let _ = post_action(&app, "examine room").await;
     assert!(wait_settled(&state, 1000).await);
-    let before = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let before = story_of(&state);
     assert!(
         before.iter().any(|m| m.message_type == MessageType::Input),
         "history should have an Input before reset"
@@ -30,10 +27,7 @@ async fn test_reset_clears_history_http() {
     let resp = post_empty(&app, "/reset").await;
     assert!(resp.status().is_success());
 
-    let after = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let after = story_of(&state);
     let inputs: Vec<_> = after
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -76,10 +70,7 @@ async fn test_reset_then_execute_works_http() {
         "action after reset should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)

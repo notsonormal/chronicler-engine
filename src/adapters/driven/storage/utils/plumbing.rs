@@ -33,6 +33,20 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
             > 0
     }
 
+    fn games_with_unknown_world(conn: &Connection) -> Result<Vec<String>, EngineError> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT name FROM games \
+                 WHERE world_key NOT IN (SELECT key FROM worlds)",
+            )
+            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+    }
+
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap_or(0);
@@ -44,13 +58,12 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         .unchecked_transaction()
         .map_err(|e| EngineError::Config(format!("Failed to begin migration: {e}")))?;
     let conn = &tx;
+    let exec = |sql: &str| {
+        conn.execute(sql, [])
+            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+    };
 
     if due(9) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         exec(
             "CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,11 +162,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(10) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         exec(
             "CREATE TABLE IF NOT EXISTS worlds (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -243,11 +251,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(12) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         if !column_exists(conn, "games", "world_key") {
             exec("ALTER TABLE games ADD COLUMN world_key TEXT NOT NULL DEFAULT ''")?;
         }
@@ -263,11 +266,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(13) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         exec("ALTER TABLE games ADD COLUMN persona_key TEXT NOT NULL DEFAULT ''")?;
         exec("ALTER TABLE games ADD COLUMN persona_name TEXT NOT NULL DEFAULT ''")?;
         exec("ALTER TABLE worlds DROP COLUMN player_key")?;
@@ -276,10 +274,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(14) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
         if column_exists(conn, "worlds", "starting_room_id") {
             exec("ALTER TABLE worlds DROP COLUMN starting_room_id")?;
         }
@@ -288,10 +282,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(15) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
         if !column_exists(conn, "message_swipes", "replay") {
             exec("ALTER TABLE message_swipes ADD COLUMN replay TEXT")?;
         }
@@ -300,10 +290,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(16) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
         if !column_exists(conn, "settings", "active_impersonate_prompt_preset_id") {
             exec(
                 "ALTER TABLE settings ADD COLUMN active_impersonate_prompt_preset_id \
@@ -315,10 +301,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(17) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
         if column_exists(conn, "messages", "sender") {
             exec("ALTER TABLE messages DROP COLUMN sender")?;
         }
@@ -327,10 +309,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(18) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
         if !column_exists(conn, "settings", "narrative_perspective") {
             exec(
                 "ALTER TABLE settings ADD COLUMN narrative_perspective \
@@ -348,11 +326,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(19) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         if !column_exists(conn, "worlds", "narrator_mode") {
             exec("ALTER TABLE worlds ADD COLUMN narrator_mode TEXT NOT NULL DEFAULT 'novel'")?;
         }
@@ -405,19 +378,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
                narrative_tense = COALESCE((SELECT narrative_tense FROM worlds WHERE worlds.key = games.world_key), 'past')",
         )?;
 
-        let orphans: Vec<String> = {
-            let mut stmt = conn
-                .prepare(
-                    "SELECT name FROM games \
-                     WHERE world_key NOT IN (SELECT key FROM worlds)",
-                )
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
-            let rows = stmt
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
-            rows.collect::<Result<Vec<_>, _>>()
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
-        };
+        let orphans = games_with_unknown_world(conn)?;
         for key in &orphans {
             tracing::warn!(
                 "migration v19: game '{key}' references world_key with no matching world row; \
@@ -475,11 +436,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(20) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // The column is born all-allowed on every existing row — no user value
         // can pre-exist a column at birth.
         if !column_exists(conn, "prompt_presets", "allowed_modes") {
@@ -514,11 +470,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(21) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // The prompt assembler stamps world posture as the sole owner; nothing
         // reads the per-game copies.
         if column_exists(conn, "games", "narrative_perspective") {
@@ -533,11 +484,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(22) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // A corrupt v15 replay blob degraded the turn to a plain retry at parse
         // time, so the backfill skips non-JSON values. Producers never set
         // impersonate_direction and guide together; the impersonate direction wins.
@@ -562,11 +508,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(23) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // Restore the per-game posture columns v21 dropped as write-only: the
         // narration path now reads posture from the game, so the copies are
         // live data again. Backfill mirrors v19.
@@ -585,19 +526,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
                narrative_tense = COALESCE((SELECT narrative_tense FROM worlds WHERE worlds.key = games.world_key), 'past')",
         )?;
 
-        let orphans: Vec<String> = {
-            let mut stmt = conn
-                .prepare(
-                    "SELECT name FROM games \
-                     WHERE world_key NOT IN (SELECT key FROM worlds)",
-                )
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
-            let rows = stmt
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
-            rows.collect::<Result<Vec<_>, _>>()
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
-        };
+        let orphans = games_with_unknown_world(conn)?;
         for key in &orphans {
             tracing::warn!(
                 "migration v23: game '{key}' references world_key with no matching world row; \
@@ -610,11 +539,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(24) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // Options autogeneration follows the v19/v23 posture pattern. The options
         // preset id is mode-agnostic; games inherit a copy from settings at creation.
         if !column_exists(conn, "worlds", "options_always_on") {
@@ -641,19 +565,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
                options_always_on = COALESCE((SELECT options_always_on FROM worlds WHERE worlds.key = games.world_key), 0)",
         )?;
 
-        let orphans: Vec<String> = {
-            let mut stmt = conn
-                .prepare(
-                    "SELECT name FROM games \
-                     WHERE world_key NOT IN (SELECT key FROM worlds)",
-                )
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
-            let rows = stmt
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
-            rows.collect::<Result<Vec<_>, _>>()
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
-        };
+        let orphans = games_with_unknown_world(conn)?;
         for key in &orphans {
             tracing::warn!(
                 "migration v24: game '{key}' references world_key with no matching world row; \
@@ -666,11 +578,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(25) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // The Game display name is separate from the stable generated `name`,
         // so a rename can never disturb the uniqueness scan. Existing rows are
         // backfilled from their key so the first render after upgrade already
@@ -702,11 +609,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(26) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // The `impersonated` flag picks the owner column, so no row ends up with
         // both: the old merged column fills that column and the split column
         // keeps the other. The old column is dropped below, so the UPDATE runs
@@ -731,11 +633,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(27) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // The new columns are additive and backfill nothing. `room_report` renames
         // today's `location_header`, so the existing rows survive with no reader
         // picking between two columns.
@@ -766,11 +663,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(28) {
-        let exec = |sql: &str| {
-            conn.execute(sql, [])
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-        };
-
         // The Snapshot tables go, and so do the Games the older code saved: their
         // Messages hold no kind and their Swipes no state and no maker, which the new
         // records require. The two tables are rebuilt empty, because SQLite cannot

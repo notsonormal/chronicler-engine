@@ -3,7 +3,7 @@
 use axum::http::StatusCode;
 
 use crate::adapters::driving::http::utils::response::{
-    bad_request, html_escape, internal_error, ok, ok_refresh, service_unavailable,
+    bad_request, html_escape, internal_error, ok, ok_refresh,
 };
 use crate::adapters::driving::http::utils::error::render_error;
 use crate::test_support::body_text;
@@ -40,13 +40,6 @@ async fn internal_error_returns_500_with_body() {
     let resp = internal_error("boom");
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(body_text(resp).await, "boom");
-}
-
-#[tokio::test]
-async fn service_unavailable_returns_503_with_body() {
-    let resp = service_unavailable("try later");
-    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(body_text(resp).await, "try later");
 }
 
 #[test]

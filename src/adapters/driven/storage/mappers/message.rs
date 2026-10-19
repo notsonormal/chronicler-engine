@@ -70,12 +70,7 @@ impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
         }
 
         if !message.swipes.is_empty() {
-            let fallback_applied = message.ensure_valid_swipe_index();
-            if fallback_applied {
-                message.set_active_swipe(0);
-            } else {
-                message.set_active_swipe(message.active_swipe_index);
-            }
+            message.ensure_valid_swipe_index();
         }
 
         Ok(message)

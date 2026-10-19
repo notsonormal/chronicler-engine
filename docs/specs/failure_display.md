@@ -124,3 +124,29 @@ Then the status response carries the contradiction line
 And the story log holds that Action's Narration text
 And the raw internal message appears once, inside that response's disclosure
 ```
+
+#### Scenario 38.11: A refused save keeps its own line and saves no Narrations
+
+```gherkin
+Given a Game whose storage refuses the write of a Narration's text
+And a narrator backend that answers the narration prompt
+When the client POST /action with command="look"
+And the Job ends
+And the client GET /status/generating
+Then the status response carries the save-failed line, not the line for an unnamed failure
+And the raw storage error is reachable only inside the response's disclosure
+And the story log holds that Action's Input
+And the story log holds no Narration of that Action
+```
+
+#### Scenario 38.12: A prompt too long for the connection keeps its own line
+
+```gherkin
+Given a Game whose narration connection holds a context window too small for the system prompt and the fixed input budget
+When the client POST /action with command="look"
+And the Job ends
+And the client GET /status/generating
+Then the status response carries the prompt-too-long line, not the line for an unnamed failure
+And the raw context-overflow message is reachable only inside the response's disclosure
+And the story log holds no Narration of that Action
+```

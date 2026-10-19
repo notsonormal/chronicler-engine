@@ -177,18 +177,15 @@ impl TestData {
                 .seed_character(world_id, npc)
                 .expect("test setup: seed character");
         }
-        GameId(
-            crate::test_support::seed_game_row(
-                storage,
-                &crate::test_support::test_new_game(
-                    &self.world.name,
-                    &self.world.key,
-                    &self.persona.key,
-                    &self.persona.sheet.name,
-                    "Test Game",
-                ),
-            )
-            .0,
+        crate::test_support::seed_game_row(
+            storage,
+            &crate::test_support::test_new_game(
+                &self.world.name,
+                &self.world.key,
+                &self.persona.key,
+                &self.persona.sheet.name,
+                "Test Game",
+            ),
         )
     }
 

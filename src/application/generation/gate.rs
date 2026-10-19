@@ -5,8 +5,6 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use tokio_util::sync::CancellationToken;
-
 use crate::adapters::driven::storage::{Storage, Tx, TxToken};
 use crate::domain::model::agent::Kind;
 use crate::domain::model::character::NpcCard;
@@ -55,7 +53,7 @@ pub enum JobRequest {
     Action(String),
     /// `/guide`: a steering direction that shapes the next Narration.
     Guide(String),
-    /// `/impersonate`: the player dictates their own character's turn.
+    /// `/impersonate`: the player dictates their own Persona's Message.
     Impersonate(Option<String>),
     /// `/options`: the Options run alone.
     Options,
@@ -124,8 +122,6 @@ struct JobEntry {
     /// The Job that owns the entry; a save unit whose id differs is refused.
     id: u64,
     step: Step,
-    /// The handle a stop cancels, and the Job observes around a model call.
-    cancel: CancellationToken,
 }
 
 /// The one registry of job entries: a private `Mutex` behind a type whose only
@@ -241,14 +237,7 @@ impl GameWriter {
             // The unit lands before the entry: a refused accept makes no entry, so a
             // Game is never busy for a Job that never started.
             self.accept_unit(game, units)?;
-            entries.insert(
-                game,
-                JobEntry {
-                    id: job_id,
-                    step,
-                    cancel: CancellationToken::new(),
-                },
-            );
+            entries.insert(game, JobEntry { id: job_id, step });
             Ok((
                 JobWriter {
                     writer: self.clone(),
@@ -266,9 +255,7 @@ impl GameWriter {
 
     pub fn stop(&self, game: GameId) -> Result<(), EngineError> {
         self.hold(|entries, units| {
-            if let Some(entry) = entries.remove(&game) {
-                entry.cancel.cancel();
-            }
+            entries.remove(&game);
             let record = DockRecord {
                 offered: self.dock_of(game)?.offered,
                 notice: None,
@@ -348,29 +335,25 @@ impl GameWriter {
         self.hold(|_entries, units| self.create_unit(new, &opening, units))
     }
 
-    /// Both units run in one hold, and the old Game's Job ends under the same guard,
-    /// so its next save unit is refused and its model call stops. The create unit
-    /// runs first: a failure there leaves the old Game and its Job entry as they
-    /// were, so the active-Game pointer never names a deleted Game.
+    /// Both units run in one hold, and the old Game's Job entry ends under the same
+    /// guard, so its next save unit or step is refused by the id check; a running
+    /// model call ends on its own. The create unit runs first: a failure there
+    /// leaves the old Game, its entry and the pointer as they were.
     pub fn replace(&self, old: GameId, new: &NewGame) -> Result<GameId, EngineError> {
         let opening = self.opening_message(new)?;
         self.hold(|entries, units| {
             let new_id = self.create_unit(new, &opening, units)?;
-            if let Some(entry) = entries.remove(&old) {
-                entry.cancel.cancel();
-            }
+            entries.remove(&old);
             units.open(old, |tx| tx.delete_game())?;
             Ok(new_id)
         })
     }
 
-    /// One hold: the Game's job entry ends under the same guard as its rows, so a
-    /// Job still running on it stops before its records go.
+    /// One hold: the Game's job entry ends under the same guard as its rows, so the
+    /// Job's next save unit or step is refused by the id check before its records go.
     pub fn delete(&self, game: GameId) -> Result<(), EngineError> {
         self.hold(|entries, units| {
-            if let Some(entry) = entries.remove(&game) {
-                entry.cancel.cancel();
-            }
+            entries.remove(&game);
             units.open(game, |tx| tx.delete_game())
         })
     }
@@ -664,16 +647,6 @@ impl JobWriter {
         self.id
     }
 
-    /// `None` once the entry is gone: a stop or a reset ended the Job.
-    pub fn cancelled(&self) -> Option<CancellationToken> {
-        self.writer.hold(|entries, _units| {
-            entries
-                .get(&self.game)
-                .filter(|entry| entry.id == self.id)
-                .map(|entry| entry.cancel.clone())
-        })
-    }
-
     /// One hold for this Job: the Game's entry must still hold this Job's id, and
     /// the units of `f` open under the same lock.
     fn hold<T>(
@@ -724,7 +697,7 @@ impl JobWriter {
             let empties_the_dock = Self::empties_the_dock(order.kind);
             let at = match order.place {
                 Place::NewMessage => {
-                    let swipe = Self::text_swipe(order, text.clone(), pre, None);
+                    let swipe = Self::text_swipe(order, text, pre, None);
                     let message = Message::new(
                         generation_record::message_type(order.kind),
                         Self::message_kind_of(order)?,

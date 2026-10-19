@@ -73,7 +73,7 @@ impl Narrator {
     }
 
     /// `role` is the role whose health the call feeds: the narrator's own for a
-    /// turn, and the Trigger's for an event Narration.
+    /// generation, and the Trigger's for an event Narration.
     pub fn narrate(
         &self,
         role: Role,
@@ -96,7 +96,7 @@ impl Narrator {
                 Some(assembled.max_tokens),
             )
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
-        tracing::info!("Pipeline ✓ Narration complete");
+        tracing::info!("Narration complete");
 
         let text = narration_result.text;
         if text.trim().is_empty() {

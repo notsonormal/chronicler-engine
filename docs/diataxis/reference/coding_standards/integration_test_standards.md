@@ -252,8 +252,8 @@ failure, and the fake panics when it drops with a stray call on record.
 that role until `release()`; the hold also releases with the handle, so a
 failing test cannot strand the held call. This is how a test arranges a real Job
 whose Game is busy: `tests/http/races.rs` holds one Job and asserts the second
-request's answer (actions.md 3.4, 3.5; options.md 24.21), and `swipe_new.rs`
-12.1 and `retrigger.rs` 15.1 do the same.
+request's answer, and `swipe_new.rs` and `retrigger.rs` hold a Job the same
+way.
 
 `MockBackend` stays the lenient runtime provider of `LlmBackendType::Mock`,
 which the browser tier and dev runs use.

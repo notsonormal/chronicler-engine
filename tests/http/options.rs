@@ -14,7 +14,7 @@ use chronicler_engine::test_support::{
 
 use crate::support::app_wiring::{app_with_script, app_with_script_and_agents};
 use crate::support::http_assertions::{defined_icons, referenced_icons, status_error_message};
-use crate::support::http_fixtures::{if_world, seed_offered_set};
+use crate::support::http_fixtures::{if_world, seed_offered_set, story_of};
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
     wait_settled,
@@ -57,11 +57,7 @@ fn current_options(state: &AppState) -> Vec<String> {
 }
 
 fn message_count(state: &AppState) -> usize {
-    state
-        .game_view_query
-        .story_messages(active_game_of(state))
-        .unwrap()
-        .len()
+    story_of(state).len()
 }
 
 /// The dock's notice line, or `None` when the dock renders the offered set.
@@ -721,10 +717,7 @@ async fn test_using_offered_option_submits_as_input_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await, "/options should complete");
 
-    let inputs_before = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let inputs_before = story_of(&state)
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
         .count();
@@ -739,10 +732,7 @@ async fn test_using_offered_option_submits_as_input_http() {
         "the submitted option should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)

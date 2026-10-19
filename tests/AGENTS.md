@@ -114,7 +114,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - **support/**
       - `app_wiring.rs` — Test-app builders for the http test binary: scripted-model AppState + router bundles.
       - `http_assertions.rs` — Rendered-HTML assertions shared by the http test binary.
-      - `http_fixtures.rs` — HTTP test fixtures: storage seeding and world-card builders for the endpoint tests.
+      - `http_fixtures.rs` — HTTP test fixtures: storage seeding, story reads and world-card builders for the endpoint tests.
       - `http_requests.rs` — HTTP request plumbing for the http test binary: POST builders, body readers, generation-idle polling.
       - `mod.rs` — Concept modules for the HTTP test binary's shared surface (requests, fixtures, assertions, app wiring).
 - **infrastructure/**

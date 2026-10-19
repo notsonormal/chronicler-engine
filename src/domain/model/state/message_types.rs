@@ -18,7 +18,7 @@ pub enum MessageType {
 pub enum MessageKind {
     /// Free text the player typed.
     TypedInput,
-    /// The player dictating their own character's turn.
+    /// The player dictating their own Persona's Message.
     ImpersonateInput,
     /// A Narration the narrator wrote.
     Narration,

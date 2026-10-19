@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! ApplicationError — the error envelope of the application services.
 
-use crate::error::{EngineError, InternalError};
+use crate::error::EngineError;
 
 pub enum ApplicationError {
     /// Input failed domain validation; payload is the user-facing reason.
@@ -13,10 +13,6 @@ pub enum ApplicationError {
 impl ApplicationError {
     pub fn validation(msg: impl Into<String>) -> Self {
         Self::Validation(msg.into())
-    }
-
-    pub fn internal(msg: impl Into<String>) -> Self {
-        Self::Engine(EngineError::Internal(InternalError::new(msg)))
     }
 
     /// Lifts an engine error, keeping a domain refusal on the variant the HTTP

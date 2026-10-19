@@ -45,7 +45,7 @@ The seeding order satisfies the foreign-key edges. Worlds and maps are seeded fi
 
 Every write to the records of a Game's story runs inside one `Tx`. A `Tx` is one SQLite transaction. It holds the backend mutex for its whole run and rolls back when it is dropped without a commit. A save unit therefore lands whole or not at all.
 
-The unit is the answer to a failure that sequential statements allow. A Narration is a Message row, a Swipe row and, in the older design, a separate state row that referenced them. A crash between two statements left a text with no state, or a state with no text. The Swipe now holds its own Swipe state, so the common write is one Swipe row, and a write that needs more than one row (create, a text save, a swipe switch, a delete) writes them in one unit.
+The unit is the answer to a failure that sequential statements allow: a crash between two statements leaves a text with no state, or a state with no text. The Swipe holds its own Swipe state, so the common write is one Swipe row, and a write that needs more than one row (create, a text save, a swipe switch, a delete) writes them in one unit.
 
 The dock record is a table of its own, because the config routes write the Game record with no busy check.
 

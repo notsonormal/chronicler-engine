@@ -16,22 +16,10 @@ pub enum GenerationStatus {
     Error(GenerationFailure),
 }
 
-impl GenerationStatus {
-    pub fn is_generating(&self) -> bool {
-        matches!(self, Self::Generating)
-    }
-
-    pub fn failure(&self) -> Option<&GenerationFailure> {
-        match self {
-            Self::Error(failure) => Some(failure),
-            _ => None,
-        }
-    }
-}
-
 impl GenerationFailureKind {
-    /// The words are the design's failure table; only a line that names something
-    /// reads `named`.
+    /// The 240px status column clamps this sentence to two lines, so any remedy it
+    /// names has to be one the dashboard can carry out. The words are the design's
+    /// failure table; only a line that names something reads `named`.
     pub fn line(self, named: &str) -> String {
         let named = named.trim_end_matches('.');
         match self {
@@ -164,13 +152,6 @@ impl GenerationFailure {
             _ => GenerationFailureKind::Other,
         };
         Self::new(kind, error.to_string())
-    }
-
-    /// Keeps the failing step in the disclosure, which the classified error alone
-    /// does not carry.
-    pub fn with_context(mut self, context: impl std::fmt::Display) -> Self {
-        self.raw = format!("{context}: {}", self.raw);
-        self
     }
 }
 

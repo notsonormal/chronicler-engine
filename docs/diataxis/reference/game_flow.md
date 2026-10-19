@@ -20,7 +20,7 @@ A `JobPlan` holds the order of one request, and a `GenerationOrder` the order of
 
 ## The Job Entry and Busy
 
-`GameWriter` owns one registry of **job entries**, one for each busy Game. A job entry holds the Job's id, the current `Step` and a cancel handle. A Game is busy when its job entry exists.
+`GameWriter` owns one registry of **job entries**, one for each busy Game. A job entry holds the Job's id and the current `Step`. A Game is busy when its job entry exists.
 
 No saved record holds the busy mark or the step. A restart loses every job entry, so every Game is idle after a start.
 
@@ -68,7 +68,7 @@ The status of a Game has one rule. A busy Game shows the step of its job entry. 
 
 ## Stop and Reset
 
-A **stop** removes the job entry, cancels its handle, clears the failure line and clears the notice of the dock record. The Game is idle at once. The Job starts no further step, and the id check refuses any later save of the stopped Job. Every save unit that landed before the stop stays. A model call that runs when the stop comes runs to its end, and the id check refuses its answer.
+A **stop** removes the job entry, clears the failure line and clears the notice of the dock record. The Game is idle at once. The Job starts no further step, and the id check refuses any later save of the stopped Job. Every save unit that landed before the stop stays. A model call that runs when the stop comes runs to its end, and the id check refuses its answer.
 
 A **reset** creates a new Game and removes the active Game with its job entry. Both writes land in one hold. A Job that ran on the removed Game writes nothing more.
 
@@ -88,7 +88,7 @@ A Swipe also holds the room report that its Message shows. An event Narration's 
 
 One save unit creates a Game. It writes the Game record, an empty dock record and the opening Narration. The opening Narration holds one Swipe: the World's opening text, which can be empty, the starting state, and the starting room as its room report. No LLM call writes it. A reset runs the same unit, so a Game always holds its opening Narration.
 
-A Game switch moves the active-Game pointer and touches the Game's `updated_at`; the newest Game of a World is picked by that column. `GameCatalogue` is the only writer of the pointer.
+A Game switch moves the active-Game pointer and touches the Game's `updated_at`. `GameCatalogue` is the only writer of the pointer.
 
 ## Trigger Evaluation
 

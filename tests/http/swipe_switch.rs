@@ -10,8 +10,8 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::app_wiring::app_with_script;
-use crate::support::http_fixtures::OFFERED_SET;
-use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_settled};
+use crate::support::http_fixtures::{story_of, OFFERED_SET};
+use crate::support::http_requests::{fetch_body, post_action, post_empty, response_body, wait_settled};
 
 /// The first swipe switch the rendered log offers, as `(message id, target
 /// index)`.
@@ -110,6 +110,45 @@ async fn test_switch_swipe_drops_the_offered_option_set_http() {
     );
 }
 
+// [docs/specs/swipe_switch.md] SCENARIO: 36.5
+#[tokio::test]
+async fn test_switch_swipe_past_the_last_swipe_is_refused_http() {
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .turn("You look around again."),
+    );
+
+    let (message_id, _target) = last_message_with_two_swipes(&app, &state).await;
+    let before = story_of(&state)
+        .into_iter()
+        .find(|message| message.id == message_id)
+        .expect("the Narration survives the refused switch");
+
+    let resp = post_empty(&app, &format!("/message/{message_id}/swipe/2")).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("Swipe index out of bounds"),
+        "the refusal names the index it could not reach: {body}"
+    );
+
+    let after = story_of(&state)
+        .into_iter()
+        .find(|message| message.id == message_id)
+        .expect("the Narration survives the refused switch");
+    assert_eq!(after.swipe_count(), 2, "the refused switch adds no Swipe");
+    assert_eq!(
+        after.active_swipe_index, before.active_swipe_index,
+        "the refused switch leaves the active Swipe where it was"
+    );
+    assert_eq!(
+        after.text(),
+        before.text(),
+        "the refused switch leaves the shown text as it was"
+    );
+}
+
 // [docs/specs/swipe_switch.md] SCENARIO: 36.4
 #[tokio::test]
 async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
@@ -134,10 +173,7 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
     assert_eq!(target, 0, "the log offers the other Swipe of the pair");
 
     let narration = |state: &AppState| {
-        state
-            .game_view_query
-            .story_messages(active_game_of(state))
-            .expect("the story log reads back")
+        story_of(state)
             .into_iter()
             .find(|message| message.id == message_id)
             .expect("the Narration survives the switch")

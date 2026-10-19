@@ -262,25 +262,4 @@ impl GameViewQuery {
             .collect();
         Ok(health)
     }
-
-    pub fn active_quantifier_prompt(&self, game_id: GameId) -> String {
-        let preset_id = self
-            .storage
-            .get_settings()
-            .map(|s| self.storage.active_quantifier_preset_id(game_id, &s))
-            .unwrap_or_default();
-        match self.storage.get_preset(&preset_id) {
-            Ok(Some(preset)) => preset.assemble_text(&[], None, None),
-            Ok(None) => {
-                tracing::error!(
-                    "active quantifier preset '{preset_id}' not found — defaults not seeded?"
-                );
-                String::new()
-            }
-            Err(e) => {
-                tracing::error!("preset storage inaccessible: {e}");
-                String::new()
-            }
-        }
-    }
 }

@@ -110,8 +110,7 @@ impl<'a> Tx<'a> {
 
     pub fn insert_message(&mut self, message: &Message) -> Result<u64, EngineError> {
         self.writes.fail_if_injected(TxWrite::InsertMessage)?;
-        let message_type_json = serde_json::to_string(&message.message_type)
-            .map_err(|e| EngineError::Config(format!("Failed to serialize message type: {e}")))?;
+        let message_type_json = to_json("message type", &message.message_type)?;
         self.conn
             .execute(
                 "INSERT INTO messages (game_id, message_type, kind, timestamp, active_swipe_index)

@@ -85,7 +85,10 @@ impl AppState {
         let game_name = self
             .game_view_query
             .game_display_name(game_id)
-            .unwrap_or_else(|_| "Unknown".to_string());
+            .unwrap_or_else(|error| {
+                tracing::warn!("header: the game name could not be read: {error}");
+                "Unknown".to_string()
+            });
         let roles = self
             .game_view_query
             .role_health()

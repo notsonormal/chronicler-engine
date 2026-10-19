@@ -30,7 +30,7 @@ pub struct ActionForm {
     pub command: String,
 }
 
-async fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Response<Body> {
+fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Response<Body> {
     let request = match Action::parse(&command) {
         Action::FreeAction(text) => JobRequest::Action(text),
         Action::Guide(guide) => JobRequest::Guide(guide),
@@ -49,10 +49,9 @@ pub async fn action_handler(
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-    dispatch_action(&state, game_id, command).await
+    dispatch_action(&state, game_id, command)
 }
 
-#[allow(clippy::expect_used)]
 pub async fn action_confirm_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
@@ -67,7 +66,7 @@ async fn dispatch_with_status_headers(
     game_id: GameId,
     command: String,
 ) -> Response<Body> {
-    let mut response = dispatch_action(state, game_id, command).await;
+    let mut response = dispatch_action(state, game_id, command);
     add_status_swap_headers(&mut response);
     response
 }

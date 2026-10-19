@@ -140,15 +140,6 @@ fn test_get_debug_state_populates_fields() {
 }
 
 #[test]
-fn test_active_quantifier_prompt_does_not_panic() {
-    let app = minimal_app();
-    let prompt = app
-        .game_view_query
-        .active_quantifier_prompt(active_game_of(&app));
-    let _ = prompt.len();
-}
-
-#[test]
 fn test_role_health_reads_each_roles_true_newest_attempt() {
     let storage = Arc::new(Storage::new_in_memory());
     storage

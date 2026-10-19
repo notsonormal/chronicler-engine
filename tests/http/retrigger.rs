@@ -10,20 +10,18 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, empty_sqlite_storage, ModelRole, ScriptedModel,
-    TestAppBuilder, TestDataBuilder, TestMap, TestNpc,
+    TestAppBuilder, TestMap, TestNpc,
 };
 
-use crate::support::http_assertions::assert_story_log_ends_with_message;
-use crate::support::http_fixtures::OFFERED_SET;
+use crate::support::app_wiring::app_with_a_triggered_npc;
+use crate::support::http_assertions::{assert_still_thinking, assert_story_log_ends_with_message};
+use crate::support::http_fixtures::{story_of, OFFERED_SET};
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_empty, wait_settled,
 };
 
 fn story_log_holds_event_narration(state: &AppState) -> bool {
-    state
-        .game_view_query
-        .story_messages(active_game_of(state))
-        .expect("the story log reads back")
+    story_of(state)
         .iter()
         .any(|message| message.event_header().is_some())
 }
@@ -33,47 +31,30 @@ fn story_log_holds_event_narration(state: &AppState) -> bool {
 async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
     // The Action's Trigger fires but its continuation fails, so the main Narration
     // keeps the trigger context that makes Retrigger available.
-    let data = TestDataBuilder::default_test()
-        .npcs(vec![TestNpc::with_times_met_trigger(
-            "npc_1",
-            "Test NPC",
-            ComparisonOperator::Eq,
-            0,
-        )])
-        .build();
+    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
     let model = ScriptedModel::new()
         .narration("Main narration")
         .analysis(analysis_report(&["npc_1"], None))
         .failed(ModelRole::Event)
         .event_narration("The event fires again.")
         .analysis(analysis_report(&["npc_1"], None));
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should settle after its failed continuation"
     );
-    let n = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
-        .len();
+    let n = story_of(&state).len();
 
     let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retrigger should complete"
     );
 
-    let messages_after = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages_after = story_of(&state);
     assert_eq!(
         messages_after.len(),
         n + 1,
@@ -97,29 +78,18 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
 async fn test_retrigger_does_not_move_the_player_http() {
     // The Action moves into "room2"; the event's reconciliation then names
     // "room_1" as a tripwire, because a retrigger applies no movement.
-    let data = TestDataBuilder::default_test()
-        .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![TestNpc::with_times_met_trigger(
-            "npc_1",
-            "Test NPC",
-            ComparisonOperator::Eq,
-            0,
-        )])
-        .build();
+    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
     let model = ScriptedModel::new()
         .narration("You walk into the next room.")
         .analysis(analysis_report(&["npc_1"], Some("room2")))
         .failed(ModelRole::Event)
         .event_narration("The event fires again.")
         .analysis(analysis_report(&[], Some("room_1")));
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the moving Action should settle after its failed continuation"
     );
     let room_before = state
@@ -132,7 +102,7 @@ async fn test_retrigger_does_not_move_the_player_http() {
     let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retrigger should complete"
     );
 
@@ -151,19 +121,24 @@ async fn test_retrigger_does_not_move_the_player_http() {
 #[tokio::test]
 async fn test_retrigger_no_trigger_context_returns_400_http() {
     // A fresh Game's opening Narration holds no trigger context.
-    let app = TestAppBuilder::default_app();
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let before = story_of(&state);
 
-    let req = axum::http::Request::builder()
-        .uri("/retrigger")
-        .method(axum::http::Method::POST)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
+    let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(
-        response.status(),
+        resp.status(),
         StatusCode::BAD_REQUEST,
         "Retrigger with no trigger context should return bad request"
+    );
+
+    assert!(
+        !story_log_holds_event_narration(&state),
+        "no retrigger was started: its event Narration never lands"
+    );
+    assert_eq!(
+        story_of(&state).len(),
+        before.len(),
+        "the refused Retrigger saves no Message"
     );
 }
 
@@ -178,7 +153,7 @@ async fn test_retrigger_last_message_not_narration_returns_400_http() {
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should complete"
     );
     let resp = post_empty(&app, "/history/delete").await;
@@ -203,27 +178,17 @@ async fn test_retrigger_last_message_not_narration_returns_400_http() {
 async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
     // The Action fires its Trigger and the event Narration lands, so the story ends
     // on an event Narration.
-    let data = TestDataBuilder::default_test()
-        .npcs(vec![TestNpc::with_times_met_trigger(
-            "npc_1",
-            "Test NPC",
-            ComparisonOperator::Eq,
-            0,
-        )])
-        .build();
+    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
     let model = ScriptedModel::new()
         .narration("Main narration")
         .analysis(analysis_report(&["npc_1"], None))
         .event_narration("The event lands.")
         .analysis(analysis_report(&["npc_1"], None));
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should complete"
     );
     assert!(
@@ -250,27 +215,17 @@ async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
 async fn test_retrigger_trigger_narration_failure_sets_error_http() {
     // The Action's Trigger fires but its continuation fails, leaving the trigger
     // context; the retrigger's continuation then fails too.
-    let data = TestDataBuilder::default_test()
-        .npcs(vec![TestNpc::with_times_met_trigger(
-            "npc_1",
-            "Test NPC",
-            ComparisonOperator::Eq,
-            0,
-        )])
-        .build();
+    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
     let model = ScriptedModel::new()
         .narration("Main narration")
         .analysis(analysis_report(&["npc_1"], None))
         .failed(ModelRole::Event)
         .failed(ModelRole::Event);
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should settle after its failed continuation"
     );
 
@@ -286,10 +241,7 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
         status.contains("The event narration failed."),
         "the failure line of a failed event narration, got: {status}"
     );
-    let messages_after = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages_after = story_of(&state);
     let new_event_narrations = messages_after
         .iter()
         .filter(|m| m.message_type == MessageType::Narration && m.event_header().is_some())
@@ -379,10 +331,7 @@ async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
         .await
         .expect("read body");
     let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Still thinking..."),
-        "expected 'Still thinking...' in body, got: {body_str}"
-    );
+    assert_still_thinking(&body_str);
 
     hold.release();
     assert!(

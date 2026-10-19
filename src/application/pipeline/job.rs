@@ -331,16 +331,7 @@ impl Job {
         run: impl FnOnce() -> Result<T, Failure>,
     ) -> Result<T, Failure> {
         self.writer.step(step).map_err(Failure::from)?;
-        self.require_alive()?;
         run()
-    }
-
-    /// A stop or a reset cancels the entry, so the Job starts no further step.
-    fn require_alive(&self) -> Result<(), Failure> {
-        match self.writer.cancelled() {
-            Some(token) if !token.is_cancelled() => Ok(()),
-            _ => Err(Failure::Stopped(Stopped::EntryMoved)),
-        }
     }
 
     fn room_check(&self, bundle: &WorldBundle, start: &SwipeState) -> Result<(), Failure> {
@@ -426,7 +417,6 @@ impl Job {
         player_text: &str,
     ) -> Result<QuantifierResult, Failure> {
         let story: Vec<StoryEntry> = history.iter().map(StoryEntry::from).collect();
-        let event = order.event.clone();
         let world = WorldView {
             room: Self::room_of(start, &bundle.map),
             map: &bundle.map,
@@ -440,11 +430,11 @@ impl Job {
             player_text,
             story: &story,
             world: &world,
-            event: event.as_ref(),
+            event: order.event.as_ref(),
         };
         Ok(self
             .agent_runner
-            .analysis(&input, &self.analysis_settings()))
+            .analysis(&input, &self.analysis_settings()?))
     }
 
     /// An event generation writes no room report, so the opening's room stays the one
@@ -556,7 +546,7 @@ impl Job {
                 event: None,
             };
 
-            let outcome = match self.agent_runner.options(&input, &self.options_settings()) {
+            let outcome = match self.agent_runner.options(&input, &self.options_settings()?) {
                 Ok(Some(offered)) => OptionsResult::Offered(offered),
                 Ok(None) => OptionsResult::Unavailable {
                     reason: "Options agent is not available".to_string(),
@@ -783,27 +773,32 @@ impl Job {
         Ok(self.game_row()?.options_always_on)
     }
 
-    fn analysis_settings(&self) -> AgentSettings {
-        AgentSettings {
-            preset: self.preset_text(Storage::active_quantifier_preset_id),
+    fn analysis_settings(&self) -> Result<AgentSettings, Failure> {
+        Ok(AgentSettings {
+            preset: self.preset_text(Storage::active_quantifier_preset_id)?,
             max_tokens: None,
-        }
+        })
     }
 
-    fn options_settings(&self) -> AgentSettings {
-        AgentSettings {
-            preset: self.preset_text(Storage::active_options_preset_id),
+    fn options_settings(&self) -> Result<AgentSettings, Failure> {
+        Ok(AgentSettings {
+            preset: self.preset_text(Storage::active_options_preset_id)?,
             max_tokens: None,
-        }
+        })
     }
 
-    fn preset_text(&self, pick: fn(&Storage, GameId, &AppSettings) -> String) -> Option<String> {
-        let settings = self.storage.get_settings().ok()?;
+    /// The preset's assembled text, or `None` when the Game's preset row is gone.
+    /// A read failure is the Job's failure, not a silent no-preset.
+    fn preset_text(
+        &self,
+        pick: fn(&Storage, GameId, &AppSettings) -> String,
+    ) -> Result<Option<String>, Failure> {
+        let settings = self.storage.get_settings().map_err(Failure::from)?;
         let preset_id = pick(&self.storage, self.writer.game(), &settings);
-        self.storage
-            .get_preset(&preset_id)
-            .ok()
-            .flatten()
-            .map(|preset| preset.assemble_text(&[], None, None))
+        match self.storage.get_preset(&preset_id) {
+            Ok(Some(preset)) => Ok(Some(preset.assemble_text(&[], None, None))),
+            Ok(None) => Ok(None),
+            Err(error) => Err(Failure::from(error)),
+        }
     }
 }

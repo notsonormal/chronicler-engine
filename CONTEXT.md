@@ -37,7 +37,7 @@ The background work that one accepted Action, Retry, Retrigger or Options reques
 _Avoid_: Work, turn
 
 **Job entry**:
-The record in memory that says a Game is busy. It holds the id of the Job, the step that runs, and a cancel handle.
+The record in memory that says a Game is busy. It holds the id of the Job and the step that runs.
 _Avoid_: Busy flag, lock, slot
 
 **Step**:

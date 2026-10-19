@@ -60,7 +60,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - **utils/**
           - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
           - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
-          - `records.rs` — Shared helpers of the new records: the in-memory answer and the JSON columns
+          - `records.rs` — Shared helpers of the story records: the in-memory refusal and the JSON columns
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation

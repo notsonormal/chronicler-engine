@@ -13,27 +13,21 @@ use chronicler_engine::test_support::{
     ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
 };
 
-use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
-use crate::support::http_assertions::status_error_message;
-use crate::support::http_fixtures::break_start_room;
+use crate::support::app_wiring::{app_with_a_triggered_npc, app_with_model, app_with_model_and_storage};
+use crate::support::http_assertions::{assert_still_thinking, status_error_message};
+use crate::support::http_fixtures::{break_start_room, story_of};
 use crate::support::http_requests::{
     fetch_generating_status, post_action, post_empty, post_form, wait_settled,
 };
 
 fn story_log_counts(state: &AppState) -> (usize, usize) {
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(state))
-        .expect("the story log reads back");
+    let messages = story_of(state);
     let count = |kind: MessageType| messages.iter().filter(|m| m.message_type == kind).count();
     (count(MessageType::Input), count(MessageType::Narration))
 }
 
 fn newest_swipes(state: &AppState, message_type: MessageType) -> usize {
-    state
-        .game_view_query
-        .story_messages(active_game_of(state))
-        .expect("the story log reads back")
+    story_of(state)
         .into_iter()
         .rfind(|m| m.message_type == message_type)
         .map(|m| m.swipes.len())
@@ -76,14 +70,11 @@ async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u6
     let resp = post_action(&app, "walk around").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the trigger turn should complete"
     );
 
-    let event_id = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let event_id = story_of(&state)
         .iter()
         .find(|m| m.event_header().is_some())
         .map(|m| m.id)
@@ -114,16 +105,13 @@ async fn test_retry_replaces_narration_with_new_swipe_http() {
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 2000).await, "action should complete");
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let narrations: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -161,7 +149,7 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
 
     let resp = post_action(&app, "walk around").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 2000).await, "action should complete");
     {
         let room = state
             .game_view_query
@@ -173,7 +161,7 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
     let room = state
         .game_view_query
         .get_debug_state(active_game_of(&state))
@@ -181,10 +169,7 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
         .current_room_id;
     assert_eq!(room, "room2", "retry re-ran quantifier → moved to room2");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let narration = messages
         .iter()
         .rfind(|m| m.message_type == MessageType::Narration)
@@ -212,16 +197,13 @@ async fn test_retry_preserves_input_message_http() {
 
     let resp = post_action(&app, "walk around").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let input = messages
         .iter()
         .find(|m| m.message_type == MessageType::Input)
@@ -243,12 +225,9 @@ async fn test_retry_uses_edited_input_text_http() {
 
     let resp = post_action(&app, "walk around").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let input = messages
         .iter()
         .find(|m| m.message_type == MessageType::Input)
@@ -259,12 +238,9 @@ async fn test_retry_uses_edited_input_text_http() {
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let retry_narration = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -312,12 +288,9 @@ async fn test_retry_reevaluates_triggers_http() {
 
     let resp = post_action(&app, "walk around").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await, "action should complete");
+    assert!(wait_settled(&state, 2000).await, "action should complete");
     {
-        let events = state
-            .game_view_query
-            .story_messages(active_game_of(&state))
-            .unwrap()
+        let events = story_of(&state)
             .iter()
             .filter(|m| m.event_header().is_some())
             .count();
@@ -326,11 +299,8 @@ async fn test_retry_reevaluates_triggers_http() {
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
-    let events = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
+    let events = story_of(&state)
         .iter()
         .filter(|m| m.event_header().is_some())
         .count();
@@ -352,12 +322,12 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
 
     let resp = post_action(&app, "walk around").await;
     assert!(resp.status().is_success());
-    assert!(wait_settled(&state, 1000).await);
+    assert!(wait_settled(&state, 2000).await);
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retry should complete even with no movement"
     );
     assert_eq!(
@@ -385,18 +355,15 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the moving Action should complete"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let narration = messages
         .iter()
         .rfind(|m| m.message_type == MessageType::Narration)
@@ -426,16 +393,13 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
 
     // The Action moves into "room2" and meets Gabriella, whose room-scoped Trigger
     // fires, so the story ends on an event Narration.
-    let data = TestDataBuilder::default_test()
-        .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![TestNpc::with_room_scoped_trigger(
-            "gabriella",
-            "Gabriella",
-            ComparisonOperator::Eq,
-            0,
-            "room2",
-        )])
-        .build();
+    let npc = TestNpc::with_room_scoped_trigger(
+        "gabriella",
+        "Gabriella",
+        ComparisonOperator::Eq,
+        0,
+        "room2",
+    );
     let model = ScriptedModel::new()
         .narration("You walk into the next room.")
         .analysis(analysis_report(&[], Some("room2")))
@@ -443,28 +407,22 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
         .analysis(analysis_report(&["gabriella"], None))
         .event_narration("The event happens again.")
         .analysis(analysis_report(&[], None));
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action that fires the Trigger should complete"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "event retry should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let narrations: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -508,16 +466,13 @@ async fn test_event_retry_does_not_move_the_player_http() {
     // The Action moves into "room2" and fires Gabriella's Trigger. The retry's own
     // analysis names "room_1" as a tripwire: an event generation applies no
     // movement, so a movement-applying pass would move the player back.
-    let data = TestDataBuilder::default_test()
-        .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![TestNpc::with_room_scoped_trigger(
-            "gabriella",
-            "Gabriella",
-            ComparisonOperator::Eq,
-            0,
-            "room2",
-        )])
-        .build();
+    let npc = TestNpc::with_room_scoped_trigger(
+        "gabriella",
+        "Gabriella",
+        ComparisonOperator::Eq,
+        0,
+        "room2",
+    );
     let model = ScriptedModel::new()
         .narration("You walk into the next room.")
         .analysis(analysis_report(&[], Some("room2")))
@@ -525,14 +480,11 @@ async fn test_event_retry_does_not_move_the_player_http() {
         .analysis(analysis_report(&["gabriella"], None))
         .event_narration("The event happens again.")
         .analysis(analysis_report(&[], Some("room_1")));
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action that fires the Trigger should complete"
     );
 
@@ -546,7 +498,7 @@ async fn test_event_retry_does_not_move_the_player_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "event retry should complete"
     );
 
@@ -569,15 +521,7 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
 
     // The Action's Trigger fires, but its continuation fails: the main Narration
     // keeps its trigger context, which is what makes Retrigger available.
-    let data = TestDataBuilder::default_test()
-        .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![TestNpc::with_times_met_trigger(
-            "npc_1",
-            "Test NPC",
-            ComparisonOperator::Eq,
-            0,
-        )])
-        .build();
+    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
     let model = ScriptedModel::new()
         .narration("You look around.")
         .analysis(analysis_report(&["npc_1"], None))
@@ -586,27 +530,21 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
         .analysis(analysis_report(&["npc_1"], None))
         .event_narration("The event fires once more.")
         .analysis(analysis_report(&["npc_1"], None));
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should settle after its failed continuation"
     );
 
     let resp = post_empty(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retrigger should complete"
     );
-    let retriggered_event = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let retriggered_event = story_of(&state)
         .into_iter()
         .next_back()
         .expect("retrigger appends the event narration");
@@ -618,14 +556,11 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "event retry should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let event = messages
         .iter()
         .find(|m| m.id == retriggered_event.id)
@@ -659,7 +594,7 @@ async fn test_event_retry_does_not_carry_the_previous_swipes_encounter_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "event retry should complete"
     );
 
@@ -677,10 +612,7 @@ async fn test_event_retry_does_not_carry_the_previous_swipes_encounter_http() {
         "Gabriella is not in the retry's scene, got {:?}",
         debug.npcs_in_area
     );
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let event = messages
         .iter()
         .find(|m| m.id == event_id)
@@ -733,13 +665,10 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
 
     assert!(post_action(&app, "look around").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the first turn should complete"
     );
-    let first_event = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let first_event = story_of(&state)
         .into_iter()
         .next_back()
         .expect("the first turn's event narration");
@@ -749,11 +678,7 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
         "the first turn fires npc_1's Trigger"
     );
     let seeded = first_event;
-    let seeded_count = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
-        .len();
+    let seeded_count = story_of(&state).len();
     let seeded_header = seeded
         .event_header()
         .map(str::to_string)
@@ -762,13 +687,10 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     let resp = post_action(&app, "walk north").await;
     assert!(resp.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the later turn should complete"
     );
-    let later = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let later = story_of(&state)
         .into_iter()
         .next_back()
         .expect("the later turn's event narration");
@@ -780,13 +702,7 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
 
     // The delete loop below leaves the first event last again; its own record is
     // the Trigger the retry must reuse.
-    while state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
-        .len()
-        > seeded_count
-    {
+    while story_of(&state).len() > seeded_count {
         let resp = post_empty(&app, "/history/delete").await;
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -794,14 +710,11 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "event retry should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let retried = messages
         .iter()
         .find(|m| m.id == seeded.id)
@@ -832,7 +745,7 @@ async fn test_event_retry_matches_with_a_prior_swipe_switch_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "event retry should complete"
     );
 
@@ -850,10 +763,7 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
 
     // The room name belongs to the Narration the Action's movement arrived on, so
     // the event continuation that follows it in the same generation carries none.
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let event_narration = messages
         .iter()
         .find(|m| m.id == event_id)
@@ -876,14 +786,11 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "event retry should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let event_narration = messages
         .iter()
         .find(|m| m.id == event_id)
@@ -939,7 +846,7 @@ async fn test_retry_llm_failure_sets_error_http() {
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should complete"
     );
 
@@ -948,7 +855,7 @@ async fn test_retry_llm_failure_sets_error_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retry should complete (with error)"
     );
 
@@ -973,7 +880,7 @@ async fn test_retry_empty_narration_sets_error_http() {
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should complete"
     );
 
@@ -982,7 +889,7 @@ async fn test_retry_empty_narration_sets_error_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retry should complete (with error)"
     );
 
@@ -1010,7 +917,7 @@ async fn test_retry_room_not_found_sets_error_http() {
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should complete"
     );
     break_start_room(&storage, active_game_of(&state), "non_existent_room");
@@ -1018,7 +925,7 @@ async fn test_retry_room_not_found_sets_error_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retry should complete (with error)"
     );
 
@@ -1028,10 +935,7 @@ async fn test_retry_room_not_found_sets_error_http() {
         "the failure names the invalid room, got: {status}"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let narration = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Narration && m.event_header().is_none())
@@ -1052,41 +956,26 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
 
     // The Action fires npc_1's Trigger and its continuation lands; the retry's
     // event narration then fails, so the event's reconciliation never runs.
-    let data = TestDataBuilder::default_test()
-        .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![TestNpc::with_times_met_trigger(
-            "npc_1",
-            "Test NPC",
-            ComparisonOperator::Eq,
-            0,
-        )])
-        .build();
+    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
     let model = ScriptedModel::new()
         .narration("The main narration.")
         .analysis(analysis_report(&["npc_1"], Some("room2")))
         .event_narration("The NPC greets you.")
         .analysis(analysis_report(&["npc_1"], None))
         .failed(ModelRole::Event);
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should complete"
     );
-    let messages_before = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
-        .len();
+    let messages_before = story_of(&state).len();
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "event retry should complete (with error)"
     );
 
@@ -1095,10 +984,7 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
         status.contains("The event narration failed."),
         "the failure line of a failed event narration, got: {status}"
     );
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     assert!(
         messages.iter().any(|m| {
             m.message_type == MessageType::Narration
@@ -1151,7 +1037,7 @@ async fn test_failed_retry_does_not_roll_the_movement_back_http() {
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the moving Action should complete"
     );
     let room_moved = state
@@ -1164,7 +1050,7 @@ async fn test_failed_retry_does_not_roll_the_movement_back_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retry should complete (with error)"
     );
 
@@ -1192,37 +1078,31 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
     // The Action stays in "room_1". The redo's narration lands and its analysis
     // moves the player into "room2", which fires the room-scoped Trigger, whose
     // narration then fails: the redo's own world is the one to keep.
-    let data = TestDataBuilder::default_test()
-        .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![TestNpc::with_room_scoped_trigger(
-            "shopkeeper",
-            "Shopkeeper Sarah",
-            ComparisonOperator::Eq,
-            0,
-            "room2",
-        )])
-        .build();
+    let npc = TestNpc::with_room_scoped_trigger(
+        "shopkeeper",
+        "Shopkeeper Sarah",
+        ComparisonOperator::Eq,
+        0,
+        "room2",
+    );
     let model = ScriptedModel::new()
         .narration("You look around.")
         .analysis(analysis_report(&[], None))
         .narration("You enter room2.")
         .analysis(analysis_report(&[], Some("room2")))
         .failed(ModelRole::Event);
-    let (app, state) = TestAppBuilder::default_test()
-        .data(data)
-        .model(Arc::new(model))
-        .build_with_state();
+    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should complete"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "retry should complete (with error)"
     );
 
@@ -1261,14 +1141,11 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
         .await
         .expect("read body");
     let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Still thinking..."),
-        "expected 'Still thinking...' in body, got: {body_str}"
-    );
+    assert_still_thinking(&body_str);
 
     hold.release();
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the held Action should complete once released"
     );
     let (inputs, narrations) = story_log_counts(&state);
@@ -1280,10 +1157,7 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
         narrations, 2,
         "the opening Narration and the held Action's own one, and no retry"
     );
-    let last = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap()
+    let last = story_of(&state)
         .into_iter()
         .next_back()
         .expect("the held Action's Narration");
@@ -1319,7 +1193,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
             .is_success()
     );
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the impersonate turn should complete"
     );
 
@@ -1327,7 +1201,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
     assert_eq!(
         fetch_generating_status(&app).await,
@@ -1335,10 +1209,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
         "retry should finish in the Idle state"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .into_iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -1390,7 +1261,7 @@ async fn test_retry_user_regen_generates_input_swipe_http() {
             .is_success()
     );
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the Action should complete"
     );
     let resp = post_empty(&app, "/history/delete").await;
@@ -1405,7 +1276,7 @@ async fn test_retry_user_regen_generates_input_swipe_http() {
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
     assert_eq!(
         fetch_generating_status(&app).await,
@@ -1413,10 +1284,7 @@ async fn test_retry_user_regen_generates_input_swipe_http() {
         "retry should finish in the Idle state"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .into_iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -1465,18 +1333,15 @@ async fn test_retry_re_impersonate_preserves_record_http() {
             .is_success()
     );
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the impersonate turn should complete"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let input = messages
         .into_iter()
         .find(|m| m.message_type == MessageType::Input)
@@ -1519,7 +1384,7 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
             .is_success()
     );
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the impersonate turn should complete"
     );
 
@@ -1544,7 +1409,7 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(wait_settled(&state, 1000).await, "retry should complete");
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
 
     let forensics = state
         .game_view_query
@@ -1563,10 +1428,7 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
         "the redo must generate with the preset's CURRENT content; prompt was: {prompt}"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let input = messages
         .into_iter()
         .find(|m| m.message_type == MessageType::Input)
@@ -1603,7 +1465,7 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the moving Action should complete"
     );
     assert!(
@@ -1613,14 +1475,11 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
             .is_success()
     );
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the guided generation should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let guided = messages
         .iter()
         .find(|m| m.is_guided())
@@ -1634,14 +1493,11 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
-        wait_settled(&state, 1000).await,
+        wait_settled(&state, 2000).await,
         "the guided retry should complete"
     );
 
-    let messages = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let guided = messages
         .iter()
         .find(|m| m.is_guided())

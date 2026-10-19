@@ -11,7 +11,6 @@ use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
-#[allow(private_interfaces)]
 #[derive(Debug, Clone)]
 pub struct SafeHtml(String);
 

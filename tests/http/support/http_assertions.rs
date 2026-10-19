@@ -2,6 +2,18 @@
 
 use chronicler_engine::adapters::driving::http::AppState;
 
+/// The status line the busy refusal carries while a Job holds the Game.
+pub const STILL_THINKING: &str = "Still thinking...";
+
+/// The busy refusal answers this line, and its own answer to the request lands
+/// nothing.
+pub fn assert_still_thinking(body: &str) {
+    assert!(
+        body.contains(STILL_THINKING),
+        "the refusal must answer the wait state, got: {body}"
+    );
+}
+
 /// How many model calls the Game recorded for one Agent, read through the
 /// forensics seam. A test that pins "the Job made no Options call" reads this
 /// rather than the fake's own call log.

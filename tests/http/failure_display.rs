@@ -6,20 +6,22 @@ use chronicler_engine::test_support::active_game_of;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{TestOverride, TxWrite};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
+use chronicler_engine::domain::model::llm_backend::LlmBackendType;
+use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
 use chronicler_engine::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind,
 };
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::fixtures::llm_message;
-use chronicler_engine::test_support::{ModelRole, ScriptedModel};
-use chronicler_engine::test_support::TestAppBuilder;
+use chronicler_engine::test_support::{configured_runner, ModelRole, ScriptedModel, TestAppBuilder};
 use chronicler_engine::test_support::empty_sqlite_storage;
 
-use crate::support::app_wiring::app_with_model;
+use crate::SettingsTestGuard;
+use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
 use crate::support::http_assertions::status_error_message;
-use crate::support::http_fixtures::{break_start_room, corrupt_start_state};
+use crate::support::http_fixtures::{break_start_room, corrupt_start_state, story_of};
 use crate::support::http_requests::{fetch_body, post_action, post_form, wait_for_jobs, wait_settled};
 // [docs/specs/failure_display.md] SCENARIO: 38.1
 #[tokio::test]
@@ -394,10 +396,7 @@ async fn test_empty_answer_keeps_its_own_line_clamps() {
         !body.contains("answer could not be read"),
         "an empty answer is not an unreadable answer: {body}"
     );
-    let narrations = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .expect("the story log reads back")
+    let narrations = story_of(&state)
         .into_iter()
         .filter(|message| message.message_type == MessageType::Narration)
         .count();
@@ -453,10 +452,7 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         1,
         "the raw internal message appears once, inside the disclosure: {body}"
     );
-    let narrations: Vec<_> = state
-        .game_view_query
-        .story_messages(active_game_of(&state))
-        .expect("the story log reads back")
+    let narrations: Vec<_> = story_of(&state)
         .into_iter()
         .filter(|message| message.message_type == MessageType::Narration)
         .collect();
@@ -469,5 +465,123 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         narrations.last().map(|message| message.text().to_string()),
         Some("The room waits.".to_string()),
         "the text the Job saved stays when the state update is refused"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.11
+#[tokio::test]
+async fn test_save_failure_clamps_with_the_save_line_and_saves_no_narration() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::new(ScriptedModel::new().turn("You look around.")),
+        AppSettings::default(),
+        configured_runner,
+    );
+    // The Input's save unit writes no dock, so the Narration's text save is the
+    // first write this override refuses.
+    failures.set_write(
+        TxWrite::PutDock,
+        TestOverride::internal("the dock write failed"),
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The new text could not be saved."),
+        "a refused save keeps the save-failed line: {body}"
+    );
+    assert_eq!(
+        body.matches("The new text could not be saved.").count(),
+        1,
+        "the line appears once: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("the dock write failed"),
+        "the storage error behind the line is reachable in the disclosure: {body}"
+    );
+
+    let messages = story_of(&state);
+    let narrations = messages
+        .iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 1,
+        "the opening is the only Narration: the refused save landed no text"
+    );
+    let inputs = messages
+        .iter()
+        .filter(|message| message.message_type == MessageType::Input)
+        .count();
+    assert_eq!(
+        inputs, 1,
+        "the Input saved before the failure stays in the story"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.12
+#[tokio::test]
+async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
+    let _guard = SettingsTestGuard::new();
+    // The fixed safety margin and minimum input budget together exceed this
+    // window, so the prompt can never fit beside the system prompt.
+    let connection = LlmProviderConfig {
+        max_context_tokens: Some(512),
+        ..LlmProviderConfig::new("narration-conn", "narration-conn", LlmBackendType::Mock)
+    };
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "narration-conn".into(),
+        quantifier_connection_id: "narration-conn".into(),
+        ..AppSettings::default()
+    };
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(empty_sqlite_storage()),
+        Arc::new(ScriptedModel::new().turn("You look around.")),
+        settings,
+        configured_runner,
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The story was too long for the language model."),
+        "a prompt that cannot fit keeps the prompt-too-long line: {body}"
+    );
+    assert!(
+        !body.contains("The engine failed with an internal error."),
+        "the general line belongs to failures no kind names: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("Context overflow"),
+        "the budget the prompt missed is reachable in the disclosure: {body}"
+    );
+
+    let narrations = story_of(&state)
+        .iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 1,
+        "the model was never asked, so the opening is the only Narration"
     );
 }

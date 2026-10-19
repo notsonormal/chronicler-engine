@@ -182,14 +182,6 @@ fn test_a_missing_record_names_the_record_and_keeps_the_error() {
 }
 
 #[test]
-fn test_with_context_prefixes_the_raw_text() {
-    let failure = GenerationFailure::from_engine_error(&EngineError::Io("disk full".into()))
-        .with_context("Trigger error");
-    assert_eq!(failure.raw, "Trigger error: I/O error: disk full");
-    assert_eq!(failure.kind, GenerationFailureKind::SaveFailed);
-}
-
-#[test]
 fn test_a_named_failure_carries_its_kind_and_raw_text() {
     let failure = GenerationFailure::new(
         GenerationFailureKind::Other,

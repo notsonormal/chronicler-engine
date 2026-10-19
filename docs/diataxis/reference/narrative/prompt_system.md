@@ -9,7 +9,7 @@ The engine assembles a structured prompt for every Game Master call from the act
 
 ## Layered Prompt Architecture
 
-The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3 and 7 are conditional — Layer 3 (`<PlayerCharacter>`) is dropped on an impersonated turn, and persona data then reaches the prompt through the impersonate preset's template macros; Layer 7 (`<Guide>`) renders only on a guided turn. The remaining six layers are always present. A post-history splice of `<writing_style>` and `<output_format>` sits between Layer 5 and Layer 6.
+The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3 and 7 are conditional — Layer 3 (`<PlayerCharacter>`) is dropped on an Impersonate generation, and persona data then reaches the prompt through the impersonate preset's template macros; Layer 7 (`<Guide>`) renders only on a Guided Generation. The remaining six layers are always present. A post-history splice of `<writing_style>` and `<output_format>` sits between Layer 5 and Layer 6.
 
 | Layer | Name | SillyTavern Equivalent | Role | Content |
 |-------|------|----------------------|------|---------|
@@ -20,7 +20,7 @@ The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manage
 | 4 | World Info | World Info / Lorebook | User (data) | `<WorldLore>` world name + description |
 | 5 | History | Chat History | User (data) | `<ConversationHistory>` conversation history |
 | 6 | User Input | User Message | User (data) | `<PlayerInput>` sanitized current player input |
-| 7 | Guide | — | User (data) | Transient guide text on guided turns; omitted on plain turns |
+| 7 | Guide | — | User (data) | Transient guide text on a Guided Generation; omitted otherwise |
 
 ## Section Definitions
 

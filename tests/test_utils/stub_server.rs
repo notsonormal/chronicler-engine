@@ -25,7 +25,7 @@ use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate,
 };
 use chronicler_engine::adapters::driving::http::utils::error::{
-    error_disclosure, generation_failure_summary, raw_error_detail, render_error,
+    error_disclosure, raw_error_detail, render_error,
 };
 use chronicler_engine::application::games::view_query::RoleHealth;
 use chronicler_engine::domain::model::agent::Role;
@@ -885,7 +885,7 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
         StubStatus::Step(step) => step,
         StubStatus::Error(kind, raw) => error_disclosure(
             "status-error-popover",
-            &generation_failure_summary(kind, &raw),
+            &kind.line(&raw),
             &raw_error_detail(&raw),
         ),
     };

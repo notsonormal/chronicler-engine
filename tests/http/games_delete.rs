@@ -2,36 +2,20 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::test_support::active_game_of;
 use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
-use chronicler_engine::TestAppBuilder;
-use chronicler_engine::test_support::TestPersona;
 
+use chronicler_engine::test_support::active_game_of;
+use chronicler_engine::TestAppBuilder;
+
+use crate::support::app_wiring::two_game_app;
 use crate::support::http_fixtures::seeded_storage_with_initial_game;
 use crate::support::http_requests::{fetch_body, response_body};
+
 // [docs/specs/games.md] SCENARIO: 19.1
 #[tokio::test]
 async fn test_delete_game_handler_success() {
-    let (storage, _world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
-
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-
-    let other_id = chronicler_engine::test_support::seed_game_row(
-        &storage,
-        &chronicler_engine::test_support::test_new_game(
-            "Test World",
-            "Test World",
-            &persona_key,
-            &TestPersona::standard().sheet.name,
-            "Test World_2026-01-01_1",
-        ),
-    )
-    .0;
-    assert_ne!(other_id, active_game_of(&state).0);
-
+    let (app, _state, _storage, other_id) = two_game_app();
     let req = Request::builder()
         .uri(format!("/games/{other_id}/delete"))
         .method(http::Method::POST)
@@ -111,23 +95,9 @@ async fn delete_game_body(app: &axum::Router, id: u64) -> String {
 // [docs/specs/games.md] SCENARIO: 19.4
 #[tokio::test]
 async fn test_delete_game_handler_last_saved_game_answers_with_the_empty_state() {
-    let (storage, _world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
-
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
+    let (app, state, _storage, _other_id) = two_game_app();
 
     let active_id = active_game_of(&state);
-    chronicler_engine::test_support::seed_game_row(
-        &storage,
-        &chronicler_engine::test_support::test_new_game(
-            "Test World",
-            "Test World",
-            &persona_key,
-            &TestPersona::standard().sheet.name,
-            "Test World_2026-01-01_1",
-        ),
-    );
 
     let saved_ids: Vec<u64> = state
         .game_catalogue

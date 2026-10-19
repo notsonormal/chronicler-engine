@@ -25,15 +25,15 @@ The shape serves a read-mostly workload. Each read is a short storage call; writ
 
 ## Lock-poison recovery
 
-Every `Mutex` and `RwLock` site in the engine recovers from a poisoned lock by calling `.into_inner()` on the guard. Lock poisoning is the Rust standard library's signal that a previous holder panicked while holding the lock; the engine treats poisoning as recoverable rather than fatal.
+Every `Mutex` site in the engine recovers from a poisoned lock by calling `.into_inner()` on the guard. Lock poisoning is the Rust standard library's signal that a previous holder panicked while holding the lock; the engine treats poisoning as recoverable rather than fatal.
 
 A panic while holding the lock is a definite bug — the previous code path exited abnormally — but the engine treats the next holder as legitimate. `.into_inner()` consumes the poisoned `Result` and yields the guarded value; the type is unchanged; the next holder sees the state as the previous holder left it and proceeds. The convention holds at every site with a single consistent shape; `tests/test_utils/server.rs`'s `buffer_text` shows it.
 
 ## Cancellation of a Job
 
-A Job cancels through the handle in its job entry. A stop, a reset and a delete of its Game cancel the handle. The Job checks it before each step, so a cancelled Job starts no further step.
+A Job ends when its job entry goes. A stop, a reset and a delete of its Game remove the entry. Before each step, the Job writes its step name through its `JobWriter`, and that write checks the job id, so a Job with no entry starts no further step.
 
-A cancel can reach a Job while an LLM call runs, and the call returns after it. The job id check covers that case: each save of the Job compares its id with the job entry of the Game, and a cancelled Job has no entry. The check refuses the save, and the Job ends with no write. The Job code stays synchronous, because a late answer cannot change a record.
+A stop can reach a Job while an LLM call runs, and the call returns after it. The same job id check covers that case: each save of the Job compares its id with the job entry of the Game, and a stopped Job has no entry. The check refuses the save, and the Job ends with no write. The Job code stays synchronous, because a late answer cannot change a record.
 
 The server stops accepting requests when the process receives the shutdown signal, and it serves the requests it already holds until they end.
 

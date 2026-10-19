@@ -5,7 +5,6 @@
 
 use std::time::Duration;
 
-use chronicler_engine::adapters::driving::http::utils::error::generation_failure_summary;
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 use playwright_rs::Viewport;
 
@@ -1008,7 +1007,7 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
                 GenerationFailureKind::MissingData => "the story".to_string(),
                 _ => format!("stub raw failure for {kind:?}"),
             };
-            let sentence = generation_failure_summary(kind, &raw);
+            let sentence = kind.line(&raw);
             status.set(StubStatus::Error(kind, raw));
             poll_now(&page, "#status-display").await;
             assert!(
