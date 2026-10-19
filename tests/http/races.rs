@@ -25,7 +25,6 @@ use crate::support::http_requests::{
 
 const STILL_THINKING: &str = "Still thinking...";
 
-/// A held Job: the busy state a second request meets.
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
     let hold = model.hold(ModelRole::Narration);
@@ -72,8 +71,8 @@ async fn test_action_while_job_runs_is_refused_http() {
         "the held Action's own input is the only one saved"
     );
     let narrations = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .expect("the story log reads back")
         .into_iter()
         .filter(|message| message.message_type == MessageType::Narration)
@@ -93,7 +92,7 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
     let barrier = Arc::new(Barrier::new(2));
 
     // Both clicks carry the same Action, released together, so which of them
-    // wins is the generation slot's to decide and not the scheduler's.
+    // wins comes from the Game's job entry and not the scheduler's.
     let click = |app: axum::Router, barrier: Arc<Barrier>| async move {
         barrier.wait().await;
         let resp = post_action(&app, "look").await;
@@ -180,8 +179,8 @@ async fn test_options_while_job_runs_is_refused_http() {
 
 fn messages_of(state: &AppState, game: GameId) -> Vec<Message> {
     state
-        .message_service
-        .load_messages(game)
+        .game_view_query
+        .story_messages(game)
         .expect("the story log reads back")
 }
 
@@ -510,7 +509,6 @@ const GAME_A_NARRATION: &str = "Game A's narration.";
 const GAME_B_NARRATION: &str = "Game B's narration.";
 const MAIN_NARRATION: &str = "The main narration.";
 const EVENT_NARRATION: &str = "The NPC greets you warmly.";
-/// The preset the client sets while the Job's narrator call is held.
 const SECOND_PRESET_TEXT: &str = "SecondPresetMarker";
 
 // [docs/specs/actions.md] SCENARIO: 6.4
@@ -607,8 +605,6 @@ fn trigger_world() -> chronicler_engine::test_support::TestData {
         .build()
 }
 
-/// The four model calls of that Turn: the Narration, its analysis, the event
-/// Narration, and the event's analysis.
 fn triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
     ScriptedModel::new()
         .narration(narration)
@@ -658,9 +654,7 @@ impl JobKind {
     }
 }
 
-/// The free-text Action every Narration row sends, and the Input it saves.
 const ACTION_INPUT: &str = "look";
-/// The Action of the row whose analysis fires the Trigger, and the Input it saves.
 const EVENT_ACTION_INPUT: &str = "enter the shop";
 
 /// What the story log holds after a stop, per the row of the design's
@@ -751,7 +745,6 @@ static STOP_ROWS: &[StopRow] = &[
 
 const SCRIPTED_NARRATION: &str = "The Job's narration.";
 const WORLD_OPENING_TEXT: &str = "The World begins.";
-/// The room the scripted analysis moves the player to.
 const MOVED_ROOM: &str = "room2";
 const STARTING_ROOM: &str = "room_1";
 
@@ -1071,8 +1064,8 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                 None,
                 "{label}: the pre-analysis state reports no room"
             );
-            // The current state, not the Snapshot the Job's redo starts from: the
-            // refused state update is what keeps the player where it started.
+            // The refused state update is what keeps the player where it started,
+            // so the current state still names the starting room.
             let room = start
                 .state
                 .game_view_query

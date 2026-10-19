@@ -108,20 +108,26 @@ fn rule_step(
 
 fn trigger_step(
     swipe: &mut SwipeState,
-    trigger: &crate::domain::model::state::trigger_context::StoredTriggerContext,
+    trigger: &TriggerRef,
     text: &str,
     deps: &RulesDeps,
 ) -> GameRulesOutcome {
     apply_game_rules(
         swipe,
-        GameRuleRequest::TriggerNarration {
-            trigger: &TriggerRef::from(trigger),
-            text,
-        },
+        GameRuleRequest::TriggerNarration { trigger, text },
         &deps.map,
         &deps.npcs,
     )
     .expect("a Trigger narration rule step cannot fail")
+}
+
+fn trigger_ref(npc_id: &str, trigger_name: &str, repeat: bool) -> TriggerRef {
+    TriggerRef {
+        npc_id: npc_id.to_string(),
+        trigger_idx: 0,
+        trigger_name: trigger_name.to_string(),
+        trigger_repeat: repeat,
+    }
 }
 
 fn make_npc(id: &str, triggers: Vec<Trigger>) -> NpcCard {
@@ -540,11 +546,11 @@ fn test_a_landed_one_shot_trigger_does_not_match_again() {
         false,
         0,
     );
-    let stored = TestStoredTriggerContext::for_npc("gabriella", "Test Event", "Test trigger");
+    let trigger = trigger_ref("gabriella", "Test Event", false);
 
     assert!(matched(&mut case.swipe, &case.deps, &["gabriella"]).is_some());
 
-    let outcome = trigger_step(&mut case.swipe, &stored, "Gabriella appears.", &case.deps);
+    let outcome = trigger_step(&mut case.swipe, &trigger, "Gabriella appears.", &case.deps);
     assert!(outcome.trigger_narration_landed);
     assert!(
         matched(&mut case.swipe, &case.deps, &["gabriella"]).is_none(),
@@ -636,7 +642,7 @@ fn test_apply_npc_events_increments_times_met() {
 fn test_a_trigger_narration_marks_a_one_shot_trigger_fired() {
     let deps = deps_with_carla("test_room");
     let mut swipe = swipe_in("test_room");
-    let trigger = TestStoredTriggerContext::for_npc("carla", "Carla Introduction", "Carla appears");
+    let trigger = trigger_ref("carla", "Carla Introduction", false);
 
     let outcome = trigger_step(&mut swipe, &trigger, "Some text.", &deps);
 
@@ -651,8 +657,7 @@ fn test_a_trigger_narration_marks_a_one_shot_trigger_fired() {
 fn test_a_trigger_narration_does_not_mark_a_repeating_trigger_fired() {
     let deps = deps_with_carla("test_room");
     let mut swipe = swipe_in("test_room");
-    let mut trigger = TestStoredTriggerContext::for_npc("carla", "Carla Greeting", "Carla greets");
-    trigger.trigger_repeat = true;
+    let trigger = trigger_ref("carla", "Carla Greeting", true);
 
     trigger_step(&mut swipe, &trigger, "Some text.", &deps);
 
@@ -666,7 +671,7 @@ fn test_a_trigger_narration_does_not_mark_a_repeating_trigger_fired() {
 fn test_an_empty_trigger_narration_lands_nothing() {
     let deps = deps_with_carla("test_room");
     let mut swipe = swipe_in("test_room");
-    let trigger = TestStoredTriggerContext::for_npc("carla", "Carla Introduction", "Carla appears");
+    let trigger = trigger_ref("carla", "Carla Introduction", false);
 
     for text in ["", "   "] {
         let outcome = trigger_step(&mut swipe, &trigger, text, &deps);
@@ -814,10 +819,9 @@ proptest! {
     ) {
         let trigger = make_trigger(requirement(ComparisonOperator::Gte, 0), repeat);
         let mut case = trigger_case(trigger, fired_before, false, 0);
-        let mut stored = TestStoredTriggerContext::for_npc("gabriella", "Test Event", "Test trigger");
-        stored.trigger_repeat = repeat;
+        let trigger = trigger_ref("gabriella", "Test Event", repeat);
 
-        let outcome = trigger_step(&mut case.swipe, &stored, "Gabriella appears.", &case.deps);
+        let outcome = trigger_step(&mut case.swipe, &trigger, "Gabriella appears.", &case.deps);
         prop_assert!(outcome.trigger_narration_landed);
 
         prop_assert_eq!(

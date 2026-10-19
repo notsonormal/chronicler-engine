@@ -14,11 +14,8 @@ pub mod test_app_builder;
 pub mod test_data_builder;
 
 pub use context::{
-    build_test_message_service, build_test_wired_app, configured_runner, configured_runner_without,
-    make_test_app, make_test_app_without_snapshot, make_test_pipeline_app,
-    make_test_pipeline_app_with_storage, make_test_pipeline_with_backends,
-    make_test_pipeline_with_mock_quantifier, seed_default_impersonate_preset, seed_default_preset,
-    seed_test_world_into_storage,
+    configured_runner, configured_runner_without, make_test_job_deps,
+    seed_default_impersonate_preset, seed_default_preset,
 };
 pub use fixtures::*;
 pub use http::body_text;

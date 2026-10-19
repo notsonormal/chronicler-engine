@@ -21,8 +21,8 @@ use crate::support::http_requests::{
 
 fn story_log_holds_event_narration(state: &AppState) -> bool {
     state
-        .message_service
-        .load_messages(active_game_of(state))
+        .game_view_query
+        .story_messages(active_game_of(state))
         .expect("the story log reads back")
         .iter()
         .any(|message| message.event_header().is_some())
@@ -58,8 +58,8 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
         "the Action should settle after its failed continuation"
     );
     let n = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .len();
 
@@ -71,8 +71,8 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
     );
 
     let messages_after = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     assert_eq!(
         messages_after.len(),
@@ -287,8 +287,8 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
         "the failure line of a failed event narration, got: {status}"
     );
     let messages_after = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let new_event_narrations = messages_after
         .iter()

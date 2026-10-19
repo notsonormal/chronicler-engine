@@ -395,8 +395,8 @@ async fn test_empty_answer_keeps_its_own_line_clamps() {
         "an empty answer is not an unreadable answer: {body}"
     );
     let narrations = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .expect("the story log reads back")
         .into_iter()
         .filter(|message| message.message_type == MessageType::Narration)
@@ -454,8 +454,8 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         "the raw internal message appears once, inside the disclosure: {body}"
     );
     let narrations: Vec<_> = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .expect("the story log reads back")
         .into_iter()
         .filter(|message| message.message_type == MessageType::Narration)

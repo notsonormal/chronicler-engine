@@ -328,14 +328,6 @@ fn guardrails_test_file_location() {
 }
 
 #[test]
-fn guardrails_messages_swipes_separation() {
-    check_src_files(
-        "messages/swipes separation",
-        check_messages_swipes_separation,
-    );
-}
-
-#[test]
 fn guardrails_http_storage_leak() {
     check_src_files("HTTP storage leak", check_http_storage_leak);
 }

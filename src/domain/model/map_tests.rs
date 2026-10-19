@@ -1,4 +1,4 @@
-use crate::domain::model::map::{Direction, MapDef};
+use crate::domain::model::map::{Direction, MapDef, Room};
 
 #[test]
 fn test_map_serde() {
@@ -39,4 +39,14 @@ fn test_map_serde() {
         map.overworld.regions[0].rooms[0].image_path,
         Some("data/images/tavern.png".to_string())
     );
+}
+
+#[test]
+fn test_new_dynamic_room() {
+    let room = Room::new_dynamic("Test Room", "A test room.");
+    assert_eq!(room.name, "Test Room");
+    assert_eq!(room.description, "A test room.");
+    assert!(room.id.starts_with("dynamic_"));
+    assert!(room.exits.is_empty());
+    assert!(room.items.is_empty());
 }

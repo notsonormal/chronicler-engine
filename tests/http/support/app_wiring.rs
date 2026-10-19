@@ -11,8 +11,8 @@ use chronicler_engine::bootstrap::wiring::build_app_graph;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::test_support::{
-    configured_runner, make_test_pipeline_with_backends, make_test_recorder_with_storage,
-    ScriptedModel, TestAppBuilder, empty_sqlite_storage,
+    configured_runner, make_test_job_deps, make_test_recorder_with_storage, ScriptedModel,
+    TestAppBuilder, empty_sqlite_storage,
 };
 
 pub fn app_with_model(model: Arc<ScriptedModel>) -> (axum::Router, AppState) {
@@ -57,10 +57,10 @@ pub fn app_with_model_and_storage(
 ) -> (axum::Router, AppState, Arc<Storage>) {
     let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
     let runner = agents(Arc::clone(&recorder));
-    let pipeline = make_test_pipeline_with_backends(Arc::clone(&storage), recorder, runner);
+    let job_deps = make_test_job_deps(Arc::clone(&storage), recorder, runner);
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .pipeline(pipeline)
+        .job_deps(job_deps)
         .settings(settings)
         .build_with_state();
     (app, state, storage)

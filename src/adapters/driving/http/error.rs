@@ -14,14 +14,6 @@ impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
             ApplicationError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            ApplicationError::ConcurrentGeneration => (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Generation in progress, please wait...".to_string(),
-            ),
-            ApplicationError::ShuttingDown => (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Server is shutting down".to_string(),
-            ),
             ApplicationError::Engine(_) if self.is_user_displayable() => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }

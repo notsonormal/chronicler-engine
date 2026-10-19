@@ -16,12 +16,14 @@ use chronicler_engine::test_support::{
 use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
 use crate::support::http_assertions::status_error_message;
 use crate::support::http_fixtures::break_start_room;
-use crate::support::http_requests::{fetch_generating_status, post_action, post_empty, wait_settled};
+use crate::support::http_requests::{
+    fetch_generating_status, post_action, post_empty, post_form, wait_settled,
+};
 
 fn story_log_counts(state: &AppState) -> (usize, usize) {
     let messages = state
-        .message_service
-        .load_messages(active_game_of(state))
+        .game_view_query
+        .story_messages(active_game_of(state))
         .expect("the story log reads back");
     let count = |kind: MessageType| messages.iter().filter(|m| m.message_type == kind).count();
     (count(MessageType::Input), count(MessageType::Narration))
@@ -29,8 +31,8 @@ fn story_log_counts(state: &AppState) -> (usize, usize) {
 
 fn newest_swipes(state: &AppState, message_type: MessageType) -> usize {
     state
-        .message_service
-        .load_messages(active_game_of(state))
+        .game_view_query
+        .story_messages(active_game_of(state))
         .expect("the story log reads back")
         .into_iter()
         .rfind(|m| m.message_type == message_type)
@@ -79,8 +81,8 @@ async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u6
     );
 
     let event_id = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .find(|m| m.event_header().is_some())
@@ -119,8 +121,8 @@ async fn test_retry_replaces_narration_with_new_swipe_http() {
     assert!(wait_settled(&state, 1000).await, "retry should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let narrations: Vec<_> = messages
         .iter()
@@ -180,8 +182,8 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
     assert_eq!(room, "room2", "retry re-ran quantifier → moved to room2");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let narration = messages
         .iter()
@@ -217,8 +219,8 @@ async fn test_retry_preserves_input_message_http() {
     assert!(wait_settled(&state, 1000).await, "retry should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let input = messages
         .iter()
@@ -244,26 +246,24 @@ async fn test_retry_uses_edited_input_text_http() {
     assert!(wait_settled(&state, 1000).await);
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let input = messages
         .iter()
         .find(|m| m.message_type == MessageType::Input)
         .expect("Input message");
     let input_id = input.id;
-    let index = input.active_swipe_index;
-    storage
-        .update_swipe_text(input_id, index, "sprint forward")
-        .expect("update_swipe_text should succeed");
+    let edit = post_form(&app, &format!("/history/{input_id}"), "text=sprint+forward").await;
+    assert_eq!(edit.status(), StatusCode::OK, "the edit should succeed");
 
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 1000).await, "retry should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let retry_narration = messages
         .iter()
@@ -315,8 +315,8 @@ async fn test_retry_reevaluates_triggers_http() {
     assert!(wait_settled(&state, 1000).await, "action should complete");
     {
         let events = state
-            .message_service
-            .load_messages(active_game_of(&state))
+            .game_view_query
+            .story_messages(active_game_of(&state))
             .unwrap()
             .iter()
             .filter(|m| m.event_header().is_some())
@@ -328,8 +328,8 @@ async fn test_retry_reevaluates_triggers_http() {
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 1000).await, "retry should complete");
     let events = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .filter(|m| m.event_header().is_some())
@@ -394,8 +394,8 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
     assert!(wait_settled(&state, 1000).await, "retry should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let narration = messages
         .iter()
@@ -462,8 +462,8 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let narrations: Vec<_> = messages
         .iter()
@@ -604,8 +604,8 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
         "retrigger should complete"
     );
     let retriggered_event = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .into_iter()
         .next_back()
@@ -623,8 +623,8 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let event = messages
         .iter()
@@ -678,8 +678,8 @@ async fn test_event_retry_does_not_carry_the_previous_swipes_encounter_http() {
         debug.npcs_in_area
     );
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let event = messages
         .iter()
@@ -737,8 +737,8 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
         "the first turn should complete"
     );
     let first_event = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .into_iter()
         .next_back()
@@ -750,8 +750,8 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     );
     let seeded = first_event;
     let seeded_count = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .len();
     let seeded_header = seeded
@@ -766,8 +766,8 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
         "the later turn should complete"
     );
     let later = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .into_iter()
         .next_back()
@@ -781,8 +781,8 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     // The delete loop below leaves the first event last again; its own record is
     // the Trigger the retry must reuse.
     while state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .len()
         > seeded_count
@@ -799,8 +799,8 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let retried = messages
         .iter()
@@ -824,8 +824,8 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
 async fn test_event_retry_matches_with_a_prior_swipe_switch_http() {
     let (app, state, event_id) = app_with_an_event_that_meets_gabriella().await;
 
-    // Re-selecting the event's only Swipe re-saves its Snapshot as the latest
-    // one; the retry must not read the world from there.
+    // Re-selecting the event's only Swipe makes it the active Swipe again; the
+    // retry must read the world from the Message before it.
     let resp = post_empty(&app, &format!("/message/{event_id}/swipe/0")).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
@@ -851,8 +851,8 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
     // The room name belongs to the Narration the Action's movement arrived on, so
     // the event continuation that follows it in the same generation carries none.
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let event_narration = messages
         .iter()
@@ -881,8 +881,8 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let event_narration = messages
         .iter()
@@ -1029,8 +1029,8 @@ async fn test_retry_room_not_found_sets_error_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let narration = messages
         .iter()
@@ -1078,8 +1078,8 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
         "the Action should complete"
     );
     let messages_before = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .len();
 
@@ -1096,8 +1096,8 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
         "the failure line of a failed event narration, got: {status}"
     );
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     assert!(
         messages.iter().any(|m| {
@@ -1281,8 +1281,8 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
         "the opening Narration and the held Action's own one, and no retry"
     );
     let last = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .into_iter()
         .next_back()
@@ -1336,8 +1336,8 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .into_iter()
@@ -1414,8 +1414,8 @@ async fn test_retry_user_regen_generates_input_swipe_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .into_iter()
@@ -1474,8 +1474,8 @@ async fn test_retry_re_impersonate_preserves_record_http() {
     assert!(wait_settled(&state, 1000).await, "retry should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let input = messages
         .into_iter()
@@ -1564,8 +1564,8 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let input = messages
         .into_iter()
@@ -1618,8 +1618,8 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let guided = messages
         .iter()
@@ -1639,8 +1639,8 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let guided = messages
         .iter()

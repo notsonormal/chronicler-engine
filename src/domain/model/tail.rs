@@ -23,7 +23,7 @@ impl Tail {
         self.last
             .swipes
             .get(self.last.active_swipe_index)
-            .and_then(|swipe| swipe.state.as_ref())
+            .map(|swipe| &swipe.state)
     }
 
     pub fn current_at(&self) -> SwipeAt {
@@ -47,11 +47,10 @@ impl Tail {
     }
 
     /// The order of the last Message again, of the kind the last Message holds.
-    /// `None` for a story that holds no Message.
-    pub fn redo(&self) -> Option<GenerationOrder> {
-        let kind = self.redo_kind()?;
+    pub fn redo(&self) -> GenerationOrder {
+        let kind = self.redo_kind();
         let last_swipe = self.last.swipes.get(self.last.active_swipe_index);
-        Some(GenerationOrder {
+        GenerationOrder {
             kind,
             place: Place::NewSwipeOnLast,
             start: self.start_at(),
@@ -61,7 +60,7 @@ impl Tail {
                 _ => last_swipe.map(Swipe::stored_inputs).unwrap_or_default(),
             },
             event: self.event_record(),
-        })
+        }
     }
 
     /// The event Narration as a new Message at the end of the story, from the
@@ -80,19 +79,18 @@ impl Tail {
         })
     }
 
-    fn redo_kind(&self) -> Option<Kind> {
+    fn redo_kind(&self) -> Kind {
         match self.last.kind {
-            Some(MessageKind::Narration) => Some(Kind::Narration),
-            Some(MessageKind::EventNarration(_)) => Some(Kind::Event),
-            Some(MessageKind::ImpersonateInput) => Some(Kind::Impersonate),
-            Some(MessageKind::TypedInput) => Some(Kind::UserRegen),
-            None => None,
+            MessageKind::Narration => Kind::Narration,
+            MessageKind::EventNarration(_) => Kind::Event,
+            MessageKind::ImpersonateInput => Kind::Impersonate,
+            MessageKind::TypedInput => Kind::UserRegen,
         }
     }
 
     fn event_record(&self) -> Option<EventRecord> {
         match &self.last.kind {
-            Some(MessageKind::EventNarration(record)) => Some(record.clone()),
+            MessageKind::EventNarration(record) => Some(record.clone()),
             _ => None,
         }
     }
@@ -100,7 +98,7 @@ impl Tail {
     pub fn retrigger_allowed(&self) -> bool {
         let kind_allows = matches!(
             self.last.kind,
-            Some(MessageKind::Narration) | Some(MessageKind::ImpersonateInput)
+            MessageKind::Narration | MessageKind::ImpersonateInput
         );
         kind_allows
             && self

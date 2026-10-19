@@ -82,6 +82,48 @@ impl StoryReads<'_> {
             })
     }
 
+    /// Every Message of the story with all its Swipes, oldest first, and no Swipe
+    /// state beyond the one each Swipe holds.
+    pub fn messages(&self, game: GameId) -> Result<Vec<Message>, EngineError> {
+        self.storage
+            .with_backend_mut("stories_messages", |backend| match backend {
+                Backend::Sqlite { pool } => {
+                    let conn = pool.conn();
+                    let ids = Self::last_message_ids(&conn, game, STORY_LIMIT)?;
+                    ids.into_iter()
+                        .map(|id| Self::load_message(&conn, id))
+                        .collect()
+                }
+                Backend::InMemory(_) => Err(no_in_memory("stories_messages")),
+            })
+    }
+
+    /// The active Swipe of a Message of this Game, or none when the Game holds no
+    /// such Message.
+    pub fn active_swipe(&self, game: GameId, message: u64) -> Result<Option<SwipeAt>, EngineError> {
+        self.storage
+            .with_backend_mut("stories_active_swipe", |backend| match backend {
+                Backend::Sqlite { pool } => {
+                    let conn = pool.conn();
+                    match conn.query_row(
+                        "SELECT active_swipe_index FROM messages WHERE id = ?1 AND game_id = ?2",
+                        rusqlite::params![message as i64, game.0 as i64],
+                        |row| row.get::<_, i64>(0),
+                    ) {
+                        Ok(swipe) => Ok(Some(SwipeAt {
+                            message,
+                            swipe: swipe as usize,
+                        })),
+                        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                        Err(e) => Err(EngineError::Config(format!(
+                            "Failed to read the active swipe: {e}"
+                        ))),
+                    }
+                }
+                Backend::InMemory(_) => Err(no_in_memory("stories_active_swipe")),
+            })
+    }
+
     /// Whether any Message of the story holds text: `/options` needs something to
     /// work from. One `EXISTS` query, and no Swipe state.
     pub fn has_text(&self, game: GameId) -> Result<bool, EngineError> {
@@ -93,7 +135,7 @@ impl StoryReads<'_> {
                         .query_row(
                             "SELECT EXISTS(SELECT 1 FROM messages m \
                              JOIN message_swipes s ON s.message_id = m.id AND s.swipe_index = m.active_swipe_index \
-                             WHERE m.game_id = ?1 AND m.is_deleted = 0 AND TRIM(COALESCE(s.text, '')) <> '')",
+                             WHERE m.game_id = ?1 AND TRIM(COALESCE(s.text, '')) <> '')",
                             rusqlite::params![game.0 as i64],
                             |row| row.get(0),
                         )
@@ -125,7 +167,7 @@ impl StoryReads<'_> {
                                     (SELECT COUNT(*) FROM message_swipes WHERE message_id = m.id), m.active_swipe_index
                              FROM messages m
                              LEFT JOIN message_swipes s ON s.message_id = m.id AND s.swipe_index = m.active_swipe_index
-                             WHERE m.game_id = ?1 AND m.is_deleted = 0 AND m.id < ?2
+                             WHERE m.game_id = ?1 AND m.id < ?2
                              ORDER BY m.id DESC
                              LIMIT ?3",
                         )
@@ -178,7 +220,7 @@ impl StoryReads<'_> {
     fn message_count(conn: &rusqlite::Connection, game: GameId) -> Result<usize, EngineError> {
         let count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM messages WHERE game_id = ?1 AND is_deleted = 0",
+                "SELECT COUNT(*) FROM messages WHERE game_id = ?1",
                 rusqlite::params![game.0 as i64],
                 |row| row.get(0),
             )
@@ -193,7 +235,7 @@ impl StoryReads<'_> {
     ) -> Result<Vec<i64>, EngineError> {
         let mut stmt = conn
             .prepare(
-                "SELECT id FROM (SELECT id FROM messages WHERE game_id = ?1 AND is_deleted = 0 ORDER BY id DESC LIMIT ?2) ORDER BY id ASC",
+                "SELECT id FROM (SELECT id FROM messages WHERE game_id = ?1 ORDER BY id DESC LIMIT ?2) ORDER BY id ASC",
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare the story ids: {e}")))?;
         let rows = stmt
@@ -223,7 +265,7 @@ impl StoryReads<'_> {
     ) -> Result<Vec<DbSwipe>, EngineError> {
         let mut stmt = conn
             .prepare(
-                "SELECT id, message_id, swipe_index, text, snapshot_id, room_report, event_header, impersonated, guide_text, impersonate_direction, state, maker
+                "SELECT id, message_id, swipe_index, text, room_report, event_header, impersonated, guide_text, impersonate_direction, state, maker
                  FROM message_swipes WHERE message_id = ?1 ORDER BY swipe_index ASC",
             )
             .map_err(|e| EngineError::Config(format!("Failed to prepare the swipe rows: {e}")))?;
@@ -241,7 +283,7 @@ impl StoryReads<'_> {
         let state_json = match conn.query_row(
             "SELECT state FROM message_swipes WHERE message_id = ?1 AND swipe_index = ?2",
             rusqlite::params![at.message as i64, at.swipe as i64],
-            |row| row.get::<_, Option<String>>(0),
+            |row| row.get::<_, String>(0),
         ) {
             Ok(json) => json,
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
@@ -251,7 +293,7 @@ impl StoryReads<'_> {
                 )));
             }
         };
-        from_json("swipe state", state_json.as_deref())
+        from_json("swipe state", &state_json).map(Some)
     }
 
     fn active_swipe_index(conn: &rusqlite::Connection, message: i64) -> Result<usize, EngineError> {

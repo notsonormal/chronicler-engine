@@ -124,12 +124,6 @@ fn boot_error(error: ApplicationError) -> EngineError {
     match error {
         ApplicationError::Validation(message) => EngineError::Validation(message),
         ApplicationError::Engine(error) => error,
-        ApplicationError::ShuttingDown => {
-            EngineError::Config("Server is shutting down".to_string())
-        }
-        ApplicationError::ConcurrentGeneration => {
-            EngineError::Config("Generation in progress".to_string())
-        }
     }
 }
 

@@ -31,9 +31,7 @@ fn one_turn_app() -> (axum::Router, AppState) {
 async fn test_basic_fragments_return_html() {
     // The fragment renders entries only — the shell owns `#story-log` — so it needs
     // a seeded entry.
-    let app = TestAppBuilder::default_test()
-        .log("You look around.", MessageType::Narration)
-        .build();
+    let app = TestAppBuilder::default_test().build();
     let fragments = [
         ("/fragment/header", "class=\"header\""),
         ("/fragment/story-log", "class=\"log-entry"),
@@ -211,31 +209,11 @@ async fn test_reset_generating_handler() {
 
 #[tokio::test]
 async fn test_edit_history_handler_success() {
-    let storage = Arc::new(empty_sqlite_storage());
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
 
-    use chronicler_engine::test_support::{TestWorld, TestMap, TestPersona};
-    let world = TestWorld::minimal();
-    let map = TestMap::single_room("start");
-    storage.seed_world(&world, &map).unwrap();
-    let player = TestPersona::standard();
-    storage.seed_persona(&player.key, &player).unwrap();
-    storage
-        .create_game(
-            &world.name,
-            &world.key,
-            &player.key,
-            &player.sheet.name,
-            "Test Game",
-        )
-        .unwrap();
-
-    let (app, state) = TestAppBuilder::default_test()
-        .log("Original text", MessageType::Narration)
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-
-    let entry_id = storage
-        .load_message_rows(active_game_of(&state))
+    let entry_id = state
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .last()
         .unwrap()
@@ -287,12 +265,16 @@ async fn test_edit_history_handler_not_found() {
 
 #[tokio::test]
 async fn test_delete_history_handler_success() {
-    // The story keeps its first Message, so the fixture holds one before the one
-    // the delete removes.
-    let app = TestAppBuilder::default_test()
-        .log("Prior message", MessageType::Narration)
-        .log("Test message", MessageType::Narration)
-        .build();
+    // The story keeps its opening, so the Message the delete removes is the turn's
+    // Narration.
+    let (app, state) = one_turn_app();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 1000).await, "the turn should settle");
+    assert!(
+        fetch_body(&app, "/fragment/story-log")
+            .await
+            .contains("You look around.")
+    );
 
     let req = Request::builder()
         .uri("/history/delete")
@@ -305,7 +287,7 @@ async fn test_delete_history_handler_success() {
 
     let body = fetch_body(&app, "/fragment/story-log").await;
     assert!(
-        !body.contains("Test message"),
+        !body.contains("You look around."),
         "Log entry should be deleted from rendered story log"
     );
 }
@@ -427,15 +409,16 @@ async fn test_list_games_fragment_populated() {
 async fn test_list_games_fragment_escapes_html() {
     let storage = Arc::new(empty_sqlite_storage());
 
-    let _ = storage
-        .create_game(
+    let _ = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             "Test World",
             "Test World",
             "test_player",
             "Test Player",
             "<script>alert('xss')</script>",
-        )
-        .unwrap();
+        ),
+    );
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -496,24 +479,26 @@ async fn test_list_games_fragment_shows_world_badge() {
     storage.seed_world(&world_b, &map_b).unwrap();
     storage.seed_persona(&player.key, &player).unwrap();
 
-    let _game_a = storage
-        .create_game(
+    let _game_a = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             &world_a.name,
             &world_a.key,
             &player.key,
             &player.sheet.name,
             "Game A",
-        )
-        .unwrap();
-    let _game_b = storage
-        .create_game(
+        ),
+    );
+    let _game_b = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             &world_b.name,
             &world_b.key,
             &player.key,
             &player.sheet.name,
             "Game B",
-        )
-        .unwrap();
+        ),
+    );
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))

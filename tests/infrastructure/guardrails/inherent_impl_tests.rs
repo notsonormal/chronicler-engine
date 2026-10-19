@@ -139,7 +139,7 @@ fn test_cfg_feature_test_is_not_skipped() {
 #[test]
 fn test_to_snake_case_simple() {
     assert_eq!(to_snake_case("Foo"), "foo");
-    assert_eq!(to_snake_case("ActionPipeline"), "action_pipeline");
+    assert_eq!(to_snake_case("GameCatalogue"), "game_catalogue");
     assert_eq!(to_snake_case("DbPool"), "db_pool");
 }
 

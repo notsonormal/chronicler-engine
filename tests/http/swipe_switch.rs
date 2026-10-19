@@ -135,8 +135,8 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
 
     let narration = |state: &AppState| {
         state
-            .message_service
-            .load_messages(active_game_of(state))
+            .game_view_query
+            .story_messages(active_game_of(state))
             .expect("the story log reads back")
             .into_iter()
             .find(|message| message.id == message_id)

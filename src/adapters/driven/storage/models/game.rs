@@ -23,7 +23,6 @@ pub struct DbGame {
     pub active_options_prompt_preset_id: String,
     pub options_always_on: bool,
     pub display_name: String,
-    /// `None` when the Game holds no failure line.
     pub failure_json: Option<String>,
 }
 
@@ -81,14 +80,13 @@ impl DbGame {
         })
     }
 
-    /// The failure line this row holds, or none.
     fn failure(
         &self,
     ) -> Result<
         Option<crate::domain::model::state::generation_status::GenerationFailure>,
         EngineError,
     > {
-        crate::adapters::driven::storage::utils::from_json(
+        crate::adapters::driven::storage::utils::from_optional_json(
             "game failure",
             self.failure_json.as_deref(),
         )

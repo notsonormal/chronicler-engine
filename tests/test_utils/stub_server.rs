@@ -203,8 +203,8 @@ pub enum StubStatus {
     /// The engine is idle; the poll answers "idle".
     #[default]
     Idle,
-    /// The engine is generating; the poll answers the phase name.
-    Phase(String),
+    /// The engine is generating; the poll answers the step name.
+    Step(String),
     /// A failed generation; the poll answers the error fragment, clamped to
     /// the sentence the failure kind names, over this raw text.
     Error(GenerationFailureKind, String),
@@ -643,7 +643,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             post(|| async { client_failure("Stub retry failure") }),
         )
         .route("/retrigger", post(record_retrigger))
-        // The real switch restores a Snapshot; the stub scripts only the two
+        // The real switch makes another Swipe active; the stub scripts only the two
         // log shapes and the dock drop a switch test observes.
         .route("/message/:id/swipe/:index", post(switch_swipe))
         .route("/status/generating", get(status_generating))
@@ -882,7 +882,7 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
         .clone();
     let body = match status {
         StubStatus::Idle => "idle".to_string(),
-        StubStatus::Phase(phase) => phase,
+        StubStatus::Step(step) => step,
         StubStatus::Error(kind, raw) => error_disclosure(
             "status-error-popover",
             &generation_failure_summary(kind, &raw),

@@ -2,7 +2,9 @@
 //! The transaction: one unit of record writes that lands whole
 
 use crate::adapters::driven::storage::core::WriteOverrides;
-use crate::adapters::driven::storage::utils::{no_in_memory, require_message_of_game, to_json};
+use crate::adapters::driven::storage::utils::{
+    no_in_memory, require_message_of_game, to_json, to_optional_json,
+};
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::domain::model::dock::DockRecord;
 use crate::domain::model::game::{GameId, NewGame};
@@ -112,15 +114,14 @@ impl<'a> Tx<'a> {
             .map_err(|e| EngineError::Config(format!("Failed to serialize message type: {e}")))?;
         self.conn
             .execute(
-                "INSERT INTO messages (game_id, message_type, kind, timestamp, active_swipe_index, is_deleted)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO messages (game_id, message_type, kind, timestamp, active_swipe_index)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![
                     self.game.0 as i64,
                     message_type_json,
-                    to_json("message kind", message.kind.as_ref())?,
+                    to_json("message kind", &message.kind)?,
                     message.timestamp.to_rfc3339(),
                     message.active_swipe_index as i64,
-                    if message.is_deleted { 1 } else { 0 },
                 ],
             )
             .map_err(|e| EngineError::Config(format!("Failed to insert message: {e}")))?;
@@ -157,20 +158,19 @@ impl<'a> Tx<'a> {
         require_message_of_game(&self.conn, at.message, self.game)?;
         self.conn
             .execute(
-                "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, room_report, event_header, impersonated, guide_text, impersonate_direction, state, maker)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                "INSERT INTO message_swipes (message_id, swipe_index, text, room_report, event_header, impersonated, guide_text, impersonate_direction, state, maker)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 rusqlite::params![
                     at.message as i64,
                     at.swipe as i64,
                     &swipe.text,
-                    swipe.snapshot_id.map(|id| id as i64),
                     swipe.room_report.as_deref(),
                     swipe.event_header.as_deref(),
                     if swipe.impersonated { 1 } else { 0 },
                     swipe.guide_text.as_deref(),
                     swipe.impersonate_direction.as_deref(),
-                    to_json("swipe state", swipe.state.as_ref())?,
-                    to_json("swipe maker", swipe.maker.as_ref())?,
+                    to_json("swipe state", &swipe.state)?,
+                    to_json("swipe maker", &swipe.maker)?,
                 ],
             )
             .map_err(|e| EngineError::Config(format!("Failed to insert swipe: {e}")))?;
@@ -201,7 +201,7 @@ impl<'a> Tx<'a> {
             .execute(
                 "UPDATE message_swipes SET state = ?1, room_report = ?2 WHERE message_id = ?3 AND swipe_index = ?4",
                 rusqlite::params![
-                    to_json("swipe state", Some(state))?,
+                    to_json("swipe state", state)?,
                     room_report,
                     at.message as i64,
                     at.swipe as i64,
@@ -219,7 +219,10 @@ impl<'a> Tx<'a> {
         self.conn
             .execute(
                 "UPDATE games SET failure = ?1 WHERE id = ?2",
-                rusqlite::params![to_json("game failure", failure)?, self.game.0 as i64],
+                rusqlite::params![
+                    to_optional_json("game failure", failure)?,
+                    self.game.0 as i64
+                ],
             )
             .map_err(|e| EngineError::Config(format!("Failed to set the failure line: {e}")))?;
         Ok(())
@@ -247,7 +250,7 @@ impl<'a> Tx<'a> {
                 rusqlite::params![
                     self.game.0 as i64,
                     offered,
-                    to_json("dock notice", record.notice.as_ref())?,
+                    to_optional_json("dock notice", record.notice.as_ref())?,
                 ],
             )
             .map_err(|e| EngineError::Config(format!("Failed to write the dock record: {e}")))?;

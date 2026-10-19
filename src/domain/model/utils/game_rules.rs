@@ -279,10 +279,10 @@ fn evaluate_triggers(
     results
 }
 
-/// The "last Narration after last player Input" ordering on `MessageHistory`
-/// is not a global invariant: `POST /history/delete` legitimately pops a
-/// trailing Narration, so a state whose last entry is an Input is a valid
-/// rest state. This check therefore omits it.
+/// The "last Narration after last player Input" ordering over the story is not
+/// a global invariant: `POST /history/delete` legitimately pops a trailing
+/// Narration, so a state whose last Message is an Input is a valid rest state.
+/// This check therefore omits it.
 #[cfg(feature = "diagnostics")]
 pub(crate) fn assert_state_consistency(
     state: &SwipeState,

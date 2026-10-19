@@ -34,8 +34,8 @@ async fn test_delete_last_between_actions_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await, "action A should complete");
     let narration_a = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -51,8 +51,8 @@ async fn test_delete_last_between_actions_http() {
     assert!(wait_settled(&state, 1000).await, "action B should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()
@@ -92,8 +92,8 @@ async fn test_delete_mid_sequence_http() {
     let _ = post_action(&app, "look around").await;
     assert!(wait_settled(&state, 1000).await);
     let narration_b = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -108,8 +108,8 @@ async fn test_delete_mid_sequence_http() {
     assert!(wait_settled(&state, 1000).await);
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()

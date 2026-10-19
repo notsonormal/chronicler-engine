@@ -224,12 +224,12 @@ fn test_rename_game_errors_when_game_missing() {
 #[test]
 fn test_create_game_restores_current_game_on_persist_failure() {
     let data = TestDataBuilder::default_test().build();
-    let raw_storage = Storage::new_in_memory();
+    let raw_storage = crate::test_support::empty_sqlite_storage();
     data.seed_into(&raw_storage);
     let (storage, handle) = raw_storage.with_test_failures();
-    handle.set(
-        "save_snapshot",
-        TestOverride::internal("simulated initial snapshot failure"),
+    handle.set_write(
+        TxWrite::InsertMessage,
+        TestOverride::internal("simulated opening message failure"),
     );
     let storage = Arc::new(storage);
     let catalogue = new_catalogue(&storage, None);
@@ -405,21 +405,18 @@ fn test_create_game_persists_scenario_message_and_swipe() {
         .expect("create_game should succeed");
 
     assert!(id > 0, "Game ID should be positive");
-    let messages = storage
-        .load_message_rows(catalogue.active_game_id().expect("an active game"))
-        .unwrap();
-    let narrations: Vec<_> = messages
-        .into_iter()
-        .filter(|m| m.message_type == MessageType::Narration)
-        .collect();
+    let tail = storage
+        .stories()
+        .tail(catalogue.active_game_id().expect("an active game"))
+        .unwrap()
+        .expect("the Game holds its opening");
     assert_eq!(
-        narrations.len(),
-        1,
+        tail.count, 1,
         "exactly one scenario Narration should be persisted"
     );
-    let swipe_count = storage.count_swipes_for_message(narrations[0].id).unwrap();
+    assert_eq!(tail.last.message_type, MessageType::Narration);
     assert!(
-        swipe_count > 0,
+        !tail.last.swipes.is_empty(),
         "scenario message should have at least one swipe"
     );
 }

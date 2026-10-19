@@ -44,7 +44,7 @@ fn mock_backend_path_returns_recorder_with_mock_provider() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(mock_connection(), storage);
-    let recorder = wired.pipeline.recorder();
+    let recorder = wired.job_deps.narrator.recorder();
 
     assert_eq!(recorder.provider().expect("resolves").name(), "Mock");
     assert_eq!(
@@ -59,7 +59,7 @@ fn mock_backend_recorder_persists_forensics_to_storage() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(mock_connection(), Arc::clone(&storage));
-    let recorder = wired.pipeline.recorder();
+    let recorder = wired.job_deps.narrator.recorder();
 
     recorder
         .complete("wiring-test-agent", "sys", "usr", None)
@@ -93,7 +93,7 @@ fn deepseek_path_returns_recorder() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(connection, storage);
-    let recorder = wired.pipeline.recorder();
+    let recorder = wired.job_deps.narrator.recorder();
 
     assert_eq!(recorder.provider().expect("resolves").name(), "DeepSeek");
 }
@@ -114,7 +114,7 @@ fn openrouter_path_returns_recorder() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(connection, storage);
-    let recorder = wired.pipeline.recorder();
+    let recorder = wired.job_deps.narrator.recorder();
 
     assert_eq!(recorder.provider().expect("resolves").name(), "OpenRouter");
 }
@@ -135,7 +135,7 @@ fn ollama_path_returns_recorder() {
     let storage = Arc::new(Storage::new_in_memory());
 
     let wired = wired_app(connection, storage);
-    let recorder = wired.pipeline.recorder();
+    let recorder = wired.job_deps.narrator.recorder();
 
     assert_eq!(recorder.provider().expect("resolves").name(), "Ollama");
 }
@@ -163,7 +163,8 @@ fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
 
     assert_eq!(
         wired
-            .pipeline
+            .job_deps
+            .narrator
             .recorder()
             .provider()
             .expect("resolves")
@@ -195,7 +196,7 @@ fn openrouter_connection_without_key_reports_missing_api_key() {
 
     let wired = wired_app(connection, storage);
     // `dyn LlmProvider` is not `Debug`, so `expect_err` is unavailable here.
-    let error = match wired.pipeline.recorder().provider() {
+    let error = match wired.job_deps.narrator.recorder().provider() {
         Ok(_) => panic!("a keyless OpenRouter connection must not resolve"),
         Err(e) => e,
     };

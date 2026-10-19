@@ -57,8 +57,8 @@ fn current_options(state: &AppState) -> Vec<String> {
 
 fn message_count(state: &AppState) -> usize {
     state
-        .message_service
-        .load_messages(active_game_of(state))
+        .game_view_query
+        .story_messages(active_game_of(state))
         .unwrap()
         .len()
 }
@@ -645,8 +645,8 @@ async fn test_using_offered_option_submits_as_input_http() {
     assert!(wait_settled(&state, 1000).await, "/options should complete");
 
     let inputs_before = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -663,8 +663,8 @@ async fn test_using_offered_option_submits_as_input_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()

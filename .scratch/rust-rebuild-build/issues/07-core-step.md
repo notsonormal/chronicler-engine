@@ -581,3 +581,182 @@ Per item, what changed.
 
 
 **2026-10-18 ~23:05, lead (C5 commit gate).** The first full gate on the C5 tree failed 2 tests of the `bootstrap` binary (`run_branches::test_run_persona_not_found_*`: `Validation("Persona not found")`, not `PersonaNotFound`). Cause: a C4 regression. C4 moved the persona check behind `resolve_boot_game`, so on an empty database boot created the Game first and failed inside `GameCatalogue::create_game`. Neither C4's reduced gate (clippy, guardrails, lib, storage) nor C5's focused checks (http, lib, storage) run the `bootstrap` binary. Fix: `prepare_data` checks the persona before it resolves the Game, and `PreparedData.persona_key` is removed. Full gate green on the final tree (`logs/build_20261018_230213.log`: guardrails 193, integration 1683 + 2 skipped, browser 29). Lesson for C6: a focused check list must name every test binary the change can reach; `python build.py integration` covers them all in ~35 s.
+
+**2026-10-19, implementer (C6, uncommitted).** Branch `wf/rebuild-core`, base `c05e2395` (core C5 + the delegation commit). The deletions, the migration and the guardrail rows. No commit, no branch switch, `.pi/` untouched. The deletions are unstaged (`git status` shows ` D`).
+
+### What was deleted
+
+42 files: 21 production (3,801 lines) and 21 test (9,471 lines). The lines are those at `c05e2395`.
+
+| Area | Files (lines) |
+|---|---|
+| Storage | `snapshots.rs` (134), `messages.rs` (246), `swipes.rs` (219), `mappers/state_snapshot.rs` (60), `models/game_state_snapshot.rs` (26) |
+| Application | `message_service.rs` (283), `pipeline/pipeline_run.rs` (577), `pipeline/narration_generation.rs` (188), `pipeline/phase_error.rs` (24), `pipeline/action_pipeline/{action 81, core 583, mod 21, options 189, retrigger 52, retry 425}.rs`, `generation/guard.rs` (38), `generation/slot.rs` (55) |
+| Domain | `state/game_state.rs` (318), `state/game_state_snapshot.rs` (72), `state/narrative_state.rs` (63), `message_history.rs` (147) |
+
+Inside kept files: today's `GenerationGate` (about 180 lines of `gate.rs`; `JobTasks` stays in `job_tasks.rs`, and `wait_for_jobs` in the tier-1 support reads `JobDeps.tasks`), `ProcessActionResult`, `ApplicationError::{ConcurrentGeneration, ShuttingDown}`, `InputBuffer`, `ActionPipeline`'s wiring (`WiredApp.pipeline`, `.message_service`, `.generation_gate` give way to `WiredApp.job_deps`; `AppState` follows), the in-memory `snapshots`, `messages` and `swipes` maps, `Storage::{active_system_preset_id, active_impersonate_preset_id}`, `AgentRunner::{with_analysis_agent, with_options_agent}`, `Message::{is_unpersisted, set_room_report, snapshot_id, set_snapshot_id}`, `From<&Message> for MessageEntry`, `Swipe.snapshot_id`, and the dead fixtures that only deleted tests used (`create_test_state*`, `create_minimal_test_state`, `create_test_player`, `create_test_npcs`, `npc_map`, `TestStoredTriggerContext::with_max_tokens`, `TestMap::room_named`). `TestGameState` is `TestSwipeState`.
+
+Net of the whole tree: 129 files changed, +1,212 / −15,199.
+
+### Item 2, one by one
+
+| Item | Result |
+|---|---|
+| `ConcurrentGeneration` (`503`) and its producers | **The ticket's claim was wrong.** At `c05e2395` no producer exists in `settings_service`, `world_catalogue`, `persona_catalogue` or `prompt_preset_service` (`git grep ConcurrentGeneration` finds only `message_service.rs` and the old gate). The variant, its `503` mapping, its boot mapping and its test are gone with `MessageService`. No design question arose. `ApplicationError::ShuttingDown` had no producer either (its only producer was `ProcessActionResult::ShuttingDown`), so it went too, with its test. |
+| `MockBackend` knobs | `with_delay`, `with_trigger_delay`, `narration_started` and `trigger_started` had no user and are gone. **`with_narrations` and `with_prompt_responses` stay**: their last users are legacy lib tests of surviving subjects (`llm_recorder_tests` ×2, `quantifier/utils/orchestration_tests` ×4, `mock_tests` for the knob itself). Rewriting them needs a local fake per file; that is not small, and the plan removes the knobs "when their last tier-1 user moves", which happened in C5. |
+| `TestAppBuilder::last_trigger` and `::log` | Both deleted. `log`'s users were four quarantine tier-1 tests and `endpoints_tests`; each now reads the seeded opening, or arranges a real turn (`test_delete_history_handler_success`), or reads the id through `GameViewQuery::story_messages` (`test_edit_history_handler_success`). The builder now takes `job_deps(JobDeps)` where it took `pipeline(ActionPipeline)`; `make_test_job_deps` replaces `make_test_pipeline_with_backends`. |
+| `gate_tests::test_boot_heal_resets_stale_generating_status` | Gone with `gate_tests.rs` (4 tests, 115 lines). |
+| Duplicated swipe-row SELECT | Gone: `swipes.rs` is deleted, `stories.rs` holds the one SELECT. |
+| `edit` and `require_active_swipe_index` | `GameWriter::edit` reads `StoryReads::active_swipe(game, message) -> Option<SwipeAt>` (new; storage cases `story-active-swipe`). |
+| The boot's own `GameWriter` | **Not changed.** `resolve_boot_game` runs in `prepare_data`, before the wired graph exists, and five unit tests call `resolve_boot_game(storage, ..)`. Giving it the app's writer means building the graph first or passing a writer into `build_app_graph` (4 callers), and the C5 fix pinned the order persona check, then Game. The boot runs no Job, so the second registry is never used. Recorded, not a defect. |
+| The event Narration's `maker` | **Stays `Narrator`.** The design lists exactly three makers ("the World's opening text, the player, or the narrator", target design §2 table), and the Message's kind (`EventNarration`) already says it is an event. No fourth value. |
+| `Notice.reason` typed? | **Stays a `String`.** The design's words are "a reason line with its raw text"; a typed reason would be a design change, and no spec asserts a set of values. Open for the owner only if a later Agent needs to branch on a reason. |
+| Remaining `turn` wording | Two doc comments on `GenerationFailureKind` changed. The lines themselves already matched §4.7 after C4/C5. `headers.rs` ("the turn was left unnarrated") and the `worlds` template label keep "turn": they are player-visible copy that no §4.7 row names. |
+| The trigger role's call | Already settled in C3/C4: `Narrator::narrate` takes the role, and an event Narration passes `Kind::role` (the Trigger). |
+
+### Migration (v28)
+
+`plumbing.rs` adds step 28 and keeps every old step. It deletes `game_docks` rows, drops `message_swipes`, `messages` and `game_state_snapshots` (its index goes with it), deletes every `games` row, and recreates `messages` and `message_swipes` empty with the final columns: `messages.kind TEXT NOT NULL`, `message_swipes.state TEXT NOT NULL`, `message_swipes.maker TEXT NOT NULL`, no `snapshot_id`, `location_header` already `room_report`. SQLite cannot add `NOT NULL` in place, and the tables are empty after the delete, so a rebuild is the plain way. **This deletes the Games in the dev database** (OR-01). `is_deleted` stays (see open questions). To keep the earlier steps testable, `run_migrations` is now `migrate_up_to(conn, LATEST_VERSION)` and each step reads `due(N)`; `plumbing_tests.rs` runs its old-step tests up to v27 through a local helper, because v28 erases their rows. Two new tests there: `test_v28_deletes_saved_games_and_drops_the_snapshot_tables` (with foreign keys on, as the pool runs) and `test_v28_requires_the_kind_the_state_and_the_maker`.
+
+Domain: `Swipe.state: SwipeState`, `Swipe.maker: Maker`, `Message.kind: MessageKind`, `StoryRow.kind: MessageKind`. `Swipe::new(text, maker, state)` and `Message::new(message_type, kind, swipe)` replace the old four-argument `Message::new`; `opening_message` takes the state. `Tail::redo` returns a `GenerationOrder` (a Message always has a kind), and `current_state` reads the active Swipe directly. `DbSwipe`/`DbMessage` hold the three JSON columns as `String`; `to_json`/`from_json` are the plain forms, with `to_optional_json`/`from_optional_json` for the nullable failure and notice columns.
+
+### Guardrail rows
+
+| Rule | Where |
+|---|---|
+| 13 | call-site row in `walker_rows.rs`: `Narrator::narrate`, `AgentRunner::analysis`, `AgentRunner::options` may be called only from `application/pipeline/job.rs` (and the `Narrator` seam contract, which calls its own entry point). The walker sees files, not functions, and matches a method call through the receiver name, so `JobDeps.agents` became `agent_runner`. The row's case mirror is in `walker_tests.rs`. |
+| 9 and 14 (compiler half) | no row; the compiler holds them. Verified: `Storage` holds no write of a Message, Swipe, Swipe state, dock record or failure line; they exist on `Tx` only. The Game-row writes outside the lifecycle stay on `Storage` (`update_game_config`, `update_game_display_name`, `delete_game` for the Games list, fixture `create_game`), because the config routes and the list delete are not lifecycle units. No `GameState` type is left, and `WHOLE_STATE_TYPES` now holds `SwipeState` only. |
+| `messages swipes separation` | retired: the function, its two unit cases and its `guardrails_messages_swipes_separation` test. |
+| Legacy list | 19 entries dropped (every deleted `_tests.rs`). |
+| `guardrails.md` | regenerated with `scripts/generate_guardrails_doc.py`; `AGENTS.md` and `tests/AGENTS.md` blocks regenerated too. |
+
+### Deleted tests
+
+Whole files (counted by `#[test]` marks, so a `proptest!` block counts once):
+
+| File | Tests |
+|---|---|
+| `storage/snapshots_tests.rs` | 20 |
+| `storage/messages_tests.rs` | 28 |
+| `storage/swipes_tests.rs` | 35 |
+| `storage/mappers/state_snapshot_tests.rs` | 8 |
+| `storage/mappers/message_tests.rs` | 5 |
+| `storage/models/message_tests.rs` | 3 |
+| `application/message_service_tests.rs` | 18 |
+| `application/generation/{gate 4, guard 2, slot 3}_tests.rs` | 9 |
+| `pipeline/action_pipeline/{action 12, core 35, options 13, retrigger 6, retry 42}_tests.rs` | 108 |
+| `pipeline/narration_generation_tests.rs` | 11 |
+| `domain/model/message_history_tests.rs` | 20 |
+| `domain/model/state/game_state_snapshot_tests.rs` | 5 |
+| `domain/model/state/game_state_tests.rs` | 37 (4 moved, below) |
+| `tests/storage/message_storage.rs` | 14 |
+| `tests/storage/snapshot_storage.rs` | 17 |
+| Total | 338 |
+
+Inside kept files (subject deleted, no cover needed): `error_tests` 2 (the two removed variants); `mod_tests::test_pipeline_trait_bounds` (`ActionPipeline`; `JobDeps` being `Send + Sync` is a compile check, because `AppState` is axum state); `db_tests::test_db_game_state_snapshots_has_game_id` (the table is gone; `test_v28_deletes_..` checks that); `message_tests::test_message_set_snapshot_id_writes_active_swipe`; `tail_tests` 2 (a Message with no kind); three layers and guardrail cases (above) and `test_check_server_layer_boundaries_catches_game_state`.
+
+Deleted tests whose subject survives, and their cover:
+
+| Test or group | Cover |
+|---|---|
+| `game_state_tests` story methods (push message, retry target, stored inputs, log order, arriving location, commit trigger; about 28) | tier 1: `actions.md` 1.x, `swipe_new.md` 9.x to 11.x and 22.x, `retrigger.md`; the rules themselves stay in `game_rules_tests`. `test_npcs_in_area_*` (4) were tautologies about a `Vec`. |
+| `game_state_tests::test_generation_state_status` | `GenerationStatus` through the status rule: `dashboard.md` 39.1. |
+| `game_state_tests` encounter-log, dynamic-room cases (4) | **Moved**, not deleted: three to `trigger_tests.rs`, one to `map_tests.rs` (pure domain, place 2 of the one rule). |
+| `mappers/message_tests` (5), `models/message_tests` (3) | storage seam contract: existing `story-tail-last-message`, `story-entries-entry-fields`, plus new `story-swipe-stored-inputs` (impersonated, guide, direction round trip), `story-tail-active-swipe-out-of-bounds` (index past the Swipes reads as the first), `story-messages`. The null-optionals case is obsolete: `NOT NULL` is checked by `test_v28_requires_...`. |
+| `tests/storage/message_storage.rs` (14: soft delete, restore, purge, swipe insert, shift, count, in-memory arms) | soft delete no longer exists; `story-delete-message`, `story-set-swipe-text`, `story-write-injection` cover the kept writes. |
+| `message_service_tests` (18: edit, delete, swipe switch, anchor) | tier 1: `story_log.md` 8.x, `swipe_switch.md` 36.x, `races.rs` I6. |
+| `pipeline/*_tests`, `narration_generation_tests` (≈119) | tier 1 over HTTP (`actions`, `swipe_new`, `retrigger`, `options`, `races`, `failure_display`) and the `Narrator` and Agent seam contracts. |
+| `gate_tests` (4), `guard_tests`, `slot_tests` | `races.rs` (I1 to I6) and `dashboard.md` 39.x. |
+| `message_history_tests` (20) and the two cap proptests | the cap went with `MessageHistory`; the story reads have `STORY_LIMIT`. |
+
+Changed in place (mechanical or reworked): `storage/core_tests` (override keys rekeyed from `save_snapshot`/`load_latest_snapshot` to `get_game`/`list_games`), `db_tests::test_db_cascade_delete_game`, `settings_tests` (version 28), `plumbing_tests`, `message_tests`, `tail_tests`, `catalogue_tests` (2: the create failure now injects `TxWrite::InsertMessage` on SQLite, and the create test reads `stories().tail`), `run_tests::test_restart_with_existing_game_does_not_duplicate_scenario` (now two `resolve_boot_game` calls and one opening Message), `orchestration_tests` (`SwipeState` fixture), `wiring_tests`, `endpoints_tests`, `transaction_storage` (the three Message-ordered newest-Game cases run on SQLite only, because the in-memory backend holds no Message; one new in-memory case). Tier 1: every `message_service.load_messages` became `game_view_query.story_messages` (11 files), one test arranges its edit through `POST /history/:id`, and the `NPC detection uncertain` helper and its assertion in `wait_settled` are gone (the notice no longer exists; `wait_settled` still checks for unscripted model calls). New storage cases: `story-active-swipe`, `story-messages`, `story-swipe-stored-inputs`, `story-tail-active-swipe-out-of-bounds`, `storage-newest-game-in-memory`; gone: `story-kind-written-none`. Seam cases now 5 contracts, 93 cases.
+
+### §9.7 search
+
+`rg -n 'GameStateSnapshot|save_snapshot|load_latest_snapshot|snapshot_id' src/ tests/` finds two lines, both in the v9 step of `storage/utils/plumbing.rs` (a comment and the column). Clean.
+
+### Doc lines made stale (for C7)
+
+- `docs/diataxis/reference/storage.md`: l.60 (`GameStateSnapshot` section), 68, 75, 98 to 108 (snapshot table and the non-FK edge), 132 to 136 (`MessageHistory`).
+- `docs/diataxis/reference/game_flow.md`: l.8 (slot registry), 20 (pre-main snapshot), 36 to 44 (`ActionPipeline`, `GenerationGate`, `GenerationGuard`), 65 (`GameState` wrappers), 69 and 80 (Snapshots).
+- `docs/diataxis/reference/architecture_system.md`: l.40 to 44 (`pipeline`, `message_service`, `generation_gate` on `AppState`; now `job_deps`).
+- `docs/diataxis/reference/startup.md`: l.92 to 94 (`Swipe.snapshot_id`).
+- `docs/diataxis/reference/frontend/dashboard.md` l.53 and `docs/diataxis/reference/narrative/options.md` l.10 (snapshot wording); `narration_system.md` l.16 ("action pipeline").
+- `docs/diataxis/reference/coding_standards/integration_test_standards.md`: l.18, 26, 34 to 37 (`message_service.load_or_fresh`), 53 to 54, 80, 206 to 217, 282 (`make_test_pipeline_*`).
+- `docs/diataxis/explanation/`: `two-state-channels.md` l.12 to 26; `storage_design.md` l.48, 66, 70; `rust_idioms.md` l.8, 16, 34, 36; `architecture.md` l.69, 79.
+- `tests/STRATEGY.md`: l.92 (`MessageService` as a read seam; now `GameViewQuery` holds `story_messages`), l.98 and 106 (`GameState`, snapshot row).
+- `CONTEXT.md`: l.37, 75 to 76 (**Snapshot**), 100 (**Action Pipeline**).
+- `docs/specs`: `story_log.md` l.13 to 60 and `reset.md` l.19 to 26 name `message_service.load_messages()`, `load_or_fresh` and `narrative.history`; `retrigger.md` l.102 to 109 (`narrative.history`, `process_action`, `last_trigger`); `swipe_new.md` l.135, 245 (Snapshot); the "pipeline returns to idle" lines (the earlier list).
+- `docs/plans/rust-rebuild-build-plan.md` §7 "Done when" names the `NPC detection uncertain` support assertion, which is gone.
+
+### Deviations from the plan
+
+1. `ConcurrentGeneration` has no producers in the four services (above); `ShuttingDown` went with it (not in the plan's list).
+2. `with_narrations` and `with_prompt_responses` stay (above).
+3. The boot keeps its own `GameWriter` (above).
+4. `run_migrations` gained `migrate_up_to`, and the v28 tests live in the legacy `plumbing_tests.rs`: no seam-level way exists to stop a database at v27.
+5. `Storage` keeps the Game-row writes that are not lifecycle units (above).
+6. Added `StoryReads::messages` and `GameViewQuery::story_messages`: tier 1 needs the whole story with every Swipe, and `MessageService` was the read seam for it. No production caller.
+7. `StoredTriggerContext` and its two `From` impls into `TriggerRef`/`EventRecord` remain; only `game_rules_tests` and `TestStoredTriggerContext` use them. Not on the C6 list.
+
+### Open questions
+
+- `Message.is_deleted` and `messages.is_deleted` are dead: nothing sets them since the soft-delete writes went. Left, because the plan does not name them; the migration rebuilt the table, so dropping the column is now cheap.
+- `Notice.reason` stays a `String` (above).
+- `StoredTriggerContext` (deviation 7).
+- The dev database loses its Games at the next boot, as the plan accepts.
+
+### Checks
+
+Log paths are the last runs on the final tree except where a later edit followed (fmt, one plumbing test).
+
+| Check | Log | Result |
+|---|---|---|
+| `python build.py clippy` | `logs/build_20261019_000608.log` | green |
+| `python build.py guardrails` | `logs/build_20261019_000620.log` | 189 passed (193 before: 4 retired or merged) |
+| `python build.py integration` | `logs/build_20261019_000644.log` | 1352 passed + 2 skipped (1354; C5 had 1683 + 2) |
+| `python build.py browser` | `logs/build_20261019_000724.log` | 29 passed |
+| `spec-coverage`, `seam-cases`, `validate-docs`, `test-structure` | `logs/build_20261019_000904.log`, `...000905.log` | green; 288 scenarios covered, 5 contracts / 93 cases |
+| `python build.py test-pattern "test_v28" --test-target lib` | `logs/build_20261019_000948.log` | 2 passed |
+
+The focused list for this step was `integration`, which runs every binary except browser, architecture and guardrails, as the C5 lesson says. `python build.py fmt` ran before the last four checks.
+
+### C6 fix pass (the two-axis code review)
+
+Branch `wf/rebuild-core`, base `c05e2395`; the C6 deletions were in the working tree and uncommitted. Per item, what changed.
+
+1. **`tests/AGENTS.md` hand-written lines.** The unit-test-mirror example `src/application/pipeline/action_pipeline/core.rs` ↔ `.../core_tests.rs` is `src/application/narration/narrator.rs` ↔ `src/application/narration/narrator_tests.rs` (the pipeline has one file, `job.rs`, and no unit test of its own). The options-agent recipe is "an `options`-type `AgentConfig` through `AgentRunner::from_configs` (`configured_runner` in test support; `configured_runner_without` leaves one type out)", exemplar `src/application/agents/options/agent_tests.rs`. A third stale line in the same section, `tests/storage/message_storage.rs` (deleted by C6), now names `tests/storage/story_storage.rs`.
+2. **The `foreign_keys` pragma in `test_v28_deletes_saved_games_and_drops_the_snapshot_tables`.** Removed with its comment: `DbPool::new` runs `run_migrations` first and sets the pragma after, so the pragma made the test arrange a database the engine never boots. Green without it.
+3. **`layers.rs` module summary.** Now names the checks the file holds (urlencoded form safety, the HTTP-to-storage leak) instead of the retired tests-vs-messages/swipes check. `scripts/generate_structure_index.py` and `..._tests_structure_index.py` regenerated.
+4. **`Message.is_deleted`.** The field, the `Message::from_db` parameter, `DbMessage.is_deleted`, the mapper's read, the `insert_message` column, the four `is_deleted = 0` filters in `stories.rs` and the column in the v28 rebuild are gone. `test_message_from_db_with_deleted` went with the field; `db_tests::test_db_cascade_delete_game` stamps no column. The v9 step keeps the column, because it reproduces the old schema.
+5. **`StoredTriggerContext`.** Deleted with its two `From` impls and `TestStoredTriggerContext`. `game_rules_tests` passes a live `TriggerRef`: `trigger_step` takes one, and a local `trigger_ref(npc_id, trigger_name, repeat)` builds it. The narration prompt and the system/user prompt fields had no reader.
+6. **`run_migrations_to_v27`.** Deleted; the 13 call sites call `migrate_up_to(&conn, UP_TO_V27)`, and a `const UP_TO_V27: i32 = 27` with its reason replaces the old helper's doc. **`migrate_up_to` stays uncfg'd: production code calls it** — `run_migrations` is its only wrapper and `DbPool::new` calls that. The item's `#[cfg(test)]` clause had no case to apply to; making it test-only would need a second private body for `run_migrations`.
+7. **`GameViewQuery::story_messages` and `StoryReads::messages`: kept.** They cannot be deleted, because some uses read a Swipe field that no production read returns. `MessageEntry`/`StoryRow` carry the active Swipe's `text`, `room_report` and `event_header`, the `swipe_count` and the `active_swipe_index`; they carry no stored input and no other Swipe's field. The uses that need the live `Message`:
+   - the stored inputs (`impersonated`, `impersonate_direction`, `guide_text`): `actions.rs::test_slash_impersonate_produces_input_http`, `actions.rs::test_slash_guide_does_not_persist_input_http`, `narrator_mode.rs::test_impersonate_works_in_if_game_http`, `swipe_new.rs::test_retry_re_impersonate_generates_input_swipe_http`, `...::test_retry_re_impersonate_preserves_record_http`, `...::test_retry_re_impersonate_uses_current_preset_content_http`, and `is_guided()` in `...::test_guided_retry_reports_the_room_its_redo_arrives_in_http`;
+   - a non-active Swipe's own `room_report`: `swipe_new.rs::test_retry_reruns_quantifier_moves_player_http` (Swipe 0 after a redo), `...::test_retry_swipe_without_movement_reports_no_room_http`, `...::test_event_retry_keeps_the_room_name_off_the_event_swipe_http`, `...::test_guided_retry_reports_the_room_its_redo_arrives_in_http`.
+   Every other use (the count, the last Message's text, kind, room report, event header, `swipes.len()`) has an equivalent in `get_story_log_entries` or `get_debug_state`, so the seam could shrink to these ten tests if the two reads were ever split.
+8. **`Narrator::recorder()`: kept.** Two wiring tests need it and no other public path reaches the wired recorder: `mock_backend_recorder_persists_forensics_to_storage` calls `LlmCallRecorder::complete` (the point is that the wired recorder saves to the wired storage; `Narrator::narrate` would need a full `PromptContext` and would assemble a prompt, which is not the fact under test), and `openrouter_connection_without_key_reports_missing_api_key` asserts that `provider()` is `Err` and reads the error's own text (`backend_info()` folds an error into a formatted string, so it cannot fail). The other five uses assert a provider name or model and could move to `backend_info()`, the production read the debug endpoint uses.
+9. **Rule 14.** `Storage::create_game`, `Storage::create_game_from_request` and `Storage::delete_game` are gone. `GameWriter::delete(game)` is new: one `hold` removes and cancels the Game's job entry and opens `units.open(game, |tx| tx.delete_game())`, so a Job held on Game A after a switch to Game B stops before its rows go, and `GameCatalogue::delete_game` routes through it, keeping the "Cannot delete the active game" refusal. The tests moved: `src/test_support/fixtures.rs` gained `test_new_game(...)` (the old create's defaults) and `seed_game_row(storage, &NewGame)` (the row lands whole in either backend, as `seed_default_game_row` already does for the shared SQLite fixture); `TestData::seed_into` and seven tier-1 files (`games_create`, `games_delete`, `games_fragment`, `games_switch`, `requires_migration/{fragment,text_check}`, `support/http_fixtures`) use them, as do `games_tests.rs` (7 sites), `worlds_tests.rs`, `actions_tests.rs` and `tests/storage/{transaction_storage,world_storage}.rs`. `GameWriter::create` was not the path for these moves: it also writes the opening Narration, and `TestAppBuilder` seeds its own opening (`seed_opening`) with the test's state, so a seeded Game would carry two. `games_tests.rs` keeps the tests whose subject survives (the reads, the rename, the config write) and drops the ones whose subject was the deleted method (`test_create_game_*`, `test_delete_game_*`, `test_create_game_failure`, `test_delete_game_failure`). The seam gained `storage-tx-new-game-failure` (a refused `InsertGame` leaves no row) and `storage-tx-delete-game` (the unit deletes the row and the schema cascades its records); the delete failure stays covered by `storage-tx-new-game-rollback`'s `DeleteGame` injection, and the idempotent delete by tier 1 (`games_delete.rs`). **Lead decision: `update_game_config` and `update_game_display_name` stay on `Storage`** — they write Game settings, not the records of a save unit. **Consequence to know: the in-memory backend can no longer hold a Game row** (`transaction_new_game` has no in-memory arm), so its Game arms answer the empty value and only `seed_game_row`'s in-memory arm still fills `InMemoryData.games`; `storage-newest-game-in-memory` therefore survives only through that seed, and a later pass that deletes the in-memory backend would take the arms with it.
+10. **`StubStatus`.** `Phase(String)` is `Step(String)`, and its local `phase` is `step`, in `stub_server.rs`, `announcements.rs`, `dashboard.rs` and `swipes.rs`.
+11. **The stale comment in `game_rules.rs`.** `MessageHistory` no longer exists; the comment now says the ordering over the story is not a global invariant, because `POST /history/delete` pops a trailing Narration.
+
+Lead decisions recorded here, as the brief asked.
+
+- **The v28 tests stay in the legacy `plumbing_tests.rs`**: a migration test needs a database stopped at v27, and no seam can stop one there. Accepted deviation.
+- **All five remaining `MockBackend` knobs are test-only** (`with_narrations`, `with_prompt_responses`, `with_fail_first_n`, `with_empty_response`, `with_trigger_narration_fail`) and stay with the legacy lib tests.
+- **Rule 13 matches calls by receiver name per file**, a known walker limit: the row sees files, not functions, so `JobDeps.agents` became `agent_runner` to keep the receiver name in `job.rs`.
+
+Checks on the final tree. `python build.py fmt` ran before the round, not after it.
+
+| Check | Log | Result |
+|---|---|---|
+| `python build.py clippy` | `logs/build_20261019_005246.log` | green (the earlier `logs/build_20261019_004819.log` is the same tree before the last doc-comment edit) |
+| `python build.py guardrails` | `logs/build_20261019_005101.log` | 189 passed (unchanged) |
+| `python build.py integration` | `logs/build_20261019_004836.log` | 1344 passed + 2 skipped (1346; C6 had 1352 + 2, and the 8 are the 9 `games_tests` tests whose subject was deleted, less one `display_name` case kept on the `seed_game_row` path, plus `message_tests::test_message_from_db_with_deleted`, minus the 2 new seam cases) |
+| `python build.py browser` | `logs/build_20261019_004916.log` | 29 passed |
+| `python build.py spec-coverage` | `logs/build_20261019_005114.log` | green |
+| `python build.py seam-cases` | `logs/build_20261019_005140.log` | 5 contracts, 95 cases (93 before: the 2 new transaction cases) |
+| `python build.py validate-docs` | `logs/build_20261019_005115.log` | green |
+| `python build.py test-pattern "" --test-target storage` | `logs/build_20261019_004421.log` | 105 passed |
+| `python build.py test-pattern "" --test-target lib` | `logs/build_20261019_004439.log` | 955 passed |
+| `python build.py test-pattern "" --test-target http` | `logs/build_20261019_004503.log` | 280 passed |

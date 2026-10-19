@@ -42,36 +42,3 @@ impl From<&crate::domain::model::utils::game_rules::TriggerMatch> for EventRecor
         }
     }
 }
-
-impl From<&StoredTriggerContext> for TriggerRef {
-    fn from(context: &StoredTriggerContext) -> Self {
-        Self {
-            npc_id: context.npc_id.clone(),
-            trigger_idx: context.trigger_idx,
-            trigger_name: context.trigger_name.clone(),
-            trigger_repeat: context.trigger_repeat,
-        }
-    }
-}
-
-impl From<&StoredTriggerContext> for EventRecord {
-    fn from(context: &StoredTriggerContext) -> Self {
-        Self {
-            trigger: TriggerRef::from(context),
-            header_name: context.trigger_name.clone(),
-            direction: context.trigger_narration_prompt.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct StoredTriggerContext {
-    pub npc_id: String,
-    pub trigger_idx: usize,
-    pub trigger_name: String,
-    pub trigger_repeat: bool,
-    pub trigger_narration_prompt: String,
-    pub system_prompt: String,
-    pub user_prompt: String,
-    pub max_tokens: Option<u32>,
-}

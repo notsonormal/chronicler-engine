@@ -3,9 +3,8 @@
 
 use std::sync::Mutex;
 
-/// One instance per app: the pipeline's tasks and the new Job's tasks share one
-/// watch, so one wait covers both. It is built into production because the
-/// `testing` feature is a default one.
+/// One instance per app: every Job's task joins one watch, so one wait covers them
+/// all. It is built into production because the `testing` feature is a default one.
 #[derive(Default)]
 pub struct JobTasks {
     handles: Mutex<Vec<tokio::task::JoinHandle<()>>>,

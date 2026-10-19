@@ -19,8 +19,8 @@ async fn test_reset_clears_history_http() {
     let _ = post_action(&app, "examine room").await;
     assert!(wait_settled(&state, 1000).await);
     let before = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     assert!(
         before.iter().any(|m| m.message_type == MessageType::Input),
@@ -31,8 +31,8 @@ async fn test_reset_clears_history_http() {
     assert!(resp.status().is_success());
 
     let after = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = after
         .iter()
@@ -77,8 +77,8 @@ async fn test_reset_then_execute_works_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()

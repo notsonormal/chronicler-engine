@@ -5,10 +5,10 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
-use crate::domain::model::state::game_state::GameState;
+use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::agent::{StoryEntry, WorldView};
 use crate::error::EngineError;
-use crate::test_support::fixtures::{TestGameState, TestMap, TestNpc, TestPersona};
+use crate::test_support::fixtures::{TestSwipeState, TestMap, TestNpc, TestPersona};
 use crate::test_support::make_test_recorder;
 
 use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result};
@@ -213,27 +213,19 @@ fn map_with_room(room: &Room) -> MapDef {
 }
 
 fn determine_npcs_with_room(
-    state: &mut GameState,
+    state: &mut SwipeState,
     current_room: &Room,
     npc_pool_ids: &[String],
     scene_npcs: &[NpcCard],
     player_action: &str,
     recorder: &LlmCallRecorder,
 ) -> crate::domain::model::quantifier::QuantifierResult {
-    use crate::domain::model::agent::{HookInput, Kind, StoryEntry, WorldView, STORY_WINDOW};
+    use crate::domain::model::agent::{HookInput, Kind, StoryEntry, WorldView};
     let map = map_with_room(current_room);
     let persona = TestPersona::standard();
     let npcs = npc_map_from_ids(npc_pool_ids);
-    state.swipe.scene.npcs_in_area = scene_npcs.to_vec();
-    let story: Vec<StoryEntry> = state
-        .narrative
-        .history()
-        .iter()
-        .rev()
-        .take(STORY_WINDOW)
-        .rev()
-        .map(StoryEntry::from)
-        .collect();
+    state.scene.npcs_in_area = scene_npcs.to_vec();
+    let story: Vec<StoryEntry> = Vec::new();
     let world = WorldView {
         room: Some(current_room),
         map: &map,
@@ -259,7 +251,7 @@ fn determine_npcs_with_room(
 
 #[test]
 fn test_determine_npcs_high_confidence() {
-    let mut state = TestGameState::in_room("hall");
+    let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = HighConfidenceBackend {
@@ -283,7 +275,7 @@ fn test_determine_npcs_high_confidence() {
 
 #[test]
 fn test_determine_npcs_medium_confidence() {
-    let mut state = TestGameState::in_room("hall");
+    let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = MediumConfidenceBackend;
@@ -303,7 +295,7 @@ fn test_determine_npcs_medium_confidence() {
 
 #[test]
 fn test_determine_npcs_low_confidence_fallback() {
-    let mut state = TestGameState::in_room("hall");
+    let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = LowConfidenceBackend;
@@ -327,7 +319,7 @@ fn test_determine_npcs_low_confidence_fallback() {
 
 #[test]
 fn test_determine_npcs_backend_error_fallback() {
-    let mut state = TestGameState::in_room("hall");
+    let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = ErrBackend;
@@ -348,7 +340,7 @@ fn test_determine_npcs_backend_error_fallback() {
 
 #[test]
 fn test_determine_npcs_filters_unknown_backend_ids() {
-    let mut state = TestGameState::in_room("hall");
+    let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = HighConfidenceBackend {
@@ -483,7 +475,7 @@ fn test_quantifier_low_confidence_then_error_fallback() {
 
 #[test]
 fn test_static_npc_result_preserves_movement() {
-    let state = TestGameState::in_room("hall");
+    let state = TestSwipeState::in_room("hall");
     let movement = MovementParseResult {
         movement_type: Some(MovementType::Leaving),
         destination: Some("garden".to_string()),
@@ -498,7 +490,7 @@ fn test_static_npc_result_preserves_movement() {
         map: &map,
         persona: &persona,
         characters: &npcs,
-        present: &state.swipe.scene.npcs_in_area,
+        present: &state.scene.npcs_in_area,
     };
     let result = static_npc_result(&world, movement.clone());
 
@@ -509,9 +501,8 @@ fn test_static_npc_result_preserves_movement() {
 
 #[test]
 fn test_static_npc_result_fallback_to_scene_npcs() {
-    let mut state = TestGameState::in_room("hall");
+    let mut state = TestSwipeState::in_room("hall");
     state
-        .swipe
         .scene
         .npcs_in_area
         .push(TestNpc::named("carla", "Carla"));
@@ -524,7 +515,7 @@ fn test_static_npc_result_fallback_to_scene_npcs() {
         map: &map,
         persona: &persona,
         characters: &npcs,
-        present: &state.swipe.scene.npcs_in_area,
+        present: &state.scene.npcs_in_area,
     };
     let result = static_npc_result(&world, MovementParseResult::default());
 

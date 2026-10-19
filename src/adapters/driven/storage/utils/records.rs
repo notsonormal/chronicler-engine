@@ -16,32 +16,34 @@ pub(crate) fn no_in_memory(operation: &'static str) -> EngineError {
     )))
 }
 
-/// The JSON a nullable column holds, or none. `label` names the record in the
-/// error, because a parse failure is what a corrupt row shows.
-pub(crate) fn to_json<T: Serialize>(
+/// The JSON a column holds. `label` names the record in the error, because a
+/// parse failure is what a corrupt row shows.
+pub(crate) fn to_json<T: Serialize>(label: &str, value: &T) -> Result<String, EngineError> {
+    serde_json::to_string(value)
+        .map_err(|e| EngineError::Config(format!("Failed to serialize {label}: {e}")))
+}
+
+/// The JSON a nullable column holds, or none.
+pub(crate) fn to_optional_json<T: Serialize>(
     label: &str,
     value: Option<&T>,
 ) -> Result<Option<String>, EngineError> {
-    match value {
-        Some(value) => serde_json::to_string(value)
-            .map(Some)
-            .map_err(|e| EngineError::Config(format!("Failed to serialize {label}: {e}"))),
-        None => Ok(None),
-    }
+    value.map(|value| to_json(label, value)).transpose()
 }
 
-/// The value a nullable JSON column holds, or none. `label` names the record in
-/// the error, because a parse failure is what a corrupt row shows.
-pub(crate) fn from_json<T: DeserializeOwned>(
+/// The value a column holds. `label` names the record in the error, because a
+/// parse failure is what a corrupt row shows.
+pub(crate) fn from_json<T: DeserializeOwned>(label: &str, json: &str) -> Result<T, EngineError> {
+    serde_json::from_str(json)
+        .map_err(|e| EngineError::Config(format!("Failed to parse {label}: {e}")))
+}
+
+/// The value a nullable column holds, or none.
+pub(crate) fn from_optional_json<T: DeserializeOwned>(
     label: &str,
     json: Option<&str>,
 ) -> Result<Option<T>, EngineError> {
-    match json {
-        Some(json) => serde_json::from_str(json)
-            .map(Some)
-            .map_err(|e| EngineError::Config(format!("Failed to parse {label}: {e}"))),
-        None => Ok(None),
-    }
+    json.map(|json| from_json(label, json)).transpose()
 }
 
 /// A write that names another Game's Message is a programmer error, so the unit

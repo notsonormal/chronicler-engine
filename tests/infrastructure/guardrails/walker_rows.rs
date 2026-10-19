@@ -26,6 +26,21 @@ pub const BANNED_NAME_ROWS: &[BannedNameRow] = &[
     },
 ];
 
+// The calls rule 13 guards: the three paths fit no single row field line, so the
+// list is one named const the row points at.
+pub const GENERATION_CALLEES: &[&str] = &[
+    "Narrator::narrate",
+    "AgentRunner::analysis",
+    "AgentRunner::options",
+];
+
+// What may make those calls: the Job, and the `Narrator` seam contract, which calls
+// its own entry point. Two paths fit no single row field line.
+pub const GENERATION_CALLERS: &[&str] = &[
+    "application/pipeline/job.rs",
+    "application/narration/narrator_tests.rs",
+];
+
 pub const CALL_SITE_ROWS: &[CallSiteRow] = &[
     // Rule 2: the active-Game pointer has one reader and one writer.
     // `GameCatalogue` is both — `CurrentGame` reads through it once per request
@@ -46,6 +61,18 @@ pub const CALL_SITE_ROWS: &[CallSiteRow] = &[
         scope: "",
         callees: &["TxToken::new"],
         allowed: &["application/generation/gate.rs", "test_support/"],
+    },
+    // Rule 13: one generation path. Only `job.rs` calls the narrator and the
+    // hooks of the Agent runner, and its step functions are the one place that
+    // does, so no second route to a model call grows beside the Job. The row sees
+    // files, not functions, and `job.rs` holds only Job code. A method call is
+    // matched through the receiver's name (`narrator`, `agent_runner`), which
+    // `JobDeps` keeps.
+    CallSiteRow {
+        rule: 13,
+        scope: "",
+        callees: GENERATION_CALLEES,
+        allowed: GENERATION_CALLERS,
     },
 ];
 

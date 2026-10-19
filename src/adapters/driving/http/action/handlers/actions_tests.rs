@@ -5,7 +5,6 @@ use axum::{Form, http::StatusCode};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driven::storage::Storage;
-use crate::domain::model::game::GameId;
 use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::action::handlers::actions::{
     action_check_handler, action_confirm_handler, action_handler,
@@ -318,20 +317,21 @@ async fn test_action_handler_returns_500_on_pipeline_error() {
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPersona::standard();
-    let game_id = storage
-        .create_game(
+    let game_id = crate::test_support::seed_game_row(
+        &storage,
+        &crate::test_support::test_new_game(
             &world.name,
             &world.key,
             "__missing_persona__",
             &player.sheet.name,
             "Test Game",
-        )
-        .unwrap();
+        ),
+    );
 
     let state = TestAppBuilder::default_test()
         .storage(storage)
         .skip_seeding(true)
-        .active_game(GameId(game_id))
+        .active_game(game_id)
         .build_service();
     let form = ActionForm {
         command: "look".to_string(),

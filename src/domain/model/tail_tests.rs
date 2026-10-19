@@ -2,7 +2,7 @@
 
 use super::agent::Kind;
 use super::generation::Place;
-use super::message::{Message, StoredInputs, Swipe, SwipeAt};
+use super::message::{Maker, Message, StoredInputs, Swipe, SwipeAt};
 use super::state::message_types::{MessageKind, MessageType};
 use super::state::movement::MovementState;
 use super::state::scene_state::SceneState;
@@ -24,17 +24,7 @@ fn state_in(room: &str, trigger_context: Option<TriggerRef>) -> SwipeState {
 }
 
 fn swipe(text: &str, state: SwipeState) -> Swipe {
-    Swipe {
-        text: text.to_string(),
-        snapshot_id: None,
-        room_report: None,
-        event_header: None,
-        impersonated: false,
-        guide_text: None,
-        impersonate_direction: None,
-        state: Some(state),
-        maker: None,
-    }
+    Swipe::new(text, Maker::Narrator, state)
 }
 
 fn trigger() -> TriggerRef {
@@ -55,9 +45,12 @@ fn event_record() -> EventRecord {
 }
 
 fn tail_after_one_message(kind: MessageKind) -> Tail {
-    let mut last = Message::new("last", MessageType::Narration, None, None);
+    let mut last = Message::new(
+        MessageType::Narration,
+        kind,
+        swipe("first", state_in("room2", None)),
+    );
     last.id = 7;
-    last.kind = Some(kind);
     last.swipes = vec![
         swipe("first", state_in("room2", None)),
         swipe("second", state_in("room3", None)),
@@ -77,9 +70,12 @@ fn tail_after_one_message(kind: MessageKind) -> Tail {
 }
 
 fn tail_of_the_opening() -> Tail {
-    let mut opening = Message::new("opening", MessageType::Narration, None, None);
+    let mut opening = Message::new(
+        MessageType::Narration,
+        MessageKind::Narration,
+        swipe("opening", state_in("room1", None)),
+    );
     opening.id = 3;
-    opening.kind = Some(MessageKind::Narration);
     opening.swipes = vec![
         swipe("opening", state_in("room1", None)),
         swipe("retold", state_in("room2", None)),
@@ -132,9 +128,9 @@ fn current_state_is_the_state_of_the_active_swipe() {
 }
 
 #[test]
-fn current_state_is_none_when_the_active_swipe_holds_no_state() {
+fn current_state_is_none_when_the_active_swipe_is_missing() {
     let mut tail = tail_after_one_message(MessageKind::Narration);
-    tail.last.swipes[1].state = None;
+    tail.last.active_swipe_index = 9;
 
     assert!(tail.current_state().is_none());
 }
@@ -142,7 +138,7 @@ fn current_state_is_none_when_the_active_swipe_holds_no_state() {
 #[test]
 fn retrigger_allowed_is_true_for_a_narration_with_a_trigger_context() {
     let mut tail = tail_after_one_message(MessageKind::Narration);
-    tail.last.swipes[1].state = Some(state_in("room3", Some(trigger())));
+    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
 
     assert!(tail.retrigger_allowed());
 }
@@ -150,7 +146,7 @@ fn retrigger_allowed_is_true_for_a_narration_with_a_trigger_context() {
 #[test]
 fn retrigger_allowed_is_true_for_an_impersonate_input_with_a_trigger_context() {
     let mut tail = tail_after_one_message(MessageKind::ImpersonateInput);
-    tail.last.swipes[1].state = Some(state_in("room3", Some(trigger())));
+    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
 
     assert!(tail.retrigger_allowed());
 }
@@ -158,7 +154,7 @@ fn retrigger_allowed_is_true_for_an_impersonate_input_with_a_trigger_context() {
 #[test]
 fn retrigger_allowed_is_false_for_an_event_narration_with_a_trigger_context() {
     let mut tail = tail_after_one_message(MessageKind::EventNarration(event_record()));
-    tail.last.swipes[1].state = Some(state_in("room3", Some(trigger())));
+    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
 
     assert!(!tail.retrigger_allowed());
 }
@@ -166,16 +162,7 @@ fn retrigger_allowed_is_false_for_an_event_narration_with_a_trigger_context() {
 #[test]
 fn retrigger_allowed_is_false_for_a_typed_input_with_a_trigger_context() {
     let mut tail = tail_after_one_message(MessageKind::TypedInput);
-    tail.last.swipes[1].state = Some(state_in("room3", Some(trigger())));
-
-    assert!(!tail.retrigger_allowed());
-}
-
-#[test]
-fn retrigger_allowed_is_false_when_the_message_holds_no_kind() {
-    let mut tail = tail_after_one_message(MessageKind::Narration);
-    tail.last.kind = None;
-    tail.last.swipes[1].state = Some(state_in("room3", Some(trigger())));
+    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
 
     assert!(!tail.retrigger_allowed());
 }
@@ -190,7 +177,7 @@ fn retrigger_allowed_is_false_without_a_trigger_context() {
 #[test]
 fn retrigger_allowed_is_false_without_a_current_state() {
     let mut tail = tail_after_one_message(MessageKind::Narration);
-    tail.last.swipes[1].state = None;
+    tail.last.active_swipe_index = 9;
 
     assert!(!tail.retrigger_allowed());
 }
@@ -227,7 +214,7 @@ fn current_at_names_the_active_swipe_of_the_last_message() {
 fn redo_of_the_opening_starts_from_its_first_swipe() {
     let tail = tail_of_the_opening();
 
-    let order = tail.redo().expect("the opening can be redone");
+    let order = tail.redo();
 
     assert_eq!(order.kind, Kind::Narration);
     assert_eq!(order.place, Place::NewSwipeOnLast);
@@ -250,7 +237,7 @@ fn redo_of_the_opening_starts_from_its_first_swipe() {
 fn redo_of_a_narration_starts_from_the_message_before_it() {
     let tail = tail_after_one_message(MessageKind::Narration);
 
-    let order = tail.redo().expect("the Narration can be redone");
+    let order = tail.redo();
 
     assert_eq!(order.kind, Kind::Narration);
     assert_eq!(order.place, Place::NewSwipeOnLast);
@@ -267,7 +254,7 @@ fn redo_of_a_narration_starts_from_the_message_before_it() {
 fn redo_of_an_event_narration_carries_its_event_record() {
     let tail = tail_after_one_message(MessageKind::EventNarration(event_record()));
 
-    let order = tail.redo().expect("the event Narration can be redone");
+    let order = tail.redo();
 
     assert_eq!(order.kind, Kind::Event);
     assert_eq!(order.event, Some(event_record()));
@@ -277,7 +264,7 @@ fn redo_of_an_event_narration_carries_its_event_record() {
 fn redo_of_an_impersonate_input_is_an_impersonate_generation() {
     let tail = tail_after_one_message(MessageKind::ImpersonateInput);
 
-    let order = tail.redo().expect("the Impersonate Input can be redone");
+    let order = tail.redo();
 
     assert_eq!(order.kind, Kind::Impersonate);
 }
@@ -286,26 +273,15 @@ fn redo_of_an_impersonate_input_is_an_impersonate_generation() {
 fn redo_of_a_typed_input_is_a_user_regen() {
     let tail = tail_after_one_message(MessageKind::TypedInput);
 
-    let order = tail.redo().expect("the Typed Input can be redone");
+    let order = tail.redo();
 
     assert_eq!(order.kind, Kind::UserRegen);
 }
 
 #[test]
-fn redo_of_a_message_without_a_kind_is_none() {
-    let mut tail = tail_after_one_message(MessageKind::Narration);
-    tail.last.kind = None;
-
-    assert!(
-        tail.redo().is_none(),
-        "a Message today's code wrote carries no kind to redo"
-    );
-}
-
-#[test]
 fn retrigger_is_a_new_event_message_from_the_current_state() {
     let mut tail = tail_after_one_message(MessageKind::Narration);
-    tail.last.swipes[1].state = Some(state_in("room3", Some(trigger())));
+    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
 
     let order = tail.retrigger().expect("the Trigger continues the story");
 
@@ -321,7 +297,7 @@ fn retrigger_is_a_new_event_message_from_the_current_state() {
 #[test]
 fn retrigger_is_none_for_an_event_narration() {
     let mut tail = tail_after_one_message(MessageKind::EventNarration(event_record()));
-    tail.last.swipes[1].state = Some(state_in("room3", Some(trigger())));
+    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
 
     assert!(tail.retrigger().is_none());
 }

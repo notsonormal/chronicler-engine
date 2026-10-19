@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Generation status enums and input buffer: the step and the status are independent axes; the pipeline in `application/pipeline/` drives them.
+//! Generation status enums: the step and the status are independent axes; the Job in `application/pipeline/` drives them.
 
 use serde::{Deserialize, Serialize};
 
@@ -7,10 +7,10 @@ use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationStatus {
-    /// No generation running; input buffer is empty or consumed.
+    /// No Job holds the Game.
     #[default]
     Idle,
-    /// Generation in progress; the input buffer's `Step` names the sub-stage.
+    /// A Job holds the Game; its `Step` names the sub-stage.
     Generating,
     /// Generation failed; the payload classifies the failure.
     Error(GenerationFailure),
@@ -68,9 +68,9 @@ pub enum GenerationFailureKind {
     UnreadableAnswer,
     /// The model spent its whole output budget before writing an answer.
     TokenBudgetSpent,
-    /// The turn could not be persisted.
+    /// The new text could not be saved.
     SaveFailed,
-    /// The room the turn ran in is gone from the map.
+    /// The room the request ran in is gone from the map.
     SceneMissing,
     /// The game's active preset is not in the library it names.
     PresetMissing,
@@ -196,11 +196,4 @@ impl Step {
             Self::Options => "options",
         }
     }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct InputBuffer {
-    pub input: String,
-    pub status: GenerationStatus,
-    pub step: Step,
 }

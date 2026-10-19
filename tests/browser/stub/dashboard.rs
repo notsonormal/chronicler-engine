@@ -98,7 +98,7 @@ async fn check_primary_button_locks_and_unlocks_after_confirm(
 ) {
     let status = stub.status_handle();
     // Keep the stub generating so no poll unlocks the button before the assertion reads it.
-    status.set(StubStatus::Phase("narrating".to_string()));
+    status.set(StubStatus::Step("narrating".to_string()));
     stash_action_area_nodes(&page).await;
 
     submit_intercepted_command(&page).await;
@@ -207,7 +207,7 @@ async fn check_status_error_shows_in_the_status_display_after_confirm(
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.13
 async fn check_preview_opens_beside_status_display(page: playwright_rs::Page, stub: StubServer) {
     let status = stub.status_handle();
-    status.set(StubStatus::Phase("narrating".to_string()));
+    status.set(StubStatus::Step("narrating".to_string()));
     poll_now(&page, "#status-display").await;
     wait_for_status_generating(&page).await;
 
@@ -420,7 +420,7 @@ async fn check_status_poll_leaves_generating_and_enter_submits(
 ) {
     let status = stub.status_handle();
     let action = stub.action_handle();
-    status.set(StubStatus::Phase("narrating".to_string()));
+    status.set(StubStatus::Step("narrating".to_string()));
     poll_now(&page, "#status-display").await;
     assert!(
         wait_for_condition_async(

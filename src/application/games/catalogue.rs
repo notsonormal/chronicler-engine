@@ -111,7 +111,7 @@ impl GameCatalogue {
                 "Cannot delete the active game",
             ));
         }
-        self.storage.delete_game(id)?;
+        self.game_writer.delete(GameId(id))?;
         Ok(())
     }
 

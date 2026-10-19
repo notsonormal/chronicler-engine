@@ -17,11 +17,9 @@ use crate::adapters::driving::http::view_models::{
 use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
-use crate::application::generation::gate::{GameWriter, GenerationGate};
-use crate::application::message_service::MessageService;
+use crate::application::generation::gate::GameWriter;
 use crate::application::persona_catalogue::PersonaCatalogue;
 use crate::application::pipeline::job::JobDeps;
-use crate::application::pipeline::ActionPipeline;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::settings_service::SettingsService;
 use crate::application::text_check_service::TextCheckService;
@@ -35,14 +33,11 @@ use crate::error::{EngineError, Result};
 pub struct AppState {
     pub settings_service: SettingsService,
     pub prompt_preset_service: PromptPresetService,
-    pub message_service: Arc<MessageService>,
     pub world_catalogue: WorldCatalogue,
     pub persona_catalogue: PersonaCatalogue,
     pub text_check_service: Arc<TextCheckService>,
     pub connection_test_service: ConnectionTestService,
     pub shutdown_token: CancellationToken,
-    pub pipeline: Arc<ActionPipeline>,
-    pub generation_gate: GenerationGate,
     pub game_writer: GameWriter,
     pub job_deps: JobDeps,
     pub game_catalogue: GameCatalogue,
@@ -51,27 +46,16 @@ pub struct AppState {
 
 impl AppState {
     pub fn from_wired(wired: WiredApp) -> Self {
-        // The Job runs on the pipeline the app holds, so a test override's narrator
-        // and Agents are the Job's too.
-        let job_deps = JobDeps {
-            narrator: Arc::clone(&wired.pipeline.narrator),
-            agents: Arc::clone(&wired.pipeline.agent_runner),
-            storage: Arc::clone(&wired.pipeline.storage),
-            tasks: wired.generation_gate.job_tasks(),
-        };
         AppState {
             settings_service: wired.settings_service,
             prompt_preset_service: wired.prompt_preset_service,
-            message_service: wired.message_service,
             world_catalogue: wired.world_catalogue,
             persona_catalogue: wired.persona_catalogue,
             text_check_service: wired.text_check_service,
             connection_test_service: wired.connection_test_service,
             shutdown_token: wired.shutdown_token,
-            pipeline: Arc::new(wired.pipeline),
-            generation_gate: wired.generation_gate,
             game_writer: wired.game_writer,
-            job_deps,
+            job_deps: wired.job_deps,
             game_catalogue: wired.game_catalogue,
             game_view_query: wired.game_view_query,
         }

@@ -14,7 +14,15 @@ pub(crate) fn parse_datetime(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
+const LATEST_VERSION: i32 = 28;
+
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
+    migrate_up_to(conn, LATEST_VERSION)
+}
+
+/// Runs the steps after the database's version, up to and including `up_to`. A
+/// test stops before a later step that erases the rows an earlier step wrote.
+pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineError> {
     fn column_exists(conn: &Connection, table: &str, col: &str) -> bool {
         conn.query_row(
             "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?",
@@ -28,6 +36,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap_or(0);
+    let due = |step: i32| version < step && step <= up_to;
 
     // Batched to avoid one fsync per statement under default `synchronous=FULL`;
     // the single commit is still fsynced, so durability is unchanged.
@@ -36,7 +45,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         .map_err(|e| EngineError::Config(format!("Failed to begin migration: {e}")))?;
     let conn = &tx;
 
-    if version < 9 {
+    if due(9) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -139,7 +148,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 10 {
+    if due(10) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -233,7 +242,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 12 {
+    if due(12) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -253,7 +262,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 13 {
+    if due(13) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -266,7 +275,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 14 {
+    if due(14) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -278,7 +287,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 15 {
+    if due(15) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -290,7 +299,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 16 {
+    if due(16) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -305,7 +314,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 17 {
+    if due(17) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -317,7 +326,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 18 {
+    if due(18) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -338,7 +347,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 19 {
+    if due(19) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -465,7 +474,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 20 {
+    if due(20) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -504,7 +513,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 21 {
+    if due(21) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -523,7 +532,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 22 {
+    if due(22) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -552,7 +561,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 23 {
+    if due(23) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -600,7 +609,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 24 {
+    if due(24) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -656,7 +665,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 25 {
+    if due(25) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -692,7 +701,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 26 {
+    if due(26) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -721,7 +730,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 
-    if version < 27 {
+    if due(27) {
         let exec = |sql: &str| {
             conn.execute(sql, [])
                 .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
@@ -753,6 +762,54 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
         )?;
 
         conn.pragma_update(None, "user_version", 27)
+            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+    }
+
+    if due(28) {
+        let exec = |sql: &str| {
+            conn.execute(sql, [])
+                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+        };
+
+        // The Snapshot tables go, and so do the Games the older code saved: their
+        // Messages hold no kind and their Swipes no state and no maker, which the new
+        // records require. The two tables are rebuilt empty, because SQLite cannot
+        // add `NOT NULL` to a column in place.
+        exec("DELETE FROM game_docks")?;
+        exec("DROP TABLE IF EXISTS message_swipes")?;
+        exec("DROP TABLE IF EXISTS messages")?;
+        exec("DROP TABLE IF EXISTS game_state_snapshots")?;
+        exec("DELETE FROM games")?;
+
+        exec(
+            "CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL DEFAULT 1 REFERENCES games(id) ON DELETE CASCADE,
+                message_type TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                active_swipe_index INTEGER NOT NULL DEFAULT 0
+            )",
+        )?;
+        exec("CREATE INDEX IF NOT EXISTS idx_messages_game_id ON messages(game_id, id)")?;
+        exec(
+            "CREATE TABLE message_swipes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                swipe_index INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                room_report TEXT,
+                event_header TEXT,
+                impersonated INTEGER NOT NULL DEFAULT 0,
+                guide_text TEXT,
+                impersonate_direction TEXT,
+                state TEXT NOT NULL,
+                maker TEXT NOT NULL,
+                UNIQUE(message_id, swipe_index)
+            )",
+        )?;
+
+        conn.pragma_update(None, "user_version", 28)
             .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
     }
 

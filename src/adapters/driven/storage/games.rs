@@ -2,13 +2,10 @@
 //! Game storage operations
 
 use crate::error::EngineError;
-use crate::domain::model::game::{Game, GameId, NewGame};
-use crate::domain::model::settings::{
-    AppSettings, ModePresetBundle, NarrativePerspective, NarrativeTense, NarratorMode,
-};
+use crate::domain::model::game::{Game, GameId};
+use crate::domain::model::settings::{AppSettings, ModePresetBundle, NarratorMode};
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
-use crate::adapters::driven::storage::transaction::Tx;
 
 impl Storage {
     pub fn list_games(&self) -> Result<Vec<Game>, EngineError> {
@@ -41,68 +38,6 @@ impl Storage {
         })
     }
 
-    pub fn create_game(
-        &self,
-        world_name: &str,
-        world_key: &str,
-        persona_key: &str,
-        persona_name: &str,
-        name: &str,
-    ) -> Result<u64, EngineError> {
-        self.create_game_from_request(&NewGame {
-            world_name: world_name.to_string(),
-            world_key: world_key.to_string(),
-            persona_key: persona_key.to_string(),
-            persona_name: persona_name.to_string(),
-            name: name.to_string(),
-            narrator_mode: NarratorMode::Novel,
-            narrative_perspective: NarrativePerspective::Third,
-            narrative_tense: NarrativeTense::Past,
-            system_prompt_preset_id: "system_default".to_string(),
-            quantifier_prompt_preset_id: "quantifier_default".to_string(),
-            impersonate_prompt_preset_id: "impersonate_default".to_string(),
-            options_prompt_preset_id: "options_default".to_string(),
-            options_always_on: false,
-        })
-    }
-
-    pub fn create_game_from_request(&self, request: &NewGame) -> Result<u64, EngineError> {
-        self.with_backend_mut("create_game", |backend| match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                Ok(Tx::write_game_row(&conn, request)?.0)
-            }
-            Backend::InMemory(data) => {
-                let id = data.next_game_id;
-                data.next_game_id += 1;
-                let now = chrono::Utc::now();
-                data.games.push(Game {
-                    id,
-                    world_name: request.world_name.clone(),
-                    world_key: request.world_key.clone(),
-                    persona_key: request.persona_key.clone(),
-                    persona_name: request.persona_name.clone(),
-                    name: request.name.clone(),
-                    display_name: request.display_name(),
-                    created_at: now,
-                    updated_at: now,
-                    narrator_mode: request.narrator_mode,
-                    narrative_perspective: request.narrative_perspective,
-                    narrative_tense: request.narrative_tense,
-                    active_system_prompt_preset_id: request.system_prompt_preset_id.clone(),
-                    active_quantifier_prompt_preset_id: request.quantifier_prompt_preset_id.clone(),
-                    active_impersonate_prompt_preset_id: request
-                        .impersonate_prompt_preset_id
-                        .clone(),
-                    active_options_prompt_preset_id: request.options_prompt_preset_id.clone(),
-                    options_always_on: request.options_always_on,
-                    failure: None,
-                });
-                Ok(id)
-            }
-        })
-    }
-
     /// The uniqueness scan keys on `name`, so a rename must not touch it.
     pub fn update_game_display_name(&self, id: u64, display_name: &str) -> Result<(), EngineError> {
         self.with_backend_mut("update_game_display_name", |backend| match backend {
@@ -130,24 +65,6 @@ impl Storage {
                     .ok_or(EngineError::GameNotFound(id))?;
                 stored.display_name = display_name.to_string();
                 stored.updated_at = chrono::Utc::now();
-                Ok(())
-            }
-        })
-    }
-
-    pub fn delete_game(&self, id: u64) -> Result<(), EngineError> {
-        self.with_backend_mut("delete_game", |backend| match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                conn.execute(
-                    "DELETE FROM games WHERE id = ?1",
-                    rusqlite::params![id as i64],
-                )
-                .map_err(|e| EngineError::Config(format!("Failed to delete game: {e}")))?;
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                data.games.retain(|g| g.id != id);
                 Ok(())
             }
         })
@@ -219,17 +136,12 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => {
-                let key = |game: &Game| {
-                    data.messages
-                        .get(&GameId(game.id))
-                        .and_then(|messages| messages.iter().map(|m| m.timestamp).max())
-                        .unwrap_or(game.updated_at)
-                };
+                // The in-memory backend holds no Message, so only `updated_at` orders.
                 let newest = data
                     .games
                     .iter()
                     .filter(|game| game.world_key == world_key)
-                    .max_by(|a, b| key(a).cmp(&key(b)).then(a.id.cmp(&b.id)));
+                    .max_by(|a, b| a.updated_at.cmp(&b.updated_at).then(a.id.cmp(&b.id)));
                 Ok(newest.map(|game| GameId(game.id)))
             }
         })
@@ -288,30 +200,12 @@ impl Storage {
         })
     }
 
-    pub fn active_system_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.resolve_active_preset_id(
-            game_id,
-            settings,
-            |g| g.active_system_prompt_preset_id.as_str(),
-            |b| b.system_prompt_preset_id.as_str(),
-        )
-    }
-
     pub fn active_quantifier_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
         self.resolve_active_preset_id(
             game_id,
             settings,
             |g| g.active_quantifier_prompt_preset_id.as_str(),
             |b| b.quantifier_prompt_preset_id.as_str(),
-        )
-    }
-
-    pub fn active_impersonate_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.resolve_active_preset_id(
-            game_id,
-            settings,
-            |g| g.active_impersonate_prompt_preset_id.as_str(),
-            |b| b.impersonate_prompt_preset_id.as_str(),
         )
     }
 

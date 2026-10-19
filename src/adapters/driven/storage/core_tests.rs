@@ -1,13 +1,10 @@
-use crate::domain::model::game::GameId;
 use crate::adapters::driven::storage::{Storage, TestOverride};
-use crate::test_support::dummy_message;
 
 #[test]
 fn test_with_failure_single_operation() {
-    let storage =
-        Storage::new_in_memory().with_failure("save_snapshot", TestOverride::internal("fail"));
+    let storage = Storage::new_in_memory().with_failure("get_game", TestOverride::internal("fail"));
 
-    let result = storage.save_snapshot(GameId(0), &dummy_snapshot());
+    let result = storage.get_game(0);
     assert!(result.is_err());
 }
 
@@ -15,22 +12,22 @@ fn test_with_failure_single_operation() {
 fn test_with_test_failures_shared_handle() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set("save_snapshot", TestOverride::internal("simulated failure"));
+    handle.set("get_game", TestOverride::internal("simulated failure"));
 
-    assert!(storage.save_snapshot(GameId(0), &dummy_snapshot()).is_err());
+    assert!(storage.get_game(0).is_err());
 
-    handle.clear("save_snapshot");
-    assert!(storage.save_snapshot(GameId(0), &dummy_snapshot()).is_ok());
+    handle.clear("get_game");
+    assert!(storage.get_game(0).is_ok());
 }
 
 #[test]
 fn test_clear_restores_operation() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set("save_snapshot", TestOverride::internal("simulated failure"));
-    handle.clear("save_snapshot");
+    handle.set("get_game", TestOverride::internal("simulated failure"));
+    handle.clear("get_game");
 
-    let result = storage.save_snapshot(GameId(0), &dummy_snapshot());
+    let result = storage.get_game(0);
     assert!(result.is_ok());
 }
 
@@ -38,20 +35,18 @@ fn test_clear_restores_operation() {
 fn test_non_overridden_operations_unaffected() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set("save_snapshot", TestOverride::internal("simulated failure"));
+    handle.set("get_game", TestOverride::internal("simulated failure"));
 
-    let msg = dummy_message("test");
-    let id = storage.insert_message(GameId(0), &msg).unwrap();
-    assert!(id > 0);
+    assert!(storage.list_games().unwrap().is_empty());
 }
 
 #[test]
 fn test_config_error_variant() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set("save_snapshot", TestOverride::config("configuration error"));
+    handle.set("get_game", TestOverride::config("configuration error"));
 
-    let result = storage.save_snapshot(GameId(0), &dummy_snapshot());
+    let result = storage.get_game(0);
     assert!(result.is_err());
     assert!(
         result
@@ -65,9 +60,9 @@ fn test_config_error_variant() {
 fn test_internal_error_variant() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set("save_snapshot", TestOverride::internal("internal error"));
+    handle.set("get_game", TestOverride::internal("internal error"));
 
-    let result = storage.save_snapshot(GameId(0), &dummy_snapshot());
+    let result = storage.get_game(0);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("internal error"));
 }
@@ -76,39 +71,36 @@ fn test_internal_error_variant() {
 fn test_clear_all_removes_all_overrides() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
 
-    handle.set("save_snapshot", TestOverride::internal("fail1"));
-    handle.set("load_latest_snapshot", TestOverride::config("fail2"));
+    handle.set("get_game", TestOverride::internal("fail1"));
+    handle.set("list_games", TestOverride::config("fail2"));
 
     handle.clear_all();
 
-    assert!(storage.save_snapshot(GameId(0), &dummy_snapshot()).is_ok());
-    assert!(storage.load_latest_snapshot(GameId(0),).is_ok());
+    assert!(storage.get_game(0).is_ok());
+    assert!(storage.list_games().is_ok());
 }
 
 #[test]
 #[should_panic(expected = "Unconsumed overrides remain")]
 fn test_typoed_override_key_panics_on_assert() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("save_snapshat", TestOverride::internal("typo deliberate"));
-    let _ = storage.save_snapshot(GameId(0), &dummy_snapshot());
+    handle.set("get_gam", TestOverride::internal("typo deliberate"));
+    let _ = storage.get_game(0);
     handle.assert_no_unconsumed();
 }
 
 #[test]
 fn with_failure_adds_does_not_nest() {
     let s = Storage::new_in_memory()
-        .with_failure("save_snapshot", TestOverride::internal("first"))
-        .with_failure("save_snapshot", TestOverride::internal("second"));
+        .with_failure("get_game", TestOverride::internal("first"))
+        .with_failure("get_game", TestOverride::internal("second"));
     let (layer, base) = s.backend_layer_info();
     assert_eq!(
         layer, "Test",
         "expected single Test layer after chained with_failure"
     );
     assert_eq!(base, "InMemory", "with_failure must not stack Test layers");
-    let err = s
-        .save_snapshot(GameId(0), &dummy_snapshot())
-        .unwrap_err()
-        .to_string();
+    let err = s.get_game(0).unwrap_err().to_string();
     assert!(
         err.contains("second"),
         "latest with_failure must win for same method: {err}"
@@ -122,44 +114,22 @@ fn with_failure_adds_does_not_nest() {
 #[test]
 fn add_failure_reuses_map_does_not_nest() {
     let s = Storage::new_in_memory();
-    s.add_failure("save_snapshot", TestOverride::internal("snap fail"));
-    s.add_failure("load_latest_snapshot", TestOverride::config("load fail"));
+    s.add_failure("get_game", TestOverride::internal("snap fail"));
+    s.add_failure("list_games", TestOverride::config("load fail"));
     let (layer, base) = s.backend_layer_info();
     assert_eq!(
         layer, "Test",
         "expected single Test layer after double add_failure"
     );
     assert_eq!(base, "InMemory", "add_failure must not stack Test layers");
-    let snap_err = s
-        .save_snapshot(GameId(0), &dummy_snapshot())
-        .unwrap_err()
-        .to_string();
+    let snap_err = s.get_game(0).unwrap_err().to_string();
     assert!(
         snap_err.contains("snap fail"),
         "first add_failure must fire: {snap_err}"
     );
-    let load_err = s.load_latest_snapshot(GameId(0)).unwrap_err().to_string();
+    let load_err = s.list_games().unwrap_err().to_string();
     assert!(
         load_err.contains("load fail"),
         "second add_failure must fire: {load_err}"
     );
-}
-
-use crate::domain::model::state::game_state_snapshot::{GameStateSnapshot, NarrativeSnapshot};
-use crate::domain::model::state::movement::MovementState;
-use crate::domain::model::state::scene_state::SceneState;
-use crate::domain::model::trigger::NpcEncounterLog;
-
-fn dummy_snapshot() -> GameStateSnapshot {
-    GameStateSnapshot {
-        db_id: None,
-        movement: MovementState {
-            current_room_id: "start".to_string(),
-            dynamic_rooms: std::collections::HashMap::new(),
-        },
-        narrative: NarrativeSnapshot::default(),
-        scene: SceneState::default(),
-        npc_encounter_log: NpcEncounterLog::default(),
-        created_at: chrono::Utc::now(),
-    }
 }

@@ -11,7 +11,6 @@ pub mod llm_backend;
 pub mod llm_message;
 pub mod map;
 pub mod message;
-pub mod message_history;
 pub mod prompt_preset;
 pub mod quantifier;
 pub mod scenario;
@@ -35,8 +34,6 @@ mod game_tests;
 mod llm_backend_tests;
 #[cfg(test)]
 mod map_tests;
-#[cfg(test)]
-mod message_history_tests;
 #[cfg(test)]
 mod message_tests;
 #[cfg(test)]

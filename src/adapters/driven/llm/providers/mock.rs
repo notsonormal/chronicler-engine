@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! Mock LLM provider for testing
 
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use crate::adapters::driven::utils::mock::extract_player_input;
 use crate::error::{EngineError, NarrativeFailure};
@@ -14,17 +14,11 @@ pub struct MockBackend {
     pub(crate) fail_first_n: AtomicU32,
     pub(crate) should_return_empty: AtomicBool,
     pub(crate) trigger_narration_should_fail: AtomicBool,
-    pub(crate) delay_ms: AtomicU64,
-    pub(crate) trigger_delay_ms: AtomicU64,
     pub(crate) per_call_narrations: Vec<String>,
     pub(crate) per_call_prompt_responses: Vec<String>,
     pub(crate) call_index: AtomicUsize,
     /// The model this mock stands in for. `None` reports the bare `"mock"`.
     pub(crate) model: Option<String>,
-    /// Set when `complete` narration starts. Test-sync primitive — read with `.load(Ordering::SeqCst)`, do not mutate externally.
-    pub narration_started: AtomicBool,
-    /// Set when `complete` trigger narration starts. Test-sync primitive — read with `.load(Ordering::SeqCst)`, do not mutate externally.
-    pub trigger_started: AtomicBool,
 }
 
 impl MockBackend {
@@ -57,16 +51,6 @@ impl MockBackend {
 
     pub fn with_trigger_narration_fail(mut self) -> Self {
         self.trigger_narration_should_fail = AtomicBool::new(true);
-        self
-    }
-
-    pub fn with_delay(mut self, ms: u64) -> Self {
-        self.delay_ms = AtomicU64::new(ms);
-        self
-    }
-
-    pub fn with_trigger_delay(mut self, ms: u64) -> Self {
-        self.trigger_delay_ms = AtomicU64::new(ms);
         self
     }
 
@@ -137,11 +121,6 @@ impl LlmProvider for MockBackend {
             || agent_name == crate::application::ports::llm_provider::AGENT_DIALOGUE;
 
         if is_narration {
-            self.narration_started.store(true, Ordering::SeqCst);
-            let delay = self.delay_ms.load(Ordering::SeqCst);
-            if delay > 0 {
-                std::thread::sleep(std::time::Duration::from_millis(delay));
-            }
             self.guard()?;
             if self.should_return_empty.load(Ordering::SeqCst) {
                 return Ok(self.make_result(
@@ -169,11 +148,6 @@ impl LlmProvider for MockBackend {
                 user_prompt,
             ))
         } else {
-            self.trigger_started.store(true, Ordering::SeqCst);
-            let delay = self.trigger_delay_ms.load(Ordering::SeqCst);
-            if delay > 0 {
-                std::thread::sleep(std::time::Duration::from_millis(delay));
-            }
             if self.should_fail.load(Ordering::SeqCst)
                 || self.trigger_narration_should_fail.load(Ordering::SeqCst)
             {

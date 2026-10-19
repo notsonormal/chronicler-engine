@@ -36,7 +36,7 @@ use crate::error::EngineError;
 #[derive(Clone)]
 pub struct JobDeps {
     pub narrator: Arc<Narrator>,
-    pub agents: Arc<AgentRunner>,
+    pub agent_runner: Arc<AgentRunner>,
     pub storage: Arc<Storage>,
     pub tasks: Arc<JobTasks>,
 }
@@ -125,7 +125,7 @@ impl Ended {
 pub struct Job {
     writer: JobWriter,
     narrator: Arc<Narrator>,
-    agents: Arc<AgentRunner>,
+    agent_runner: Arc<AgentRunner>,
     storage: Arc<Storage>,
 }
 
@@ -156,14 +156,14 @@ impl Job {
 
         let JobDeps {
             narrator,
-            agents,
+            agent_runner,
             storage,
             tasks,
         } = deps;
         let job = Self {
             writer: job_writer,
             narrator,
-            agents,
+            agent_runner,
             storage,
         };
         let handle = tokio::task::spawn_blocking(move || {
@@ -437,7 +437,9 @@ impl Job {
             world: &world,
             event: event.as_ref(),
         };
-        Ok(self.agents.analysis(&input, &self.analysis_settings()))
+        Ok(self
+            .agent_runner
+            .analysis(&input, &self.analysis_settings()))
     }
 
     /// An event generation writes no room report, so the opening's room stays the one
@@ -549,7 +551,7 @@ impl Job {
                 event: None,
             };
 
-            let outcome = match self.agents.options(&input, &self.options_settings()) {
+            let outcome = match self.agent_runner.options(&input, &self.options_settings()) {
                 Ok(Some(offered)) => OptionsResult::Offered(offered),
                 Ok(None) => OptionsResult::Unavailable {
                     reason: "Options agent is not available".to_string(),
@@ -568,7 +570,7 @@ impl Job {
 
     fn scene_kind(tail: &Tail) -> Kind {
         match tail.last.kind {
-            Some(MessageKind::EventNarration(_)) => Kind::Event,
+            MessageKind::EventNarration(_) => Kind::Event,
             _ => Kind::Narration,
         }
     }

@@ -35,8 +35,8 @@ async fn test_action_succeeds_one_narration_idle_http() {
     assert!(wait_settled(&state, 1000).await, "action should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()
@@ -76,8 +76,8 @@ async fn test_input_persisted_before_narration_http() {
     assert!(wait_settled(&state, 1000).await);
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let input_idx = messages
         .iter()
@@ -144,8 +144,8 @@ async fn test_quantifier_npc_fires_trigger_http() {
     assert!(wait_settled(&state, 1000).await);
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let has_event = messages
         .iter()
@@ -189,8 +189,8 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
     assert!(wait_settled(&state, 1000).await, "action should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let narrations: Vec<_> = messages
         .iter()
@@ -255,8 +255,8 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let trigger_narrations = messages
         .iter()
@@ -284,8 +284,8 @@ async fn test_empty_command_continuation_no_input_http() {
     assert!(wait_settled(&state, 1000).await);
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()
@@ -389,8 +389,8 @@ async fn test_nonexistent_room_sets_error_status_http() {
         "the failure names the invalid room, got: {status}"
     );
     let narrations = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap()
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
@@ -467,8 +467,8 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
         "the disclosure holds the narrator call's own line, got: {status}"
     );
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     assert!(
         messages.iter().any(|m| {
@@ -630,8 +630,8 @@ async fn test_three_actions_in_sequence_http() {
     }
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()
@@ -676,8 +676,8 @@ async fn test_sequential_execute_retry_execute_http() {
     assert!(wait_settled(&state, 1000).await, "action B should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()
@@ -717,8 +717,8 @@ async fn test_async_action_sequence_then_retry_http() {
     assert!(wait_settled(&state, 1000).await, "retry should complete");
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()
@@ -740,8 +740,8 @@ async fn test_slash_impersonate_produces_input_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()
@@ -788,8 +788,8 @@ async fn test_slash_guide_does_not_persist_input_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let narrations: Vec<_> = messages
         .iter()
@@ -858,8 +858,8 @@ async fn test_slash_command_bypasses_text_check_http() {
         "guide action should complete"
     );
 
-    // The /guide leg above already created scene history, so this /options
-    // dispatch passes the empty-history validation.
+    // The /guide leg above already wrote story text, so this /options dispatch
+    // passes the check that needs a story with text to work from.
     let resp = post_action_check(&app, "/options").await;
     assert!(resp.status().is_success());
     assert!(
@@ -917,8 +917,8 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let narration = messages
         .iter()
@@ -946,8 +946,8 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let later: Vec<_> = messages
         .iter()
@@ -1002,8 +1002,8 @@ async fn test_missing_persona_answers_500_with_the_missing_data_line_http() {
         .model(Arc::new(ScriptedModel::new().turn("You look around.")))
         .build_with_state();
     let before = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .expect("the story log reads back")
         .len();
 
@@ -1024,8 +1024,8 @@ async fn test_missing_persona_answers_500_with_the_missing_data_line_http() {
     );
 
     let after = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .expect("the story log reads back")
         .len();
     assert_eq!(

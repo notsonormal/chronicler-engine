@@ -39,6 +39,18 @@ impl Narrator {
         }
     }
 
+    pub fn recorder(&self) -> &Arc<LlmCallRecorder> {
+        &self.recorder
+    }
+
+    /// The provider and model the next narration would use.
+    pub fn backend_info(&self) -> (String, String) {
+        match self.recorder.provider() {
+            Ok(p) => (p.name().to_string(), p.model().to_string()),
+            Err(e) => (format!("<unresolved: {e}>"), "<unresolved>".to_string()),
+        }
+    }
+
     /// The prompt of one narration without the model call; the trigger context
     /// keeps it for the event narration to re-use.
     pub fn assemble(

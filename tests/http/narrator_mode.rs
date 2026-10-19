@@ -69,8 +69,8 @@ async fn test_if_world_game_inherits_posture_and_bundle_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()
@@ -233,8 +233,8 @@ async fn test_impersonate_works_in_if_game_http() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     let inputs: Vec<_> = messages
         .iter()

@@ -3,7 +3,7 @@
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driven::storage::db::DbPool;
 
-// Pre-seeds the games row so `game_state_snapshots.game_id` / `messages.game_id` FKs hold.
+// Pre-seeds the games row so `messages.game_id` and `game_docks.game_id` FKs hold.
 pub fn create_test_storage(game_id: u64) -> Storage {
     let pool = DbPool::new(":memory:").expect("in-memory db should open");
     chronicler_engine::test_support::seed_default_game_row(&pool, game_id).unwrap();

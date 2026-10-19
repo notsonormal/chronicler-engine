@@ -33,14 +33,11 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `games.rs` — Game storage operations
         - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
         - `llm_messages.rs` — LLM message storage
-        - `messages.rs` — Message storage operations
         - `mod.rs` — Storage layer and database access
         - `personas.rs` — Persona storage operations
         - `presets.rs` — Preset storage operations
         - `settings.rs` — Settings storage operations
-        - `snapshots.rs` — Snapshot storage operations
         - `stories.rs` — The story reads: the end of the story, one Swipe state, and the entries of a window
-        - `swipes.rs` — Swipe data storage
         - `test_support.rs` — Test infrastructure types for storage failure injection
         - `transaction.rs` — The transaction: one unit of record writes that lands whole
         - `worlds.rs` — World storage backend operations
@@ -48,11 +45,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `llm_message.rs` — LLM message mapper
           - `message.rs` — Message mapper
           - `mod.rs` — Row-to-domain object mapping
-          - `state_snapshot.rs` — State snapshot mapper
         - **models/**
           - `character.rs` — Character database model
           - `game.rs` — Game database model
-          - `game_state_snapshot.rs` — Game state snapshot model
           - `llm_message.rs` — LLM message database model
           - `map.rs` — Database row struct for the `maps` table
           - `message.rs` — Database row struct for the `messages` table
@@ -159,9 +154,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `worlds.rs` — Worlds templates
   - **application/**
     - `connection_test_service.rs` — Connection test service — one short provider call that records nothing.
-    - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
+    - `errors.rs` — ApplicationError — the error envelope of the application services.
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
-    - `message_service.rs` — Game-state lifecycle seam for message history and snapshots.
     - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
     - `prompt_preset_service.rs` — Prompt preset service — prompt preset persistence orchestration at the application layer.
     - `settings_service.rs` — Settings service — settings persistence orchestration at the application layer.
@@ -198,27 +192,15 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Game lifecycle orchestration and read-side queries.
       - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
     - **generation/**
-      - `gate.rs` — GenerationGate, GameWriter and JobWriter — today's per-game slot registry, and the writer rule and the guard of the rebuild beside it.
-      - `guard.rs` — Generation guard logic
+      - `gate.rs` — GameWriter and JobWriter — the writer rule and the guard: the one registry of job entries, and the save units a Job writes through.
       - `job_tasks.rs` — The watch on the tasks a Job spawns, so a tier-1 test waits for a Job to end
-      - `mod.rs` — Generation gating and per-game slot orchestration.
-      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
+      - `mod.rs` — The writer rule and the guard: the one registry of job entries.
     - **narration/**
       - `mod.rs` — Narration: the generation a Job's narration call makes
       - `narrator.rs` — The narrator: the assembly and the model call a Job's narration needs
     - **pipeline/**
       - `job.rs` — The Job: the plan of one request, its generations, and the steps of a generation
-      - `mod.rs` — Action pipeline for processing game actions
-      - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.
-      - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
-      - `pipeline_run.rs` — PipelineRun and its phase implementations for the action pipeline.
-      - **action_pipeline/**
-        - `action.rs` — Action entry path for the pipeline.
-        - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
-        - `mod.rs` — ActionPipeline type-split: the struct and all its inherent impls.
-        - `options.rs` — Options pipeline slice — on-demand entry, agent dispatch, and the
-        - `retrigger.rs` — Retrigger entry path for the pipeline.
-        - `retry.rs` — Retry entry path for the pipeline.
+      - `mod.rs` — The Job of one request.
     - **ports/**
       - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)
@@ -254,7 +236,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
       - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
-      - `message_history.rs` — Message history tracking
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
       - `quantifier.rs` — Quantifier types for narrative evaluation
@@ -265,13 +246,10 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `trigger.rs` — Trigger conditions and event types
       - `world.rs` — World model definitions
       - **state/**
-        - `game_state.rs` — Main game state and builder
-        - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
-        - `generation_status.rs` — Generation status enums and input buffer: the step and the status are independent axes; the pipeline in `application/pipeline/` drives them.
+        - `generation_status.rs` — Generation status enums: the step and the status are independent axes; the Job in `application/pipeline/` drives them.
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state
-        - `narrative_state.rs` — Narrative state with history and input buffer
         - `scene_state.rs` — Current scene NPCs and quantifier confidence
         - `swipe_state.rs` — The game state of one Swipe: movement, scene and encounter log
         - `trigger_context.rs` — Stored trigger snapshot context

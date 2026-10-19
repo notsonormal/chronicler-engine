@@ -6,7 +6,7 @@ use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::dock::DockRecord;
 use chronicler_engine::domain::model::game::GameId;
-use chronicler_engine::domain::model::message::{Message, SwipeAt};
+use chronicler_engine::domain::model::message::{Maker, Message, Swipe, SwipeAt};
 use chronicler_engine::domain::model::state::swipe_state::SwipeState;
 use chronicler_engine::domain::model::state::message_types::{MessageKind, MessageType};
 use chronicler_engine::domain::model::map::MapDef;
@@ -31,15 +31,17 @@ pub fn seeded_storage_with_initial_game() -> (Arc<Storage>, String, String, i64)
     let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
-    let initial_game_id = storage
-        .create_game(
+    let initial_game_id = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             &world.name,
             &world.key,
             &player.key,
             &player.sheet.name,
             "Initial Game",
-        )
-        .unwrap();
+        ),
+    )
+    .0;
 
     (
         storage,
@@ -90,8 +92,8 @@ pub fn seed_offered_set(state: &AppState, options: &[&str]) {
 }
 
 /// Pads the story with `count` Narration Messages, each with one Swipe that holds
-/// the current state. They carry no Input, no maker and no room report, so a test
-/// that needs a long story reads padding and not a turned scene.
+/// the current state. They carry no Input and no room report, so a test that
+/// needs a long story reads padding and not a turned scene.
 pub fn append_narrations(
     storage: &Storage,
     game: GameId,
@@ -108,12 +110,16 @@ pub fn append_narrations(
         .transaction(game, tx_token(), |tx| {
             for index in 0..count {
                 let narration = text(index);
-                let mut message =
-                    Message::new(narration.clone(), MessageType::Narration, None, None);
-                message.kind = Some(MessageKind::Narration);
+                let swipe = Swipe {
+                    room_report: None,
+                    ..Swipe::new(narration, Maker::Narrator, state.clone())
+                };
+                let message = Message::new(
+                    MessageType::Narration,
+                    MessageKind::Narration,
+                    swipe.clone(),
+                );
                 let id = tx.insert_message(&message)?;
-                let mut swipe = chronicler_engine::test_support::dummy_swipe(&narration);
-                swipe.state = Some(state.clone());
                 tx.insert_swipe(
                     SwipeAt {
                         message: id,

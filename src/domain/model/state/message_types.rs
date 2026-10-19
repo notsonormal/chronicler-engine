@@ -31,8 +31,7 @@ pub enum MessageKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StoryRow {
     pub id: u64,
-    /// The kind of the Message. `None` for a row today's code wrote.
-    pub kind: Option<MessageKind>,
+    pub kind: MessageKind,
     pub message_type: MessageType,
     pub timestamp: DateTime<Utc>,
     pub text: String,
@@ -84,21 +83,6 @@ impl Default for MessageEntry {
             event_header: None,
             swipe_count: 1,
             active_swipe_index: 0,
-        }
-    }
-}
-
-impl From<&crate::domain::model::message::Message> for MessageEntry {
-    fn from(msg: &crate::domain::model::message::Message) -> Self {
-        Self {
-            id: msg.id,
-            text: msg.text().to_string(),
-            message_type: msg.message_type.clone(),
-            timestamp: msg.timestamp,
-            room_report: msg.room_report().map(|s| s.to_string()),
-            event_header: msg.event_header().map(|s| s.to_string()),
-            swipe_count: msg.swipe_count(),
-            active_swipe_index: msg.active_swipe_index,
         }
     }
 }

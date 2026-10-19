@@ -50,25 +50,16 @@ fn state_in(room: &str) -> SwipeState {
 }
 
 fn swipe(text: &str) -> Swipe {
-    Swipe {
-        text: text.to_string(),
-        snapshot_id: None,
-        room_report: None,
-        event_header: None,
-        impersonated: false,
-        guide_text: None,
-        impersonate_direction: None,
-        state: None,
-        maker: None,
-    }
+    Swipe::new(text, Maker::Narrator, state_in("room1"))
 }
 
 fn narration_swipe(text: &str, state: SwipeState) -> Swipe {
-    Swipe {
-        state: Some(state),
-        maker: Some(Maker::Narrator),
-        ..swipe(text)
-    }
+    Swipe::new(text, Maker::Narrator, state)
+}
+
+/// The Message row only: its Swipes are written one by one.
+fn narration_message(text: &str) -> Message {
+    Message::new(MessageType::Narration, MessageKind::Narration, swipe(text))
 }
 
 fn event_record() -> EventRecord {
@@ -88,7 +79,7 @@ fn add_message(storage: &Storage, game: GameId, text: &str, room: &str) -> u64 {
     let mut message_id = 0;
     storage
         .transaction(game, tx_token(), |tx| {
-            let message = Message::new(text, MessageType::Narration, None, None);
+            let message = narration_message(text);
             message_id = tx.insert_message(&message)?;
             tx.insert_swipe(
                 SwipeAt {
@@ -111,7 +102,7 @@ fn game_with_message(storage: &Storage, name: &str, text: &str, room: &str) -> (
     storage
         .transaction_new_game(&new_game(name), tx_token(), |new_game_id, tx| {
             game_id = new_game_id;
-            let message = Message::new(text, MessageType::Narration, None, None);
+            let message = narration_message(text);
             message_id = tx.insert_message(&message)?;
             tx.insert_swipe(
                 SwipeAt {
@@ -250,30 +241,24 @@ fn the_state_update_writes_the_room_report_with_the_state() {
     );
 }
 
-// CASE story-swipe-state-none: a Swipe whose state never landed answers no state
+// CASE story-swipe-state-none: a Swipe the story does not hold answers no state
 #[test]
-fn a_swipe_whose_state_never_landed_answers_none() {
+fn a_swipe_the_story_does_not_hold_answers_none() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
     let (game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
-    let other = SwipeAt {
-        message: message_id,
-        swipe: 1,
-    };
-    storage
-        .transaction(game_id, tx_token(), |tx| {
-            tx.insert_swipe(other, &swipe("no state"))
-        })
-        .expect("the insert should succeed");
 
     let state = storage
         .stories()
-        .swipe_state(game_id, other)
+        .swipe_state(
+            game_id,
+            SwipeAt {
+                message: message_id,
+                swipe: 1,
+            },
+        )
         .expect("the state read should succeed");
 
-    assert!(
-        state.is_none(),
-        "a Swipe whose state never landed has no state"
-    );
+    assert!(state.is_none(), "a missing Swipe has no state");
 }
 
 // CASE story-swipe-state-other-game [failure]: a read of another Game's Swipe is refused
@@ -418,8 +403,11 @@ fn an_entry_carries_the_active_swipe_and_its_headers() {
 fn an_inserted_message_kind_reads_back_through_the_entries_read() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
     let (game_id, _first_id) = game_with_message(&storage, "Story", "text", "room1");
-    let mut message = Message::new("event text", MessageType::Narration, None, None);
-    message.kind = Some(MessageKind::EventNarration(event_record()));
+    let message = Message::new(
+        MessageType::Narration,
+        MessageKind::EventNarration(event_record()),
+        swipe("event text"),
+    );
     storage
         .transaction(game_id, tx_token(), |tx| {
             let id = tx.insert_message(&message)?;
@@ -443,7 +431,7 @@ fn an_inserted_message_kind_reads_back_through_the_entries_read() {
 
     assert_eq!(
         entries[1].kind,
-        Some(MessageKind::EventNarration(event_record())),
+        MessageKind::EventNarration(event_record()),
         "the inserted kind reads back"
     );
 }
@@ -512,7 +500,7 @@ fn the_failed_state_update_rolls_the_whole_unit_back() {
     );
 
     let result = storage.transaction(game_id, tx_token(), |tx| {
-        let message = Message::new("rolled back", MessageType::Narration, None, None);
+        let message = narration_message("rolled back");
         let id = tx.insert_message(&message)?;
         tx.insert_swipe(
             SwipeAt {
@@ -692,26 +680,149 @@ fn the_new_records_refuse_the_in_memory_backend() {
     );
 }
 
-// CASE story-kind-written-none: a Message of the old path carries no kind
+// CASE story-active-swipe: the active Swipe of a Message of the Game reads back, and another Game's Message answers none
 #[test]
-fn a_message_of_the_old_path_carries_no_kind() {
+fn the_active_swipe_of_a_message_reads_back() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
-    let game_id = game_without_messages(&storage, "Old path");
-    let message = Message::new("old text", MessageType::Narration, None, None);
-    let message_id = storage
-        .insert_message(game_id, &message)
-        .expect("the old insert should succeed");
+    let (game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
+    let other_game = game_without_messages(&storage, "Other");
     storage
-        .insert_swipe(message_id, &swipe("old text"), 0)
-        .expect("the old swipe insert should succeed");
-
-    let entries = storage
-        .stories()
-        .entries(game_id, None, 10)
-        .expect("the entries read should succeed");
+        .transaction(game_id, tx_token(), |tx| {
+            tx.insert_swipe(
+                SwipeAt {
+                    message: message_id,
+                    swipe: 1,
+                },
+                &swipe("second"),
+            )?;
+            tx.set_active_swipe(SwipeAt {
+                message: message_id,
+                swipe: 1,
+            })
+        })
+        .expect("the unit should succeed");
 
     assert_eq!(
-        entries[0].kind, None,
-        "a Message today's code wrote carries no kind"
+        storage.stories().active_swipe(game_id, message_id).unwrap(),
+        Some(SwipeAt {
+            message: message_id,
+            swipe: 1
+        }),
+        "the read names the active Swipe"
     );
+    assert_eq!(
+        storage
+            .stories()
+            .active_swipe(other_game, message_id)
+            .unwrap(),
+        None,
+        "another Game's Message is not found"
+    );
+    assert_eq!(
+        storage.stories().active_swipe(game_id, 9999).unwrap(),
+        None,
+        "a Message the story does not hold is not found"
+    );
+}
+
+// CASE story-messages: the whole story reads back oldest first, each Message with all its Swipes
+#[test]
+fn the_whole_story_reads_back_with_all_swipes() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, first_id) = game_with_message(&storage, "Story", "first", "room1");
+    let second_id = add_message(&storage, game_id, "second", "room2");
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.insert_swipe(
+                SwipeAt {
+                    message: second_id,
+                    swipe: 1,
+                },
+                &swipe("second again"),
+            )
+        })
+        .expect("the swipe insert should succeed");
+
+    let messages = storage
+        .stories()
+        .messages(game_id)
+        .expect("the messages read should succeed");
+
+    assert_eq!(
+        messages.iter().map(|m| m.id).collect::<Vec<_>>(),
+        vec![first_id, second_id],
+        "oldest first"
+    );
+    assert_eq!(messages[0].swipes.len(), 1);
+    assert_eq!(
+        messages[1]
+            .swipes
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["second", "second again"],
+        "every Swipe of a Message comes with it"
+    );
+}
+
+// CASE story-swipe-stored-inputs: the inputs a Swipe was made from read back with it
+#[test]
+fn the_stored_inputs_of_a_swipe_read_back() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let game_id = game_without_messages(&storage, "Story");
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            let id = tx.insert_message(&narration_message("I ask about the artifact."))?;
+            tx.insert_swipe(
+                SwipeAt {
+                    message: id,
+                    swipe: 0,
+                },
+                &Swipe {
+                    impersonated: true,
+                    guide_text: Some("make it ominous".to_string()),
+                    impersonate_direction: Some("as the player".to_string()),
+                    ..swipe("I ask about the artifact.")
+                },
+            )
+        })
+        .expect("the unit should succeed");
+
+    let tail = storage
+        .stories()
+        .tail(game_id)
+        .unwrap()
+        .expect("the story holds a Message");
+    let inputs = tail.last.swipes[0].stored_inputs();
+
+    assert!(inputs.impersonated);
+    assert_eq!(inputs.guide_text.as_deref(), Some("make it ominous"));
+    assert_eq!(
+        inputs.impersonate_direction.as_deref(),
+        Some("as the player")
+    );
+}
+
+// CASE story-tail-active-swipe-out-of-bounds: an active index past the Swipes reads as the first Swipe
+#[test]
+fn an_active_swipe_index_past_the_swipes_reads_as_the_first() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, message_id) = game_with_message(&storage, "Story", "first swipe", "room1");
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.set_active_swipe(SwipeAt {
+                message: message_id,
+                swipe: 99,
+            })
+        })
+        .expect("the unit should succeed");
+
+    let tail = storage
+        .stories()
+        .tail(game_id)
+        .unwrap()
+        .expect("the story holds a Message");
+
+    assert_eq!(tail.last.text(), "first swipe");
+    assert_eq!(tail.last.active_swipe_index, 0);
 }

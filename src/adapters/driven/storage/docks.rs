@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! The dock record reads: the offered set and the notice of one Game
 
-use crate::adapters::driven::storage::utils::{from_json, no_in_memory};
+use crate::adapters::driven::storage::utils::{from_optional_json, no_in_memory};
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::domain::model::dock::{DockRecord, Notice};
 use crate::domain::model::game::GameId;
@@ -40,7 +40,8 @@ impl DockReads<'_> {
                     let offered: Vec<String> = serde_json::from_str(&row.0).map_err(|e| {
                         EngineError::Config(format!("Failed to parse the offered set: {e}"))
                     })?;
-                    let notice: Option<Notice> = from_json("dock notice", row.1.as_deref())?;
+                    let notice: Option<Notice> =
+                        from_optional_json("dock notice", row.1.as_deref())?;
                     Ok(Some(DockRecord { offered, notice }))
                 }
                 Backend::InMemory(_) => Err(no_in_memory("docks_get")),

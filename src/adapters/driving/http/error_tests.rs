@@ -16,22 +16,6 @@ async fn validation_into_response_returns_400_with_message() {
 }
 
 #[tokio::test]
-async fn concurrent_generation_into_response_returns_503_with_wait_body() {
-    let resp = ApplicationError::ConcurrentGeneration.into_response();
-    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
-    let body = body_text(resp).await;
-    assert!(body.contains("Generation in progress"), "body: {body}");
-}
-
-#[tokio::test]
-async fn shutting_down_into_response_returns_503_with_shutdown_body() {
-    let resp = ApplicationError::ShuttingDown.into_response();
-    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
-    let body = body_text(resp).await;
-    assert!(body.contains("shutting down"), "body: {body}");
-}
-
-#[tokio::test]
 async fn engine_displayable_into_response_returns_500_with_engine_message() {
     let resp =
         ApplicationError::Engine(EngineError::WorldHasGames { game_count: 1 }).into_response();

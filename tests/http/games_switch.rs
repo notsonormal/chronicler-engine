@@ -18,15 +18,17 @@ async fn test_switch_game_handler_success() {
         .storage(Arc::clone(&storage))
         .build_with_state();
 
-    let other_id = storage
-        .create_game(
+    let other_id = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             "Test World",
             "Test World",
             &persona_key,
             &TestPersona::standard().sheet.name,
             "Test World_2026-01-01_1",
-        )
-        .unwrap();
+        ),
+    )
+    .0;
     assert_ne!(other_id, active_game_of(&state).0);
 
     let req = Request::builder()

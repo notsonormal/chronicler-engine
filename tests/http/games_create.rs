@@ -36,15 +36,17 @@ async fn test_create_game_handler() {
     let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
-    let initial_game_id = storage
-        .create_game(
+    let initial_game_id = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             &world.name,
             &world.key,
             &player.key,
             &player.sheet.name,
             "Initial Game",
-        )
-        .unwrap();
+        ),
+    )
+    .0;
 
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -77,8 +79,8 @@ async fn test_create_game_handler() {
     );
 
     let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
+        .game_view_query
+        .story_messages(active_game_of(&state))
         .unwrap();
     assert!(
         !messages.is_empty(),

@@ -346,6 +346,38 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         ],
         expected: 1,
     },
+    // The case mirrors the rule-13 row: only `job.rs` calls the narrator and the
+    // hooks of the Agent runner, by path or through a receiver named for the type.
+    WalkerCase {
+        row: CallSiteRow {
+            rule: 13,
+            scope: "",
+            callees: &[
+                "Narrator::narrate",
+                "AgentRunner::analysis",
+                "AgentRunner::options",
+            ],
+            allowed: &[
+                "application/pipeline/job.rs",
+                "application/narration/narrator_tests.rs",
+            ],
+        },
+        files: &[
+            (
+                "application/pipeline/job.rs",
+                "fn narrate_step(&self) {\n    self.narrator.narrate(role);\n    self.agent_runner.analysis(&input);\n    self.agent_runner.options(&input);\n}\n",
+            ),
+            (
+                "application/generation/gate.rs",
+                "fn rogue(&self) {\n    self.narrator.narrate(role);\n}\n",
+            ),
+            (
+                "application/games/catalogue.rs",
+                "fn rogue(&self) {\n    self.agent_runner.options(&input);\n    AgentRunner::analysis(&runner, &input);\n}\n",
+            ),
+        ],
+        expected: 3,
+    },
 ];
 
 pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
@@ -353,7 +385,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
         row: TypeCheckRow {
             rule: FIXTURE_RULE,
             scope: "application/pipeline/",
-            banned_types: &["GameState", "SwipeState"],
+            banned_types: &["Tail", "SwipeState"],
             position: TypeCheckPosition::Fields,
         },
         files: &[(
@@ -366,12 +398,12 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
         row: TypeCheckRow {
             rule: FIXTURE_RULE,
             scope: "application/pipeline/",
-            banned_types: &["GameState"],
+            banned_types: &["Tail"],
             position: TypeCheckPosition::Parameters,
         },
         files: &[(
             "application/pipeline/job.rs",
-            "pub fn run(state: &GameState) {\n    let _ = state;\n}\n",
+            "pub fn run(state: &Tail) {\n    let _ = state;\n}\n",
         )],
         expected: 1,
     },
@@ -379,12 +411,12 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
         row: TypeCheckRow {
             rule: FIXTURE_RULE,
             scope: "application/pipeline/",
-            banned_types: &["GameState"],
+            banned_types: &["Tail"],
             position: TypeCheckPosition::Parameters,
         },
         files: &[(
             "application/pipeline/job.rs",
-            "pub struct Job {\n    state: GameState,\n}\n",
+            "pub struct Job {\n    state: Tail,\n}\n",
         )],
         expected: 0,
     },
@@ -392,7 +424,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
         row: TypeCheckRow {
             rule: FIXTURE_RULE,
             scope: "application/pipeline/",
-            banned_types: &["GameState"],
+            banned_types: &["Tail"],
             position: TypeCheckPosition::Fields,
         },
         files: &[("application/games/catalogue.rs", "pub struct Job {}\n")],

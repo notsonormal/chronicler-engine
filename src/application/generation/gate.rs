@@ -1,180 +1,26 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! GenerationGate, GameWriter and JobWriter — today's per-game slot registry, and the writer rule and the guard of the rebuild beside it.
+//! GameWriter and JobWriter — the writer rule and the guard: the one registry of job entries, and the save units a Job writes through.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use tokio_util::sync::CancellationToken;
 
 use crate::adapters::driven::storage::{Storage, Tx, TxToken};
-use crate::application::errors::ProcessActionResult;
-use super::job_tasks::JobTasks;
-use crate::application::generation::guard::GenerationGuard;
-use crate::application::generation::slot::release_owned_slot;
-use crate::application::generation::slot::GenerationSlot;
-use crate::application::message_service::MessageService;
 use crate::domain::model::agent::Kind;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::dock::{DockRecord, Notice};
 use crate::domain::model::game::{GameId, NewGame};
 use crate::domain::model::generation::{GenerationOrder, Place};
 use crate::domain::model::message::{Maker, Message, StoredInputs, Swipe, SwipeAt};
-use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::generation_status::{
-    GenerationFailure, GenerationFailureKind, GenerationStatus, Step,
-};
+use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::tail::Tail;
 use crate::domain::model::state::trigger_context::{EventRecord, TriggerRef};
+use crate::domain::model::tail::Tail;
 use crate::domain::model::utils::generation_record;
 use crate::error::EngineError;
-
-#[derive(Clone)]
-pub struct GenerationGate {
-    registry: Arc<RwLock<HashMap<GameId, GenerationSlot>>>,
-    next_generation_id: Arc<AtomicU64>,
-    jobs: Arc<JobTasks>,
-}
-
-impl Default for GenerationGate {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl GenerationGate {
-    pub fn new() -> Self {
-        Self {
-            registry: Arc::new(RwLock::new(HashMap::new())),
-            next_generation_id: Arc::new(AtomicU64::new(0)),
-            jobs: Arc::new(JobTasks::default()),
-        }
-    }
-
-    pub fn job_tasks(&self) -> Arc<JobTasks> {
-        Arc::clone(&self.jobs)
-    }
-
-    pub fn watch_job(&self, handle: tokio::task::JoinHandle<()>) {
-        self.jobs.watch(handle);
-    }
-
-    pub async fn wait_for_jobs(&self, timeout_ms: u64) -> bool {
-        self.jobs
-            .wait(std::time::Duration::from_millis(timeout_ms))
-            .await
-    }
-
-    fn next_generation_id(&self) -> u64 {
-        self.next_generation_id
-            .fetch_add(1, Ordering::SeqCst)
-            .wrapping_add(1)
-    }
-
-    /// Memory only; the caller persists the reset.
-    pub fn heal_stale(&self, game_id: GameId, state: &mut GameState) {
-        if !state.narrative.input_buffer.status.is_generating() {
-            return;
-        }
-
-        let slot_generating = {
-            let registry = self.registry.read().unwrap_or_else(|p| {
-                tracing::warn!("Generation registry read lock poisoned during heal; recovering");
-                p.into_inner()
-            });
-            registry
-                .get(&game_id)
-                .map(|slot| slot.is_generating())
-                .unwrap_or(false)
-        };
-
-        if slot_generating {
-            return;
-        }
-
-        tracing::warn!(
-            "Found stale Generating status without active generation, resetting to Idle"
-        );
-        state.narrative.input_buffer.status = GenerationStatus::Idle;
-        state.narrative.input_buffer.step = Step::default();
-    }
-
-    pub fn try_claim(
-        &self,
-        game_id: GameId,
-        state: &mut GameState,
-        message_service: &MessageService,
-    ) -> Result<(GameId, u64, ProcessActionResult), EngineError> {
-        let generation_id = self.next_generation_id();
-
-        {
-            let mut registry = self.registry.write().unwrap_or_else(|p| {
-                tracing::warn!("Generation registry write lock poisoned during claim; recovering");
-                p.into_inner()
-            });
-            if let Some(slot) = registry.get(&game_id) {
-                if slot.is_generating() {
-                    return Ok((
-                        game_id,
-                        generation_id,
-                        ProcessActionResult::ConcurrentGeneration,
-                    ));
-                }
-            }
-            registry.insert(game_id, GenerationSlot::Generating { generation_id });
-        }
-
-        state.narrative.input_buffer.status = GenerationStatus::Generating;
-        state.narrative.input_buffer.step = Step::Narrating;
-
-        if let Err(e) = message_service.save_message_and_snapshot(game_id, state) {
-            tracing::debug!("try_claim: save failed; releasing slot");
-            release_owned_slot(&self.registry, game_id, generation_id);
-            return Err(e);
-        }
-        tracing::debug!("try_claim: state saved, spawning blocking task");
-        Ok((game_id, generation_id, ProcessActionResult::Started))
-    }
-
-    pub(crate) fn guard(&self, game_id: GameId, generation_id: u64) -> GenerationGuard {
-        GenerationGuard::new(game_id, generation_id, Arc::clone(&self.registry))
-    }
-
-    pub fn release_generation_slot(&self, game_id: GameId, generation_id: u64) {
-        release_owned_slot(&self.registry, game_id, generation_id);
-    }
-
-    /// Releases the slot; the pipeline resets the persisted status.
-    pub fn release_generation_slot_for_game(&self, game_id: GameId) -> Option<u64> {
-        let mut registry = self.registry.write().unwrap_or_else(|p| {
-            tracing::warn!(
-                "Generation registry write lock poisoned during release for game; recovering"
-            );
-            p.into_inner()
-        });
-        match registry.get(&game_id) {
-            Some(GenerationSlot::Generating { generation_id }) => {
-                let id = *generation_id;
-                registry.insert(game_id, GenerationSlot::Idle);
-                Some(id)
-            }
-            _ => None,
-        }
-    }
-
-    pub fn is_busy(&self, game_id: GameId) -> bool {
-        let registry = self.registry.read().unwrap_or_else(|p| {
-            tracing::warn!("Generation registry read lock poisoned during is_busy; recovering");
-            p.into_inner()
-        });
-        registry
-            .get(&game_id)
-            .map(|slot| slot.is_generating())
-            .unwrap_or(false)
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Refusal {
@@ -380,8 +226,6 @@ impl GameWriter {
         Ok(())
     }
 
-    /// Accepts one request: busy, then the `400` checks, then the `500` checks, then
-    /// the accept unit and the job entry.
     pub fn accept(
         &self,
         game: GameId,
@@ -467,18 +311,10 @@ impl GameWriter {
     pub fn edit(&self, game: GameId, message: u64, text: &str) -> Result<(), Refusal> {
         self.hold(|entries, units| {
             Self::require_idle(entries, game)?;
-            let index = match self.storage.require_active_swipe_index(game, message) {
-                Ok(index) => index,
-                Err(EngineError::MessageNotFound(_)) => {
-                    return Err(Refusal::BadRequest("Message not found".to_string()));
-                }
-                Err(error) => {
-                    return Err(self.unreadable(game, "the message", &error, units));
-                }
-            };
-            let at = SwipeAt {
-                message,
-                swipe: index,
+            let at = match self.storage.stories().active_swipe(game, message) {
+                Ok(Some(at)) => at,
+                Ok(None) => return Err(Refusal::BadRequest("Message not found".to_string())),
+                Err(error) => return Err(self.unreadable(game, "the message", &error, units)),
             };
             units
                 .open(game, |tx| tx.set_swipe_text(at, text))
@@ -507,7 +343,6 @@ impl GameWriter {
         })
     }
 
-    /// A create touches no other Game's records.
     pub fn create(&self, new: &NewGame) -> Result<GameId, EngineError> {
         let opening = self.opening_message(new)?;
         self.hold(|_entries, units| self.create_unit(new, &opening, units))
@@ -526,6 +361,17 @@ impl GameWriter {
             }
             units.open(old, |tx| tx.delete_game())?;
             Ok(new_id)
+        })
+    }
+
+    /// One hold: the Game's job entry ends under the same guard as its rows, so a
+    /// Job still running on it stops before its records go.
+    pub fn delete(&self, game: GameId) -> Result<(), EngineError> {
+        self.hold(|entries, units| {
+            if let Some(entry) = entries.remove(&game) {
+                entry.cancel.cancel();
+            }
+            units.open(game, |tx| tx.delete_game())
         })
     }
 
@@ -617,7 +463,7 @@ impl GameWriter {
             }
             JobRequest::Retry => {
                 let order = tail
-                    .and_then(Tail::redo)
+                    .map(Tail::redo)
                     .ok_or_else(|| Refusal::BadRequest("No input to retry".to_string()))?;
                 Ok(JobPlan {
                     input: None,
@@ -786,17 +632,17 @@ impl GameWriter {
             .map(|card| (card.id.clone(), card))
             .collect();
         let world = &world_with_map.world_card;
-        let mut opening = crate::domain::model::utils::opening::opening_message(
-            world,
-            &world_with_map.map,
-            &persona.sheet.name,
-        );
-        opening.swipes[0].state = Some(SwipeState::starting(
+        let state = SwipeState::starting(
             world.default_scenario(),
             &characters,
             &world.starting_room_id(),
-        ));
-        Ok(opening)
+        );
+        Ok(crate::domain::model::utils::opening::opening_message(
+            world,
+            &world_with_map.map,
+            &persona.sheet.name,
+            state,
+        ))
     }
 }
 
@@ -853,10 +699,8 @@ impl JobWriter {
     pub fn save_input(&self, text: &str, start: SwipeAt) -> Result<SwipeAt, Stopped> {
         self.hold(|_entry, units| {
             let state = self.state_at(start)?;
-            let swipe = Self::input_swipe(text, state);
-            let mut message = Message::new(text, MessageType::Input, None, None);
-            message.kind = Some(MessageKind::TypedInput);
-            message.swipes = vec![swipe.clone()];
+            let swipe = Swipe::new(text, Maker::Player, state);
+            let message = Message::new(MessageType::Input, MessageKind::TypedInput, swipe.clone());
 
             Self::unit(units, self.game, |tx| {
                 let message_id = tx.insert_message(&message)?;
@@ -881,14 +725,11 @@ impl JobWriter {
             let at = match order.place {
                 Place::NewMessage => {
                     let swipe = Self::text_swipe(order, text.clone(), pre, None);
-                    let mut message = Message::new(
-                        text,
+                    let message = Message::new(
                         generation_record::message_type(order.kind),
-                        None,
-                        None,
+                        Self::message_kind_of(order)?,
+                        swipe.clone(),
                     );
-                    message.kind = Some(Self::message_kind_of(order)?);
-                    message.swipes = vec![swipe.clone()];
                     self.write_new_message(&message, &swipe, empties_the_dock, units)?
                 }
                 Place::NewSwipeOnLast => {
@@ -1050,20 +891,6 @@ impl JobWriter {
         Ok(at)
     }
 
-    fn input_swipe(text: &str, state: SwipeState) -> Swipe {
-        Swipe {
-            text: text.to_string(),
-            snapshot_id: None,
-            room_report: None,
-            event_header: None,
-            impersonated: false,
-            guide_text: None,
-            impersonate_direction: None,
-            state: Some(state),
-            maker: Some(Maker::Player),
-        }
-    }
-
     fn text_swipe(
         order: &GenerationOrder,
         text: String,
@@ -1071,8 +898,6 @@ impl JobWriter {
         room_report: Option<String>,
     ) -> Swipe {
         Swipe {
-            text,
-            snapshot_id: None,
             room_report,
             event_header: order
                 .event
@@ -1081,8 +906,7 @@ impl JobWriter {
             impersonated: order.inputs.impersonated,
             guide_text: order.inputs.guide_text.clone(),
             impersonate_direction: order.inputs.impersonate_direction.clone(),
-            state: Some(pre),
-            maker: Some(generation_record::maker(order.kind)),
+            ..Swipe::new(text, generation_record::maker(order.kind), pre)
         }
     }
 

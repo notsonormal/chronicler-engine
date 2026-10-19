@@ -19,15 +19,17 @@ async fn test_delete_game_handler_success() {
         .storage(Arc::clone(&storage))
         .build_with_state();
 
-    let other_id = storage
-        .create_game(
+    let other_id = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             "Test World",
             "Test World",
             &persona_key,
             &TestPersona::standard().sheet.name,
             "Test World_2026-01-01_1",
-        )
-        .unwrap();
+        ),
+    )
+    .0;
     assert_ne!(other_id, active_game_of(&state).0);
 
     let req = Request::builder()
@@ -116,15 +118,16 @@ async fn test_delete_game_handler_last_saved_game_answers_with_the_empty_state()
         .build_with_state();
 
     let active_id = active_game_of(&state);
-    storage
-        .create_game(
+    chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             "Test World",
             "Test World",
             &persona_key,
             &TestPersona::standard().sheet.name,
             "Test World_2026-01-01_1",
-        )
-        .unwrap();
+        ),
+    );
 
     let saved_ids: Vec<u64> = state
         .game_catalogue

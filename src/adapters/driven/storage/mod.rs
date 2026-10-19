@@ -9,14 +9,11 @@ pub mod games;
 pub mod in_memory_data;
 pub mod llm_messages;
 pub mod mappers;
-pub mod messages;
 pub mod models;
 pub mod personas;
 pub mod presets;
 pub mod settings;
-pub mod snapshots;
 pub mod stories;
-pub mod swipes;
 pub mod transaction;
 pub mod utils;
 pub mod worlds;
@@ -42,16 +39,10 @@ mod games_tests;
 #[cfg(test)]
 mod llm_messages_tests;
 #[cfg(test)]
-mod messages_tests;
-#[cfg(test)]
 mod personas_tests;
 #[cfg(test)]
 mod presets_tests;
 #[cfg(test)]
 mod settings_tests;
-#[cfg(test)]
-mod snapshots_tests;
-#[cfg(test)]
-mod swipes_tests;
 #[cfg(test)]
 mod worlds_tests;

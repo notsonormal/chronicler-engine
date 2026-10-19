@@ -1,4 +1,4 @@
-//! Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, and tests-vs-messages/swipes separation.
+//! Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, urlencoded form safety, and the HTTP adapter's storage leak.
 
 use crate::Violation;
 
@@ -46,46 +46,13 @@ pub fn check_wiredapp_scope(file_path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
-/// Ensures `storage/messages.rs` never references the `message_swipes` table.
-pub fn check_messages_swipes_separation(file_path: &str, content: &str) -> Vec<Violation> {
-    let mut violations = Vec::new();
-
-    if !file_path.ends_with("storage/messages.rs") {
-        return violations;
-    }
-
-    for (line_no, line) in content.lines().enumerate() {
-        let line_num = line_no + 1;
-        let trimmed = line.trim();
-
-        if trimmed.starts_with("//") || trimmed.starts_with("*") {
-            continue;
-        }
-        if trimmed.contains("FROM message_swipes")
-            || trimmed.contains("INTO message_swipes")
-            || trimmed.contains("UPDATE message_swipes")
-            || trimmed.contains("JOIN message_swipes")
-            || trimmed.contains("DELETE FROM message_swipes")
-        {
-            violations.push(Violation::error(
-                file_path,
-                line_num,
-                "Storage module `messages.rs` references `message_swipes` table",
-            ));
-        }
-    }
-
-    violations
-}
-
 /// The scope of the two path-limited guards below, relative to `src/`. Their tests
 /// assert it matches a file, so a stale scope cannot pass by checking nothing.
 pub const HTTP_ADAPTER_SCOPE: &str = "adapters/driving/http/";
 
 /// The whole-state types the HTTP layer must not name: `SwipeState` is the design's
-/// state, and `GameState` is today's wrapper around it, which goes in the core
-/// step's deletions.
-const WHOLE_STATE_TYPES: [&str; 2] = ["SwipeState", "GameState"];
+/// state.
+const WHOLE_STATE_TYPES: [&str; 1] = ["SwipeState"];
 
 /// Requires server handlers to return `Response<Body>` instead of `(StatusCode, String)`.
 pub fn check_handler_return_type(file_path: &str, content: &str) -> Vec<Violation> {
@@ -494,25 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn test_check_messages_swipes_separation_catches_swipes_table() {
-        let violations = check_messages_swipes_separation(
-            "adapters/driven/storage/messages.rs",
-            "SELECT id FROM message_swipes WHERE message_id = ?\n",
-        );
-        assert_eq!(violations.len(), 1);
-        assert!(violations[0].message.contains("message_swipes"));
-    }
-
-    #[test]
-    fn test_check_messages_swipes_separation_allows_messages_table() {
-        let violations = check_messages_swipes_separation(
-            "adapters/driven/storage/messages.rs",
-            "SELECT id FROM messages WHERE game_id = ?\n",
-        );
-        assert_eq!(violations.len(), 0);
-    }
-
-    #[test]
     fn test_check_server_layer_boundaries_catches_swipe_state() {
         let violations = check_server_layer_boundaries(
             "adapters/driving/http/renderers.rs",
@@ -520,16 +468,6 @@ mod tests {
         );
         assert_eq!(violations.len(), 1);
         assert!(violations[0].message.contains("SwipeState"));
-    }
-
-    #[test]
-    fn test_check_server_layer_boundaries_catches_game_state() {
-        let violations = check_server_layer_boundaries(
-            "adapters/driving/http/renderers.rs",
-            "fn render(state: &GameState) {}\n",
-        );
-        assert_eq!(violations.len(), 1);
-        assert!(violations[0].message.contains("GameState"));
     }
 
     #[test]
