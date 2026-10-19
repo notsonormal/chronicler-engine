@@ -31,6 +31,8 @@ Labels: wayfinder:map
 
 ## Not yet specified
 
+- **After the response to the review.** The code of every slice is built, but `wf/rebuild-core` (with tickets 09 to 12) is not merged to `main`. The review of the whole rebuild (2026-10-19, against `bc7d6cd4`) waits on [Decide how to respond to the review of the whole rebuild](issues/13-respond-to-the-whole-rebuild-review.md), which waits on three architecture reviews of the rebuilt code on different models and their synthesis. Its answer may graduate fix or refactor tickets, and then the merge.
+
 ## Out of scope
 
 - The efforts of plan §10 ("Past the build").
