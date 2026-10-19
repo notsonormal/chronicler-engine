@@ -15,31 +15,31 @@ exemplar cannot state are inlined here.
 **Purpose.** Test an application collaborator through the production wiring.
 `TestAppBuilder` defaults to `empty_sqlite_storage()`: the production SQLite backend
 over `DbPool::new(":memory:")`. Pass an `Arc<Storage>` via `.storage(...)` when
-the test wires its own instance. State persists through snapshots and
-messages the way it does in production, so a test can assert on the state a
-service left behind.
+the test wires its own instance. Records persist through save units the way
+they do in production, so a test can assert on the state a service left behind.
 
 **The builder.** `TestAppBuilder` (`src/test_support/test_app_builder.rs`).
 `default_test()` (or `with_data(data)`) seeds test data; `.storage(Arc<Storage>)`
 overrides storage; `.model(Arc<ScriptedModel>)` runs the real Agents on that
-script (Cross-cutting 7); `.pipeline(pipeline)` injects a mock-wired
-`ActionPipeline`; `.skip_seeding(true)` leaves seeding to the test. Terminals:
+script (Cross-cutting 7); `.job_deps(job_deps)` injects the collaborators of a
+Job; `.skip_seeding(true)` leaves seeding to the test. Terminals:
 `build()` → `Router`, `build_service()` → `AppState`, `build_with_state()` →
 `(Router, AppState)`, `build_service_with_storage()` → `(AppState, Arc<Storage>)`.
 
-**Wiring the scripted pipeline.** A test that does not seed through the builder
+**Wiring the scripted model.** A test that does not seed through the builder
 uses `app_with_script` / `app_with_model_and_storage`
 (`tests/http/support/app_wiring.rs`); those build the recorder with
 `make_test_recorder_with_storage` (`src/test_support/fixtures.rs`) and the
-pipeline with `make_test_pipeline_with_backends` (`src/test_support/context.rs`).
-Either way the test scripts every model call the turn makes (Cross-cutting 7).
+Job collaborators with `make_test_job_deps` (`src/test_support/context.rs`).
+Either way the test scripts every model call a Job makes (Cross-cutting 7).
 
-**Observing state.** `app.message_service.load_or_fresh(game_id)` is the
-persisted state. Take the Game from the app the test built, through the shared
-`test_support::active_game_of(&state)` (it panics when no Game is active, which
-names a broken fixture). The injected pipeline is rebound to the
-builder's storage, so pass the same `Arc<Storage>` via `.storage(...)` when the
-test mutates storage the pipeline should read. A test that seeds its own storage
+**Observing state.** `state.game_view_query` is the read seam: `story_messages`
+for the whole story, `dock` for the offered set and the notice, `status` for
+the step or the failure line. Take the Game from the app the test built,
+through the shared `test_support::active_game_of(&state)` (it panics when no
+Game is active, which names a broken fixture). Injected `JobDeps` are rebound to
+the builder's storage, so pass the same `Arc<Storage>` via `.storage(...)` when
+the test mutates storage the Job should read. A test that seeds its own storage
 and skips the builder's seeding also names the Game the app should point at:
 `.skip_seeding(true).active_game(game_id)`.
 
@@ -49,9 +49,10 @@ and skips the builder's seeding also names the Game the app should point at:
 
 **Service-direct variant.** Use it for collaborator methods no request flows
 through: lifecycle ops on `GameCatalogue` (`create_game`, `switch_game`,
-`delete_game`, `list_games`, `active_game_id`), status/cancellation on
-`GenerationGate`, read-side queries on `GameViewQuery`. Do not use it for
-`process_action` — drive that through the builder + injected pipeline form above.
+`delete_game`, `list_games`, `active_game_id`), the writes of `GameWriter`
+(stop, edit, delete, swipe switch), read-side queries on `GameViewQuery`. Do
+not use it to start a Job — drive that through a request on the builder's
+router, as above.
 Direct-storage tests with no service are Pattern 3.
 
 ## Pattern 2 — Real `TestServer` lifecycle + port allocation
@@ -77,7 +78,7 @@ which sends SIGTERM through `terminate_pid`.
 ## Pattern 3 — Storage-direct round-trip
 
 **Purpose.** Exercise a `Storage` method against a real SQLite (or in-memory)
-backend, with no `ActionPipeline` and no application collaborators.
+backend, with no `Job` and no application collaborators.
 
 **The standard.** `create_test_storage(game_id)` in `tests/helpers/fixtures.rs`
 opens `:memory:` SQLite and pre-seeds the games row so FK-bearing tables accept
@@ -203,18 +204,18 @@ returning `Err` would suppress the dump. See `tests/test_utils/wait.rs` for the
 current list. There is no sync-polling equivalent; sync failures rely on
 `cargo nextest`'s `--failure-output` reporting.
 
-### Cross-cutting 6 — `TestAppBuilder` storage handoff for snapshot assertions
+### Cross-cutting 6 — `TestAppBuilder` storage handoff for record assertions
 
 `build_service_with_storage()` returns the wired `AppState` and the exact
-`Arc<Storage>` the pipeline holds, so a test can assert through the
-snapshot/message path and still read storage directly. `skip_seeding(true)` suits
-a test that seeds its own game state; `build()` / `default_app()` suit
+`Arc<Storage>` the Jobs hold, so a test can assert through the read seams and
+still read storage directly. `skip_seeding(true)` suits
+a test that seeds its own Game; `build()` / `default_app()` suit
 router-only HTTP tests.
 
 The decision rule:
 
-- Service method that mutates state the test then reads, or asserts through the
-  snapshot/generation path? → the wired `TestAppBuilder` app.
+- Service method that mutates state the test then reads, or asserts through a
+  Job? → the wired `TestAppBuilder` app.
 - Service method on a pre-seeded state (read or write)? → `TestAppBuilder`.
 - `Storage` method under test (no service at all)? → `create_test_storage(...)`,
   `empty_sqlite_storage()` when the case needs no seeded row, or
@@ -223,14 +224,14 @@ The decision rule:
 
 ### Cross-cutting 7 — The scripted model and the Agents a tier-1 app runs
 
-A tier-1 test scripts every model call its turn makes. `ScriptedModel`
+A tier-1 test scripts every model call its Job makes. `ScriptedModel`
 (`src/test_support/scripted_model.rs`) is a strict, holdable `LlmProvider`: it
 holds one entry per call and fails the test on a call the test did not script.
 Entries are keyed by role (`ModelRole`), so a test declares `.narration("…")`,
 `.event_narration("…")`, `.analysis(analysis_report(&[], Some("room2")))`,
 `.options(set_a)` and the shorthand `.turn("…")` (a narration and the analysis
 of it) without depending on the order the roles interleave. The analysis entry
-is a parsed room report (`analysis_report`), which is what makes a turn's
+is a parsed room report (`analysis_report`), which is what makes a generation's
 analysis confident.
 
 Hand the model to the app with `app_with_script` /
@@ -238,7 +239,7 @@ Hand the model to the app with `app_with_script` /
 `TestAppBuilder::model(model)` when the builder's other knobs seed the fixture.
 `app_with_script`, `TestAppBuilder::model` and `app_with_model` wire the
 production Agents through `configured_runner` (`src/test_support/context.rs`),
-so a tier-1 turn runs the real Quantifier and the real Options agent on that
+so a tier-1 Job runs the real Quantifier and the real Options agent on that
 script. The tests that leave an Agent out build their runner through a closure
 over `configured_runner_without(recorder, "options")`, passed to
 `app_with_script_and_agents`.
@@ -279,7 +280,7 @@ CI does not exercise the ignored tests.
 - `tests/test_utils/settings_guard.rs` — `SettingsTestGuard`.
 - `tests/helpers/fixtures.rs` — `create_test_storage` and shared fixtures.
 - `src/test_support/test_app_builder.rs` — `TestAppBuilder`.
-- `src/test_support/context.rs` — `make_test_pipeline_*` constructors.
+- `src/test_support/context.rs` — `make_test_job_deps` and the Agent runner constructors.
 - `src/test_support/fixtures.rs` — recorders and test-data fixtures.
 - `scripts/tests/test_validate_docs.py` — front-matter, mode vocabulary, DOC-anchor regression suite.
 - `docs/AGENTS.md` — autogenerated catalogue of all docs in `docs/`.

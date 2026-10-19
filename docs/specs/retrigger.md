@@ -14,7 +14,7 @@ And the last Message is a non-event Narration (the main narration)
 And the story log holds N Messages
 And a narrator backend that returns a non-empty continuation for the trigger prompt
 When the client sends POST /retrigger
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the story log holds N+1 Messages (the original history is preserved; the new event narration is appended, not a replacement)
 And the new Message is an event Narration (it carries an event header)
 And the generation status is Idle
@@ -27,7 +27,7 @@ Given a Game whose current state holds a trigger context
 And the last Message is a non-event Narration
 And the player stands in "room2"
 When the client sends POST /retrigger
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the player still stands in "room2" (a retrigger applies no movement)
 ```
 
@@ -65,10 +65,10 @@ Given a Game whose current state holds a trigger context
 And the last Message is a non-event Narration
 And a narrator backend that fails for the trigger continuation prompt
 When the client sends POST /retrigger
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is an error whose text is "The event narration failed."
-And the message history gained no new event Narration entry (the failed continuation is not persisted)
-And the message history still ends in the non-event Narration the failure was reported on
+And the story log gained no new event Narration entry (the failed continuation is not persisted)
+And the story log still ends in the non-event Narration the failure was reported on
 And the story-log fragment still offers the `.retrigger-btn` control on that Narration
 ```
 
@@ -98,15 +98,13 @@ And no event Narration is added
 These properties hold across every `POST /retrigger` and are observable
 through HTTP. Drift indicates a regression even if all scenarios pass.
 
-- **I.3** Retrigger (`POST /retrigger`) adds exactly one new message to
-  `narrative.history` (the event narration). It does not append a swipe.
+- **I.3** Retrigger (`POST /retrigger`) adds exactly one new Message to
+  the story log (the event Narration). It does not add a Swipe.
 - **I.7** A request whose start state is missing is a data-integrity
   violation: 500 and the failure line "The data for this request is
   missing: …", not a user error (400).
-- **I.8** Retrigger rejects concurrent generation the same way
-  `process_action` does: 200 with a `"Still thinking..."` status, no
-  generation started.
-- **I.9** `last_trigger` is set before the trigger LLM call, so it
-  survives a trigger-narration failure. Retrigger is available as a
-  recovery path after trigger failure without re-running the full
-  pipeline.
+- **I.8** Retrigger rejects concurrent generation the same way an Action
+  does: 200 with a `"Still thinking..."` status, no generation started.
+- **I.9** A failed event Narration leaves the trigger context of the last
+  Narration in place. Retrigger stays available as a recovery path after
+  the failure, with no new Action.

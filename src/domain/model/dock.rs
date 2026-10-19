@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! The dock record: the offered set and the one notice of a Game
 
 use serde::{Deserialize, Serialize};

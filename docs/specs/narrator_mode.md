@@ -16,7 +16,7 @@ Endpoints:
 Given a seeded world in Interactive Fiction mode with perspective "second" and tense "present"
 When the client POST /games with that world and a valid persona
 And the client POST /action with command="open the door"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the narrator's recorded system prompt carries the Interactive Fiction system preset (the mode bundle's system preset)
 And the prompt's perspective macro is resolved to the inherited "second" and the tense macro to the inherited "present"
 And the story log contains one Input entry with text "open the door" and at least one Narration entry
@@ -31,7 +31,7 @@ Given an active game in Novel mode
 And a completed narration whose recorded system prompt carries the Novel system preset
 When the client POST /games/{game_id}/mode with narrator_mode="interactive_fiction"
 And the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the new narration's recorded system prompt carries the Interactive Fiction system preset
 And it no longer carries the Novel system preset
 ```
@@ -62,7 +62,7 @@ And the next narration's recorded user prompt still resolves the perspective mac
 ```gherkin
 Given an active game in Interactive Fiction mode
 When the client POST /action with command="/impersonate hello"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the story log contains exactly one Input entry with the impersonated flag set and the impersonate direction "hello"
 And no Input entry carries the raw "/impersonate" command text
 ```

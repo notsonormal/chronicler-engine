@@ -14,7 +14,7 @@ Endpoints:
 ```gherkin
 Given a game with scene history and an options agent
 When the client POST /action with command="/options"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then GET /fragment/options-dock renders the options strip with one button per generated option
 ```
 
@@ -33,7 +33,7 @@ And GET /fragment/options-dock renders no options strip and no notice
 ```gherkin
 Given a game with scene history, an offered set of set A, and no options agent
 When the client POST /action with command="/options"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the dock shows the notice saying the options agent is not available
 And the dock renders no options strip
 When the client POST /status/reset-generating
@@ -57,7 +57,7 @@ And the story-log message count is unchanged by the two /options calls
 Given the dock shows set A
 And the options agent's next responses fail to parse
 When the client POST /action with command="/options"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the dock shows the notice naming the options-generation failure
 And the dock renders no options strip
 When the client POST /status/reset-generating
@@ -69,10 +69,10 @@ Then the dock renders set A
 ```gherkin
 Given a game with scene history and an options agent whose response yields set A
 When the client POST /action with command="/options"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client POST /action/check with command="Search the desk" (the form submit the Use button performs)
-And the pipeline returns to idle
-Then the message history holds one more player-input message than before
+And the Game is no longer busy
+Then the story log holds one more player-input message than before
 And the newest player-input message's text is "Search the desk"
 And a Narration message was added after it
 ```
@@ -85,7 +85,7 @@ And a Narration message was added after it
 Given a world with the always-on toggle enabled
 When the client POST /games creates a game from that world (the toggle is inherited at creation)
 And the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the dock renders a fresh option set without any /options command
 ```
 
@@ -95,7 +95,7 @@ Then the dock renders a fresh option set without any /options command
 Given a game with the always-on toggle on
 And the offered set is set A
 When the client POST /action with command="/impersonate hello"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the offered set still holds set A
 And the dock still renders set A
 ```
@@ -106,7 +106,7 @@ And the dock still renders set A
 Given a game whose always-on toggle is off
 And the offered set is set A
 When the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the offered set is empty
 And the dock renders no options strip
 ```
@@ -117,10 +117,10 @@ And the dock renders no options strip
 Given a world with the always-on toggle on and an options agent whose first response yields set A and whose later responses fail to parse
 When the client POST /games creates a game from that world
 And the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the offered set is set A
 When the client POST /action with command="look" again
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the offered set is empty
 And the dock renders no options strip
 And the dock shows the notice naming the options generation failure
@@ -131,10 +131,23 @@ And the dock shows the notice naming the options generation failure
 ```gherkin
 Given a world with the always-on toggle on, no options agent, and an offered set of set A
 When the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the offered set is empty
 And the dock renders no options strip
 And the dock shows the notice saying the options agent is not available
+```
+
+#### Scenario 24.22: An Options run follows a Narration whose event narration fails
+
+```gherkin
+Given a world with the always-on toggle on and an options agent
+And a Character whose Trigger fires on the next Action
+When the client POST /games creates a game from that world
+And the client POST /action with command="examine the npc"
+And the Game is no longer busy
+Then the dock renders a fresh option set
+And the dock shows no notice
+And the status names the event narration failure
 ```
 
 ### Response shapes
@@ -144,7 +157,7 @@ And the dock shows the notice saying the options agent is not available
 ```gherkin
 Given an options agent whose response is a numbered list ("1. Search the desk" per line)
 When the client POST /action with command="/options"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the dock renders the option texts without their list numbering
 ```
 
@@ -155,7 +168,7 @@ Then the dock renders the option texts without their list numbering
 ```gherkin
 Given an active game in Interactive Fiction mode with scene history and an options agent
 When the client POST /action with command="/options"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the dock renders the generated option set
 ```
 
@@ -187,7 +200,7 @@ And GET /fragment/options-dock renders no options strip
 ```gherkin
 Given a game with scene history and an options agent
 When the client POST /action with command="/options"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then GET /fragment/options-dock shows at least one icon
 And every icon it references is one GET / defines
 ```

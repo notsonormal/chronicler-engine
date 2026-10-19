@@ -100,7 +100,7 @@ The same holds for any production method that only tests call.
 
 Apply the rule to one line of test code. The line reads a domain outcome when
 it reads the HTTP response or calls a read seam. It leaks when it
-dereferences a `GameState` field or calls a `Storage` method to observe state.
+calls a `Storage` method to observe state.
 
 - **Helpers.** The rule judges the read inside a helper's body. A helper may
   wrap a read seam.
@@ -108,8 +108,8 @@ dereferences a `GameState` field or calls a `Storage` method to observe state.
   state through `Storage` and fixtures. A synchronization wait such as
   `wait_idle` may read state, because it gates the test and observes no
   outcome.
-- **A persistence fact** that has no read seam (a snapshot row, a swipe
-  count) is a driven-adapter or unit assertion, not a tier-1 one.
+- **A persistence fact** that has no read seam (a column of a Swipe row that no view
+  shows) is a driven-adapter or unit assertion, not a tier-1 one.
 
 **Check:** review-only.
 

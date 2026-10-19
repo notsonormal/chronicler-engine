@@ -22,7 +22,7 @@ Then open `http://localhost:3000`. Use `--list-worlds` to see shipped worlds.
 | For | Read |
 | --- | --- |
 | Working in this repo — structure, build/test commands, policies | [`AGENTS.md`](AGENTS.md) |
-| Domain language (Game, World, Persona, Action Pipeline, …) | [`CONTEXT.md`](CONTEXT.md) |
+| Domain language (Game, World, Persona, Job, …) | [`CONTEXT.md`](CONTEXT.md) |
 | Architecture & design docs | [`docs/diataxis/explanation/`](docs/diataxis/explanation/) |
 | Reference docs (one per source module) | [`docs/diataxis/reference/`](docs/diataxis/reference/) |
 | Full docs catalogue | [`docs/AGENTS.md`](docs/AGENTS.md) |

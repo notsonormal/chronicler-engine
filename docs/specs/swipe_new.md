@@ -12,10 +12,10 @@ Endpoint: `POST /swipe/new`
 Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns "First." then "Second." for successive narration prompts
 When the client sends POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client sends POST /swipe/new
-And the pipeline returns to idle
-Then the story log holds 2 Narration entries (the opening and the Action's)
+And the Game is no longer busy
+Then the story log holds 2 Narration entries (its opening Narration and the Action's)
 And the Action's Narration entry keeps its message ID and has 2 swipes (one appended by the retry)
 And the active swipe's text is "Second."
 And the generation status is Idle
@@ -27,9 +27,9 @@ And the generation status is Idle
 Given a fresh game state whose player stands in "room_1"
 And a quantifier backend that returns no movement for the first action, then movement to "room2" on the retry prompt
 When the client sends POST /action with command="walk around"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the player stands in "room2" (the Quantifier re-ran on the redo)
 And the Narration entry's active swipe reports the room "Room room2"
 And its first swipe reports no room (that generation did not move)
@@ -41,8 +41,8 @@ And its first swipe reports no room (that generation did not move)
 Given a fresh game state with an Input message whose text is "walk around"
 And a non-event Narration as the last message
 When the client sends POST /swipe/new
-And the pipeline returns to idle
-Then the message history contains an Input entry whose text is still "walk around" (unchanged by retry)
+And the Game is no longer busy
+Then the story log contains an Input entry whose text is still "walk around" (unchanged by retry)
 ```
 
 #### Scenario 9.4: Main retry uses the edited input text
@@ -51,8 +51,8 @@ Then the message history contains an Input entry whose text is still "walk aroun
 Given a fresh game state with an Input message whose active swipe has been edited to "sprint forward"
 And a non-event Narration as the last message
 When the client sends POST /swipe/new
-And the pipeline returns to idle
-Then the message history contains a Narration entry whose text reflects "sprint forward", not the original input text
+And the Game is no longer busy
+Then the story log contains a Narration entry whose text reflects "sprint forward", not the original input text
 ```
 
 #### Scenario 9.5: Main retry re-evaluates triggers
@@ -61,10 +61,10 @@ Then the message history contains a Narration entry whose text reflects "sprint 
 Given a game state with an NPC whose trigger fires when the player is in "room2"
 And a quantifier backend that returns no movement on the first action, then movement to "room2" on the retry prompt
 When the client sends POST /action (no trigger fires — player not in "room2")
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client sends POST /swipe/new
-And the pipeline returns to idle
-Then the message history contains at least one Narration entry that carries an event header (the trigger fired after the retry moved the player)
+And the Game is no longer busy
+Then the story log contains at least one Narration entry that carries an event header (the trigger fired after the retry moved the player)
 ```
 
 #### Scenario 9.6: Main retry completes when the quantifier returns no movement
@@ -73,9 +73,9 @@ Then the message history contains at least one Narration entry that carries an e
 Given a fresh game state
 And a quantifier backend that returns no movement for both the action and the retry prompt
 When the client sends POST /action with command="walk around"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is Idle (retry completes even with no movement)
 ```
 
@@ -86,7 +86,7 @@ Given a game state whose first Action moved the player into "room2"
 And the Narration entry's first swipe reports the room "Room room2"
 And a quantifier backend that returns no movement for the retry prompt
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the Narration entry has 2 swipes
 And its active swipe reports no room (the redo must not keep its sibling's room)
 And its first swipe still reports the room "Room room2"
@@ -102,8 +102,8 @@ A switch to another Swipe gives back the state of that Swipe; `swipe_switch.md` 
 Given a game state where the last message is an event Narration (it carries an event header)
 And a narrator backend that returns a different continuation text for the retry prompt
 When the client sends POST /swipe/new
-And the pipeline returns to idle
-Then the story log holds 3 Narration entries (the opening, the main narration and the event narration)
+And the Game is no longer busy
+Then the story log holds 3 Narration entries (its opening Narration, the main narration and the event narration)
 And the event narration message has its new swipe as the active swipe
 And the generation status is Idle
 ```
@@ -114,7 +114,7 @@ And the generation status is Idle
 Given a game state where the last message is an event Narration
 And the Action that fired the event moved the player into "room2"
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the player is still in "room2" (an event retry applies no movement)
 ```
 
@@ -124,21 +124,21 @@ Then the player is still in "room2" (an event retry applies no movement)
 Given a game state whose last message is a non-event Narration
 And a stored trigger context whose continuation narration failed
 When the client sends POST /retrigger
-And the pipeline returns to idle (the event narration is appended)
+And the Game is no longer busy (the event narration is appended)
 And the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the retriggered event Narration has 2 swipes (the retriggered one and the retry's)
 And its new swipe is the active swipe
 And the generation status is Idle
 ```
 
-#### Scenario 10.5: An event retry starts from the Snapshot of the Swipe it retries
+#### Scenario 10.5: An event retry starts from the state of the Swipe it retries
 
 ```gherkin
 Given a game state whose event Narration meets Character Gabriella in its first Swipe
 And a Quantifier backend that leaves Gabriella out of the retry's continuation
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then Gabriella's encounter count is 0 (the first Swipe's encounter does not carry over)
 And the scene holds no Character
 And the event Narration has 2 swipes
@@ -151,7 +151,7 @@ Given a game state whose event Narration carries the trigger context of the Trig
 And a later Action that fires another Trigger and appends its own event Narration
 And the client deletes that later Action's Messages
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the event Narration has 2 swipes
 And its new swipe's event header names the first event's own Trigger
 And the generation status is Idle
@@ -164,7 +164,7 @@ Given a game state whose event Narration meets Character Gabriella in its first 
 And a Quantifier backend that leaves Gabriella out of the retry's continuation
 And the client re-selects that Message's first Swipe
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then Gabriella's encounter count is 0, as it is without the switch
 ```
 
@@ -175,7 +175,7 @@ Given a game state whose event Narration follows the movement into "room2"
 And the Narration that moved the player reports the room "Room room2"
 And that event Narration's Swipe reports no room
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the event Narration has 2 swipes
 And neither the new active swipe nor the first swipe reports a room
 ```
@@ -196,7 +196,7 @@ Then the response is 400 Bad Request
 Given a game state where the last message is a non-event Narration
 And a narrator backend that fails for the narration request
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is Error
 And the original narration's swipes are unchanged (no new swipe appended)
 ```
@@ -207,7 +207,7 @@ And the original narration's swipes are unchanged (no new swipe appended)
 Given a game state where the last message is a non-event Narration
 And a narrator backend that returns an empty string for the narration prompt
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is Error, with a failure that contains "empty"
 And the original narration's swipes are unchanged (no new swipe appended)
 ```
@@ -218,7 +218,7 @@ And the original narration's swipes are unchanged (no new swipe appended)
 Given a Game whose state before its last Narration names a room that is not on the map
 And the last Message is a non-event Narration
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is Error, with a failure that names the invalid room
 And the original narration's swipes are unchanged (no new swipe appended)
 ```
@@ -230,10 +230,10 @@ Given a game state where the last message is an event Narration
 And the Action that fired the event moved the player into "room2" and marked the trigger fired
 And a narrator backend that fails only for the trigger continuation prompt (main narration succeeds)
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is an error whose text is "The event narration failed."
-And the message history still contains the main Narration entry (preserved, not removed)
-And the message history gained no entry for the failure
+And the story log still contains the main Narration entry (preserved, not removed)
+And the story log gained no entry for the failure
 And the player is still in "room2"
 And the event's trigger is still marked as fired
 ```
@@ -242,10 +242,10 @@ And the event's trigger is still marked as fired
 
 ```gherkin
 Given a game state whose last Action moved the player into "room2"
-And the Snapshot that the retry restores has the player in "room_1"
+And the state that the retry starts from has the player in "room_1"
 And a narrator backend that fails the narration request
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is an error
 And the player is still in "room2"
 ```
@@ -258,7 +258,7 @@ And a trigger in "room2" that fires when the player enters it
 And a quantifier backend that moves the player into "room2" on the retry
 And a narrator backend that fails only for the trigger continuation prompt (the narration succeeds)
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is an error whose text is "The event narration failed."
 And the player is in "room2" (the state that the retry's analysis saved)
 ```
@@ -283,8 +283,8 @@ Given a game state whose last message is an Input whose active swipe is an imper
 And a narrator backend that returns "I look around cautiously." for the impersonation prompt
 And a quantifier backend that moves the player into "room2" on the redo's analysis
 When the client sends POST /swipe/new
-And the pipeline returns to idle
-Then the message history contains exactly one Input entry (the original message ID unchanged)
+And the Game is no longer busy
+Then the story log contains exactly one Input entry (the original message ID unchanged)
 And that Input entry has 2 swipes (one appended by retry)
 And the active swipe's text is "I look around cautiously."
 And the generation status is Idle
@@ -297,8 +297,8 @@ And the player is in "room2" (a re-impersonate runs the analysis)
 Given a game state whose last message is an Input whose active swipe has no stored inputs
 And a narrator backend that returns "I sprint forward." for the user-regen prompt
 When the client sends POST /swipe/new
-And the pipeline returns to idle
-Then the message history contains exactly one Input entry (the original message ID unchanged)
+And the Game is no longer busy
+Then the story log contains exactly one Input entry (the original message ID unchanged)
 And that Input entry has 2 swipes (one appended by retry)
 And the active swipe's text is "I sprint forward."
 And the generation status is Idle
@@ -311,8 +311,8 @@ And the player has not moved (the quantifier did not re-run)
 Given a game state whose last message is an Input whose active swipe is an impersonation
 And the active swipe's impersonate direction is "Sneak past the guard."
 When the client sends POST /swipe/new
-And the pipeline returns to idle
-Then the message history contains an Input entry whose active swipe is an impersonation
+And the Game is no longer busy
+Then the story log contains an Input entry whose active swipe is an impersonation
 And the active swipe's impersonate direction is "Sneak past the guard."
 ```
 
@@ -323,7 +323,7 @@ Given a game whose impersonate preset's instructions changed after the original 
 And a game state whose last message is an Input whose active swipe is an impersonation
 And a narrator backend that returns "I look around cautiously." for the impersonation prompt
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then a new swipe is appended and its stored inputs re-apply (impersonated with the impersonate direction)
 And the narrator generation's recorded prompt contains the preset's current instructions
 ```
@@ -334,10 +334,10 @@ And the narrator generation's recorded prompt contains the preset's current inst
 Given a game state whose Action before a guided Narration moved the player into "room2"
 And a quantifier backend that reports no movement for the guided generation and movement back to "room_1" for the redo
 When the client sends POST /action with command="/guide look for the key"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the guided Narration reports no room (it stayed put)
 When the client sends POST /swipe/new
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the guided Narration has 2 swipes
 And its active swipe reports the room "Room room_1"
 And its first swipe reports no room
@@ -350,10 +350,10 @@ And its first swipe reports no room
 These properties hold across every `POST /swipe/new` and are observable
 through HTTP. Drift indicates a regression even if all scenarios pass.
 
-- **I.1** After the pipeline returns to idle, the generation status is
-  Idle or Error, never stuck in generation.
+- **I.1** A Job always ends: the generation status then reads Idle or an
+  error, never a step.
 - **I.2** Retry (`POST /swipe/new`) never adds a new message to
-  the message history. It appends a swipe to an existing message. Re-impersonate
+  the story log. It appends a swipe to an existing message. Re-impersonate
   and user-regen retries append the new swipe to the existing Input message.
 - **I.4** Retry never modifies the text of any prior swipe. Main
   retry uses the input's current active swipe text, which the user may

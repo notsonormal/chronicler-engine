@@ -23,8 +23,8 @@ Agent serves, and each hook has its own dispatch site:
 - **`Analysis`**: runs after the narration was saved. `AgentRunner::analysis`
   merges the `AnalysisOutput` of each Agent into the result that the game rules
   apply. `QuantifierAgent` runs here.
-- **`Options`**: runs once per Job, at the two gated Options sites (turn end and
-  on demand). The Options hook holds at most one Agent. The Options agent runs
+- **`Options`**: runs once per Job, at the two gated Options sites (after a
+  Narration and on demand). The Options hook holds at most one Agent. The Options agent runs
   here and answers with an `OfferedSet`.
 
 ## What an Agent gets

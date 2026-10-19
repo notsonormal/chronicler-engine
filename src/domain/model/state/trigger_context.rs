@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Stored trigger snapshot context
+//! The Trigger reference of a Swipe state and the event record of an event Narration
 
 use serde::{Deserialize, Serialize};
 

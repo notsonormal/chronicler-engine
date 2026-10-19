@@ -5,7 +5,7 @@ title: Storage and Bootstrap Design
 
 ## Overview
 
-The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; an application-tier rule that each `Storage` method touches exactly one table and that multi-table operations compose in the application orchestrator (`ActionPipeline`, `MessageService`, `GameCatalogue`, `GameViewQuery`); and a paired `get_*` / `require_*` read-helper contract that lets the storage interface distinguish absence-as-OK from absence-as-error.
+The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; a save-unit rule that every write to a Game's story records runs inside one `Tx`, opened by `GameWriter`, so the records of one request land whole; and a paired `get_*` / `require_*` read-helper contract that lets the storage interface distinguish absence-as-OK from absence-as-error.
 
 ## The storage struct and its backend decorator
 
@@ -41,13 +41,21 @@ DB is the sole source of truth afterwards. Once a row exists, the JSON file that
 
 The seeding order satisfies the foreign-key edges. Worlds and maps are seeded first because characters reference the world's numeric id, and that id exists only after the world row is written. Personas are world-independent and seeded in their own pass; prompt presets are independent of world, character, and persona. Game-scoped rows that reference any seeded row see a fully-populated parent.
 
-## Cross-table coordination in the orchestrator
+## Save units
 
-Each `Storage` method touches exactly one table. The rule is structural — every public method on `Storage` opens one row or one query against one table and returns. The rule keeps the storage layer narrow: a reader of any method sees what it reads, and a writer sees what it writes.
+Every write to the records of a Game's story runs inside one `Tx`. A `Tx` is one SQLite transaction. It holds the backend mutex for its whole run and rolls back when it is dropped without a commit. A save unit therefore lands whole or not at all.
 
-Multi-table operations compose one tier up, in the application orchestrator (`ActionPipeline`, `MessageService`, and catalogue collaborators). Save-message-and-snapshot writes the snapshot row first, then appends the message row that references the snapshot's id. Hydrate-messages-with-swipes reads the message rows and attaches the swipe rows. The orchestrator owns the order and the references; the storage layer owns the rows.
+The unit is the answer to a failure that sequential statements allow. A Narration is a Message row, a Swipe row and, in the older design, a separate state row that referenced them. A crash between two statements left a text with no state, or a state with no text. The Swipe now holds its own Swipe state, so the common write is one Swipe row, and a write that needs more than one row (create, a text save, a swipe switch, a delete) writes them in one unit.
 
-Atomicity within a single multi-table operation comes from sequential SQLite statements on one connection. The window in which a crash can leave the tables partially updated is small — a process exit between the two statements is the only way to land in a half-finished state — and the application treats the operation as atomic for non-critical data. The seed flow itself sits outside this trade-off: it runs at startup, not on user request, and its non-atomicity is bounded by the absence of concurrent readers.
+The dock record is a table of its own, because the config routes write the Game record with no busy check.
+
+`GameWriter` decides what a unit holds, because it knows the request and checks the job id in the same hold. `Storage` supplies the mechanism and knows nothing of Jobs. The split keeps the layers narrow: a reader of a `Tx` method sees one record write, and a reader of `GameWriter` sees which records change together.
+
+A unit holds the backend mutex for its whole run, so a `Storage` call inside the closure of a unit would wait on the mutex that the unit itself holds.
+
+The new records run on SQLite only. Tier-1 tests run on a SQLite `:memory:` database for this reason: a rollback and a failure in the middle of a unit are properties of the real backend, and an in-memory fake would only mimic them. Legacy unit tests in `src/` keep the in-memory backend for the tables it still holds.
+
+The seed flow sits outside this rule. It runs at startup, not on user request, and its non-atomicity is bounded by the absence of concurrent readers.
 
 ## The paired read-helper contract
 
@@ -63,11 +71,17 @@ The shape of the entity determines whether it has a required-read helper at all.
 
 ## Messages-and-swipes
 
-LLM narration is non-deterministic. The same player input can produce a strong paragraph on one run and a flat one on the next. The message aggregate carries this non-determinism directly: each retry of an AI message produces a new `Swipe` on the same `Message`, and the previous swipe is preserved. The narrative cost of retry — a fresh LLM call, a snapshot to restore — is paid in full. The information cost — losing the prior generation — is zero.
+LLM narration is non-deterministic. The same player input can produce a strong paragraph on one run and a flat one on the next. The message aggregate carries this non-determinism directly: each retry of an AI message produces a new `Swipe` on the same `Message`, and the previous swipe is preserved. The narrative cost of retry is a fresh LLM call. The information cost — losing the prior generation — is zero.
 
 ### Per-swipe state binding
 
-Narration mutates state. The quantifier runs after the narration LLM. It detects NPCs and movement, and it updates the scene state and the encounter counters. Two narrations of one input therefore leave two different game states. Each swipe keeps the Snapshot of the state that its own narration produced, so the text on screen and the world state always come from the same generation. A text-only swipe would show the text of one generation over the state of another: a "ghost state".
+Narration mutates state. The Quantifier runs after the narration LLM. It detects NPCs and movement, and the game rules update the scene state and the encounter counters. Two narrations of one input therefore leave two different game states. Each Swipe keeps the Swipe state that its own generation produced, so the text on screen and the world state always come from the same generation. A text-only swipe would show the text of one generation over the state of another: a "ghost state".
+
+A Swipe state on the Swipe also removes the need for a live state. The current state is the Swipe state of the active Swipe of the last Message, so a swipe switch and a delete change the current state by changing which Swipe is active. Nothing is copied or restored.
+
+### Two writes to one Swipe state
+
+The story log shows a new text as soon as the narrator call returns. The analysis follows a few seconds later. The Job therefore writes the Swipe state twice: the pre-analysis state at the text save, and the analysed state at the state update. A stop or a restart between the two keeps the text with its pre-analysis state, which says that the player has not moved and no Trigger fired. Only the Job that made the Swipe writes its Swipe state, so no other writer can overwrite what that Job saved.
 
 ### Last-message-only swiping
 

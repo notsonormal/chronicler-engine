@@ -252,7 +252,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `movement.rs` — Player movement state
         - `scene_state.rs` — Current scene NPCs and quantifier confidence
         - `swipe_state.rs` — The game state of one Swipe: movement, scene and encounter log
-        - `trigger_context.rs` — Stored trigger snapshot context
+        - `trigger_context.rs` — The Trigger reference of a Swipe state and the event record of an event Narration
       - **utils/**
         - `game_name.rs` — Game name generation with date-based disambiguation.
         - `game_rules.rs` — The game rules: movement, the Characters present and the Triggers, as a pure function of the Swipe state

@@ -760,3 +760,120 @@ Checks on the final tree. `python build.py fmt` ran before the round, not after 
 | `python build.py test-pattern "" --test-target storage` | `logs/build_20261019_004421.log` | 105 passed |
 | `python build.py test-pattern "" --test-target lib` | `logs/build_20261019_004439.log` | 955 passed |
 | `python build.py test-pattern "" --test-target http` | `logs/build_20261019_004503.log` | 280 passed |
+
+## C7
+
+**2026-10-19, implementer (C7, uncommitted).** Branch `wf/rebuild-core`, base `04c9180d`. The docs of plan §9.6, the two C7 lists of this ticket, and the DOC anchors. No commit was made. Rust changes: two module comment lines (below).
+
+### Docs rewritten in place (headings kept where anchored; `game_flow.md#trigger-evaluation` kept)
+
+- `docs/diataxis/reference/game_flow.md`: the Job, the job entry and busy, the writer rule, steps, step flow, status rule, stop and reset, the state of a Game (Swipe, current, start and pre-analysis state), create and reset, trigger evaluation and the game rules' order.
+- `docs/diataxis/reference/storage.md`: the records of a Game, the story and dock reads, the save unit with `Tx`, `TxToken` and `TxWrite`, the eleven tables without the Snapshot table (`game_docks` in), the relationships diagram without the non-FK edge.
+- `docs/diataxis/reference/architecture_system.md`: `AppState` collaborators as wired today; new "Who Owns What" table (what each part owns, what it may write); new "Module Shape" (an inherent impl lives in its type's file, a file may define more than one type).
+- `docs/diataxis/explanation/two-state-channels.md`: Channel A is the job entry (memory), Channel B is the failure line (Game record); the status rule order.
+- `docs/diataxis/explanation/storage_design.md`: Snapshot persistence replaced by save units, the per-Swipe state and its two writes.
+
+### Other docs edited
+
+- `docs/diataxis/reference/startup.md`: dropped the "Swipe snapshot reference" section; the create unit writes the opening Narration; every Game is idle after a start; Game Flow reference line.
+- `docs/diataxis/reference/frontend/dashboard.md`: story log wording, status display names the step or the failure line, a swipe switch makes a Swipe active.
+- `docs/diataxis/reference/narrative/options.md`: the offered set lives in the dock record; the Job runs the Options hook after a Narration or on demand.
+- `docs/diataxis/reference/narrative/narration_system.md`: "action pipeline" became the Job; the recorder returns text to its caller.
+- `docs/diataxis/reference/coding_standards/integration_test_standards.md`: `.pipeline(..)` became `.job_deps(..)`; `make_test_pipeline_*` became `make_test_job_deps`; observing state through `game_view_query` (`story_messages`, `dock`, `status`); Cross-cutting 6 reworded; "turn" became "Job" or "generation".
+- `docs/diataxis/explanation/rust_idioms.md`: concrete services, `spawn_blocking` through `Job::start`, and "Cancellation of a Job" in place of the shutdown-gate and α-check section.
+- `docs/diataxis/explanation/architecture.md`: the single-process paragraph and the commitments (restart safety, one Job per Game); `bootstrap::llm_factory` became `bootstrap::wiring`.
+- `tests/STRATEGY.md`: the `GameState` line and the snapshot row. `tests/AGENTS.md`: the mirror example `db.rs` became `stories.rs`; its generated index is unchanged.
+- `AGENTS.md`: the hand-written prose needed no change. The generated line for `trigger_context.rs` changed with its module comment (regenerated).
+- Not on the lists, but stale for the same reason (inferred, low risk): `docs/diataxis/explanation/agent_system_design.md` ("pipeline", "trigger pipeline"), `reference/narrative/agent_system.md` ("turn end"), `reference/narrative/ai_steering.md` ("turn"), `reference/coding_standards/guardrails.md` Document References (`execute_freeaction_impl`, no longer in `src/`), and four examples in `docs/AGENTS.md` that named the Snapshot, `snapshot_id` and "action pipeline".
+
+### Specs (no scenario number or `SCENARIO` tag changed; no assertion changed)
+
+- "the pipeline returns to idle" became "the Game is no longer busy" in every spec (actions, llm_messages, narrator_mode, options, reset, retrigger, story_log, swipe_new). `I.1` of `actions.md` and `swipe_new.md` now reads "A Job always ends: the generation status then reads Idle or an error, never a step."
+- `story_log.md` 8.1 to 8.3 and `reset.md` 7.2: `message_service`, `load_or_fresh`, `narrative.history` replaced by story-log wording (Given: "a Game whose story log holds only its opening Narration"; the fresh Game already holds that Narration).
+- `retrigger.md` I.3, I.8, I.9 restated without `narrative.history`, `process_action`, `last_trigger`.
+- `swipe_new.md` 10.5 title and 11.9 Given: Snapshot became "state". `actions.md` 3.3 title: "does not deadlock the pipeline" became "does not leave the Game busy".
+- "message history" became "story log" in every spec (one pass, 35 lines), so 14.5 and 11.8 no longer mix the two. The opening is "its opening Narration" in `swipe_new.md` and `reset.md`.
+- The §9.1 and §9.2 scenarios were already in the specs (39.4, 39.5, 36.4, 8.7, 8.8, 7.3, 6.4); no spec was added.
+
+### CONTEXT.md
+
+- Removed: **Snapshot** (entry), **Action Pipeline** (Deprecated Terms entry and the Job's `_Avoid_`).
+- Added: **Swipe state**, **Start state**, **Current state**, **Pre-analysis state**, **Job entry**, **Step**, **Save unit**, **Dock record**, **Notice**, **Failure line**, **Event record**. The **Hook** `_Avoid_` line now says what a step is against a hook. Changed: **Game** (no "generation gate"), **Message** (four kinds; "system log" gone), **Swipe** (names its Swipe state).
+- Decision for the lead: `Snapshot` stays as an `_Avoid_` word on **Swipe state**. The task said to remove the term; a tombstone costs one word and warns the next agent. Delete it if you want it gone.
+
+### DOC anchors
+
+- `src/domain/model/dock.rs`: `game_flow.md` became `storage.md` (the dock record is a table of `storage.md`).
+- Every other new module (`job.rs`, `gate.rs`, `job_tasks.rs`, `stories.rs`, `docks.rs`, `transaction.rs`, `records.rs`, `tail.rs`, `generation.rs`, `swipe_state.rs`, `game_rules.rs`, `generation_record.rs`, `opening.rs`) already pointed at the right area doc: checked, no change.
+- Comment change: `src/domain/model/state/trigger_context.rs` module line ("Stored trigger snapshot context" became "The Trigger reference of a Swipe state and the event record of an event Narration").
+
+### Final search
+
+`rg -n -i 'snapshot|GameState|NarrativeState|MessageService|message_service|ActionPipeline|action pipeline|PipelineRun|GenerationGate|GenerationGuard|generation slot|load_or_fresh|narrative\.history|process_action|heal'` over the named paths. The `heal` pattern also matches "health"; those hits are noise. Kept hits:
+
+| Hit | Reason |
+|---|---|
+| `CONTEXT.md` Swipe state `_Avoid_: Snapshot` | The avoided word for the new term (see decision above). |
+| `docs/diataxis/explanation/prompt_system_design.md` `<GameState>` | The XML data wrapper that `prompting/assembler.rs` still writes: a prompt tag, not the deleted type. |
+| `AGENTS.md` `healthcheck.py`, "overall health", `headers.rs` "role-health" | "health", not "heal". |
+| `docs/diataxis/reference/frontend/dashboard.md`, `docs/specs/failure_display.md`, `docs/specs/settings.md` "health" | Role health of the LLM roles. |
+| No other hit: `snapshot`, `GameState`, `message_service`, `heal` (as a word) are gone from the named paths. | |
+
+### Doc and code disagree
+
+- Design D-11 and target design §5 say a stop cancels the LLM call when it can. The code only cancels the job entry's handle, and `Job::run_step` checks it before each step; no model call observes it. The docs state the code (the Job starts no further step; the id check refuses a late save). Lead: decide whether the design text or the code is right.
+- `AppState.shutdown_token` is cancelled by the server on the shutdown signal, and nothing in `src/` reads it. `architecture_system.md` still lists it ("request shutdown signal"); `rust_idioms.md` says only that the server cancels it. Possible dead field; I did not change code.
+- `Message.is_deleted` and `StoredTriggerContext` stay open from C6 (unchanged).
+
+### Not done
+
+- Vale: `vale` is not installed (`python scripts/vale_lint.py` exits "vale not found on PATH"), so the rewritten docs were not linted.
+- `docs/plans/` §7 "Done when" still names the removed `NPC detection uncertain` assertion: the plan stays as written.
+- `docs/AGENTS.md` auto-index not regenerated: no doc title or path changed.
+
+### Checks
+
+| Check | Log | Result |
+|---|---|---|
+| `python build.py validate-docs` (final) | `logs/build_20261019_182828.log` | green, 0 errors |
+| `python build.py spec-coverage` | `logs/build_20261019_182824.log` | 288 declared, 288 covered, 0 gaps |
+| `python build.py guardrails` | `logs/build_20261019_182806.log` | 189 passed |
+| `python build.py clippy` | `logs/build_20261019_182753.log` | green |
+| `generate_structure_index.py`, `generate_tests_structure_index.py` | none | only the two lines above changed |
+
+### C7 fix pass (the document review of the C7 commit)
+
+Branch `wf/rebuild-core`, base `04c9180d`; the C7 docs and this pass are in the working tree, uncommitted. One code defect, one dead field, and the doc items of the review. No commit was made, and `.pi/` was not touched.
+
+| # | Result |
+|---|---|
+| A | **The event generation's failure dropped the Options run.** `Job::run` passed `Ended` from the event generation's `Err` arm with `narration_saved: false`, so a Narration that its first generation already saved got no Options run when the event Narration failed. `job.rs` now runs `ended.narration_saved \|= saved_a_narration` before `into_event_failure`; a stop still skips the run (`Failure::Stopped`). New spec scenario **`options.md` 24.22** ("An Options run follows a Narration whose event narration fails") with its tier-1 test `options::test_options_run_follows_a_failed_event_narration_http`. The test failed on the old code: `assertion left == right failed: the Options run must follow the Narration the failed event step kept` — `left: []`, `right: ["Search the desk", "Question the guard", "Leave the hall"]` (`logs/build_20261019_183632.log`). It passes after the fix (`logs/build_20261019_183647.log`). The `Ended` doc comment still holds ("A Narration saved before the failure still gets its Options run") and gained a comment at the arm. |
+| B | **`shutdown_token` removed.** The field is gone from `WiredApp`, `AppState`, `build_wired_app` and `AppState::from_wired`, with the now-unused `CancellationToken` import. `server.rs` keeps its ctrl-C `with_graceful_shutdown`; the signal now only logs, because nothing read the token. Its line is gone from `architecture_system.md`. **Beyond the brief:** `rust_idioms.md` still said "The shutdown signal is a `CancellationToken` on `AppState`", which the removal made false; it now states the graceful shutdown the server keeps. |
+| C1 | `game_flow.md` Writer Rule: `GameWriter` "holds every write to a Game's story records, dock record and failure line", and `GameCatalogue` writes "the Game's config columns: its display name, its posture, its mode, its preset selections and its options toggle" (`update_game_config` writes `narrator_mode`, the perspective, the tense, the four active preset ids and `options_always_on`; `update_game_display_name` writes the name). |
+| C2 | Re-read after A: `game_flow.md`'s "When the first generation saved its Narration, the Options run still runs, even when the event generation fails" and `reference/narrative/options.md`'s "at the end of a Job that saved a Narration" now match the code, so both stay. |
+| C3 | `CONTEXT.md` **Failure line** and `two-state-channels.md` now say "why its last Job or its last refused write failed", and Channel B names `GameWriter::refuse`: it writes the line for a `500` accept and for a failed edit, delete or swipe switch save. |
+| D1 | "step" keeps one meaning (a `Step` status name). `game_flow.md`'s **Step Flow** heading is **The Parts of a Generation**, the prose says each part runs under one Step, and the diagram and bullets say part. No link named `#step-flow` (only `game_flow.md#trigger-evaluation` is linked, and that heading stands). `storage.md` says "the record writes of one request"; `storage_design.md` says "a write that needs more than one row" and "the records of one request land whole". |
+| D2 | `storage_design.md` Save units: the multi-row examples are now create, a text save, a swipe switch and a delete. Verified in `gate.rs`: the create unit writes the dock, the Message and its Swipe; a text save writes the Message and Swipe (or the new Swipe and the active Swipe) and the dock; a swipe switch writes the active Swipe, the dock and the failure line; a delete writes the Message delete, the dock and the failure line. `accept` and the Options save write one row each, so both left the example. |
+| D3 | `architecture_system.md` Module Shape allows the guardrail's exception: an inherent impl lives in its type's file **or a folder named after the type** (`impl Storage` across `storage/`). |
+| D4 | `CONTEXT.md` **Pre-analysis state**: it belongs to a new Swipe of an analysed generation (a user regen keeps its start state), and an event Narration also marks its own one-shot Trigger fired in it. Verified against `SwipeState::pre_analysis` and `Job::generate`'s `Kind::UserRegen => start.clone()`. |
+| D5 | `CONTEXT.md` **Message**: "Each Narration has its own Swipe set" became "Each Message has its own Swipe set". |
+| D6 | Wrong layer: the dock-record reason ("a table of its own, because the config routes write the Game record with no busy check") moved from `storage.md` to `storage_design.md` Save units. `game_flow.md` lost the `Refusal` variant list with its codes and text, the lowercase status names, and the `JobPlan`/`GenerationOrder` field sentences (their names stay in one sentence). `two-state-channels.md` lost "Where each channel is read", the Channel A field list and "Each step sets it before it runs"; the reasons it keeps are busy-first and what a memory-only mark buys. `storage_design.md`'s "Two rules follow from the mutex" is one sentence: the reason (a unit holds the backend mutex for its whole run). |
+| D7 | `README.md`: "Action Pipeline" in the domain-language row became "Job". |
+| E1 | `storage.md` `TxToken`: "Its constructor is crate-private, and guardrail Rule 3 (call site) limits its callers to `GameWriter`'s registry and `test_support/`" — Rule 3 as `guardrails.md` names it. |
+| E2 | `game_flow.md`: a Game switch "moves the active-Game pointer and touches the Game's `updated_at`", which is what `ActiveGame::set` does (`touch_game_updated_at`), and why the newest-Game read can use that column. |
+| E3 | `browser_dashboard.md`: the four prose uses of "phase" (scenarios 16.13, 16.23, 16.28) are "step" now. **Reported, not changed:** the rendered text the tests assert is the client's status label ("Ready", "Thinking..."), and "phase" survives only as local variable and message names in `tests/browser/stub/{announcements,dashboard}.rs` and as a JS map name in `assets/dashboard-action-area.js`; no DOM attribute, class or endpoint text carries it. No scenario's assertion, number or tag changed. |
+| E4 | `tests/http/options.rs` module summary: "the always-on turn-end hook" became "the always-on Options run at the end of a Job". `scripts/generate_tests_structure_index.py` ran, so `tests/AGENTS.md` follows. |
+
+Checks on the final tree (focused, per the brief; no full gate).
+
+| Check | Log | Result |
+|---|---|---|
+| `python build.py fmt` | `logs/build_20261019_184400.log` | green (ran before the last doc edit; no Rust edit followed it) |
+| `python build.py clippy` | `logs/build_20261019_184145.log` | green |
+| `python build.py guardrails` | `logs/build_20261019_184154.log` | 189 passed |
+| `python build.py integration` | `logs/build_20261019_184223.log` | 1345 passed + 2 skipped (1347; the C7 tree had 1346, plus the new 24.22 test) |
+| `python build.py validate-docs` | `logs/build_20261019_184332.log` (and `logs/build_20261019_184359.log` after the last `rust_idioms.md` edit) | PASS, 0 errors |
+| `python build.py spec-coverage` | `logs/build_20261019_184333.log` | 289 declared, 289 covered, 0 gaps (288 before: scenario 24.22) |
+| `python build.py test-pattern "test_options_run_follows_a_failed_event_narration_http" --test-target http` | `logs/build_20261019_183632.log` (red, before the fix), `logs/build_20261019_183647.log` (green) | 0 passed / 1 failed, then 1 passed |
+
+Open, from the review and not part of this pass: `Message.is_deleted` and `StoredTriggerContext` stay open from C6, and the stop-versus-cancel design question of D-11 stands. The "Doc and code disagree" item on `AppState.shutdown_token` is resolved by B.

@@ -13,6 +13,8 @@ title: Storage
 - **`BackendKind`** selects `Direct` access or `Test` failure injection around one `Backend`.
 - **Decorator invariant.** `Test` wraps a single `Backend`, never another `BackendKind`. The storage seam therefore permits at most one `Test` layer at a time.
 
+The records of a Game's story (the Message and Swipe rows, the dock record and the failure line) run on SQLite. The `InMemory` backend holds none of them.
+
 ## Game Scoping
 
 Every game-scoped read and write takes its Game as the first argument, typed
@@ -23,21 +25,34 @@ process lives in `ActiveGame` (`application/games/active.rs`).
 `GameCatalogue` is the only reader and the only writer of `ActiveGame`.
 `CurrentGame` reads the active Game through `GameCatalogue` once per request.
 
+## Records of a Game
+
+| Record | Holds | Lives in |
+|---|---|---|
+| Game | The World, the Persona, the prompt presets, the always-on toggle, the names, and the **failure line** | `games` |
+| Message | The place in the story, its kind (typed Input, Impersonate Input, Narration or event Narration) and the active Swipe. An event Narration also holds its event record. | `messages` |
+| Swipe | The text, the stored inputs of its generation, the maker, the room report and the **Swipe state** | `message_swipes` |
+| Dock record | The offered set and at most one notice. A Game has one. | `game_docks` |
+
+No other record holds game state. The busy mark and the step name are not saved: the job entry in memory holds them.
+
+## Reads of the Story
+
+`Storage::stories()` and `Storage::docks()` return read handles. Each read names its Game.
+
+- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, and the entries of a window. It reads no more of the story than its answer needs.
+- **`DockReads`** (`docks.rs`) reads the dock record of a Game.
+
 ## Transactions
 
-`Storage::transaction` runs one **unit** of record writes. The unit holds the
-backend mutex for its whole run, so the closure of a unit makes no `Storage`
-call: such a call waits on the mutex the unit already holds.
+`Storage::transaction` runs one **save unit**: the record writes of one request. The unit holds the backend mutex for its whole run, so the closure of a unit makes no `Storage` call: such a call waits on the mutex the unit already holds.
 
-- **`Tx`** holds the record writes of one unit. It exists on SQLite only, the
-  backend tier 1 runs on.
-- **`TxWrite`** is the typed key of one record write. A write checks its key
-  before it writes, so a test can fail one write in the middle of a unit.
-- **`Storage::transaction_new_game`** opens a unit that creates a Game: it writes the Game
-  row first, so the writes that follow it in the same unit know the new Game.
+- **`Tx`** holds the record writes of one unit, and every record write exists only on `Tx`. It exists on SQLite only. A `Tx` serves one Game, so no write reaches another Game.
+- **`TxToken`** is the capability that opens a unit. Its constructor is crate-private, and guardrail Rule 3 (call site) limits its callers to `GameWriter`'s registry and `test_support/`.
+- **`TxWrite`** is the typed key of one record write. A write checks its key before it writes, so a test can fail one write in the middle of a unit.
+- **`Storage::transaction_new_game`** opens a unit that creates a Game: it writes the Game row first, so the writes that follow it in the same unit know the new Game.
 
-A unit lands **whole, or not at all**. A closure that fails and a closure that
-panics both roll the unit back.
+A unit lands **whole, or not at all**. A closure that fails and a closure that panics both roll the unit back.
 
 ## The Newest Game of a World
 
@@ -57,24 +72,20 @@ Settings occupy a singleton row in the `settings` table — the engine's only se
 - **`get_*`** returns an optional result when absence is a valid runtime state.
 - **`require_*`** returns a required result and turns absence into a typed error.
 
-## GameStateSnapshot
-
-`GameStateSnapshot` is a domain-owned DTO persisted by the storage layer. Snapshot JSON contains the serializable game-state subset; message history is persisted in `messages` and hydrated separately.
-
 ## Tables
 
 The schema has 11 tables, organized into three logical clusters:
 
-1. **Game state** — the runtime narrative and snapshot data, rooted at `games`.
+1. **Game state** — the story and the dock of a Game, rooted at `games`.
 2. **World catalogue** — the static world definitions and NPCs, rooted at `worlds`.
 3. **Standalone** — settings, prompt presets, and LLM call forensics; independent of any game or world.
 
 ### Game state cluster
 
-- **`games`** — top-level game session record.
-- **`game_state_snapshots`** — frozen point-in-time captures of the mutable game state.
-- **`messages`** — chronological narrative history. Each row is one log entry (player input, narration, system message), persisted incrementally. There is exactly one message history per game.
-- **`message_swipes`** — per-message swipe versions. A swipe also carries the player-typed inputs of its generation, so a retry of that swipe re-applies the same steering.
+- **`games`** — top-level game session record. It holds the failure line of the Game.
+- **`messages`** — the story of a Game in order. Each row is one Message, written by a save unit. There is exactly one story per game.
+- **`message_swipes`** — the Swipes of a Message. A Swipe holds the text, the stored inputs of its generation (so a Retry of that Swipe re-applies the same steering), the maker, the room report and its Swipe state.
+- **`game_docks`** — the dock record of a Game: the offered set and the notice.
 
 ### World catalogue cluster
 
@@ -95,17 +106,16 @@ The schema has 11 tables, organized into three logical clusters:
 ```mermaid
 flowchart TD
     games["games<br/>session record"]
-    snapshots["game_state_snapshots<br/>frozen state"]
-    messages["messages<br/>narrative history"]
-    swipes["message_swipes<br/>alternative generations"]
+    messages["messages<br/>the story"]
+    swipes["message_swipes<br/>texts and Swipe states"]
+    docks["game_docks<br/>dock record"]
 
-    games -->|"1 → ∞, cascades"| snapshots
     games -->|"1 → ∞, cascades"| messages
+    games -->|"1 → 1, cascades"| docks
     messages -->|"1 → ∞, cascades, UNIQUE(message_id, swipe_index)"| swipes
-    swipes -.->|"optional, not FK<br/>(message_swipes.snapshot_id → game_state_snapshots.id)"| snapshots
 ```
 
-- **`message_swipes.snapshot_id → game_state_snapshots.id`** — **not a SQL FK**, deliberately. Each swipe carries the snapshot of the state captured *after* the swipe was created; switching swipes restores that exact state. The retry flow depends on this relationship; referential integrity is the application's responsibility.
+A Swipe holds its own Swipe state, so a swipe switch needs no second record: the active Swipe of the last Message gives the current state.
 
 ### World catalogue cluster
 
@@ -129,15 +139,15 @@ Several relationships between clusters are **not** SQL foreign keys. Integrity f
 
 ## Messages
 
-The message aggregate has three pieces: `Message`, `Swipe`, and `MessageHistory`.
+The story has two pieces: `Message` and `Swipe`.
 
-- **`Message`** — a single narrative unit.
-- **`Swipe`** — one alternative generation for a `Message`. The content fields live on the Swipe.
-- **`MessageHistory`** — the ordered collection that owns the Messages.
+- **`Message`** — a single narrative unit. It holds the kind and the active Swipe.
+- **`Swipe`** — one text of a `Message`. The content fields live on the Swipe.
 
 Persistence mirrors this split: identity fields live on `messages`, and content fields live on `message_swipes`.
 
 ## Document References
 
 - [Storage design](../explanation/storage_design.md) — why the storage layer is shaped this way.
+- [Game Flow](./game_flow.md) — the Job that writes these records, and the writer rule.
 - [Startup and Bootstrap](./startup.md) — the bootstrap seeding that writes the first rows.

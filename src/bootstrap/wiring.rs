@@ -3,8 +3,6 @@
 
 use std::sync::Arc;
 
-use tokio_util::sync::CancellationToken;
-
 use crate::adapters::driven::llm::providers::{
     DeepSeekBackend, MockBackend, OllamaBackend, OpenRouterBackend,
 };
@@ -95,7 +93,6 @@ pub struct WiredApp {
     pub job_deps: JobDeps,
     pub text_check_service: Arc<TextCheckService>,
     pub connection_test_service: ConnectionTestService,
-    pub shutdown_token: CancellationToken,
 }
 
 fn build_wired_app(
@@ -106,7 +103,6 @@ fn build_wired_app(
     initial_game: Option<GameId>,
 ) -> Result<WiredApp> {
     let active_game = Arc::new(ActiveGame::new(Arc::clone(&storage)));
-    let shutdown_token = CancellationToken::new();
 
     let settings_service = SettingsService::new(Arc::clone(&storage));
     let prompt_preset_service = PromptPresetService::new(Arc::clone(&storage));
@@ -141,7 +137,6 @@ fn build_wired_app(
         job_deps,
         text_check_service,
         connection_test_service,
-        shutdown_token,
     })
 }
 

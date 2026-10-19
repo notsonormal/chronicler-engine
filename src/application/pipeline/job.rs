@@ -198,7 +198,12 @@ impl Job {
                 let event = Self::event_order(record, generated.at);
                 match self.generate(&event, None) {
                     Ok(generated) => saved_a_narration = generated.narration,
-                    Err(ended) => return self.failed(ended.into_event_failure(), options),
+                    // The Narration of the first generation already landed, so the
+                    // event generation's failure still leaves one for the Options run.
+                    Err(mut ended) => {
+                        ended.narration_saved |= saved_a_narration;
+                        return self.failed(ended.into_event_failure(), options);
+                    }
                 }
             }
         }

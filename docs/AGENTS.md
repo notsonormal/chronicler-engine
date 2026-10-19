@@ -26,7 +26,7 @@ Put each fact in exactly one layer:
 
 | A fact that is… | Lives in |
 |---|---|
-| The purpose of a part, its name, or an invariant: an always-true relation between named parts — what owns what, what restores what, how many of a part exist, where a part shows ("a swipe switch restores the Snapshot of the target Swipe", "role health is engine-wide", "settings is a singleton row") | Diátaxis Reference |
+| The purpose of a part, its name, or an invariant: an always-true relation between named parts — what owns what, what makes what current, how many of a part exist, where a part shows ("a swipe switch makes the target Swipe active", "role health is engine-wide", "settings is a singleton row") | Diátaxis Reference |
 | Why the system is that way | Diátaxis Explanation |
 | An event rule at feature level ("when X, then Y"), or a property that every request to one route keeps | A spec scenario, a spec section intro, or a spec's Properties section |
 | Fine-grained behaviour (a rule inside one part, such as how a function reads its input), edge cases, values, copy text, icons, markup, implementation steps | The code and its tests |
@@ -165,7 +165,7 @@ A backticked `path:line` citation (`` `foo.rs:42` ``) is a promise about a line 
 
 Where aggregate structure isn't obvious from reading the source sequentially, a relationships diagram earns its place. Use Mermaid `flowchart`, not `erDiagram`, not C4.
 
-- **`flowchart`** — boxes for tables/components, edges for relationships. Cardinality as edge labels (`"1 → ∞, cascades"`). Non-FK invariants as dashed edges (`-.->|"optional, not FK"|`) with prose labels. This is the only diagram type flexible enough to express both FK edges and application-enforced non-FK invariants (e.g. `message_swipes.snapshot_id → game_state_snapshots.id`, which is deliberately not a SQL FK).
+- **`flowchart`** — boxes for tables/components, edges for relationships. Cardinality as edge labels (`"1 → ∞, cascades"`). Non-FK invariants as dashed edges (`-.->|"optional, not FK"|`) with prose labels. This is the only diagram type flexible enough to express both FK edges and application-enforced non-FK invariants (e.g. `games.world_key → worlds.key`, which is deliberately not a SQL FK).
 - **Not `erDiagram`** — its strict cardinality markers (`||--o{`) handle FK edges but not non-FK invariants or independent tables cleanly, and its `{ column TYPE }` body blocks tempt re-adding column duplication.
 - **Not C4** — C4 primitives describe software components with tech stacks, not data tables. Using `Component()` for a table is a category error.
 
@@ -246,7 +246,7 @@ Don't describe a thing by what it isn't, and don't editorialize about absences i
 
 Two forms, both banned:
 
-- **Tautological negative definition** — e.g. "`Message` carries no `text`, `location_header`, `event_header`, or `snapshot_id` field" when the `Swipe` bullet just said `Swipe` holds those fields. The reader learns the same fact twice and the negative is the weaker copy. State what a thing *is*; the complement's own description carries the rest. A dedicated section that exists only to restate an invariant the Overview already established fails the compass test ("What problem does this solve for the reader?") — drop the section, keep the one-line positive where the reader first encounters the thing.
+- **Tautological negative definition** — e.g. "`Message` carries no `text`, `room_report`, `event_header`, or `state` field" when the `Swipe` bullet just said `Swipe` holds those fields. The reader learns the same fact twice and the negative is the weaker copy. State what a thing *is*; the complement's own description carries the rest. A dedicated section that exists only to restate an invariant the Overview already established fails the compass test ("What problem does this solve for the reader?") — drop the section, keep the one-line positive where the reader first encounters the thing.
 - **Defensive scope disclaiming** — e.g. "X is not an external system", "X is not in scope", "State mutation via LLM function calling is out of scope for this reference". Diagrams and Out-of-scope lists are the source of truth for what's external; if something isn't in the diagram, it isn't in scope. Don't keep the disclaimed thing alive in the reader's mind with parallel negation. Inspirations belong in the explanation doc for the thing they inspired, not in negative asides on unrelated docs.
 
-If the negative is a constraint the reader must know, state it as a **positive constraint**, not a disclaimer. "The LLM cannot call back into the engine" becomes "state mutation is the engine's job, run through the action pipeline after the LLM has spoken." The reader gets the same fact as an assertion about how the system behaves, not as an apology about what it doesn't do.
+If the negative is a constraint the reader must know, state it as a **positive constraint**, not a disclaimer. "The LLM cannot call back into the engine" becomes "state mutation is the engine's job, run by the Job after the LLM has spoken." The reader gets the same fact as an assertion about how the system behaves, not as an apology about what it doesn't do.

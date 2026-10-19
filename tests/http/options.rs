@@ -1,4 +1,4 @@
-//! HTTP E2E tests for options-autogeneration: on-demand /options, the always-on turn-end hook, and response-shape parsing.
+//! HTTP E2E tests for options-autogeneration: on-demand /options, the always-on Options run at the end of a Job, and response-shape parsing.
 
 use std::sync::Arc;
 
@@ -8,15 +8,16 @@ use chronicler_engine::domain::model::settings::{AppSettings, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    analysis_report, configured_runner_without, ScriptedModel, TestAppBuilder, TestDataBuilder,
-    TestMap, TestWorld,
+    analysis_report, configured_runner_without, ModelRole, ScriptedModel, TestAppBuilder,
+    TestDataBuilder, TestMap, TestWorld,
 };
 
 use crate::support::app_wiring::{app_with_script, app_with_script_and_agents};
-use crate::support::http_assertions::{defined_icons, referenced_icons};
+use crate::support::http_assertions::{defined_icons, referenced_icons, status_error_message};
 use crate::support::http_fixtures::{if_world, seed_offered_set};
 use crate::support::http_requests::{
-    fetch_body, post_action, post_action_check, post_empty, post_form, wait_settled,
+    fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
+    wait_settled,
 };
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -491,6 +492,82 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
         dock_notice(&app).await.as_deref(),
         Some("Options agent is not available"),
         "the dock must name the unavailable agent once: {dock}"
+    );
+}
+
+// [docs/specs/options.md] SCENARIO: 24.22
+#[tokio::test]
+async fn test_options_run_follows_a_failed_event_narration_http() {
+    use chronicler_engine::domain::model::character::NpcCard;
+    use chronicler_engine::domain::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
+    use chronicler_engine::test_support::TestPersona;
+
+    let (app, state, storage) = app_with_script(
+        ScriptedModel::new()
+            .narration("You examine the guard.")
+            .analysis(analysis_report(&["npc_1"], None))
+            .failed(ModelRole::Event)
+            .options(SET_A),
+    );
+    let world_id = storage
+        .seed_world(&always_on_world(), &TestMap::single_room("start"))
+        .expect("seed always-on world");
+    let npc = NpcCard {
+        id: "npc_1".to_string(),
+        sheet: TestPersona::standard().sheet,
+        inventory: vec![],
+        triggers: vec![Trigger {
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
+            narration: TriggerNarration {
+                name: "Greeting".to_string(),
+                narration_prompt: "The guard greets you.".to_string(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    };
+    storage
+        .seed_character(world_id, &npc)
+        .expect("seed the Character of the Trigger");
+    create_game(&app, "always_on_world").await;
+
+    let resp = post_action(&app, "examine the npc").await;
+    assert!(resp.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the Action should complete"
+    );
+
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "the Options run must follow the Narration the failed event step kept"
+    );
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert!(
+        dock.contains("options-strip"),
+        "the dock must render the fresh set: {dock}"
+    );
+    assert_eq!(
+        dock_notice(&app).await,
+        None,
+        "the Options run succeeded, so the dock shows no notice: {dock}"
+    );
+
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("The event narration failed."),
+        "the failure line must name the failed event narration, got: {status}"
+    );
+    assert!(
+        !status_error_message(&status).is_empty(),
+        "the failure display must hold the failed call's own line, got: {status}"
     );
 }
 

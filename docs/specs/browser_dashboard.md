@@ -59,10 +59,10 @@ And the command input accepts and submits a new command with no reload
 #### Scenario 16.13: The send preview opens beside the status display
 
 ```gherkin
-Given a generation is running and the status display shows its phase
+Given a generation is running and the status display shows its step
 When the client submits a command the preview intercepts
 Then the preview is open
-And the status display is still in the document and still shows the phase
+And the status display is still in the document and still shows the step
 ```
 
 #### Scenario 16.15: Focus moves into the preview and back to the command input
@@ -157,9 +157,9 @@ And that disclosure names each role with its backend and model
 
 ```gherkin
 Given the dashboard is loaded and idle
-When the status display shows a generation phase
-Then a polite region announces that phase
-And the phase is not announced again while it is unchanged
+When the status display shows a generation step
+Then a polite region announces that step
+And the step is not announced again while it is unchanged
 When the generation fails
 Then an assertive region announces the error's short line but not its raw text
 When the generation finishes
@@ -212,7 +212,7 @@ And the banner is still up
 #### Scenario 16.28: The status poll leaves generating and re-enables Send
 
 ```gherkin
-Given the dashboard is loaded and the status poll reports a generation phase
+Given the dashboard is loaded and the status poll reports a generation step
 Then #status-display shows a generating state
 And #submit-btn is disabled
 When the status poll reports idle

@@ -32,7 +32,7 @@ Examples:
 - `src/application/narration/narrator.rs` ↔ `src/application/narration/narrator_tests.rs` (unit test mirror)
 - `src/application/games/catalogue.rs` ↔ `src/application/games/catalogue_tests.rs` (unit test mirror)
 - `src/adapters/driving/http/action/handlers/actions.rs` ↔ `tests/http/actions.rs` (http test binary mirrors the http subset)
-- `src/adapters/driven/storage/db.rs` ↔ `tests/storage/story_storage.rs` (driven-adapter storage seam)
+- `src/adapters/driven/storage/stories.rs` ↔ `tests/storage/story_storage.rs` (driven-adapter storage seam)
 
 ## Seam recipes
 
@@ -89,7 +89,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `llm_messages.rs` — HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders.
     - `mod.rs` — HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, and server wiring.
     - `narrator_mode.rs` — HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
-    - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on turn-end hook, and response-shape parsing.
+    - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on Options run at the end of a Job, and response-shape parsing.
     - `prompt_presets.rs` — HTTP E2E tests for the prompt-presets endpoints.
     - `races.rs` — HTTP E2E tests for the write path while a Job runs: the races (actions.md 3.4, 3.5; options.md 24.21), the stop at each model call (dashboard.md 39.4, 39.5), the reset (reset.md 7.3), the Job of another Game (games.md 18.4), the edit, delete and swipe switch (story_log.md 8.7; swipe_switch.md 36.3), and the preset an event Narration uses (actions.md 6.4).
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).

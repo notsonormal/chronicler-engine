@@ -5,7 +5,7 @@ title: Rust Idioms
 
 ## Concrete services and backend enum dispatch
 
-`ActionPipeline` and the catalogue/gate collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum — `Sqlite` or `InMemory` — plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the `AgentRunner`'s `Box<dyn AnalysisAgent>` for heterogeneous agent dispatch).
+`Job`, `GameWriter` and the catalogue collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum — `Sqlite` or `InMemory` — plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the `AgentRunner`'s `Box<dyn AnalysisAgent>` for heterogeneous agent dispatch).
 
 Backend switching travels through enum-variant dispatch. Tests construct an in-memory backend by selecting the enum variant; production constructs the SQLite backend the same way; the surrounding code is the same struct. Each call site reads the same concrete type; the polymorphism lives at the switch sites that consume the enum, which avoids threading a type parameter through the application to make storage polymorphic.
 
@@ -13,9 +13,9 @@ The convention fits the constraint that Rust 2024 edition makes async-trait disp
 
 ## LLM-call offload via spawn_blocking
 
-Synchronous services (`ActionPipeline` and its collaborators) run inside `tokio::task::spawn_blocking`. The offload happens inside `ActionPipeline`'s spawn path (`tokio::task::spawn_blocking`); HTTP handlers reach it through `ActionPipeline::process_action` on the `AppState.pipeline` field. The pipeline instance is built once at startup and shared through an `Arc`, so the handler submits work to the same pipeline across requests.
+Synchronous services (`Job` and its collaborators) run inside `tokio::task::spawn_blocking`. `Job::start` accepts the request and spawns the Job on the blocking pool. HTTP handlers reach it through the `game_writer` and `job_deps` fields of `AppState`. The `JobDeps` are built once at startup and shared through `Arc`s, so each handler starts its Job on the same narrator, Agent runner and storage.
 
-The offload buys separation between the Axum event loop, which stays responsive, and the LLM network call, which can take seconds. The synchronous service code is unchanged; the handler hands the blocking call to a Tokio blocking pool, returns immediately, and the caller awaits the response on the future the pool returns. Latency from one slow LLM call does not back up unrelated handlers; the synchronous service code runs unchanged inside the blocking pool.
+The offload buys separation between the Axum event loop, which stays responsive, and the LLM network call, which can take seconds. The handler gets its answer when the accept succeeds, and the Job runs on after the response. Latency from one slow LLM call does not back up unrelated handlers; the synchronous service code runs unchanged inside the blocking pool.
 
 ## Settings resolution at the read site
 
@@ -29,16 +29,18 @@ Every `Mutex` and `RwLock` site in the engine recovers from a poisoned lock by c
 
 A panic while holding the lock is a definite bug — the previous code path exited abnormally — but the engine treats the next holder as legitimate. `.into_inner()` consumes the poisoned `Result` and yields the guarded value; the type is unchanged; the next holder sees the state as the previous holder left it and proceeds. The convention holds at every site with a single consistent shape; `tests/test_utils/server.rs`'s `buffer_text` shows it.
 
-## Shutdown gate at the spawn boundary
+## Cancellation of a Job
 
-Shutdown is signalled through a `CancellationToken` on `AppState`. The token is read at the application layer rather than at the HTTP handler entry. Retry, retrigger, and process-action all check the token twice: a top-of-function `is_shutting_down()` guard captures the snapshot and returns early before the spawn (the caller skips the spawn on shutdown), and the spawn_blocking closure reads the token again before the pipeline runs. The check does not live inside phase functions; long-running pipelines perform an in-phase game-id α-check (`PipelineRun::check_game_unchanged(started_for)`) at three internal boundaries instead, which is *behavioural* rather than runtime.
+A Job cancels through the handle in its job entry. A stop, a reset and a delete of its Game cancel the handle. The Job checks it before each step, so a cancelled Job starts no further step.
 
-The boundary reading keeps phase functions pure: phases operate on `GameState`, not on runtime signals. The shutdown check is a runtime concern at the driving adapter, not a domain concern in the pipeline. The α-check inside the pipeline covers the case where the request started before shutdown was signalled but the LLM call is still in flight when the signal arrives — the pipeline notices that the game id it was started for no longer matches the registry, and bails. The two checks together cover request-arrival and pipeline-in-flight; nothing needs to be cancelled from inside a phase.
+A cancel can reach a Job while an LLM call runs, and the call returns after it. The job id check covers that case: each save of the Job compares its id with the job entry of the Game, and a cancelled Job has no entry. The check refuses the save, and the Job ends with no write. The Job code stays synchronous, because a late answer cannot change a record.
+
+The server stops accepting requests when the process receives the shutdown signal, and it serves the requests it already holds until they end.
 
 ## Document References
 
 - `../reference/architecture_system.md` — tier map (the canonical home for the settings resolution shape) + invariant identifiers.
 - `../reference/coding_standards/guardrails.md` — the static guardrail layers (clippy, arch-lint, syn-based convention tests) that enforce the conventions above.
 - `../reference/narrative/narration_system.md` — LLM connections and their token caps, including the `max_context_tokens` context window.
-- `../reference/game_flow.md` — pipeline cancellation shape (the in-phase α-check that lives inside the pipeline rather than at the boundary).
+- `../reference/game_flow.md` — the Job, its job entry and the writer rule that the cancellation above relies on.
 - `../explanation/architecture.md` [§Architectural commitments](../explanation/architecture.md#architectural-commitments) — the quality attributes the conventions above guarantee.

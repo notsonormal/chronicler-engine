@@ -14,8 +14,8 @@ Endpoints:
 Given a Game whose story log holds only its opening Narration
 And an LLM backend that returns "You see a small wooden room." for any narration prompt
 When the client POST /action with command="look"
-And the pipeline returns to idle (status not generating)
-Then the message history gained exactly 2 messages:
+And the Game is no longer busy (status not generating)
+Then the story log gained exactly 2 messages:
   - one player-input message whose text is "look"
   - one Narration message whose text is "You see a small wooden room."
 And the generation status is Idle
@@ -27,9 +27,9 @@ And the generation status is Idle
 Given a Game whose story log holds only its opening Narration
 And an LLM backend that returns "It is a small wooden room." for the narration prompt
 When the client POST /action with command="examine the room"
-And the pipeline returns to idle
-Then the message history gained 2 messages
-And the player-input message appears in the message history before the Narration message
+And the Game is no longer busy
+Then the story log gained 2 messages
+And the player-input message appears in the story log before the Narration message
 And the player-input message's text is "examine the room"
 And the Narration message's text is "It is a small wooden room."
 And the generation status is Idle
@@ -43,9 +43,9 @@ And the current room's NPCs include "npc_1"
 And a quantifier backend that responds with {"npcs_in_room": ["npc_1"]} for the quantifier prompt
 And a narrator backend that returns valid narration for both main and trigger prompts
 When the client POST /action with command="enter the shop"
-And the pipeline returns to idle
-Then the message history holds at least one Narration message carrying an event header (the trigger fired)
-And the message history holds at least 2 Narration messages in total (main + trigger continuation)
+And the Game is no longer busy
+Then the story log holds at least one Narration message carrying an event header (the trigger fired)
+And the story log holds at least 2 Narration messages in total (main + trigger continuation)
 And the generation status is Idle
 ```
 
@@ -55,8 +55,8 @@ And the generation status is Idle
 Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns "The scene continues." for the continuation prompt
 When the client POST /action with command="" (empty)
-And the pipeline returns to idle
-Then the message history gained exactly one Narration message (a continuation, with no player-input message)
+And the Game is no longer busy
+Then the story log gained exactly one Narration message (a continuation, with no player-input message)
 And that Narration message's text is "The scene continues."
 And the generation status is Idle
 ```
@@ -68,7 +68,7 @@ Given a game state with an NPC "gabriella" present in the current room
 And a quantifier backend that returns [] for the first quantifier call then ["gabriella"] for the second
 And a narrator backend that returns valid narration for both main and trigger prompts
 When the client POST /action with command="enter shop"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the scene's NPCs include "gabriella"
 And the player has met "gabriella" once
 And the player is currently meeting "gabriella"
@@ -82,8 +82,8 @@ And the NPC has no triggers
 And a quantifier backend that returns {"npcs_in_room": ["bartender"]} for the quantifier prompt
 And a narrator backend that returns "The bartender nods." for the main narration prompt
 When the client POST /action with command="talk to bartender"
-And the pipeline returns to idle
-Then the message history holds at least one Narration message
+And the Game is no longer busy
+Then the story log holds at least one Narration message
 And no Narration message carries an event header (no trigger fired)
 And the generation status is Idle
 ```
@@ -96,9 +96,9 @@ And the current room's NPCs include "shopkeeper"
 And a quantifier backend that returns {"npcs_in_room": ["shopkeeper"]} for every quantifier call
 And a narrator backend that returns valid narration for both main and trigger prompts
 When the client POST /action with command="talk to shopkeeper"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client POST /action with command="talk to shopkeeper"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then at most one Narration message carries an event header (the trigger fires at most once)
 And the generation status is Idle
 ```
@@ -111,11 +111,11 @@ And a map whose rooms are "room_1" and "room2"
 And a quantifier backend that moves the player to "room2" for the first Action and reports no movement for the second
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="walk north"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the Action's Narration message reports the room "Room room2"
 And the player-input message reports no room
 When the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the second Action's Narration message reports no room
 And that Action's player-input message reports no room
 ```
@@ -128,9 +128,9 @@ And that Action's player-input message reports no room
 Given a game state where the player stands in a room that does not exist
 And the story log holds only its opening Narration
 When the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is an error whose text indicates the room is invalid
-And the message history gained no Narration message
+And the story log gained no Narration message
 ```
 
 #### Scenario 2.2: LLM transport failure reports an error
@@ -139,7 +139,7 @@ And the message history gained no Narration message
 Given a Game whose story log holds only its opening Narration
 And an LLM backend configured to fail (returns an error for the narration request)
 When the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is an error whose text is non-empty
 ```
 
@@ -150,7 +150,7 @@ Given a game state with an NPC "npc_1" whose Trigger fires on the first meeting
 And a quantifier backend that returns {"npcs_in_room": ["npc_1"]}
 And a narrator backend that succeeds for the main prompt but fails for the trigger prompt
 When the client POST /action with command="examine the npc"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is an error whose text is "The event narration failed."
 And the status error's disclosure holds the failure line of the narrator call
 And the story log gained no entry for the failure and still ends in the main Narration
@@ -164,7 +164,7 @@ Given a game state with an NPC "npc_1" in the current room
 And a narrator backend that returns a non-empty narration for any prompt
 And a quantifier backend that either fails every call or answers on both attempts with text that is not a room report and names no known NPC
 When the client POST /action with command="look"
-And the pipeline returns to idle
+And the Game is no longer busy
 Then the generation status is Idle
 And the scene's NPCs still include "npc_1"
 ```
@@ -184,7 +184,7 @@ And the raw error text is reachable only inside that response's disclosure
 
 ### Concurrency
 
-#### Scenario 3.3: Delayed LLM response does not deadlock the pipeline
+#### Scenario 3.3: A delayed LLM response does not leave the Game busy
 
 ```gherkin
 Given a fresh game state
@@ -200,8 +200,8 @@ And within 2 s, the generation status is no longer Generating
 Given a Game whose Job is running, held inside its narrator call
 When a client POST /action with command="listen"
 Then the response is 200 carrying the "Still thinking..." status
-And the message history gained no player-input message for "listen"
-And the message history gained no Narration message for "listen"
+And the story log gained no player-input message for "listen"
+And the story log gained no Narration message for "listen"
 ```
 
 #### Scenario 3.5: Two clients POST the same Action at the same moment and one Action is accepted
@@ -222,13 +222,13 @@ And the story log holds the opening Narration and exactly one Narration of that 
 Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client POST /action with command="look around"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client POST /action with command="check inventory"
-And the pipeline returns to idle
-Then the message history gained exactly 3 player-input messages
-And the message history holds at least 3 Narration messages (one per action)
+And the Game is no longer busy
+Then the story log gained exactly 3 player-input messages
+And the story log holds at least 3 Narration messages (one per action)
 And each player-input message's text matches its submitted command, in order
 ```
 
@@ -238,13 +238,13 @@ And each player-input message's text matches its submitted command, in order
 Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client POST /swipe/new (retry)
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client POST /action with command="look around"
-And the pipeline returns to idle
-Then the message history gained exactly 2 player-input messages
-And the message history holds at least 2 Narration messages
+And the Game is no longer busy
+Then the story log gained exactly 2 player-input messages
+And the story log holds at least 2 Narration messages
 ```
 
 #### Scenario 6.3: Async action sequence then retry completes with two inputs persisted
@@ -253,12 +253,12 @@ And the message history holds at least 2 Narration messages
 Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="hello"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client POST /action with command="examine room"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client POST /swipe/new (retry)
-And the pipeline returns to idle
-Then the message history gained exactly 2 player-input messages
+And the Game is no longer busy
+Then the story log gained exactly 2 player-input messages
 ```
 
 #### Scenario 6.4: The event Narration's call uses the preset that is active when it runs
@@ -280,8 +280,8 @@ And the LLM call record of the Narration shows the system prompt of the preset t
 Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="/impersonate hello"
-And the pipeline returns to idle
-Then the message history gained exactly one player-input message
+And the Game is no longer busy
+Then the story log gained exactly one player-input message
 And no player-input message's text is "/impersonate hello"
 And the generation status is Idle
 ```
@@ -292,9 +292,9 @@ And the generation status is Idle
 Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="/guide look around"
-And the pipeline returns to idle
-Then the message history gained at least one Narration message
-And the message history gained no player-input message
+And the Game is no longer busy
+Then the story log gained at least one Narration message
+And the story log gained no player-input message
 And the generation status is Idle
 ```
 
@@ -307,12 +307,12 @@ And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action/check with command="/guide look at the casle" (a deliberate misspelling the spell check would flag)
 Then the response contains no text-check preview
 And the guide action is dispatched directly
-And the pipeline returns to idle
+And the Game is no longer busy
 And a narration message has created scene history
 When the client POST /action/check with command="/options" (an engine command the dispatch layer handles)
 Then the response contains no text-check preview
 And the options action is dispatched directly
-And the pipeline returns to idle
+And the Game is no longer busy
 When the client POST /action/check with command="look at the casle" (same words, plain input)
 Then the response contains a text-check preview
 ```
@@ -331,7 +331,7 @@ And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action/confirm with that command
 Then the response is the status fragment alone, not the action area or the command form
 And the response retargets #status-display
-And the pipeline returns to idle
+And the Game is no longer busy
 ```
 
 The confirm path is the preview's send: it dispatches the checked command
@@ -343,9 +343,9 @@ reflects the running generation.
 These properties hold across every `POST /action` and are observable
 through HTTP. Drift indicates a regression even if all scenarios pass.
 
-- **I.1** After the pipeline returns to idle, the generation status is
-  Idle or an error — never stuck Generating.
-- **I.2** A player-input message always appears in the message history
+- **I.1** A Job always ends: the generation status then reads Idle or an
+  error, never a step.
+- **I.2** A player-input message always appears in the story log
   before its associated Narration message (the input is persisted first).
 - **I.3** No scenario produces more than one main Narration message
   per `POST /action` call (trigger continuations are separate

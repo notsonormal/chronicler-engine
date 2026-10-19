@@ -5,9 +5,9 @@ title: Agent System Design
 
 ## The agent abstraction
 
-Each agent implements a hook trait: `AnalysisAgent` or `OptionsAgent`. The `AgentRunner` holds the set that the bootstrap wired in. The analysis hook iterates over the analysis Agents in the runner, including the empty set. The Options hook holds at most one Agent. The pipeline runs correctly with zero agents configured.
+Each agent implements a hook trait: `AnalysisAgent` or `OptionsAgent`. The `AgentRunner` holds the set that the bootstrap wired in. The analysis hook iterates over the analysis Agents in the runner, including the empty set. The Options hook holds at most one Agent. A Job runs correctly with zero agents configured.
 
-The trait-plus-runner shape keeps the pipeline indifferent to which post-processing concerns exist. Adding an agent of a known type is a wiring change in bootstrap; a new agent type also needs an arm in `AgentRunner::from_configs`. Removing one is removing it from the runner. Reordering is changing the iteration order. None of these changes require editing the pipeline itself. Each hook has one output type. The compiler rejects an Agent whose answer the hook cannot save.
+The trait-plus-runner shape keeps the Job indifferent to which post-processing concerns exist. Adding an agent of a known type is a wiring change in bootstrap; a new agent type also needs an arm in `AgentRunner::from_configs`. Removing one is removing it from the runner. Reordering is changing the iteration order. None of these changes require editing the Job itself. Each hook has one output type. The compiler rejects an Agent whose answer the hook cannot save.
 
 ## Per-agent LLM backends
 
@@ -27,7 +27,7 @@ The quantifier prompt returns a JSON object with two fields: `npcs_in_room` (the
 
 Presence detection and transition reasoning are different jobs. Presence detection is structured extraction over a fixed schema: the model names the NPCs it can see in the scene. Transition reasoning would require the model to track prior state across calls and infer who moved since the last result, which is less reliable than a set diff the engine computes over two lists it already holds. Asking the model for the harder job would couple observation and inference in the same call.
 
-The orchestration layer couples the quantifier call to the NPC reconciliation step: the engine remembers the previous result, diffs the two lists, and feeds the resulting events into the trigger pipeline. The deterministic source of truth for NPC transitions is the diff, which runs over inputs the engine already holds.
+The game rules couple the quantifier result to the NPC reconciliation step: they diff the Characters present in the start state against the new list and apply the resulting events to the encounter records. The deterministic source of truth for NPC transitions is the diff, which runs over inputs the engine already holds.
 
 ## Document References
 

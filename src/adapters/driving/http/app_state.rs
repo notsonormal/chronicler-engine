@@ -2,7 +2,6 @@
 //! Application state and HTTP fragment rendering.
 
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 
 use askama::Template;
 
@@ -37,7 +36,6 @@ pub struct AppState {
     pub persona_catalogue: PersonaCatalogue,
     pub text_check_service: Arc<TextCheckService>,
     pub connection_test_service: ConnectionTestService,
-    pub shutdown_token: CancellationToken,
     pub game_writer: GameWriter,
     pub job_deps: JobDeps,
     pub game_catalogue: GameCatalogue,
@@ -53,7 +51,6 @@ impl AppState {
             persona_catalogue: wired.persona_catalogue,
             text_check_service: wired.text_check_service,
             connection_test_service: wired.connection_test_service,
-            shutdown_token: wired.shutdown_token,
             game_writer: wired.game_writer,
             job_deps: wired.job_deps,
             game_catalogue: wired.game_catalogue,
