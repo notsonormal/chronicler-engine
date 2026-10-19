@@ -23,6 +23,7 @@ Labels: wayfinder:map
 - [P3: `SwipeState` and the game rules](issues/04-p3-swipe-state-and-game-rules.md) — built and merged; `apply_game_rules` takes a `GameRuleRequest` and returns `Result<GameRulesOutcome>`; the wrappers keep the story writes and the old error-path order.
 - [P4: the Agent edge on values](issues/05-p4-agent-edge-on-values.md) — built and merged in two commits; the preset and budget reads stay in the pipeline (rule 11); the Options agent struct is `OptionsGeneratorAgent`; 15 prompting helper tests stay legacy (owner item).
 - [P5: the storage `Tx`](issues/06-p5-storage-tx.md) — built and merged in two commits; tier 1 runs on SQLite `:memory:`; 5 target tests are red and ignored until C5; the Job-task tracker moves to the Job runner in the core step.
+- [The core step (C1 to C7)](issues/07-core-step.md) — built in seven commits and resolved before the merge to `main` (owner); merged into `wf/rebuild-review` for a review of the whole rebuild; migration v28 deletes saved Games; follow-ups are tickets 09 to 12.
 
 ## Not yet specified
 

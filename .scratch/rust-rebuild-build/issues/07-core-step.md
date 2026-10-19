@@ -1,7 +1,7 @@
 # The core step (C1 to C7)
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 06
 
 ## Question
@@ -885,4 +885,26 @@ Open, from the review and not part of this pass: `Message.is_deleted` and `Store
 - **Fixed in this session.** `validate_docs.py` now checks the source paths of the root docs (`04c9180d`); `tests/STRATEGY.md` states when a production method may exist only for tests (`04c9180d`); `simple-after-plan` runs the full gate once; `AGENTS.md` holds the delegation rules for the new roles (`c05e2395`).
 - **Filed in `.scratch/retro-issue-bucket/`:** 51 (a design-rule branch without a test), 52 (the comment pass deletes real reasons), 53 (focused checks that miss a binary), 54 (a scenario's Given a client can reach), 55 (a tier-1 assertion that reads state nothing writes), 56 (ticket edit lists built from memory).
 - **Owner items still open after the core step:** the 15 legacy prompting tests; the Connection form's context-window field; `build.py test-pattern` cannot run ignored tests; a stop does not cancel a running model call; bucket ticket 50 (the plan says C4 delivered it, and the owner changes its status).
-- **Merge.** The owner asked for a holistic review before `main`. The branch merges into a review branch in its own worktree, not into `main`. This ticket stays `claimed` until the merge into `main`.
+- **Merge.** The owner asked for a holistic review before `main`. The branch merges into a review branch in its own worktree, not into `main`. The owner closed this ticket on 2026-10-19 before the merge into `main` (see the Answer).
+
+## Answer
+
+The core step is built on `wf/rebuild-core` in seven commits, and the retro is committed. Target design version 2 runs in the crate.
+
+- **C1** `622d5a5e`: the new records next to the old ones (migration v27, `Tail`, `DockRecord`, `Step`, the story and dock reads, `Tx` bound to one Game).
+- **C2** `fcbe318f`: `GameWriter`, `JobWriter` and the job registry in `application/generation/gate.rs`.
+- **C3** `959ca7d6`: the Job and the parts of a generation in `application/pipeline/job.rs`.
+- **C4** `51efaafc`: the switch of every route to the Job and `GameWriter` (tier 1 red on purpose).
+- **C5** `8a8ba6bb`: tier 1 arranges through the public write path and is green; every target test of §9.1 is un-ignored and was checked against a wrong expectation.
+- **C6** `36a1e1c7`: the deletions (Snapshot, `GameState`, `MessageService`, the old pipeline and gate) and migration v28, which deletes the saved Games; the rule-13 row; `GameWriter::delete`.
+- **C7** `4eeadba2`: the docs and `CONTEXT.md`; a fix found by the doc review (the Options run follows a failed event Narration, scenario `options.md` 24.22).
+- **Retro** `48553d10`: findings filed as retro-bucket tickets 51 to 56.
+
+Last full gate: `logs/build_20261019_184434.log` (guardrails 189, integration 1345 + 2 skipped, browser 29). No `#[ignore]` from §9.1 is left, and the §9.7 search finds the Snapshot names only in the migration history.
+
+**Done-when against the Answer.** Two items of Done-when are not met, and the owner closed the ticket anyway (2026-10-19), so that the follow-up tickets do not wait on it:
+
+- The branch has **not** merged to `main`. It merged with `--no-ff` into `wf/rebuild-review` (`927405bc`, worktree `/workspace/chronicler-engine-rebuild-review`) for a review of the whole rebuild. The merge into `main` follows that review.
+- The owner has not yet approved the last commit; the review branch is where that happens.
+
+**Follow-ups:** [Move or delete the 15 legacy prompting tests](09-legacy-prompting-tests.md), [Decide if the Connection form sets the context window and the answer budget](10-connection-form-budget-fields.md), [Close or fix: `build.py test-pattern` cannot run ignored tests](11-test-pattern-ignored-tests.md), [Decide if a stop cancels a running model call](12-stop-cancels-the-model-call.md). Recorded decisions that stay as they are: the boot's own `GameWriter`, the Game config writes on `Storage`, the test-only reads `GameViewQuery::story_messages` and `Narrator::recorder`, `Notice.reason` as a `String`, the event Narration's maker `Narrator`.
