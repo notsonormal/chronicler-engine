@@ -24,9 +24,14 @@ Labels: wayfinder:map
 - [P4: the Agent edge on values](issues/05-p4-agent-edge-on-values.md) — built and merged in two commits; the preset and budget reads stay in the pipeline (rule 11); the Options agent struct is `OptionsGeneratorAgent`; 15 prompting helper tests stay legacy (owner item).
 - [P5: the storage `Tx`](issues/06-p5-storage-tx.md) — built and merged in two commits; tier 1 runs on SQLite `:memory:`; 5 target tests are red and ignored until C5; the Job-task tracker moves to the Job runner in the core step.
 - [The core step (C1 to C7)](issues/07-core-step.md) — built in seven commits and resolved before the merge to `main` (owner); merged into `wf/rebuild-review` for a review of the whole rebuild; migration v28 deletes saved Games; follow-ups are tickets 09 to 12.
+- [Move or delete the 15 legacy prompting tests](issues/09-legacy-prompting-tests.md) — option D (owner): prompting is inside the Narrator box; the 15 tests are deleted and the new case `narrator-history-cap` pins the history cap.
+- [Decide if the Connection form sets the context window and the answer budget](issues/10-connection-form-budget-fields.md) — option B (owner): the form sets the context window only; empty means the provider default, any positive integer is valid, a provider change keeps an explicit value.
+- [Close or fix: `build.py test-pattern` cannot run ignored tests](issues/11-test-pattern-ignored-tests.md) — option A (owner): closed; no ignored test is left outside `tests/llm/`; the next plan that parks red tests adds the flag.
+- [Decide if a stop cancels a running model call](issues/12-stop-cancels-the-model-call.md) — option C (owner): a call that runs ends on its own, and the id check refuses its answer; `game_flow.md` states the limit.
 
 ## Not yet specified
 
 ## Out of scope
 
 - The efforts of plan §10 ("Past the build").
+- A streaming LLM transport with a real cancel of a running call. A non-streaming call cannot save tokens on a stop with every provider ([Decide if a stop cancels a running model call](issues/12-stop-cancels-the-model-call.md)).

@@ -1,7 +1,7 @@
 # Close or fix: `build.py test-pattern` cannot run ignored tests
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -18,3 +18,10 @@ Recommendation (inferred): A. Reopen it with the next plan that parks red tests.
 ## Context
 
 - Source: P5 ([P5: the storage Tx](06-p5-storage-tx.md), owner item 1 of its retro), repeated in the core step's retro ([The core step](07-core-step.md)).
+
+## Answer
+
+Option A (owner, 2026-10-19): close it. `build.py` stays as it is.
+
+- Check (known): no `#[ignore]` is left in `src/` or `tests/` outside `tests/llm/`. `build.py` already passes `--run-ignored all` for the LLM runs.
+- Reopen trigger: the next plan that parks red target tests behind `#[ignore]`. That plan adds a `--run-ignored` flag to `test-pattern` in its first slice.

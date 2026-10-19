@@ -1,7 +1,7 @@
 # Decide if a stop cancels a running model call
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -16,3 +16,12 @@ Target design D-11 says a stop cancels the model call "when it can". Today it ca
 
 - Source: core step C3 ([The core step](07-core-step.md)): "a stop does not cancel a running model call because `Narrator::narrate` has no cancel handle (D-11 'when it can')". The C7 doc review confirmed that the docs state the code as it is.
 - Design: `.scratch/turn-state-model/assets/target-design.md`, D-11.
+
+## Answer
+
+Option C (owner, 2026-10-19): leave it. A stop does not cancel a model call that runs. D-11 "when it can" allows this.
+
+- **Facts checked (known):** `Job::require_alive` checks the cancel handle before each step. After a stop, at most one model call that already runs goes on to its end, and the Job starts no further call. The stop removes the job entry, so the Game is idle at once and a new Job can start. The id check refuses the late answer.
+- **Reason:** every request is non-streaming. Not every provider stops the model when the client disconnects (guessed: Ollama stops; OpenRouter documents a cancel for streamed requests only). Option A changes the `LlmProvider` port, 4 providers, `LlmRecorder`, the Narrator, both Agents and the test fakes, and it may still save no tokens.
+- **Done:** `docs/diataxis/reference/game_flow.md`, section "Stop and Reset", states the limit: "A model call that runs when the stop comes runs to its end, and the id check refuses its answer."
+- **Out of scope:** a streaming transport with a real cancel of the call. It is an effort after the build, and it is recorded on the map.

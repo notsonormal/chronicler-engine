@@ -68,7 +68,7 @@ The status of a Game has one rule. A busy Game shows the step of its job entry. 
 
 ## Stop and Reset
 
-A **stop** removes the job entry, cancels its handle, clears the failure line and clears the notice of the dock record. The Game is idle at once. The Job starts no further step, and the id check refuses any later save of the stopped Job. Every save unit that landed before the stop stays.
+A **stop** removes the job entry, cancels its handle, clears the failure line and clears the notice of the dock record. The Game is idle at once. The Job starts no further step, and the id check refuses any later save of the stopped Job. Every save unit that landed before the stop stays. A model call that runs when the stop comes runs to its end, and the id check refuses its answer.
 
 A **reset** creates a new Game and removes the active Game with its job entry. Both writes land in one hold. A Job that ran on the removed Game writes nothing more.
 
