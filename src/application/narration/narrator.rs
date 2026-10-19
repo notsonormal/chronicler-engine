@@ -39,6 +39,9 @@ impl Narrator {
         }
     }
 
+    /// Only the wiring tests call it: they drive the recorder that the wiring
+    /// built, and check a provider that failed to build, which
+    /// `backend_info` does not show.
     pub fn recorder(&self) -> &Arc<LlmCallRecorder> {
         &self.recorder
     }

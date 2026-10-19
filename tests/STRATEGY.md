@@ -89,9 +89,14 @@ A tier-1 test asserts **domain outcomes** only. A domain outcome is one of:
 
 A **read seam** is a read the application exposes to a driving adapter: an
 HTTP GET, or a method on an application read service or port
-(`GameViewQuery`, `MessageService`, `GameCatalogue`, `SettingsService`,
+(`GameViewQuery`, `GameCatalogue`, `SettingsService`,
 `PromptPresetService`, `WorldCatalogue`). `Storage` is a driven adapter, not
 a read seam.
+
+A read seam that no driving adapter calls is allowed only when a test checks
+a stored fact that no production read returns, such as the stored inputs of a
+Swipe. Its doc comment names that fact, so a reviewer can see why it exists.
+The same holds for any production method that only tests call.
 
 Apply the rule to one line of test code. The line reads a domain outcome when
 it reads the HTTP response or calls a read seam. It leaks when it

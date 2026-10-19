@@ -184,6 +184,9 @@ impl GameViewQuery {
     }
 
     /// Every Message of the story with all its Swipes, oldest first.
+    ///
+    /// Only tests call it: they check the stored inputs and the room report of
+    /// a Swipe that is not active, which no production read returns.
     pub fn story_messages(&self, game_id: GameId) -> Result<Vec<Message>, ApplicationError> {
         self.storage.stories().messages(game_id).map_err(Into::into)
     }

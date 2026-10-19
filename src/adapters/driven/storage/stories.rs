@@ -83,7 +83,8 @@ impl StoryReads<'_> {
     }
 
     /// Every Message of the story with all its Swipes, oldest first, and no Swipe
-    /// state beyond the one each Swipe holds.
+    /// state beyond the one each Swipe holds. Only `GameViewQuery::story_messages`
+    /// calls it, for tests.
     pub fn messages(&self, game: GameId) -> Result<Vec<Message>, EngineError> {
         self.storage
             .with_backend_mut("stories_messages", |backend| match backend {

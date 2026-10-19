@@ -361,7 +361,7 @@ tail -n 10 "$(ls -t logs/build_*.log | head -1)"
 | `python build.py browser` | The browser (Playwright) binary only | ~92 s |
 | `python build.py --no-browser` | The full gate without the browser tier | ~50 s |
 | `python build.py` | The full gate: installs git hooks, removes safe-to-lose linked worktrees, fmt (rewrites files), data, doc and structure checks, Python tests, clippy, guardrails, integration, browser, packaging | ~145 s |
-| `python build.py validate-docs` | Markdown docs and DOC anchors under `docs/` | <1 s |
+| `python build.py validate-docs` | Markdown docs and DOC anchors under `docs/`, and the source paths that `AGENTS.md`, `tests/AGENTS.md` and the other root docs name | <1 s |
 | `python build.py run` | Builds and runs the dev server | see `ENVIRONMENT.md` |
 
 Warm cost is the median of recent runs in `logs/build_history.txt`, including runs after a Rust edit. A run with no Rust change is faster (`ENVIRONMENT.md`, *Typical gate cost*). A narrow loop with `--test-target` does not compile the other test binaries, so a change to a shared API shows in `clippy` or in the full gate instead.

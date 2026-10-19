@@ -251,6 +251,18 @@ class TestSourcePaths(unittest.TestCase):
         path = fix.write_doc("explanation/foo.md", "See `src/here.rs`.\n")
         self.assertEqual(fix.scan(path), [])
 
+    def test_root_doc_flags_missing_path(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.engine / "tests" / "AGENTS.md"
+        path.parent.mkdir(parents=True)
+        path.write_text("Mirror: `src/gone_tests.rs`.\n", encoding="utf-8")
+        report = vd.scan_root_doc(path, fix.engine)
+        self.assertEqual([v.rule for v in report.violations], ["BROKEN_SOURCE_PATH"])
+
+    def test_root_docs_name_the_hand_written_agent_docs(self) -> None:
+        self.assertIn("AGENTS.md", vd.ROOT_DOCS)
+        self.assertIn("tests/AGENTS.md", vd.ROOT_DOCS)
+
     def test_glob_and_line_citation_spans_skipped(self) -> None:
         fix = _SourcePathFixture()
         path = fix.write_doc(
