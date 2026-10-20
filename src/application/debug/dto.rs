@@ -14,8 +14,8 @@ pub struct DebugStateView {
     pub current_room_id: String,
     pub npcs_in_area: Vec<String>,
     pub generation_status: GenerationStatus,
-    /// The step the Game's generation reached.
-    pub step: Step,
+    /// The step of the running Job; `None` when no Job runs.
+    pub step: Option<Step>,
     pub npc_encounter_log: HashMap<String, NpcEncounterState>,
     pub narration_history_tail: Vec<MessageEntry>,
     pub narration_history_length: usize,

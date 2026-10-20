@@ -1,8 +1,16 @@
-//! HTTP E2E tests for dashboard chrome: the shell's icon sprite and the generating-status surfaces. Tagged against `docs/specs/dashboard.md`.
+//! HTTP E2E tests for dashboard chrome: the shell's icon sprite, the generating-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
 
 use std::sync::Arc;
 
-use chronicler_engine::test_support::{analysis_report, ModelRole, ScriptedModel, TestAppBuilder};
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use tower::util::ServiceExt;
+
+use chronicler_engine::adapters::driven::storage::TestOverride;
+
+use chronicler_engine::test_support::{
+    analysis_report, empty_sqlite_storage, ModelRole, ScriptedModel, TestAppBuilder,
+};
 
 use crate::support::http_assertions::{defined_icons, referenced_icons};
 use crate::support::http_fixtures::seed_offered_set;
@@ -177,4 +185,75 @@ async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
         !dock.contains("disabled"),
         "a Game with no Job leaves the dock controls enabled: {dock}"
     );
+}
+
+async fn debug_state_json(app: &axum::Router) -> serde_json::Value {
+    serde_json::from_str(&fetch_body(app, "/debug/state").await).expect("/debug/state answers JSON")
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.6
+#[tokio::test]
+async fn test_the_debug_state_names_a_step_only_while_a_job_runs() {
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(ModelRole::Narration);
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::clone(&model))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narrator call should reach the model"
+    );
+    let json = debug_state_json(&app).await;
+    assert_eq!(json["generation_status"], "Generating", "{json}");
+    assert_eq!(
+        json["step"], "Narrating",
+        "a Job at its narrator call names its step: {json}"
+    );
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the released Job should complete"
+    );
+
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().failed(ModelRole::Narration)))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failing Job should end"
+    );
+    let json = debug_state_json(&app).await;
+    assert_eq!(
+        json["generation_status"]["Error"]["kind"], "UnreadableAnswer",
+        "a Game with a failure line reports the kind of that line: {json}"
+    );
+    assert!(
+        json["step"].is_null(),
+        "a failed Game names no step: {json}"
+    );
+
+    let json = debug_state_json(&TestAppBuilder::default_app()).await;
+    assert_eq!(json["generation_status"], "Idle", "{json}");
+    assert!(json["step"].is_null(), "an idle Game names no step: {json}");
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.7
+#[tokio::test]
+async fn test_the_debug_state_answers_500_on_a_storage_failure() {
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        "stories_entries",
+        TestOverride::internal("stories_entries failure"),
+    ));
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+
+    let req = Request::builder()
+        .uri("/debug/state")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }

@@ -155,10 +155,9 @@ impl GenerationFailure {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Step {
     /// Narrator LLM generating the scene response.
-    #[default]
     Narrating,
     /// Quantifier LLM evaluating NPC presence and movement.
     Quantifying,

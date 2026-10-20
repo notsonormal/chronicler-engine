@@ -54,14 +54,6 @@ async fn test_debug_state_endpoint_returns_json() {
             "Error variant should have 'Error' key"
         );
     }
-    let phase = &json["step"];
-    assert!(phase.is_string(), "step should be string (unit enum)");
-    if let Some(p) = phase.as_str() {
-        assert!(
-            p == "Narrating" || p == "Quantifying" || p == "GeneratingEvent",
-            "step should be known variant, got: {p}"
-        );
-    }
 }
 
 #[tokio::test]

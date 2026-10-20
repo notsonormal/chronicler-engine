@@ -5,6 +5,7 @@ Endpoints:
 - `POST /status/reset-generating` (the stop)
 - `GET /fragment/options-dock`
 - `GET /debug/is_generating`
+- `GET /debug/state`
 - `GET /` (the shell that defines the icons)
 
 ## Scenarios
@@ -88,4 +89,28 @@ And the second Job's model answer arrives
 Then the story log holds the Input of the stopped Job
 And the story log holds the Input and the Narration of the second Job
 And the story log holds no Narration of the stopped Job
+```
+
+#### Scenario 39.6: The debug state names a Step only while a Job runs
+
+```gherkin
+Given a Game whose Job is at the narrator call of a Narration
+When the client requests GET /debug/state
+Then the response reports the status "Generating" and the Step "Narrating"
+
+Given a Game with no Job and a failure line
+When the client requests GET /debug/state
+Then the response reports the status "Error" with the kind of that failure line, and no Step
+
+Given a Game with no Job and no failure line
+When the client requests GET /debug/state
+Then the response reports the status "Idle" and no Step
+```
+
+#### Scenario 39.7: A storage failure during the debug state read answers a 500
+
+```gherkin
+Given a storage that rejects the read of the story
+When the client requests GET /debug/state
+Then the response status is "500 Internal Server Error"
 ```

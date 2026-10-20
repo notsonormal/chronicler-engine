@@ -165,7 +165,10 @@ pub enum EngineError {
     WorldAlreadyExists(String),
 
     /// World cannot be deleted because games still reference it; `game_count` is the blocker count.
-    #[error("Cannot delete world with {game_count} games")]
+    #[error(
+        "Cannot delete world with {game_count} {}",
+        if *game_count == 1 { "game" } else { "games" }
+    )]
     WorldHasGames { game_count: usize },
 
     /// Settings/config value missing or invalid; message names the field and constraint.

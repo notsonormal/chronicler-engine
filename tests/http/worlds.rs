@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, and the duplicate-identifier create refusal.
+//! HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure.
 
 use std::sync::Arc;
 
@@ -421,6 +421,95 @@ async fn test_world_create_storage_failure_renders_error_fragment_http() {
     let body = response_body(resp).await;
     assert!(
         body.contains("error-message") && body.contains("create_world failure"),
+        "the error fragment must name the storage failure: {body:?}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.10
+#[tokio::test]
+async fn test_world_delete_refusal_pluralises_the_game_count_http() {
+    // `default_test` seeds the World "test" with exactly one game in it.
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+
+    let resp = post_form(&app, "/worlds/test/delete", "").await;
+    assert_eq!(resp.status(), http::StatusCode::OK);
+    let html = response_body(resp).await;
+    assert!(
+        html.contains("Cannot delete world with 1 game"),
+        "the refusal must count one game in the singular: {html}"
+    );
+    assert!(
+        !html.contains("1 games"),
+        "the refusal must not pluralise a single game: {html}"
+    );
+
+    state
+        .game_catalogue
+        .create_game("test", "test_player")
+        .expect("create a second game");
+
+    let html = response_body(post_form(&app, "/worlds/test/delete", "").await).await;
+    assert!(
+        html.contains("Cannot delete world with 2 games"),
+        "the refusal must count two games in the plural: {html}"
+    );
+    assert!(
+        state
+            .world_catalogue
+            .list_worlds()
+            .expect("list worlds")
+            .iter()
+            .any(|world| world.key == "test"),
+        "a refused delete keeps the World"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.11
+#[tokio::test]
+async fn test_world_delete_removes_a_world_with_no_games_http() {
+    let (app, state) = posture_world_app();
+
+    let resp = post_form(&app, "/worlds/posture_world/delete", "").await;
+    assert_eq!(resp.status(), http::StatusCode::OK);
+    assert_eq!(
+        response_body(resp).await,
+        "",
+        "a delete answers an empty body"
+    );
+    assert!(
+        state
+            .world_catalogue
+            .get_world("posture_world")
+            .expect("read the world")
+            .is_none(),
+        "the deleted World is no longer stored"
+    );
+
+    let resp = post_form(&app, "/worlds/nonexistent/delete", "").await;
+    assert_eq!(resp.status(), http::StatusCode::OK);
+    assert_eq!(
+        response_body(resp).await,
+        "",
+        "a delete of an unknown key answers an empty body"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.12
+#[tokio::test]
+async fn test_world_delete_storage_failure_renders_error_fragment_http() {
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        "delete_world",
+        TestOverride::internal("delete_world failure"),
+    ));
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+
+    let resp = post_form(&app, "/worlds/test/delete", "").await;
+    assert_eq!(resp.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("error-message") && body.contains("delete_world failure"),
         "the error fragment must name the storage failure: {body:?}"
     );
 }

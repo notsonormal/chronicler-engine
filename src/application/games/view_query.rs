@@ -132,13 +132,13 @@ impl GameViewQuery {
             .collect();
         let status = self.status(game_id)?;
         let (generation_status, step, last_error) = match status {
-            Status::Busy(step) => (GenerationStatus::Generating, step, None),
+            Status::Busy(step) => (GenerationStatus::Generating, Some(step), None),
             Status::Failed(failure) => (
                 GenerationStatus::Error(failure.clone()),
-                Step::default(),
+                None,
                 Some(failure.raw),
             ),
-            Status::Idle => (GenerationStatus::Idle, Step::default(), None),
+            Status::Idle => (GenerationStatus::Idle, None, None),
         };
 
         Ok(DebugStateView {

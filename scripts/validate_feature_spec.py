@@ -78,7 +78,7 @@ TAG_EXEMPT_FILES = {
 # Pins the requires_migration quarantine: the count may only go down.
 # Migration cleanups lower it deliberately; a new test in the folder fails
 # the gate.
-REQUIRES_MIGRATION_TEST_COUNT = 74
+REQUIRES_MIGRATION_TEST_COUNT = 72
 
 
 def parse_spec_scenarios(spec_path: Path) -> set[str]:
