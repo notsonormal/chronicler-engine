@@ -1,7 +1,7 @@
 # Run the architecture review of the rebuilt code on GLM 5.3
 
 Type: research
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -23,3 +23,8 @@ Run steps 1 and 2 of `/improve-codebase-architecture` (`.agents/skills/improve-c
 - The Answer gives the tree (commit, and the dirty-file count under `src/` and `tests/`), the candidate count by strength, the top recommendation in one line, and the asset link.
 
 ## Answer
+
+- Tree: `d7cf3eb0`; `src/` and `tests/` identical to `2885df2c`; 0 dirty files under `src/` and `tests/`.
+- Candidates: 5 (Strong 1, Worth exploring 3, Speculative 1): C1 one domain module for the room of a Swipe state; C2 split the Storage seam along the catalogue and story line; C3 one hook-input assembly behind the two hooks; C4 one read-side module for the dashboard; C5 collapse the story-window projection trio.
+- Top recommendation: C1. The dynamic-room rule is copied across `game_rules.rs`, `job.rs`, `view_query.rs` and `gate.rs`, and the copies already disagree. One small pure module in `domain/model/` concentrates it.
+- Asset: [../assets/architecture-review/glm.md](../assets/architecture-review/glm.md). HTML report: `/tmp/architecture-review-arch-glm-20261019-232427.html` (session `bffa37e2`, 6.4 min).

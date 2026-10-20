@@ -1,7 +1,7 @@
 # Run the architecture review of the rebuilt code on Opus 5.5
 
 Type: research
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -23,3 +23,9 @@ Run steps 1 and 2 of `/improve-codebase-architecture` (`.agents/skills/improve-c
 - The Answer gives the tree (commit, and the dirty-file count under `src/` and `tests/`), the candidate count by strength, the top recommendation in one line, and the asset link.
 
 ## Answer
+
+- Tree: `d7cf3eb0`; `git diff 2885df2c HEAD -- src tests` is empty; 0 dirty files under `src/` and `tests/`. `docs/adr/` does not exist; the run checked candidates against `arch-lint.toml` and `tests/STRATEGY.md`.
+- Candidates: 8 (Strong 3, Worth exploring 4, Speculative 1): 1 deepen the Game rules, one call per generation; 2 delete the in-memory Storage adapter, SQLite `:memory:` is the one stand-in; 3 deepen the Narrator, the narration prompt rules move behind its interface; 4 move the Job plan rules from `gate.rs` to the Tail; 5 one preset module; 6 one analysis output type from the analysis hook to the Game rules; 7 the story window, one read for the story log with the Retrigger rule from the Tail; 8 one composition root, the LLM port as the only test input.
+- Top recommendation: candidate 1. The Game rules take one generation and return the analysed Swipe state, the room report and the rendered event record. This moves the event, room report and event record rules out of the Job and the writer, and removes the Retrigger-direction divergence.
+- Possible bugs found by reading (not confirmed by a test): the Retrigger direction is not rendered (`gate.rs:587` against `game_rules.rs:119`); `render_story_log` keeps the 50 oldest Messages; the template shows the Retrigger button on a Narration only, but `Tail::retrigger_allowed` also allows an Impersonate Input.
+- Asset: [../assets/architecture-review/opus.md](../assets/architecture-review/opus.md). HTML report: `/tmp/architecture-review-arch-opus-20261019T232823Z.html` (session `959d0d4d`, 8.2 min).

@@ -1,7 +1,7 @@
 # Run the architecture review of the rebuilt code on Qwen 3.8
 
 Type: research
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -23,3 +23,8 @@ Run steps 1 and 2 of `/improve-codebase-architecture` (`.agents/skills/improve-c
 - The Answer gives the tree (commit, and the dirty-file count under `src/` and `tests/`), the candidate count by strength, the top recommendation in one line, and the asset link.
 
 ## Answer
+
+- Tree: `d7cf3eb0`; `src/` and `tests/` identical to `2885df2c`; 0 dirty files under `src/` and `tests/`. `docs/adr/` does not exist.
+- Candidates: 5 (Strong 1, Worth exploring 3, Speculative 1): 1 one type family for the analysis hook; 2 the storage record seam has one real adapter (the `no_in_memory` arms; string-keyed read failure injection against the typed `TxWrite`); 3 three projections of one story entry (`StoryRow`, `MessageEntry`, `StoryEntry`); 4 prompt wording (`continuation_user_message`) leaks into the Job across the Narrator seam; 5 `PersonaCatalogue` and `WorldCatalogue` are shallow pass-throughs, kept by a guardrail (deepen or leave).
+- Top recommendation: candidate 1. The Quantifier's answer goes `QuantifierResult` to `StatePatch` to a new `QuantifierResult` with loss; `Confidence` and `QuantifierConfidence` are two enums with `From` both ways; `SceneState.quantifier_confidence: Option<String>` is a third, dead form. One type family deletes them, and the Quantifier seam cases pin the change.
+- Asset: [../assets/architecture-review/qwen.md](../assets/architecture-review/qwen.md). HTML report: `/tmp/architecture-review-arch-qwen-20261019-233248.html` (session `727c691e`, 16.6 min).

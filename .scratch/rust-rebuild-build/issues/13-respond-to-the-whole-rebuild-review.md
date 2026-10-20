@@ -1,8 +1,8 @@
 # Decide how to respond to the review of the whole rebuild
 
 Type: grilling (HITL)
-Status: open
-Blocked by: 17
+Status: resolved
+Blocked by: 17, 18
 
 ## Question
 
@@ -23,6 +23,7 @@ The answer also decides these questions, which hang on the same choice:
 ## Context
 
 - The architecture reviews of the rebuilt code on three models (tickets 14, 15 and 16) and their synthesis, [Synthesize the three architecture reviews of the rebuilt code](17-synthesize-the-architecture-reviews.md), give this ticket its view of the code shape. Option B starts from the synthesis.
+- [Review the dashboard after the Rust rebuild](18-review-the-ui-after-the-rebuild.md) gives this ticket the bugs a player hits in the running UI.
 
 - The findings, de-duplicated and verified: [FINDINGS.md](../assets/whole-rebuild-review/FINDINGS.md). There are 29 items: 6 high, 14 medium and 9 low, plus what the review already fixed.
 - The run record, with its steps, gates and decisions: [tracker.md](../assets/whole-rebuild-review/tracker.md). Its `tmp/` paths are git-ignored scratch.
@@ -34,3 +35,12 @@ The answer also decides these questions, which hang on the same choice:
 - Plan: [the build plan](../../../docs/plans/rust-rebuild-build-plan.md) §9.7 (the merge) and §10 (past the build). Design: `.scratch/turn-state-model/assets/target-design.md`.
 
 ## Answer
+
+Owner, 2026-10-19: a widened **Option B**. Fix before the merge.
+
+- The architecture reviews (tickets 14 to 17) are a list of problems to resolve now, before the rebuild is final, so the architecture does not need a visit again soon.
+- The UI findings (ticket 18) are fixed before the merge.
+- Sub-question 5: the shape findings are inside the Destination; the Destination now names the response to the reviews.
+- Sub-questions 3 and 4 go to [Decide the storage seam: the in-memory adapter, the story projections and the read failures](21-storage-seam.md) and [Decide what test machinery the production build carries](22-test-machinery-in-production.md). Sub-questions 1 and 2 (the branch to merge) wait in the map's fog until the plan of the response.
+- UI F2 and F3 wait for [Decide the shape of a generation: its kind, its analysis output and the Game rules](19-shape-of-a-generation.md), whose data-carrying kind removes their cause; no player hits them before the merge.
+- Graduated: tickets 19 to 24.

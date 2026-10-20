@@ -4,7 +4,7 @@ Labels: wayfinder:map
 
 ## Destination
 
-[Target design](../turn-state-model/assets/target-design.md) version 2 runs in the current Rust crate: the six preparation slices and the core step of [the build plan](../../docs/plans/rust-rebuild-build-plan.md) are done and merged to `main`.
+[Target design](../turn-state-model/assets/target-design.md) version 2 runs in the current Rust crate: the six preparation slices and the core step of [the build plan](../../docs/plans/rust-rebuild-build-plan.md) are done, the response to the reviews of the whole rebuild is built, and all of it is merged to `main`. (Redrawn by the owner on 2026-10-19 to take in the response.)
 
 ## Notes
 
@@ -13,6 +13,7 @@ Labels: wayfinder:map
 - One implementer at a time; the slices run in order. Every commit passes the commit gate of plan §2.
 - **Standing approval** (owner, 2026-10-17): the owner approves the commits and merges of the slices in advance. The lead commits after a green commit gate, merges a done slice to `main`, and starts the next slice. The lead stops only for a gap that needs a decision.
 - **Seam-case form** (owner, 2026-10-17, option B): `// CASE <id>: <description>` on the tag above the test; no module-doc list. Amends ticket 26 R4. [The seam-case form: the tag carries the description](issues/08-seam-case-tag-only-form.md) is built and merged.
+- **The response to the reviews** (owner, 2026-10-19): its design questions are grilling tickets (19 to 23); once they are answered, a build plan for the response gives the task tickets. The standing approval covers the commits of those tasks.
 - Terms: `CONTEXT.md`. "Turn" and "Action Pipeline" are deprecated.
 
 ## Decisions so far
@@ -28,10 +29,17 @@ Labels: wayfinder:map
 - [Decide if the Connection form sets the context window and the answer budget](issues/10-connection-form-budget-fields.md) — option B (owner): the form sets the context window only; empty means the provider default, any positive integer is valid, a provider change keeps an explicit value.
 - [Close or fix: `build.py test-pattern` cannot run ignored tests](issues/11-test-pattern-ignored-tests.md) — option A (owner): closed; no ignored test is left outside `tests/llm/`; the next plan that parks red tests adds the flag.
 - [Decide if a stop cancels a running model call](issues/12-stop-cancels-the-model-call.md) — option C (owner): a call that runs ends on its own, and the id check refuses its answer; `game_flow.md` states the limit.
+- [Decide how to respond to the review of the whole rebuild](issues/13-respond-to-the-whole-rebuild-review.md) — widened option B (owner): fix before the merge; the architecture candidates are problems to resolve now; the UI findings are fixed; graduated tickets 19 to 24.
+- [Run the architecture review of the rebuilt code on Opus 5.5](issues/14-architecture-review-opus.md) — 8 candidates (3 Strong); top: deepen the Game rules, one call per generation.
+- [Run the architecture review of the rebuilt code on GLM 5.3](issues/15-architecture-review-glm.md) — 5 candidates (1 Strong); top: one domain module for the room of a Swipe state.
+- [Run the architecture review of the rebuilt code on Qwen 3.8](issues/16-architecture-review-qwen.md) — 5 candidates (1 Strong); top: one type family for the analysis hook.
+- [Synthesize the three architecture reviews of the rebuilt code](issues/17-synthesize-the-architecture-reviews.md) — 6 merged and 5 single-model candidates, none rejected; they touch review findings 4, 5, 7, 12, 15, 17, 19, not 2, 3, 6; order: analysis type, Game rules, plan rules to the Tail, narrator.
+- [Review the dashboard after the Rust rebuild](issues/18-review-the-ui-after-the-rebuild.md) — 1 P1, 1 P2, 3 P3. New in the rebuild: a bare `/impersonate` answers 500, and `/retrigger` accepts an Impersonate Input. Older: past 50 Messages, the story log hides the newest Messages and its controls act on a hidden Message.
 
 ## Not yet specified
 
-- **After the response to the review.** The code of every slice is built, but `wf/rebuild-core` (with tickets 09 to 12) is not merged to `main`. The review of the whole rebuild (2026-10-19, against `bc7d6cd4`) waits on [Decide how to respond to the review of the whole rebuild](issues/13-respond-to-the-whole-rebuild-review.md), which waits on three architecture reviews of the rebuilt code on different models and their synthesis. Its answer may graduate fix or refactor tickets, and then the merge.
+- **The small items of the review.** Candidates S2 (one preset module, with the gap that a preset delete does not check the preset slots of each Game) and M6 (the shallow catalogues), and the medium and low findings that tickets 19 to 24 do not take ([FINDINGS.md](assets/whole-rebuild-review/FINDINGS.md), [synthesis.md](assets/architecture-review/synthesis.md) §3). Triage them once the design tickets have placed their neighbours.
+- **The plan of the response, then the merge.** After the design tickets: one build plan for the response, its slices as task tickets, and which branch merges to `main` (`wf/rebuild-core` holds tickets 09 to 13 and the review fixes `2885df2c`; `wf/rebuild-review` at `fa1a25e1` lacks them).
 
 ## Out of scope
 
