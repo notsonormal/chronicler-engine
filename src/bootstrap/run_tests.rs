@@ -1,6 +1,4 @@
 use crate::bootstrap::run::{ensure_presets, resolve_boot_game};
-use crate::domain::model::game::GameId;
-use crate::domain::model::state::game_state::GameState;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::adapters::driven::storage::Storage;
 
@@ -102,18 +100,7 @@ fn resolve_game_id_inherits_world_posture_and_mode_matched_bundle() {
 #[test]
 fn test_restart_with_existing_game_does_not_duplicate_scenario() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();
-
-    let game_id = {
-        let conn = db_pool.conn();
-        conn.execute(
-            "INSERT INTO games (world_name, world_key, name, created_at, updated_at) VALUES ('TestWorld', 'TestWorld', 'TestGame', '2026-05-26T10:00:00+00:00', '2026-05-26T10:00:00+00:00')",
-            [],
-        )
-        .unwrap();
-        GameId(conn.last_insert_rowid() as u64)
-    };
-
-    let storage = Storage::new_sqlite(db_pool.clone());
+    let storage = std::sync::Arc::new(Storage::new_sqlite(db_pool));
 
     let world_card = crate::domain::model::world::WorldCard {
         key: "test".to_string(),
@@ -127,64 +114,29 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
             text: "Welcome, traveller.".to_string(),
             npcs: vec![],
         }],
+        default_scenario_id: Some("intro".to_string()),
         ..Default::default()
     };
-    let map = crate::domain::model::map::MapDef {
-        overworld: crate::domain::model::map::Overworld {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            regions: vec![],
-        },
-    };
-    let player = crate::domain::model::character::PersonaCard {
-        key: "alice".to_string(),
-        sheet: crate::domain::model::character::CharacterSheet {
-            name: "Alice".to_string(),
-            description: "".to_string(),
-            personality: "".to_string(),
-            scenario: "".to_string(),
-            example_dialogue: "".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    };
+    storage.seed_world(&world_card, &boot_map()).unwrap();
+    let persona = crate::test_support::TestPersona::named("Alice");
+    storage.seed_persona(&persona.key, &persona).unwrap();
 
-    let map_arc = std::sync::Arc::new(map);
-    let mut state = GameState::new(world_card.starting_room_id());
-    state.inject_scenario_logs(&world_card, &player, &map_arc);
+    let game_id = resolve_boot_game(&storage, &world_card.key, &persona.key).unwrap();
+    let after_restart = resolve_boot_game(&storage, &world_card.key, &persona.key).unwrap();
+    assert_eq!(after_restart, game_id);
 
-    let snapshot =
-        crate::domain::model::state::game_state_snapshot::GameStateSnapshot::from_game_state(
-            &state,
-        );
-    let snapshot_id = storage.save_snapshot(game_id, &snapshot).unwrap();
-    if let Some(msg) = state.narrative.history.last_mut() {
-        msg.set_snapshot_id(Some(snapshot_id));
-        let id = storage.insert_message(game_id, &*msg).unwrap();
-        msg.id = id;
-    }
-
-    let initial_messages = storage.load_message_rows(game_id).unwrap();
-    assert_eq!(initial_messages.len(), 1);
-
-    let found = storage.newest_game_of_world("TestWorld").unwrap();
-    assert_eq!(found, Some(game_id));
-
-    let loaded = storage.load_latest_snapshot(game_id).unwrap();
-    assert!(
-        loaded.is_some(),
-        "Existing snapshot should be found on restart"
-    );
-
-    let msgs_after_restart = storage.load_message_rows(game_id).unwrap();
+    let tail = storage
+        .stories()
+        .tail(game_id)
+        .unwrap()
+        .expect("the Game holds its opening");
     assert_eq!(
-        msgs_after_restart.len(),
-        1,
+        tail.count, 1,
         "Restart should not duplicate the scenario message"
     );
+    assert_eq!(tail.last.text(), "Welcome, traveller.");
 }
+
 #[test]
 fn test_ensure_presets_empty_data_dir() {
     let db_pool = crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap();

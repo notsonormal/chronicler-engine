@@ -1,26 +1,18 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
+//! ApplicationError — the error envelope of the application services.
 
-use crate::error::{EngineError, InternalError};
+use crate::error::EngineError;
 
 pub enum ApplicationError {
     /// Input failed domain validation; payload is the user-facing reason.
     Validation(String),
     /// Engine-layer failure surfaced through the application service.
     Engine(EngineError),
-    /// Server shutting down; reject new work.
-    ShuttingDown,
-    /// Another generation already in progress for this game; caller must retry or back off.
-    ConcurrentGeneration,
 }
 
 impl ApplicationError {
     pub fn validation(msg: impl Into<String>) -> Self {
         Self::Validation(msg.into())
-    }
-
-    pub fn internal(msg: impl Into<String>) -> Self {
-        Self::Engine(EngineError::Internal(InternalError::new(msg)))
     }
 
     /// Lifts an engine error, keeping a domain refusal on the variant the HTTP
@@ -48,8 +40,6 @@ impl std::fmt::Display for ApplicationError {
         match self {
             Self::Validation(msg) => write!(f, "{msg}"),
             Self::Engine(e) => write!(f, "{e}"),
-            Self::ShuttingDown => write!(f, "Server is shutting down"),
-            Self::ConcurrentGeneration => write!(f, "Generation in progress"),
         }
     }
 }
@@ -73,14 +63,4 @@ impl From<EngineError> for ApplicationError {
     fn from(e: EngineError) -> Self {
         Self::Engine(e)
     }
-}
-
-#[derive(Debug)]
-pub enum ProcessActionResult {
-    /// Generation task spawned and registered.
-    Started,
-    /// Rejected: another generation holds the slot for this game.
-    ConcurrentGeneration,
-    /// Rejected: server is shutting down.
-    ShuttingDown,
 }

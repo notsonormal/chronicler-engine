@@ -29,10 +29,10 @@ Every spawned test server tees engine stdout/stderr incrementally to `tmp/test_s
 Integration test structure mirrors `src/` paths **within each test binary**. The tier table in [`STRATEGY.md`](STRATEGY.md) picks the directory; inside it, file paths mirror `src/` subpaths.
 
 Examples:
-- `src/application/pipeline/action_pipeline/core.rs` ↔ `src/application/pipeline/action_pipeline/core_tests.rs` (unit test mirror)
+- `src/application/narration/narrator.rs` ↔ `src/application/narration/narrator_tests.rs` (unit test mirror)
 - `src/application/games/catalogue.rs` ↔ `src/application/games/catalogue_tests.rs` (unit test mirror)
 - `src/adapters/driving/http/action/handlers/actions.rs` ↔ `tests/http/actions.rs` (http test binary mirrors the http subset)
-- `src/adapters/driven/storage/db.rs` ↔ `tests/storage/message_storage.rs` (driven-adapter storage seam)
+- `src/adapters/driven/storage/stories.rs` ↔ `tests/storage/story_storage.rs` (driven-adapter storage seam)
 
 ## Seam recipes
 
@@ -40,7 +40,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
 
 - Assert what the narrator was sent → storage-backed recorder (`make_test_recorder_with_storage`, `src/test_support/fixtures.rs`) + `GameViewQuery::list_latest_llm_messages`
 - Inject a storage failure → `Storage::with_failure` + `TestOverride::internal`, exemplar `tests/http/settings.rs`
-- Wire an options agent → `OptionsGeneratorAgent::with_provider` inside `AgentRunner::with_options_agent`, exemplar `src/application/pipeline/action_pipeline/options_tests.rs`
+- Wire an options agent → an `options`-type `AgentConfig` through `AgentRunner::from_configs` (`configured_runner` in test support; `configured_runner_without` leaves one type out), exemplar `src/application/agents/options/agent_tests.rs`
 - Observe generated options in the UI → `GET /fragment/options-dock` (`src/adapters/driving/http/builders/router.rs`)
 
 ## STRUCTURE
@@ -78,7 +78,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
-    - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite and the registry-backed generating-status surfaces. Tagged against `docs/specs/dashboard.md`.
+    - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite, the generating-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
     - `failure_display.rs` — HTTP E2E tests for the failure display, tagged against `docs/specs/failure_display.md`.
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
@@ -89,7 +89,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `llm_messages.rs` — HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders.
     - `mod.rs` — HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, and server wiring.
     - `narrator_mode.rs` — HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
-    - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on turn-end hook, and response-shape parsing.
+    - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on Options run at the end of a Job, and response-shape parsing.
     - `prompt_presets.rs` — HTTP E2E tests for the prompt-presets endpoints.
     - `races.rs` — HTTP E2E tests for the write path while a Job runs: the races (actions.md 3.4, 3.5; options.md 24.21), the stop at each model call (dashboard.md 39.4, 39.5), the reset (reset.md 7.3), the Job of another Game (games.md 18.4), the edit, delete and swipe switch (story_log.md 8.7; swipe_switch.md 36.3), and the preset an event Narration uses (actions.md 6.4).
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).
@@ -99,7 +99,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
     - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.
-    - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, and the duplicate-identifier create refusal.
+    - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.
@@ -114,7 +114,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - **support/**
       - `app_wiring.rs` — Test-app builders for the http test binary: scripted-model AppState + router bundles.
       - `http_assertions.rs` — Rendered-HTML assertions shared by the http test binary.
-      - `http_fixtures.rs` — HTTP test fixtures: storage seeding and world-card builders for the endpoint tests.
+      - `http_fixtures.rs` — HTTP test fixtures: storage seeding, story reads and world-card builders for the endpoint tests.
       - `http_requests.rs` — HTTP request plumbing for the http test binary: POST builders, body readers, generation-idle polling.
       - `mod.rs` — Concept modules for the HTTP test binary's shared surface (requests, fixtures, assertions, app wiring).
 - **infrastructure/**
@@ -125,7 +125,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `free_fn_tests.rs` — Tests for `free_fn.rs` guardrail.
       - `inherent_impl.rs` — Inherent impl locality guardrail: every inherent impl must live in the type's defining file or a folder named after the type.
       - `inherent_impl_tests.rs` — Tests for the inherent impl locality guardrail.
-      - `layers.rs` — Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, and tests-vs-messages/swipes separation.
+      - `layers.rs` — Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, urlencoded form safety, and the HTTP adapter's storage leak.
       - `location.rs` — Location guardrail tests: ensures `#[test]` / `#[cfg(test)]` units live in the correct directory (e.g., unit tests stay in `src/`, integration tests stay in `tests/`).
       - `location_tests.rs` — Tests for `location.rs` guardrail.
       - `mod.rs` — Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
@@ -145,11 +145,10 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `mod.rs` — LLM test binary: real LLM provider flows (ignored by default; run with `python build.py --llm-only`).
 - **storage/**
     - `llm_message_storage.rs` — Integration tests for LLM message persistence: save/list, error-message preservation, global-cap pruning, and pagination across a real SQLite-backed `Storage`.
-    - `message_storage.rs` — Integration tests for `Message` persistence: soft-delete, restore, purge, and swipe insert/load round-trips against a real SQLite-backed `Storage`.
     - `mod.rs` — Driven-adapter storage seam tests: repositories exercised against a real SQLite-backed `Storage`.
     - `preset_storage.rs` — Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset
-    - `snapshot_storage.rs` — Integration tests for game-state snapshot persistence: save/load, missing-snapshot errors, and message/swipe round-tripping against a real SQLite-backed `Storage`.
-    - `transaction_storage.rs` — The storage transaction seam: one unit of record writes that lands whole, and the newest Game of a World, on both backends.
+    - `story_storage.rs` — The storage seam of the new records: the story reads, the dock record, the Game's failure line and the record writes of a transaction.
+    - `transaction_storage.rs` — The storage transaction seam: one unit of record writes that lands whole, and the newest Game of a World.
     - `world_storage.rs` — Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 - **test_utils/**
     - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.

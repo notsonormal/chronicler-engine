@@ -125,3 +125,36 @@ fn test_npc_encounter_log_npc_tracking() {
     assert!(state.npcs.contains_key("carla"));
     assert_eq!(state.npcs.get("carla").unwrap().times_met, 3);
 }
+
+#[test]
+fn test_currently_meeting_tracks_encounters() {
+    let mut npc_encounter_log = NpcEncounterLog::default();
+
+    assert!(!npc_encounter_log.is_currently_meeting("carla"));
+    npc_encounter_log.set_currently_meeting("carla", true);
+    assert!(npc_encounter_log.is_currently_meeting("carla"));
+
+    npc_encounter_log.set_currently_meeting("carla", false);
+    assert!(!npc_encounter_log.is_currently_meeting("carla"));
+}
+
+#[test]
+fn test_increment_times_met_always_increments() {
+    let mut npc_encounter_log = NpcEncounterLog::default();
+
+    npc_encounter_log.increment_times_met("gabriella");
+    assert_eq!(npc_encounter_log.get_times_met("gabriella"), 1);
+
+    npc_encounter_log.increment_times_met("gabriella");
+    assert_eq!(npc_encounter_log.get_times_met("gabriella"), 2);
+}
+
+#[test]
+fn test_check_condition_missing_npc_defaults_to_zero() {
+    let npc_encounter_log = NpcEncounterLog::default();
+    let condition = TriggerRequirement {
+        operator: ComparisonOperator::Eq,
+        threshold: 0,
+    };
+    assert!(npc_encounter_log.check_condition("unknown_npc", &condition));
+}

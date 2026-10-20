@@ -38,6 +38,8 @@ Rules (only enforced on STANDARD docs):
                               guardrails doc (see GENERATED_DOC_PATHS). `data/`
                               is out of scope: its contents are runtime
                               artifacts, absent from a fresh checkout.
+                              This one check also runs on the hand-written
+                              root docs (see ROOT_DOCS), which name paths too.
 
 Diátaxis-front-matter rules (only enforced on STANDARD docs under
 docs/diataxis/):
@@ -195,6 +197,18 @@ EXCLUDED_DIR_NAMES: set[str] = {"old-docs"}
 # from the current source by the generator, and the `--check` freshness step
 # keeps them current — the citation cannot rot between generation and commit.
 # Paths are relative to docs/diataxis/.
+# Docs outside docs/diataxis/ that agents read first. They name source paths,
+# and a deletion otherwise leaves them pointing at files that are gone. Only
+# BROKEN_SOURCE_PATH applies: the other rules are written for the diataxis tree.
+ROOT_DOCS: tuple[str, ...] = (
+    "AGENTS.md",
+    "tests/AGENTS.md",
+    "tests/STRATEGY.md",
+    "CODING_STANDARDS.md",
+    "CONTEXT.md",
+    "ENVIRONMENT.md",
+)
+
 GENERATED_DOC_PATHS: set[str] = {
     "reference/coding_standards/guardrails.md",  # generate_guardrails_doc.py
 }
@@ -1081,6 +1095,13 @@ def scan_file(
     return report
 
 
+def scan_root_doc(path: Path, engine_root: Path) -> FileReport:
+    """Source-path scan for one hand-written doc of ROOT_DOCS."""
+    report = FileReport(path)
+    check_source_paths(report, engine_root)
+    return report
+
+
 def render_reports(
     reports: list[FileReport],
     engine_root: Path,
@@ -1199,6 +1220,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     reports = [scan_file(f, engine_root) for f in files]
+    if not args.path:
+        reports += [
+            scan_root_doc(engine_root / rel, engine_root)
+            for rel in ROOT_DOCS
+            if (engine_root / rel).is_file()
+        ]
     rendered, error_count, warning_count, _ = render_reports(reports, engine_root)
     print(rendered)
 

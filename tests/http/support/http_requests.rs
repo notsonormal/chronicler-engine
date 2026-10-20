@@ -1,6 +1,5 @@
 //! HTTP request plumbing for the http test binary: POST builders, body readers, generation-idle polling.
 
-use chronicler_engine::application::pipeline::pipeline_run::UNCERTAIN_NPC_NOTICE;
 use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::test_support::STRAY_CALL_MARKER;
 use axum::body::Body;
@@ -27,8 +26,8 @@ pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     response_body(response).await
 }
 
-/// The status endpoint answers `idle`, a phase endpoint string, or an
-/// `Error: {message}` span.
+/// The status endpoint answers `idle`, a step endpoint string, or the failure
+/// disclosure.
 pub async fn fetch_generating_status(app: &axum::Router) -> String {
     fetch_body(app, "/status/generating").await
 }
@@ -98,50 +97,29 @@ pub async fn post_form_with_hx(
     app.clone().oneshot(req).await.unwrap()
 }
 
-/// Waits for both the persisted status and the generation slot: the pipeline
-/// persists `Idle` before its guard releases the slot, so a status-only check
-/// can return while `try_claim` still rejects the next action. This observes
-/// nothing but the wait itself; a test that also reads the turn's outcome calls
-/// `wait_settled`.
+/// Waits for the Game's job entry to go. It observes nothing but the wait itself,
+/// so a test that also reads the turn's outcome calls `wait_settled`.
 pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
     let game_id = active_game_of(state);
     wait_for_condition_async(
         std::time::Duration::from_millis(timeout_ms),
         std::time::Duration::from_millis(15),
         || async {
-            !state
-                .message_service
-                .load_or_fresh(game_id)
-                .narrative
-                .input_buffer
-                .status
-                .is_generating()
-                && !state.generation_gate.is_busy(game_id)
+            // The job entry is the one busy truth: no Job holds the Game.
+            !state.game_view_query.is_busy(game_id)
         },
     )
     .await
 }
 
-/// Waits for the Job to settle, then checks the turn's own outcome: its
-/// analysis left no uncertain-detection notice, and no model call reached the
-/// fake without a scripted answer. Every tier-1 test whose turn runs an
-/// analysis ends here.
+/// Waits for the Job to settle, then checks that no model call went unscripted.
+/// Every tier-1 test whose turn runs an analysis ends here.
 pub async fn wait_settled(state: &AppState, timeout_ms: u64) -> bool {
     let idle = wait_idle(state, timeout_ms).await;
     if idle {
-        assert_no_uncertain_npc_notice(state);
         assert_no_unscripted_model_call(state);
     }
     idle
-}
-
-/// No tier-1 turn may end on the low-confidence fallback: a parsed room report
-/// needs none, so a notice means the turn's analysis answer was not one.
-pub fn assert_no_uncertain_npc_notice(state: &AppState) {
-    assert!(
-        !story_log_holds_uncertain_npc_notice(state),
-        "the turn fell back to the uncertain NPC notice: its analysis answer was not a room report"
-    );
 }
 
 /// A model call the test did not script is recorded as a failed attempt whose
@@ -162,25 +140,14 @@ pub fn assert_no_unscripted_model_call(state: &AppState) {
     );
 }
 
-/// Whether the story log holds the low-confidence fallback's notice.
-pub fn story_log_holds_uncertain_npc_notice(state: &AppState) -> bool {
-    state
-        .message_service
-        .load_messages(active_game_of(state))
-        .map(|messages| {
-            messages
-                .iter()
-                .any(|message| message.text().contains(UNCERTAIN_NPC_NOTICE))
-        })
-        .unwrap_or(false)
-}
-
-/// Waits until every Job this app spawned has ended, or `timeout_ms` passes.
-///
-/// A stop and a reset end a Game's slot at once, while the Job's thread lives
+/// A stop and a reset end a Game's job entry at once, while the Job's thread lives
 /// on until its refusals return. A test that asserts what a Job's late answer
 /// wrote waits here before it reads, so it observes the Job's end and not a
 /// moment before it.
 pub async fn wait_for_jobs(state: &AppState, timeout_ms: u64) -> bool {
-    state.generation_gate.wait_for_jobs(timeout_ms).await
+    state
+        .job_deps
+        .tasks
+        .wait(std::time::Duration::from_millis(timeout_ms))
+        .await
 }

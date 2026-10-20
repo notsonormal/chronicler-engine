@@ -103,15 +103,16 @@ async fn test_async_action_saves_input_to_story_log_with_sqlite() {
     storage.seed_world(&world, &map).unwrap();
     let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
-    storage
-        .create_game(
+    chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             &world.name,
             &world.key,
             &player.key,
             &player.sheet.name,
             "Test Game",
-        )
-        .unwrap();
+        ),
+    );
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 

@@ -4,6 +4,7 @@ Endpoints:
 - `POST /worlds`
 - `POST /worlds/:key`
 - `POST /worlds/:key/posture`
+- `POST /worlds/:key/delete`
 
 ## Scenarios
 
@@ -120,4 +121,39 @@ And the World's card shows "1 game" and not "1 games"
 When a second game is created in that World
 And the client GET /fragment/worlds
 Then the World's card shows "2 games"
+```
+
+### World delete
+
+#### Scenario 25.10: The refusal of a World delete pluralises the game count
+
+```gherkin
+Given a seeded World with exactly one game
+When the client POST /worlds/{key}/delete
+Then the response is a 200 that holds the refusal "Cannot delete world with 1 game"
+And the refusal does not read "1 games"
+When a second game is created in that World
+And the client POST /worlds/{key}/delete
+Then the refusal reads "Cannot delete world with 2 games"
+And the World is still stored
+```
+
+#### Scenario 25.11: A World delete removes a World with no games, and an unknown key changes nothing
+
+```gherkin
+Given a seeded World "posture_world" with no games
+When the client POST /worlds/posture_world/delete
+Then the response is a 200 with an empty body
+And the World is no longer stored
+When the client POST /worlds/nonexistent/delete
+Then the response is a 200 with an empty body
+```
+
+#### Scenario 25.12: A storage failure during a World delete renders the error fragment with a 500
+
+```gherkin
+Given a storage that rejects the World delete
+When the client POST /worlds/{key}/delete
+Then the response status is "500 Internal Server Error"
+And the body carries the error fragment naming the storage failure
 ```

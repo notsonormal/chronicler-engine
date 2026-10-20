@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narration::{Narrated, Narrator};
-use crate::application::prompting::token_budget::{TokenBudget, MAX_CONTEXT_TOKENS};
+use crate::application::prompting::token_budget::{TokenBudget, MAX_CONTEXT_TOKENS, MAX_HISTORY_TOKENS};
 use crate::application::prompting::{NpcContext, PromptAssembler, PromptContext};
+use crate::domain::model::agent::Role;
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard, Relationship};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
@@ -129,7 +130,6 @@ impl Fixture {
         self
     }
 
-    /// `count` narration entries, each long enough to spend tokens.
     fn history_of(&self, count: usize) -> Vec<MessageEntry> {
         (0..count)
             .map(|index| MessageEntry {
@@ -177,7 +177,7 @@ fn narrate_with(
     preset: &PromptPreset,
     budget: TokenBudget,
 ) -> Result<Narrated, GenerationFailure> {
-    narrator(Arc::clone(model)).narrate(context, preset, "Short", budget)
+    narrator(Arc::clone(model)).narrate(Role::Narrator, context, preset, "Short", budget)
 }
 
 fn sent_prompt(context: &PromptContext, preset: &PromptPreset) -> ModelCall {
@@ -399,6 +399,29 @@ fn test_the_default_window_carries_the_whole_history() {
         "and the newest: {}",
         call.user_prompt
     );
+}
+
+// CASE narrator-history-cap: a history past the history cap keeps its newest text within the cap.
+#[test]
+fn test_a_history_past_the_cap_keeps_its_newest_text() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+    let call = sent_prompt(&fixture.context(&history, "I look around."), &preset());
+
+    let kept = layer(
+        &call.user_prompt,
+        "<ConversationHistory>",
+        "</ConversationHistory>",
+    );
+    let tags = "<ConversationHistory>\n</ConversationHistory>".len();
+    let cap_chars = MAX_HISTORY_TOKENS as usize * 4;
+    assert!(
+        kept.chars().count() <= cap_chars + tags,
+        "the history stays within the cap: {} characters",
+        kept.chars().count()
+    );
+    assert!(kept.contains("Entry 1999 "), "the newest entry must stay");
+    assert!(!kept.contains("Entry 0 "), "the oldest entry goes first");
 }
 
 // CASE narrator-response-cap: the call asks for the budget's response length.
@@ -962,9 +985,10 @@ fn test_an_empty_or_whitespace_only_answer_fails() {
         let model = Arc::new(ScriptedModel::new().narration(answer));
         let result = narrate_with(&model, &context, &preset(), TokenBudget::fallback());
         match result {
-            Err(failure) => assert!(
-                failure.raw.contains("empty"),
-                "the failure names the empty answer: {failure:?}"
+            Err(failure) => assert_eq!(
+                failure.kind,
+                crate::domain::model::state::generation_status::GenerationFailureKind::EmptyText,
+                "an empty answer is its own kind, so its own line shows"
             ),
             Ok(narrated) => panic!("an answer of {answer:?} is no narration: {narrated:?}"),
         }
@@ -1002,7 +1026,13 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     let context = fixture.context(&fixture.history, "I look around.");
 
     narrator
-        .narrate(&context, &preset(), "Short", TokenBudget::fallback())
+        .narrate(
+            Role::Narrator,
+            &context,
+            &preset(),
+            "Short",
+            TokenBudget::fallback(),
+        )
         .expect("a narration is a result");
 
     let recorded = storage
@@ -1015,6 +1045,33 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     assert!(!call.user_prompt.is_empty());
 }
 
+// CASE narrator-role: the call carries the role the caller names, so an event
+// Narration feeds the Trigger's health.
+#[test]
+fn test_a_call_carries_the_role_the_caller_names() {
+    let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
+    let model = Arc::new(ScriptedModel::new().event_narration("The gate swings open."));
+    let narrator = recording_narrator(model, &storage);
+    let fixture = Fixture::new();
+    let context = fixture.context(&fixture.history, "I look around.");
+
+    narrator
+        .narrate(
+            Role::Trigger,
+            &context,
+            &preset(),
+            "Short",
+            TokenBudget::fallback(),
+        )
+        .expect("the event narration is a result");
+
+    let recorded = storage
+        .list_latest_llm_messages(10)
+        .expect("the forensics read back");
+    let call = recorded.last().expect("the call is recorded");
+    assert_eq!(call.agent_name, "trigger");
+}
+
 // CASE narrator-call-record-failure: a failed call is recorded with its failure text.
 #[test]
 fn test_a_failed_call_is_recorded_with_its_failure_text() {
@@ -1024,7 +1081,13 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let fixture = Fixture::new();
     let context = fixture.context(&fixture.history, "I look around.");
 
-    let _ = narrator.narrate(&context, &preset(), "Short", TokenBudget::fallback());
+    let _ = narrator.narrate(
+        Role::Narrator,
+        &context,
+        &preset(),
+        "Short",
+        TokenBudget::fallback(),
+    );
 
     let recorded = storage
         .list_latest_llm_messages(10)

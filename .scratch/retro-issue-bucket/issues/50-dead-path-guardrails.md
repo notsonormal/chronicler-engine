@@ -25,3 +25,5 @@ Recommendation: C with A. Today, neither rule would find a violation in `adapter
   - `check_handler_return_type` also has a `TODO` (`layers.rs:91`) that questions its list of exceptions.
 - **Why it matters.** The turn-state-model sketch (`assets/sketch-25-new-design.md` §6) makes guardrails part of the design. A walker that silently checks nothing gives false confidence.
 - **Skills:** `/grilling`.
+
+**2026-10-19, lead (evidence for the owner's status change).** The core step's C4 built option C with A. Both walkers now take the HTTP adapter's folder: `check_handler_return_type` uses `HTTP_ADAPTER_SCOPE`, and `check_server_layer_boundaries` checks `adapters/driving/http/` with `SwipeState` as its banned type (`tests/infrastructure/guardrails/layers.rs`). The meta rule is in place: a path-limited check whose scope matches no file reports `dead_scope_violation` (`tests/infrastructure/guardrails/mod.rs`), and a walker row reports `dead_path_violation` (`walkers.rs`, tested in `walker_tests.rs::a_dead_path_names_the_rule_and_the_scope`). The branch is `wf/rebuild-core`, not yet on `main`. Recommendation: resolve this ticket when the core step merges to `main`.

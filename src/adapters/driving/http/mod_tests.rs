@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use crate::domain::model::settings::AppSettings;
 use crate::adapters::driving::http::ServerConfig;
-use crate::application::pipeline::ActionPipeline;
 
 #[test]
 fn test_server_config_default() {
@@ -77,13 +76,7 @@ fn test_app_state_struct_fields() {
     )
     .expect("build_app_graph_for_tests should succeed");
 
-    let _app_state = wired.pipeline;
-}
-
-#[test]
-fn test_pipeline_trait_bounds() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<ActionPipeline>();
+    let _job_deps = wired.job_deps;
 }
 
 #[test]

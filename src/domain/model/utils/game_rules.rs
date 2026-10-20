@@ -7,7 +7,7 @@ use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::quantifier::{NpcEvent, NpcEventList, NpcTransitionType, QuantifierResult};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state::trigger_context::TriggerRef;
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::trigger::Trigger;
 use crate::error::{EngineError, Result};
@@ -23,7 +23,6 @@ pub struct TriggerMatch {
     pub trigger_narration_prompt: String,
 }
 
-/// One application of the game rules to a Swipe state.
 pub enum GameRuleRequest<'a> {
     /// The whole rule step of one Narration: movement, Characters and Trigger.
     Analysis {
@@ -32,17 +31,16 @@ pub enum GameRuleRequest<'a> {
     },
     /// The Characters that entered or left.
     NpcEvents(&'a [NpcEvent]),
-    /// The Trigger narration that landed.
+    /// The Trigger narration that landed: which Trigger it was, and the text.
     TriggerNarration {
-        trigger: &'a StoredTriggerContext,
+        trigger: &'a TriggerRef,
         text: &'a str,
     },
 }
 
-/// What the rules changed; the caller turns them into story writes.
+/// The rules write no story: the caller turns these into writes.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct GameRulesOutcome {
-    /// The room the movement arrived in, when one happened.
     pub arrived_room_name: Option<String>,
     /// The room the rules added, because no room known to the map had the destination.
     pub unknown_location: Option<Room>,
@@ -52,8 +50,6 @@ pub struct GameRulesOutcome {
     pub trigger_narration_landed: bool,
 }
 
-/// Applies one rule step to `state`, changing only that state.
-///
 /// Except for `TriggerNarration`, the consistency check is the returned `Err`: it runs on the
 /// state the step left. A landed Trigger narration is the caller's to check, because the caller
 /// reports that failure with a state that already holds the event Narration.
@@ -79,8 +75,8 @@ pub fn apply_game_rules(
     }
 }
 
-/// The whole rule step of one Narration. Triggers read `times_met` before the Character events
-/// below advance it; swapping the two suppresses every first-encounter Trigger.
+/// Triggers read `times_met` before the Character events below advance it; swapping the two
+/// suppresses every first-encounter Trigger.
 fn analysis(
     state: &mut SwipeState,
     quantifier_result: &QuantifierResult,
@@ -131,8 +127,7 @@ fn analysis(
     Ok(outcome)
 }
 
-/// The movement of one Narration: the walk, the Characters met on arrival and the room the
-/// arriving Narration reports. No destination moves nobody and reports no room.
+/// No destination moves nobody and reports no room.
 fn movement(
     state: &mut SwipeState,
     destination: Option<&str>,
@@ -186,7 +181,6 @@ fn walk(state: &mut SwipeState, map: &MapDef, room_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// The room a room id names: one of the map's rooms, or one the rules added.
 fn room_of<'a>(state: &'a SwipeState, map: &'a MapDef, room_id: &str) -> Option<&'a Room> {
     map.get_room_by_id(room_id)
         .or_else(|| state.movement.dynamic_rooms.get(room_id))
@@ -214,11 +208,7 @@ fn apply_npc_events(state: &mut SwipeState, events: &[NpcEvent]) {
     }
 }
 
-fn trigger_narration(
-    state: &mut SwipeState,
-    trigger: &StoredTriggerContext,
-    text: &str,
-) -> GameRulesOutcome {
+fn trigger_narration(state: &mut SwipeState, trigger: &TriggerRef, text: &str) -> GameRulesOutcome {
     if text.trim().is_empty() {
         return GameRulesOutcome::default();
     }
@@ -289,10 +279,10 @@ fn evaluate_triggers(
     results
 }
 
-/// The "last Narration after last player Input" ordering on `MessageHistory`
-/// is not a global invariant: `POST /history/delete` legitimately pops a
-/// trailing Narration, so a state whose last entry is an Input is a valid
-/// rest state. This check therefore omits it.
+/// The "last Narration after last player Input" ordering over the story is not
+/// a global invariant: `POST /history/delete` legitimately pops a trailing
+/// Narration, so a state whose last Message is an Input is a valid rest state.
+/// This check therefore omits it.
 #[cfg(feature = "diagnostics")]
 pub(crate) fn assert_state_consistency(
     state: &SwipeState,

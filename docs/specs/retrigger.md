@@ -9,26 +9,26 @@ Endpoint: `POST /retrigger`
 #### Scenario 13.1: Retrigger creates a new event narration message and does not roll back state
 
 ```gherkin
-Given a game state where narrative.last_trigger is set (a trigger context exists)
-And the last message is a non-event Narration (the main narration)
-And narrative.history contains N messages
+Given a Game whose current state holds a trigger context
+And the last Message is a non-event Narration (the main narration)
+And the story log holds N Messages
 And a narrator backend that returns a non-empty continuation for the trigger prompt
 When the client sends POST /retrigger
-And the pipeline returns to idle
-Then message_service.load_messages() contains N+1 messages (the original history is preserved; the new event narration is appended, not a replacement)
-And the new message is a Narration entry whose event_header is Some(...)
-And message_service.load_or_fresh().narrative.input_buffer.status is Idle
+And the Game is no longer busy
+Then the story log holds N+1 Messages (the original history is preserved; the new event narration is appended, not a replacement)
+And the new Message is an event Narration (it carries an event header)
+And the generation status is Idle
 ```
 
 #### Scenario 13.2: Retrigger does not move the player
 
 ```gherkin
-Given a game state where narrative.last_trigger is set
-And the last message is a non-event Narration
-And movement.current_room_id == "room2"
+Given a Game whose current state holds a trigger context
+And the last Message is a non-event Narration
+And the player stands in "room2"
 When the client sends POST /retrigger
-And the pipeline returns to idle
-Then message_service.load_or_fresh().movement.current_room_id is still "room2" (a retrigger applies no movement)
+And the Game is no longer busy
+Then the player still stands in "room2" (a retrigger applies no movement)
 ```
 
 ### Retrigger error cases
@@ -36,25 +36,16 @@ Then message_service.load_or_fresh().movement.current_room_id is still "room2" (
 #### Scenario 14.1: Retrigger with no trigger context returns 400
 
 ```gherkin
-Given a game state where narrative.last_trigger is None
+Given a Game whose current state holds no trigger context
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 And no generation is started
 ```
 
-#### Scenario 14.2: Retrigger with no messages returns 400
-
-```gherkin
-Given a game state with no messages in history
-When the client sends POST /retrigger
-Then the response is 400 Bad Request
-```
-
 #### Scenario 14.3: Retrigger when the last message is not a narration returns 400
 
 ```gherkin
-Given a game state where narrative.last_trigger is set
-And the last message is an Input message (not a Narration)
+Given a Game whose last Message is an Input message (not a Narration)
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 ```
@@ -62,8 +53,7 @@ Then the response is 400 Bad Request
 #### Scenario 14.4: Retrigger when the last message is an event continuation returns 400
 
 ```gherkin
-Given a game state where narrative.last_trigger is set
-And the last message is an event Narration (has event_header)
+Given a Game whose last Message is an event Narration that a Trigger appended
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 ```
@@ -71,14 +61,14 @@ Then the response is 400 Bad Request
 #### Scenario 14.5: Retrigger trigger narration failure sets Error
 
 ```gherkin
-Given a game state with a stored trigger context
-And the last message is a non-event Narration
+Given a Game whose current state holds a trigger context
+And the last Message is a non-event Narration
 And a narrator backend that fails for the trigger continuation prompt
 When the client sends POST /retrigger
-And the pipeline returns to idle
-Then the generation status is an error whose text mentions "Trigger narration failed"
-And the message history gained no new event Narration entry (the failed continuation is not persisted)
-And the message history still ends in the non-event Narration the failure was reported on
+And the Game is no longer busy
+Then the generation status is an error whose text is "The event narration failed."
+And the story log gained no new event Narration entry (the failed continuation is not persisted)
+And the story log still ends in the non-event Narration the failure was reported on
 And the story-log fragment still offers the `.retrigger-btn` control on that Narration
 ```
 
@@ -95,10 +85,10 @@ Then the response is 400 Bad Request
 #### Scenario 15.1: Retrigger while a generation is already in flight returns "Still thinking..."
 
 ```gherkin
-Given a game state where a generation is already in flight (the generation gate is busy)
+Given a Game whose Job is running
 When the client sends POST /retrigger
 Then the response is 200 with a "Still thinking..." status string
-And no retrigger is started (the gate is not claimed)
+And no event Narration is added
 ```
 
 ---
@@ -108,16 +98,13 @@ And no retrigger is started (the gate is not claimed)
 These properties hold across every `POST /retrigger` and are observable
 through HTTP. Drift indicates a regression even if all scenarios pass.
 
-- **I.3** Retrigger (`POST /retrigger`) adds exactly one new message to
-  `narrative.history` (the event narration). It does not append a swipe.
-- **I.7** If a message exists in history, it must have a `snapshot_id`
-  pointing to a restorable snapshot. A message without a snapshot (or with
-  a dangling snapshot id) is a data-integrity violation (500), not a user
-  error (400).
-- **I.8** Retrigger rejects concurrent generation the same way
-  `process_action` does: 200 with a `"Still thinking..."` status, no
-  generation started.
-- **I.9** `last_trigger` is set before the trigger LLM call, so it
-  survives a trigger-narration failure. Retrigger is available as a
-  recovery path after trigger failure without re-running the full
-  pipeline.
+- **I.3** Retrigger (`POST /retrigger`) adds exactly one new Message to
+  the story log (the event Narration). It does not add a Swipe.
+- **I.7** A request whose start state is missing is a data-integrity
+  violation: 500 and the failure line "The data for this request is
+  missing: …", not a user error (400).
+- **I.8** Retrigger rejects concurrent generation the same way an Action
+  does: 200 with a `"Still thinking..."` status, no generation started.
+- **I.9** A failed event Narration leaves the trigger context of the last
+  Narration in place. Retrigger stays available as a recovery path after
+  the failure, with no new Action.

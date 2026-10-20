@@ -62,22 +62,22 @@ flowchart LR
     bootstrap -. wires .-> app
 ```
 
-Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::llm_factory`). `Storage` is concrete-by-design — the engine's persistence boundary may call it directly, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
+Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::wiring`). `Storage` is concrete-by-design — the engine's persistence boundary may call it directly, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
 
 ## The single-process deployment contract
 
-The engine deploys as one process against one SQLite file. The per-game generation registry is process-local; two engines pointed at the same database would race on the gate and lose updates on the registry. The single-process commitment is the deployment contract — horizontal scaling is not on the table, and the architecture is free to use process-local concurrency primitives (RAII guards, registry projections) without paying for cross-process coordination. Restarting the engine is safe because the database is the coordination boundary: the registry's "no generating slot" state is checked against the persisted `GenerationStatus` on the next action, and disagreement heals to `Idle`.
+The engine deploys as one process against one SQLite file. The registry of job entries is process-local; two engines pointed at the same database would not see each other's busy Games, and each could start a Job on the same Game. The single-process commitment is the deployment contract — horizontal scaling is not on the table, and the architecture is free to use process-local concurrency primitives (the registry lock, RAII drops of a Job's writer) without paying for cross-process coordination. Restarting the engine is safe because no saved record holds a busy mark: every Game is idle after a start, and every save unit that landed before the restart stays.
 
 ## Architectural commitments
 
 A small set of guarantees follow from the shape above. Each is machine-checked or relied on directly by the code; see `## Document References` for the formal enumeration and test references. The architectural intent, in one line each:
 
 - Domain purity — domain code has no `tokio`, no I/O, no HTTP types. Tested without a runtime.
-- Single-process deployment — one engine, one database; the gate and registry are process-local.
+- Single-process deployment — one engine, one database; the registry of job entries is process-local.
 - Tokio-only concurrency — `spawn_blocking` for synchronous services; no `std::thread::spawn` anywhere in `src/`.
-- Lock-poison recovery — every `Mutex`/`RwLock` site recovers via `into_inner()`; a panic does not corrupt the lock.
-- Generation self-healing — the registry slot and the persisted status are written in sequence, and recovery resets a persisted `Generating` that no slot owns.
-- One FreeAction at a time — overlapping actions are rejected at the HTTP boundary, matching single-player semantics.
+- Lock-poison recovery — every `Mutex` site recovers via `into_inner()`; a panic does not corrupt the lock.
+- Restart safety — the busy mark lives in memory, and each save unit lands whole, so a restart leaves every Game idle and no record half-written.
+- One Job per Game — a second request for a busy Game is refused with "Still thinking...", matching single-player semantics.
 
 ## Document References
 

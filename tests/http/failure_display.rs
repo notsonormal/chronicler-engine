@@ -6,16 +6,23 @@ use chronicler_engine::test_support::active_game_of;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{TestOverride, TxWrite};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
+use chronicler_engine::domain::model::llm_backend::LlmBackendType;
+use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
 use chronicler_engine::domain::model::state::generation_status::{
-    GenerationFailure, GenerationFailureKind, GenerationPhase, GenerationStatus,
+    GenerationFailure, GenerationFailureKind,
 };
+use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::fixtures::llm_message;
-use chronicler_engine::test_support::TestAppBuilder;
+use chronicler_engine::test_support::{configured_runner, ModelRole, ScriptedModel, TestAppBuilder};
 use chronicler_engine::test_support::empty_sqlite_storage;
 
-use crate::support::http_requests::{fetch_body, post_form};
+use crate::SettingsTestGuard;
+use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
+use crate::support::http_assertions::status_error_message;
+use crate::support::http_fixtures::{break_start_room, corrupt_start_state, story_of};
+use crate::support::http_requests::{fetch_body, post_action, post_form, wait_for_jobs, wait_settled};
 // [docs/specs/failure_display.md] SCENARIO: 38.1
 #[tokio::test]
 async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
@@ -207,14 +214,11 @@ async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
 // [docs/specs/failure_display.md] SCENARIO: 38.2
 #[tokio::test]
 async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
-    let state = TestAppBuilder::default_test().build_service();
-    {
-        let mut game_state = state.message_service.load_or_fresh(active_game_of(&state));
-        game_state.swipe.movement.current_room_id = "non_existent_room".to_string();
-        let _ = state
-            .message_service
-            .save_state(active_game_of(&state), &game_state);
-    }
+    let storage = Arc::new(empty_sqlite_storage());
+    let state = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_service();
+    break_start_room(&storage, active_game_of(&state), "non_existent_room");
     let app = build_router(state);
 
     let request = Request::builder()
@@ -241,13 +245,10 @@ async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
 #[tokio::test]
 async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
     let state = TestAppBuilder::default_test()
-        .generation_status(
-            GenerationStatus::Error(GenerationFailure {
-                kind: GenerationFailureKind::Unreachable,
-                raw: "LLM Error: connection refused".to_string(),
-            }),
-            GenerationPhase::Narrating,
-        )
+        .failure(GenerationFailure::new(
+            GenerationFailureKind::Unreachable,
+            "LLM Error: connection refused",
+        ))
         .build_service();
     let app = build_router(state);
 
@@ -270,13 +271,10 @@ async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
 #[tokio::test]
 async fn test_missing_preset_failure_clamps_with_the_preset_line() {
     let state = TestAppBuilder::default_test()
-        .generation_status(
-            GenerationStatus::Error(GenerationFailure {
-                kind: GenerationFailureKind::PresetMissing,
-                raw: "Prompt preset not found: system_default".to_string(),
-            }),
-            GenerationPhase::Narrating,
-        )
+        .failure(GenerationFailure::new(
+            GenerationFailureKind::PresetMissing,
+            "Prompt preset not found: system_default",
+        ))
         .build_service();
     let app = build_router(state);
 
@@ -286,7 +284,7 @@ async fn test_missing_preset_failure_clamps_with_the_preset_line() {
         "a missing preset must keep its own line, not the general one: {body}"
     );
     assert!(
-        !body.contains("The last turn failed to generate."),
+        !body.contains("The engine failed with an internal error."),
         "the general line belongs to failures no kind names: {body}"
     );
     assert!(
@@ -302,13 +300,10 @@ async fn test_missing_preset_failure_clamps_with_the_preset_line() {
 async fn test_spent_token_budget_clamps_with_its_own_line() {
     let raw = "LLM returned no answer after spending its whole token budget (2048 completion tokens, 2041 of them reasoning)";
     let state = TestAppBuilder::default_test()
-        .generation_status(
-            GenerationStatus::Error(GenerationFailure {
-                kind: GenerationFailureKind::TokenBudgetSpent,
-                raw: raw.to_string(),
-            }),
-            GenerationPhase::Narrating,
-        )
+        .failure(GenerationFailure::new(
+            GenerationFailureKind::TokenBudgetSpent,
+            raw,
+        ))
         .build_service();
     let app = build_router(state);
 
@@ -322,7 +317,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
         "the line must name only an action the dashboard offers: {body}"
     );
     assert!(
-        !body.contains("The last turn failed to generate."),
+        !body.contains("The engine failed with an internal error."),
         "the general line belongs to failures no kind names: {body}"
     );
     assert!(
@@ -374,5 +369,219 @@ async fn test_failed_user_action_is_not_a_failed_poll() {
     assert!(
         body_str.contains("update_game_config failure"),
         "the failure text must reach the client: {body_str}"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.9
+#[tokio::test]
+async fn test_empty_answer_keeps_its_own_line_clamps() {
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().empty(ModelRole::Narration)));
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 1000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The language model gave an empty answer."),
+        "an empty answer keeps its own line: {body}"
+    );
+    assert!(
+        !body.contains("answer could not be read"),
+        "an empty answer is not an unreadable answer: {body}"
+    );
+    let narrations = story_of(&state)
+        .into_iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 1,
+        "the empty answer saves no Narration, so the opening is the only one"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.10
+#[tokio::test]
+async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
+    // The start state's encounter log names a Character the World does not hold,
+    // so the game rules refuse to apply the analysis. The narration itself answers
+    // and is saved first.
+    let storage = Arc::new(empty_sqlite_storage());
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("The room waits.")
+                .analysis("{\"npcs_in_room\": [], \"movement\": null}"),
+        ))
+        .build_with_state();
+    corrupt_start_state(&storage, active_game_of(&state), |broken| {
+        broken
+            .npc_encounter_log
+            .set_currently_meeting("a_ghost_the_world_lacks", true);
+    });
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 1000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The text was saved, but the game state could not be updated."),
+        "a contradiction keeps its own line: {body}"
+    );
+    let raw = "npc_encounter_log references unknown NPC";
+    assert!(
+        status_error_message(&body).contains(raw),
+        "the disclosure holds the raw internal message: {body}"
+    );
+    assert_eq!(
+        body.matches(raw).count(),
+        1,
+        "the raw internal message appears once, inside the disclosure: {body}"
+    );
+    let narrations: Vec<_> = story_of(&state)
+        .into_iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .collect();
+    assert_eq!(
+        narrations.len(),
+        2,
+        "the opening Narration and the Action's"
+    );
+    assert_eq!(
+        narrations.last().map(|message| message.text().to_string()),
+        Some("The room waits.".to_string()),
+        "the text the Job saved stays when the state update is refused"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.11
+#[tokio::test]
+async fn test_save_failure_clamps_with_the_save_line_and_saves_no_narration() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::new(ScriptedModel::new().turn("You look around.")),
+        AppSettings::default(),
+        configured_runner,
+    );
+    // The Input's save unit writes no dock, so the Narration's text save is the
+    // first write this override refuses.
+    failures.set_write(
+        TxWrite::PutDock,
+        TestOverride::internal("the dock write failed"),
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The new text could not be saved."),
+        "a refused save keeps the save-failed line: {body}"
+    );
+    assert_eq!(
+        body.matches("The new text could not be saved.").count(),
+        1,
+        "the line appears once: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("the dock write failed"),
+        "the storage error behind the line is reachable in the disclosure: {body}"
+    );
+
+    let messages = story_of(&state);
+    let narrations = messages
+        .iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 1,
+        "the opening is the only Narration: the refused save landed no text"
+    );
+    let inputs = messages
+        .iter()
+        .filter(|message| message.message_type == MessageType::Input)
+        .count();
+    assert_eq!(
+        inputs, 1,
+        "the Input saved before the failure stays in the story"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.12
+#[tokio::test]
+async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
+    let _guard = SettingsTestGuard::new();
+    // The fixed safety margin and minimum input budget together exceed this
+    // window, so the prompt can never fit beside the system prompt.
+    let connection = LlmProviderConfig {
+        max_context_tokens: Some(512),
+        ..LlmProviderConfig::new("narration-conn", "narration-conn", LlmBackendType::Mock)
+    };
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "narration-conn".into(),
+        quantifier_connection_id: "narration-conn".into(),
+        ..AppSettings::default()
+    };
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(empty_sqlite_storage()),
+        Arc::new(ScriptedModel::new().turn("You look around.")),
+        settings,
+        configured_runner,
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The story was too long for the language model."),
+        "a prompt that cannot fit keeps the prompt-too-long line: {body}"
+    );
+    assert!(
+        !body.contains("The engine failed with an internal error."),
+        "the general line belongs to failures no kind names: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("Context overflow"),
+        "the budget the prompt missed is reachable in the disclosure: {body}"
+    );
+
+    let narrations = story_of(&state)
+        .iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 1,
+        "the model was never asked, so the opening is the only Narration"
     );
 }

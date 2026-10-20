@@ -35,20 +35,6 @@ fn test_db_games_table_has_persona_columns() {
 }
 
 #[test]
-fn test_db_game_state_snapshots_has_game_id() {
-    let pool = DbPool::new(":memory:").unwrap();
-    let conn = pool.conn();
-    let mut stmt = conn
-        .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='game_state_snapshots'")
-        .unwrap();
-    let schema: String = stmt.query_row([], |row| row.get(0)).unwrap();
-    assert!(
-        schema.contains("game_id"),
-        "game_state_snapshots should have game_id column"
-    );
-}
-
-#[test]
 fn test_db_messages_has_game_id() {
     let pool = DbPool::new(":memory:").unwrap();
     let conn = pool.conn();
@@ -186,35 +172,19 @@ fn test_db_cascade_delete_game() {
     let game_id: i64 = conn.last_insert_rowid();
 
     conn.execute(
-        "INSERT INTO game_state_snapshots (game_id, movement, narrative, scene, npc_encounter_log, created_at)
-         VALUES (?1, '{}', '{}', '{}', '{}', '1')",
-        rusqlite::params![game_id],
-    )
-    .unwrap();
-
-    conn.execute(
-        "INSERT INTO messages (game_id, message_type, timestamp, active_swipe_index, is_deleted)
-         VALUES (?1, 'Narration', '1', 0, 0)",
+        "INSERT INTO messages (game_id, message_type, kind, timestamp, active_swipe_index)
+         VALUES (?1, 'Narration', 'Narration', '1', 0)",
         rusqlite::params![game_id],
     )
     .unwrap();
     let message_id: i64 = conn.last_insert_rowid();
 
     conn.execute(
-        "INSERT INTO message_swipes (message_id, swipe_index, text, snapshot_id, location_header, event_header)
-         VALUES (?1, 0, 'hello', NULL, NULL, NULL)",
+        "INSERT INTO message_swipes (message_id, swipe_index, text, room_report, event_header, state, maker)
+         VALUES (?1, 0, 'hello', NULL, NULL, '{}', 'Narrator')",
         rusqlite::params![message_id],
     )
     .unwrap();
-
-    let snap_count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM game_state_snapshots WHERE game_id = ?1",
-            rusqlite::params![game_id],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(snap_count, 1, "snapshot should exist before delete");
 
     let msg_count: i64 = conn
         .query_row(
@@ -239,15 +209,6 @@ fn test_db_cascade_delete_game() {
         rusqlite::params![game_id],
     )
     .unwrap();
-
-    let snap_count_after: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM game_state_snapshots WHERE game_id = ?1",
-            rusqlite::params![game_id],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(snap_count_after, 0, "snapshot should be cascaded-deleted");
 
     let msg_count_after: i64 = conn
         .query_row(

@@ -23,6 +23,7 @@ pub struct DbGame {
     pub active_options_prompt_preset_id: String,
     pub options_always_on: bool,
     pub display_name: String,
+    pub failure_json: Option<String>,
 }
 
 impl DbGame {
@@ -45,6 +46,7 @@ impl DbGame {
             active_options_prompt_preset_id: row.get(14)?,
             options_always_on: row.get::<_, i64>(15)? != 0,
             display_name: row.get(16)?,
+            failure_json: row.get(17)?,
         })
     }
 
@@ -74,6 +76,19 @@ impl DbGame {
             active_options_prompt_preset_id: self.active_options_prompt_preset_id.clone(),
             options_always_on: self.options_always_on,
             display_name: self.display_name.clone(),
+            failure: self.failure()?,
         })
+    }
+
+    fn failure(
+        &self,
+    ) -> Result<
+        Option<crate::domain::model::state::generation_status::GenerationFailure>,
+        EngineError,
+    > {
+        crate::adapters::driven::storage::utils::from_optional_json(
+            "game failure",
+            self.failure_json.as_deref(),
+        )
     }
 }

@@ -11,6 +11,3 @@ pub mod utils;
 
 pub use assembler::{AssembledPrompt, PromptAssembler, PromptContext};
 pub use types::NpcContext;
-
-#[cfg(test)]
-mod token_budget_tests;

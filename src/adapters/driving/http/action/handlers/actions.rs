@@ -5,11 +5,12 @@ use askama::Template;
 use axum::{
     body::Body,
     extract::{Form, State},
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 
-use crate::application::errors::ProcessActionResult;
+use crate::application::generation::gate::JobRequest;
+use crate::application::pipeline::job::Job;
 use crate::domain::model::action::Action;
 use crate::domain::model::game::GameId;
 use crate::adapters::driving::http::AppState;
@@ -18,33 +19,27 @@ use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::render_error;
-use crate::adapters::driving::http::utils::response::{internal_error, ok, service_unavailable};
+use crate::adapters::driving::http::utils::response::{internal_error, ok};
+
+/// `dashboard-action-area.js` keys the wait state on the `.status.wait` class in this
+/// markup; the stub server answers a refused Action with it.
+pub const BUSY_STATUS: &str = "<span class=\"status wait\">Still thinking...</span>";
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
     pub command: String,
 }
 
-/// `dashboard-action-area.js` keys the wait state on the `.status.wait` class in this
-/// markup.
-pub const CONCURRENT_GENERATION_STATUS: &str =
-    "<span class=\"status wait\">Still thinking...</span>";
-
-async fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Response<Body> {
-    let action_result =
-        state
-            .pipeline
-            .process_action(&state.generation_gate, game_id, Action::parse(&command));
-
-    match action_result {
-        Ok(ProcessActionResult::Started) => {
-            ok("<span class=\"status thinking\">Thinking...</span>")
-        }
-        Ok(ProcessActionResult::ConcurrentGeneration) => ok(CONCURRENT_GENERATION_STATUS),
-        Ok(ProcessActionResult::ShuttingDown) => {
-            service_unavailable(render_error("Server is shutting down"))
-        }
-        Err(e) => internal_error(render_error(&format!("Failed to process action: {e}"))),
+fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Response<Body> {
+    let request = match Action::parse(&command) {
+        Action::FreeAction(text) => JobRequest::Action(text),
+        Action::Guide(guide) => JobRequest::Guide(guide),
+        Action::Impersonate(direction) => JobRequest::Impersonate(direction),
+        Action::Options => JobRequest::Options,
+    };
+    match Job::start(&state.game_writer, state.job_deps.clone(), game_id, request) {
+        Ok(()) => ok("<span class=\"status thinking\">Thinking...</span>"),
+        Err(refusal) => refusal.into_response(),
     }
 }
 
@@ -54,10 +49,9 @@ pub async fn action_handler(
     Form(form): Form<ActionForm>,
 ) -> Response<Body> {
     let command = form.command.trim().to_string();
-    dispatch_action(&state, game_id, command).await
+    dispatch_action(&state, game_id, command)
 }
 
-#[allow(clippy::expect_used)]
 pub async fn action_confirm_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
@@ -72,7 +66,7 @@ async fn dispatch_with_status_headers(
     game_id: GameId,
     command: String,
 ) -> Response<Body> {
-    let mut response = dispatch_action(state, game_id, command).await;
+    let mut response = dispatch_action(state, game_id, command);
     add_status_swap_headers(&mut response);
     response
 }

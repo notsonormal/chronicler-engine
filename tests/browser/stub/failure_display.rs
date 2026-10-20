@@ -5,7 +5,6 @@
 
 use std::time::Duration;
 
-use chronicler_engine::adapters::driving::http::utils::error::generation_failure_summary;
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 use playwright_rs::Viewport;
 
@@ -885,7 +884,7 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     );
 }
 
-const FAILURE_KINDS: [GenerationFailureKind; 8] = [
+const FAILURE_KINDS: [GenerationFailureKind; 12] = [
     GenerationFailureKind::Unreachable,
     GenerationFailureKind::PromptTooLong,
     GenerationFailureKind::UnreadableAnswer,
@@ -893,6 +892,10 @@ const FAILURE_KINDS: [GenerationFailureKind; 8] = [
     GenerationFailureKind::SaveFailed,
     GenerationFailureKind::SceneMissing,
     GenerationFailureKind::PresetMissing,
+    GenerationFailureKind::MissingData,
+    GenerationFailureKind::EmptyText,
+    GenerationFailureKind::Contradiction,
+    GenerationFailureKind::EventNarrationFailed,
     GenerationFailureKind::Other,
 ];
 
@@ -907,12 +910,15 @@ fn assert_kind_is_listed(kind: GenerationFailureKind) {
         | GenerationFailureKind::SaveFailed
         | GenerationFailureKind::SceneMissing
         | GenerationFailureKind::PresetMissing
+        | GenerationFailureKind::MissingData
+        | GenerationFailureKind::EmptyText
+        | GenerationFailureKind::Contradiction
+        | GenerationFailureKind::EventNarrationFailed
         | GenerationFailureKind::Other => {}
     }
 }
 
-/// `box_height` is the box the clamp draws, `needed_height` the height the
-/// sentence needs once the clamp is lifted off it.
+/// `needed_height` is the height the sentence needs once the clamp is lifted off it.
 #[derive(serde::Deserialize)]
 struct ClampedLine {
     text: String,
@@ -995,11 +1001,14 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
         let (baseline_input, baseline_area) = measure_action_area(&page).await;
         for kind in FAILURE_KINDS {
             assert_kind_is_listed(kind);
-            let sentence = generation_failure_summary(kind);
-            status.set(StubStatus::Error(
-                kind,
-                format!("stub raw failure for {kind:?}"),
-            ));
+            // The missing-data line carries what is missing, so this check uses a
+            // name a real failure carries; the other kinds ignore the raw text.
+            let raw = match kind {
+                GenerationFailureKind::MissingData => "the story".to_string(),
+                _ => format!("stub raw failure for {kind:?}"),
+            };
+            let sentence = kind.line(&raw);
+            status.set(StubStatus::Error(kind, raw));
             poll_now(&page, "#status-display").await;
             assert!(
                 wait_for_condition_async(
@@ -1157,8 +1166,6 @@ async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _
             rows_before,
             "a failed row action must leave the row in place"
         );
-        // A failed row action swaps nothing, so the control that asked for it
-        // keeps focus.
         assert!(
             active_element_is(&page, control).await,
             "a failed {tab} action must leave focus on the control that asked for it"

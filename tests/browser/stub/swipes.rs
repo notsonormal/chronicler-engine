@@ -70,7 +70,7 @@ async fn check_switch_swipe_leaves_dashboard_ready_and_drops_options(
     // Reproduce the stuck state: the status poll reports a generation
     // still narrating while the log still offers a switch. Clearing it
     // must not wait for another poll.
-    status.set(StubStatus::Phase("narrating".to_string()));
+    status.set(StubStatus::Step("narrating".to_string()));
     poll_now(&page, "#status-display").await;
     wait_for_status_generating(&page).await;
 

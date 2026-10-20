@@ -32,10 +32,6 @@ pub fn internal_error(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::INTERNAL_SERVER_ERROR, body)
 }
 
-pub fn service_unavailable(body: impl Into<String>) -> Response<Body> {
-    status_response(StatusCode::SERVICE_UNAVAILABLE, body)
-}
-
 pub fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")

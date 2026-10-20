@@ -177,14 +177,14 @@ fn test_story_log_template_renders_event_header() {
 }
 
 #[test]
-fn test_story_log_template_renders_location_header() {
+fn test_story_log_template_renders_room_report() {
     let entries = vec![
         MessageEntry {
             id: 1,
             text: "You walk into the hall.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
-            location_header: Some("Entrance Hall".to_string()),
+            room_report: Some("Entrance Hall".to_string()),
             ..Default::default()
         },
         MessageEntry {
@@ -535,7 +535,7 @@ fn test_markdown_to_html_xss_prevention() {
 
 #[test]
 fn test_options_dock_empty_set_renders_empty_body() {
-    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(vec![], false));
+    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(vec![], false, None));
     let rendered = template.render().unwrap();
     assert!(rendered.trim().is_empty());
 }
@@ -546,7 +546,7 @@ fn test_options_dock_renders_escaped_option_rows() {
         "Open the creaking door".to_string(),
         "Search the foyer <quietly>".to_string(),
     ];
-    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(options, false));
+    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(options, false, None));
     let rendered = template.render().unwrap();
 
     assert_eq!(rendered.matches("option-btn").count(), 2);
@@ -560,7 +560,6 @@ fn test_options_dock_renders_escaped_option_rows() {
         rendered.matches(r#"aria-label="Edit before send""#).count(),
         2
     );
-    // Askama escapes element content with numeric entities.
     assert!(!rendered.contains("<quietly>"));
     assert!(rendered.contains("&#60;quietly&#62;"));
     assert!(!rendered.contains("disabled"));
@@ -569,7 +568,7 @@ fn test_options_dock_renders_escaped_option_rows() {
 #[test]
 fn test_options_dock_busy_disables_all_controls() {
     let options = vec!["Wait".to_string(), "Listen".to_string()];
-    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(options, true));
+    let template = OptionsDockTemplate::new(OptionsDockViewModel::new(options, true, None));
     let rendered = template.render().unwrap();
 
     // 2 option buttons + 2 edit buttons + the regenerate button.

@@ -168,6 +168,10 @@ impl ScriptedModel {
         });
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
         let mut hold = self.hold.lock().expect("scripted model hold lock");
+        assert!(
+            hold.is_none(),
+            "ScriptedModel: a hold is already in place; release it before holding again"
+        );
         *hold = Some((role, Arc::clone(&state)));
         ModelHold { state }
     }

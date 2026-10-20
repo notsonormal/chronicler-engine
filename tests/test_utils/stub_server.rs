@@ -16,7 +16,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use chrono::{TimeZone, Utc};
 
-use chronicler_engine::adapters::driving::http::action::handlers::CONCURRENT_GENERATION_STATUS;
+use chronicler_engine::adapters::driving::http::action::handlers::BUSY_STATUS;
 use chronicler_engine::adapters::driving::http::builders::headers::{
     add_status_swap_headers, header_fragment_html,
 };
@@ -25,7 +25,7 @@ use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate,
 };
 use chronicler_engine::adapters::driving::http::utils::error::{
-    error_disclosure, generation_failure_summary, raw_error_detail, render_error,
+    error_disclosure, raw_error_detail, render_error,
 };
 use chronicler_engine::application::games::view_query::RoleHealth;
 use chronicler_engine::domain::model::agent::Role;
@@ -86,7 +86,7 @@ fn default_story_log_entries() -> Vec<MessageEntry> {
             text: NARRATIVE_TEXT.to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 8, 0).unwrap(),
-            location_header: Some("Test Tavern".to_string()),
+            room_report: Some("Test Tavern".to_string()),
             ..Default::default()
         },
     ]
@@ -162,7 +162,7 @@ fn options_dock_html(alternate: bool) -> String {
     } else {
         CANNED_OPTIONS.iter().map(|o| o.to_string()).collect()
     };
-    let vm = OptionsDockViewModel::new(options, false);
+    let vm = OptionsDockViewModel::new(options, false, None);
     OptionsDockTemplate::new(vm)
         .render()
         .expect("render options dock")
@@ -203,8 +203,8 @@ pub enum StubStatus {
     /// The engine is idle; the poll answers "idle".
     #[default]
     Idle,
-    /// The engine is generating; the poll answers the phase name.
-    Phase(String),
+    /// The engine is generating; the poll answers the step name.
+    Step(String),
     /// A failed generation; the poll answers the error fragment, clamped to
     /// the sentence the failure kind names, over this raw text.
     Error(GenerationFailureKind, String),
@@ -630,7 +630,8 @@ fn stub_router(state: Arc<StubState>) -> Router {
             post(|| async { (StatusCode::OK, "").into_response() }),
         )
         .route("/history/:id", post(save_message))
-        // A 500 here drives a row's own error slot rather than the panel's.
+        // Scenario 16.34 drives /reset from the games row: a 500 here fills that
+        // row's own error slot rather than the panel's.
         .route(
             "/reset",
             post(|| async { client_failure("Stub reset failure") }),
@@ -642,7 +643,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             post(|| async { client_failure("Stub retry failure") }),
         )
         .route("/retrigger", post(record_retrigger))
-        // The real switch restores a Snapshot; the stub scripts only the two
+        // The real switch makes another Swipe active; the stub scripts only the two
         // log shapes and the dock drop a switch test observes.
         .route("/message/:id/swipe/:index", post(switch_swipe))
         .route("/status/generating", get(status_generating))
@@ -854,7 +855,7 @@ async fn action_check(
             let mut response = (
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                CONCURRENT_GENERATION_STATUS,
+                BUSY_STATUS,
             )
                 .into_response();
             add_status_swap_headers(&mut response);
@@ -881,10 +882,10 @@ async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body
         .clone();
     let body = match status {
         StubStatus::Idle => "idle".to_string(),
-        StubStatus::Phase(phase) => phase,
+        StubStatus::Step(step) => step,
         StubStatus::Error(kind, raw) => error_disclosure(
             "status-error-popover",
-            generation_failure_summary(kind),
+            &kind.line(&raw),
             &raw_error_detail(&raw),
         ),
     };

@@ -5,9 +5,7 @@ use axum::body::Body;
 use axum::{extract::State, response::Html, response::Response};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::{
-    error_disclosure, generation_failure_summary, raw_error_detail,
-};
+use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
 use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::AppState;
 
@@ -70,48 +68,25 @@ pub async fn generating_status_handler(
     State(state): State<AppState>,
     current: Option<CurrentGame>,
 ) -> Html<String> {
-    tracing::debug!("generating_status_handler: called");
-    let game_id = current.map(|CurrentGame(game_id)| game_id);
-    let (status, phase) = match game_id {
-        Some(game_id) => match state.message_service.load_expecting_valid_state(game_id) {
-            Ok(gs) => {
-                tracing::debug!(
-                    "generating_status_handler: loaded status={:?}, phase={:?}",
-                    gs.narrative.input_buffer.status,
-                    gs.narrative.input_buffer.phase
-                );
-                (
-                    gs.narrative.input_buffer.status.clone(),
-                    gs.narrative.input_buffer.phase.clone(),
-                )
-            }
-            Err(e) => {
-                tracing::error!("generating_status_handler: failed to load state: {e}");
-                Default::default()
-            }
-        },
-        // No Game to read a persisted status from: the live registry has no
-        // slot either, so the poll answers idle.
-        None => Default::default(),
+    let Some(CurrentGame(game_id)) = current else {
+        return Html("idle".to_string());
     };
-    // The live registry, not the persisted record, answers "is something
-    // generating?". A persisted `Generating` with no slot is a stale artifact
-    // from a panic; the poll reports `idle` so the page unblocks. The
-    // persisted phase still supplies the phase name while a slot is live.
-    let is_gen = game_id.is_some_and(|game_id| state.generation_gate.is_busy(game_id));
-    tracing::debug!(
-        "generating_status_handler: is_generating={is_gen}, status={status:?}, phase={phase:?}",
-    );
-    if let Some(failure) = status.failure() {
-        Html(error_disclosure(
-            "status-error-popover",
-            generation_failure_summary(failure.kind),
-            &raw_error_detail(&failure.raw),
-        ))
-    } else if is_gen {
-        Html(phase.as_endpoint_str().to_string())
-    } else {
-        Html("idle".to_string())
+    match state.game_view_query.status(game_id) {
+        Ok(crate::application::games::view_query::Status::Busy(step)) => {
+            Html(step.as_endpoint_str().to_string())
+        }
+        Ok(crate::application::games::view_query::Status::Failed(failure)) => {
+            Html(error_disclosure(
+                "status-error-popover",
+                &failure.line(),
+                &raw_error_detail(&failure.raw),
+            ))
+        }
+        Ok(crate::application::games::view_query::Status::Idle) => Html("idle".to_string()),
+        Err(e) => {
+            tracing::error!("generating_status_handler: {e}");
+            Html("idle".to_string())
+        }
     }
 }
 
@@ -122,10 +97,7 @@ pub async fn reset_generating_handler(
     let Some(CurrentGame(game_id)) = current else {
         return Html("failed".to_string());
     };
-    let _ = state
-        .generation_gate
-        .release_generation_slot_for_game(game_id);
-    match state.pipeline.reset_persisted_status(game_id) {
+    match state.game_writer.stop(game_id) {
         Ok(()) => Html("reset".to_string()),
         Err(e) => {
             tracing::error!("reset_generating_handler: {e}");

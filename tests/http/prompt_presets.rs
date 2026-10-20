@@ -18,6 +18,7 @@ use chronicler_engine::test_support::empty_sqlite_storage;
 use crate::test_utils::preset_card_html_slice;
 use crate::test_utils::panel_section_html_slice;
 
+use crate::support::http_requests::post_form;
 use crate::SettingsTestGuard;
 
 fn get_request(uri: &str) -> Request<Body> {
@@ -25,18 +26,6 @@ fn get_request(uri: &str) -> Request<Body> {
         .uri(uri)
         .method(http::Method::GET)
         .body(Body::empty())
-        .unwrap()
-}
-
-fn post_form_request(uri: &str, body: &str) -> Request<Body> {
-    Request::builder()
-        .uri(uri)
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from(body.to_string()))
         .unwrap()
 }
 
@@ -178,14 +167,12 @@ async fn test_prompt_preset_single_card_renders() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let create_response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let create_response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
+    )
+    .await;
     assert_eq!(create_response.status(), StatusCode::OK);
     let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
@@ -227,14 +214,12 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let create_response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Editable&instructions=Edit+me.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let create_response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Editable&instructions=Edit+me.&preset_type=system",
+    )
+    .await;
     let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
@@ -337,13 +322,12 @@ async fn test_create_system_preset_renders_panel() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
@@ -359,13 +343,12 @@ async fn test_create_quantifier_preset_renders_panel() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=My+Quantifier+Prompt&instructions=Quantify+this+scene.&preset_type=quantifier",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=My+Quantifier+Prompt&instructions=Quantify+this+scene.&preset_type=quantifier",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
@@ -379,13 +362,12 @@ async fn test_create_preset_invalid_type_returns_error() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Bad+Type&instructions=Test.&preset_type=invalid",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Bad+Type&instructions=Test.&preset_type=invalid",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(
@@ -400,13 +382,12 @@ async fn test_create_preset_missing_type_returns_422() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Missing+Type&instructions=Test.",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Missing+Type&instructions=Test.",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
@@ -421,13 +402,12 @@ async fn test_create_preset_reports_save_failure() {
     ));
     let app = build_router(app_state);
 
-    let response = app
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Fail+Preset&instructions=Will+fail.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Fail+Preset&instructions=Will+fail.&preset_type=system",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_text(response).await;
     assert!(body.contains(r#"<div class="error-message">Save failed:"#));
@@ -439,24 +419,21 @@ async fn test_update_preset_renders_card_with_new_name() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let create_response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Before&instructions=Original.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let create_response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Before&instructions=Original.&preset_type=system",
+    )
+    .await;
     let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
-    let response = app
-        .oneshot(post_form_request(
-            &format!("/prompt-presets/{preset_id}"),
-            "name=After&instructions=Updated.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        &format!("/prompt-presets/{preset_id}"),
+        "name=After&instructions=Updated.&preset_type=system",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(body.contains(r#"<div class="preset-card""#));
@@ -470,13 +447,12 @@ async fn test_update_missing_preset_returns_error() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(post_form_request(
-            "/prompt-presets/does-not-exist",
-            "name=Updated&instructions=Updated.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/prompt-presets/does-not-exist",
+        "name=Updated&instructions=Updated.&preset_type=system",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
@@ -489,24 +465,21 @@ async fn test_update_preset_ignores_form_preset_type() {
     let app_state = TestAppBuilder::default_test().build_service();
     let app = build_router(app_state.clone());
 
-    let create_response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Update+Type&instructions=Test.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let create_response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Update+Type&instructions=Test.&preset_type=system",
+    )
+    .await;
     let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
-    let response = app
-        .oneshot(post_form_request(
-            &format!("/prompt-presets/{preset_id}"),
-            "name=Updated&instructions=Updated.&preset_type=quantifier",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        &format!("/prompt-presets/{preset_id}"),
+        "name=Updated&instructions=Updated.&preset_type=quantifier",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(
@@ -530,13 +503,12 @@ async fn test_update_default_preset_returns_error() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(post_form_request(
-            "/prompt-presets/system_default",
-            "name=Changed&instructions=Changed.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/prompt-presets/system_default",
+        "name=Changed&instructions=Changed.&preset_type=system",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(
@@ -551,14 +523,12 @@ async fn test_delete_non_default_preset_returns_empty_body() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let create_response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Delete+Me&instructions=Delete.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let create_response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Delete+Me&instructions=Delete.&preset_type=system",
+    )
+    .await;
     let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
@@ -696,14 +666,12 @@ async fn test_duplicate_preset_renders_panel_with_copy() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let create_response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Original&instructions=Original.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let create_response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Original&instructions=Original.&preset_type=system",
+    )
+    .await;
     let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
@@ -742,14 +710,12 @@ async fn test_activate_system_preset_renders_active_badge() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let create_response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Activate+Me&instructions=Activate.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let create_response = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Activate+Me&instructions=Activate.&preset_type=system",
+    )
+    .await;
     let panel = body_text(create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
@@ -994,14 +960,13 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
         "the stored IF flag must render checked: {form}"
     );
 
-    let saved = app
-        .oneshot(post_form_request(
-            &format!("/prompt-presets/{copy_id}"),
-            "name=Chain+Copy&instructions=Chain.&preset_type=system\
+    let saved = post_form(
+        &app,
+        &format!("/prompt-presets/{copy_id}"),
+        "name=Chain+Copy&instructions=Chain.&preset_type=system\
              &allowed_mode_novel=true&allowed_mode_if=true",
-        ))
-        .await
-        .unwrap();
+    )
+    .await;
     assert_eq!(saved.status(), StatusCode::OK);
     let card = body_text(saved).await;
     assert!(
@@ -1034,23 +999,20 @@ async fn test_create_preset_duplicate_name_in_category_is_refused() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let first = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Alpha&instructions=First.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let first = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Alpha&instructions=First.&preset_type=system",
+    )
+    .await;
     assert_eq!(first.status(), StatusCode::OK);
 
-    let second = app
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Alpha&instructions=Second.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let second = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Alpha&instructions=Second.&preset_type=system",
+    )
+    .await;
     assert_eq!(
         second.status(),
         StatusCode::BAD_REQUEST,
@@ -1067,23 +1029,20 @@ async fn test_create_preset_case_and_space_variant_is_refused() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let first = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Alpha&instructions=First.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let first = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Alpha&instructions=First.&preset_type=system",
+    )
+    .await;
     assert_eq!(first.status(), StatusCode::OK);
 
-    let second = app
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=++alpha++&instructions=Second.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let second = post_form(
+        &app,
+        "/prompt-presets",
+        "name=++alpha++&instructions=Second.&preset_type=system",
+    )
+    .await;
     assert_eq!(
         second.status(),
         StatusCode::BAD_REQUEST,
@@ -1099,23 +1058,20 @@ async fn test_create_preset_same_name_in_another_category_is_allowed() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let first = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Alpha&instructions=First.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let first = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Alpha&instructions=First.&preset_type=system",
+    )
+    .await;
     assert_eq!(first.status(), StatusCode::OK);
 
-    let second = app
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Alpha&instructions=Second.&preset_type=quantifier",
-        ))
-        .await
-        .unwrap();
+    let second = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Alpha&instructions=Second.&preset_type=quantifier",
+    )
+    .await;
     assert_eq!(second.status(), StatusCode::OK);
     let body = body_text(second).await;
     let quantifier_section = panel_section_html_slice(&body, "Quantifier Prompts")
@@ -1132,24 +1088,21 @@ async fn test_update_preset_keeps_its_own_name() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let created = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Alpha&instructions=First.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let created = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Alpha&instructions=First.&preset_type=system",
+    )
+    .await;
     let panel = body_text(created).await;
     let preset_id = extract_first_preset_id(&panel);
 
-    let response = app
-        .oneshot(post_form_request(
-            &format!("/prompt-presets/{preset_id}"),
-            "name=Alpha&instructions=Changed.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        &format!("/prompt-presets/{preset_id}"),
+        "name=Alpha&instructions=Changed.&preset_type=system",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     let card = preset_card_html_slice(&body, "Alpha").expect("the updated card must render");
@@ -1173,14 +1126,12 @@ async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let created = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets",
-            "name=Original&instructions=Original.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let created = post_form(
+        &app,
+        "/prompt-presets",
+        "name=Original&instructions=Original.&preset_type=system",
+    )
+    .await;
     let panel = body_text(created).await;
     let source_id = extract_first_preset_id(&panel);
 
@@ -1227,25 +1178,22 @@ async fn test_update_preset_onto_sibling_name_is_refused() {
     let app = build_router(app_state.clone());
 
     for name in ["Alpha", "Beta"] {
-        let response = app
-            .clone()
-            .oneshot(post_form_request(
-                "/prompt-presets",
-                &format!("name={name}&instructions=First.&preset_type=system"),
-            ))
-            .await
-            .unwrap();
+        let response = post_form(
+            &app,
+            "/prompt-presets",
+            &format!("name={name}&instructions=First.&preset_type=system"),
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
     }
 
     let beta_id = preset_id_by_name(&storage, "Beta");
-    let response = app
-        .oneshot(post_form_request(
-            &format!("/prompt-presets/{beta_id}"),
-            "name=Alpha&instructions=Changed.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        &format!("/prompt-presets/{beta_id}"),
+        "name=Alpha&instructions=Changed.&preset_type=system",
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
@@ -1357,14 +1305,12 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
 
     failures.set("save_preset", TestOverride::internal("preset save failure"));
 
-    let response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/prompt-presets/original_ref",
-            "name=Changed&instructions=Updated.&preset_type=system",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/prompt-presets/original_ref",
+        "name=Changed&instructions=Updated.&preset_type=system",
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::INTERNAL_SERVER_ERROR,

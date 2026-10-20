@@ -8,18 +8,19 @@ use std::sync::Arc;
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::game::GameId;
-use crate::domain::model::message::{Message, Swipe};
+use crate::domain::model::message::{Maker, Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::settings_defaults;
-use crate::domain::model::state::game_state::GameState;
-use crate::domain::model::state::message_types::MessageType;
-use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state::swipe_state::SwipeState;
+use crate::domain::model::state::message_types::{MessageKind, MessageType};
+use crate::adapters::driven::storage::TxToken;
 use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::world::{WorldCard, WorldManifest};
-use crate::adapters::driven::storage::Storage;
+use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::db::DbPool;
+use crate::adapters::driven::storage::transaction::Tx;
 use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::application::llm_recorder::LlmCallRecorder;
@@ -160,18 +161,6 @@ impl TestMap {
         }
     }
 
-    pub fn room_named(id: &str, name: &str) -> Room {
-        Room {
-            id: id.to_string(),
-            name: name.to_string(),
-            description: format!("A plain test room ({id})."),
-            exits: HashMap::new(),
-            items: vec![],
-            image_path: None,
-            navigation_description: None,
-        }
-    }
-
     pub fn single_room(room_id: &str) -> MapDef {
         MapDef {
             overworld: Overworld {
@@ -206,76 +195,11 @@ impl TestMap {
     }
 }
 
-pub struct TestGameState;
+pub struct TestSwipeState;
 
-impl TestGameState {
-    pub fn in_room(room_id: &str) -> GameState {
-        GameState::new(room_id)
-    }
-}
-
-pub struct TestStoredTriggerContext;
-
-impl TestStoredTriggerContext {
-    pub fn standard() -> StoredTriggerContext {
-        StoredTriggerContext {
-            npc_id: "npc_1".to_string(),
-            trigger_idx: 0,
-            trigger_name: "Test".to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: "Test prompt".to_string(),
-            system_prompt: "sys".to_string(),
-            user_prompt: "user".to_string(),
-            max_tokens: None,
-        }
-    }
-
-    pub fn for_npc(
-        npc_id: &str,
-        trigger_name: &str,
-        narration_prompt: &str,
-    ) -> StoredTriggerContext {
-        StoredTriggerContext {
-            npc_id: npc_id.to_string(),
-            trigger_idx: 0,
-            trigger_name: trigger_name.to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: narration_prompt.to_string(),
-            system_prompt: "sys".to_string(),
-            user_prompt: "user".to_string(),
-            max_tokens: None,
-        }
-    }
-
-    pub fn named(trigger_name: &str, npc_id: &str) -> StoredTriggerContext {
-        StoredTriggerContext {
-            npc_id: npc_id.to_string(),
-            trigger_idx: 0,
-            trigger_name: trigger_name.to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: format!("{trigger_name} fires."),
-            system_prompt: "sys".to_string(),
-            user_prompt: "user".to_string(),
-            max_tokens: None,
-        }
-    }
-
-    pub fn with_max_tokens(
-        npc_id: &str,
-        trigger_name: &str,
-        narration_prompt: &str,
-        max_tokens: u32,
-    ) -> StoredTriggerContext {
-        StoredTriggerContext {
-            npc_id: npc_id.to_string(),
-            trigger_idx: 0,
-            trigger_name: trigger_name.to_string(),
-            trigger_repeat: false,
-            trigger_narration_prompt: narration_prompt.to_string(),
-            system_prompt: "system prompt text".to_string(),
-            user_prompt: "user prompt text".to_string(),
-            max_tokens: Some(max_tokens),
-        }
+impl TestSwipeState {
+    pub fn in_room(room_id: &str) -> SwipeState {
+        SwipeState::starting(None, &HashMap::new(), room_id)
     }
 }
 
@@ -374,33 +298,12 @@ impl TestCharacterSheet {
     }
 }
 
-pub fn create_minimal_test_state() -> GameState {
-    GameState::new("room1".to_string())
-}
-
 pub fn create_test_world() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
         name: "Test Realm".to_string(),
         description: "A small testing kingdom".to_string(),
         ..Default::default()
-    }
-}
-
-pub fn create_test_player() -> PersonaCard {
-    PersonaCard {
-        key: "test_player".to_string(),
-        sheet: CharacterSheet {
-            name: "Test Player".to_string(),
-            description: "A brave adventurer".to_string(),
-            personality: "Brave and curious".to_string(),
-            scenario: "Exploring the test realm".to_string(),
-            example_dialogue: "Hello, world!".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
     }
 }
 
@@ -459,92 +362,6 @@ pub fn create_test_map() -> MapDef {
     MapDef { overworld }
 }
 
-pub fn create_test_npcs() -> Vec<NpcCard> {
-    vec![NpcCard {
-        id: "test_npc".to_string(),
-        sheet: CharacterSheet {
-            name: "Innkeeper".to_string(),
-            description: "A friendly innkeeper".to_string(),
-            personality: "Helpful and cheerful".to_string(),
-            scenario: "Runs the local tavern".to_string(),
-            example_dialogue: "Welcome, traveler!".to_string(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-        triggers: vec![],
-        relationships: vec![],
-    }]
-}
-
-pub fn create_test_state_with_npcs(room_npcs: Vec<String>, npcs: Vec<NpcCard>) -> GameState {
-    let _world = Arc::new(WorldCard {
-        key: "test".into(),
-        name: "Test World".into(),
-        description: "A test world".into(),
-        scenarios: vec![StartingScenario {
-            id: "default".into(),
-            name: "Default".into(),
-            description: "Test scenario".into(),
-            starting_room_id: "room1".into(),
-            text: String::new(),
-            npcs: vec![],
-        }],
-        default_scenario_id: Some("default".into()),
-        ..Default::default()
-    });
-
-    let room1 = Room {
-        id: "room1".into(),
-        name: "Test Tavern".into(),
-        description: "A cozy tavern with wooden beams and warm fire.".into(),
-        exits: HashMap::new(),
-        items: vec![],
-        image_path: None,
-        navigation_description: None,
-    };
-
-    let region = Region {
-        id: "test_region".into(),
-        name: "Test Region".into(),
-        rooms: vec![room1],
-    };
-
-    let _map = Arc::new(MapDef {
-        overworld: Overworld {
-            id: "test_overworld".into(),
-            name: "Test World".into(),
-            regions: vec![region],
-        },
-    });
-
-    let _player = Arc::new(PersonaCard {
-        key: "test_player".to_string(),
-        sheet: CharacterSheet {
-            name: "Test Player".into(),
-            description: "A test player".into(),
-            personality: "Brave".into(),
-            scenario: "Test scenario".into(),
-            example_dialogue: "Hello!".into(),
-            summary: None,
-            profile_image: None,
-            headshot_image: None,
-        },
-        inventory: vec![],
-    });
-
-    let mut state = GameState::new("room1");
-    for npc in npcs.iter().filter(|n| room_npcs.contains(&n.id)) {
-        state.swipe.scene.npcs_in_area.push(npc.clone());
-    }
-    state
-}
-
-pub fn create_test_state() -> GameState {
-    create_test_state_with_npcs(vec!["test_npc".to_string()], create_test_npcs())
-}
-
 pub fn create_test_world_with_scenario() -> WorldCard {
     WorldCard {
         key: "test".to_string(),
@@ -592,10 +409,6 @@ pub fn shopkeeper_npc() -> NpcCard {
     }
 }
 
-pub fn npc_map(npcs: Vec<NpcCard>) -> HashMap<String, NpcCard> {
-    npcs.into_iter().map(|npc| (npc.id.clone(), npc)).collect()
-}
-
 pub fn seed_default_game_row(
     pool: &crate::adapters::driven::storage::db::DbPool,
     game_id: u64,
@@ -616,7 +429,76 @@ pub fn sqlite_storage() -> Result<Storage, crate::error::EngineError> {
     Ok(Storage::new_sqlite(pool))
 }
 
-/// SQLite in memory with no Game row, unlike `sqlite_storage`.
+/// The request a hand-made test Game row is written from: the defaults the
+/// storage layer's own create gave a Game with no World to inherit from.
+pub fn test_new_game(
+    world_name: &str,
+    world_key: &str,
+    persona_key: &str,
+    persona_name: &str,
+    name: &str,
+) -> crate::domain::model::game::NewGame {
+    crate::domain::model::game::NewGame {
+        world_name: world_name.to_string(),
+        world_key: world_key.to_string(),
+        persona_key: persona_key.to_string(),
+        persona_name: persona_name.to_string(),
+        name: name.to_string(),
+        narrator_mode: NarratorMode::Novel,
+        narrative_perspective: NarrativePerspective::Third,
+        narrative_tense: NarrativeTense::Past,
+        system_prompt_preset_id: "system_default".to_string(),
+        quantifier_prompt_preset_id: "quantifier_default".to_string(),
+        impersonate_prompt_preset_id: "impersonate_default".to_string(),
+        options_prompt_preset_id: "options_default".to_string(),
+        options_always_on: false,
+    }
+}
+
+/// A Game row a test only needs to write into. The row lands whole and off any
+/// unit, as `seed_default_game_row` does for the shared SQLite fixture: the
+/// create unit's clauses are the seam contract's, and a seeded Game holds no
+/// opening Narration.
+pub fn seed_game_row(storage: &Storage, request: &crate::domain::model::game::NewGame) -> GameId {
+    storage
+        .with_backend_mut("seed_game_row", |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                Ok(Tx::write_game_row(&conn, request)?)
+            }
+            Backend::InMemory(data) => {
+                let id = data.next_game_id;
+                data.next_game_id += 1;
+                let now = chrono::Utc::now();
+                data.games.push(crate::domain::model::game::Game {
+                    id,
+                    world_name: request.world_name.clone(),
+                    world_key: request.world_key.clone(),
+                    persona_key: request.persona_key.clone(),
+                    persona_name: request.persona_name.clone(),
+                    name: request.name.clone(),
+                    display_name: request.display_name(),
+                    created_at: now,
+                    updated_at: now,
+                    narrator_mode: request.narrator_mode,
+                    narrative_perspective: request.narrative_perspective,
+                    narrative_tense: request.narrative_tense,
+                    active_system_prompt_preset_id: request.system_prompt_preset_id.clone(),
+                    active_quantifier_prompt_preset_id: request.quantifier_prompt_preset_id.clone(),
+                    active_impersonate_prompt_preset_id: request
+                        .impersonate_prompt_preset_id
+                        .clone(),
+                    active_options_prompt_preset_id: request.options_prompt_preset_id.clone(),
+                    options_always_on: request.options_always_on,
+                    failure: None,
+                });
+                Ok(GameId(id))
+            }
+        })
+        // arch-lint: allow(no-unwrap-expect) reason="test fixture panics when the seed write fails"
+        .expect("test setup: the Game row must land")
+}
+
 pub fn empty_sqlite_storage() -> Storage {
     let pool = DbPool::new(":memory:")
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on a storage failure"
@@ -624,8 +506,18 @@ pub fn empty_sqlite_storage() -> Storage {
     Storage::new_sqlite(pool)
 }
 
+/// The token a storage test's unit needs: `TxToken`'s constructor is crate-only,
+/// and the storage seam contract is a test crate.
+pub fn tx_token() -> TxToken {
+    TxToken::new()
+}
+
 pub fn dummy_message(text: &str) -> Message {
-    Message::new(text, MessageType::Input, None, None)
+    Message::new(
+        MessageType::Input,
+        MessageKind::TypedInput,
+        Swipe::new(text, Maker::Player, TestSwipeState::in_room("room1")),
+    )
 }
 
 pub fn llm_message(
@@ -650,15 +542,7 @@ pub fn llm_message(
 }
 
 pub fn dummy_swipe(text: &str) -> Swipe {
-    Swipe {
-        text: text.to_string(),
-        snapshot_id: None,
-        location_header: None,
-        event_header: None,
-        impersonated: false,
-        guide_text: None,
-        impersonate_direction: None,
-    }
+    Swipe::new(text, Maker::Narrator, TestSwipeState::in_room("room1"))
 }
 
 pub fn make_noop_save_fn() -> SaveLlmMessageFn {
@@ -686,130 +570,4 @@ pub fn active_game_of(state: &crate::adapters::driving::http::AppState) -> GameI
         .active_game_id()
         // arch-lint: allow(no-unwrap-expect) reason="test fixture panics on a broken fixture"
         .expect("test fixture: an active game")
-}
-
-/// Mirrors what production code writes, so a seeded row matches a generated one.
-pub fn insert_message_with_swipe(
-    storage: &Storage,
-    game_id: GameId,
-    msg: &Message,
-) -> Result<(), crate::error::EngineError> {
-    let id = storage.insert_message(game_id, msg)?;
-    if let Some(swipe) = msg.swipes.first() {
-        let mut swipe = swipe.clone();
-        swipe.text = msg.text().to_string();
-        swipe.snapshot_id = msg.snapshot_id();
-        swipe.location_header = msg.location_header().map(|s| s.to_string());
-        swipe.event_header = msg.event_header().map(|s| s.to_string());
-        storage.insert_swipe(id, &swipe, 0)?;
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn seed_swipe_with_stored_inputs(
-    storage: &Storage,
-    game_id: GameId,
-    room_id: &str,
-    text: &str,
-    message_type: MessageType,
-    impersonated: bool,
-    guide_text: Option<String>,
-    impersonate_direction: Option<String>,
-) -> Result<u64, crate::error::EngineError> {
-    use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-
-    let mut state = TestGameState::in_room(room_id);
-    state.add_message(text.to_string(), message_type);
-    let snapshot = GameStateSnapshot::from_game_state(&state);
-    let snapshot_id = storage.save_snapshot(game_id, &snapshot)?;
-    let mut message = state
-        .narrative
-        .history
-        .last()
-        .ok_or_else(|| crate::error::EngineError::Config("seed: no message appended".into()))?
-        .clone();
-    message.set_stored_inputs(impersonated, guide_text, impersonate_direction);
-    message.set_snapshot_id(Some(snapshot_id));
-    insert_message_with_swipe(storage, game_id, &message)?;
-    Ok(snapshot_id)
-}
-
-/// One main turn, in the order the pipeline saves it.
-pub fn seed_main_narration_flow(
-    state: &crate::adapters::driving::http::AppState,
-    storage: &Storage,
-    room_after: &str,
-) -> Result<(), crate::error::EngineError> {
-    use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-
-    // Mirrors `phase_pre_main_snapshot`: the Input links to this snapshot, so it is
-    // the turn's retry anchor.
-    {
-        let game_id = active_game_of(state);
-        let mut gs = state.message_service.load_or_fresh(game_id);
-        gs.add_message("look".to_string(), MessageType::Input);
-        let id = storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
-        if let Some(last) = gs.narrative.history.last_mut() {
-            last.set_snapshot_id(Some(id));
-            insert_message_with_swipe(storage, game_id, last)?;
-        }
-    }
-
-    // Saved before the game rules ran, so this snapshot carries no movement or
-    // trigger.
-    {
-        let game_id = active_game_of(state);
-        let mut gs = state.message_service.load_or_fresh(game_id);
-        gs.add_message("Main narration".to_string(), MessageType::Narration);
-        let id = storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
-        if let Some(last) = gs.narrative.history.last_mut() {
-            last.set_snapshot_id(Some(id));
-            insert_message_with_swipe(storage, game_id, last)?;
-        }
-    }
-
-    let game_id = active_game_of(state);
-    let mut gs = state.message_service.load_or_fresh(game_id);
-    gs.swipe.movement.current_room_id = room_after.to_string();
-    storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
-    Ok(())
-}
-
-pub fn seed_event_flow(
-    state: &crate::adapters::driving::http::AppState,
-    storage: &Storage,
-    room_after: &str,
-) -> Result<(), crate::error::EngineError> {
-    use crate::domain::model::state::game_state_snapshot::GameStateSnapshot;
-
-    seed_main_narration_flow(state, storage, room_after)?;
-
-    // The snapshot `phase_trigger_continuation_llm_call` writes before the trigger
-    // call; no Message links to it.
-    {
-        let game_id = active_game_of(state);
-        let mut gs = state.message_service.load_or_fresh(game_id);
-        gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
-        storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
-    }
-
-    {
-        let game_id = active_game_of(state);
-        let mut gs = state.message_service.load_or_fresh(game_id);
-        gs.narrative.last_trigger = Some(TestStoredTriggerContext::standard());
-        gs.swipe.npc_encounter_log.mark_trigger_fired("npc_1", 0);
-        gs.narrative.pending_event = Some(TestStoredTriggerContext::standard().trigger_name);
-        gs.add_message("Event narration".to_string(), MessageType::Narration);
-        let id = storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
-        if let Some(last) = gs.narrative.history.last_mut() {
-            last.set_snapshot_id(Some(id));
-            insert_message_with_swipe(storage, game_id, last)?;
-        }
-    }
-
-    let game_id = active_game_of(state);
-    let gs = state.message_service.load_or_fresh(game_id);
-    storage.save_snapshot(game_id, &GameStateSnapshot::from_game_state(&gs))?;
-    Ok(())
 }

@@ -15,6 +15,9 @@ pub enum BannedName {
     /// A name that starts with this prefix, in a type, a `use` tree, or an
     /// expression path.
     NamePrefix(&'static str),
+    /// A name that holds this part, which covers a family of names that share one
+    /// word (an `AnalysisAgent`, an `OptionsAgent`, an `AgentRunner`).
+    NameContains(&'static str),
 }
 
 pub struct BannedNameRow {
@@ -202,10 +205,11 @@ impl BannedNameVisitor<'_> {
         self.violations.push(violation);
     }
 
-    fn check_prefixes(&mut self, ident: &syn::Ident, what: &str) {
+    fn check_names(&mut self, ident: &syn::Ident, what: &str) {
         let name = ident.to_string();
         let banned = self.row.banned.iter().any(|banned| match banned {
             BannedName::NamePrefix(prefix) => name.starts_with(prefix),
+            BannedName::NameContains(part) => name.contains(part),
             BannedName::StaticItem => false,
         });
         if banned {
@@ -231,7 +235,7 @@ impl<'ast> Visit<'ast> for BannedNameVisitor<'_> {
     fn visit_type_path(&mut self, node: &'ast syn::TypePath) {
         if let Some(segment) = node.path.segments.last() {
             let ident = &segment.ident;
-            self.check_prefixes(ident, "type");
+            self.check_names(ident, "type");
         }
         syn::visit::visit_type_path(self, node);
     }
@@ -239,16 +243,26 @@ impl<'ast> Visit<'ast> for BannedNameVisitor<'_> {
     fn visit_expr_path(&mut self, node: &'ast syn::ExprPath) {
         for segment in &node.path.segments {
             let ident = &segment.ident;
-            self.check_prefixes(ident, "path");
+            self.check_names(ident, "path");
         }
         syn::visit::visit_expr_path(self, node);
+    }
+
+    /// A trait bound, as in `Box<dyn AnalysisAgent>`: the trait's own path is not a
+    /// type path, so the type and import walks do not reach it.
+    fn visit_trait_bound(&mut self, node: &'ast syn::TraitBound) {
+        if let Some(segment) = node.path.segments.last() {
+            let ident = &segment.ident;
+            self.check_names(ident, "trait bound");
+        }
+        syn::visit::visit_trait_bound(self, node);
     }
 
     fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
         let mut idents = Vec::new();
         use_tree_idents(&node.tree, &mut idents);
         for ident in idents {
-            self.check_prefixes(&ident, "import");
+            self.check_names(&ident, "import");
         }
         syn::visit::visit_item_use(self, node);
     }

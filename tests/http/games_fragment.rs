@@ -112,17 +112,18 @@ async fn test_games_fragment_lists_other_saved_games_http() {
         .active_game()
         .expect("the active game must load")
         .expect("the fixture seeds an active game");
-    // The storage-level create does not switch the active game, so the new
-    // game lands in the Saved Games list beside the active one.
-    storage
-        .create_game(
+    // Seeding a row does not switch the active game, so the new game lands in
+    // the Saved Games list beside the active one.
+    chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             &active.world_name,
             &active.world_key,
             &active.persona_key,
             &active.persona_name,
             "Second Game",
-        )
-        .expect("the second game must save");
+        ),
+    );
 
     let app = build_router(state);
     let html = fetch_body(&app, "/fragment/games").await;

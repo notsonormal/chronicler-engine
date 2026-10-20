@@ -6,7 +6,6 @@ use axum::response::{Html, IntoResponse, Response};
 
 use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error};
 use crate::application::errors::ApplicationError;
-use crate::domain::model::state::generation_status::GenerationFailureKind;
 use crate::error::EngineError;
 
 pub(crate) fn error_fragment(message: impl std::fmt::Display) -> String {
@@ -35,27 +34,6 @@ pub fn raw_error_detail(raw: &str) -> String {
     format!("<pre class=\"error-detail-raw\">{}</pre>", html_escape(raw))
 }
 
-/// The 240px status column clamps this sentence to two lines, so any remedy it
-/// names has to be one the dashboard can carry out.
-pub fn generation_failure_summary(kind: GenerationFailureKind) -> &'static str {
-    match kind {
-        GenerationFailureKind::Unreachable => "The language model could not be reached.",
-        GenerationFailureKind::PromptTooLong => {
-            "The last turn was too long for the language model."
-        }
-        GenerationFailureKind::UnreadableAnswer => "The language model's answer could not be read.",
-        // The dashboard offers no Max Tokens control, so the one remedy a player
-        // can act on is a different model on the role's connection.
-        GenerationFailureKind::TokenBudgetSpent => {
-            "The model used its budget on reasoning. Try another model."
-        }
-        GenerationFailureKind::SaveFailed => "The last turn could not be saved.",
-        GenerationFailureKind::SceneMissing => "The current scene could not be found.",
-        GenerationFailureKind::PresetMissing => "The active prompt preset is missing.",
-        GenerationFailureKind::Other => "The last turn failed to generate.",
-    }
-}
-
 pub(crate) fn error_fragment_response(message: impl std::fmt::Display) -> Response<Body> {
     Html(error_fragment(message)).into_response()
 }
@@ -81,7 +59,8 @@ pub(crate) fn refusal_message_without_layer_prefix_for_validation_and_config(
     }
 }
 
-/// A non-2xx so htmx never swaps the region the failure describes.
+/// A 500 for an error the request cannot correct; htmx still never swaps the
+/// region the failure describes.
 pub(crate) fn action_failure_response(message: impl std::fmt::Display) -> Response<Body> {
     internal_error(error_fragment(message))
 }

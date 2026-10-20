@@ -33,7 +33,6 @@ pub async fn run_server_with_config(
     config: ServerConfig,
 ) -> Result<(SocketAddr, JoinHandle<std::io::Result<()>>)> {
     let app_state = AppState::from_wired(app);
-    let shutdown_token = app_state.shutdown_token.clone();
 
     let app = build_router(app_state);
 
@@ -52,9 +51,8 @@ pub async fn run_server_with_config(
         if let Err(e) = tokio::signal::ctrl_c().await {
             tracing::warn!("ctrl_c handler unavailable ({e}); shutting down");
         } else {
-            tracing::info!("Shutdown signal received, cancelling in-flight tasks...");
+            tracing::info!("Shutdown signal received, shutting down...");
         }
-        shutdown_token.cancel();
     };
 
     let handle = tokio::spawn(async move {

@@ -12,20 +12,17 @@ use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, ModelHold, ModelRole, ScriptedModel, TestAppBuilder,
-    TestDataBuilder, TestMap,
+    TestDataBuilder,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_script};
-use crate::support::http_assertions::llm_call_count;
-use crate::support::http_fixtures::OFFERED_SET;
+use crate::support::http_assertions::{assert_still_thinking, llm_call_count, STILL_THINKING};
+use crate::support::http_fixtures::{story_of, OFFERED_SET};
 use crate::support::http_requests::{
     fetch_body, post_action, post_empty, post_form, response_body, wait_for_jobs, wait_idle,
     wait_settled,
 };
 
-const STILL_THINKING: &str = "Still thinking...";
-
-/// A held Job: the busy state a second request meets.
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
     let hold = model.hold(ModelRole::Narration);
@@ -51,10 +48,7 @@ async fn test_action_while_job_runs_is_refused_http() {
     let refused = post_action(&app, "listen").await;
     assert_eq!(refused.status(), StatusCode::OK);
     let body = response_body(refused).await;
-    assert!(
-        body.contains(STILL_THINKING),
-        "the refused Action must answer the wait state, got: {body}"
-    );
+    assert_still_thinking(&body);
     assert_eq!(
         texts_of(&state, active_game_of(&state), MessageType::Input),
         vec!["look".to_string()],
@@ -71,16 +65,14 @@ async fn test_action_while_job_runs_is_refused_http() {
         vec!["look".to_string()],
         "the held Action's own input is the only one saved"
     );
-    let narrations = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .expect("the story log reads back")
+    let narrations = story_of(&state)
         .into_iter()
         .filter(|message| message.message_type == MessageType::Narration)
         .count();
     assert_eq!(
-        narrations, 1,
-        "the refused Action must narrate nothing of its own"
+        narrations, 2,
+        "the opening Narration and the held Action's own one, and nothing of the \
+         refused Action's"
     );
 }
 
@@ -92,7 +84,7 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
     let barrier = Arc::new(Barrier::new(2));
 
     // Both clicks carry the same Action, released together, so which of them
-    // wins is the generation slot's to decide and not the scheduler's.
+    // wins comes from the Game's job entry and not the scheduler's.
     let click = |app: axum::Router, barrier: Arc<Barrier>| async move {
         barrier.wait().await;
         let resp = post_action(&app, "look").await;
@@ -155,10 +147,7 @@ async fn test_options_while_job_runs_is_refused_http() {
     let refused = post_action(&app, "/options").await;
     assert_eq!(refused.status(), StatusCode::OK);
     let body = response_body(refused).await;
-    assert!(
-        body.contains(STILL_THINKING),
-        "the refused /options must answer the wait state, got: {body}"
-    );
+    assert_still_thinking(&body);
 
     hold.release();
     assert!(
@@ -179,8 +168,8 @@ async fn test_options_while_job_runs_is_refused_http() {
 
 fn messages_of(state: &AppState, game: GameId) -> Vec<Message> {
     state
-        .message_service
-        .load_messages(game)
+        .game_view_query
+        .story_messages(game)
         .expect("the story log reads back")
 }
 
@@ -194,14 +183,10 @@ fn texts_of(state: &AppState, game: GameId, kind: MessageType) -> Vec<String> {
 
 /// The one narration answer both Jobs of a stop case script, so which Job takes
 /// which answer cannot change the assertions.
-/// The Narration the stopped Job of the stop case scripts.
 const STOPPED_NARRATION: &str = "The stopped Job's narration.";
-/// The Narration the Job that follows it scripts, so the test can name the text
-/// that follows the second Job's Input.
 const NEXT_NARRATION: &str = "The next Job's narration.";
 
 // [docs/specs/dashboard.md] SCENARIO: 39.5
-#[ignore = "red until the core step: a stopped job's late answer"]
 #[tokio::test]
 async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text() {
     let model = Arc::new(
@@ -255,10 +240,12 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
         vec!["look".to_string(), "listen".to_string()],
         "the stopped Job's Input stays, and the next Job saves its own"
     );
+    let narrations = texts_of(&state, game, MessageType::Narration);
     assert_eq!(
-        texts_of(&state, game, MessageType::Narration),
+        narrations.iter().skip(1).cloned().collect::<Vec<_>>(),
         vec![NEXT_NARRATION.to_string()],
-        "the Narration after listen is the next Job's text"
+        "the stopped Job's late answer adds no Narration, so the next Job's text is \
+         the only one after the opening"
     );
 }
 
@@ -318,7 +305,6 @@ async fn test_reset_while_job_runs_keeps_only_the_new_game_opening() {
 }
 
 // [docs/specs/story_log.md] SCENARIO: 8.7
-#[ignore = "red until the core step: an edit and a delete while busy"]
 #[tokio::test]
 async fn test_edit_and_delete_while_job_runs_are_refused() {
     let (model, hold) = held_action();
@@ -336,18 +322,12 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
     let edit = post_form(&app, &format!("/history/{target}"), "text=An+edited+text").await;
     assert_eq!(edit.status(), StatusCode::OK);
     let edit_body = response_body(edit).await;
-    assert!(
-        edit_body.contains(STILL_THINKING),
-        "an edit while the Game is busy must answer the wait state, got: {edit_body}"
-    );
+    assert_still_thinking(&edit_body);
 
     let delete = post_empty(&app, "/history/delete").await;
     assert_eq!(delete.status(), StatusCode::OK);
     let delete_body = response_body(delete).await;
-    assert!(
-        delete_body.contains(STILL_THINKING),
-        "a delete while the Game is busy must answer the wait state, got: {delete_body}"
-    );
+    assert_still_thinking(&delete_body);
 
     let after = messages_of(&state, game);
     assert_eq!(
@@ -369,7 +349,6 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
 }
 
 // [docs/specs/swipe_switch.md] SCENARIO: 36.3
-#[ignore = "red until the core step: a swipe switch while busy"]
 #[tokio::test]
 async fn test_swipe_switch_while_job_runs_is_refused() {
     let model = Arc::new(
@@ -411,10 +390,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
     let resp = post_empty(&app, &format!("/message/{}/swipe/{target}", narration.id)).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body = response_body(resp).await;
-    assert!(
-        body.contains(STILL_THINKING),
-        "a swipe switch while the Game is busy must answer the wait state, got: {body}"
-    );
+    assert_still_thinking(&body);
 
     let after = messages_of(&state, game)
         .into_iter()
@@ -433,7 +409,6 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
 }
 
 // [docs/specs/games.md] SCENARIO: 18.4
-#[ignore = "red until the core step: a job on another game"]
 #[tokio::test]
 async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
     let model = Arc::new(
@@ -510,16 +485,10 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
     );
 }
 
-/// The Narration Game A's Job writes.
 const GAME_A_NARRATION: &str = "Game A's narration.";
-/// The Narration Game B's Job writes.
 const GAME_B_NARRATION: &str = "Game B's narration.";
-
-/// The Narration a Job of the default test World writes.
 const MAIN_NARRATION: &str = "The main narration.";
-/// The event Narration the Trigger's Character writes.
 const EVENT_NARRATION: &str = "The NPC greets you warmly.";
-/// The preset the client sets while the Job's narrator call is held.
 const SECOND_PRESET_TEXT: &str = "SecondPresetMarker";
 
 // [docs/specs/actions.md] SCENARIO: 6.4
@@ -578,15 +547,13 @@ async fn test_the_event_narration_call_uses_the_preset_active_when_it_runs() {
     hold.release();
     assert!(wait_settled(&state, 2000).await, "the Job should settle");
 
+    let narrations = texts_of(&state, game, MessageType::Narration);
     assert_eq!(
-        texts_of(&state, game, MessageType::Narration),
+        narrations.iter().skip(1).cloned().collect::<Vec<_>>(),
         vec![MAIN_NARRATION.to_string(), EVENT_NARRATION.to_string()],
-        "the Job narrates its own text and the Trigger's"
+        "the Job narrates its own text and the Trigger's, after the opening Narration"
     );
 
-    // The records the panel shows: the event Narration's call carries the
-    // system prompt of the preset the client set, and the Narration's call the
-    // preset that was active when the Job started.
     let calls = state
         .game_view_query
         .list_latest_llm_messages(20)
@@ -618,8 +585,6 @@ fn trigger_world() -> chronicler_engine::test_support::TestData {
         .build()
 }
 
-/// The four model calls of that Turn: the Narration, its analysis, the event
-/// Narration, and the event's analysis.
 fn triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
     ScriptedModel::new()
         .narration(narration)
@@ -628,7 +593,6 @@ fn triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
         .analysis(analysis_report(&["npc_1"], None))
 }
 
-/// The kind of Job the stop table walks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum JobKind {
     /// A free-text Action: an Input save, then a Narration generation. A row
@@ -643,7 +607,6 @@ enum JobKind {
 }
 
 impl JobKind {
-    /// The words a failing row reports.
     fn label(self) -> String {
         match self {
             Self::Narration {
@@ -671,9 +634,7 @@ impl JobKind {
     }
 }
 
-/// The free-text Action every Narration row sends, and the Input it saves.
 const ACTION_INPUT: &str = "look";
-/// The Action of the row whose analysis fires the Trigger, and the Input it saves.
 const EVENT_ACTION_INPUT: &str = "enter the shop";
 
 /// What the story log holds after a stop, per the row of the design's
@@ -698,9 +659,6 @@ enum StoryLogAfterStop {
     MainNarrationOnly,
 }
 
-/// One row of the stop table: the kind of Job, the model call the stop comes
-/// during, the status that call shows, and what the story log holds after the
-/// stop.
 struct StopRow {
     kind: JobKind,
     held: ModelRole,
@@ -765,17 +723,11 @@ static STOP_ROWS: &[StopRow] = &[
     },
 ];
 
-/// The narration answer every stop row scripts.
 const SCRIPTED_NARRATION: &str = "The Job's narration.";
-/// The opening Narration of the always-on World the Narration rows run in.
 const WORLD_OPENING_TEXT: &str = "The World begins.";
-/// The room the scripted analysis moves the player to.
 const MOVED_ROOM: &str = "room2";
-/// The room the always-on World starts in.
 const STARTING_ROOM: &str = "room_1";
 
-/// What one row needs before its request: the app, the Game, the hold armed on
-/// the row's call, and the story log before the request.
 struct StopJob {
     app: axum::Router,
     state: AppState,
@@ -784,7 +736,6 @@ struct StopJob {
     story_before: Vec<Message>,
 }
 
-/// Builds the Job of one row and sends its request, with the row's call held.
 async fn start_stop_job(row: &StopRow) -> StopJob {
     match row.kind {
         JobKind::Narration { fires_trigger } => {
@@ -813,22 +764,17 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             }
         }
         JobKind::Impersonate => {
-            // The two-room map lets the scripted analysis move the player, so
-            // the row can show that the pre-analysis state kept the room.
-            let data = TestDataBuilder::default_test()
-                .map(TestMap::two_rooms(STARTING_ROOM, MOVED_ROOM))
-                .build();
+            // The always-on World's two-room map lets the scripted analysis move
+            // the player, so the row can show that the pre-analysis state kept
+            // the room. Its opening is the one every arm asserts.
             let model = Arc::new(
                 ScriptedModel::new()
                     .narration(SCRIPTED_NARRATION)
                     .analysis(analysis_report(&[], Some(MOVED_ROOM))),
             );
             let hold = model.hold(row.held);
-            let (app, state) = TestAppBuilder::default_test()
-                .data(data)
-                .model(Arc::clone(&model))
-                .build_with_state();
-            let game = active_game_of(&state);
+            let (app, state, storage) = app_with_script(Arc::clone(&model));
+            let game = active_game_on_an_always_on_world(&app, &state, &storage, false).await;
             let story_before = messages_of(&state, game);
             assert!(
                 post_action(&app, "/impersonate hello")
@@ -929,7 +875,6 @@ fn triggered_npc() -> chronicler_engine::domain::model::character::NpcCard {
 }
 
 // [docs/specs/dashboard.md] SCENARIO: 39.4
-#[ignore = "red until the core step: a stop at each model call"]
 #[tokio::test]
 async fn test_a_stop_at_each_model_call_keeps_the_records_of_that_step() {
     // Every row runs, so one report names every stop point that broke.
@@ -947,7 +892,6 @@ async fn test_a_stop_at_each_model_call_keeps_the_records_of_that_step() {
     );
 }
 
-/// Drives one row of the stop table: hold its call, stop, and check what stays.
 async fn run_stop_row(row: &'static StopRow) {
     let label = format!("{} at the {} call", row.kind.label(), row.held.label());
     let start = start_stop_job(row).await;
@@ -971,7 +915,6 @@ async fn run_stop_row(row: &'static StopRow) {
         "reset",
         "{label}: a stop answers reset"
     );
-    // The Game is idle at once, before the held call is released.
     assert!(
         wait_idle(&start.state, 2000).await,
         "{label}: the Game should end idle at once"
@@ -994,8 +937,6 @@ async fn run_stop_row(row: &'static StopRow) {
     assert_story_log_after_stop(row, &label, &start).await;
 }
 
-/// Checks what the story log holds after the stop ended the Job's call, per the
-/// row's outcome.
 async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob) {
     let after = messages_of(&start.state, start.game);
     let after_texts: Vec<String> = after
@@ -1047,7 +988,7 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             );
             let narration = job_narration.expect("the text save wrote the Narration");
             assert_eq!(
-                narration.location_header(),
+                narration.room_report(),
                 None,
                 "{label}: the pre-analysis state names no room, so the player has not moved"
             );
@@ -1075,7 +1016,7 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             let narration = job_narration.expect("the text save wrote the Narration");
             let expected = format!("Room {room}");
             assert_eq!(
-                narration.location_header(),
+                narration.room_report(),
                 Some(expected.as_str()),
                 "{label}: the state update landed, so the Narration reports the room it arrived in"
             );
@@ -1087,29 +1028,29 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
         }
         StoryLogAfterStop::ImpersonateInput => {
             assert_eq!(
-                texts_of(&start.state, start.game, MessageType::Input),
-                vec![SCRIPTED_NARRATION.to_string()],
-                "{label}: the text save of the Impersonate Job stays"
-            );
-            assert!(
-                narrations.is_empty(),
-                "{label}: an Impersonate Job saves no Narration, got: {narrations:?}"
+                after_texts,
+                vec![
+                    WORLD_OPENING_TEXT.to_string(),
+                    SCRIPTED_NARRATION.to_string()
+                ],
+                "{label}: the Impersonate Job saves its Input and no Narration of its own"
             );
             let impersonate_input = after
                 .iter()
                 .find(|message| message.message_type == MessageType::Input)
                 .expect("the text save wrote the Input");
             assert_eq!(
-                impersonate_input.location_header(),
+                impersonate_input.room_report(),
                 None,
                 "{label}: the pre-analysis state reports no room"
             );
+            // The refused state update is what keeps the player where it started,
+            // so the current state still names the starting room.
             let room = start
                 .state
-                .message_service
-                .load_or_fresh(start.game)
-                .swipe
-                .movement
+                .game_view_query
+                .get_debug_state(start.game)
+                .expect("the debug state reads back")
                 .current_room_id;
             assert_eq!(
                 room, STARTING_ROOM,

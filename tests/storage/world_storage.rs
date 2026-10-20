@@ -176,15 +176,16 @@ fn test_delete_world_blocked_by_games() {
 
     let _world_id = storage.create_world(&world_card, &map).unwrap();
 
-    let _game_id = storage
-        .create_game(
+    let _game_id = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             "Test World",
             "test_world_blocked",
             "test_player",
             "Test Player",
             "Test Game",
-        )
-        .unwrap();
+        ),
+    );
 
     let result = storage.delete_world("test_world_blocked");
     assert!(result.is_err(), "Should not delete world with games");
@@ -736,15 +737,16 @@ fn test_sqlite_delete_world_blocked_by_games() {
     let map = make_test_map("sql_map", "SQL Map");
     storage.seed_world(&world_card, &map).unwrap();
 
-    storage
-        .create_game(
+    chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             "Blocked",
             "sql_blocked",
             "test_player",
             "Test Player",
             "Test Game",
-        )
-        .unwrap();
+        ),
+    );
 
     let result = storage.delete_world("sql_blocked");
     assert!(result.is_err(), "Should not delete world with games");

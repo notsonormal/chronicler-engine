@@ -2,17 +2,22 @@
 
 use std::sync::Arc;
 
-use chronicler_engine::test_support::active_game_of;
 use axum::http::StatusCode;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::{analysis_report, ScriptedModel, TestStoredTriggerContext};
-use chronicler_engine::TestAppBuilder;
+use chronicler_engine::domain::model::trigger::ComparisonOperator;
+use chronicler_engine::test_support::{
+    analysis_report, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder, TestNpc,
+};
 
 use crate::support::http_assertions::{
     icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
 };
-use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_settled};
+use crate::support::http_fixtures::story_of;
+use crate::support::http_requests::{
+    fetch_body, fetch_generating_status, post_action, post_empty, post_form, response_body,
+    wait_settled,
+};
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
 #[tokio::test]
@@ -29,14 +34,11 @@ async fn test_delete_last_between_actions_http() {
     let resp = post_action(&app, "examine room").await;
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await, "action A should complete");
-    let narration_a = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap()
+    let narration_a = story_of(&state)
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
         .map(|m| m.text().to_string())
-        .next()
+        .next_back()
         .expect("narration A should be persisted");
 
     let resp = post_empty(&app, "/history/delete").await;
@@ -46,10 +48,7 @@ async fn test_delete_last_between_actions_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await, "action B should complete");
 
-    let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -87,10 +86,7 @@ async fn test_delete_mid_sequence_http() {
     assert!(wait_settled(&state, 1000).await);
     let _ = post_action(&app, "look around").await;
     assert!(wait_settled(&state, 1000).await);
-    let narration_b = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap()
+    let narration_b = story_of(&state)
         .iter()
         .filter(|m| m.message_type == MessageType::Narration)
         .map(|m| m.text().to_string())
@@ -103,10 +99,7 @@ async fn test_delete_mid_sequence_http() {
     let _ = post_action(&app, "check door").await;
     assert!(wait_settled(&state, 1000).await);
 
-    let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -118,6 +111,58 @@ async fn test_delete_mid_sequence_http() {
             .filter(|m| m.message_type == MessageType::Narration)
             .any(|m| m.text() == narration_b),
         "deleted narration B should not reappear"
+    );
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.9
+#[tokio::test]
+async fn test_edit_of_an_unknown_message_is_refused_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let before: Vec<(u64, String)> = story_of(&state)
+        .into_iter()
+        .map(|message| (message.id, message.text().to_string()))
+        .collect();
+
+    let resp = post_form(&app, "/history/999999", "text=Changed.").await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("Message not found"),
+        "the refusal names what the edit could not find: {body}"
+    );
+
+    let after: Vec<(u64, String)> = story_of(&state)
+        .into_iter()
+        .map(|message| (message.id, message.text().to_string()))
+        .collect();
+    assert_eq!(after, before, "the refused edit changes no Message");
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.10
+#[tokio::test]
+async fn test_delete_of_the_only_message_is_refused_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let before = story_of(&state);
+    assert_eq!(
+        before.len(),
+        1,
+        "the seeded Game holds only its opening Narration"
+    );
+
+    let resp = post_empty(&app, "/history/delete").await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The story keeps its last message"),
+        "the refusal says why the delete cannot run: {body}"
+    );
+
+    let after = story_of(&state);
+    assert_eq!(after.len(), 1, "the refused delete drops no Message");
+    assert_eq!(
+        after[0].text(),
+        before[0].text(),
+        "the opening Narration stays"
     );
 }
 
@@ -186,9 +231,8 @@ async fn test_delete_removes_entry_from_fragment_http() {
 // [docs/specs/story_log.md] SCENARIO: 8.5
 #[tokio::test]
 async fn test_story_log_fragment_declares_no_log_container() {
-    let app = TestAppBuilder::default_test()
-        .log("You look around.", MessageType::Narration)
-        .build();
+    // The seeded Game's opening Narration is the entry the fragment renders.
+    let app = TestAppBuilder::default_app();
 
     let body = fetch_body(&app, "/fragment/story-log").await;
 
@@ -209,11 +253,30 @@ async fn test_story_log_fragment_declares_no_log_container() {
 // [docs/specs/story_log.md] SCENARIO: 8.6
 #[tokio::test]
 async fn test_story_log_icon_buttons_have_accessible_names() {
-    let app = TestAppBuilder::default_test()
-        .last_trigger(TestStoredTriggerContext::standard())
-        .log("look around", MessageType::Input)
-        .log("You look around.", MessageType::Narration)
+    // The Action's Trigger fires but its continuation fails, so the main Narration
+    // keeps the trigger context that offers Retrigger on the last entry.
+    let data = TestDataBuilder::default_test()
+        .npcs(vec![TestNpc::with_times_met_trigger(
+            "npc_1",
+            "Test NPC",
+            ComparisonOperator::Eq,
+            0,
+        )])
         .build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You look around.")
+                .analysis(analysis_report(&["npc_1"], None))
+                .failed(ModelRole::Event),
+        ))
+        .build_with_state();
+    assert!(post_action(&app, "look around").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the Action should settle after its failed continuation"
+    );
 
     let body = fetch_body(&app, "/fragment/story-log").await;
 
@@ -232,5 +295,44 @@ async fn test_story_log_icon_buttons_have_accessible_names() {
     assert!(
         exposed.is_empty(),
         "icons must carry aria-hidden=\"true\": {exposed:?}"
+    );
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.8
+#[tokio::test]
+async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
+    // The text save runs before the analysis, so the story log shows the text
+    // while the analysis call is still held.
+    let model = Arc::new(
+        ScriptedModel::new()
+            .narration("The room waits.")
+            .analysis(analysis_report(&[], None)),
+    );
+    let hold = model.hold(ModelRole::Analysis);
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::clone(&model))
+        .build_with_state();
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held analysis call should reach the model"
+    );
+
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "quantifying",
+        "the status names the step the held call runs in"
+    );
+    let log = fetch_body(&app, "/fragment/story-log").await;
+    assert!(
+        log.contains("The room waits."),
+        "the story log shows the text from the save on: {log}"
+    );
+
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the released Job should complete"
     );
 }

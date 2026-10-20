@@ -177,22 +177,23 @@ fn world_bundle_for_assembles_all_four_pieces() {
         )
         .unwrap();
 
-    let game_id = storage
-        .create_game(
+    let game_id = crate::test_support::seed_game_row(
+        &storage,
+        &crate::test_support::test_new_game(
             "bundle_world",
             "bundle_world",
             "bundle_persona",
             "Bundle Persona",
             "Bundle Game",
-        )
-        .unwrap();
+        ),
+    );
 
     let WorldBundle {
         world,
         map: map_arc,
         persona: persona_arc,
         npcs,
-    } = storage.world_bundle_for(game_id).unwrap();
+    } = storage.world_bundle_for(game_id.0).unwrap();
 
     assert_eq!(world.key, "bundle_world");
     assert_eq!(map_arc.overworld.id, "overworld1");

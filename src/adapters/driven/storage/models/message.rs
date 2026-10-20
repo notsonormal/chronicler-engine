@@ -5,9 +5,9 @@ pub struct DbMessage {
     pub id: i64,
     pub game_id: i64,
     pub message_type_json: String,
+    pub kind_json: String,
     pub timestamp: String,
     pub active_swipe_index: i64,
-    pub is_deleted: i64,
 }
 
 impl DbMessage {
@@ -16,9 +16,9 @@ impl DbMessage {
             id: row.get(0)?,
             game_id: row.get(1)?,
             message_type_json: row.get(2)?,
-            timestamp: row.get(3)?,
-            active_swipe_index: row.get(4)?,
-            is_deleted: 0,
+            kind_json: row.get(3)?,
+            timestamp: row.get(4)?,
+            active_swipe_index: row.get(5)?,
         })
     }
 }

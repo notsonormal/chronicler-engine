@@ -142,17 +142,43 @@ fn test_unlisted_error_is_other() {
 }
 
 #[test]
-fn test_raw_text_is_the_classified_error_message() {
+fn test_a_missing_room_names_the_room_and_keeps_the_error() {
     let failure = GenerationFailure::from_engine_error(&EngineError::RoomNotFound("cellar".into()));
-    assert_eq!(failure.raw, "Room not found: cellar");
+    assert_eq!(failure.kind, GenerationFailureKind::SceneMissing);
+    assert_eq!(failure.named, "cellar", "the line names the room");
+    assert_eq!(
+        failure.line(),
+        "The room cellar is not on the map.",
+        "the line is the kind's words with the room in them"
+    );
+    assert_eq!(
+        failure.raw, "Room not found: cellar",
+        "the disclosure holds the error behind the line"
+    );
 }
 
 #[test]
-fn test_with_context_prefixes_the_raw_text() {
-    let failure = GenerationFailure::from_engine_error(&EngineError::Io("disk full".into()))
-        .with_context("Trigger error");
-    assert_eq!(failure.raw, "Trigger error: I/O error: disk full");
-    assert_eq!(failure.kind, GenerationFailureKind::SaveFailed);
+fn test_a_missing_record_names_the_record_and_keeps_the_error() {
+    let failure = GenerationFailure::missing_record(
+        "the persona",
+        Some("the persona record cannot be read".to_string()),
+    );
+    assert_eq!(failure.kind, GenerationFailureKind::MissingData);
+    assert_eq!(
+        failure.line(),
+        "The data for this request is missing: the persona."
+    );
+    assert_eq!(failure.raw, "the persona record cannot be read");
+
+    let without_error = GenerationFailure::missing_record("the story", None);
+    assert_eq!(
+        without_error.line(),
+        "The data for this request is missing: the story."
+    );
+    assert_eq!(
+        without_error.raw, "the story",
+        "with no error behind it, the disclosure holds the line's own name"
+    );
 }
 
 #[test]

@@ -7,15 +7,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
-use crate::domain::model::state::trigger_context::StoredTriggerContext;
+use crate::domain::model::state::generation_status::Step;
+use crate::domain::model::state::message_types::{MessageEntry, MessageType, StoryRow};
+use crate::domain::model::state::trigger_context::EventRecord;
 
-/// A role's health is its newest LLM attempt across every game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
-    /// Writes the turn's narration.
+    /// Writes a generation's Narration.
     Narrator,
-    /// Evaluates the turn and patches narrative state.
+    /// Evaluates a generation's Narration and patches the Swipe state.
     Quantifier,
     /// Offers the pickable next actions.
     Options,
@@ -41,7 +41,6 @@ impl Role {
     }
 }
 
-/// A point in a generation where the Job runs the Agents registered for that hook.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Hook {
@@ -52,19 +51,40 @@ pub enum Hook {
     Options,
 }
 
-/// The kind of one generation: how it was asked for, which decides how the
-/// Narrator writes it and what may follow it. A typed Input is no generation,
-/// so it has no kind here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// A player Action or a Retry of one.
     Narration,
-    /// The player dictating their own character's turn.
+    /// The player dictating their own Persona's Message.
     Impersonate,
     /// A Retry that regenerates the player's own message.
     UserRegen,
     /// A Trigger's continuation narration.
     Event,
+}
+
+impl Kind {
+    /// The step whose name the status shows while this generation runs.
+    pub fn step(self) -> Step {
+        match self {
+            Self::Event => Step::GeneratingEvent,
+            _ => Step::Narrating,
+        }
+    }
+
+    /// The role whose health a generation's model call feeds.
+    pub fn role(self) -> Role {
+        match self {
+            Self::Event => Role::Trigger,
+            _ => Role::Narrator,
+        }
+    }
+
+    /// Whether a generation of this kind saves a Narration: the text save empties
+    /// the dock and the Options run may follow it. An Input save does neither.
+    pub fn saves_a_narration(self) -> bool {
+        matches!(self, Self::Narration | Self::Event)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -82,26 +102,16 @@ impl From<&MessageEntry> for StoryEntry {
     }
 }
 
-pub const STORY_WINDOW: usize = 4;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct EventRecord {
-    pub npc_id: String,
-    pub trigger_idx: usize,
-    pub trigger_name: String,
-    pub direction: String,
-}
-
-impl From<&StoredTriggerContext> for EventRecord {
-    fn from(context: &StoredTriggerContext) -> Self {
+impl From<&StoryRow> for StoryEntry {
+    fn from(row: &StoryRow) -> Self {
         Self {
-            npc_id: context.npc_id.clone(),
-            trigger_idx: context.trigger_idx,
-            trigger_name: context.trigger_name.clone(),
-            direction: context.trigger_narration_prompt.clone(),
+            message_type: row.message_type.clone(),
+            text: row.text.clone(),
         }
     }
 }
+
+pub const STORY_WINDOW: usize = 4;
 
 pub struct WorldView<'a> {
     /// `None` when the state names a room the map does not know.
@@ -112,8 +122,7 @@ pub struct WorldView<'a> {
     pub present: &'a [NpcCard],
 }
 
-/// Carries no Game id, no storage, no dock record and no failure line: an Agent
-/// writes no game record, and the step owns every read and write.
+/// The hook step owns every read and write an Agent needs.
 pub struct HookInput<'a> {
     pub kind: Kind,
     /// The text the Job saved, for a hook that runs after the narrator call.
@@ -172,10 +181,8 @@ impl AgentConfig {
 }
 
 impl StatePatch {
-    /// Merges two Agents' patches into the one the game rules apply: the union of
-    /// their Characters, the first movement destination (a second one is a
-    /// contradiction between two Agents, so the first wins and the second is
-    /// logged), and the least confident of the two.
+    /// A second movement destination is a contradiction between two Agents, so the
+    /// first wins.
     pub fn merge(self, other: StatePatch) -> StatePatch {
         let mut npc_ids = self.npc_ids;
         let new_ids: Vec<String> = other

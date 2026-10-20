@@ -4,9 +4,9 @@
 use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::ports::llm_provider::AGENT_NARRATOR;
 use crate::application::prompting::token_budget::TokenBudget;
 use crate::application::prompting::{AssembledPrompt, PromptAssembler, PromptContext};
+use crate::domain::model::agent::Role;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind};
 use crate::error::EngineError;
@@ -18,8 +18,6 @@ pub struct Narrated {
     pub model_name: String,
 }
 
-/// Holds no storage and no Game: the caller resolves the preset, the posture
-/// and the budget and hands them in.
 pub struct Narrator {
     assembler: PromptAssembler,
     recorder: Arc<LlmCallRecorder>,
@@ -41,6 +39,21 @@ impl Narrator {
         }
     }
 
+    /// Only the wiring tests call it: they drive the recorder that the wiring
+    /// built, and check a provider that failed to build, which
+    /// `backend_info` does not show.
+    pub fn recorder(&self) -> &Arc<LlmCallRecorder> {
+        &self.recorder
+    }
+
+    /// The provider and model the next narration would use.
+    pub fn backend_info(&self) -> (String, String) {
+        match self.recorder.provider() {
+            Ok(p) => (p.name().to_string(), p.model().to_string()),
+            Err(e) => (format!("<unresolved: {e}>"), "<unresolved>".to_string()),
+        }
+    }
+
     /// The prompt of one narration without the model call; the trigger context
     /// keeps it for the event narration to re-use.
     pub fn assemble(
@@ -59,8 +72,11 @@ impl Narrator {
         )
     }
 
+    /// `role` is the role whose health the call feeds: the narrator's own for a
+    /// generation, and the Trigger's for an event Narration.
     pub fn narrate(
         &self,
+        role: Role,
         context: &PromptContext,
         preset: &PromptPreset,
         response_length: &str,
@@ -70,23 +86,23 @@ impl Narrator {
             .assemble(context, preset, response_length, budget)
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
 
-        tracing::info!("Pipeline ▶ Narration LLM call (agent=narrator)");
+        tracing::info!("Narration LLM call (agent={})", role.agent_name());
         let narration_result = self
             .recorder
             .complete(
-                AGENT_NARRATOR,
+                role.agent_name(),
                 &assembled.system_prompt,
                 &assembled.user_prompt,
                 Some(assembled.max_tokens),
             )
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
-        tracing::info!("Pipeline ✓ Narration complete");
+        tracing::info!("Narration complete");
 
         let text = narration_result.text;
         if text.trim().is_empty() {
             return Err(GenerationFailure::new(
-                GenerationFailureKind::UnreadableAnswer,
-                "LLM Error: empty response",
+                GenerationFailureKind::EmptyText,
+                "the answer was empty",
             ));
         }
 

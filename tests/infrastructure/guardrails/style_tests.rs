@@ -13,6 +13,29 @@ fn check_import_ordering_flags_crate_before_std() {
 }
 
 #[test]
+fn check_import_ordering_sees_past_a_multi_line_use() {
+    let violations = check_import_ordering(
+        "src/example.rs",
+        "use crate::thing::{\n    Thing,\n    Other,\n};\nuse tokio_util::sync::CancellationToken;\n",
+    );
+    assert_eq!(
+        violations.len(),
+        1,
+        "the external import after the multi-line crate import is out of order"
+    );
+    assert!(violations[0].message.contains("Import ordering violation"));
+}
+
+#[test]
+fn check_import_ordering_allows_a_multi_line_use_in_order() {
+    let violations = check_import_ordering(
+        "src/example.rs",
+        "use std::collections::HashMap;\nuse tokio_util::sync::CancellationToken;\nuse crate::thing::{\n    Thing,\n    Other,\n};\n",
+    );
+    assert!(violations.is_empty());
+}
+
+#[test]
 fn check_import_ordering_allows_std_external_crate_order() {
     let violations = check_import_ordering(
         "src/example.rs",

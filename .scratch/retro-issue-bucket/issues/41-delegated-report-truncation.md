@@ -21,3 +21,4 @@ Where should a report that exceeds the cap go?
 - The Lead's next turn: "Recon report arrived (truncated after §2, so I still need the ticket Answers)", which dispatched `recon-answers` (`01a12c59-a7b9-74e7-a424-d5c383570a31`, 92 s), itself delivered truncated at 528/696 lines.
 - The truncation notice names the loss, so the failure is legible; what is missing is any recovery path that does not cost a whole agent.
 - Related: issue 08 (`read` with `limit=0` returns nothing) is the neighbouring read-side gap.
+- More evidence (`/retro` 2026-10-19, whole-rebuild review, lead `01a15614`): the thermo-nuclear reviewer's 20,090-character report arrived truncated before its closing section ("What would make this approvable … H"). The notice named `/home/node/.pi/agent/delegate/0ec8f36d/result.json`, and the lead read the tail from it with one `python` call. The recovery path exists now, but it is not a documented step.

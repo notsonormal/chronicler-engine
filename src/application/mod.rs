@@ -10,7 +10,6 @@ pub mod errors;
 pub mod games;
 pub mod generation;
 pub mod llm_recorder;
-pub mod message_service;
 pub mod narration;
 pub mod persona_catalogue;
 pub mod pipeline;
@@ -25,9 +24,6 @@ pub use debug::DebugStateView;
 
 #[cfg(test)]
 mod llm_recorder_tests;
-
-#[cfg(test)]
-mod message_service_tests;
 
 #[cfg(test)]
 mod persona_catalogue_tests;

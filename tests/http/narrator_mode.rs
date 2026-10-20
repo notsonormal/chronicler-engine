@@ -7,7 +7,7 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{ScriptedModel, TestMap};
 
 use crate::support::app_wiring::app_with_script;
-use crate::support::http_fixtures::if_world;
+use crate::support::http_fixtures::{if_world, story_of};
 use crate::support::http_requests::{post_action, post_form, wait_settled};
 
 fn narrator_prompts(state: &AppState) -> Vec<(String, String)> {
@@ -68,10 +68,7 @@ async fn test_if_world_game_inherits_posture_and_bundle_http() {
         "tense macro must resolve to the inherited present tense"
     );
 
-    let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
@@ -232,10 +229,7 @@ async fn test_impersonate_works_in_if_game_http() {
         "impersonate should complete"
     );
 
-    let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)

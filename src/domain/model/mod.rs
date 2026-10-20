@@ -4,17 +4,19 @@
 pub mod action;
 pub mod agent;
 pub mod character;
+pub mod dock;
 pub mod game;
+pub mod generation;
 pub mod llm_backend;
 pub mod llm_message;
 pub mod map;
 pub mod message;
-pub mod message_history;
 pub mod prompt_preset;
 pub mod quantifier;
 pub mod scenario;
 pub mod settings;
 pub mod state;
+pub mod tail;
 pub mod template;
 pub mod trigger;
 pub mod utils;
@@ -33,8 +35,6 @@ mod llm_backend_tests;
 #[cfg(test)]
 mod map_tests;
 #[cfg(test)]
-mod message_history_tests;
-#[cfg(test)]
 mod message_tests;
 #[cfg(test)]
 mod prompt_preset_tests;
@@ -42,6 +42,8 @@ mod prompt_preset_tests;
 mod scenario_tests;
 #[cfg(test)]
 mod settings_tests;
+#[cfg(test)]
+mod tail_tests;
 #[cfg(test)]
 mod template_tests;
 #[cfg(test)]

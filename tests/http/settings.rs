@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::http::{self, Request, StatusCode};
+use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driven::storage::TestOverride;
@@ -13,29 +13,15 @@ use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
-use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::body_text;
 use chronicler_engine::test_support::fixtures::llm_message;
-use chronicler_engine::test_support::ScriptedModel;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::empty_sqlite_storage;
 
 use crate::SettingsTestGuard;
-use crate::support::app_wiring::{app_with_model_and_storage, app_with_production_graph};
-use crate::support::http_requests::{post_action, wait_settled};
+use crate::support::app_wiring::{app_with_production_graph, long_story_app};
+use crate::support::http_requests::{post_action, post_form, wait_settled};
 use crate::test_utils::card_html_slice;
-
-fn post_form_request(uri: &str, body: &str) -> Request<Body> {
-    Request::builder()
-        .uri(uri)
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from(body.to_string()))
-        .unwrap()
-}
 
 async fn get_body(app: &axum::Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
@@ -122,11 +108,12 @@ async fn test_text_check_autosave_stores_mode_and_check_before_sending() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let req = post_form_request(
+    let response = post_form(
+        &app,
         "/settings/text-check",
         "check_mode=spell&enable_auto_check=true",
-    );
-    let response = app.clone().oneshot(req).await.unwrap();
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
@@ -156,11 +143,12 @@ async fn test_text_check_disabled_clears_check_before_sending() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let req = post_form_request(
+    let response = post_form(
+        &app,
         "/settings/text-check",
         "check_mode=disabled&enable_auto_check=true",
-    );
-    let response = app.clone().oneshot(req).await.unwrap();
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let panel = get_body(&app, "/fragment/settings").await;
@@ -198,13 +186,12 @@ async fn test_failed_text_check_save_answers_non_2xx_and_swaps_no_card() {
     ));
     let app = TestAppBuilder::default_test().storage(storage).build();
 
-    let response = app
-        .oneshot(post_form_request(
-            "/settings/text-check",
-            "check_mode=spell&enable_auto_check=true",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/settings/text-check",
+        "check_mode=spell&enable_auto_check=true",
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_text(response).await;
@@ -283,14 +270,7 @@ async fn test_narrator_role_select_applies_at_once() {
         "the seeded narrator should serve the first resolution: {backend}"
     );
 
-    let response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/set-narrator",
-            "connection_id=mock-b",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(&app, "/connections/set-narrator", "connection_id=mock-b").await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(
@@ -321,13 +301,7 @@ async fn test_quantifier_role_select_applies_at_once() {
     };
     let (app, state, _storage) = app_with_production_graph(settings);
 
-    let response = app
-        .oneshot(post_form_request(
-            "/connections/set-quantifier",
-            "connection_id=mock-b",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(&app, "/connections/set-quantifier", "connection_id=mock-b").await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(
@@ -359,11 +333,7 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
     };
     let (app, _state, _storage) = app_with_production_graph(settings);
 
-    let response = app
-        .clone()
-        .oneshot(post_form_request("/connections/mock-a/delete", ""))
-        .await
-        .unwrap();
+    let response = post_form(&app, "/connections/mock-a/delete", "").await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(
@@ -379,21 +349,14 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
         "the refused connection must stay in the list: {body}"
     );
 
-    let response = app
-        .clone()
-        .oneshot(post_form_request("/connections/mock-b/delete", ""))
-        .await
-        .unwrap();
+    let response = post_form(&app, "/connections/mock-b/delete", "").await;
     let body = body_text(response).await;
     assert!(
         body.contains("Quantifier uses this connection"),
         "the refusal must name the Quantifier: {body}"
     );
 
-    let response = app
-        .oneshot(post_form_request("/connections/mock-c/delete", ""))
-        .await
-        .unwrap();
+    let response = post_form(&app, "/connections/mock-c/delete", "").await;
     let body = body_text(response).await;
     assert!(
         !body.contains(r#"hx-get="/fragment/connections/mock-c/edit"#),
@@ -462,24 +425,20 @@ async fn test_connection_add_duplicate_name_is_refused() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let first = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/add",
-            "conn_name=Duplicate+Probe&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let first = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Duplicate+Probe&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(first.status(), StatusCode::OK);
 
-    let second = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/add",
-            "conn_name=Duplicate+Probe&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let second = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Duplicate+Probe&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(
         second.status(),
         StatusCode::BAD_REQUEST,
@@ -505,24 +464,20 @@ async fn test_connection_add_case_and_space_variant_is_refused() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let first = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/add",
-            "conn_name=Alpha&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let first = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Alpha&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(first.status(), StatusCode::OK);
 
-    let second = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/add",
-            "conn_name=++alpha++&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let second = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=++alpha++&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(
         second.status(),
         StatusCode::BAD_REQUEST,
@@ -538,25 +493,22 @@ async fn test_connection_edit_keeps_its_own_name() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let added = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/add",
-            "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let added = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(added.status(), StatusCode::OK);
     let panel = body_text(added).await;
     let id = added_connection_id(&panel);
 
-    let response = app
-        .oneshot(post_form_request(
-            &format!("/connections/{id}/edit"),
-            "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model-2&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        &format!("/connections/{id}/edit"),
+        "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model-2&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     let row = connection_row(&body, &id);
@@ -576,14 +528,12 @@ async fn test_connection_add_unknown_provider_answers_non_2xx() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/add",
-            "conn_name=Bogus&conn_provider=bogus_provider&conn_model=m&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Bogus&conn_provider=bogus_provider&conn_model=m&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
@@ -609,26 +559,22 @@ async fn test_connection_edit_unknown_provider_answers_non_2xx() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let added = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/add",
-            "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let added = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(added.status(), StatusCode::OK);
     let panel = body_text(added).await;
     let id = added_connection_id(&panel);
 
-    let response = app
-        .clone()
-        .oneshot(post_form_request(
-            &format!("/connections/{id}/edit"),
-            "conn_name=Alpha&conn_provider=bogus_provider&conn_model=alpha-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        &format!("/connections/{id}/edit"),
+        "conn_name=Alpha&conn_provider=bogus_provider&conn_model=alpha-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
@@ -670,10 +616,7 @@ async fn test_saved_connection_test_reports_success_and_records_nothing() {
     let (app, state, _storage) =
         app_with_production_graph(single_mock_settings("mock-a", "mock-model-a"));
 
-    let response = app
-        .oneshot(post_form_request("/connections/mock-a/test", ""))
-        .await
-        .unwrap();
+    let response = post_form(&app, "/connections/mock-a/test", "").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
@@ -722,10 +665,7 @@ async fn test_failed_saved_connection_test_renders_the_error_disclosure() {
             .with_connection_test_provider(failing_connection_test_factory()),
     );
 
-    let response = app
-        .oneshot(post_form_request("/connections/mock-a/test", ""))
-        .await
-        .unwrap();
+    let response = post_form(&app, "/connections/mock-a/test", "").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
@@ -764,13 +704,12 @@ async fn test_form_connection_test_uses_the_typed_values_before_save() {
         .build_service_with_storage();
     let app = build_router(state.clone());
 
-    let response = app
-        .oneshot(post_form_request(
-            "/connections/test",
-            "conn_name=Typed&conn_provider=mock&conn_model=typed-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let response = post_form(
+        &app,
+        "/connections/test",
+        "conn_name=Typed&conn_provider=mock&conn_model=typed-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
@@ -799,44 +738,10 @@ async fn test_form_connection_test_uses_the_typed_values_before_save() {
 #[tokio::test]
 async fn test_connection_context_window_applies_from_the_next_narration() {
     let _guard = SettingsTestGuard::new();
-    let model = Arc::new(
-        ScriptedModel::new()
-            .turn("First narration.")
-            .turn("Second narration."),
-    );
-    // A mock connection resolves a 4096-token window; an Ollama connection
-    // resolves 8192, so the edit widens the window the narration fits into.
-    let settings = AppSettings {
-        connections: vec![mock_connection("narration-conn", "mock-model")],
-        narration_connection_id: "narration-conn".into(),
-        quantifier_connection_id: "narration-conn".into(),
-        ..AppSettings::default()
-    };
-    let (app, state, _storage) = app_with_model_and_storage(
-        Arc::new(empty_sqlite_storage()),
-        model,
-        settings,
-        chronicler_engine::test_support::configured_runner,
-    );
-    let game_id = chronicler_engine::test_support::active_game_of(&state);
-
-    // A story log long enough that the window's size shows in the prompt.
-    {
-        let mut seeded = state.message_service.load_or_fresh(game_id);
-        for index in 0..150 {
-            seeded.add_message(
-                format!(
-                    "Story entry {index}: the long tale of the inn, told again at length \
-                     for everyone who came to listen that evening."
-                ),
-                MessageType::Narration,
-            );
-        }
-        state
-            .message_service
-            .save_message_and_snapshot(game_id, &mut seeded)
-            .expect("the seeded story log saves");
-    }
+    // An empty window on a mock connection resolves the provider default of
+    // 4096 tokens; the edit sets a window wide enough for the whole story log.
+    // The padding story makes the window's size show in the prompt.
+    let (app, state, _storage, _game_id) = long_story_app(None);
 
     assert!(post_action(&app, "first look").await.status().is_success());
     assert!(
@@ -844,14 +749,12 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
         "the first narration should settle"
     );
 
-    let edited = app
-        .clone()
-        .oneshot(post_form_request(
-            "/connections/narration-conn/edit",
-            "conn_name=Wide&conn_provider=ollama&conn_model=mock-model&conn_api_key=&conn_base_url=",
-        ))
-        .await
-        .unwrap();
+    let edited = post_form(
+        &app,
+        "/connections/narration-conn/edit",
+        "conn_name=Wide&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_context_tokens=131072",
+    )
+    .await;
     assert_eq!(
         edited.status(),
         StatusCode::OK,
@@ -877,11 +780,186 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
     let wide = prompts[1].matches("Story entry ").count();
     assert!(
         tight < 150,
-        "the small window must not carry the whole story log: {tight} entries"
+        "the default window must not carry the whole story log: {tight} entries"
     );
     assert!(
         wide > tight,
         "the window the Connection holds at that moment decides how much of the story \
          log reaches the prompt: {tight} entries before the edit, {wide} after"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.26
+#[tokio::test]
+async fn test_empty_context_window_field_uses_the_provider_default() {
+    let _guard = SettingsTestGuard::new();
+    let (app, state, _storage, _game_id) = long_story_app(Some(131_072));
+
+    assert!(post_action(&app, "first look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the first narration should settle"
+    );
+
+    let edited = post_form(
+        &app,
+        "/connections/narration-conn/edit",
+        "conn_name=Default&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_context_tokens=",
+    )
+    .await;
+    assert_eq!(
+        edited.status(),
+        StatusCode::OK,
+        "an empty window field should save"
+    );
+
+    assert!(post_action(&app, "second look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the second narration should settle"
+    );
+
+    let prompts: Vec<String> = state
+        .game_view_query
+        .list_latest_llm_messages(20)
+        .expect("the recorded calls read back")
+        .into_iter()
+        .filter(|message| message.agent_name == "narrator")
+        .map(|message| message.user_prompt)
+        .collect();
+    assert_eq!(prompts.len(), 2, "each Action records one narrator call");
+    let wide = prompts[0].matches("Story entry ").count();
+    let narrow = prompts[1].matches("Story entry ").count();
+    assert!(
+        narrow < wide,
+        "an empty window field must fall back to the provider default: {wide} entries \
+         with the explicit window, {narrow} after it was cleared"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.27
+#[tokio::test]
+async fn test_edit_that_changes_the_provider_keeps_an_explicit_context_window() {
+    let _guard = SettingsTestGuard::new();
+    let mut connection = mock_connection("window-conn", "mock-model");
+    connection.max_context_tokens = Some(65_536);
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "window-conn".into(),
+        quantifier_connection_id: "window-conn".into(),
+        ..AppSettings::default()
+    };
+    let (state, _storage) = TestAppBuilder::default_test()
+        .settings(settings)
+        .build_service_with_storage();
+    let app = build_router(state.clone());
+
+    let response = post_form(
+        &app,
+        "/connections/window-conn/edit",
+        "conn_name=Wide&conn_provider=ollama&conn_model=llama3&conn_api_key=&conn_base_url=&conn_max_context_tokens=65536",
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let stored = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    let edited = stored
+        .find_connection("window-conn")
+        .expect("the edited connection must still be stored");
+    assert_eq!(edited.provider, LlmBackendType::Ollama);
+    assert_eq!(
+        edited.max_context_tokens,
+        Some(65_536),
+        "the explicit window must survive the provider change"
+    );
+
+    let form = get_body(&app, "/fragment/connections/window-conn/edit").await;
+    assert!(
+        form.contains(r#"name="conn_max_context_tokens" value="65536""#),
+        "the edit form must show the explicit window: {form}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.28
+#[tokio::test]
+async fn test_context_window_that_is_not_a_positive_whole_number_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let mut connection = mock_connection("alpha-conn", "mock-model");
+    connection.name = "Alpha".into();
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "alpha-conn".into(),
+        quantifier_connection_id: "alpha-conn".into(),
+        ..AppSettings::default()
+    };
+    let (state, _storage) = TestAppBuilder::default_test()
+        .settings(settings)
+        .build_service_with_storage();
+    let app = build_router(state.clone());
+
+    for typed in ["wide", "0", "-5", "4294967296"] {
+        let response = post_form(
+            &app,
+            "/connections/alpha-conn/edit",
+            &format!(
+                "conn_name=Alpha&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_context_tokens={typed}"
+            ),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "the window '{typed}' must be refused"
+        );
+        let body = body_text(response).await;
+        assert!(
+            body.contains("Context window must be a positive whole number"),
+            "the refusal must name the window rule for '{typed}': {body}"
+        );
+    }
+
+    let panel = get_body(&app, "/fragment/settings").await;
+    assert!(
+        panel.contains(r#"<span class="connection-name">Alpha</span>"#),
+        "the refused edit must leave the connection list intact: {panel}"
+    );
+    let stored = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    let connection_count = stored.connections.len();
+
+    let added = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Refused&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_context_tokens=wide",
+    )
+    .await;
+    assert_eq!(
+        added.status(),
+        StatusCode::BAD_REQUEST,
+        "a refused window must refuse the add too"
+    );
+    let after_add = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    assert_eq!(
+        after_add.connections.len(),
+        connection_count,
+        "a refused window must save no connection"
+    );
+
+    let untouched = after_add
+        .connections
+        .iter()
+        .find(|conn| conn.id == "alpha-conn")
+        .expect("the edited connection must still be stored");
+    assert_eq!(
+        untouched.max_context_tokens, None,
+        "a refused window must store nothing"
     );
 }

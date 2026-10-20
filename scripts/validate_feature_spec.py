@@ -78,7 +78,7 @@ TAG_EXEMPT_FILES = {
 # Pins the requires_migration quarantine: the count may only go down.
 # Migration cleanups lower it deliberately; a new test in the folder fails
 # the gate.
-REQUIRES_MIGRATION_TEST_COUNT = 75
+REQUIRES_MIGRATION_TEST_COUNT = 72
 
 
 def parse_spec_scenarios(spec_path: Path) -> set[str]:
@@ -97,10 +97,8 @@ def parse_spec_scenarios(spec_path: Path) -> set[str]:
 
 
 class TestFileScan(NamedTuple):
-    """One read of a Rust test file: SCENARIO annotations plus every test
-    attribute with its fn name. All three tag-rule consumers (coverage,
-    untagged, surface) derive their facts from this scan, so each file is
-    read exactly once."""
+    """The facts all three tag-rule consumers (coverage, untagged, surface)
+    derive from, so each file is read exactly once."""
 
     # (comment line, anchor line, spec path, scenario id), 1-based lines. The
     # anchor is a test attribute, or a `check_*` function in the stub tier.
@@ -173,9 +171,7 @@ def is_tag_exempt(rel: Path) -> bool:
 def find_untagged_tests(
     scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str]]:
-    """Pure over the prepared scans — no I/O.
-
-    In the stub tier a `check_*` function is the tag target (the module's
+    """In the stub tier a `check_*` function is the tag target (the module's
     `run_*` runner test is exempt: it drives the checks and observes no
     scenario of its own)."""
     violations: list[tuple[Path, int, str]] = []
@@ -202,8 +198,8 @@ def find_unwired_checks(
     scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str]]:
     """Return (path, line, fn name) for every stub-tier `check_*` that no
-    runner in its file calls. Its SCENARIO tag would otherwise count as
-    coverage for a check that never runs. Pure over the prepared scans."""
+    runner in its file calls: its SCENARIO tag would otherwise count as
+    coverage for a check that never runs."""
     violations: list[tuple[Path, int, str]] = []
     for path, rel, scan in scans:
         if not rel.is_relative_to(STUB_DIR):
@@ -218,11 +214,8 @@ def find_surface_violations(
     scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str, str]]:
     """Return (path, line, spec_path, reason) for every SCENARIO tag whose
-    observation surface does not match its test directory: `browser_*.md`
-    specs must be tagged only from `tests/browser/`, and non-`browser_*`
-    specs never from `tests/browser/` (contract: tests/STRATEGY.md
-    "SCENARIO tags", per-surface rule). Pure over the prepared
-    `(path, engine-relative path, scan)` triples — no I/O."""
+    observation surface does not match its test directory (contract:
+    tests/STRATEGY.md "SCENARIO tags", per-surface rule)."""
     violations: list[tuple[Path, int, str, str]] = []
     browser_dir = Path("tests/browser")
     for path, rel, scan in scans:

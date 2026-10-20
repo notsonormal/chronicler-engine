@@ -3,8 +3,6 @@
 
 use std::sync::Arc;
 
-use tokio_util::sync::CancellationToken;
-
 use crate::adapters::driven::llm::providers::{
     DeepSeekBackend, MockBackend, OllamaBackend, OpenRouterBackend,
 };
@@ -15,12 +13,14 @@ use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::active::ActiveGame;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
-use crate::application::generation::gate::GenerationGate;
+use crate::application::generation::gate::GameWriter;
+use crate::application::generation::job_tasks::JobTasks;
 use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::application::llm_recorder::{LlmCallRecorder, ProviderResolver};
-use crate::application::message_service::MessageService;
+use crate::application::narration::Narrator;
 use crate::application::persona_catalogue::PersonaCatalogue;
-use crate::application::pipeline::ActionPipeline;
+use crate::application::pipeline::job::JobDeps;
+use crate::application::prompting::PromptAssembler;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::settings_service::SettingsService;
@@ -42,8 +42,7 @@ fn provider_from_config(config: &LlmProviderConfig) -> Arc<dyn LlmProvider> {
 }
 
 /// Resolves the provider per call, so a dashboard change takes effect without a
-/// restart. A `pick` failure (a dangling connection id) or a missing API key
-/// surfaces as a call error.
+/// restart.
 fn recorder_with_storage(
     storage: Arc<Storage>,
     role: &'static str,
@@ -73,9 +72,8 @@ fn recorder_with_storage(
     Arc::new(LlmCallRecorder::with_resolver(resolve, save_fn))
 }
 
-/// Named-backend seam: a connection whose id is "options" routes options
-/// generation to it (Roadway's cheap-model pattern); absent, the narration
-/// connection serves.
+/// The connection whose id is `options` serves options generation; without one,
+/// the narration connection serves.
 fn options_recorder(storage: Arc<Storage>) -> Arc<LlmCallRecorder> {
     recorder_with_storage(storage, "options", |s| match s.find_connection("options") {
         Some(c) => Ok(c.clone()),
@@ -87,16 +85,14 @@ pub struct WiredApp {
     pub settings_service: SettingsService,
     pub prompt_preset_service: PromptPresetService,
     pub storage: Arc<Storage>,
-    pub message_service: Arc<MessageService>,
-    pub generation_gate: GenerationGate,
+    pub game_writer: GameWriter,
     pub game_catalogue: GameCatalogue,
     pub game_view_query: GameViewQuery,
     pub world_catalogue: WorldCatalogue,
     pub persona_catalogue: PersonaCatalogue,
-    pub pipeline: ActionPipeline,
+    pub job_deps: JobDeps,
     pub text_check_service: Arc<TextCheckService>,
     pub connection_test_service: ConnectionTestService,
-    pub shutdown_token: CancellationToken,
 }
 
 fn build_wired_app(
@@ -107,53 +103,40 @@ fn build_wired_app(
     initial_game: Option<GameId>,
 ) -> Result<WiredApp> {
     let active_game = Arc::new(ActiveGame::new(Arc::clone(&storage)));
-    let shutdown_token = CancellationToken::new();
 
     let settings_service = SettingsService::new(Arc::clone(&storage));
     let prompt_preset_service = PromptPresetService::new(Arc::clone(&storage));
     let connection_test_service =
         ConnectionTestService::new(settings_service.clone(), Arc::new(provider_from_config));
-    let message_service = Arc::new(MessageService::new(Arc::clone(&storage)));
     let world_catalogue = WorldCatalogue::new(Arc::clone(&storage));
     let persona_catalogue = PersonaCatalogue::new(Arc::clone(&storage));
-    let generation_gate = GenerationGate::new();
+    let game_writer = GameWriter::new(Arc::clone(&storage));
     let game_catalogue = GameCatalogue::new(
         Arc::clone(&storage),
-        Arc::clone(&message_service),
+        game_writer.clone(),
         Arc::clone(&active_game),
         initial_game,
     );
-    let game_view_query = GameViewQuery::new(Arc::clone(&storage), Arc::clone(&message_service));
-    let pipeline = ActionPipeline::with_storage(
-        shutdown_token.clone(),
-        recorder,
-        agent_runner,
-        Arc::clone(&message_service),
-        Arc::clone(&storage),
-        Arc::new(game_catalogue.clone()),
-    );
-
-    // Boot heal: a crash/restart may have left the current game persisted as Generating.
-    if let Some(game_id) = game_catalogue.active_game_id() {
-        if let Err(e) = pipeline.heal_stale_status(&generation_gate, game_id) {
-            tracing::warn!("boot heal: failed to persist healed status: {e}");
-        }
-    }
-
+    let game_view_query = GameViewQuery::new(Arc::clone(&storage), game_writer.clone());
+    tracing::info!("Narrator: provider={}", recorder.provider_label());
+    let job_deps = JobDeps {
+        narrator: Arc::new(Narrator::new(PromptAssembler, recorder)),
+        agent_runner: Arc::new(agent_runner),
+        storage: Arc::clone(&storage),
+        tasks: Arc::new(JobTasks::default()),
+    };
     Ok(WiredApp {
         settings_service,
         prompt_preset_service,
         storage,
-        message_service,
-        generation_gate,
+        game_writer,
         game_catalogue,
         game_view_query,
         world_catalogue,
         persona_catalogue,
-        pipeline,
+        job_deps,
         text_check_service,
         connection_test_service,
-        shutdown_token,
     })
 }
 
@@ -196,7 +179,7 @@ pub fn build_app_graph(storage: Arc<Storage>, initial_game: Option<GameId>) -> R
 #[cfg(feature = "testing")]
 pub fn build_app_graph_for_tests(
     storage: Arc<Storage>,
-    pipeline_override: Option<ActionPipeline>,
+    job_deps_override: Option<JobDeps>,
     initial_game: Option<GameId>,
 ) -> Result<WiredApp> {
     let settings = storage.get_settings()?;
@@ -208,8 +191,8 @@ pub fn build_app_graph_for_tests(
         Arc::clone(&mock_provider),
         Arc::clone(&storage),
     );
-    // Build placeholder collaborators; a pipeline override replaces them below.
-    let agent_runner = if pipeline_override.is_some() {
+    // Build placeholder collaborators; a Job-deps override replaces them below.
+    let agent_runner = if job_deps_override.is_some() {
         AgentRunner::default()
     } else {
         let options_recorder = options_recorder(Arc::clone(&storage));
@@ -225,14 +208,12 @@ pub fn build_app_graph_for_tests(
         initial_game,
     )?;
 
-    // Override backends must use this graph's persistence.
-    if let Some(pipeline) = pipeline_override {
-        wired.pipeline = pipeline.rebind_for_test(
-            Arc::clone(&wired.message_service),
-            Arc::clone(&wired.storage),
-            Arc::new(wired.game_catalogue.clone()),
-            wired.shutdown_token.clone(),
-        );
+    // The override's Job writes through this graph's storage.
+    if let Some(job_deps) = job_deps_override {
+        wired.job_deps = JobDeps {
+            storage: Arc::clone(&wired.storage),
+            ..job_deps
+        };
     }
 
     Ok(wired)

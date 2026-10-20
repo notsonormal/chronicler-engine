@@ -1,36 +1,17 @@
 //! HTTP E2E tests for game switching (POST /games/:id/switch).
 
-use std::sync::Arc;
-
-use chronicler_engine::domain::model::game::GameId;
-use chronicler_engine::test_support::active_game_of;
 use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
-use chronicler_engine::TestAppBuilder;
-use chronicler_engine::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use chronicler_engine::test_support::TestPersona;
 
-use crate::support::http_fixtures::seeded_storage_with_initial_game;
+use chronicler_engine::test_support::active_game_of;
+use chronicler_engine::TestAppBuilder;
+
+use crate::support::app_wiring::two_game_app;
+
 // [docs/specs/games.md] SCENARIO: 18.1
 #[tokio::test]
 async fn test_switch_game_handler_success() {
-    let (storage, _world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
-
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-
-    let other_id = storage
-        .create_game(
-            "Test World",
-            "Test World",
-            &persona_key,
-            &TestPersona::standard().sheet.name,
-            "Test World_2026-01-01_1",
-        )
-        .unwrap();
-    assert_ne!(other_id, active_game_of(&state).0);
-
+    let (app, state, _storage, other_id) = two_game_app();
     let req = Request::builder()
         .uri(format!("/games/{other_id}/switch"))
         .method(http::Method::POST)
@@ -66,57 +47,5 @@ async fn test_switch_game_handler_not_found() {
     assert!(
         body_str.contains("Game not found"),
         "Expected 'Game not found' in error body: {body_str}"
-    );
-}
-
-// [docs/specs/games.md] SCENARIO: 18.3
-#[tokio::test]
-async fn test_switch_game_heals_stale_generating_status() {
-    let (storage, world_key, persona_key, _initial_game_id) = seeded_storage_with_initial_game();
-
-    let (app, state) = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build_with_state();
-    let initial_id = active_game_of(&state);
-
-    let other_id = storage
-        .create_game(
-            "Test World",
-            &world_key,
-            &persona_key,
-            &TestPersona::standard().sheet.name,
-            "Test World_2026-01-01_1",
-        )
-        .unwrap();
-    assert_ne!(other_id, initial_id.0);
-
-    let mut stale = state.message_service.load_or_fresh(GameId(other_id));
-    stale.narrative.input_buffer.status = GenerationStatus::Generating;
-    stale.narrative.input_buffer.phase = GenerationPhase::Narrating;
-    state
-        .message_service
-        .save_state(GameId(other_id), &stale)
-        .expect("saving the stale snapshot should succeed");
-
-    let req = Request::builder()
-        .uri(format!("/games/{other_id}/switch"))
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers().get("HX-Refresh").unwrap(), "true");
-    assert_eq!(active_game_of(&state).0, other_id);
-
-    // The registry poll reads `idle` for a game with no slot whether or not
-    // the handler healed it, so assert the persisted channel.
-    let persisted = state
-        .message_service
-        .load_expecting_valid_state(active_game_of(&state))
-        .expect("reading the persisted status should succeed");
-    assert_eq!(
-        persisted.narrative.input_buffer.status,
-        GenerationStatus::Idle,
-        "switching to a game with a stale persisted Generating must heal the persisted channel"
     );
 }

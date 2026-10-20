@@ -46,13 +46,6 @@ impl TestFailureHandle {
             .remove(method);
     }
 
-    pub fn clear_write(&self, write: TxWrite) {
-        self.writes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&write);
-    }
-
     pub fn clear_all(&self) {
         self.overrides
             .lock()

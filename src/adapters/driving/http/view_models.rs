@@ -3,6 +3,7 @@
 
 use std::fmt;
 
+use crate::domain::model::dock::Notice;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::NarratorMode;
@@ -10,7 +11,6 @@ use crate::domain::model::state::message_types::{MessageEntry, MessageType};
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
-#[allow(private_interfaces)]
 #[derive(Debug, Clone)]
 pub struct SafeHtml(String);
 
@@ -23,10 +23,8 @@ impl SafeHtml {
 
 impl askama::filters::HtmlSafe for SafeHtml {}
 
-/// One `<option>` in a `<select>`: the value and label a template renders,
-/// and whether this is the current selection. `SelectOptionsTemplate` renders
-/// it so Askama escapes every value; the constructors here are the single
-/// source for which options each select offers.
+/// `SelectOptionsTemplate` renders it so Askama escapes every value; the
+/// constructors here are the single source for which options each select offers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectOptionView {
     pub value: String,
@@ -35,7 +33,6 @@ pub struct SelectOptionView {
 }
 
 impl SelectOptionView {
-    /// The narrator-mode options, marking `selected`.
     pub fn narrator_modes(selected: NarratorMode) -> Vec<Self> {
         [NarratorMode::Novel, NarratorMode::InteractiveFiction]
             .into_iter()
@@ -47,8 +44,6 @@ impl SelectOptionView {
             .collect()
     }
 
-    /// The LLM-connection provider options, marking the provider whose wire
-    /// id is `selected` (an unknown id selects none).
     pub fn providers(selected: &str) -> Vec<Self> {
         [
             ("openrouter", "OpenRouter"),
@@ -64,9 +59,9 @@ impl SelectOptionView {
         .collect()
     }
 
-    /// Picker options for one preset slot: presets allowing the game's mode,
-    /// plus the stored selection (even when disallowed or absent from the
-    /// library) so the browser never silently substitutes another preset.
+    /// Picker options for one preset slot. A stored selection comes back even when
+    /// its preset is disallowed or gone, so the browser never silently substitutes
+    /// another preset.
     pub fn presets(presets: &[PromptPreset], mode: NarratorMode, selected_id: &str) -> Vec<Self> {
         Self::from_presets(
             presets
@@ -118,7 +113,7 @@ pub struct MessageEntryView {
     pub text: SafeHtml,
     pub raw_text: String,
     pub log_type: String,
-    pub location_header: Option<String>,
+    pub room_report: Option<String>,
     pub event_header: Option<String>,
     pub swipe_count: usize,
     pub active_swipe_index: usize,
@@ -142,7 +137,7 @@ impl From<&MessageEntry> for MessageEntryView {
                 MessageType::System => "system".to_string(),
                 MessageType::Input => "input".to_string(),
             },
-            location_header: entry.location_header.clone(),
+            room_report: entry.room_report.clone(),
             event_header: entry.event_header.clone(),
             swipe_count: count,
             active_swipe_index: active,
@@ -219,28 +214,38 @@ impl From<&LlmMessage> for LlmMessageView {
     }
 }
 
-/// View model for the options dock — the current pickable option set,
-/// rendered above the command input as part of the input surface.
 #[derive(Debug, Clone)]
 pub struct OptionsDockViewModel {
     pub options: Vec<String>,
     pub is_busy: bool,
+    pub notice: Option<DockNoticeView>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DockNoticeView {
+    pub reason: String,
+    pub raw: String,
 }
 
 impl OptionsDockViewModel {
-    pub fn new(options: Vec<String>, is_busy: bool) -> Self {
-        Self { options, is_busy }
+    pub fn new(options: Vec<String>, is_busy: bool, notice: Option<Notice>) -> Self {
+        Self {
+            options,
+            is_busy,
+            notice: notice.map(|notice| DockNoticeView {
+                reason: notice.reason,
+                raw: notice.raw,
+            }),
+        }
     }
 }
 
-/// View model for a single NPC portrait in the visual sidebar.
 #[derive(Debug, Clone)]
 pub struct NpcPortraitView {
     pub image_path: String,
     pub name: String,
 }
 
-/// View model for the visual sidebar template.
 #[derive(Debug, Clone)]
 pub struct VisualSidebarViewModel {
     pub room_has_image: bool,

@@ -162,9 +162,9 @@ pub struct TestData {
 }
 
 impl TestData {
-    /// Returns the seeded Game's id. Snapshots and messages are not written —
-    /// `TestAppBuilder` owns those and points their app's active-Game pointer at
-    /// the Game.
+    /// Returns the seeded Game's id. The story is not written —
+    /// `TestAppBuilder` owns it and points its app's active-Game pointer at the
+    /// Game.
     pub fn seed_into(&self, storage: &Storage) -> GameId {
         let world_id = storage
             .seed_world(&self.world, &self.map)
@@ -177,16 +177,15 @@ impl TestData {
                 .seed_character(world_id, npc)
                 .expect("test setup: seed character");
         }
-        GameId(
-            storage
-                .create_game(
-                    &self.world.name,
-                    &self.world.key,
-                    &self.persona.key,
-                    &self.persona.sheet.name,
-                    "Test Game",
-                )
-                .expect("test setup: create game"),
+        crate::test_support::seed_game_row(
+            storage,
+            &crate::test_support::test_new_game(
+                &self.world.name,
+                &self.world.key,
+                &self.persona.key,
+                &self.persona.sheet.name,
+                "Test Game",
+            ),
         )
     }
 

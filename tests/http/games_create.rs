@@ -12,6 +12,8 @@ use chronicler_engine::test_support::{
     active_game_of, TestMap, TestPersona, TestWorld, empty_sqlite_storage,
 };
 
+use crate::support::http_fixtures::story_of;
+
 // [docs/specs/games.md] SCENARIO: 17.1
 #[tokio::test]
 async fn test_create_game_handler() {
@@ -36,15 +38,17 @@ async fn test_create_game_handler() {
     let player = TestPersona::standard();
     storage.seed_persona(&player.key, &player).unwrap();
 
-    let initial_game_id = storage
-        .create_game(
+    let initial_game_id = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
             &world.name,
             &world.key,
             &player.key,
             &player.sheet.name,
             "Initial Game",
-        )
-        .unwrap();
+        ),
+    )
+    .0;
 
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -76,10 +80,7 @@ async fn test_create_game_handler() {
         "Should have switched to the new game"
     );
 
-    let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     assert!(
         !messages.is_empty(),
         "New game should have at least one message (scenario introduction)"
@@ -94,9 +95,9 @@ async fn test_create_game_handler() {
         !scenario_msg.swipes.is_empty(),
         "the scenario message must carry its first swipe"
     );
-    // The initial GameStateSnapshot is written by the same
-    // `save_message_and_snapshot` call as the message; snapshots are not a
-    // tier-1 read surface, so `message_service_tests` asserts it through the seam.
+    // The create unit writes the opening Message and the Swipe that carries the
+    // state the Game starts from; the Swipe's own state is not a tier-1 read
+    // surface, so this test reads the records the story reads return.
 }
 
 // [docs/specs/games.md] SCENARIO: 17.2

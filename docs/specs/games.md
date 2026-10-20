@@ -17,6 +17,7 @@ Given a seeded world with key "test" and a persona with key "test_player"
 When the client POST /games with "world_key=test&persona_key=test_player"
 Then the response status is "200 OK"
 And the response has an "HX-Refresh: true" header
+And the new Game's story log holds its opening Narration
 ```
 
 #### Scenario 17.2: Creating a game with an unknown world key returns 400
@@ -54,17 +55,6 @@ And the response has an "HX-Refresh: true" header
 When the client POST /games/99999999/switch
 Then the response status is "400 BAD_REQUEST"
 And the response body mentions "Game not found"
-```
-
-#### Scenario 18.3: Switching to a game heals a stale generating status
-
-```gherkin
-Given two created games with ids "id1" (active) and "id2"
-And "id2" carries a persisted "Generating" status with no live generation slot
-When the client POST /games/{id2}/switch
-Then the response status is "200 OK"
-And the response has an "HX-Refresh: true" header
-And the active game's persisted status is "idle"
 ```
 
 #### Scenario 18.4: A Job goes on for its own Game while another Game is active

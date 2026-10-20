@@ -2,13 +2,10 @@
 //! Game storage operations
 
 use crate::error::EngineError;
-use crate::domain::model::game::{Game, GameId, NewGame};
-use crate::domain::model::settings::{
-    AppSettings, ModePresetBundle, NarrativePerspective, NarrativeTense, NarratorMode,
-};
+use crate::domain::model::game::{Game, GameId};
+use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::adapters::driven::storage::{Backend, Storage};
 use crate::adapters::driven::storage::models::game::DbGame;
-use crate::adapters::driven::storage::transaction::Tx;
 
 impl Storage {
     pub fn list_games(&self) -> Result<Vec<Game>, EngineError> {
@@ -17,7 +14,7 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on, display_name
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on, display_name, failure
                          FROM games
                          ORDER BY updated_at DESC",
                     )
@@ -37,67 +34,6 @@ impl Storage {
                 let mut games = data.games.clone();
                 games.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
                 Ok(games)
-            }
-        })
-    }
-
-    pub fn create_game(
-        &self,
-        world_name: &str,
-        world_key: &str,
-        persona_key: &str,
-        persona_name: &str,
-        name: &str,
-    ) -> Result<u64, EngineError> {
-        self.create_game_from_request(&NewGame {
-            world_name: world_name.to_string(),
-            world_key: world_key.to_string(),
-            persona_key: persona_key.to_string(),
-            persona_name: persona_name.to_string(),
-            name: name.to_string(),
-            narrator_mode: NarratorMode::Novel,
-            narrative_perspective: NarrativePerspective::Third,
-            narrative_tense: NarrativeTense::Past,
-            system_prompt_preset_id: "system_default".to_string(),
-            quantifier_prompt_preset_id: "quantifier_default".to_string(),
-            impersonate_prompt_preset_id: "impersonate_default".to_string(),
-            options_prompt_preset_id: "options_default".to_string(),
-            options_always_on: false,
-        })
-    }
-
-    pub fn create_game_from_request(&self, request: &NewGame) -> Result<u64, EngineError> {
-        self.with_backend_mut("create_game", |backend| match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                Ok(Tx::write_game_row(&conn, request)?.0)
-            }
-            Backend::InMemory(data) => {
-                let id = data.next_game_id;
-                data.next_game_id += 1;
-                let now = chrono::Utc::now();
-                data.games.push(Game {
-                    id,
-                    world_name: request.world_name.clone(),
-                    world_key: request.world_key.clone(),
-                    persona_key: request.persona_key.clone(),
-                    persona_name: request.persona_name.clone(),
-                    name: request.name.clone(),
-                    display_name: request.display_name(),
-                    created_at: now,
-                    updated_at: now,
-                    narrator_mode: request.narrator_mode,
-                    narrative_perspective: request.narrative_perspective,
-                    narrative_tense: request.narrative_tense,
-                    active_system_prompt_preset_id: request.system_prompt_preset_id.clone(),
-                    active_quantifier_prompt_preset_id: request.quantifier_prompt_preset_id.clone(),
-                    active_impersonate_prompt_preset_id: request
-                        .impersonate_prompt_preset_id
-                        .clone(),
-                    active_options_prompt_preset_id: request.options_prompt_preset_id.clone(),
-                    options_always_on: request.options_always_on,
-                });
-                Ok(id)
             }
         })
     }
@@ -134,31 +70,13 @@ impl Storage {
         })
     }
 
-    pub fn delete_game(&self, id: u64) -> Result<(), EngineError> {
-        self.with_backend_mut("delete_game", |backend| match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                conn.execute(
-                    "DELETE FROM games WHERE id = ?1",
-                    rusqlite::params![id as i64],
-                )
-                .map_err(|e| EngineError::Config(format!("Failed to delete game: {e}")))?;
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                data.games.retain(|g| g.id != id);
-                Ok(())
-            }
-        })
-    }
-
     pub fn get_game(&self, id: u64) -> Result<Option<Game>, EngineError> {
         self.with_backend_mut("get_game", |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare(
-                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on, display_name
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on, display_name, failure
                          FROM games
                          WHERE id = ?1
                          LIMIT 1",
@@ -218,17 +136,12 @@ impl Storage {
                 }
             }
             Backend::InMemory(data) => {
-                let key = |game: &Game| {
-                    data.messages
-                        .get(&GameId(game.id))
-                        .and_then(|messages| messages.iter().map(|m| m.timestamp).max())
-                        .unwrap_or(game.updated_at)
-                };
+                // The in-memory backend holds no Message, so only `updated_at` orders.
                 let newest = data
                     .games
                     .iter()
                     .filter(|game| game.world_key == world_key)
-                    .max_by(|a, b| key(a).cmp(&key(b)).then(a.id.cmp(&b.id)));
+                    .max_by(|a, b| a.updated_at.cmp(&b.updated_at).then(a.id.cmp(&b.id)));
                 Ok(newest.map(|game| GameId(game.id)))
             }
         })
@@ -287,65 +200,43 @@ impl Storage {
         })
     }
 
-    pub fn active_system_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.resolve_active_preset_id(
-            game_id,
-            settings,
-            |g| g.active_system_prompt_preset_id.as_str(),
-            |b| b.system_prompt_preset_id.as_str(),
-        )
-    }
-
     pub fn active_quantifier_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.resolve_active_preset_id(
+        self.preset_id_or(
             game_id,
-            settings,
-            |g| g.active_quantifier_prompt_preset_id.as_str(),
-            |b| b.quantifier_prompt_preset_id.as_str(),
-        )
-    }
-
-    pub fn active_impersonate_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.resolve_active_preset_id(
-            game_id,
-            settings,
-            |g| g.active_impersonate_prompt_preset_id.as_str(),
-            |b| b.impersonate_prompt_preset_id.as_str(),
+            || {
+                tracing::warn!("game {game_id} missing; falling back to registry novel preset");
+                settings
+                    .mode_preset_registry
+                    .bundle_for(NarratorMode::Novel)
+                    .quantifier_prompt_preset_id
+            },
+            |game| &game.active_quantifier_prompt_preset_id,
         )
     }
 
     /// Options presets are mode-agnostic and sit outside the per-mode registry, so
     /// the fallback is the settings column, not a mode bundle.
     pub fn active_options_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        match self.get_game(game_id.0).ok().flatten() {
-            Some(game) => game.active_options_prompt_preset_id.clone(),
-            None => {
+        self.preset_id_or(
+            game_id,
+            || {
                 tracing::warn!("game {game_id} missing; falling back to settings options preset");
                 settings.active_options_prompt_preset_id.clone()
-            }
-        }
+            },
+            |game| &game.active_options_prompt_preset_id,
+        )
     }
 
-    fn resolve_active_preset_id<G, B>(
+    /// The Game's preset slot, or `fallback` when the Game row is gone.
+    fn preset_id_or(
         &self,
         game_id: GameId,
-        settings: &AppSettings,
-        game_slot: G,
-        bundle_slot: B,
-    ) -> String
-    where
-        G: FnOnce(&Game) -> &str,
-        B: FnOnce(&ModePresetBundle) -> &str,
-    {
+        fallback: impl FnOnce() -> String,
+        game_slot: impl FnOnce(&Game) -> &str,
+    ) -> String {
         match self.get_game(game_id.0).ok().flatten() {
             Some(game) => game_slot(&game).to_string(),
-            None => {
-                tracing::warn!("game {game_id} missing; falling back to registry novel preset");
-                let bundle = settings
-                    .mode_preset_registry
-                    .bundle_for(NarratorMode::Novel);
-                bundle_slot(&bundle).to_string()
-            }
+            None => fallback(),
         }
     }
 }

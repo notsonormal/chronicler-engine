@@ -56,20 +56,6 @@ impl AgentRunner {
         Ok(runner)
     }
 
-    pub fn with_analysis_agent(agent: Box<dyn AnalysisAgent>) -> Self {
-        Self {
-            analysis: vec![agent],
-            options: None,
-        }
-    }
-
-    pub fn with_options_agent(agent: Box<dyn OptionsAgent>) -> Self {
-        Self {
-            analysis: Vec::new(),
-            options: Some(agent),
-        }
-    }
-
     /// A failed Agent is logged and contributes nothing: the Job continues with
     /// the patches of the others.
     pub fn analysis(&self, input: &HookInput, settings: &AgentSettings) -> QuantifierResult {

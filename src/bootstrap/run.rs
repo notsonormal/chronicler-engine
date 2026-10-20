@@ -1,7 +1,6 @@
 //! [DOC: docs/diataxis/reference/startup.md]
 //! Main entry point and runtime execution
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::utils::cli::{Args, list_available_worlds, resolve_engine_data_path};
@@ -11,22 +10,14 @@ use crate::adapters::driving::http::ServerConfig;
 use crate::application::errors::ApplicationError;
 use crate::application::games::active::ActiveGame;
 use crate::application::games::catalogue::GameCatalogue;
-use crate::application::message_service::MessageService;
 use crate::bootstrap::load::{seed_game_data, seed_settings};
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
-use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::game::GameId;
-use crate::domain::model::map::MapDef;
-use crate::domain::model::world::WorldCard;
 use crate::error::EngineError;
 
 struct PreparedData {
     storage: Arc<Storage>,
     active_game_id: GameId,
-    world_card: WorldCard,
-    map: Arc<MapDef>,
-    player: PersonaCard,
-    npcs_map: HashMap<String, NpcCard>,
 }
 
 struct StateResources {
@@ -90,27 +81,19 @@ fn prepare_data(args: &Args) -> crate::error::Result<PreparedData> {
         }
     };
 
-    let npcs: Vec<NpcCard> = storage.list_characters(world_with_map.world_id)?;
-    let npcs_map: HashMap<String, NpcCard> = npcs.into_iter().map(|n| (n.id.clone(), n)).collect();
-    let world_arc = Arc::new(world_with_map.world_card.clone());
-    let map_arc = Arc::new(world_with_map.map);
-
-    let player = storage.require_persona(&args.persona)?;
-
-    let active_game_id = resolve_boot_game(&storage, &world_arc.key, &args.persona)?;
+    // The persona is checked before the Game is resolved, so an unknown persona
+    // stops the boot with its own error on both the create and the resume path.
+    storage.require_persona(&args.persona)?;
+    let active_game_id =
+        resolve_boot_game(&storage, &world_with_map.world_card.key, &args.persona)?;
     Ok(PreparedData {
         storage,
         active_game_id,
-        world_card: world_with_map.world_card,
-        map: map_arc,
-        player,
-        npcs_map,
     })
 }
 
 /// Boot resolves its Game before the wired graph exists, so this builds its own
-/// catalogue; the Game is the newest of the World, or a fresh one through
-/// `GameCatalogue::create_game`.
+/// catalogue.
 pub(super) fn resolve_boot_game(
     storage: &Arc<Storage>,
     world_key: &str,
@@ -118,7 +101,7 @@ pub(super) fn resolve_boot_game(
 ) -> crate::error::Result<GameId> {
     let catalogue = GameCatalogue::new(
         Arc::clone(storage),
-        Arc::new(MessageService::new(Arc::clone(storage))),
+        crate::application::generation::gate::GameWriter::new(Arc::clone(storage)),
         Arc::new(ActiveGame::new(Arc::clone(storage))),
         None,
     );
@@ -141,12 +124,6 @@ fn boot_error(error: ApplicationError) -> EngineError {
     match error {
         ApplicationError::Validation(message) => EngineError::Validation(message),
         ApplicationError::Engine(error) => error,
-        ApplicationError::ShuttingDown => {
-            EngineError::Config("Server is shutting down".to_string())
-        }
-        ApplicationError::ConcurrentGeneration => {
-            EngineError::Config("Generation in progress".to_string())
-        }
     }
 }
 
@@ -154,20 +131,8 @@ fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| EngineError::Io(format!("runtime_new {}: {e}", "tokio_runtime")))?;
 
-    let world_arc = Arc::new(data.world_card.clone());
-    let player_arc = Arc::new(data.player.clone());
-
-    // Its write is the point: a game with no Snapshot gets the initial one and
-    // the scenario Message.
-    super::init_game::load_game_state(
-        &data.storage,
-        data.active_game_id,
-        &world_arc,
-        &data.map,
-        &player_arc,
-        &data.npcs_map,
-    )?;
-
+    // The Game's opening Narration and its Swipe state come from the create unit,
+    // so the boot reads no state and writes nothing.
     let wired = build_app_graph(Arc::clone(&data.storage), Some(data.active_game_id))?;
 
     Ok(StateResources { runtime, wired })

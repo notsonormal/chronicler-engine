@@ -3,8 +3,6 @@ use crate::adapters::driving::http::layout::handlers::endpoints::{
     character_headshots_fragment, generating_status_handler, header_fragment,
     llm_messages_fragment, reset_generating_handler, story_log_fragment, visual_sidebar_fragment,
 };
-use crate::domain::model::state::generation_status::{GenerationPhase, GenerationStatus};
-use crate::domain::model::state::message_types::MessageType;
 use crate::test_support::{active_game_of, body_text, TestAppBuilder};
 
 #[tokio::test]
@@ -23,9 +21,7 @@ async fn test_header_fragment() {
 
 #[tokio::test]
 async fn test_story_log_fragment() {
-    let state = TestAppBuilder::default_test()
-        .log("You look around.", MessageType::Narration)
-        .build_service();
+    let state = TestAppBuilder::default_test().build_service();
     let result = body_text(
         story_log_fragment(
             axum::extract::State(state.clone()),
@@ -82,52 +78,6 @@ async fn test_generating_status_idle() {
     )
     .await;
     assert!(result.0.contains("idle"));
-}
-
-#[tokio::test]
-async fn test_generating_status_answers_from_live_registry() {
-    let state = TestAppBuilder::default_test().build_service();
-    let game_id = active_game_of(&state);
-
-    let mut game_state = state.message_service.load_or_fresh(game_id);
-    game_state.narrative.input_buffer.status = GenerationStatus::Generating;
-    game_state.narrative.input_buffer.phase = GenerationPhase::Narrating;
-    let _ = state.message_service.save_state(game_id, &game_state);
-
-    let result = generating_status_handler(
-        axum::extract::State(state.clone()),
-        Some(CurrentGame(active_game_of(&state))),
-    )
-    .await;
-    assert!(
-        result.0.contains("idle"),
-        "stale status should answer idle: {}",
-        result.0
-    );
-
-    let mut game_state = state.message_service.load_or_fresh(game_id);
-    let (_, _, outcome) = state
-        .generation_gate
-        .try_claim(game_id, &mut game_state, &state.message_service)
-        .expect("live slot claim should succeed");
-    assert!(
-        matches!(
-            outcome,
-            crate::application::errors::ProcessActionResult::Started
-        ),
-        "the claim should start a generation, got {outcome:?}"
-    );
-
-    let result = generating_status_handler(
-        axum::extract::State(state.clone()),
-        Some(CurrentGame(active_game_of(&state))),
-    )
-    .await;
-    assert!(
-        result.0.contains("narrating"),
-        "live slot should report the phase: {}",
-        result.0
-    );
 }
 
 #[tokio::test]

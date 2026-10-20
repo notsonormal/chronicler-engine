@@ -10,15 +10,55 @@ use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::trigger::NpcEncounterLog;
 use super::movement::MovementState;
 use super::scene_state::SceneState;
+use super::trigger_context::{EventRecord, TriggerRef};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SwipeState {
     pub movement: MovementState,
     pub scene: SceneState,
     pub npc_encounter_log: NpcEncounterLog,
+    /// The Trigger that fired for this Swipe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger_context: Option<TriggerRef>,
 }
 
 impl SwipeState {
+    pub fn starting(
+        scenario: Option<&StartingScenario>,
+        characters: &HashMap<String, NpcCard>,
+        starting_room: &str,
+    ) -> Self {
+        let mut state = Self {
+            movement: MovementState {
+                current_room_id: starting_room.to_string(),
+                dynamic_rooms: HashMap::new(),
+            },
+            scene: SceneState::default(),
+            npc_encounter_log: NpcEncounterLog::default(),
+            trigger_context: None,
+        };
+        if let Some(scenario) = scenario {
+            state.init_scenario_npcs(scenario, characters);
+        }
+        state
+    }
+
+    /// The state a Swipe holds from the text save until its analysis updates it:
+    /// the start state, with no trigger context. An event generation marks its own
+    /// one-shot Trigger fired, because the rules read the fired set from there.
+    pub fn pre_analysis(&self, event: Option<&EventRecord>) -> Self {
+        let mut state = self.clone();
+        state.trigger_context = None;
+        if let Some(record) = event {
+            if !record.trigger.trigger_repeat {
+                state
+                    .npc_encounter_log
+                    .mark_trigger_fired(&record.trigger.npc_id, record.trigger.trigger_idx);
+            }
+        }
+        state
+    }
+
     pub fn init_scenario_npcs(
         &mut self,
         scenario: &StartingScenario,

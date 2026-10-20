@@ -2,7 +2,10 @@
 
 use rusqlite::Connection;
 
-use super::plumbing::run_migrations;
+use super::plumbing::{migrate_up_to, run_migrations};
+
+/// The last step these tests run: v28 erases the rows they arrange.
+const UP_TO_V27: i32 = 27;
 
 fn columns_of(conn: &Connection, table: &str) -> Vec<String> {
     let mut stmt = conn
@@ -18,7 +21,7 @@ fn columns_of(conn: &Connection, table: &str) -> Vec<String> {
 #[test]
 fn test_pre_v21_database_restores_posture_and_keeps_rows() {
     let conn = Connection::open_in_memory().unwrap();
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     conn.execute(
         "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
@@ -28,7 +31,7 @@ fn test_pre_v21_database_restores_posture_and_keeps_rows() {
     .unwrap();
     conn.pragma_update(None, "user_version", 20).unwrap();
 
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     let columns = columns_of(&conn, "games");
     assert!(columns.contains(&"narrative_perspective".to_string()));
@@ -51,7 +54,7 @@ fn test_pre_v21_database_restores_posture_and_keeps_rows() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 26,
+        version, 27,
         "the migration chain must land on the latest version"
     );
 }
@@ -68,13 +71,13 @@ fn test_fresh_database_has_game_posture_columns() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 28);
 }
 
 #[test]
 fn test_v19_defaults_posture_for_game_with_missing_world() {
     let conn = Connection::open_in_memory().unwrap();
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     conn.execute(
         "INSERT INTO games (world_name, world_key, persona_key, persona_name, name, created_at, updated_at) \
@@ -84,7 +87,7 @@ fn test_v19_defaults_posture_for_game_with_missing_world() {
     .unwrap();
     conn.pragma_update(None, "user_version", 18).unwrap();
 
-    run_migrations(&conn).expect("migration must survive an orphan world_key");
+    migrate_up_to(&conn, UP_TO_V27).expect("migration must survive an orphan world_key");
 
     let mode: String = conn
         .query_row(
@@ -107,13 +110,13 @@ fn test_v19_defaults_posture_for_game_with_missing_world() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 27);
 }
 
 #[test]
 fn test_v23_backfills_game_posture_from_world() {
     let conn = Connection::open_in_memory().unwrap();
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     conn.execute("ALTER TABLE games DROP COLUMN narrative_perspective", [])
         .unwrap();
@@ -139,7 +142,7 @@ fn test_v23_backfills_game_posture_from_world() {
     .unwrap();
     conn.pragma_update(None, "user_version", 22).unwrap();
 
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     let (perspective, tense): (String, String) = conn
         .query_row(
@@ -154,13 +157,13 @@ fn test_v23_backfills_game_posture_from_world() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 27);
 }
 
 #[test]
 fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
     let conn = Connection::open_in_memory().unwrap();
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     conn.execute("ALTER TABLE message_swipes ADD COLUMN replay TEXT", [])
         .unwrap();
@@ -216,7 +219,7 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
     }
     conn.pragma_update(None, "user_version", 21).unwrap();
 
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     for (idx, (_, expected_impersonated, expected_guide_text, expected_direction)) in
         blobs.iter().enumerate()
@@ -257,8 +260,8 @@ fn test_v22_backfills_swipe_inputs_from_replay_blob_and_drops_column() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 26,
-        "migration chain must land on the latest version"
+        version, 27,
+        "the migration chain must land on the latest version"
     );
 }
 
@@ -276,13 +279,13 @@ fn test_v22_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 28);
 }
 
 #[test]
 fn test_v26_splits_merged_steering_instruction_into_its_two_columns() {
     let conn = Connection::open_in_memory().unwrap();
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     conn.execute("ALTER TABLE message_swipes DROP COLUMN guide_text", [])
         .unwrap();
@@ -324,7 +327,7 @@ fn test_v26_splits_merged_steering_instruction_into_its_two_columns() {
     }
     conn.pragma_update(None, "user_version", 25).unwrap();
 
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     for (idx, (_, _, expected_guide_text, expected_direction)) in rows.iter().enumerate() {
         let (guide_text, impersonate_direction): (Option<String>, Option<String>) = conn
@@ -355,15 +358,15 @@ fn test_v26_splits_merged_steering_instruction_into_its_two_columns() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        version, 26,
-        "migration chain must land on the latest version"
+        version, 27,
+        "the migration chain must land on the latest version"
     );
 }
 
 #[test]
 fn test_v25_backfills_game_display_name_from_stable_name() {
     let conn = Connection::open_in_memory().unwrap();
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     conn.execute("ALTER TABLE games DROP COLUMN display_name", [])
         .unwrap();
@@ -381,7 +384,7 @@ fn test_v25_backfills_game_display_name_from_stable_name() {
     .unwrap();
     conn.pragma_update(None, "user_version", 24).unwrap();
 
-    run_migrations(&conn).unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
 
     let generated: String = conn
         .query_row(
@@ -409,5 +412,95 @@ fn test_v25_backfills_game_display_name_from_stable_name() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 26);
+    assert_eq!(version, 27);
+}
+
+#[test]
+fn test_v28_deletes_saved_games_and_drops_the_snapshot_tables() {
+    let conn = Connection::open_in_memory().unwrap();
+    migrate_up_to(&conn, UP_TO_V27).unwrap();
+    conn.execute(
+        "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
+         VALUES ('w', 'w', 'g', 't', 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO game_state_snapshots (game_id, movement, narrative, scene, npc_encounter_log, created_at) \
+         VALUES (1, '{}', '{}', '{}', '{}', 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO messages (game_id, message_type, timestamp) VALUES (1, '\"Narration\"', 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO message_swipes (message_id, swipe_index, text) VALUES (1, 0, 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute("INSERT INTO game_docks (game_id) VALUES (1)", [])
+        .unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    for table in ["games", "messages", "message_swipes", "game_docks"] {
+        let rows: i64 = conn
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 0, "{table} must hold no row of a saved Game");
+    }
+    assert!(
+        columns_of(&conn, "game_state_snapshots").is_empty(),
+        "the Snapshot table must be gone"
+    );
+    let swipe_columns = columns_of(&conn, "message_swipes");
+    assert!(
+        !swipe_columns
+            .iter()
+            .any(|column| column.starts_with("snapshot"))
+    );
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 28);
+}
+
+#[test]
+fn test_v28_requires_the_kind_the_state_and_the_maker() {
+    let conn = Connection::open_in_memory().unwrap();
+    run_migrations(&conn).unwrap();
+    conn.execute(
+        "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
+         VALUES ('w', 'w', 'g', 't', 't')",
+        [],
+    )
+    .unwrap();
+
+    let no_kind = conn.execute(
+        "INSERT INTO messages (game_id, message_type, timestamp) VALUES (1, '\"Narration\"', 't')",
+        [],
+    );
+    assert!(no_kind.is_err(), "a Message with no kind must be refused");
+
+    conn.execute(
+        "INSERT INTO messages (game_id, message_type, kind, timestamp) \
+         VALUES (1, '\"Narration\"', '\"Narration\"', 't')",
+        [],
+    )
+    .unwrap();
+    let no_state = conn.execute(
+        "INSERT INTO message_swipes (message_id, swipe_index, text, maker) \
+         VALUES (1, 0, 't', '\"Narrator\"')",
+        [],
+    );
+    assert!(no_state.is_err(), "a Swipe with no state must be refused");
+    let no_maker = conn.execute(
+        "INSERT INTO message_swipes (message_id, swipe_index, text, state) \
+         VALUES (1, 0, 't', '{}')",
+        [],
+    );
+    assert!(no_maker.is_err(), "a Swipe with no maker must be refused");
 }

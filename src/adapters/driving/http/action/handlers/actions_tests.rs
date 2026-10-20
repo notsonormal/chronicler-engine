@@ -5,7 +5,6 @@ use axum::{Form, http::StatusCode};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driven::storage::Storage;
-use crate::domain::model::game::GameId;
 use crate::domain::model::settings::TextCheckMode;
 use crate::adapters::driving::http::action::handlers::actions::{
     action_check_handler, action_confirm_handler, action_handler,
@@ -318,20 +317,21 @@ async fn test_action_handler_returns_500_on_pipeline_error() {
     let map = TestMap::single_room("start");
     storage.seed_world(&world, &map).unwrap();
     let player = TestPersona::standard();
-    let game_id = storage
-        .create_game(
+    let game_id = crate::test_support::seed_game_row(
+        &storage,
+        &crate::test_support::test_new_game(
             &world.name,
             &world.key,
             "__missing_persona__",
             &player.sheet.name,
             "Test Game",
-        )
-        .unwrap();
+        ),
+    );
 
     let state = TestAppBuilder::default_test()
         .storage(storage)
         .skip_seeding(true)
-        .active_game(GameId(game_id))
+        .active_game(game_id)
         .build_service();
     let form = ActionForm {
         command: "look".to_string(),
@@ -347,67 +347,5 @@ async fn test_action_handler_returns_500_on_pipeline_error() {
         response.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
         "missing-persona should produce 500 via dispatch_action Err arm"
-    );
-}
-
-#[tokio::test]
-async fn test_action_handler_returns_200_still_thinking_on_concurrent_generation() {
-    let state = TestAppBuilder::default_test().build_service();
-
-    let game_id = active_game_of(&state);
-    let mut gs = state.message_service.load_or_fresh(game_id);
-    let (_gid, _gen_id, claim) = state
-        .generation_gate
-        .try_claim(game_id, &mut gs, &state.message_service)
-        .unwrap();
-    assert!(matches!(
-        claim,
-        crate::application::errors::ProcessActionResult::Started
-    ));
-
-    let form = ActionForm {
-        command: "look".to_string(),
-    };
-
-    let response = action_handler(
-        axum::extract::State(state.clone()),
-        CurrentGame(active_game_of(&state)),
-        Form(form),
-    )
-    .await;
-    assert_eq!(
-        response.status(),
-        StatusCode::OK,
-        "concurrent generation should produce 200"
-    );
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Still thinking"),
-        "expected 'Still thinking' in body: {body_str}"
-    );
-}
-
-#[tokio::test]
-async fn test_action_handler_returns_503_on_shutdown() {
-    let state = TestAppBuilder::default_test().build_service();
-    state.shutdown_token.cancel();
-
-    let form = ActionForm {
-        command: "look".to_string(),
-    };
-
-    let response = action_handler(
-        axum::extract::State(state.clone()),
-        CurrentGame(active_game_of(&state)),
-        Form(form),
-    )
-    .await;
-    assert_eq!(
-        response.status(),
-        StatusCode::SERVICE_UNAVAILABLE,
-        "cancelled shutdown should produce 503 via Ok(ShuttingDown) arm"
     );
 }

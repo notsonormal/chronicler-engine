@@ -29,16 +29,15 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `characters.rs` — Character storage backend operations
         - `core.rs` — Storage backend and core abstractions
         - `db.rs` — SQLite database connection pool
+        - `docks.rs` — The dock record reads: the offered set and the notice of one Game
         - `games.rs` — Game storage operations
         - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
         - `llm_messages.rs` — LLM message storage
-        - `messages.rs` — Message storage operations
         - `mod.rs` — Storage layer and database access
         - `personas.rs` — Persona storage operations
         - `presets.rs` — Preset storage operations
         - `settings.rs` — Settings storage operations
-        - `snapshots.rs` — Snapshot storage operations
-        - `swipes.rs` — Swipe data storage
+        - `stories.rs` — The story reads: the end of the story, one Swipe state, and the entries of a window
         - `test_support.rs` — Test infrastructure types for storage failure injection
         - `transaction.rs` — The transaction: one unit of record writes that lands whole
         - `worlds.rs` — World storage backend operations
@@ -46,11 +45,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `llm_message.rs` — LLM message mapper
           - `message.rs` — Message mapper
           - `mod.rs` — Row-to-domain object mapping
-          - `state_snapshot.rs` — State snapshot mapper
         - **models/**
           - `character.rs` — Character database model
           - `game.rs` — Game database model
-          - `game_state_snapshot.rs` — Game state snapshot model
           - `llm_message.rs` — LLM message database model
           - `map.rs` — Database row struct for the `maps` table
           - `message.rs` — Database row struct for the `messages` table
@@ -63,6 +60,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - **utils/**
           - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
           - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
+          - `records.rs` — Shared helpers of the story records: the in-memory refusal and the JSON columns
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -156,9 +154,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `worlds.rs` — Worlds templates
   - **application/**
     - `connection_test_service.rs` — Connection test service — one short provider call that records nothing.
-    - `errors.rs` — ApplicationError + ProcessActionResult — error envelope and action-result tri-state.
+    - `errors.rs` — ApplicationError — the error envelope of the application services.
     - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
-    - `message_service.rs` — Game-state lifecycle seam for message history and snapshots.
     - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
     - `prompt_preset_service.rs` — Prompt preset service — prompt preset persistence orchestration at the application layer.
     - `settings_service.rs` — Settings service — settings persistence orchestration at the application layer.
@@ -195,25 +192,15 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Game lifecycle orchestration and read-side queries.
       - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
     - **generation/**
-      - `gate.rs` — GenerationGate — per-game slot orchestration. The registry is the live "is generating" truth; the persisted `GenerationStatus` carries the durable phase.
-      - `guard.rs` — Generation guard logic
-      - `mod.rs` — Generation gating and per-game slot orchestration.
-      - `slot.rs` — GenerationSlot — per-game registry slot enum (distinct from domain `GenerationStatus`, which is the pipeline phase).
+      - `gate.rs` — GameWriter and JobWriter — the writer rule and the guard: the one registry of job entries, and the save units a Job writes through.
+      - `job_tasks.rs` — The watch on the tasks a Job spawns, so a tier-1 test waits for a Job to end
+      - `mod.rs` — The writer rule and the guard: the one registry of job entries.
     - **narration/**
       - `mod.rs` — Narration: the generation a Job's narration call makes
       - `narrator.rs` — The narrator: the assembly and the model call a Job's narration needs
     - **pipeline/**
-      - `mod.rs` — Action pipeline for processing game actions
-      - `narration_generation.rs` — Narration generation — the narrate-and-persist prefix of one generation.
-      - `phase_error.rs` — Canonical phase-level error type for the action pipeline.
-      - `pipeline_run.rs` — PipelineRun and its phase implementations for the action pipeline.
-      - **action_pipeline/**
-        - `action.rs` — Action entry path for the pipeline.
-        - `core.rs` — Shared action-pipeline state, constructors, and orchestration helpers.
-        - `mod.rs` — ActionPipeline type-split: the struct and all its inherent impls.
-        - `options.rs` — Options pipeline slice — on-demand entry, agent dispatch, and the
-        - `retrigger.rs` — Retrigger entry path for the pipeline.
-        - `retry.rs` — Retry entry path for the pipeline.
+      - `job.rs` — The Job: the plan of one request, its generations, and the steps of a generation
+      - `mod.rs` — The Job of one request.
     - **ports/**
       - `llm_provider.rs` — LLM provider port (transport-only)
       - `mod.rs` — Application ports: outbound interfaces (driven port traits)
@@ -242,36 +229,37 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `action.rs` — Action enum and semantic command types (slash-command steering entry)
       - `agent.rs` — Agent definitions and behavior types
       - `character.rs` — Character sheet data and NPC card definitions
+      - `dock.rs` — The dock record: the offered set and the one notice of a Game
       - `game.rs` — Game state and session management
+      - `generation.rs` — The order of one generation: ids and texts only
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
       - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
-      - `message_history.rs` — Message history tracking
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
       - `quantifier.rs` — Quantifier types for narrative evaluation
       - `scenario.rs` — Scenario definitions and world data
       - `settings.rs` — Settings and configuration types
+      - `tail.rs` — The end of the story, and the rules derived from it
       - `template.rs` — Template placeholder substitution for author-controlled text fields.
       - `trigger.rs` — Trigger conditions and event types
       - `world.rs` — World model definitions
       - **state/**
-        - `game_state.rs` — Main game state and builder
-        - `game_state_snapshot.rs` — State snapshot value types (persistable representations of game state).
-        - `generation_status.rs` — Generation status enums and input buffer — phase/status are independent axes; live state machine lives in `application/pipeline/` (`core.rs` orchestration, `phases.rs` implementations).
+        - `generation_status.rs` — Generation status enums: the step and the status are independent axes; the Job in `application/pipeline/` drives them.
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state
-        - `narrative_state.rs` — Narrative state with history and input buffer
         - `scene_state.rs` — Current scene NPCs and quantifier confidence
         - `swipe_state.rs` — The game state of one Swipe: movement, scene and encounter log
-        - `trigger_context.rs` — Stored trigger snapshot context
+        - `trigger_context.rs` — The Trigger reference of a Swipe state and the event record of an event Narration
       - **utils/**
         - `game_name.rs` — Game name generation with date-based disambiguation.
         - `game_rules.rs` — The game rules: movement, the Characters present and the Triggers, as a pure function of the Swipe state
+        - `generation_record.rs` — What a generation writes as a record: its Message kind, its message type and its maker
         - `mod.rs` — Domain model utility modules.
         - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings/preset services and preset storage.
+        - `opening.rs` — The opening Narration of a new Game and the parts only it has.
         - `scenario_defaults.rs` — Serde default-fn-pointers for StartingScenario fields.
         - `settings_defaults.rs` — Serde default-fn-pointers for `AppSettings` fields. Cannot become methods — `#[serde(default = "...")]` requires a fn path.
         - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.
@@ -373,7 +361,7 @@ tail -n 10 "$(ls -t logs/build_*.log | head -1)"
 | `python build.py browser` | The browser (Playwright) binary only | ~92 s |
 | `python build.py --no-browser` | The full gate without the browser tier | ~50 s |
 | `python build.py` | The full gate: installs git hooks, removes safe-to-lose linked worktrees, fmt (rewrites files), data, doc and structure checks, Python tests, clippy, guardrails, integration, browser, packaging | ~145 s |
-| `python build.py validate-docs` | Markdown docs and DOC anchors under `docs/` | <1 s |
+| `python build.py validate-docs` | Markdown docs and DOC anchors under `docs/`, and the source paths that `AGENTS.md`, `tests/AGENTS.md` and the other root docs name | <1 s |
 | `python build.py run` | Builds and runs the dev server | see `ENVIRONMENT.md` |
 
 Warm cost is the median of recent runs in `logs/build_history.txt`, including runs after a Rust edit. A run with no Rust change is faster (`ENVIRONMENT.md`, *Typical gate cost*). A narrow loop with `--test-target` does not compile the other test binaries, so a change to a shared API shows in `clippy` or in the full gate instead.
@@ -402,13 +390,12 @@ Don't commit without explict approval, even if commiting is allowed in the permi
 
 ## Subagents and delegation extra rules
 
-Prefer single long running subagents over multiple smaller subagents because it's more expensive to load up twice the context. This is a preference, some workflows/skills specificially use multiple subagents, such as some code review workflows or when implementing multiple wayfinder tickets at once.
+Delegate a task only when it is substantial, and do a short task yourself: each new subagent pays again to load the context. A skill that runs several subagents, such as code review or parallel wayfinder tickets, keeps its own split.
 
-Only create `scout` subagents if the current model is Anthropic (e.g. Opus or Sonnet). With a non-Anthropic model, read all the information you need in the current session. This rule is specific to `scout` subagents only.
+`implementer` is the default for implementation work whose brief names the design, the files and the checks. Choose `strong-implementer` when a wrong judgement is expensive:
 
-The latest pi-note gives the current model. For example:
+- the agent must decide questions that the design leaves open;
+- the change must keep many parts consistent across layers;
+- an `implementer` run on the same work came back wrong on points its brief had already decided.
 
-```
-<pi-note> Model: anthropic/claude-opus-5-5 </pi-note>
-<pi-note> Model: opencode-go/deepseek-v4.1-flash </pi-note>
-```
+Give a substantial investigation to a `scout`: work whose result is a finding, such as how a flow works, every place a change must touch, or whether a claim holds, and whose raw reads you will not need again. Name that finding in the brief.

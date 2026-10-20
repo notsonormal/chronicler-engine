@@ -4,13 +4,17 @@
 use axum::{
     body::Body,
     extract::{Path, State},
-    response::{Html, Response},
+    response::{Html, IntoResponse, Response},
 };
 
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
+use crate::adapters::driving::http::utils::error::render_error;
 use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
-use crate::application::errors::{ApplicationError, ProcessActionResult};
+use crate::application::errors::ApplicationError;
+use crate::application::generation::gate::JobRequest;
+use crate::application::pipeline::job::Job;
+use crate::domain::model::game::GameId;
 
 pub async fn index_handler() -> Html<String> {
     Html(include_str!("../../../../../../assets/index.html").to_string())
@@ -28,35 +32,26 @@ pub async fn reset_handler(
 pub async fn retrigger_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
-) -> Result<Response<Body>, ApplicationError> {
-    map_process_action_result(
-        state.pipeline.retrigger(&state.generation_gate, game_id)?,
-        "Retriggering...",
-    )
+) -> Response<Body> {
+    start_job(&state, game_id, JobRequest::Retrigger, "Retriggering...")
 }
 
 pub async fn retry_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
-) -> Result<Response<Body>, ApplicationError> {
-    map_process_action_result(
-        state.pipeline.retry(&state.generation_gate, game_id)?,
-        "Retrying...",
-    )
+) -> Response<Body> {
+    start_job(&state, game_id, JobRequest::Retry, "Retrying...")
 }
 
-fn map_process_action_result(
-    result: ProcessActionResult,
-    started_label: &str,
-) -> Result<Response<Body>, ApplicationError> {
-    match result {
-        ProcessActionResult::Started => Ok(ok(format!(
-            "<span class=\"status ready\">{started_label}</span>"
-        ))),
-        ProcessActionResult::ConcurrentGeneration => {
-            Ok(ok("<span class=\"status wait\">Still thinking...</span>"))
-        }
-        ProcessActionResult::ShuttingDown => Err(ApplicationError::ShuttingDown),
+fn start_job(
+    state: &AppState,
+    game_id: GameId,
+    request: JobRequest,
+    label: &str,
+) -> Response<Body> {
+    match Job::start(&state.game_writer, state.job_deps.clone(), game_id, request) {
+        Ok(()) => ok(format!("<span class=\"status ready\">{label}</span>")),
+        Err(refusal) => refusal.into_response(),
     }
 }
 
@@ -64,11 +59,17 @@ pub async fn switch_swipe_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
     Path((message_id, swipe_index)): Path<(u64, usize)>,
-) -> Result<Response<Body>, ApplicationError> {
-    let is_generating = state.generation_gate.is_busy(game_id);
-    state
-        .message_service
-        .switch_swipe(game_id, is_generating, message_id, swipe_index)?;
-    let html = state.render_story_log(game_id)?;
-    Ok(ok(html))
+) -> Response<Body> {
+    match state
+        .game_writer
+        .switch_swipe(game_id, message_id, swipe_index)
+    {
+        Ok(()) => match state.render_story_log(game_id) {
+            Ok(html) => ok(html),
+            Err(e) => internal_error(render_error(&format!(
+                "Failed to render the story log: {e}"
+            ))),
+        },
+        Err(refusal) => refusal.into_response(),
+    }
 }

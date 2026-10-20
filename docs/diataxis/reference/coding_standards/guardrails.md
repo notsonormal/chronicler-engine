@@ -62,20 +62,24 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 <!-- AUTO-GUARDRAILS: syn START -->
 | Rule | Kind | Reason | Source |
 |------|------|--------|--------|
-| 1 | banned name | Rule 1: every read and write names its Game. The active-Game pointer lives in `ActiveGame`, so a `static` item or an `Atomic*` type in the storage adapter would be a second hidden Game id. | `tests/infrastructure/guardrails/walker_rows.rs:13` |
-| 2 | call site | Rule 2: the active-Game pointer has one reader and one writer. `GameCatalogue` is both — `CurrentGame` reads through it once per request — and `ActiveGame::set` is `pub(super)`, so the compiler holds the write side too. | `tests/infrastructure/guardrails/walker_rows.rs:25` |
+| 1 | banned name | Rule 1: every read and write names its Game. The active-Game pointer lives in `ActiveGame`, so a `static` item or an `Atomic*` type in the storage adapter would be a second hidden Game id. | `tests/infrastructure/guardrails/walker_rows.rs:14` |
+| 6 | banned name | Rule 6: the guard never spans a model call. `gate.rs` holds the guard for one check and its writes, so the narrator or an Agent (an analysis Agent, an Options Agent, their runner) named in that file would let a call run under it. | `tests/infrastructure/guardrails/walker_rows.rs:22` |
+| 2 | call site | Rule 2: the active-Game pointer has one reader and one writer. `GameCatalogue` is both — `CurrentGame` reads through it once per request — and `ActiveGame::set` is `pub(super)`, so the compiler holds the write side too. | `tests/infrastructure/guardrails/walker_rows.rs:49` |
+| 3 | call site | Rule 3: only `GameWriter` writes game records. The unit of record writes is opened with a capability token, so `gate.rs` is where a unit starts and no other caller can open one; the storage seam contract gets its token from `test_support`, because its crate cannot call a crate-only constructor. | `tests/infrastructure/guardrails/walker_rows.rs:59` |
+| 13 | call site | Rule 13: one generation path. Only `job.rs` calls the narrator and the hooks of the Agent runner, and its step functions are the one place that does, so no second route to a model call grows beside the Job. The row sees files, not functions, and `job.rs` holds only Job code. A method call is matched through the receiver's name (`narrator`, `agent_runner`), which `JobDeps` keeps. | `tests/infrastructure/guardrails/walker_rows.rs:71` |
+| 7 | type check | Rule 7: between steps, pass ids. A Job holds no record field, so a record a step loads cannot go stale in another step's hands. | `tests/infrastructure/guardrails/walker_rows.rs:93` |
+| 18 | call count | Rule 18: each writer takes the guard once, so a check and its writes are one critical section. Look again when a second lock (for example one guard per Game), an atomic with weak ordering in the write path, or a background Agent save that checks "this Swipe is still active" outside `hold` arrives; then the new primitive earns a `loom` seam contract. | `tests/infrastructure/guardrails/walker_rows.rs:107` |
 
 | Rule | Description | Source |
 |------|-------------|--------|
 | enum variant docs | Requires every enum variant to have a `///` doc unless the enum is marked `/// [TRIVIAL_ENUM]`. | `tests/infrastructure/guardrails/enums.rs:69` |
 | free fn location | Restricts top-level free functions to allowlisted category folders or exempt paths. | `tests/infrastructure/guardrails/free_fn.rs:31` |
 | inherent impl locality | Checks all files in `src/` for inherent impls that violate the module-per-type rule. | `tests/infrastructure/guardrails/inherent_impl.rs:15` |
-| wiredapp scope | Restricts `WiredApp` imports to composition-root, HTTP, test-support, and test scopes. | `tests/infrastructure/guardrails/layers.rs:13` |
-| messages swipes separation | Ensures `storage/messages.rs` never references the `message_swipes` table. | `tests/infrastructure/guardrails/layers.rs:54` |
-| handler return type | Requires server handlers to return `Response<Body>` instead of `(StatusCode, String)`. | `tests/infrastructure/guardrails/layers.rs:86` |
-| form fields urlencoded safe | Flags collection-typed fields on HTTP form structs. | `tests/infrastructure/guardrails/layers.rs:130` |
-| server layer boundaries | Prevents server-layer files from referencing `GameState` directly. | `tests/infrastructure/guardrails/layers.rs:196` |
-| http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:228` |
+| wiredapp scope | Restricts `WiredApp` imports to composition-root, HTTP, test-support, and test scopes. | `tests/infrastructure/guardrails/layers.rs:9` |
+| handler return type | Requires server handlers to return `Response<Body>` instead of `(StatusCode, String)`. | `tests/infrastructure/guardrails/layers.rs:58` |
+| form fields urlencoded safe | Flags collection-typed fields on HTTP form structs. | `tests/infrastructure/guardrails/layers.rs:100` |
+| server layer boundaries | Prevents HTTP-layer files from referencing the whole-state types directly. | `tests/infrastructure/guardrails/layers.rs:166` |
+| http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:203` |
 | test file naming | Rejects unit-test files with the singular `_test.rs` suffix in favor of `_tests.rs`. | `tests/infrastructure/guardrails/location.rs:7` |
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |
@@ -88,15 +92,15 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | file length | Enforces a maximum of 2000 non-blank lines per file. | `tests/infrastructure/guardrails/structure.rs:309` |
 | test module header | Test files must have a single-line `//!` summary on the first non-blank line: | `tests/infrastructure/guardrails/structure.rs:333` |
 | import ordering | Enforces import ordering: std/core/alloc, then external crates, then crate/super/self. | `tests/infrastructure/guardrails/style.rs:9` |
-| long comment runs | Warns when five or more countable comment lines appear consecutively. | `tests/infrastructure/guardrails/style.rs:124` |
-| template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:165` |
-| separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:245` |
-| single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:260` |
-| unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:201` |
-| banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:163` |
-| call site rows | Runs the call-site table: only what a row allows may call its callees. | `tests/infrastructure/guardrails/walkers.rs:379` |
-| type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:411` |
-| call count rows | Runs the call-count table: no function calls a row's callee more than the row allows. | `tests/infrastructure/guardrails/walkers.rs:496` |
+| long comment runs | Warns when five or more countable comment lines appear consecutively. | `tests/infrastructure/guardrails/style.rs:132` |
+| template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:173` |
+| separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:253` |
+| single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:268` |
+| unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:180` |
+| banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:166` |
+| call site rows | Runs the call-site table: only what a row allows may call its callees. | `tests/infrastructure/guardrails/walkers.rs:393` |
+| type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:425` |
+| call count rows | Runs the call-count table: no function calls a row's callee more than the row allows. | `tests/infrastructure/guardrails/walkers.rs:510` |
 <!-- AUTO-GUARDRAILS: syn END -->
 
 ## 4. Coverage Exclusion Policy
@@ -106,5 +110,5 @@ Coverage is measured via `cargo-llvm-cov` with file-level exclusions configured 
 ## Document References
 
 - [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Architectural commitments](../../explanation/architecture.md#architectural-commitments) lists the guarantees the static guardrails enforce.
-- [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — the trigger-evaluation mutation sequence is the same one the `execute_freeaction_impl` tests observe.
+- [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — the order in which the game rules apply an analysis, which the game-rules tests observe.
 - `.scratch/turn-state-model/assets/sketch-25-new-design.md` §6.2 — the design rule numbers the four table-driven walkers enforce.

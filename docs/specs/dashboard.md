@@ -5,24 +5,29 @@ Endpoints:
 - `POST /status/reset-generating` (the stop)
 - `GET /fragment/options-dock`
 - `GET /debug/is_generating`
+- `GET /debug/state`
 - `GET /` (the shell that defines the icons)
 
 ## Scenarios
 
-#### Scenario 39.1: The generating poll answers from the live generation registry
+#### Scenario 39.1: The status poll answers with the step of a running Job, else the failure line, else idle
 
 ```gherkin
-Given a game whose persisted status is Generating with no live generation slot
-When the client requests GET /status/generating
-Then the response body is "idle"
-
-Given a game with a live generation slot in phase Narrating
+Given a Game whose Job is at the narrator call of a Narration
 When the client requests GET /status/generating
 Then the response body is "narrating"
 
-Given a game with a live generation slot in phase Quantifying
+Given a Game whose Job is at its analysis
 When the client requests GET /status/generating
 Then the response body is "quantifying"
+
+Given a Game with no Job and a failure line
+When the client requests GET /status/generating
+Then the response body carries that failure line
+
+Given a Game with no Job and no failure line
+When the client requests GET /status/generating
+Then the response body is "idle"
 ```
 
 #### Scenario 39.2: The shell defines each referenced icon exactly once
@@ -34,15 +39,15 @@ And every icon the shell or a fragment named above references is one the shell d
 And each fragment named above shows at least one icon
 ```
 
-#### Scenario 39.3: The dock and the debug endpoint answer from the live registry
+#### Scenario 39.3: The dock and the debug endpoint answer from the busy state
 
 ```gherkin
-Given a game with a live generation slot and a persisted status of Idle
+Given a Game with an offered set and a Job
 When the client requests GET /fragment/options-dock and GET /debug/is_generating
 Then the dock's controls are disabled
 And the debug response body is "true"
 
-Given a game whose persisted status is Generating with no live generation slot
+Given a Game with an offered set and no Job
 When the client requests GET /fragment/options-dock and GET /debug/is_generating
 Then the dock's controls are enabled
 And the debug response body is "false"
@@ -64,7 +69,7 @@ Examples:
 | Kind of Job | Model call | Status while held | Records in the story log after the stop |
 | Narration | the narrator call | narrating | the Input of the Job, and no Narration |
 | Narration | the analysis call | quantifying | the Input of the Job and the Narration, with no room on the Narration and no event Narration |
-| Narration | the Options call | the step that runs next | the Input of the Job, the Narration, and the room the Narration arrived in |
+| Narration | the Options call | options | the Input of the Job, the Narration, and the room the Narration arrived in |
 | Impersonate | the narrator call | narrating | no Message of the Job |
 | Impersonate | the analysis call | quantifying | the Input of the Job and no Narration |
 | Retry of a typed Input | the narrator call | narrating | the Messages of the story before the Retry |
@@ -84,4 +89,28 @@ And the second Job's model answer arrives
 Then the story log holds the Input of the stopped Job
 And the story log holds the Input and the Narration of the second Job
 And the story log holds no Narration of the stopped Job
+```
+
+#### Scenario 39.6: The debug state names a Step only while a Job runs
+
+```gherkin
+Given a Game whose Job is at the narrator call of a Narration
+When the client requests GET /debug/state
+Then the response reports the status "Generating" and the Step "Narrating"
+
+Given a Game with no Job and a failure line
+When the client requests GET /debug/state
+Then the response reports the status "Error" with the kind of that failure line, and no Step
+
+Given a Game with no Job and no failure line
+When the client requests GET /debug/state
+Then the response reports the status "Idle" and no Step
+```
+
+#### Scenario 39.7: A storage failure during the debug state read answers a 500
+
+```gherkin
+Given a storage that rejects the read of the story
+When the client requests GET /debug/state
+Then the response status is "500 Internal Server Error"
 ```

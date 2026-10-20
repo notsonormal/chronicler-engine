@@ -200,14 +200,48 @@ And the body carries the unknown-backend failure text
 And a following GET /fragment/settings still renders the Connection named "Alpha"
 ```
 
-#### Scenario 20.25: A Connection's context window applies from the next narration
+#### Scenario 20.25: The context window field sets the window the next narration uses
 
 ```gherkin
-Given a Game with a long story log, whose Narrator role uses a Connection whose provider has a small default context window
+Given a Game with a long story log, whose Narrator role uses a mock Connection with an empty context window field
 And the player submits an Action, and its narration settles
-When the client edits that Connection to a provider with a larger default context window
+When the client edits that Connection with the context window field set to a larger value
 And the player submits a second Action, and its narration settles
 Then the recorded prompt of the second narration holds more of the story log than the first
+```
+
+#### Scenario 20.26: An empty context window field uses the provider default
+
+```gherkin
+Given a Game with a long story log, whose Narrator role uses a mock Connection whose context window field holds a large value
+And the player submits an Action, and its narration settles
+When the client edits that Connection with an empty context window field
+And the player submits a second Action, and its narration settles
+Then the recorded prompt of the second narration holds less of the story log than the first
+```
+
+#### Scenario 20.27: An edit that changes the provider keeps an explicit context window
+
+```gherkin
+Given a Connection whose provider has a small default context window and whose context window field holds a larger explicit value
+When the client edits that Connection to a provider with a larger default window and leaves the field as it is
+Then the response is 200
+And the stored Connection still holds the explicit value
+And a following GET /fragment/connections/{id}/edit renders the explicit value in the context window field
+```
+
+#### Scenario 20.28: A context window that is not a positive whole number is refused
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha"
+When the client edits that Connection with a context window of text, of zero or of a negative number
+Then the response is 400
+And the body says the context window must be a positive whole number, or empty for the provider default
+And the stored Connection still holds no explicit context window
+And a following GET /fragment/settings still renders the Connection named "Alpha"
+When the client adds a Connection with a context window of text
+Then the response is 400
+And the connection list still holds the connections it held before
 ```
 
 ### POST /connections/{id}/test — connection test

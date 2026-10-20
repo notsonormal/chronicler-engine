@@ -10,54 +10,54 @@ Endpoints:
 #### Scenario 8.1: Delete-last between actions — deleted narration stays absent
 
 ```gherkin
-Given a fresh game state with narrative.history empty
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
-And the pipeline returns to idle (narration A persisted)
+And the Game is no longer busy (narration A is in the story log)
 And the client POST /history/delete (deletes the last message — narration A)
 And the client POST /action with command="look around"
-And the pipeline returns to idle (narration B persisted)
-Then message_service.load_messages() contains 2 Input entries
+And the Game is no longer busy (narration B is in the story log)
+Then the story log holds 2 Input entries
 And no Narration entry's text equals narration A's text
-And message_service.load_messages() contains narration B
+And the story log holds narration B
 ```
 
 #### Scenario 8.2: Delete mid-sequence removes the targeted narration
 
 ```gherkin
-Given a fresh game state with narrative.history empty
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
-And the pipeline returns to idle (narration A)
+And the Game is no longer busy (narration A is in the story log)
 And the client POST /action with command="look around"
-And the pipeline returns to idle (narration B)
+And the Game is no longer busy (narration B is in the story log)
 And the client POST /history/delete (deletes narration B — the last message)
 And the client POST /action with command="check door"
-And the pipeline returns to idle (narration C)
-Then message_service.load_messages() contains exactly 3 Input entries
+And the Game is no longer busy (narration C is in the story log)
+Then the story log holds exactly 3 Input entries
 And no Narration entry's text equals narration B's text
 ```
 
 #### Scenario 8.3: Retry after delete of last input does not leave state generating
 
 ```gherkin
-Given a fresh game state with narrative.history empty
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
-And the pipeline returns to idle (input + narration persisted)
+And the Game is no longer busy (the Input and its Narration are in the story log)
 And the client POST /history/delete (deletes the last message — the narration)
 And the client POST /swipe/new (retry with no anchor)
 Then the response is not 500 INTERNAL_SERVER_ERROR
-And within 1 s, message_service.load_or_fresh().narrative.input_buffer.status.is_generating() is false
+And within 1 s, the Game is no longer busy
 ```
 
 #### Scenario 8.4: Delete-last removes the rendered log entry
 
 ```gherkin
-Given a fresh game state with narrative.history empty
+Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
-And the pipeline returns to idle
+And the Game is no longer busy
 And the client GET /fragment/story-log (at least 2 .log-entry rendered)
 And the client POST /history/delete
 Then the response status is "200 OK"
@@ -95,4 +95,31 @@ And the client POST /history/delete
 Then each response is 200 carrying the "Still thinking..." status
 And the Message the client tried to edit keeps the text it had
 And the story log still holds every Message of the Job
+```
+
+#### Scenario 8.8: The story log shows the text while the analysis holds the Job
+
+```gherkin
+Given a Game whose Job is held at the analysis call of a Narration
+When the client GET /fragment/story-log
+Then the rendered log holds the Narration's text
+And the client GET /status/generating answers "quantifying"
+```
+
+#### Scenario 8.9: An edit of a Message that does not exist is refused
+
+```gherkin
+Given a Game whose story log holds its opening Narration
+When the client POST /history/999999 with a new text
+Then the response is 400 Bad Request carrying "Message not found"
+And the story log holds every Message it held before
+```
+
+#### Scenario 8.10: A delete on the opening alone is refused
+
+```gherkin
+Given a Game whose story log holds only its opening Narration
+When the client POST /history/delete
+Then the response is 400 Bad Request carrying "The story keeps its last message"
+And the story log still holds the opening Narration
 ```

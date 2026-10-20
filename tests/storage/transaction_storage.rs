@@ -1,14 +1,14 @@
-//! The storage transaction seam: one unit of record writes that lands whole, and the newest Game of a World, on both backends.
+//! The storage transaction seam: one unit of record writes that lands whole, and the newest Game of a World.
 
 use chrono::{DateTime, Utc};
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrite};
 use chronicler_engine::domain::model::game::{GameId, NewGame};
+use chronicler_engine::domain::model::message::SwipeAt;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
+use chronicler_engine::test_support::tx_token;
 
 const WORLD_KEY: &str = "seam_world";
-/// A Message time the wall clock cannot reach while these cases run.
 const FUTURE_MESSAGE_TIME: &str = "2099-01-01T00:00:00+00:00";
-/// A Message time older than every `updated_at` these cases write.
 const PAST_MESSAGE_TIME: &str = "2020-01-01T00:00:00+00:00";
 
 fn backends() -> Vec<(&'static str, Storage)> {
@@ -19,6 +19,12 @@ fn backends() -> Vec<(&'static str, Storage)> {
         ),
         ("in-memory", Storage::new_in_memory()),
     ]
+}
+
+/// The in-memory backend holds no Message, so a case that orders by Message runs
+/// on SQLite alone.
+fn sqlite() -> Storage {
+    chronicler_engine::test_support::empty_sqlite_storage()
 }
 
 fn new_game(name: &str, world_key: &str) -> NewGame {
@@ -40,20 +46,26 @@ fn new_game(name: &str, world_key: &str) -> NewGame {
 }
 
 fn create_game(storage: &Storage, name: &str) -> GameId {
-    let id = storage
-        .create_game_from_request(&new_game(name, WORLD_KEY))
-        .expect("create_game_from_request should succeed");
-    GameId(id)
+    chronicler_engine::test_support::seed_game_row(storage, &new_game(name, WORLD_KEY))
 }
 
-/// The newest Message of `game_id` carries the fixed `stamp`, so its key is
-/// known without reading the wall clock.
 fn insert_message_at(storage: &Storage, game_id: GameId, stamp: &str) {
     let mut message = chronicler_engine::test_support::dummy_message("hello");
     message.timestamp = DateTime::parse_from_rfc3339(stamp)
         .expect("a fixed RFC 3339 timestamp")
         .with_timezone(&Utc);
-    storage.insert_message(game_id, &message).unwrap();
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            let message_id = tx.insert_message(&message)?;
+            tx.insert_swipe(
+                SwipeAt {
+                    message: message_id,
+                    swipe: 0,
+                },
+                &message.swipes[0],
+            )
+        })
+        .expect("the unit should succeed");
 }
 
 // CASE storage-tx-rollback [failure]: a unit whose second record write fails leaves no row
@@ -61,20 +73,27 @@ fn insert_message_at(storage: &Storage, game_id: GameId, stamp: &str) {
 fn tx_rollback_leaves_no_row_when_the_second_write_fails() {
     let (storage, handle) =
         chronicler_engine::test_support::empty_sqlite_storage().with_test_failures();
+    let game_id = create_game(&storage, "Rolled back");
     handle.set_write(
-        TxWrite::DeleteGame,
+        TxWrite::InsertSwipe,
         TestOverride::internal("the second write fails"),
     );
 
-    let result = storage.transaction(|tx| {
-        let game_id = tx.insert_game(&new_game("Rolled back", WORLD_KEY))?;
-        tx.delete_game(game_id)?;
-        Ok(())
+    let result = storage.transaction(game_id, tx_token(), |tx| {
+        let message = chronicler_engine::test_support::dummy_message("hello");
+        let message_id = tx.insert_message(&message)?;
+        tx.insert_swipe(
+            SwipeAt {
+                message: message_id,
+                swipe: 0,
+            },
+            &chronicler_engine::test_support::dummy_swipe("hello"),
+        )
     });
 
     assert!(result.is_err(), "the injected failure fails the unit");
     assert!(
-        storage.list_games().unwrap().is_empty(),
+        storage.stories().tail(game_id).unwrap().is_none(),
         "the first write must roll back with the failed unit"
     );
 }
@@ -85,7 +104,9 @@ fn transaction_new_game_writes_the_game_row() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
 
     let game_id = storage
-        .transaction_new_game(&new_game("First", WORLD_KEY), |game_id, _tx| Ok(game_id))
+        .transaction_new_game(&new_game("First", WORLD_KEY), tx_token(), |game_id, _tx| {
+            Ok(game_id)
+        })
         .expect("the create unit should succeed");
 
     let stored = storage
@@ -106,11 +127,14 @@ fn transaction_new_game_rolls_back_when_a_later_write_fails() {
         TestOverride::internal("the later write fails"),
     );
 
-    let result =
-        storage.transaction_new_game(&new_game("Rolled back", WORLD_KEY), |game_id, tx| {
-            tx.delete_game(game_id)?;
+    let result = storage.transaction_new_game(
+        &new_game("Rolled back", WORLD_KEY),
+        tx_token(),
+        |game_id, tx| {
+            tx.delete_game()?;
             Ok(game_id)
-        });
+        },
+    );
 
     assert!(result.is_err(), "the injected failure fails the unit");
     assert!(
@@ -119,12 +143,56 @@ fn transaction_new_game_rolls_back_when_a_later_write_fails() {
     );
 }
 
+// CASE storage-tx-new-game-failure [failure]: a refused Game-row write leaves no row
+#[test]
+fn transaction_new_game_refuses_when_the_game_row_write_fails() {
+    let (storage, handle) =
+        chronicler_engine::test_support::empty_sqlite_storage().with_test_failures();
+    handle.set_write(
+        TxWrite::InsertGame,
+        TestOverride::internal("the Game-row write fails"),
+    );
+
+    let result = storage.transaction_new_game(
+        &new_game("Refused", WORLD_KEY),
+        tx_token(),
+        |game_id, _tx| Ok(game_id),
+    );
+
+    assert!(result.is_err(), "the injected failure fails the unit");
+    assert!(
+        storage.list_games().unwrap().is_empty(),
+        "a refused create leaves no Game row"
+    );
+}
+
+// CASE storage-tx-delete-game: the unit deletes the Game row and the records the schema cascades
+#[test]
+fn tx_delete_game_removes_the_game_and_its_records() {
+    let storage = sqlite();
+    let game_id = create_game(&storage, "Removed");
+    insert_message_at(&storage, game_id, PAST_MESSAGE_TIME);
+
+    storage
+        .transaction(game_id, tx_token(), |tx| tx.delete_game())
+        .expect("the unit should succeed");
+
+    assert!(
+        storage.get_game(game_id.0).unwrap().is_none(),
+        "the Game row is gone"
+    );
+    assert!(
+        storage.list_games().unwrap().is_empty(),
+        "the Game's records cascade with it"
+    );
+}
+
 // CASE storage-tx-no-in-memory-arm [failure]: the in-memory backend refuses a unit
 #[test]
 fn transaction_refuses_the_in_memory_backend() {
     let storage = Storage::new_in_memory();
 
-    let result = storage.transaction(|_tx| Ok(()));
+    let result = storage.transaction(GameId(1), tx_token(), |_tx| Ok(()));
 
     assert!(
         result.is_err(),
@@ -132,56 +200,64 @@ fn transaction_refuses_the_in_memory_backend() {
     );
 }
 
-// CASE storage-newest-game-message: a Game's newest Message answers before its `updated_at`
+// CASE storage-newest-game-message: a Game's newest Message answers before its `updated_at` (SQLite: the in-memory backend holds no Message)
 #[test]
 fn newest_game_of_world_uses_the_newest_message() {
-    for (label, storage) in backends() {
-        let with_message = create_game(&storage, "With message");
-        // A second Game with a newer `updated_at`: the Message of the first
-        // still answers.
-        create_game(&storage, "Without message");
-        insert_message_at(&storage, with_message, FUTURE_MESSAGE_TIME);
+    let storage = sqlite();
+    let with_message = create_game(&storage, "With message");
+    create_game(&storage, "Without message");
+    insert_message_at(&storage, with_message, FUTURE_MESSAGE_TIME);
 
-        assert_eq!(
-            storage.newest_game_of_world(WORLD_KEY).unwrap(),
-            Some(with_message),
-            "{label}: the newest Message of a Game decides"
-        );
-    }
+    assert_eq!(
+        storage.newest_game_of_world(WORLD_KEY).unwrap(),
+        Some(with_message),
+        "the newest Message of a Game decides"
+    );
 }
 
 // CASE storage-newest-game-updated-at: without a Message, `updated_at` answers
 #[test]
 fn newest_game_of_world_falls_back_to_updated_at() {
-    for (label, storage) in backends() {
-        let with_old_message = create_game(&storage, "With old message");
-        insert_message_at(&storage, with_old_message, PAST_MESSAGE_TIME);
-        // A Game with no Message is keyed by its `updated_at`, which is now.
-        let without_message = create_game(&storage, "Without message");
+    let storage = sqlite();
+    let with_old_message = create_game(&storage, "With old message");
+    insert_message_at(&storage, with_old_message, PAST_MESSAGE_TIME);
+    let without_message = create_game(&storage, "Without message");
 
-        assert_eq!(
-            storage.newest_game_of_world(WORLD_KEY).unwrap(),
-            Some(without_message),
-            "{label}: a Game with no Message is keyed by `updated_at`"
-        );
-    }
+    assert_eq!(
+        storage.newest_game_of_world(WORLD_KEY).unwrap(),
+        Some(without_message),
+        "a Game with no Message is keyed by `updated_at`"
+    );
+}
+
+// CASE storage-newest-game-in-memory: the in-memory backend orders by `updated_at` alone
+#[test]
+fn newest_game_of_world_in_memory_orders_by_updated_at() {
+    let storage = Storage::new_in_memory();
+    create_game(&storage, "First");
+    let second = create_game(&storage, "Second");
+
+    assert_eq!(
+        storage.newest_game_of_world(WORLD_KEY).unwrap(),
+        Some(second),
+        "the newer Game answers"
+    );
 }
 
 // CASE storage-newest-game-tie: two Games share the newest key, and the higher id answers
 #[test]
 fn newest_game_of_world_breaks_a_tie_on_the_higher_id() {
-    for (label, storage) in backends() {
-        let first = create_game(&storage, "First");
-        let second = create_game(&storage, "Second");
-        insert_message_at(&storage, first, FUTURE_MESSAGE_TIME);
-        insert_message_at(&storage, second, FUTURE_MESSAGE_TIME);
+    let storage = sqlite();
+    let first = create_game(&storage, "First");
+    let second = create_game(&storage, "Second");
+    insert_message_at(&storage, first, FUTURE_MESSAGE_TIME);
+    insert_message_at(&storage, second, FUTURE_MESSAGE_TIME);
 
-        assert_eq!(
-            storage.newest_game_of_world(WORLD_KEY).unwrap(),
-            Some(second),
-            "{label}: the higher Game id breaks the tie"
-        );
-    }
+    assert_eq!(
+        storage.newest_game_of_world(WORLD_KEY).unwrap(),
+        Some(second),
+        "the higher Game id breaks the tie"
+    );
 }
 
 // CASE storage-newest-game-unknown-world: a World with no Game answers None, and another World's Game does not answer
@@ -189,9 +265,10 @@ fn newest_game_of_world_breaks_a_tie_on_the_higher_id() {
 fn newest_game_of_world_ignores_other_worlds() {
     for (label, storage) in backends() {
         create_game(&storage, "Elsewhere");
-        let other = storage
-            .create_game_from_request(&new_game("Other", "other_world"))
-            .unwrap();
+        let other = chronicler_engine::test_support::seed_game_row(
+            &storage,
+            &new_game("Other", "other_world"),
+        );
 
         assert_eq!(
             storage.newest_game_of_world("no_such_world").unwrap(),
@@ -200,7 +277,7 @@ fn newest_game_of_world_ignores_other_worlds() {
         );
         assert_eq!(
             storage.newest_game_of_world("other_world").unwrap(),
-            Some(GameId(other)),
+            Some(other),
             "{label}: the lookup filters by World"
         );
     }

@@ -38,7 +38,9 @@ Seeding completes before the HTTP server starts. A malformed world, persona, or 
 
 Bootstrap picks the newest Game of the selected World through `GameCatalogue`.
 A World with no Game gets one through
-`GameCatalogue::create_game`, the path the Games page uses.
+`GameCatalogue::create_game`, the path the Games page uses. That path writes the Game, its dock record and its opening Narration in one save unit.
+
+Every Game is idle after a start, because the job entry that marks a Game busy lives in memory.
 
 The loader calls `default_scenario()` for the active world and reads that scenario's `starting_room_id` for the initial room. When no scenarios exist, the initial room id falls back to `"start"`.
 
@@ -89,13 +91,9 @@ The schema files are authoritative for seed-file fields and validation.
 
 `NpcEvent.confidence` uses the `QuantifierConfidence` variants `High`, `Medium`, and `Low`. The events-diff path emits `Medium` when at least one transition occurred and `Low` when the previous and current NPC sets matched.
 
-### Swipe snapshot reference
-
-`Swipe.snapshot_id` references `GameStateSnapshot`. The SQL layer declares this relationship as non-FK.
-
 ## Document References
 
 - [Storage design](../explanation/storage_design.md) — current-understanding rationale for the bootstrap flow, seed ordering, and seed files as templates.
 - [Storage](./storage.md) — seeding contract, storage-layer invariants, eleven-table schema, and entity persistence (worlds, personas, messages).
-- [Game Flow](./game_flow.md) — runtime trigger evaluation, phase pipeline, and event handling.
+- [Game Flow](./game_flow.md) — the Job, runtime trigger evaluation, and event handling.
 - [Agent System](./narrative/agent_system.md) — quantifier-agent processing.

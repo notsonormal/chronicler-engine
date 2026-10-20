@@ -3,13 +3,37 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state::message_types::{MessageKind, MessageType};
+use crate::domain::model::state::swipe_state::SwipeState;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SwipeAt {
+    pub message: u64,
+    pub swipe: usize,
+}
+
+/// What the player asked for when the Swipe's text was written.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct StoredInputs {
+    pub impersonated: bool,
+    pub guide_text: Option<String>,
+    pub impersonate_direction: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Maker {
+    /// The World's opening text, written at create.
+    WorldOpening,
+    /// The player.
+    Player,
+    /// The narrator.
+    Narrator,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Swipe {
     pub text: String,
-    pub snapshot_id: Option<u64>,
-    pub location_header: Option<String>,
+    pub room_report: Option<String>,
     pub event_header: Option<String>,
     #[serde(default)]
     pub impersonated: bool,
@@ -17,47 +41,54 @@ pub struct Swipe {
     pub guide_text: Option<String>,
     #[serde(default)]
     pub impersonate_direction: Option<String>,
+    pub state: SwipeState,
+    pub maker: Maker,
+}
+
+impl Swipe {
+    pub fn new(text: impl Into<String>, maker: Maker, state: SwipeState) -> Self {
+        Self {
+            text: text.into(),
+            room_report: None,
+            event_header: None,
+            impersonated: false,
+            guide_text: None,
+            impersonate_direction: None,
+            state,
+            maker,
+        }
+    }
+
+    pub fn stored_inputs(&self) -> StoredInputs {
+        StoredInputs {
+            impersonated: self.impersonated,
+            guide_text: self.guide_text.clone(),
+            impersonate_direction: self.impersonate_direction.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub id: u64,
     pub message_type: MessageType,
+    pub kind: MessageKind,
     pub timestamp: DateTime<Utc>,
     pub active_swipe_index: usize,
     pub swipes: Vec<Swipe>,
-    pub is_deleted: bool,
 }
 
 impl Message {
-    pub fn new(
-        text: impl Into<String>,
-        message_type: MessageType,
-        location_header: Option<String>,
-        event_header: Option<String>,
-    ) -> Self {
-        let text = text.into();
-        let swipe = Swipe {
-            text,
-            snapshot_id: None,
-            location_header,
-            event_header,
-            impersonated: false,
-            guide_text: None,
-            impersonate_direction: None,
-        };
+    /// A Message of one Swipe. The id is the storage's to give.
+    pub fn new(message_type: MessageType, kind: MessageKind, swipe: Swipe) -> Self {
         Self {
             id: 0,
             message_type,
+            kind,
             timestamp: Utc::now(),
             active_swipe_index: 0,
             swipes: vec![swipe],
-            is_deleted: false,
         }
-    }
-
-    pub fn is_unpersisted(&self) -> bool {
-        self.id == 0
     }
 
     pub fn swipe_count(&self) -> usize {
@@ -76,17 +107,12 @@ impl Message {
         self.active_swipe().map(|s| s.text.as_str()).unwrap_or("")
     }
 
-    pub fn location_header(&self) -> Option<&str> {
-        self.active_swipe()
-            .and_then(|s| s.location_header.as_deref())
+    pub fn room_report(&self) -> Option<&str> {
+        self.active_swipe().and_then(|s| s.room_report.as_deref())
     }
 
     pub fn event_header(&self) -> Option<&str> {
         self.active_swipe().and_then(|s| s.event_header.as_deref())
-    }
-
-    pub fn snapshot_id(&self) -> Option<u64> {
-        self.active_swipe().and_then(|s| s.snapshot_id)
     }
 
     pub fn impersonated(&self) -> bool {
@@ -124,32 +150,20 @@ impl Message {
         }
     }
 
-    pub fn set_snapshot_id(&mut self, sid: Option<u64>) {
-        if let Some(swipe) = self.active_swipe_mut() {
-            swipe.snapshot_id = sid;
-        }
-    }
-
-    pub fn set_location_header(&mut self, location_header: String) {
-        if let Some(swipe) = self.active_swipe_mut() {
-            swipe.location_header = Some(location_header);
-        }
-    }
-
     pub(crate) fn from_db(
         id: u64,
         message_type: MessageType,
+        kind: MessageKind,
         timestamp: DateTime<Utc>,
         active_swipe_index: usize,
-        is_deleted: bool,
     ) -> Self {
         Self {
             id,
             message_type,
+            kind,
             timestamp,
             active_swipe_index,
             swipes: Vec::new(),
-            is_deleted,
         }
     }
 

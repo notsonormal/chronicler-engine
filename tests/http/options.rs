@@ -1,19 +1,23 @@
-//! HTTP E2E tests for options-autogeneration: on-demand /options, the always-on turn-end hook, and response-shape parsing.
+//! HTTP E2E tests for options-autogeneration: on-demand /options, the always-on Options run at the end of a Job, and response-shape parsing.
 
-use chronicler_engine::test_support::active_game_of;
+use std::sync::Arc;
+
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::domain::model::settings::{AppSettings, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    analysis_report, configured_runner_without, ScriptedModel, TestMap,
+    analysis_report, configured_runner_without, ModelRole, ScriptedModel, TestAppBuilder,
+    TestDataBuilder, TestMap, TestWorld,
 };
 
 use crate::support::app_wiring::{app_with_script, app_with_script_and_agents};
-use crate::support::http_assertions::{defined_icons, referenced_icons};
-use crate::support::http_fixtures::{if_world, seed_offered_set};
+use crate::support::http_assertions::{defined_icons, referenced_icons, status_error_message};
+use crate::support::http_fixtures::{if_world, seed_offered_set, story_of};
 use crate::support::http_requests::{
-    fetch_body, post_action, post_action_check, post_form, wait_settled,
+    fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
+    wait_settled,
 };
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -53,29 +57,16 @@ fn current_options(state: &AppState) -> Vec<String> {
 }
 
 fn message_count(state: &AppState) -> usize {
-    state
-        .message_service
-        .load_messages(active_game_of(state))
-        .unwrap()
-        .len()
+    story_of(state).len()
 }
 
-fn system_messages(state: &AppState) -> Vec<String> {
-    state
-        .message_service
-        .load_messages(active_game_of(state))
-        .unwrap()
-        .into_iter()
-        .filter(|m| m.message_type == MessageType::System)
-        .map(|m| m.text().to_string())
-        .collect()
-}
-
-fn unavailable_agent_reports(state: &AppState) -> usize {
-    system_messages(state)
-        .iter()
-        .filter(|m| m.contains("Options agent is not available"))
-        .count()
+/// The dock's notice line, or `None` when the dock renders the offered set.
+async fn dock_notice(app: &axum::Router) -> Option<String> {
+    let dock = fetch_body(app, "/fragment/options-dock").await;
+    dock.split("options-notice-line").nth(1).map(|rest| {
+        let line = rest.split_once('>').map(|(_, after)| after).unwrap_or("");
+        line.split('<').next().unwrap_or("").to_string()
+    })
 }
 
 // [docs/specs/options.md] SCENARIO: 24.1
@@ -109,10 +100,19 @@ async fn test_on_demand_options_render_in_dock_http() {
 // [docs/specs/options.md] SCENARIO: 24.2
 #[tokio::test]
 async fn test_options_without_scene_history_errors_http() {
-    let (app, state, _storage) = app_with_script(ScriptedModel::new());
+    // A World with no starting scenario writes an opening Narration with no text,
+    // so the Game's story holds no text at all.
+    let data = TestDataBuilder::default_test()
+        .world(TestWorld::minimal())
+        .map(TestMap::single_room("start"))
+        .build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .model(Arc::new(ScriptedModel::new()))
+        .build_with_state();
 
     let resp = post_action(&app, "/options").await;
-    assert_eq!(resp.status(), axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
     let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
@@ -124,7 +124,12 @@ async fn test_options_without_scene_history_errors_http() {
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         !dock.contains("options-strip"),
-        "a rejected /options must leave the dock empty: {dock}"
+        "a rejected /options must render no options strip: {dock}"
+    );
+    assert_eq!(
+        dock_notice(&app).await,
+        None,
+        "a rejected /options writes no notice: {dock}"
     );
     assert!(current_options(&state).is_empty());
 }
@@ -201,15 +206,21 @@ async fn test_failed_regeneration_keeps_prior_set_http() {
 
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
-        dock.contains("Search the desk"),
-        "the dock must still render the prior set: {dock}"
+        !dock.contains("options-strip"),
+        "the notice takes the strip's place: {dock}"
     );
-    let systems = system_messages(&state);
+    assert_eq!(
+        dock_notice(&app).await.as_deref(),
+        Some("Options generation failed"),
+        "the dock must name the failure: {dock}"
+    );
+
+    let resp = post_empty(&app, "/status/reset-generating").await;
+    assert_eq!(resp.status(), axum::http::StatusCode::OK);
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
-        systems
-            .iter()
-            .any(|m| m.contains("Options generation failed")),
-        "the failure must surface a system message: {systems:?}"
+        dock.contains("Search the desk"),
+        "the stop must give the prior set back: {dock}"
     );
 }
 
@@ -229,9 +240,9 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
         "setup turn should complete"
     );
     seed_offered_set(&state, &["Inspect the ledger"]);
-    let unavailable_before = unavailable_agent_reports(&state);
     assert_eq!(
-        unavailable_before, 0,
+        dock_notice(&app).await,
+        None,
         "only /options may report the unavailable agent"
     );
 
@@ -244,10 +255,23 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
         vec!["Inspect the ledger".to_string()],
         "an unavailable options agent must keep the prior set"
     );
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert!(
+        !dock.contains("options-strip"),
+        "the notice takes the strip's place: {dock}"
+    );
     assert_eq!(
-        unavailable_agent_reports(&state),
-        1,
-        "the unavailable agent must be reported once in the story log"
+        dock_notice(&app).await.as_deref(),
+        Some("Options agent is not available"),
+        "the dock must name the unavailable agent: {dock}"
+    );
+
+    let resp = post_empty(&app, "/status/reset-generating").await;
+    assert_eq!(resp.status(), axum::http::StatusCode::OK);
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert!(
+        dock.contains("Inspect the ledger"),
+        "the stop must give the prior set back: {dock}"
     );
 }
 
@@ -295,7 +319,6 @@ async fn test_impersonate_keeps_offered_set_http() {
         ScriptedModel::new()
             .turn("You look around.")
             .options(SET_A)
-            // The impersonate turn must not spend this one.
             .options(SET_B)
             .narration("You say hello.")
             .analysis(analysis_report(&[], None)),
@@ -422,14 +445,12 @@ async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         !dock.contains("options-strip"),
-        "a failed regeneration must leave the dock empty: {dock}"
+        "a failed regeneration must render no options strip: {dock}"
     );
-    let systems = system_messages(&state);
-    assert!(
-        systems
-            .iter()
-            .any(|m| m.contains("Options generation failed")),
-        "the failed regeneration must surface a system message: {systems:?}"
+    assert_eq!(
+        dock_notice(&app).await.as_deref(),
+        Some("Options generation failed"),
+        "the dock must name the failure: {dock}"
     );
 }
 
@@ -464,9 +485,85 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
         "with no agent the dock must render no options strip: {dock}"
     );
     assert_eq!(
-        unavailable_agent_reports(&state),
-        1,
-        "the unavailable agent must be reported once in the story log"
+        dock_notice(&app).await.as_deref(),
+        Some("Options agent is not available"),
+        "the dock must name the unavailable agent once: {dock}"
+    );
+}
+
+// [docs/specs/options.md] SCENARIO: 24.22
+#[tokio::test]
+async fn test_options_run_follows_a_failed_event_narration_http() {
+    use chronicler_engine::domain::model::character::NpcCard;
+    use chronicler_engine::domain::model::trigger::{
+        ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
+    };
+    use chronicler_engine::test_support::TestPersona;
+
+    let (app, state, storage) = app_with_script(
+        ScriptedModel::new()
+            .narration("You examine the guard.")
+            .analysis(analysis_report(&["npc_1"], None))
+            .failed(ModelRole::Event)
+            .options(SET_A),
+    );
+    let world_id = storage
+        .seed_world(&always_on_world(), &TestMap::single_room("start"))
+        .expect("seed always-on world");
+    let npc = NpcCard {
+        id: "npc_1".to_string(),
+        sheet: TestPersona::standard().sheet,
+        inventory: vec![],
+        triggers: vec![Trigger {
+            requirement: TriggerRequirement {
+                operator: ComparisonOperator::Eq,
+                threshold: 0,
+            },
+            narration: TriggerNarration {
+                name: "Greeting".to_string(),
+                narration_prompt: "The guard greets you.".to_string(),
+            },
+            repeat: false,
+            room_id: None,
+        }],
+        relationships: vec![],
+    };
+    storage
+        .seed_character(world_id, &npc)
+        .expect("seed the Character of the Trigger");
+    create_game(&app, "always_on_world").await;
+
+    let resp = post_action(&app, "examine the npc").await;
+    assert!(resp.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the Action should complete"
+    );
+
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "the Options run must follow the Narration the failed event step kept"
+    );
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert!(
+        dock.contains("options-strip"),
+        "the dock must render the fresh set: {dock}"
+    );
+    assert_eq!(
+        dock_notice(&app).await,
+        None,
+        "the Options run succeeded, so the dock shows no notice: {dock}"
+    );
+
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("The event narration failed."),
+        "the failure line must name the failed event narration, got: {status}"
+    );
+    assert!(
+        !status_error_message(&status).is_empty(),
+        "the failure display must hold the failed call's own line, got: {status}"
     );
 }
 
@@ -530,7 +627,6 @@ async fn test_mode_switch_keeps_offered_set_http() {
         ScriptedModel::new()
             .turn("You look around.")
             .options(SET_A)
-            // The mode switch must not spend this one.
             .options(SET_B),
     );
     let game_id = active_game_of(&state);
@@ -621,10 +717,7 @@ async fn test_using_offered_option_submits_as_input_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await, "/options should complete");
 
-    let inputs_before = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap()
+    let inputs_before = story_of(&state)
         .iter()
         .filter(|m| m.message_type == MessageType::Input)
         .count();
@@ -639,10 +732,7 @@ async fn test_using_offered_option_submits_as_input_http() {
         "the submitted option should complete"
     );
 
-    let messages = state
-        .message_service
-        .load_messages(active_game_of(&state))
-        .unwrap();
+    let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
         .filter(|m| m.message_type == MessageType::Input)

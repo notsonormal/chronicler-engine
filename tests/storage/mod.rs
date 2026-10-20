@@ -10,8 +10,7 @@ mod fixtures;
 mod storage_ext;
 
 mod llm_message_storage;
-mod message_storage;
 mod preset_storage;
-mod snapshot_storage;
+mod story_storage;
 mod transaction_storage;
 mod world_storage;
