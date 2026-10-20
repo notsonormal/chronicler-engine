@@ -4,7 +4,7 @@ Labels: wayfinder:map
 
 ## Destination
 
-[Target design](../turn-state-model/assets/target-design.md) version 2 runs in the current Rust crate: the six preparation slices and the core step of [the build plan](../../docs/plans/rust-rebuild-build-plan.md) are done, the response to the reviews of the whole rebuild is built, and all of it is merged to `main`. (Redrawn by the owner on 2026-10-19 to take in the response.)
+[Target design](../turn-state-model/assets/target-design.md) version 2 runs in the current Rust crate: the six preparation slices and the core step of [the build plan](../../docs/plans/rust-rebuild-build-plan.md) are done, the response to the reviews of the whole rebuild is built, and all of it is merged to `main`. (Redrawn by the owner on 2026-10-19 to take in the response. On 2026-10-20 the owner merged the rebuild to `main` first (`22a8f090`); the response is built on `wf/rebuild-response` and merges after it.)
 
 ## Notes
 
@@ -43,7 +43,7 @@ Labels: wayfinder:map
 - [Rethink Messages and rooms: what a room on a Message is for, how it shows, and mapless Worlds](issues/25-messages-rooms-and-mapless-worlds.md) — one fact: the stored room report is deleted (D-19 replaced); the story log shows the room name when it differs from the name of the Message before, and on the oldest Message of the story window; compare by name; R-24, R-25 and R-25a follow from the model; mapless not followed up.
 - [Fix the small dashboard findings](issues/24-fix-small-dashboard-findings.md) — built: `/debug/state` names a Step only while a Job runs (`Option<Step>`, no `Default`); the World delete refusal reads "1 game"; the delete route and `/debug/state` gain complete specs (25.10 to 25.12, 39.6, 39.7).
 - [Triage the small items of the review, and choose the branch to merge](issues/26-triage-the-small-items-and-the-merge-branch.md) — candidate S2 goes into the plan (one preset module; a preset delete is refused while a Game uses it); M6 is closed; the plan takes findings 10, 11, 13, 16, 21 to 23, C-4, P-1 and parts of 26 to 29; `wf/rebuild-core` merges to `main` with `--no-ff`, then `wf/rebuild-review` is removed.
-- [Write the build plan of the response to the reviews](issues/27-write-the-build-plan-of-the-response.md) — [the plan](../../docs/plans/rust-rebuild-response-build-plan.md): nine slices on `wf/rebuild-core` (storage seam, story window, rooms, Quantifier result and Game rules, kind and plan rules, presets, failure lines and loop, step rule and narrator, small fixes), then the `--no-ff` merge; tickets 29 to 38.
+- [Write the build plan of the response to the reviews](issues/27-write-the-build-plan-of-the-response.md) — [the plan](../../docs/plans/rust-rebuild-response-build-plan.md): nine slices on `wf/rebuild-response` (storage seam, story window, rooms, Quantifier result and Game rules, kind and plan rules, presets, failure lines and loop, step rule and narrator, small fixes), then the `--no-ff` merge; tickets 29 to 38.
 - [Confirm three fills of the build plan of the response](issues/28-confirm-the-fills-of-the-response-plan.md) — all option A (owner): `game_rules::apply` takes `kind: Kind` (amends ticket 20 Q13); a missing preset of any kind gives the `Record::Preset` line; `PresetMissing` goes.
 
 ## Not yet specified

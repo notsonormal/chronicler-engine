@@ -6,7 +6,7 @@ Blocked by: 32
 
 ## Question
 
-Build §7 of [the build plan of the response](../../../docs/plans/rust-rebuild-response-build-plan.md) on `wf/rebuild-core`. Read §1, §2 and §7 of the plan. The plan is the source of truth; this ticket records the facts that the slice measures and the result.
+Build §7 of [the build plan of the response](../../../docs/plans/rust-rebuild-response-build-plan.md) on `wf/rebuild-response`. Read §1, §2 and §7 of the plan. The plan is the source of truth; this ticket records the facts that the slice measures and the result.
 
 ## Done when
 

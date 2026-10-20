@@ -2,7 +2,7 @@
 
 ## How to use this plan
 
-This plan builds the response to the reviews of the whole Rust rebuild, on `wf/rebuild-core`, and then merges that branch to `main`. It has nine slices (R1 to R9) and the merge (§13). The slices run in order.
+This plan builds the response to the reviews of the whole Rust rebuild, on `wf/rebuild-response`, and then merges that branch to `main`. The rebuild itself (`wf/rebuild-core`) merged to `main` before the response, on 2026-10-20 (`22a8f090`; owner, which changes ticket 26 Q6). It has nine slices (R1 to R9) and the merge (§13). The slices run in order.
 
 **The implementer of one slice reads §1, §2 and the section of that slice.** The reviewer reads the same sections.
 
@@ -45,8 +45,8 @@ The order of the slices follows synthesis §6, with these changes:
 
 The rules of [build plan §2](rust-rebuild-build-plan.md#2-rules-for-every-slice) hold: the one rule, the tests in a slice, the guardrails, the docs, the dev loop, the commit gate, and Done. These changes apply:
 
-- **One branch.** Every slice commits on `wf/rebuild-core` (ticket 26 Q6). No slice makes its own branch, and no slice merges to `main`. §13 holds the one merge.
-- **One implementer at a time.** The slices run in order. No other work runs on `wf/rebuild-core` during the build.
+- **One branch.** Every slice commits on `wf/rebuild-response`, made from `main` at `22a8f090` (owner, 2026-10-20). No slice makes its own branch, and no slice merges to `main`. §13 holds the one merge.
+- **One implementer at a time.** The slices run in order. No other work runs on `wf/rebuild-response` during the build.
 - **Standing approval** (map Notes, owner 2026-10-19): the owner approves the commits of the slices in advance. The lead commits after a green commit gate.
 - **The commit gate.** Run `/simple-after-plan` with the scope of the one commit, with build plan §2's two adaptations (an empty-input step is skipped). Every commit runs the full gate (`python build.py`), and all tests pass. The retro runs once per slice, at the last commit of the slice. No commit of this plan is red on purpose.
 - **CASE ids.** A test in a seam-contract file (the Agents, the `Narrator`, `tests/storage/`) carries its id as its `// CASE <id>: <description>` tag (ticket 08 on the map). A test in any other file takes the id as its function name, in snake case (inferred: ticket 19 and ticket 20 give ids to plain unit tests and tier-1 tests too).
@@ -391,9 +391,9 @@ These points are not in the tickets as written. The plan fills each one with the
 
 1. Every slice R1 to R9 is **done** (build plan §2). The last commit of R9 passed the full gate and the retro.
 2. A last search: `src/`, `tests/` and `docs/diataxis/` hold none of the names that the Done-when lines of R1 to R9 remove.
-3. `git merge --no-ff wf/rebuild-core` into `main`, as the earlier slices did. `main` (`f64f5d41`) is an ancestor of `wf/rebuild-core`, so the merge has no conflict (known on 2026-10-20; check again).
+3. `git merge --no-ff wf/rebuild-response` into `main`, as the earlier slices did. If `main` moved after `22a8f090`, merge `main` into `wf/rebuild-response` first and run the full gate.
 4. The full gate runs on `main` after the merge.
-5. Remove `wf/rebuild-review` and its worktree `../chronicler-engine-rebuild-review` (ticket 26 Q6). It holds only two merge commits of its own. Use `scripts/remove_worktrees.py` if it accepts the worktree; else ask the owner.
+5. If `wf/rebuild-review` and its worktree `../chronicler-engine-rebuild-review` still exist, remove them (ticket 26 Q6). The branch holds only two merge commits of its own. Use `scripts/remove_worktrees.py` if it accepts the worktree; else ask the owner.
 6. The map's Destination is reached. The lead records it on the map.
 
 ## 14. Where each item of the review went
