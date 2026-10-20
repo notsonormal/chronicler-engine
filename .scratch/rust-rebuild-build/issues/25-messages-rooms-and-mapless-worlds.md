@@ -1,7 +1,7 @@
 # Rethink Messages and rooms: what a room on a Message is for, how it shows, and mapless Worlds
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -24,3 +24,29 @@ The answer is the model, the requirement changes (R-22 to R-25a, D-19) and the s
 - Skills: `/grilling`, `/domain-modeling`. Terms: `CONTEXT.md`. Design: `.scratch/turn-state-model/assets/target-design.md`.
 
 ## Answer
+
+Resolved with the owner, 2026-10-20 (grilling, two rounds).
+
+**The model.** The room is one fact: the room of the Swipe state. The stored room report (`message_swipes.room_report`, `Swipe.room_report`, its writers in `gate.rs` and `job.rs`, and `opening.rs`) is deleted. D-19 is replaced.
+
+- **Q1 (one fact or two): derived change marker (option A).** The story log shows the room name on a Message when the room name of its active Swipe state differs from the room name of the Message before it.
+- **Q2 (what is compared): the room name (option A),** not the room id. A name is the one fact that every World kind gives. Accepted cost: a move between two map rooms with the same name shows no header.
+- **Q3 (the story window): the oldest Message of the story window always shows its room name (option A).** No read of the hidden Message before it.
+- **Q4 (mapless Worlds): not followed up (owner).** The owner mentioned mapless Worlds, a growing map and the added rooms only as context. Subplans B and C stay as they are. Recorded under *Out of scope* on the map.
+
+**What follows from the model, with no rule of its own:**
+
+- The opening shows its room, because no Message is before it, also after a Retry of the opening. R-25a is no longer a rule. The three "Retry of the opening?" checks (`opening.rs`, `gate.rs` `tail.count == 1`, `job.rs` `is_the_opening`) go away, for the room.
+- An event Narration cannot move the player, so it shows no room (R-24 follows).
+- A swipe switch shows the room of the new active Swipe (R-25 follows).
+- An Input holds the state of before the Action, so it shows no room. An Impersonate Input that moved the player shows its room.
+- "Moved versus named a destination" (question 3) is moot: naming the room the player is in changes no name, so nothing shows. The Game rules do not change for it; `GameRulesOutcome::arrived_room_name` loses its room-report reader.
+- What the room is for (question 5): the narrator prompt, the Quantifier prompt, the Trigger `room_id` condition and the sidebar read the Swipe state, not the room report. None of them changes.
+
+**Behaviour that changes from today:** (1) naming the current room shows no header; (2) two added rooms with the same name show one header; (3) a move between two map rooms with the same name shows no header; (4) the top of the story window shows the room.
+
+**Requirement changes.** R-22 to R-25a become two rules: the derived change marker, and the oldest Message of the story window. D-19 is replaced by the derived marker (its rejected option fell because "moved to the same room" is not a move). Target design §4.3 rows "Room shown on a Message", "Create, reset", "Input save", "Text save", "State update", and the §4.4 room-report column lose the room report.
+
+**Spec scenarios.** 1.14, 9.2, 9.8, 10.8, 22.5 and the `swipe_switch.md` room scenario keep their results; steps on a Swipe that is not active ("its first swipe reports no room") become "after a switch to that Swipe, the Message shows …". New scenarios: the four behaviour changes above.
+
+The build is a slice of the build plan for the response.

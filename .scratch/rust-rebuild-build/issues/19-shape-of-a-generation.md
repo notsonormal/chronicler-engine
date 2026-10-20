@@ -44,6 +44,10 @@ Resolved with the owner on 2026-10-20 (grilling, 15 questions). Interface drafts
 | Q14 | One domain fn on the order builds the new Swipe and, for an analysed kind, the `PreAnalysisState`. Only that fn makes one; only the Game rules take one. |
 | Q15 | `Kind` stays a fieldless tag that the order derives. `HookInput` loses `kind` and `event` (no Agent reads them). |
 
+**Amended by [ticket 20](20-shape-of-the-job.md) Q13 (owner, 2026-10-20):** `PreAnalysisState` is deleted, because it carried a derived state from the text-save step to the Game-rules step (against sketch 25 §2.1). `GenerationOrder::write(text, start)` returns only the `NewSwipe`; its Swipe state is the pre-analysis state, and `write` still marks an event's own one-shot Trigger fired, once. The Game-rules step loads the Swipe state at `saved.at` and calls `game_rules::apply(state: SwipeState, &QuantifierResult, &GameWorld)`. R-18 is a match on the order: a user regen ends after its text save. The test `write-user-regen-not-analysed` asserts the start state and the player maker; a plan test asserts that a user regen has no analysis step. The interface text below is the original; read it with this amendment.
+
+**Amended by [ticket 25](25-messages-rooms-and-mapless-worlds.md) (owner, 2026-10-20):** the stored room report is deleted, so `RulesOutcome` has no `room_report` field, and the `room_report` line of interface 4 no longer applies.
+
 ### The interfaces
 
 **1. The kind carries its data** (`src/domain/model/generation.rs`)

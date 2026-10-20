@@ -92,6 +92,10 @@ _Avoid_: Previous state, base state
 The Swipe state of the active Swipe of the last Message.
 _Avoid_: Live state
 
+**Story window**:
+The newest Messages of a Game's story, oldest first, that one read returns together with the facts of the last Message. The story log shows the story window of the Game.
+_Avoid_: Page, history, log window
+
 **Pre-analysis state**:
 The Swipe state that a new Swipe of an analysed generation holds from the save of its text until its analysis updates it: the start state, with no trigger context. A user regen keeps its start state instead. An event Narration also marks its own one-shot Trigger fired in it. A Swipe keeps the state when a stop or a restart cuts the analysis off.
 _Avoid_: Draft state, provisional state
