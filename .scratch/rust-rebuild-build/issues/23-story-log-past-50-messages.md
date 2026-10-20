@@ -12,5 +12,6 @@ Past 50 Messages the story log shows the 50 oldest (`take(MAX_LOG_DISPLAY)`), so
 
 - Inputs: [the UI findings](../assets/ui-review/findings.md) F1 (a click deleted hidden Narration 67); [synthesis.md](../assets/architecture-review/synthesis.md) row S3 and §4 bug 2; FINDINGS "Rejected" TN-L4.
 - Specs: `docs/specs/story_log.md`, `docs/specs/browser_story_log.md`. Skills: `/grilling`, `/domain-modeling`.
+- From ticket 19 (resolved): the Retrigger button reads `Tail::retrigger_allowed` (R-65, an Impersonate Input included) and adds no condition of its own.
 
 ## Answer

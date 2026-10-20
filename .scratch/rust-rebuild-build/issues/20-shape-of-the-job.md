@@ -17,5 +17,6 @@ Given the shape of a generation (ticket 19), what is the shape of the Job and of
 
 - Inputs: [synthesis.md](../assets/architecture-review/synthesis.md) rows M3, S5; [FINDINGS.md](../assets/whole-rebuild-review/FINDINGS.md) findings 2, 6, 19; thermo M7 in `../assets/whole-rebuild-review/findings/review-thermo.md`.
 - Skills: `/grilling`, `/domain-modeling`, `/codebase-design` (its design-it-twice pattern for the interfaces). Terms: `CONTEXT.md`. Design: `.scratch/turn-state-model/assets/target-design.md`.
+- From ticket 19 (resolved): the order is `GenerationOrder { generation: Generation, place, start: SwipeAt }`; the Game rules return the fired event record and the Job builds the event order with `GenerationOrder::event_after`; the start state is read twice today (`job.rs` `start_state`, `JobWriter::state_at`), which this ticket decides; the narrator gets `&Generation`, so the direction, the guide and the event direction come with no missing-data branch.
 
 ## Answer

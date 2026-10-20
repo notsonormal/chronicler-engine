@@ -35,11 +35,12 @@ Labels: wayfinder:map
 - [Run the architecture review of the rebuilt code on Qwen 3.8](issues/16-architecture-review-qwen.md) — 5 candidates (1 Strong); top: one type family for the analysis hook.
 - [Synthesize the three architecture reviews of the rebuilt code](issues/17-synthesize-the-architecture-reviews.md) — 6 merged and 5 single-model candidates, none rejected; they touch review findings 4, 5, 7, 12, 15, 17, 19, not 2, 3, 6; order: analysis type, Game rules, plan rules to the Tail, narrator.
 - [Review the dashboard after the Rust rebuild](issues/18-review-the-ui-after-the-rebuild.md) — 1 P1, 1 P2, 3 P3. New in the rebuild: a bare `/impersonate` answers 500, and `/retrigger` accepts an Impersonate Input. Older: past 50 Messages, the story log hides the newest Messages and its controls act on a hidden Message.
+- [Decide the shape of a generation: its kind, its analysis output and the Game rules](issues/19-shape-of-a-generation.md) — a data-carrying `Generation` enum (bare `/impersonate` allowed; ids and texts only); pure plan fn `JobPlan::for_request` in the domain; `QuantifierResult` of two facts, no merge; one `game_rules::apply` per generation on a `PreAnalysisState`; the trigger context holds the event record; hooks named by position; the room report moved to ticket 25.
 
 ## Not yet specified
 
 - **The small items of the review.** Candidates S2 (one preset module, with the gap that a preset delete does not check the preset slots of each Game) and M6 (the shallow catalogues), and the medium and low findings that tickets 19 to 24 do not take ([FINDINGS.md](assets/whole-rebuild-review/FINDINGS.md), [synthesis.md](assets/architecture-review/synthesis.md) §3). Triage them once the design tickets have placed their neighbours.
-- **The plan of the response, then the merge.** After the design tickets: one build plan for the response, its slices as task tickets, and which branch merges to `main` (`wf/rebuild-core` holds tickets 09 to 13 and the review fixes `2885df2c`; `wf/rebuild-review` at `fa1a25e1` lacks them).
+- **The plan of the response, then the merge.** After the design tickets (19 to 23, and 25 for the room report): one build plan for the response, its slices as task tickets, and which branch merges to `main` (`wf/rebuild-core` holds tickets 09 to 13 and the review fixes `2885df2c`; `wf/rebuild-review` at `fa1a25e1` lacks them).
 
 ## Out of scope
 

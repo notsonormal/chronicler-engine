@@ -53,20 +53,20 @@ LLM-generated prose rendered in response to resolved Actions and trigger context
 _Avoid_: Story, text, output
 
 **Quantifier**:
-The analysis-hook Agent that analyzes narration to detect NPCs in area, player movement, and NPC enter/leave events.
+The Agent at the after-narration hook that reads the new text of a generation and gives the Quantifier result: the Characters present and the player's destination, if any. The Game rules apply the Quantifier result; they compute which Characters entered or left.
 _Avoid_: Scorer, evaluator
 
 **Game rules**:
-The code that applies the analysis of a generation to the Game's state: movement, Characters present, encounters, and which Trigger fires. It makes no LLM call; the World supplies the map, the Characters and the Triggers.
+The code that applies the Quantifier result of a generation to the Game's state: movement, Characters present, encounters, and which Trigger fires. It makes no LLM call; the World supplies the map, the Characters and the Triggers.
 _Avoid_: World rules, engine commit
 
 **Agent**:
-An LLM helper that runs at a fixed hook of a generation. The Quantifier is one Agent.
+An LLM helper that runs at a hook and gives one kind of result. The Quantifier is one Agent.
 _Avoid_: Bot, assistant, operator
 
 **Hook**:
-A fixed point in a generation where the Job runs the Agents registered for it: the analysis hook and the Options hook. Each hook has one kind of output and one place where that output lands. The before-narration and rewrite hooks come with their first Agent.
-_Avoid_: Phase, stage, step (a step is one named part of a Job's work; a hook is a point where Agents run)
+A fixed point in a Job where the Job runs the Agents registered for it, named by its position: the before-narration hook (before the narrator call), the after-narration hook (after the text save, before the state update) and the end-of-Job hook (after the last generation, or alone for `/options`). What an Agent does is the kind of its result, not its hook; each kind of result has one place where it lands.
+_Avoid_: Phase, stage, step (a step is one named part of a Job's work; a hook is a point where Agents run), analysis hook, Options hook
 
 **Message**:
 A single entry in a Game's story: a typed Input, an Impersonate Input, a Narration, or an event Narration. Each Message has its own Swipe set.
