@@ -1,6 +1,6 @@
 ---
 name: judge-qwen
-model: opencode-go/qwen3.8-max
+model: opencode-go/qwen3.7-plus
 thinking: high
 tools: ["read", "ls", "find", "grep", "bash"]
 ---

@@ -1,5 +1,5 @@
 ---
 name: implementer
-model: opencode-go/deepseek-v4.1-flash
+model: anthropic/claude-sonnet-5-5
 thinking: high
 ---
