@@ -48,6 +48,8 @@ Resolved with the owner on 2026-10-20 (grilling, 15 questions). Interface drafts
 
 **Amended by [ticket 25](25-messages-rooms-and-mapless-worlds.md) (owner, 2026-10-20):** the stored room report is deleted, so `RulesOutcome` has no `room_report` field, and the `room_report` line of interface 4 no longer applies.
 
+**Amended by [ticket 28](28-confirm-the-fills-of-the-response-plan.md) (owner, 2026-10-20):** `game_rules::apply` takes a fourth parameter, `kind: Kind`, because a loaded Swipe state cannot tell an event from a Narration. A missing preset of any kind gives the `Record::Preset` line, and `PresetMissing` goes.
+
 ### The interfaces
 
 **1. The kind carries its data** (`src/domain/model/generation.rs`)

@@ -25,6 +25,8 @@ Given the shape of a generation (ticket 19), what is the shape of the Job and of
 
 Round 3 (drafts: [design 1, minimal](../assets/job-shape/design-1-minimal.md) (Opus), [design 2, common caller](../assets/job-shape/design-2-common-caller.md) (GLM), [design 3, types](../assets/job-shape/design-3-types.md) (Qwen), from [the brief](../assets/job-shape/brief.md)). The owner rejected the drafts' direction: they pass loaded data from step to step, against sketch 25 §2.1 "pass ids, load late, save small". Q6 to Q10 of round 3 are withdrawn. Round 4: Q11 yes (Q5 revised: no input bundle; each step loads by id what it uses, makes one call, saves small, and returns its result; only ids, texts and step results move between steps; a later step may read a record again, so finding 19 is the accepted cost; the narrator still owns the prompt rules of each kind, and `Generation::preset_type` stays); Q12 A (guardrail row 7 gains the parameter half: a `Job` method takes no record type as a parameter; a free helper fn that builds an input from values is allowed); Q13 A (ticket 19 Q14 revised: `PreAnalysisState` deleted, the Game-rules step loads the Swipe state at `saved.at`, R-18 is a match on the order).
 
+**Amended by [ticket 28](28-confirm-the-fills-of-the-response-plan.md) (owner, 2026-10-20):** `game_rules::apply` takes a fourth parameter, `kind: Kind`, because a loaded Swipe state cannot tell an event from a Narration. A missing preset of any kind gives the `Record::Preset` line, and `PresetMissing` goes.
+
 ### The answer (confirmed by the owner, 2026-10-20)
 
 **Behaviour.**
