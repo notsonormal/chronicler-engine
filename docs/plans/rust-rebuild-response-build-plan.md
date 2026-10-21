@@ -302,6 +302,8 @@ The rules of [build plan §2](rust-rebuild-build-plan.md#2-rules-for-every-slice
 | tier 1, `prompt_presets.rs` or `failure_display.rs` | `preset-game-read-fails` (R6), changed | it asserts the missing line of `Record::Game` |
 | tier 1, `failure_display.rs` 38.11 | changed (finding 28) | the test does not depend on which unit writes the dock |
 
+Amendment (R7 review): `options-after-state-save-failed` shows the contradiction line (finding 24), not the save line.
+
 Existing tests that must stay green (ticket 20): `options.rs` (the three dock tests), `failure_display.rs` 38.x, `races.rs`, and the event-failure rows of `retrigger.rs` and `swipe_new.rs`.
 
 **Guardrail rules.** None new.

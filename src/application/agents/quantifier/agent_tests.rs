@@ -347,4 +347,8 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
         .find(|message| message.error_message.is_some())
         .expect("the failed attempt is recorded");
     assert_eq!(failure.agent_name, "quantifier");
+    assert_eq!(
+        failure.error_message.as_deref(),
+        Some("LLM Error: Narration generation failed at stage 'scripted': configured_failure")
+    );
 }

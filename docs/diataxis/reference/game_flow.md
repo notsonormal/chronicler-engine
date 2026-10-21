@@ -14,7 +14,8 @@ These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/opti
 - A Job runs on the Game that its request named. Every write of the Job names that Game, so a Game switch does not change a running Job.
 - A Game has at most one Job. A second request for a busy Game is refused.
 - A Job runs at most two generations: the Narration, and the event Narration of a Trigger that the game rules fired. It then runs at most one Options run.
-- A part that fails ends the Job. Every save unit that landed before the failure stays. When the first generation saved its Narration, the Options run still runs, even when the event generation fails.
+- A part that fails ends the Job. Every save unit that landed before the failure stays.
+- When the Job saved a Narration or an event Narration, the Options run follows a failure of any later part: the state update, the event generation or the save of the event text. A Job whose entry moved on runs no Options run. The status shows the first failure. A failure of that Options run goes to the log.
 
 ## The Plan of a Request
 
@@ -68,6 +69,16 @@ flowchart TD
 - The text save shows the text in the story log. The after-narration hook, the game rules and the state update follow it.
 - A user regen ends at the text save. It runs no after-narration hook.
 - A part that fails writes the failure line, which is a save unit, and the Job ends.
+
+## The Failure Lines
+
+One rule picks the failure line of a part. `accept` and the Job use the same rule.
+
+- A read that fails, or finds no row, gives the missing-data line: "The data for this request is missing: <record>." `Record` names each record. The raw error is in the disclosure. A missing preset of the Narrator or of a hook gives this line, with the record `Preset`.
+- A write that fails gives "The new text could not be saved."
+- A failed state update gives the contradiction line. A state that the game rules refuse gives the same line.
+- A failed model call or prompt assembly gives the line of its error class.
+- A failed event generation gives "The event narration failed." The line of the failure under it is in the raw text.
 
 ## Status
 

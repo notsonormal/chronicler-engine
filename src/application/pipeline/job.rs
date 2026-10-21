@@ -10,7 +10,7 @@ use crate::adapters::driven::storage::stories::STORY_LIMIT;
 use crate::adapters::driven::storage::Storage;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
-use crate::application::generation::gate::{GameWriter, JobWriter, OptionsResult, Refusal, Stopped};
+use crate::application::generation::gate::{GameWriter, JobFailure, JobWriter, OptionsResult, Refusal};
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::Narrator;
 use crate::application::prompting::token_budget::TokenBudget;
@@ -26,10 +26,9 @@ use crate::domain::model::message::SwipeAt;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::settings::AppSettings;
-use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
+use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::EventRecord;
 use crate::domain::model::tail::Tail;
 use crate::domain::model::utils::game_rules;
 use crate::error::EngineError;
@@ -40,82 +39,6 @@ pub struct JobDeps {
     pub agent_runner: Arc<AgentRunner>,
     pub storage: Arc<Storage>,
     pub tasks: Arc<JobTasks>,
-}
-
-struct Generated {
-    narration: bool,
-    at: SwipeAt,
-    fired: Option<EventRecord>,
-}
-
-#[derive(Debug)]
-enum Failure {
-    /// A save unit refused: the Job ends with no further write.
-    Stopped(Stopped),
-    /// The generation failed, and its line is the Job's to write.
-    Line(GenerationFailure),
-}
-
-impl Failure {
-    fn missing(what: &str) -> Self {
-        Self::Line(GenerationFailure::missing_record(what, None))
-    }
-
-    /// A failed event generation reports the event line, with the line of the
-    /// failure under it in the raw text.
-    fn event_narration_failed(self) -> Self {
-        match self {
-            Self::Line(failure) => Self::Line(GenerationFailure::new(
-                GenerationFailureKind::EventNarrationFailed,
-                failure.line(),
-            )),
-            Self::Stopped(stopped) => Self::Stopped(stopped),
-        }
-    }
-}
-
-impl From<Stopped> for Failure {
-    fn from(stopped: Stopped) -> Self {
-        Self::Stopped(stopped)
-    }
-}
-
-impl From<EngineError> for Failure {
-    fn from(error: EngineError) -> Self {
-        Self::missing(&error.to_string())
-    }
-}
-
-/// A Narration saved before the failure still gets its Options run.
-#[derive(Debug)]
-struct Ended {
-    failure: Failure,
-    narration_saved: bool,
-}
-
-impl From<Failure> for Ended {
-    fn from(failure: Failure) -> Self {
-        Self {
-            failure,
-            narration_saved: false,
-        }
-    }
-}
-
-impl Ended {
-    fn after_text_save(failure: Failure, kind: Kind) -> Self {
-        Self {
-            failure,
-            narration_saved: kind.saves_a_narration(),
-        }
-    }
-
-    fn into_event_failure(self) -> Self {
-        Self {
-            failure: self.failure.event_narration_failed(),
-            narration_saved: self.narration_saved,
-        }
-    }
 }
 
 pub struct Job {
@@ -172,62 +95,47 @@ impl Job {
         Ok(())
     }
 
-    /// A step that fails ends the Job, and every save unit that landed before it stays.
+    /// A step that fails ends the Job, and every save unit that landed before it
+    /// stays. The Options run follows a Narration that was saved, whatever failed
+    /// after it except a moved entry.
     fn run(&self, plan: JobPlan) {
         let JobPlan {
-            input,
+            mut input,
             first,
             options,
         } = plan;
-        let mut saved_a_narration = false;
-        if let Some(order) = first {
-            let generated = match self.generate(&order, input.as_deref()) {
-                Ok(generated) => generated,
-                // A failed event generation names the event wherever it runs: the
-                // second generation of a Narration's Job, or the redo of an event
-                // Narration.
-                Err(ended) if order.kind() == Kind::Event => {
-                    return self.failed(ended.into_event_failure(), options);
-                }
-                Err(ended) => return self.failed(ended, options),
-            };
-            saved_a_narration = generated.narration;
-            if let Some(record) = generated.fired.clone() {
-                let event = GenerationOrder::event_after(generated.at, record);
-                match self.generate(&event, None) {
-                    Ok(generated) => saved_a_narration = generated.narration,
-                    // The Narration of the first generation already landed, so the
-                    // event generation's failure still leaves one for the Options run.
-                    Err(mut ended) => {
-                        ended.narration_saved |= saved_a_narration;
-                        return self.failed(ended.into_event_failure(), options);
-                    }
+        let mut narration_saved = false;
+        let mut failure = None;
+        let mut next = first;
+        while let Some(order) = next.take() {
+            match self.generate(&order, input.take().as_deref(), &mut narration_saved) {
+                Ok(event) => next = event,
+                Err(error) => failure = Some(error.of_generation(order.kind())),
+            }
+        }
+        let entry_moved = matches!(failure, Some(JobFailure::EntryMoved));
+        if options.follows(narration_saved, entry_moved) {
+            if let Err(error) = self.options_step(options) {
+                match failure {
+                    None => failure = Some(error),
+                    Some(_) => tracing::warn!(
+                        "job {}: the Options run after a failed step ended: {error:?}",
+                        self.writer.job_id()
+                    ),
                 }
             }
         }
-        if options == OptionsRun::OnDemand || saved_a_narration {
-            if let Err(failure) = self.options_step(options, saved_a_narration) {
-                self.end(failure);
-            }
-        }
-    }
-
-    fn failed(&self, ended: Ended, options: OptionsRun) {
-        let stopped = matches!(ended.failure, Failure::Stopped(_));
-        if ended.narration_saved && !stopped && options == OptionsRun::AfterNarration {
-            if let Err(failure) = self.options_step(options, true) {
-                tracing::warn!(
-                    "job {}: the Options run after a failed step ended: {failure:?}",
-                    self.writer.job_id()
-                );
-            }
-        }
-        self.end(ended.failure);
+        self.end(failure);
     }
 
     /// The request's Input save runs after the room check, so an invalid room saves
-    /// no Input.
-    fn generate(&self, order: &GenerationOrder, input: Option<&str>) -> Result<Generated, Ended> {
+    /// no Input. A fired Trigger gives the event order that follows.
+    fn generate(
+        &self,
+        order: &GenerationOrder,
+        input: Option<&str>,
+        narration_saved: &mut bool,
+    ) -> Result<Option<GenerationOrder>, JobFailure> {
         let kind = order.kind();
         let step = kind.step();
         let bundle = self.world_bundle()?;
@@ -238,10 +146,7 @@ impl Job {
         if let Some(text) = input {
             let at = order.start;
             self.run_step(step.clone(), kind, || {
-                self.writer
-                    .save_input(text, at)
-                    .map(|_| ())
-                    .map_err(Failure::from)
+                self.writer.save_input(text, at).map(|_| ())
             })?;
         }
 
@@ -250,52 +155,33 @@ impl Job {
         })?;
 
         let saved = self.run_step(step, kind, || {
-            self.writer
-                .save_text(order, narrated.clone(), &start)
-                .map_err(Failure::from)
+            self.writer.save_text(order, narrated.clone(), &start)
         })?;
         let at = saved.at();
+        *narration_saved |= kind.saves_a_narration();
 
         if !order.is_analysed() {
-            return Ok(Generated {
-                narration: false,
-                at,
-                fired: None,
-            });
+            return Ok(None);
         }
 
         // The Quantifier must not see the new text, so the window ends at the Message
         // the text save made.
         let history = self.window_before(Some(at.message), STORY_WINDOW)?;
         let player_text = Self::player_text(input, &history);
-        let quantified = match self.run_step(Step::Quantifying, kind, || {
+        let quantified = self.run_step(Step::Quantifying, kind, || {
             self.quantify_step(&bundle, &start, &narrated, &history, &player_text)
-        }) {
-            Ok(quantified) => quantified,
-            Err(failure) => return Err(Ended::after_text_save(failure, kind)),
-        };
+        })?;
 
-        let outcome = match self.run_step(Step::Quantifying, kind, || {
+        let outcome = self.run_step(Step::Quantifying, kind, || {
             self.rules_step(kind, &bundle, at, &quantified)
-        }) {
-            Ok(outcome) => outcome,
-            Err(failure) => return Err(Ended::after_text_save(failure, kind)),
-        };
-        let fired = outcome.fired;
-        match self.run_step(Step::Quantifying, kind, || {
-            self.writer
-                .save_state_update(saved, outcome.state)
-                .map_err(Failure::from)
-        }) {
-            Ok(()) => {}
-            Err(failure) => return Err(Ended::after_text_save(failure, kind)),
-        }
+        })?;
+        self.run_step(Step::Quantifying, kind, || {
+            self.writer.save_state_update(saved, outcome.state)
+        })?;
 
-        Ok(Generated {
-            narration: kind.saves_a_narration(),
-            at,
-            fired,
-        })
+        Ok(outcome
+            .fired
+            .map(|record| GenerationOrder::event_after(at, record)))
     }
 
     /// Every step goes through here, so a step cannot forget its status name.
@@ -307,13 +193,13 @@ impl Job {
         &self,
         step: Step,
         kind: Kind,
-        run: impl FnOnce() -> Result<T, Failure>,
-    ) -> Result<T, Failure> {
-        self.writer.step(step).map_err(Failure::from)?;
+        run: impl FnOnce() -> Result<T, JobFailure>,
+    ) -> Result<T, JobFailure> {
+        self.writer.step(step)?;
         run()
     }
 
-    fn room_check(&self, bundle: &WorldBundle, start: &SwipeState) -> Result<(), Failure> {
+    fn room_check(&self, bundle: &WorldBundle, start: &SwipeState) -> Result<(), JobFailure> {
         self.resolve_room(bundle, start).map(|_| ())
     }
 
@@ -321,14 +207,11 @@ impl Job {
         &self,
         bundle: &'s WorldBundle,
         start: &'s SwipeState,
-    ) -> Result<&'s Room, Failure> {
+    ) -> Result<&'s Room, JobFailure> {
         start.room(&bundle.map).ok_or_else(|| {
             // The engine has no error behind this one: the room it stands in is
             // simply not on the map.
-            Failure::Line(GenerationFailure::missing_room(
-                start.movement.current_room_id.clone(),
-                None,
-            ))
+            GenerationFailure::invalid_room(start.movement.current_room_id.clone()).into()
         })
     }
 
@@ -338,7 +221,7 @@ impl Job {
         bundle: &WorldBundle,
         start: &SwipeState,
         input: Option<&str>,
-    ) -> Result<String, Failure> {
+    ) -> Result<String, JobFailure> {
         let game = self.game_row()?;
         let room = self.resolve_room(bundle, start)?;
         let before = self.place_before(order)?;
@@ -348,11 +231,11 @@ impl Job {
             Kind::Impersonate => PresetType::Impersonate,
             _ => PresetType::System,
         };
-        let preset = self
-            .presets
-            .for_narration(&game, preset_type)
-            .map_err(Self::preset_failure)?;
-        let settings = self.storage.get_settings().map_err(Failure::from)?;
+        let preset = Self::read(
+            Record::Preset,
+            self.presets.for_narration(&game, preset_type),
+        )?;
+        let settings = Self::read(Record::Settings, self.storage.get_settings())?;
         let budget = Self::budget(&settings)?;
 
         let all_npcs: Vec<NpcCard> = bundle.npcs.values().cloned().collect();
@@ -383,7 +266,7 @@ impl Job {
             budget,
         ) {
             Ok(narrated) => Ok(narrated.text),
-            Err(failure) => Err(Failure::Line(failure)),
+            Err(failure) => Err(failure.into()),
         }
     }
 
@@ -394,7 +277,7 @@ impl Job {
         text: &str,
         history: &[StoryRow],
         player_text: &str,
-    ) -> Result<QuantifierResult, Failure> {
+    ) -> Result<QuantifierResult, JobFailure> {
         let world = WorldView {
             room: start.room(&bundle.map),
             map: &bundle.map,
@@ -421,13 +304,13 @@ impl Job {
         bundle: &WorldBundle,
         at: SwipeAt,
         quantified: &QuantifierResult,
-    ) -> Result<game_rules::RulesOutcome, Failure> {
-        let state = self.swipe_state_at(at, "the saved state")?;
+    ) -> Result<game_rules::RulesOutcome, JobFailure> {
+        let state = self.swipe_state_at(at, Record::SavedState)?;
         game_rules::apply(state, quantified, &bundle.game_world(), kind)
-            .map_err(Self::contradiction)
+            .map_err(|error| GenerationFailure::contradiction(error.to_string()).into())
     }
 
-    fn options_step(&self, run: OptionsRun, after_narration: bool) -> Result<(), Failure> {
+    fn options_step(&self, run: OptionsRun) -> Result<(), JobFailure> {
         // The toggle decides the run that follows a Narration; `/options` asks for
         // the run itself.
         if run == OptionsRun::AfterNarration && !self.options_enabled()? {
@@ -440,7 +323,7 @@ impl Job {
             let start = tail
                 .current_state()
                 .cloned()
-                .ok_or_else(|| Failure::missing("the current state"))?;
+                .ok_or_else(|| GenerationFailure::missing(Record::CurrentState))?;
             // The run reads the four newest Messages, the Narration it serves among
             // them.
             let story = self.window_before(None, STORY_WINDOW)?;
@@ -473,8 +356,7 @@ impl Job {
                 },
             };
             self.writer
-                .save_options(outcome, after_narration)
-                .map_err(Failure::from)
+                .save_options(outcome, run == OptionsRun::AfterNarration)
         })
     }
 
@@ -493,7 +375,7 @@ impl Job {
         order: &GenerationOrder,
         input: Option<&str>,
         history: &[StoryRow],
-    ) -> Result<String, Failure> {
+    ) -> Result<String, JobFailure> {
         Ok(match &order.generation {
             Generation::Impersonate { direction } => direction.clone().unwrap_or_default(),
             Generation::UserRegen => self.tail()?.last.text().to_string(),
@@ -540,133 +422,115 @@ impl Job {
 
     /// A new Message follows the whole story; a Retry replaces the last Message, so
     /// its window ends before it.
-    fn place_before(&self, order: &GenerationOrder) -> Result<Option<u64>, Failure> {
+    fn place_before(&self, order: &GenerationOrder) -> Result<Option<u64>, JobFailure> {
         Ok(match order.place {
             Place::NewMessage => None,
             Place::NewSwipeOnLast => Some(self.tail()?.last.id),
         })
     }
 
-    fn window_before(&self, before: Option<u64>, limit: usize) -> Result<Vec<StoryRow>, Failure> {
-        self.storage
-            .stories()
-            .entries(self.writer.game(), before, limit)
-            .map_err(Failure::from)
+    fn window_before(
+        &self,
+        before: Option<u64>,
+        limit: usize,
+    ) -> Result<Vec<StoryRow>, JobFailure> {
+        Self::read(
+            Record::Story,
+            self.storage
+                .stories()
+                .entries(self.writer.game(), before, limit),
+        )
     }
 
-    fn end(&self, failure: Failure) {
+    fn end(&self, failure: Option<JobFailure>) {
         match failure {
-            Failure::Line(failure) => {
-                tracing::warn!("job {}: {failure:?}", self.writer.job_id());
-                if let Err(stopped) = self.writer.save_failure(failure) {
-                    self.log_refusal(&stopped);
+            None => {}
+            Some(JobFailure::Line(line)) => {
+                tracing::warn!("job {}: {line:?}", self.writer.job_id());
+                if let Err(refused) = self.writer.save_failure(line) {
+                    tracing::warn!(
+                        "job {}: the failure line was refused: {refused:?}",
+                        self.writer.job_id()
+                    );
                 }
             }
-            Failure::Stopped(Stopped::SaveFailed(error)) => {
-                tracing::warn!("job {}: save failed: {error}", self.writer.job_id());
-                let line =
-                    GenerationFailure::new(GenerationFailureKind::SaveFailed, error.to_string());
-                if let Err(stopped) = self.writer.save_failure(line) {
-                    self.log_refusal(&stopped);
-                }
-            }
-            Failure::Stopped(Stopped::EntryMoved) => {
-                tracing::warn!(
-                    "job {}: the entry moved on; the Job ends",
-                    self.writer.job_id()
-                );
-            }
-        }
-    }
-
-    fn log_refusal(&self, stopped: &Stopped) {
-        match stopped {
-            Stopped::EntryMoved => tracing::warn!(
-                "job {}: the entry moved on; the write is refused",
+            Some(JobFailure::EntryMoved) => tracing::warn!(
+                "job {}: the entry moved on; the Job ends",
                 self.writer.job_id()
             ),
-            Stopped::SaveFailed(error) => {
-                tracing::warn!("job {}: the write failed: {error}", self.writer.job_id())
-            }
         }
     }
 
-    fn contradiction(error: EngineError) -> Failure {
-        Failure::Line(GenerationFailure::new(
-            GenerationFailureKind::Contradiction,
-            error.to_string(),
-        ))
+    /// A read that fails shows the line of its record, with the error in the
+    /// disclosure.
+    fn read<T>(record: Record, result: Result<T, EngineError>) -> Result<T, JobFailure> {
+        result.map_err(|error| GenerationFailure::unreadable(record, &error).into())
     }
 
-    fn world_bundle(&self) -> Result<WorldBundle, Failure> {
-        self.storage
-            .world_bundle_for(self.writer.game().0)
-            .map_err(Failure::from)
+    /// A read that finds no row shows the same line as one that fails.
+    fn present<T>(record: Record, result: Result<Option<T>, EngineError>) -> Result<T, JobFailure> {
+        Self::read(record, result)?.ok_or_else(|| GenerationFailure::missing(record).into())
     }
 
-    fn game_row(&self) -> Result<Game, Failure> {
-        self.storage
-            .require_game(self.writer.game().0)
-            .map_err(Failure::from)
+    fn world_bundle(&self) -> Result<WorldBundle, JobFailure> {
+        Self::read(
+            Record::World,
+            self.storage.world_bundle_for(self.writer.game().0),
+        )
     }
 
-    fn tail(&self) -> Result<Tail, Failure> {
-        self.storage
-            .stories()
-            .tail(self.writer.game())
-            .map_err(Failure::from)?
-            .ok_or_else(|| Failure::missing("the story"))
+    fn game_row(&self) -> Result<Game, JobFailure> {
+        Self::read(
+            Record::Game,
+            self.storage.require_game(self.writer.game().0),
+        )
     }
 
-    fn start_state(&self, order: &GenerationOrder) -> Result<SwipeState, Failure> {
-        self.swipe_state_at(order.start, "the start state")
+    fn tail(&self) -> Result<Tail, JobFailure> {
+        Self::present(
+            Record::Story,
+            self.storage.stories().tail(self.writer.game()),
+        )
     }
 
-    fn swipe_state_at(&self, at: SwipeAt, what: &str) -> Result<SwipeState, Failure> {
-        self.storage
-            .stories()
-            .swipe_state(self.writer.game(), at)
-            .map_err(Failure::from)?
-            .ok_or_else(|| Failure::missing(what))
+    fn start_state(&self, order: &GenerationOrder) -> Result<SwipeState, JobFailure> {
+        self.swipe_state_at(order.start, Record::StartState)
     }
 
-    fn preset_failure(error: EngineError) -> Failure {
-        match error {
-            EngineError::PresetNotFound(_) => {
-                Failure::Line(GenerationFailure::from_engine_error(&error))
-            }
-            other => Failure::from(other),
-        }
+    fn swipe_state_at(&self, at: SwipeAt, record: Record) -> Result<SwipeState, JobFailure> {
+        Self::present(
+            record,
+            self.storage.stories().swipe_state(self.writer.game(), at),
+        )
     }
 
-    fn budget(settings: &AppSettings) -> Result<TokenBudget, Failure> {
-        let connection = settings.narration_connection().map_err(Failure::from)?;
+    fn budget(settings: &AppSettings) -> Result<TokenBudget, JobFailure> {
+        let connection = Self::read(Record::Settings, settings.narration_connection())?;
         Ok(TokenBudget {
             max_context_tokens: connection.resolve_max_context_tokens(),
             max_tokens: connection.max_tokens,
         })
     }
 
-    fn options_enabled(&self) -> Result<bool, Failure> {
+    fn options_enabled(&self) -> Result<bool, JobFailure> {
         Ok(self.game_row()?.options_always_on)
     }
 
-    fn quantifier_settings(&self) -> Result<AgentSettings, Failure> {
+    fn quantifier_settings(&self) -> Result<AgentSettings, JobFailure> {
         self.hook_settings(PresetType::Quantifier)
     }
 
-    fn options_settings(&self) -> Result<AgentSettings, Failure> {
+    fn options_settings(&self) -> Result<AgentSettings, JobFailure> {
         self.hook_settings(PresetType::Options)
     }
 
-    /// A read failure ends the Job; a missing preset gives no preset text.
-    fn hook_settings(&self, preset_type: PresetType) -> Result<AgentSettings, Failure> {
+    fn hook_settings(&self, preset_type: PresetType) -> Result<AgentSettings, JobFailure> {
         let game = self.game_row()?;
         Ok(AgentSettings {
-            preset: self
-                .presets
-                .hook_text(&game, preset_type)
-                .map_err(Failure::from)?,
+            preset: Some(Self::read(
+                Record::Preset,
+                self.presets.hook_text(&game, preset_type),
+            )?),
             max_tokens: None,
         })
     }

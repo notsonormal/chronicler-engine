@@ -5,7 +5,7 @@ use super::generation::{
     Generation, GenerationOrder, JobPlan, JobRequest, OptionsRun, PlanRefusal, Place, StoryEnd,
 };
 use super::message::{Maker, Message, Swipe, SwipeAt};
-use super::state::generation_status::Step;
+use super::state::generation_status::{Record, Step};
 use super::state::message_types::{MessageKind, MessageType};
 use super::state::movement::MovementState;
 use super::state::scene_state::SceneState;
@@ -311,7 +311,7 @@ fn plan_action_no_story() {
 
     assert_eq!(
         JobPlan::for_request(&JobRequest::Action("look".to_string()), story),
-        Err(PlanRefusal::Missing("the story"))
+        Err(PlanRefusal::Missing(Record::Story))
     );
 }
 
@@ -601,4 +601,23 @@ fn write_user_regen_not_analysed() {
 
     assert_eq!(written.swipe.state, started_from);
     assert_eq!(written.swipe.maker, Maker::Player);
+}
+
+#[test]
+fn options_follow() {
+    // (run, a Narration was saved, the failure is EntryMoved, the run follows)
+    let rows = [
+        (OptionsRun::OnDemand, false, false, true),
+        (OptionsRun::AfterNarration, true, false, true),
+        (OptionsRun::AfterNarration, true, true, false),
+        (OptionsRun::AfterNarration, false, false, false),
+        (OptionsRun::AfterNarration, false, true, false),
+    ];
+    for (run, narration_saved, entry_moved, expected) in rows {
+        assert_eq!(
+            run.follows(narration_saved, entry_moved),
+            expected,
+            "{run:?}, narration saved {narration_saved}, entry moved {entry_moved}"
+        );
+    }
 }

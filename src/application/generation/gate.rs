@@ -9,11 +9,12 @@ use crate::adapters::driven::storage::{Storage, Tx, TxToken};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::dock::{DockRecord, Notice};
 use crate::domain::model::game::{GameId, NewGame};
+use crate::domain::model::agent::Kind;
 use crate::domain::model::generation::{
     GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanRefusal, Place, StoryEnd,
 };
 use crate::domain::model::message::{Maker, Message, Swipe, SwipeAt};
-use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
+use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
@@ -31,18 +32,30 @@ pub enum Refusal {
     Failed(GenerationFailure),
 }
 
+/// Why a step or a save unit of a Job did not finish.
 #[derive(Debug)]
-pub enum Stopped {
+pub enum JobFailure {
     /// The Game's job entry no longer holds this Job's id: a stop or a reset
     /// ended the Job, so its late writes land nowhere.
     EntryMoved,
-    /// The unit failed in storage: the Job writes the failure line and ends.
-    SaveFailed(EngineError),
+    /// The Job writes this line and ends.
+    Line(GenerationFailure),
 }
 
-impl From<EngineError> for Stopped {
-    fn from(error: EngineError) -> Self {
-        Self::SaveFailed(error)
+impl From<GenerationFailure> for JobFailure {
+    fn from(failure: GenerationFailure) -> Self {
+        Self::Line(failure)
+    }
+}
+
+impl JobFailure {
+    /// The failure of the generation of `kind`: an event generation reports the
+    /// event line, wherever it failed.
+    pub fn of_generation(self, kind: Kind) -> Self {
+        match self {
+            Self::Line(line) => Self::Line(line.of_generation(kind)),
+            Self::EntryMoved => Self::EntryMoved,
+        }
     }
 }
 
@@ -185,7 +198,7 @@ impl GameWriter {
             let story = self.story_end_or_refuse(game, units)?;
             let plan = JobPlan::for_request(&request, story).map_err(|refusal| match refusal {
                 PlanRefusal::BadRequest(line) => Refusal::BadRequest(line),
-                PlanRefusal::Missing(name) => self.missing(game, name, units),
+                PlanRefusal::Missing(record) => self.missing(game, record, units),
             })?;
             self.require_records(game, &plan, units)?;
             let step = plan.first_step();
@@ -252,7 +265,7 @@ impl GameWriter {
             let at = match self.storage.stories().active_swipe(game, message) {
                 Ok(Some(at)) => at,
                 Ok(None) => return Err(Refusal::BadRequest("Message not found".to_string())),
-                Err(error) => return Err(self.unreadable(game, "the message", &error, units)),
+                Err(error) => return Err(self.unreadable(game, Record::Message, &error, units)),
             };
             units
                 .open(game, |tx| tx.set_swipe_text(at, text))
@@ -336,33 +349,31 @@ impl GameWriter {
         self.storage
             .stories()
             .tail(game)
-            .map_err(|error| self.unreadable(game, "the story", &error, units))
+            .map_err(|error| self.unreadable(game, Record::Story, &error, units))
     }
 
     /// A record the request needs that the engine has no row for: the failure line
     /// names it.
-    fn missing(&self, game: GameId, name: &str, units: &Units) -> Refusal {
-        self.refuse(game, GenerationFailure::missing_record(name, None), units)
+    fn missing(&self, game: GameId, record: Record, units: &Units) -> Refusal {
+        self.refuse(game, GenerationFailure::missing(record), units)
     }
 
     /// A record the request needs that the engine cannot read: the line names it,
     /// and the disclosure holds the error behind it.
-    fn unreadable(&self, game: GameId, name: &str, error: &EngineError, units: &Units) -> Refusal {
-        self.refuse(
-            game,
-            GenerationFailure::missing_record(name, Some(error.to_string())),
-            units,
-        )
+    fn unreadable(
+        &self,
+        game: GameId,
+        record: Record,
+        error: &EngineError,
+        units: &Units,
+    ) -> Refusal {
+        self.refuse(game, GenerationFailure::unreadable(record, error), units)
     }
 
     /// The write the request asked for failed: the line is the design's save line,
     /// and the disclosure holds the error behind it.
     fn save_failed(&self, game: GameId, error: &EngineError, units: &Units) -> Refusal {
-        self.refuse(
-            game,
-            GenerationFailure::new(GenerationFailureKind::SaveFailed, error.to_string()),
-            units,
-        )
+        self.refuse(game, GenerationFailure::save_failed(error), units)
     }
 
     /// The one refusal path of a request that cannot run: the Game's failure line
@@ -379,11 +390,11 @@ impl GameWriter {
     fn require_records(&self, game: GameId, plan: &JobPlan, units: &Units) -> Result<(), Refusal> {
         let row = match self.storage.get_game(game.0) {
             Ok(Some(row)) => row,
-            Ok(None) => return Err(self.missing(game, "the game", units)),
-            Err(error) => return Err(self.unreadable(game, "the game", &error, units)),
+            Ok(None) => return Err(self.missing(game, Record::Game, units)),
+            Err(error) => return Err(self.unreadable(game, Record::Game, &error, units)),
         };
         if let Err(error) = self.storage.require_persona(&row.persona_key) {
-            return Err(self.unreadable(game, "the persona", &error, units));
+            return Err(self.unreadable(game, Record::Persona, &error, units));
         }
 
         let Some(order) = &plan.first else {
@@ -391,8 +402,8 @@ impl GameWriter {
         };
         match self.storage.stories().swipe_state(game, order.start) {
             Ok(Some(_)) => Ok(()),
-            Ok(None) => Err(self.missing(game, "the start state", units)),
-            Err(error) => Err(self.unreadable(game, "the start state", &error, units)),
+            Ok(None) => Err(self.missing(game, Record::StartState, units)),
+            Err(error) => Err(self.unreadable(game, Record::StartState, &error, units)),
         }
     }
 
@@ -421,7 +432,7 @@ impl GameWriter {
         self.storage
             .stories()
             .has_text(game)
-            .map_err(|error| self.unreadable(game, "the story", &error, units))
+            .map_err(|error| self.unreadable(game, Record::Story, &error, units))
     }
 
     /// The World and the Persona are read before the unit opens, because the unit
@@ -471,13 +482,13 @@ impl JobWriter {
     /// the units of `f` open under the same lock.
     fn hold<T>(
         &self,
-        f: impl FnOnce(&mut JobEntry, &Units) -> Result<T, Stopped>,
-    ) -> Result<T, Stopped> {
+        f: impl FnOnce(&mut JobEntry, &Units) -> Result<T, JobFailure>,
+    ) -> Result<T, JobFailure> {
         let (game, id) = (self.game, self.id);
         self.writer
             .hold(|entries, units| match entries.get_mut(&game) {
                 Some(entry) if entry.id == id => f(entry, units),
-                _ => Err(Stopped::EntryMoved),
+                _ => Err(JobFailure::EntryMoved),
             })
     }
 
@@ -485,11 +496,13 @@ impl JobWriter {
         units: &Units,
         game: GameId,
         f: impl FnOnce(&mut Tx<'_>) -> Result<T, EngineError>,
-    ) -> Result<T, Stopped> {
-        units.open(game, f).map_err(Stopped::from)
+    ) -> Result<T, JobFailure> {
+        units
+            .open(game, f)
+            .map_err(|error| GenerationFailure::save_failed(&error).into())
     }
 
-    pub fn save_input(&self, text: &str, start: SwipeAt) -> Result<SwipeAt, Stopped> {
+    pub fn save_input(&self, text: &str, start: SwipeAt) -> Result<SwipeAt, JobFailure> {
         self.hold(|_entry, units| {
             let state = self.state_at(start)?;
             let swipe = Swipe::new(text, Maker::Player, state);
@@ -512,7 +525,7 @@ impl JobWriter {
         order: &GenerationOrder,
         text: String,
         start: &SwipeState,
-    ) -> Result<SavedText, Stopped> {
+    ) -> Result<SavedText, JobFailure> {
         self.hold(|_entry, units| {
             let empties_the_dock = order.kind().saves_a_narration();
             let NewSwipe {
@@ -535,13 +548,15 @@ impl JobWriter {
     }
 
     /// Takes `saved` by value, so one Swipe's state is written at most twice.
-    pub fn save_state_update(&self, saved: SavedText, state: SwipeState) -> Result<(), Stopped> {
+    pub fn save_state_update(&self, saved: SavedText, state: SwipeState) -> Result<(), JobFailure> {
         self.hold(|_entry, units| {
-            Self::unit(units, self.game, |tx| tx.set_swipe_state(saved.at, &state))
+            units
+                .open(self.game, |tx| tx.set_swipe_state(saved.at, &state))
+                .map_err(|error| GenerationFailure::contradiction(error.to_string()).into())
         })
     }
 
-    pub fn save_failure(&self, failure: GenerationFailure) -> Result<(), Stopped> {
+    pub fn save_failure(&self, failure: GenerationFailure) -> Result<(), JobFailure> {
         self.hold(|_entry, units| {
             Self::unit(units, self.game, |tx| tx.set_game_failure(Some(&failure)))
         })
@@ -553,7 +568,7 @@ impl JobWriter {
         &self,
         result: OptionsResult,
         after_narration: bool,
-    ) -> Result<(), Stopped> {
+    ) -> Result<(), JobFailure> {
         self.hold(|_entry, units| {
             let record = match (result, after_narration) {
                 (OptionsResult::Offered(offered), _) => DockRecord {
@@ -574,40 +589,33 @@ impl JobWriter {
     }
 
     /// The step name of the status line: memory only, and its only writer.
-    pub fn step(&self, step: Step) -> Result<(), Stopped> {
+    pub fn step(&self, step: Step) -> Result<(), JobFailure> {
         self.hold(|entry, _units| {
             entry.step = step;
             Ok(())
         })
     }
 
-    fn dock(&self) -> Result<DockRecord, Stopped> {
-        Ok(self
-            .writer
-            .storage
-            .docks()
-            .get(self.game)
-            .map_err(Stopped::from)?
-            .unwrap_or_default())
-    }
-
-    fn state_at(&self, at: SwipeAt) -> Result<SwipeState, Stopped> {
-        match self.writer.storage.stories().swipe_state(self.game, at) {
-            Ok(Some(state)) => Ok(state),
-            Ok(None) => Err(Stopped::SaveFailed(EngineError::Validation(
-                "the start state is missing".to_string(),
-            ))),
-            Err(error) => Err(Stopped::SaveFailed(error)),
+    fn dock(&self) -> Result<DockRecord, JobFailure> {
+        match self.writer.storage.docks().get(self.game) {
+            Ok(record) => Ok(record.unwrap_or_default()),
+            Err(error) => Err(GenerationFailure::unreadable(Record::Dock, &error).into()),
         }
     }
 
-    fn tail_of(&self) -> Result<Tail, Stopped> {
+    fn state_at(&self, at: SwipeAt) -> Result<SwipeState, JobFailure> {
+        match self.writer.storage.stories().swipe_state(self.game, at) {
+            Ok(Some(state)) => Ok(state),
+            Ok(None) => Err(GenerationFailure::missing(Record::StartState).into()),
+            Err(error) => Err(GenerationFailure::unreadable(Record::StartState, &error).into()),
+        }
+    }
+
+    fn tail_of(&self) -> Result<Tail, JobFailure> {
         match self.writer.storage.stories().tail(self.game) {
             Ok(Some(tail)) => Ok(tail),
-            Ok(None) => Err(Stopped::SaveFailed(EngineError::Validation(
-                "the story is empty".to_string(),
-            ))),
-            Err(error) => Err(Stopped::SaveFailed(error)),
+            Ok(None) => Err(GenerationFailure::missing(Record::Story).into()),
+            Err(error) => Err(GenerationFailure::unreadable(Record::Story, &error).into()),
         }
     }
 
@@ -617,7 +625,7 @@ impl JobWriter {
         swipe: &Swipe,
         empties_the_dock: bool,
         units: &Units,
-    ) -> Result<SwipeAt, Stopped> {
+    ) -> Result<SwipeAt, JobFailure> {
         Self::unit(units, self.game, |tx| {
             let message_id = tx.insert_message(message)?;
             let at = SwipeAt {
@@ -638,7 +646,7 @@ impl JobWriter {
         swipe: &Swipe,
         empties_the_dock: bool,
         units: &Units,
-    ) -> Result<SwipeAt, Stopped> {
+    ) -> Result<SwipeAt, JobFailure> {
         let at = SwipeAt {
             message: tail.last.id,
             swipe: tail.last.swipes.len(),

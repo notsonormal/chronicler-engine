@@ -5,20 +5,23 @@ use std::sync::Arc;
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::test_support::active_game_of;
+use chronicler_engine::adapters::driven::storage::{TestOverride, TxWrite};
 use chronicler_engine::domain::model::settings::{AppSettings, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    analysis_report, configured_runner_without, ScriptedModel, TestAppBuilder, TestDataBuilder,
-    TestMap, TestWorld,
+    analysis_report, configured_runner, configured_runner_without, empty_sqlite_storage,
+    ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap, TestWorld,
 };
 
-use crate::support::app_wiring::{app_with_script, app_with_script_and_agents};
+use crate::support::app_wiring::{
+    app_with_model_and_storage, app_with_script, app_with_script_and_agents,
+};
 use crate::support::http_assertions::{defined_icons, referenced_icons, status_error_message};
 use crate::support::http_fixtures::{if_world, seed_offered_set, story_of};
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
-    wait_settled,
+    wait_for_jobs, wait_settled,
 };
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -492,22 +495,17 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
     );
 }
 
-// [docs/specs/options.md] SCENARIO: 24.22
-#[tokio::test]
-async fn test_options_run_follows_a_failed_event_narration_http() {
+/// Seeds the always-on World with a Character whose one-shot Trigger fires on the
+/// first Action that brings the Character.
+fn seed_world_with_a_firing_trigger(
+    storage: &chronicler_engine::adapters::driven::storage::Storage,
+) {
     use chronicler_engine::domain::model::character::NpcCard;
     use chronicler_engine::domain::model::trigger::{
         ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
     };
     use chronicler_engine::test_support::TestPersona;
 
-    let (app, state, storage) = app_with_script(
-        ScriptedModel::new()
-            .narration("You examine the guard.")
-            .after_narration(analysis_report(&["npc_1"], None))
-            .failed(Role::Trigger)
-            .options(SET_A),
-    );
     let world_id = storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))
         .expect("seed always-on world");
@@ -532,6 +530,19 @@ async fn test_options_run_follows_a_failed_event_narration_http() {
     storage
         .seed_character(world_id, &npc)
         .expect("seed the Character of the Trigger");
+}
+
+// [docs/specs/options.md] SCENARIO: 24.22
+#[tokio::test]
+async fn test_options_run_follows_a_failed_event_narration_http() {
+    let (app, state, storage) = app_with_script(
+        ScriptedModel::new()
+            .narration("You examine the guard.")
+            .after_narration(analysis_report(&["npc_1"], None))
+            .failed(Role::Trigger)
+            .options(SET_A),
+    );
+    seed_world_with_a_firing_trigger(&storage);
     create_game(&app, "always_on_world").await;
 
     let resp = post_action(&app, "examine the npc").await;
@@ -565,6 +576,114 @@ async fn test_options_run_follows_a_failed_event_narration_http() {
     assert!(
         !status_error_message(&status).is_empty(),
         "the failure display must hold the failed call's own line, got: {status}"
+    );
+}
+
+// [docs/specs/options.md] SCENARIO: 24.23
+#[tokio::test]
+async fn options_after_state_save_failed() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let model = Arc::new(
+        ScriptedModel::new()
+            .narration("You look around.")
+            .after_narration(analysis_report(&[], None))
+            .options(SET_A),
+    );
+    let (app, state, storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        model,
+        AppSettings::default(),
+        configured_runner,
+    );
+    storage
+        .seed_world(&always_on_world(), &TestMap::single_room("start"))
+        .expect("seed always-on world");
+    create_game(&app, "always_on_world").await;
+    failures.set_write(
+        TxWrite::SetSwipeState,
+        TestOverride::internal("the state write failed"),
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should complete"
+    );
+    assert!(wait_for_jobs(&state, 2000).await, "the Job should end");
+
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "the Options run must follow the Narration the failed state update kept"
+    );
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert_eq!(dock_notice(&app).await, None, "the run succeeded: {dock}");
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("The text was saved, but the game state could not be updated."),
+        "the status shows the failure of the state update: {status}"
+    );
+}
+
+// [docs/specs/options.md] SCENARIO: 24.24
+#[tokio::test]
+async fn options_after_event_text_save_failed() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let model = Arc::new(
+        ScriptedModel::new()
+            .narration("You examine the guard.")
+            .after_narration(analysis_report(&["npc_1"], None))
+            .event_narration("The guard greets you.")
+            .options(SET_A),
+    );
+    let hold = model.hold(Role::Trigger);
+    let (app, state, storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::clone(&model),
+        AppSettings::default(),
+        configured_runner,
+    );
+    seed_world_with_a_firing_trigger(&storage);
+    create_game(&app, "always_on_world").await;
+
+    assert!(
+        post_action(&app, "examine the npc")
+            .await
+            .status()
+            .is_success()
+    );
+    assert!(
+        hold.wait_started(2000),
+        "the held event narration call should reach the model"
+    );
+    // The Narration that fired the Trigger is saved, so the next new Message is
+    // the event Narration.
+    failures.set_write(
+        TxWrite::InsertMessage,
+        TestOverride::internal("the message write failed"),
+    );
+    hold.release();
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should complete"
+    );
+    assert!(wait_for_jobs(&state, 2000).await, "the Job should end");
+
+    assert_eq!(
+        current_options(&state),
+        set_a_options(),
+        "the Options run must follow the Narration that the failed event text save left"
+    );
+    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    assert_eq!(dock_notice(&app).await, None, "the run succeeded: {dock}");
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("The event narration failed."),
+        "the status names the failed event narration: {status}"
+    );
+    assert!(
+        status_error_message(&status).contains("The new text could not be saved."),
+        "the disclosure holds the save line: {status}"
     );
 }
 

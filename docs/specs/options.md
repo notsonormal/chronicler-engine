@@ -150,6 +150,34 @@ And the dock shows no notice
 And the status names the event narration failure
 ```
 
+#### Scenario 24.23: An Options run follows a Narration whose state update fails
+
+```gherkin
+Given a world with the always-on toggle on and an options agent
+And storage that refuses the write of a state update
+When the client POST /games creates a game from that world
+And the client POST /action with command="look"
+And the Game is no longer busy
+Then the dock renders a fresh option set
+And the dock shows no notice
+And the status carries the contradiction line
+```
+
+#### Scenario 24.24: An Options run follows a Narration whose event text save fails
+
+```gherkin
+Given a world with the always-on toggle on and an options agent
+And a Character whose Trigger fires on the next Action
+And storage that refuses the write of a new Message once the Narration that fired the Trigger is saved
+When the client POST /games creates a game from that world
+And the client POST /action with command="examine the npc"
+And the Game is no longer busy
+Then the dock renders a fresh option set
+And the dock shows no notice
+And the status names the event narration failure
+And the raw text in the status disclosure holds the save-failed line
+```
+
 ### Response shapes
 
 #### Scenario 24.10: A numbered-list response renders parsed options

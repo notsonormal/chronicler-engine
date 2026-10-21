@@ -53,6 +53,41 @@ pub fn seed_default_preset(storage: &Storage) {
         .expect("test setup: save_preset must succeed for IF default preset");
 
     seed_default_impersonate_preset(storage);
+    seed_default_hook_presets(storage);
+}
+
+/// The Quantifier and Options presets that a new Game picks: a Job with no such
+/// preset fails.
+fn seed_default_hook_presets(storage: &Storage) {
+    for (id, name, role, preset_type) in [
+        (
+            settings_defaults::DEFAULT_QUANTIFIER_PROMPT_PRESET_ID,
+            "Default Test Quantifier",
+            "You are a test quantifier.",
+            PresetType::Quantifier,
+        ),
+        (
+            settings_defaults::DEFAULT_OPTIONS_PROMPT_PRESET_ID,
+            "Default Test Options",
+            "You are a test options writer.",
+            PresetType::Options,
+        ),
+    ] {
+        storage
+            .save_preset(&PromptPreset {
+                id: id.to_string(),
+                name: name.to_string(),
+                role: Some(role.to_string()),
+                instructions: None,
+                writing_style: None,
+                output_format: None,
+                allowed_modes: settings_defaults::default_allowed_modes(),
+                is_default: true,
+                preset_type,
+            })
+            // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
+            .expect("test setup: save_preset must succeed for a default hook preset");
+    }
 }
 
 pub fn seed_default_impersonate_preset(storage: &Storage) {

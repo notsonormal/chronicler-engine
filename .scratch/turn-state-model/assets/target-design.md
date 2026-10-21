@@ -171,7 +171,7 @@ Every generation of every kind runs these steps. The kind changes the inputs, an
 | 3. Text save | "narrating" or "generating-event" | One save unit (§3.2), with the job id check. The story log shows the text from now on (R-11a). A user regen ends here (R-18). |
 | 4. Analysis | "quantifying" | A failed or unusable answer gives the fallback result (R-12). |
 | 5. Game rules | "quantifying" | Applied to the start state. For an event generation, the movement is taken out of the analysis first, and a Trigger that the rules report is ignored (R-14, R-57; D-12). A contradiction: the Swipe keeps its pre-analysis state, and the failure line is written (R-20, OR-45). |
-| 6. State update | "quantifying" | One save unit (§3.2), with the job id check. |
+| 6. State update | "quantifying" | One save unit (§3.2), with the job id check. A failed unit gives the contradiction line of §4.7: the text is saved, and the state is not updated. |
 
 **The Swipe state that each kind leaves at the end of its generation** [D-13]. Before the state update, an analysed kind holds its pre-analysis state (§1).
 
@@ -239,11 +239,10 @@ One short line per failure kind. The raw text goes in the disclosure (R-21). The
 | Unusable answer | "The language model's answer could not be read." | code |
 | Empty text | "The language model gave an empty answer." | new, R-19 |
 | Output budget spent | "The model used its budget on reasoning. Try another model." | code |
-| Preset missing | "The active prompt preset is missing." | code |
 | Invalid room | "The room <name> is not on the map." | new, R-20. Today: "The current scene could not be found." |
-| World-rules contradiction after the text | "The text was saved, but the game state could not be updated." | new, R-20, OR-45 |
+| Game-rules contradiction, or a failed state update, after the text | "The text was saved, but the game state could not be updated." | new, R-20, OR-45 |
 | Event narration failed | "The event narration failed." The disclosure also holds the line of the narrator failure. | new, R-17 |
-| Missing data for a Retry or a Retrigger | "The data for this request is missing: <what>." | new, R-46 |
+| Missing data: a read that fails or finds no row, a missing preset included | "The data for this request is missing: <record>." The disclosure holds the raw error. | new, R-46; the missing preset, ticket 28 |
 | Save failed | "The new text could not be saved." | code, changed: "turn" |
 | Internal error | "The engine failed with an internal error." | OR-47. Today: "The last turn failed to generate." |
 

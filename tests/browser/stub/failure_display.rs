@@ -884,40 +884,6 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     );
 }
 
-const FAILURE_KINDS: [GenerationFailureKind; 12] = [
-    GenerationFailureKind::Unreachable,
-    GenerationFailureKind::PromptTooLong,
-    GenerationFailureKind::UnreadableAnswer,
-    GenerationFailureKind::TokenBudgetSpent,
-    GenerationFailureKind::SaveFailed,
-    GenerationFailureKind::SceneMissing,
-    GenerationFailureKind::PresetMissing,
-    GenerationFailureKind::MissingData,
-    GenerationFailureKind::EmptyText,
-    GenerationFailureKind::Contradiction,
-    GenerationFailureKind::EventNarrationFailed,
-    GenerationFailureKind::Other,
-];
-
-/// A new `GenerationFailureKind` variant makes this match non-exhaustive, so the
-/// clamp check cannot silently skip its sentence.
-fn assert_kind_is_listed(kind: GenerationFailureKind) {
-    match kind {
-        GenerationFailureKind::Unreachable
-        | GenerationFailureKind::PromptTooLong
-        | GenerationFailureKind::UnreadableAnswer
-        | GenerationFailureKind::TokenBudgetSpent
-        | GenerationFailureKind::SaveFailed
-        | GenerationFailureKind::SceneMissing
-        | GenerationFailureKind::PresetMissing
-        | GenerationFailureKind::MissingData
-        | GenerationFailureKind::EmptyText
-        | GenerationFailureKind::Contradiction
-        | GenerationFailureKind::EventNarrationFailed
-        | GenerationFailureKind::Other => {}
-    }
-}
-
 /// `needed_height` is the height the sentence needs once the clamp is lifted off it.
 #[derive(serde::Deserialize)]
 struct ClampedLine {
@@ -999,8 +965,7 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
         wait_for_viewport_width(&page, width).await;
 
         let (baseline_input, baseline_area) = measure_action_area(&page).await;
-        for kind in FAILURE_KINDS {
-            assert_kind_is_listed(kind);
+        for &kind in GenerationFailureKind::ALL {
             // The missing-data line carries what is missing, so this check uses a
             // name a real failure carries; the other kinds ignore the raw text.
             let raw = match kind {

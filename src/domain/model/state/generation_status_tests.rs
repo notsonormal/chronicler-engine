@@ -1,5 +1,6 @@
-use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind};
-use crate::error::{EngineError, LlmFailure, NarrativeFailure};
+use crate::domain::model::agent::Kind;
+use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Record};
+use crate::error::{EngineError, InternalError, LlmFailure, NarrativeFailure};
 
 fn kind_of(error: EngineError) -> GenerationFailureKind {
     GenerationFailure::from_engine_error(&error).kind
@@ -102,41 +103,6 @@ fn test_narration_generation_failure_is_unreadable_answer() {
 }
 
 #[test]
-fn test_io_failure_is_save_failed() {
-    assert_eq!(
-        kind_of(EngineError::Io("disk full".to_string())),
-        GenerationFailureKind::SaveFailed
-    );
-}
-
-#[test]
-fn test_database_failure_is_save_failed() {
-    assert_eq!(
-        kind_of(EngineError::Database {
-            context: "test",
-            source: rusqlite::Error::QueryReturnedNoRows,
-        }),
-        GenerationFailureKind::SaveFailed
-    );
-}
-
-#[test]
-fn test_room_not_found_is_scene_missing() {
-    assert_eq!(
-        kind_of(EngineError::RoomNotFound("cellar".to_string())),
-        GenerationFailureKind::SceneMissing
-    );
-}
-
-#[test]
-fn test_missing_preset_is_preset_missing() {
-    assert_eq!(
-        kind_of(EngineError::PresetNotFound("system_default".to_string())),
-        GenerationFailureKind::PresetMissing
-    );
-}
-
-#[test]
 fn test_unlisted_error_is_other() {
     assert_eq!(
         kind_of(EngineError::Validation("no anchor".to_string())),
@@ -145,43 +111,75 @@ fn test_unlisted_error_is_other() {
 }
 
 #[test]
-fn test_a_missing_room_names_the_room_and_keeps_the_error() {
-    let failure = GenerationFailure::from_engine_error(&EngineError::RoomNotFound("cellar".into()));
-    assert_eq!(failure.kind, GenerationFailureKind::SceneMissing);
-    assert_eq!(failure.named, "cellar", "the line names the room");
-    assert_eq!(
-        failure.line(),
-        "The room cellar is not on the map.",
-        "the line is the kind's words with the room in them"
-    );
-    assert_eq!(
-        failure.raw, "Room not found: cellar",
-        "the disclosure holds the error behind the line"
-    );
+fn test_an_invalid_room_names_the_room() {
+    let failure = GenerationFailure::invalid_room("cellar");
+    assert_eq!(failure.kind, GenerationFailureKind::InvalidRoom);
+    assert_eq!(failure.line(), "The room cellar is not on the map.");
+    assert_eq!(failure.raw, "cellar");
 }
 
 #[test]
-fn test_a_missing_record_names_the_record_and_keeps_the_error() {
-    let failure = GenerationFailure::missing_record(
-        "the persona",
-        Some("the persona record cannot be read".to_string()),
-    );
-    assert_eq!(failure.kind, GenerationFailureKind::MissingData);
-    assert_eq!(
-        failure.line(),
-        "The data for this request is missing: the persona."
-    );
-    assert_eq!(failure.raw, "the persona record cannot be read");
+fn record_names() {
+    let rows = [
+        (Record::Game, "the game"),
+        (Record::Persona, "the persona"),
+        (Record::Story, "the story"),
+        (Record::Message, "the message"),
+        (Record::StartState, "the start state"),
+        (Record::SavedState, "the saved state"),
+        (Record::CurrentState, "the current state"),
+        (Record::World, "the world"),
+        (Record::Settings, "the settings"),
+        (Record::Preset, "the preset"),
+        (Record::Dock, "the options dock"),
+    ];
+    let error = EngineError::Internal(InternalError::new("the row cannot be read"));
+    for (record, name) in rows {
+        let line = format!("The data for this request is missing: {name}.");
+        let miss = GenerationFailure::missing(record);
+        assert_eq!(miss.kind, GenerationFailureKind::MissingData);
+        assert_eq!(miss.line(), line);
+        assert_eq!(
+            miss.raw, name,
+            "a miss has no error: the disclosure holds the name"
+        );
 
-    let without_error = GenerationFailure::missing_record("the story", None);
+        let unreadable = GenerationFailure::unreadable(record, &error);
+        assert_eq!(
+            unreadable.line(),
+            line,
+            "a read error shows the line of a miss"
+        );
+        assert_eq!(unreadable.raw, error.to_string());
+    }
+}
+
+#[test]
+fn failure_of_event() {
+    let inner = GenerationFailure::new(GenerationFailureKind::Unreachable, "connection refused");
+
+    let wrapped = inner.clone().of_generation(Kind::Event);
+    assert_eq!(wrapped.kind, GenerationFailureKind::EventNarrationFailed);
+    assert_eq!(wrapped.line(), "The event narration failed.");
     assert_eq!(
-        without_error.line(),
-        "The data for this request is missing: the story."
+        wrapped.raw, "The language model could not be reached.",
+        "the line of the inner failure is in the raw text"
     );
-    assert_eq!(
-        without_error.raw, "the story",
-        "with no error behind it, the disclosure holds the line's own name"
-    );
+
+    for kind in [Kind::Narration, Kind::Impersonate, Kind::UserRegen] {
+        assert_eq!(
+            inner.clone().of_generation(kind),
+            inner,
+            "{kind:?} keeps its line"
+        );
+    }
+}
+
+#[test]
+fn every_failure_kind_has_a_line() {
+    for kind in GenerationFailureKind::ALL {
+        assert!(!kind.line("the story").is_empty(), "{kind:?}");
+    }
 }
 
 #[test]

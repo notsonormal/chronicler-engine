@@ -1,7 +1,10 @@
 //! Enum variant doc guardrail: every enum variant must carry `///` doc, OR the enum must be marked `/// [TRIVIAL_ENUM]` with all variants bare.
 
+use syn::parse::Parser;
 use syn::visit::Visit;
-use syn::{File, ItemEnum};
+use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
+use syn::{File, Ident, ItemEnum, ItemMacro, Token};
 
 use crate::Violation;
 
@@ -29,12 +32,59 @@ fn has_doc(attrs: &[syn::Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("doc"))
 }
 
+/// Macros whose body declares the variants of an enum. Their variants carry the
+/// same doc rule as a plain enum.
+const ENUM_DECLARING_MACROS: &[&str] = &["failure_kinds"];
+
+struct MacroVariant {
+    attrs: Vec<syn::Attribute>,
+    ident: Ident,
+}
+
+impl Parse for MacroVariant {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            attrs: input.call(syn::Attribute::parse_outer)?,
+            ident: input.parse()?,
+        })
+    }
+}
+
 struct EnumVisitor<'a> {
     file_path: &'a str,
     violations: &'a mut Vec<Violation>,
 }
 
 impl<'a> Visit<'a> for EnumVisitor<'a> {
+    fn visit_item_macro(&mut self, node: &'a ItemMacro) {
+        let declares_enum = ENUM_DECLARING_MACROS
+            .iter()
+            .any(|name| node.mac.path.is_ident(name));
+        if !declares_enum {
+            return;
+        }
+        let Ok(variants) =
+            Punctuated::<MacroVariant, Token![,]>::parse_terminated.parse2(node.mac.tokens.clone())
+        else {
+            return;
+        };
+        for variant in variants.iter().filter(|variant| !has_doc(&variant.attrs)) {
+            self.violations.push(Violation::error(
+                self.file_path,
+                variant.ident.span().start().line,
+                format!(
+                    "Enum variant `{}` in a `{}!` body lacks a `///` doc comment.",
+                    variant.ident,
+                    node.mac
+                        .path
+                        .get_ident()
+                        .map(ToString::to_string)
+                        .unwrap_or_default()
+                ),
+            ));
+        }
+    }
+
     fn visit_item_enum(&mut self, node: &'a ItemEnum) {
         let trivial = has_trivial_marker(&node.attrs);
         for variant in &node.variants {
@@ -134,4 +184,30 @@ enum Color {
 "#;
     let v = check_enum_variant_docs("test.rs", src);
     assert_eq!(v.len(), 1, "expected 1 conflict violation, got {v:?}");
+}
+
+#[test]
+fn check_enum_variant_docs_flags_undocumented_variant_in_failure_kinds_macro() {
+    let src = r#"
+failure_kinds! {
+    /// Documented.
+    Documented,
+    Bare,
+}
+"#;
+    let v = check_enum_variant_docs("test.rs", src);
+    assert_eq!(v.len(), 1, "expected 1 violation, got {v:?}");
+}
+
+#[test]
+fn check_enum_variant_docs_accepts_documented_failure_kinds_macro() {
+    let src = r#"
+failure_kinds! {
+    /// One.
+    One,
+    /// Two.
+    Two,
+}
+"#;
+    assert!(check_enum_variant_docs("test.rs", src).is_empty());
 }

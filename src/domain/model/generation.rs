@@ -3,7 +3,7 @@
 
 use crate::domain::model::agent::Kind;
 use crate::domain::model::message::{Maker, Swipe, SwipeAt};
-use crate::domain::model::state::generation_status::Step;
+use crate::domain::model::state::generation_status::{Record, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::trigger_context::EventRecord;
@@ -151,6 +151,18 @@ pub enum OptionsRun {
     OnDemand,
 }
 
+impl OptionsRun {
+    /// Whether the run happens at the end of the Job. `OnDemand` always runs. After
+    /// a Narration, a saved Narration earns the run, also when a later step failed;
+    /// a Job whose entry moved on runs nothing more.
+    pub fn follows(self, narration_saved: bool, entry_moved: bool) -> bool {
+        match self {
+            Self::OnDemand => true,
+            Self::AfterNarration => narration_saved && !entry_moved,
+        }
+    }
+}
+
 /// The order of one request: ids and texts only.
 #[derive(Debug, Clone, PartialEq)]
 pub struct JobPlan {
@@ -175,7 +187,7 @@ pub enum PlanRefusal {
     /// The request is wrong; the line says why.
     BadRequest(String),
     /// A record the request needs is missing; the failure line names it.
-    Missing(&'static str),
+    Missing(Record),
 }
 
 impl JobPlan {
@@ -250,7 +262,7 @@ impl JobPlan {
     ) -> Result<Self, PlanRefusal> {
         let start = tail
             .map(Tail::current_at)
-            .ok_or(PlanRefusal::Missing("the story"))?;
+            .ok_or(PlanRefusal::Missing(Record::Story))?;
         Ok(Self::of_one(
             GenerationOrder {
                 generation,
