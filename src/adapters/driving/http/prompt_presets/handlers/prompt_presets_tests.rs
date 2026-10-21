@@ -401,31 +401,6 @@ async fn test_update_preset_storage_error_returns_error() {
 }
 
 #[tokio::test]
-async fn test_delete_preset_get_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        PromptPreset {
-            id: "custom".into(),
-            name: "Custom".into(),
-            instructions: Some("Custom.".into()),
-            ..Default::default()
-        },
-        |h| {
-            h.set(
-                StorageCall::GetPreset,
-                TestOverride::config("injected get failure"),
-            )
-        },
-    );
-    let response = delete_preset_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("custom".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Load failed"));
-}
-
-#[tokio::test]
 async fn test_delete_preset_delete_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
         PromptPreset {

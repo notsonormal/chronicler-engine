@@ -30,7 +30,7 @@ Two mechanisms decide which prompt presets a mode uses:
 
 | Mechanism | Question it answers | Where it lives |
 |---|---|---|
-| Mode preset registry | Which preset is the *default* for a mode — new games, resets, mode switches, and the no-game fallback read it | Settings (one JSON list of per-mode bundles) |
+| Mode preset registry | Which preset is the *default* for a mode — new games, resets and mode switches read it | Settings (one JSON list of per-mode bundles) |
 | Allowed modes | Which modes may *select* a preset at all | Each preset carries its own `allowed_modes` list |
 
 Allowed modes gate selection surfaces only — the preset picker and activation. The narrate path uses the preset ids a Game already stores as they are.

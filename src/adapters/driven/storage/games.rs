@@ -3,7 +3,6 @@
 
 use crate::error::{DatabaseContext, EngineError};
 use crate::domain::model::game::{Game, GameId};
-use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::game::DbGame;
 
@@ -147,43 +146,27 @@ impl Storage {
         })
     }
 
-    pub fn active_quantifier_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.preset_id_or(
-            game_id,
-            || {
-                tracing::warn!("game {game_id} missing; falling back to registry novel preset");
-                settings
-                    .mode_preset_registry
-                    .bundle_for(NarratorMode::Novel)
-                    .quantifier_prompt_preset_id
+    /// How many Games hold the preset in any of its preset slots.
+    pub fn count_games_using_preset(&self, preset_id: &str) -> Result<usize, EngineError> {
+        self.with_backend_mut(
+            StorageCall::CountGamesUsingPreset,
+            |backend| match backend {
+                Backend::Sqlite { pool } => {
+                    let conn = pool.conn();
+                    let count: i64 = conn
+                        .query_row(
+                            "SELECT COUNT(*) FROM games
+                         WHERE active_system_prompt_preset_id = ?1
+                            OR active_quantifier_prompt_preset_id = ?1
+                            OR active_impersonate_prompt_preset_id = ?1
+                            OR active_options_prompt_preset_id = ?1",
+                            [preset_id],
+                            |row| row.get(0),
+                        )
+                        .db_context("Failed to count the games that use the preset")?;
+                    Ok(count as usize)
+                }
             },
-            |game| &game.active_quantifier_prompt_preset_id,
         )
-    }
-
-    /// Options presets are mode-agnostic and sit outside the per-mode registry, so
-    /// the fallback is the settings column, not a mode bundle.
-    pub fn active_options_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.preset_id_or(
-            game_id,
-            || {
-                tracing::warn!("game {game_id} missing; falling back to settings options preset");
-                settings.active_options_prompt_preset_id.clone()
-            },
-            |game| &game.active_options_prompt_preset_id,
-        )
-    }
-
-    /// The Game's preset slot, or `fallback` when the Game row is gone.
-    fn preset_id_or(
-        &self,
-        game_id: GameId,
-        fallback: impl FnOnce() -> String,
-        game_slot: impl FnOnce(&Game) -> &str,
-    ) -> String {
-        match self.get_game(game_id.0).ok().flatten() {
-            Some(game) => game_slot(&game).to_string(),
-            None => fallback(),
-        }
     }
 }

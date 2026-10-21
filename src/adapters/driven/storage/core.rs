@@ -28,6 +28,7 @@ pub enum Backend {
 /// [TRIVIAL_ENUM]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StorageCall {
+    CountGamesUsingPreset,
     CreateWorld,
     DeletePreset,
     DeleteWorld,

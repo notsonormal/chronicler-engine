@@ -674,3 +674,28 @@ fn test_concurrent_save_preset_admits_exactly_one_name() {
         "only the winner's preset must be stored"
     );
 }
+
+#[test]
+fn test_count_games_using_preset_counts_each_game_once() {
+    use chronicler_engine::test_support::{seed_game_row, test_new_game};
+
+    let storage = create_storage();
+    let seed = |name: &str| seed_game_row(&storage, &test_new_game("w", "w", "p", "P", name)).0;
+    let first = seed("First");
+    let second = seed("Second");
+    seed("Third");
+
+    let mut game = storage.require_game(first).unwrap();
+    game.active_options_prompt_preset_id = "shared".to_string();
+    storage.update_game_config(&game).unwrap();
+    let mut game = storage.require_game(second).unwrap();
+    game.active_system_prompt_preset_id = "shared".to_string();
+    game.active_quantifier_prompt_preset_id = "shared".to_string();
+    storage.update_game_config(&game).unwrap();
+
+    assert_eq!(storage.count_games_using_preset("shared").unwrap(), 2);
+    assert_eq!(
+        storage.count_games_using_preset("nobody_uses_it").unwrap(),
+        0
+    );
+}

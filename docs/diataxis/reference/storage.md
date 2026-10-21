@@ -100,7 +100,7 @@ The schema has 11 tables, organized into three logical clusters:
 ### Standalone tables
 
 - **`llm_messages`** — forensics log of LLM API calls, for debugging and prompt engineering. Pruned automatically to a fixed row cap.
-- **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is a text key.
+- **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is a text key. Storage reads, writes and deletes the rows and counts the Games that hold a preset in their preset slots. `PromptPresetService` in the application layer chooses the preset of a Game and decides whether an edit or a delete is allowed.
 
 ## Relationships
 

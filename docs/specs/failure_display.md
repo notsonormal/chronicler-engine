@@ -150,3 +150,16 @@ Then the status response carries the prompt-too-long line, not the line for an u
 And the raw context-overflow message is reachable only inside the response's disclosure
 And the story log holds no Narration of that Action
 ```
+
+#### Scenario 38.13: An unreadable Game while the Job chooses a hook preset ends the Job with a failure line
+
+```gherkin
+Given a running Job whose Narration call is held
+And the Game's record becomes unreadable while the call is held
+When the call is released and the Job ends
+And the client GET /status/generating
+Then the status response carries the missing-data line
+And the raw storage message is in the response's disclosure
+And the Quantifier is not asked
+And the story log holds the Narration of that Action beside the opening
+```

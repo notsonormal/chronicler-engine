@@ -165,10 +165,7 @@ pub enum EngineError {
     WorldAlreadyExists(String),
 
     /// World cannot be deleted because games still reference it; `game_count` is the blocker count.
-    #[error(
-        "Cannot delete world with {game_count} {}",
-        if *game_count == 1 { "game" } else { "games" }
-    )]
+    #[error("Cannot delete world with {}", EngineError::count_of_games(*game_count))]
     WorldHasGames { game_count: usize },
 
     /// Settings/config value missing or invalid; message names the field and constraint.
@@ -226,6 +223,11 @@ impl From<std::io::Error> for EngineError {
 }
 
 impl EngineError {
+    /// "1 game" or "2 games": the count with its noun, as the refusals of a delete show it.
+    pub fn count_of_games(count: usize) -> String {
+        format!("{count} {}", if count == 1 { "game" } else { "games" })
+    }
+
     pub fn raw_response_body(&self) -> Option<&str> {
         match self {
             EngineError::Llm(failure) => failure.raw_response_body(),

@@ -8,6 +8,7 @@ use tracing::instrument;
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::adapters::driven::storage::stories::STORY_LIMIT;
 use crate::adapters::driven::storage::Storage;
+use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
 use crate::application::generation::gate::{GameWriter, JobWriter, OptionsResult, Refusal, Stopped};
 use crate::application::generation::job_tasks::JobTasks;
@@ -22,7 +23,7 @@ use crate::domain::model::generation::{
 };
 use crate::domain::model::map::Room;
 use crate::domain::model::message::SwipeAt;
-use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
@@ -121,6 +122,7 @@ pub struct Job {
     writer: JobWriter,
     narrator: Arc<Narrator>,
     agent_runner: Arc<AgentRunner>,
+    presets: PromptPresetService,
     storage: Arc<Storage>,
 }
 
@@ -159,6 +161,7 @@ impl Job {
             writer: job_writer,
             narrator,
             agent_runner,
+            presets: PromptPresetService::new(Arc::clone(&storage)),
             storage,
         };
         let handle = tokio::task::spawn_blocking(move || {
@@ -341,12 +344,16 @@ impl Job {
         let before = self.place_before(order)?;
         let history = self.window_before(before, STORY_LIMIT)?;
         let user_message = self.user_message(order, input, &history)?;
-        let preset_id = match order.kind() {
-            Kind::Impersonate => game.active_preset_id(PresetType::Impersonate).to_string(),
-            _ => game.active_preset_id(PresetType::System).to_string(),
+        let preset_type = match order.kind() {
+            Kind::Impersonate => PresetType::Impersonate,
+            _ => PresetType::System,
         };
-        let (preset, response_length) = self.preset(&preset_id)?;
-        let budget = self.budget()?;
+        let preset = self
+            .presets
+            .for_narration(&game, preset_type)
+            .map_err(Self::preset_failure)?;
+        let settings = self.storage.get_settings().map_err(Failure::from)?;
+        let budget = Self::budget(&settings)?;
 
         let all_npcs: Vec<NpcCard> = bundle.npcs.values().cloned().collect();
         let context = PromptContext::new(
@@ -372,7 +379,7 @@ impl Job {
             order.kind().role(),
             &context,
             &preset,
-            &response_length,
+            &settings.response_length,
             budget,
         ) {
             Ok(narrated) => Ok(narrated.text),
@@ -623,24 +630,16 @@ impl Job {
             .ok_or_else(|| Failure::missing(what))
     }
 
-    fn preset(&self, preset_id: &str) -> Result<(PromptPreset, String), Failure> {
-        let response_length = self
-            .storage
-            .get_settings()
-            .map_err(Failure::from)?
-            .response_length
-            .clone();
-        match self.storage.get_preset(preset_id) {
-            Ok(Some(preset)) => Ok((preset, response_length)),
-            Ok(None) => Err(Failure::Line(GenerationFailure::from_engine_error(
-                &EngineError::PresetNotFound(preset_id.to_string()),
-            ))),
-            Err(error) => Err(Failure::from(error)),
+    fn preset_failure(error: EngineError) -> Failure {
+        match error {
+            EngineError::PresetNotFound(_) => {
+                Failure::Line(GenerationFailure::from_engine_error(&error))
+            }
+            other => Failure::from(other),
         }
     }
 
-    fn budget(&self) -> Result<TokenBudget, Failure> {
-        let settings = self.storage.get_settings().map_err(Failure::from)?;
+    fn budget(settings: &AppSettings) -> Result<TokenBudget, Failure> {
         let connection = settings.narration_connection().map_err(Failure::from)?;
         Ok(TokenBudget {
             max_context_tokens: connection.resolve_max_context_tokens(),
@@ -653,31 +652,22 @@ impl Job {
     }
 
     fn quantifier_settings(&self) -> Result<AgentSettings, Failure> {
-        Ok(AgentSettings {
-            preset: self.preset_text(Storage::active_quantifier_preset_id)?,
-            max_tokens: None,
-        })
+        self.hook_settings(PresetType::Quantifier)
     }
 
     fn options_settings(&self) -> Result<AgentSettings, Failure> {
-        Ok(AgentSettings {
-            preset: self.preset_text(Storage::active_options_preset_id)?,
-            max_tokens: None,
-        })
+        self.hook_settings(PresetType::Options)
     }
 
-    /// The preset's assembled text, or `None` when the Game's preset row is gone.
-    /// A read failure is the Job's failure, not a silent no-preset.
-    fn preset_text(
-        &self,
-        pick: fn(&Storage, GameId, &AppSettings) -> String,
-    ) -> Result<Option<String>, Failure> {
-        let settings = self.storage.get_settings().map_err(Failure::from)?;
-        let preset_id = pick(&self.storage, self.writer.game(), &settings);
-        match self.storage.get_preset(&preset_id) {
-            Ok(Some(preset)) => Ok(Some(preset.assemble_text(&[], None, None))),
-            Ok(None) => Ok(None),
-            Err(error) => Err(Failure::from(error)),
-        }
+    /// A read failure ends the Job; a missing preset gives no preset text.
+    fn hook_settings(&self, preset_type: PresetType) -> Result<AgentSettings, Failure> {
+        let game = self.game_row()?;
+        Ok(AgentSettings {
+            preset: self
+                .presets
+                .hook_text(&game, preset_type)
+                .map_err(Failure::from)?,
+            max_tokens: None,
+        })
     }
 }

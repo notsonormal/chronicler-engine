@@ -46,7 +46,7 @@ The settings row is the read source for the whole engine. Every consumer resolve
 - `world_catalogue: WorldCatalogue` — world CRUD.
 - `persona_catalogue: PersonaCatalogue` — persona CRUD.
 - `settings_service: SettingsService` — settings persistence.
-- `prompt_preset_service: PromptPresetService` — prompt-preset CRUD.
+- `prompt_preset_service: PromptPresetService` — prompt-preset CRUD, the preset of a Game for the Narrator and for each hook, and the rules of a preset edit and a preset delete.
 - `connection_test_service: ConnectionTestService` — one short provider call that records nothing.
 - `text_check_service: Arc<TextCheckService>` — player-command spelling/grammar check.
 
@@ -63,9 +63,10 @@ Each part owns one thing and writes only what its row names.
 | `AgentRunner` and the Agents | The hooks and the value each hook returns | Nothing. An Agent returns values. |
 | `GameCatalogue` | The lifecycle of Games, and `ActiveGame` | `ActiveGame`, and the config columns of the Game record. Create, reset and delete go through `GameWriter`. |
 | `GameViewQuery` | The read-side views and the status rule | Nothing |
+| `PromptPresetService` | The preset a Game uses for the Narrator and for each hook, and the rules of a preset edit and a preset delete | Preset rows, through `Storage` |
 | `Storage` | The records on disk, the backend mutex, and the read handles `stories()` and `docks()` | Its own tables. It writes a Game's story records only inside a `Tx`. |
 | `LlmCallRecorder` | The forensics record of each LLM call | `llm_messages` rows, through `SaveLlmMessageFn` |
-| HTTP handlers | Request parsing and response rendering | Nothing. They call `Job::start`, `GameWriter` and the catalogues. |
+| HTTP handlers | Request parsing and response rendering | Nothing. They call `Job::start`, `GameWriter`, the catalogues and `PromptPresetService`. |
 
 A running Job reads the story and the Game, and the job id check guards each of its writes. Between steps, a Job passes ids and loads each record when its step starts.
 

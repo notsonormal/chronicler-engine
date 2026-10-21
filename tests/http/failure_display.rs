@@ -586,3 +586,66 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
         "the model was never asked, so the opening is the only Narration"
     );
 }
+
+// [docs/specs/failure_display.md] SCENARIO: 38.13
+#[tokio::test]
+async fn preset_game_read_fails() {
+    let _guard = SettingsTestGuard::new();
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(Role::Narrator);
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::clone(&model),
+        AppSettings::default(),
+        configured_runner,
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narration call should reach the model"
+    );
+    // Every read the Job made before the Quantifier preset is behind it, so the
+    // refused read is the one that chooses that preset.
+    failures.set(
+        StorageCall::GetGame,
+        TestOverride::internal("the game row is unreadable"),
+    );
+    hold.release();
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    // The status reads the Game row, so the read works again before it asks.
+    failures.clear(StorageCall::GetGame);
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The data for this request is missing:"),
+        "an unreadable Game row is a failure line, not a registry preset: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("the game row is unreadable"),
+        "the storage error behind the line is reachable in the disclosure: {body}"
+    );
+    assert!(
+        model
+            .calls()
+            .iter()
+            .all(|call| call.role != Role::Quantifier),
+        "the Quantifier is never asked with a preset the Job could not choose"
+    );
+    let narrations = story_of(&state)
+        .iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 2,
+        "the Narration saved before the failure stays beside the opening"
+    );
+}

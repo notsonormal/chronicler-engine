@@ -50,7 +50,7 @@ The quantifier and options agents build their own prompts, separate from the lay
 
 ## Prompt Presets
 
-The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type, and every call reads the referenced preset fresh from storage.
+The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type. `PromptPresetService` gives the preset of a Game to the Narrator and to each hook, and every call reads the referenced preset fresh from storage.
 
 ## Document References
 
