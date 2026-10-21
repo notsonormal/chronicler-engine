@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Comment finder for chronicler-comment-fixer skill.
-Finds and filters comment patterns in Rust, Python, HTML and CSS files.
+Finds and filters comment patterns in Rust, Python, JavaScript, HTML and CSS files.
 """
 
 import argparse
-import re
+import bisect
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,7 +33,13 @@ class CommentMatch:
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 WORKSPACE_ROOT = SCRIPT_DIR.parent.parent.parent.parent  # repo root
-UNCOMMITTED_EXTENSIONS = {".rs", ".py", ".html", ".css"}
+UNCOMMITTED_EXTENSIONS = {".rs", ".py", ".js", ".html", ".css"}
+
+
+def _is_source(path: str | Path) -> bool:
+    """Minified vendor bundles have a `.js` suffix but no comments of ours."""
+    path = Path(path)
+    return path.suffix in UNCOMMITTED_EXTENSIONS and not path.name.endswith(".min.js")
 
 
 def get_uncommitted_files() -> list[Path]:
@@ -50,7 +56,7 @@ def get_uncommitted_files() -> list[Path]:
             return []
         files = []
         for f in result.stdout.strip().split("\n"):
-            if f and Path(f).suffix in UNCOMMITTED_EXTENSIONS:
+            if f and _is_source(f):
                 files.append(WORKSPACE_ROOT / f)
         # Untracked files (not yet staged)
         result2 = subprocess.run(
@@ -61,7 +67,7 @@ def get_uncommitted_files() -> list[Path]:
         )
         if result2.returncode == 0:
             for f in result2.stdout.strip().split("\n"):
-                if f and Path(f).suffix in UNCOMMITTED_EXTENSIONS:
+                if f and _is_source(f):
                     files.append(WORKSPACE_ROOT / f)
         return files
     except Exception:
@@ -80,7 +86,7 @@ def get_branch_files(base_branch: Optional[str] = None) -> list[Path]:
             return []
         files = []
         for f in result.stdout.strip().split("\n"):
-            if f and Path(f).suffix in UNCOMMITTED_EXTENSIONS:
+            if f and _is_source(f):
                 files.append(WORKSPACE_ROOT / f)
         return files
     except Exception:
@@ -88,10 +94,18 @@ def get_branch_files(base_branch: Optional[str] = None) -> list[Path]:
 
 
 def get_all_source_files() -> list[Path]:
-    """Get all Rust, HTML and CSS files in the workspace."""
+    """Get all Rust, Python, JavaScript, HTML and CSS files in the workspace."""
     source_files = []
-    for pattern in ["src/**/*.rs", "tests/**/*.rs", "assets/*.html", "assets/*.css"]:
-        source_files.extend(WORKSPACE_ROOT.glob(pattern))
+    for pattern in [
+        "src/**/*.rs",
+        "tests/**/*.rs",
+        "*.py",
+        "scripts/**/*.py",
+        "assets/*.js",
+        "assets/*.html",
+        "assets/*.css",
+    ]:
+        source_files.extend(f for f in WORKSPACE_ROOT.glob(pattern) if _is_source(f))
     return sorted(set(source_files))
 
 
@@ -99,7 +113,7 @@ def get_files_by_pattern(pattern: str) -> list[Path]:
     """Get files matching a glob pattern."""
     try:
         matches = list(WORKSPACE_ROOT.glob(pattern))
-        return [f for f in matches if f.suffix in UNCOMMITTED_EXTENSIONS]
+        return [f for f in matches if _is_source(f)]
     except Exception:
         return []
 
@@ -125,6 +139,129 @@ def _block_comment_lines(lines: list[str]) -> list[tuple[int, str]]:
                 found.append((i, stripped))
             inside = "*/" not in stripped.split("/*", 1)[1]
     return found
+
+
+_JS_REGEX_AFTER_WORDS = {
+    "return", "typeof", "instanceof", "in", "of", "new", "delete", "void",
+    "throw", "case", "do", "else", "yield", "await",
+}
+_JS_REGEX_AFTER_PUNCT = set("(,=:[!&|?{};+-*%<>~^")
+
+
+def _js_comment_spans(text: str) -> list[tuple[int, int]]:
+    """Return `(start, end)` offsets of every `//` and `/* */` comment.
+
+    A `//` or `/*` inside a string, a template literal or a regex literal is
+    code, so the scanner tracks those tokens. A `/` starts a regex only where
+    an operand cannot end, judged from the previous token.
+    """
+    spans = []
+    template_depths = []
+    depth = 0
+    prev = ""
+    i, n = 0, len(text)
+
+    def skip_quoted(i: int, quote: str) -> int:
+        i += 1
+        while i < n and text[i] != quote and text[i] != "\n":
+            i += 2 if text[i] == "\\" else 1
+        return i + 1
+
+    def skip_template(i: int) -> tuple[int, bool]:
+        while i < n:
+            if text[i] == "\\":
+                i += 2
+            elif text[i] == "`":
+                return i + 1, False
+            elif text.startswith("${", i):
+                return i + 2, True
+            else:
+                i += 1
+        return n, False
+
+    def skip_regex(i: int) -> int:
+        i += 1
+        in_class = False
+        while i < n and text[i] != "\n":
+            c = text[i]
+            if c == "\\":
+                i += 2
+                continue
+            if c == "[":
+                in_class = True
+            elif c == "]":
+                in_class = False
+            elif c == "/" and not in_class:
+                i += 1
+                while i < n and (text[i].isalnum() or text[i] == "_"):
+                    i += 1
+                return i
+            i += 1
+        return i
+
+    def enter_template(i: int) -> tuple[int, str]:
+        i, opened = skip_template(i)
+        if opened:
+            template_depths.append(depth)
+            return i, "{"
+        return i, "`"
+
+    while i < n:
+        c = text[i]
+        if c.isspace():
+            i += 1
+        elif text.startswith("//", i):
+            end = text.find("\n", i)
+            end = n if end < 0 else end
+            spans.append((i, end))
+            i = end
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            end = n if end < 0 else end + 2
+            spans.append((i, end))
+            i = end
+        elif c in "'\"":
+            i = skip_quoted(i, c)
+            prev = c
+        elif c == "`":
+            i, prev = enter_template(i + 1)
+        elif c == "/":
+            if prev == "" or prev in _JS_REGEX_AFTER_PUNCT or prev in _JS_REGEX_AFTER_WORDS:
+                i = skip_regex(i)
+                prev = "/re"
+            else:
+                i += 1
+                prev = "/"
+        elif c == "}" and template_depths and template_depths[-1] == depth:
+            template_depths.pop()
+            i, prev = enter_template(i + 1)
+        elif c.isalnum() or c in "_$":
+            start = i
+            while i < n and (text[i].isalnum() or text[i] in "_$"):
+                i += 1
+            prev = text[start:i]
+        else:
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+            prev = c
+            i += 1
+    return spans
+
+
+def _js_comment_lines(lines: list[str]) -> list[tuple[int, str]]:
+    """Return every non-blank line a JS comment touches, trailing ones included."""
+    text = "".join(lines)
+    line_starts = [0]
+    for line in lines:
+        line_starts.append(line_starts[-1] + len(line))
+    hit = set()
+    for start, end in _js_comment_spans(text):
+        first = bisect.bisect_right(line_starts, start)
+        last = bisect.bisect_right(line_starts, max(start, end - 1))
+        hit.update(range(first, last + 1))
+    return [(i, lines[i - 1].strip()) for i in sorted(hit) if lines[i - 1].strip()]
 
 
 def _html_comment_lines(lines: list[str]) -> list[tuple[int, str]]:
@@ -178,6 +315,8 @@ def _comment_lines(suffix: str, lines: list[str]) -> list[tuple[int, str]]:
             for i, line in enumerate(lines, 1)
             if (stripped := line.strip()).startswith(("#", '"""', "'''"))
         ]
+    if suffix == ".js":
+        return _js_comment_lines(lines)
     if suffix == ".css":
         return _block_comment_lines(lines)
     if suffix == ".html":
@@ -221,7 +360,7 @@ def main():
     parser.add_argument("--files", "-f", nargs="*", help="Specific files to check")
     parser.add_argument("--pattern", "-p", help="Glob pattern to match files")
     parser.add_argument("--uncommitted", "-u", action="store_true", help="Check uncommitted files")
-    parser.add_argument("--all", "-a", action="store_true", help="Check all Rust, HTML and CSS files")
+    parser.add_argument("--all", "-a", action="store_true", help="Check all Rust, Python, JavaScript, HTML and CSS files")
     parser.add_argument("--branch", "-b", nargs="?", const="main", metavar="BASE", help="Check files changed in branch vs BASE (default: main)")
     parser.add_argument("--mode", "-m", default="default", help="Output mode (for testing)")
     args = parser.parse_args()

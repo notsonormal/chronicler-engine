@@ -1,6 +1,6 @@
 ---
 name: chronicler-comment-fixer
-description: Remove AI-slop and restating comments from repo Rust, Python, HTML and CSS files.
+description: Remove AI-slop and restating comments from repo Rust, Python, JavaScript, HTML and CSS files.
 ---
 
 # Run the pass
@@ -13,7 +13,7 @@ Pick the finder mode that matches the request. Its output is the scope.
 # Mode 1: Uncommitted and untracked files (most common, after coding)
 python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --uncommitted
 
-# Mode 2: All Rust, HTML and CSS files (full codebase scan; skips Python)
+# Mode 2: Full codebase scan: Rust, Python, JavaScript, HTML and CSS (skips *.min.js)
 python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --all
 
 # Mode 3: Specific file or glob
@@ -93,12 +93,13 @@ Delete a comment that defines the code by what it is not, or disclaims what the 
 
 # Carve-outs
 
-Four comment classes are machine-enforced. Keep them:
+Five comment classes are machine-enforced. Keep them:
 
 - DOC anchors: `//! [DOC: ...]`.
 - Module summaries: the `//!` line 2 of a file.
 - Semantic enum-variant docs. The `check_enum_variant_docs` guardrail requires them, and `/// [TRIVIAL_ENUM]` above the enum opts out. `/// This variant represents the cancelled state.` is slop; `/// Generation cancelled by user; partial artifacts discarded.` is the semantic form.
 - Feature-spec tags: `// [docs/specs/<spec>.md] SCENARIO: N.N`.
+- Python module docstrings under `scripts/`. `scripts/check_python_docstrings.py` requires them.
 
 The anchor and module-summary rules live in `CODING_STANDARDS.md` (`## Code comments`) and `scripts/validate_docs.py --anchors`. Do not restate them here.
 
