@@ -142,7 +142,7 @@ impl GenerationFailure {
             EngineError::Llm(LlmFailure::TokenBudgetSpent { .. }) => {
                 GenerationFailureKind::TokenBudgetSpent
             }
-            EngineError::Database(_) | EngineError::Io(_) => GenerationFailureKind::SaveFailed,
+            EngineError::Database { .. } | EngineError::Io(_) => GenerationFailureKind::SaveFailed,
             // The line the kind renders names the room, so the room and the error
             // behind it are the failure's two parts.
             EngineError::RoomNotFound(room) => {

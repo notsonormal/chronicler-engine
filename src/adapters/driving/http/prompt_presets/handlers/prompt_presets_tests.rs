@@ -9,7 +9,7 @@ use crate::adapters::driving::http::prompt_presets::handlers::{
     duplicate_preset_handler, edit_preset_form_handler, preset_card_handler, save_preset_handler,
     update_preset_handler, view_preset_form_handler,
 };
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::TestPromptPreset;
 use crate::test_support::body_text;
 
@@ -137,7 +137,12 @@ async fn test_duplicate_preset_storage_error_returns_error() {
             preset_type: PresetType::System,
             ..Default::default()
         },
-        |h| h.set("save_preset", TestOverride::config("injected save failure")),
+        |h| {
+            h.set(
+                StorageCall::SavePreset,
+                TestOverride::config("injected save failure"),
+            )
+        },
     );
     let response = duplicate_preset_handler(
         axum::extract::State(app_state),
@@ -256,7 +261,7 @@ async fn test_activate_preset_does_not_update_memory_when_save_fails() {
         },
         |h| {
             h.set(
-                "update_settings",
+                StorageCall::UpdateSettings,
                 TestOverride::config("injected save failure"),
             )
         },
@@ -317,7 +322,12 @@ fn make_test_app_state_with_failing_storage(
 async fn test_save_preset_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
         crate::test_support::TestPromptPreset::system("x", "X"),
-        |h| h.set("save_preset", TestOverride::config("injected save failure")),
+        |h| {
+            h.set(
+                StorageCall::SavePreset,
+                TestOverride::config("injected save failure"),
+            )
+        },
     );
     let response = save_preset_handler(
         axum::extract::State(app_state),
@@ -342,7 +352,12 @@ async fn test_edit_preset_storage_error_returns_error() {
             instructions: Some("Custom.".into()),
             ..Default::default()
         },
-        |h| h.set("get_preset", TestOverride::config("injected get failure")),
+        |h| {
+            h.set(
+                StorageCall::GetPreset,
+                TestOverride::config("injected get failure"),
+            )
+        },
     );
     let response = edit_preset_form_handler(
         axum::extract::State(app_state),
@@ -362,7 +377,12 @@ async fn test_update_preset_storage_error_returns_error() {
             instructions: Some("Custom.".into()),
             ..Default::default()
         },
-        |h| h.set("save_preset", TestOverride::config("injected save failure")),
+        |h| {
+            h.set(
+                StorageCall::SavePreset,
+                TestOverride::config("injected save failure"),
+            )
+        },
     );
     let response = update_preset_handler(
         axum::extract::State(app_state),
@@ -389,7 +409,12 @@ async fn test_delete_preset_get_storage_error_returns_error() {
             instructions: Some("Custom.".into()),
             ..Default::default()
         },
-        |h| h.set("get_preset", TestOverride::config("injected get failure")),
+        |h| {
+            h.set(
+                StorageCall::GetPreset,
+                TestOverride::config("injected get failure"),
+            )
+        },
     );
     let response = delete_preset_handler(
         axum::extract::State(app_state),
@@ -411,7 +436,7 @@ async fn test_delete_preset_delete_storage_error_returns_error() {
         },
         |h| {
             h.set(
-                "delete_preset",
+                StorageCall::DeletePreset,
                 TestOverride::config("injected delete failure"),
             )
         },

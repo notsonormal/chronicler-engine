@@ -112,7 +112,10 @@ fn test_io_failure_is_save_failed() {
 #[test]
 fn test_database_failure_is_save_failed() {
     assert_eq!(
-        kind_of(EngineError::Database(rusqlite::Error::QueryReturnedNoRows)),
+        kind_of(EngineError::Database {
+            context: "test",
+            source: rusqlite::Error::QueryReturnedNoRows,
+        }),
         GenerationFailureKind::SaveFailed
     );
 }

@@ -7,7 +7,7 @@ use crate::domain::model::dock::Notice;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::NarratorMode;
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::state::message_types::{StoryRow, MessageType};
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
@@ -107,7 +107,7 @@ impl fmt::Display for SafeHtml {
 }
 
 #[derive(Debug, Clone)]
-pub struct MessageEntryView {
+pub struct StoryRowView {
     pub id: u64,
     pub timestamp: String,
     pub text: SafeHtml,
@@ -122,8 +122,8 @@ pub struct MessageEntryView {
     pub show_retrigger: bool,
 }
 
-impl From<&MessageEntry> for MessageEntryView {
-    fn from(entry: &MessageEntry) -> Self {
+impl From<&StoryRow> for StoryRowView {
+    fn from(entry: &StoryRow) -> Self {
         let parsed_text = markdown_to_html(&entry.text);
         let active = entry.active_swipe_index;
         let count = entry.swipe_count;

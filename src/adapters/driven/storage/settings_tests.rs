@@ -1,5 +1,5 @@
 use crate::adapters::driven::storage::db::DbPool;
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::domain::model::{
     agent::{AgentConfig, BackendSelector, Hook},
     settings::{AppSettings, LlmProviderConfig, NarratorMode, TextCheckMode, TextCheckSettings},
@@ -567,8 +567,10 @@ fn test_save_then_get_settings_preserves_agents_sqlite() {
 
 #[test]
 fn test_get_settings_failure() {
-    let storage = Storage::new_in_memory()
-        .with_failure("get_settings", TestOverride::internal("test failure"));
+    let storage = Storage::new_in_memory().with_failure(
+        StorageCall::GetSettings,
+        TestOverride::internal("test failure"),
+    );
 
     let result = storage.get_settings();
     assert!(
@@ -579,8 +581,10 @@ fn test_get_settings_failure() {
 
 #[test]
 fn test_save_settings_failure() {
-    let storage = Storage::new_in_memory()
-        .with_failure("save_settings", TestOverride::internal("test failure"));
+    let storage = Storage::new_in_memory().with_failure(
+        StorageCall::SaveSettings,
+        TestOverride::internal("test failure"),
+    );
 
     let settings = AppSettings::default();
     let result = storage.save_settings(&settings);

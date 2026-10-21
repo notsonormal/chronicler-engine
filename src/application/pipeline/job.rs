@@ -16,7 +16,7 @@ use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::Narrator;
 use crate::application::prompting::token_budget::TokenBudget;
 use crate::application::prompting::{NpcContext, PromptContext};
-use crate::domain::model::agent::{AgentSettings, HookInput, Kind, StoryEntry, WorldView, STORY_WINDOW};
+use crate::domain::model::agent::{AgentSettings, HookInput, Kind, WorldView, STORY_WINDOW};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::game::{Game, GameId};
 use crate::domain::model::generation::{GenerationOrder, Place};
@@ -26,7 +26,7 @@ use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::quantifier::{MovementParseResult, QuantifierResult};
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
-use crate::domain::model::state::message_types::{MessageEntry, MessageKind, MessageType, StoryRow};
+use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::trigger_context::EventRecord;
 use crate::domain::model::tail::Tail;
@@ -272,11 +272,7 @@ impl Job {
 
         // The analysis must not see the new text, so the window ends at the Message
         // the text save made.
-        let history: Vec<MessageEntry> = self
-            .window_before(Some(at.message), STORY_WINDOW)?
-            .iter()
-            .map(MessageEntry::from)
-            .collect();
+        let history = self.window_before(Some(at.message), STORY_WINDOW)?;
         let player_text = Self::player_text(input, &history);
         let analysis = match self.run_step(Step::Quantifying, kind, || {
             self.analyse_step(order, &bundle, &start, &narrated, &history, &player_text)
@@ -363,11 +359,7 @@ impl Job {
         let game = self.game_row()?;
         let room = self.resolve_room(bundle, start)?;
         let before = self.place_before(order)?;
-        let history: Vec<MessageEntry> = self
-            .window_before(before, STORY_LIMIT)?
-            .iter()
-            .map(MessageEntry::from)
-            .collect();
+        let history = self.window_before(before, STORY_LIMIT)?;
         let user_message = self.user_message(order, input, &history)?;
         let preset_id = match order.kind {
             Kind::Impersonate => game.active_preset_id(PresetType::Impersonate).to_string(),
@@ -413,10 +405,9 @@ impl Job {
         bundle: &WorldBundle,
         start: &SwipeState,
         text: &str,
-        history: &[MessageEntry],
+        history: &[StoryRow],
         player_text: &str,
     ) -> Result<QuantifierResult, Failure> {
-        let story: Vec<StoryEntry> = history.iter().map(StoryEntry::from).collect();
         let world = WorldView {
             room: Self::room_of(start, &bundle.map),
             map: &bundle.map,
@@ -428,7 +419,7 @@ impl Job {
             kind: order.kind,
             text: Some(text),
             player_text,
-            story: &story,
+            story: history,
             world: &world,
             event: order.event.as_ref(),
         };
@@ -525,11 +516,7 @@ impl Job {
                 .ok_or_else(|| Failure::missing("the current state"))?;
             // The run reads the four newest Messages, the Narration it serves among
             // them.
-            let story: Vec<StoryEntry> = self
-                .window_before(None, STORY_WINDOW)?
-                .iter()
-                .map(StoryEntry::from)
-                .collect();
+            let story = self.window_before(None, STORY_WINDOW)?;
             let world = WorldView {
                 room: Self::room_of(&start, &bundle.map),
                 map: &bundle.map,
@@ -577,7 +564,7 @@ impl Job {
         &self,
         order: &GenerationOrder,
         input: Option<&str>,
-        history: &[MessageEntry],
+        history: &[StoryRow],
     ) -> Result<String, Failure> {
         Ok(match order.kind {
             Kind::Impersonate => order
@@ -602,7 +589,7 @@ impl Job {
         })
     }
 
-    fn continuation_user_message(history: &[MessageEntry], direction: &str) -> String {
+    fn continuation_user_message(history: &[StoryRow], direction: &str) -> String {
         let previous = history
             .last()
             .map(|entry| entry.text.as_str())
@@ -614,7 +601,7 @@ impl Job {
         )
     }
 
-    fn player_text(input: Option<&str>, history: &[MessageEntry]) -> String {
+    fn player_text(input: Option<&str>, history: &[StoryRow]) -> String {
         match input {
             Some(text) if !text.is_empty() => text.to_string(),
             _ => history
@@ -624,7 +611,7 @@ impl Job {
         }
     }
 
-    fn previous_input(history: &[MessageEntry]) -> Option<&str> {
+    fn previous_input(history: &[StoryRow]) -> Option<&str> {
         history
             .last()
             .filter(|entry| matches!(entry.message_type, MessageType::Input))

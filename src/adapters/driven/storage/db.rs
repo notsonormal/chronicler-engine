@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 
 use crate::adapters::driven::storage::utils::run_migrations;
+use crate::error::DatabaseContext;
 
 #[derive(Clone)]
 pub struct DbPool {
@@ -14,13 +15,10 @@ pub struct DbPool {
 
 impl DbPool {
     pub fn new(path: &str) -> Result<Self, crate::error::EngineError> {
-        let conn = Connection::open(path)
-            .map_err(|e| crate::error::EngineError::Config(format!("Failed to open DB: {e}")))?;
+        let conn = Connection::open(path).db_context("Failed to open DB")?;
         run_migrations(&conn)?;
         conn.pragma_update(None, "foreign_keys", true)
-            .map_err(|e| {
-                crate::error::EngineError::Config(format!("Failed to enable foreign keys: {e}"))
-            })?;
+            .db_context("Failed to enable foreign keys")?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })

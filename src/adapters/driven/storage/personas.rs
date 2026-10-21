@@ -3,43 +3,42 @@
 
 use chrono::Utc;
 
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 use crate::domain::model::character::PersonaCard;
-use crate::adapters::driven::storage::{Backend, Storage};
-use crate::adapters::driven::storage::in_memory_data::PersonaCardWithKey;
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::persona::DbPersona;
 
 impl Storage {
     pub fn list_personas(&self) -> Result<Vec<PersonaCard>, EngineError> {
-        self.with_backend_mut("list_personas", |backend| match backend {
+        self.with_backend_mut(StorageCall::ListPersonas, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let mut stmt = conn.prepare("SELECT id, key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, created_at, updated_at FROM personas")?;
+                let mut stmt = conn.prepare("SELECT id, key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, created_at, updated_at FROM personas")
+                    .db_context("Failed to prepare the personas query")?;
                 let rows = stmt
-                    .query_map([], DbPersona::from_row)?
+                    .query_map([], DbPersona::from_row)
+                    .db_context("Failed to query the personas")?
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(EngineError::Database)?;
+                    .db_context("Failed to read a persona row")?;
                 rows.iter().map(DbPersona::to_card).collect()
             }
-            Backend::InMemory(data) => Ok(data.personas.iter().map(|p| p.card.clone()).collect()),
         })
     }
 
     pub fn get_persona(&self, key: &str) -> Result<Option<PersonaCard>, EngineError> {
-        self.with_backend_mut("get_persona", |backend| match backend {
+        self.with_backend_mut(StorageCall::GetPersona, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
                     "SELECT id, key, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, created_at, updated_at FROM personas WHERE key = ?",
-                )?;
+                ).db_context("Failed to prepare the persona read")?;
                 let result = stmt.query_row([key], DbPersona::from_row);
                 match result {
                     Ok(db_persona) => Ok(Some(db_persona.to_card()?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(e) => Err(EngineError::Database(e))
+                    Err(e) => Err(e).db_context("Failed to read the persona"),
                 }
             }
-            Backend::InMemory(data) => Ok(data.personas.iter().find(|p| p.key == key).map(|p| p.card.clone())),
         })
     }
 
@@ -52,7 +51,7 @@ impl Storage {
     }
 
     pub fn seed_persona(&self, key: &str, card: &PersonaCard) -> Result<(), EngineError> {
-        self.with_backend_mut("seed_persona", |backend| match backend {
+        self.with_backend_mut(StorageCall::SeedPersona, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
@@ -76,16 +75,8 @@ impl Storage {
                         now,
                         now,
                     ],
-                )?;
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                if !data.personas.iter().any(|p| p.key == key) {
-                    data.personas.push(PersonaCardWithKey {
-                        key: key.to_string(),
-                        card: card.clone(),
-                    });
-                }
+                )
+                .db_context("Failed to seed the persona")?;
                 Ok(())
             }
         })

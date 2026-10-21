@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::http;
 
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{TestAppBuilder, TestMap, empty_sqlite_storage};
@@ -194,7 +194,7 @@ async fn test_world_posture_unknown_world_returns_bad_request_http() {
 #[tokio::test]
 async fn test_world_posture_storage_failure_returns_500_http() {
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        "update_world",
+        StorageCall::UpdateWorld,
         TestOverride::internal("update_world posture failure"),
     ));
     let (app, _state) = TestAppBuilder::default_test()
@@ -393,7 +393,7 @@ async fn test_world_create_existing_key_is_refused_http() {
 #[tokio::test]
 async fn test_world_create_storage_failure_renders_error_fragment_http() {
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        "create_world",
+        StorageCall::CreateWorld,
         TestOverride::internal("create_world failure"),
     ));
     let (app, _state) = TestAppBuilder::default_test()
@@ -498,7 +498,7 @@ async fn test_world_delete_removes_a_world_with_no_games_http() {
 #[tokio::test]
 async fn test_world_delete_storage_failure_renders_error_fragment_http() {
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        "delete_world",
+        StorageCall::DeleteWorld,
         TestOverride::internal("delete_world failure"),
     ));
     let (app, _state) = TestAppBuilder::default_test()

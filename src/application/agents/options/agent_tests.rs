@@ -7,14 +7,12 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::agents::options::agent::OptionsGeneratorAgent;
 use crate::application::agents::trait_def::OptionsAgent;
 use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, BackendSelector, Hook, HookInput, Kind, StoryEntry, WorldView,
+    AgentConfig, AgentSettings, BackendSelector, Hook, HookInput, Kind, Role, WorldView,
 };
 use crate::domain::model::character::NpcCard;
-use crate::domain::model::state::message_types::MessageType;
-use crate::test_support::fixtures::{TestMap, TestNpc, TestPersona};
-use crate::test_support::{
-    make_test_recorder, make_test_recorder_with_storage, ModelRole, ScriptedModel,
-};
+use crate::domain::model::state::message_types::{MessageType, StoryRow};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona};
+use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
 
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -39,7 +37,7 @@ struct Scene {
     persona: crate::domain::model::character::PersonaCard,
     characters: HashMap<String, NpcCard>,
     present: Vec<NpcCard>,
-    story: Vec<StoryEntry>,
+    story: Vec<StoryRow>,
 }
 
 impl Scene {
@@ -56,9 +54,10 @@ impl Scene {
             persona,
             characters,
             present: npcs,
-            story: vec![StoryEntry {
+            story: vec![StoryRow {
                 message_type: MessageType::Narration,
                 text: "The innkeeper glances your way.".to_string(),
+                ..default_story_row(MessageType::Narration)
             }],
         }
     }
@@ -134,8 +133,8 @@ fn test_a_transport_failure_fails_the_call() {
     let scene = Scene::new();
     let model = Arc::new(
         ScriptedModel::new()
-            .failed(ModelRole::Options)
-            .failed(ModelRole::Options),
+            .failed(Role::Options)
+            .failed(Role::Options),
     );
     let world = scene.world();
     let result =
@@ -235,8 +234,8 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let storage = Arc::new(Storage::new_in_memory());
     let model = Arc::new(
         ScriptedModel::new()
-            .failed(ModelRole::Options)
-            .failed(ModelRole::Options),
+            .failed(Role::Options)
+            .failed(Role::Options),
     );
     let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
     let agent =

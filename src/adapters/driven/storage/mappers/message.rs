@@ -4,12 +4,11 @@
 use chrono::{DateTime, Utc};
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 
-use crate::error::EngineError;
+use crate::error::{EngineError, InternalError};
 use crate::domain::model::message::{Message, Swipe};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::adapters::driven::storage::models::message::DbMessage;
 use crate::adapters::driven::storage::models::swipe::DbSwipe;
-use crate::adapters::driven::storage::utils::from_json;
 
 /// The `message_type` and `kind` columns hold JSON, so a read parses them in the
 /// row, which keeps one message field out of every SELECT's tuple.
@@ -38,8 +37,8 @@ impl TryFrom<&DbSwipe> for Swipe {
             impersonated: db_swipe.impersonated != 0,
             guide_text: db_swipe.guide_text.clone(),
             impersonate_direction: db_swipe.impersonate_direction.clone(),
-            state: from_json("swipe state", &db_swipe.state_json)?,
-            maker: from_json("swipe maker", &db_swipe.maker_json)?,
+            state: serde_json::from_str(&db_swipe.state_json)?,
+            maker: serde_json::from_str(&db_swipe.maker_json)?,
         })
     }
 }
@@ -48,13 +47,10 @@ impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
     type Error = EngineError;
 
     fn try_from((db, swipes): (&DbMessage, &[DbSwipe])) -> Result<Self, Self::Error> {
-        let message_type: MessageType =
-            serde_json::from_str(&db.message_type_json).map_err(|e| {
-                EngineError::Config(format!("Failed to parse message message_type: {e}"))
-            })?;
-        let kind = from_json("message kind", &db.kind_json)?;
+        let message_type: MessageType = serde_json::from_str(&db.message_type_json)?;
+        let kind = serde_json::from_str(&db.kind_json)?;
         let timestamp = DateTime::parse_from_rfc3339(&db.timestamp)
-            .map_err(|e| EngineError::Config(format!("Failed to parse message timestamp: {e}")))?
+            .map_err(|e| EngineError::Parse(format!("Failed to parse message timestamp: {e}")))?
             .with_timezone(&Utc);
 
         let mut message = Message::from_db(
@@ -65,13 +61,16 @@ impl TryFrom<(&DbMessage, &[DbSwipe])> for Message {
             db.active_swipe_index as usize,
         );
 
+        if swipes.is_empty() {
+            return Err(EngineError::Internal(InternalError::new(format!(
+                "message {} has no swipe",
+                db.id
+            ))));
+        }
         for db_swipe in swipes {
             message.swipes.push(Swipe::try_from(db_swipe)?);
         }
-
-        if !message.swipes.is_empty() {
-            message.ensure_valid_swipe_index();
-        }
+        message.ensure_valid_swipe_index();
 
         Ok(message)
     }

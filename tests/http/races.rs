@@ -7,12 +7,12 @@ use tokio::sync::Barrier;
 
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, ModelHold, ModelRole, ScriptedModel, TestAppBuilder,
-    TestDataBuilder,
+    active_game_of, analysis_report, ModelHold, ScriptedModel, TestAppBuilder, TestDataBuilder,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_script};
@@ -25,7 +25,7 @@ use crate::support::http_requests::{
 
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     (model, hold)
 }
 
@@ -196,7 +196,7 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
             .narration(NEXT_NARRATION)
             .analysis(analysis_report(&[], None)),
     );
-    let stopped_hold = model.hold(ModelRole::Narration);
+    let stopped_hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
 
@@ -213,7 +213,7 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
         "a stop of a busy Game answers reset"
     );
 
-    let next_hold = model.hold(ModelRole::Narration);
+    let next_hold = model.hold(Role::Narrator);
     assert!(post_action(&app, "listen").await.status().is_success());
     assert!(
         next_hold.wait_started(1000),
@@ -253,7 +253,7 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
 #[tokio::test]
 async fn test_reset_while_job_runs_keeps_only_the_new_game_opening() {
     let model = Arc::new(ScriptedModel::new().turn("The stopped narration."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let before = active_game_of(&state);
 
@@ -380,7 +380,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
 
     // A continue holds a Job without saving an Input of its own, so the
     // Narration with two Swipes is still the Message that a switch names.
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     assert!(post_action(&app, "").await.status().is_success());
     assert!(
         hold.wait_started(1000),
@@ -418,7 +418,7 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
             .narration(GAME_B_NARRATION)
             .analysis(analysis_report(&[], None)),
     );
-    let hold_a = model.hold(ModelRole::Narration);
+    let hold_a = model.hold(Role::Narrator);
     let (app, state, storage) = app_with_script(Arc::clone(&model));
     let game_a = active_game_of(&state);
 
@@ -444,7 +444,7 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
     let game_b = active_game_of(&state);
     assert_ne!(game_b, game_a, "the create makes Game B active");
 
-    let hold_b = model.hold(ModelRole::Narration);
+    let hold_b = model.hold(Role::Narrator);
     assert!(post_action(&app, "look on B").await.status().is_success());
     assert!(
         hold_b.wait_started(1000),
@@ -498,7 +498,7 @@ async fn test_the_event_narration_call_uses_the_preset_active_when_it_runs() {
 
     let data = trigger_world();
     let model = Arc::new(triggered_script(MAIN_NARRATION, EVENT_NARRATION));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
@@ -661,7 +661,7 @@ enum StoryLogAfterStop {
 
 struct StopRow {
     kind: JobKind,
-    held: ModelRole,
+    held: Role,
     /// The step the status poll answers while the call is held, where the
     /// design names the step.
     status: Option<&'static str>,
@@ -676,7 +676,7 @@ static STOP_ROWS: &[StopRow] = &[
         kind: JobKind::Narration {
             fires_trigger: false,
         },
-        held: ModelRole::Narration,
+        held: Role::Narrator,
         status: Some("narrating"),
         after_stop: StoryLogAfterStop::PlanInput,
     },
@@ -684,7 +684,7 @@ static STOP_ROWS: &[StopRow] = &[
         kind: JobKind::Narration {
             fires_trigger: true,
         },
-        held: ModelRole::Analysis,
+        held: Role::Quantifier,
         status: Some("quantifying"),
         after_stop: StoryLogAfterStop::InputAndNarration,
     },
@@ -692,32 +692,32 @@ static STOP_ROWS: &[StopRow] = &[
         kind: JobKind::Narration {
             fires_trigger: false,
         },
-        held: ModelRole::Options,
+        held: Role::Options,
         // The design names the status of the generation's own steps only.
         status: None,
         after_stop: StoryLogAfterStop::InRoom { room: MOVED_ROOM },
     },
     StopRow {
         kind: JobKind::Impersonate,
-        held: ModelRole::Narration,
+        held: Role::Narrator,
         status: Some("narrating"),
         after_stop: StoryLogAfterStop::NoMessage,
     },
     StopRow {
         kind: JobKind::Impersonate,
-        held: ModelRole::Analysis,
+        held: Role::Quantifier,
         status: Some("quantifying"),
         after_stop: StoryLogAfterStop::ImpersonateInput,
     },
     StopRow {
         kind: JobKind::TypedInputRetry,
-        held: ModelRole::Narration,
+        held: Role::Narrator,
         status: Some("narrating"),
         after_stop: StoryLogAfterStop::NoMessage,
     },
     StopRow {
         kind: JobKind::EventNarration,
-        held: ModelRole::Event,
+        held: Role::Trigger,
         status: Some("generating-event"),
         after_stop: StoryLogAfterStop::MainNarrationOnly,
     },
@@ -893,7 +893,7 @@ async fn test_a_stop_at_each_model_call_keeps_the_records_of_that_step() {
 }
 
 async fn run_stop_row(row: &'static StopRow) {
-    let label = format!("{} at the {} call", row.kind.label(), row.held.label());
+    let label = format!("{} at the {} call", row.kind.label(), row.held.agent_name());
     let start = start_stop_job(row).await;
     assert!(
         start.hold.wait_started(2000),

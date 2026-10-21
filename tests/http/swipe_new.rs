@@ -6,11 +6,12 @@ use axum::http::StatusCode;
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, configured_runner, empty_sqlite_storage, ModelRole,
-    ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
+    active_game_of, analysis_report, configured_runner, empty_sqlite_storage, ScriptedModel,
+    TestAppBuilder, TestDataBuilder, TestMap,
 };
 
 use crate::support::app_wiring::{app_with_a_triggered_npc, app_with_model, app_with_model_and_storage};
@@ -525,7 +526,7 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
     let model = ScriptedModel::new()
         .narration("You look around.")
         .analysis(analysis_report(&["npc_1"], None))
-        .failed(ModelRole::Event)
+        .failed(Role::Trigger)
         .event_narration("The event fires again.")
         .analysis(analysis_report(&["npc_1"], None))
         .event_narration("The event fires once more.")
@@ -841,7 +842,7 @@ async fn test_retry_llm_failure_sets_error_http() {
     let (app, state) = app_with_model(Arc::new(
         ScriptedModel::new()
             .turn("Original narration.")
-            .failed(ModelRole::Narration),
+            .failed(Role::Narrator),
     ));
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -875,7 +876,7 @@ async fn test_retry_empty_narration_sets_error_http() {
     let (app, state) = app_with_model(Arc::new(
         ScriptedModel::new()
             .turn("Original narration.")
-            .empty(ModelRole::Narration),
+            .empty(Role::Narrator),
     ));
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -962,7 +963,7 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
         .analysis(analysis_report(&["npc_1"], Some("room2")))
         .event_narration("The NPC greets you.")
         .analysis(analysis_report(&["npc_1"], None))
-        .failed(ModelRole::Event);
+        .failed(Role::Trigger);
     let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
@@ -1029,7 +1030,7 @@ async fn test_failed_retry_does_not_roll_the_movement_back_http() {
     let model = ScriptedModel::new()
         .narration("You walk north.")
         .analysis(analysis_report(&[], Some("room2")))
-        .failed(ModelRole::Narration);
+        .failed(Role::Narrator);
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -1090,7 +1091,7 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
         .analysis(analysis_report(&[], None))
         .narration("You enter room2.")
         .analysis(analysis_report(&[], Some("room2")))
-        .failed(ModelRole::Event);
+        .failed(Role::Trigger);
     let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -1125,7 +1126,7 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
 #[tokio::test]
 async fn test_retry_concurrent_generation_returns_still_thinking_http() {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = app_with_model(Arc::clone(&model));
 
     let resp = post_action(&app, "look").await;

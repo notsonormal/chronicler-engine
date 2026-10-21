@@ -7,7 +7,7 @@ use axum::http::{self, Request, StatusCode};
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driven::storage::Storage;
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::prompt_preset_service::PromptPresetService;
 use chronicler_engine::test_support::body_text;
@@ -396,10 +396,11 @@ async fn test_create_preset_missing_type_returns_422() {
 async fn test_create_preset_reports_save_failure() {
     let _guard = SettingsTestGuard::new();
     let mut app_state = TestAppBuilder::default_test().build_service();
-    app_state.prompt_preset_service = PromptPresetService::new(Arc::new(
-        empty_sqlite_storage()
-            .with_failure("save_preset", TestOverride::internal("preset save failure")),
-    ));
+    app_state.prompt_preset_service =
+        PromptPresetService::new(Arc::new(empty_sqlite_storage().with_failure(
+            StorageCall::SavePreset,
+            TestOverride::internal("preset save failure"),
+        )));
     let app = build_router(app_state);
 
     let response = post_form(
@@ -1303,7 +1304,10 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
         .build_service();
     let app = build_router(app);
 
-    failures.set("save_preset", TestOverride::internal("preset save failure"));
+    failures.set(
+        StorageCall::SavePreset,
+        TestOverride::internal("preset save failure"),
+    );
 
     let response = post_form(
         &app,
@@ -1326,7 +1330,7 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
         "a failed update must not swap the card into the response: {body}"
     );
 
-    failures.clear("save_preset");
+    failures.clear(StorageCall::SavePreset);
 
     let panel = app
         .oneshot(get_request("/fragment/prompt-presets"))

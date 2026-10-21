@@ -4,13 +4,14 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder,
-    TestMap, empty_sqlite_storage,
+    active_game_of, analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
+    empty_sqlite_storage,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_model_and_settings};
@@ -383,7 +384,7 @@ async fn test_nonexistent_room_sets_error_status_http() {
 // [docs/specs/actions.md] SCENARIO: 2.2
 #[tokio::test]
 async fn test_failing_narrator_sets_error_status_http() {
-    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().failed(ModelRole::Narration)));
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().failed(Role::Narrator)));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
@@ -428,7 +429,7 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
             ScriptedModel::new()
                 .narration("Main narration preserved.")
                 .analysis(analysis_report(&["npc_1"], None))
-                .failed(ModelRole::Event),
+                .failed(Role::Trigger),
         ))
         .build_with_state();
 
@@ -496,8 +497,8 @@ async fn test_quantifier_transport_failure_completes_action_and_keeps_npcs_http(
     assert_quantifier_failure_keeps_npcs(Arc::new(
         ScriptedModel::new()
             .narration("The innkeeper glances your way.")
-            .failed(ModelRole::Analysis)
-            .failed(ModelRole::Analysis),
+            .failed(Role::Quantifier)
+            .failed(Role::Quantifier),
     ))
     .await;
 }
@@ -560,7 +561,7 @@ async fn assert_quantifier_failure_keeps_npcs(model: Arc<ScriptedModel>) {
 #[tokio::test]
 async fn test_delayed_llm_completes_without_deadlock_http() {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = app_with_model(Arc::clone(&model));
 
     let resp = post_action(&app, "look around").await;
@@ -950,8 +951,9 @@ async fn test_confirm_retargets_status_display() {
 async fn test_missing_persona_answers_500_with_the_missing_data_line_http() {
     let raw = "the persona record cannot be read";
     let line = "The data for this request is missing: the persona.";
-    let storage =
-        Arc::new(empty_sqlite_storage().with_failure("get_persona", TestOverride::internal(raw)));
+    let storage = Arc::new(
+        empty_sqlite_storage().with_failure(StorageCall::GetPersona, TestOverride::internal(raw)),
+    );
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .model(Arc::new(ScriptedModel::new().turn("You look around.")))

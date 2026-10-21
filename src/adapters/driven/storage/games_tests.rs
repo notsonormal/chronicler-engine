@@ -1,5 +1,5 @@
 use crate::domain::model::game::GameId;
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::domain::model::settings::AppSettings;
 use crate::test_support::sqlite_storage;
 
@@ -56,7 +56,7 @@ fn test_game_timestamps_created_at() {
 #[test]
 fn test_get_game_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("get_game", TestOverride::config("get failed"));
+    handle.set(StorageCall::GetGame, TestOverride::config("get failed"));
 
     let result = storage.get_game(1);
     assert!(result.is_err());
@@ -129,7 +129,7 @@ fn test_game_row_reports_the_derived_display_name() {
 }
 
 #[test]
-fn test_update_game_display_name_persists_in_memory() {
+fn test_update_game_display_name_persists() {
     let storage = Storage::new_in_memory();
     let id = seed_game(&storage, "w", "w", "Game A");
 
@@ -166,7 +166,7 @@ fn test_update_game_display_name_missing_returns_not_found() {
 fn test_update_game_display_name_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     handle.set(
-        "update_game_display_name",
+        StorageCall::UpdateGameDisplayName,
         TestOverride::config("rename failed"),
     );
 

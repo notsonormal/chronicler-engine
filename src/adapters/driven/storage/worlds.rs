@@ -6,12 +6,11 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
-use crate::adapters::driven::storage::{Backend, Storage};
-use crate::adapters::driven::storage::in_memory_data::InMemoryWorld;
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::map::DbMap;
 use crate::adapters::driven::storage::models::world::DbWorld;
 
@@ -43,42 +42,44 @@ impl Storage {
     }
 
     pub fn list_worlds(&self) -> Result<Vec<WorldCard>, EngineError> {
-        self.with_backend_mut("list_worlds", |backend| match backend {
+        self.with_backend_mut(StorageCall::ListWorlds, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let mut stmt = conn.prepare(&Self::world_select_sql(""))?;
-                let rows = stmt.query_map([], DbWorld::from_row)?;
-                rows.map(|r| {
-                    let db = r?;
-                    db.to_card()
-                })
-                .collect()
-            }
-            Backend::InMemory(data) => {
-                Ok(data.worlds.iter().map(|w| w.world_card.clone()).collect())
+                let mut stmt = conn
+                    .prepare(&Self::world_select_sql(""))
+                    .db_context("Failed to prepare the worlds query")?;
+                let rows = stmt
+                    .query_map([], DbWorld::from_row)
+                    .db_context("Failed to query the worlds")?;
+                rows.map(|r| r.db_context("Failed to read a world row")?.to_card())
+                    .collect()
             }
         })
     }
 
     pub fn get_world(&self, key: &str) -> Result<Option<WorldWithMap>, EngineError> {
-        self.with_backend_mut("get_world", |backend| match backend {
+        self.with_backend_mut(StorageCall::GetWorld, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let mut world_stmt = conn.prepare(&Self::world_select_sql("WHERE key = ?"))?;
+                let mut world_stmt = conn
+                    .prepare(&Self::world_select_sql("WHERE key = ?"))
+                    .db_context("Failed to prepare the world query")?;
                 let db_world = match world_stmt.query_row([key], DbWorld::from_row) {
                     Ok(w) => w,
                     Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
-                    Err(e) => return Err(EngineError::Database(e)),
+                    Err(e) => return Err(e).db_context("Failed to read the world"),
                 };
 
-                let mut map_stmt = conn.prepare(
-                    "SELECT id, world_id, map_data, created_at, updated_at
-                     FROM maps
-                     WHERE world_id = ?",
-                )?;
+                let mut map_stmt = conn
+                    .prepare(
+                        "SELECT id, world_id, map_data, created_at, updated_at
+                         FROM maps
+                         WHERE world_id = ?",
+                    )
+                    .db_context("Failed to prepare the map query")?;
                 let db_map = map_stmt
                     .query_row([db_world.id], DbMap::from_row)
-                    .map_err(EngineError::Database)?;
+                    .db_context("Failed to read the map")?;
 
                 let world_card = db_world.to_card()?;
                 let map: MapDef = serde_json::from_str(&db_map.map_data)
@@ -90,15 +91,6 @@ impl Storage {
                     map,
                 }))
             }
-            Backend::InMemory(data) => Ok(data
-                .worlds
-                .iter()
-                .find(|w| w.world_card.key == key)
-                .map(|w| WorldWithMap {
-                    world_id: w.world_id,
-                    world_card: w.world_card.clone(),
-                    map: w.map.clone(),
-                })),
         })
     }
 
@@ -126,10 +118,9 @@ impl Storage {
 
     /// Upsert a world by key. Used by bootstrap seeding of `data/worlds/*`,
     /// where replacing an existing world's data is intended. The world row is
-    /// updated in place, so its id and dependent characters survive; both
-    /// backends replace the stored card and map for an existing key.
+    /// updated in place, so its id and dependent characters survive.
     pub fn seed_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
-        self.with_backend_mut("seed_world", |backend| {
+        self.with_backend_mut(StorageCall::SeedWorld, |backend| {
             Self::write_world(backend, world_card, map, WorldWriteMode::Upsert)
         })
     }
@@ -138,7 +129,7 @@ impl Storage {
     /// create path must never replace an authored world; bootstrap seeding
     /// uses `seed_world` for its replace-on-key upsert instead.
     pub fn create_world(&self, world_card: &WorldCard, map: &MapDef) -> Result<i64, EngineError> {
-        self.with_backend_mut("create_world", |backend| {
+        self.with_backend_mut(StorageCall::CreateWorld, |backend| {
             Self::write_world(backend, world_card, map, WorldWriteMode::Insert)
         })
     }
@@ -158,34 +149,13 @@ impl Storage {
 
                 // World and map are one write: a failed map write must not
                 // leave a re-seeded world behind a stale map.
-                let tx = conn.unchecked_transaction()?;
+                let tx = conn
+                    .unchecked_transaction()
+                    .db_context("Failed to begin the world write")?;
                 let world_id = Self::write_world_row(&tx, world_card, &now, mode)?;
                 Self::write_map_row(&tx, world_id, map, &now)?;
-                tx.commit()?;
+                tx.commit().db_context("Failed to commit the world write")?;
                 Ok(world_id)
-            }
-            Backend::InMemory(data) => {
-                if let Some(existing) = data
-                    .worlds
-                    .iter_mut()
-                    .find(|w| w.world_card.key == world_card.key)
-                {
-                    if mode == WorldWriteMode::Insert {
-                        return Err(EngineError::WorldAlreadyExists(world_card.key.clone()));
-                    }
-                    existing.world_card = world_card.clone();
-                    existing.map = map.clone();
-                    return Ok(existing.world_id);
-                }
-
-                let new_id = data.next_world_id;
-                data.next_world_id += 1;
-                data.worlds.push(InMemoryWorld {
-                    world_id: new_id,
-                    world_card: world_card.clone(),
-                    map: map.clone(),
-                });
-                Ok(new_id)
             }
         }
     }
@@ -246,7 +216,10 @@ impl Storage {
             WorldWriteMode::Insert if Self::is_unique_violation(&e) => {
                 EngineError::WorldAlreadyExists(world_card.key.clone())
             }
-            _ => EngineError::Database(e),
+            _ => EngineError::Database {
+                context: "Failed to write the world row",
+                source: e,
+            },
         })?;
 
         match mode {
@@ -257,7 +230,7 @@ impl Storage {
                     [&world_card.key],
                     |row| row.get(0),
                 )
-                .map_err(EngineError::Database),
+                .db_context("Failed to read the world id"),
         }
     }
 
@@ -280,16 +253,19 @@ impl Storage {
         now: &str,
     ) -> Result<(), EngineError> {
         let map_data = serde_json::to_string(map)?;
-        let updated = conn.execute(
-            "UPDATE maps SET map_data = ?1, updated_at = ?2 WHERE world_id = ?3",
-            rusqlite::params![map_data, now, world_id],
-        )?;
+        let updated = conn
+            .execute(
+                "UPDATE maps SET map_data = ?1, updated_at = ?2 WHERE world_id = ?3",
+                rusqlite::params![map_data, now, world_id],
+            )
+            .db_context("Failed to update the map")?;
         if updated == 0 {
             conn.execute(
                 "INSERT INTO maps (world_id, map_data, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?3)",
                 rusqlite::params![world_id, map_data, now],
-            )?;
+            )
+            .db_context("Failed to insert the map")?;
         }
         Ok(())
     }
@@ -300,7 +276,7 @@ impl Storage {
         world_card: &WorldCard,
         map: &MapDef,
     ) -> Result<(), EngineError> {
-        self.with_backend_mut("update_world", |backend| match backend {
+        self.with_backend_mut(StorageCall::UpdateWorld, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
@@ -327,39 +303,38 @@ impl Storage {
                         &now,
                         &id
                     ],
-                )?;
+                )
+                .db_context("Failed to update the world")?;
                 Self::write_map_row(&conn, id, map, &now)?;
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                if let Some(inmem_world) = data.worlds.iter_mut().find(|w| w.world_id == id) {
-                    inmem_world.world_card = world_card.clone();
-                    inmem_world.map = map.clone();
-                }
                 Ok(())
             }
         })
     }
 
     pub fn get_world_by_id(&self, id: i64) -> Result<Option<WorldWithMap>, EngineError> {
-        self.with_backend_mut("get_world_by_id", |backend| match backend {
+        self.with_backend_mut(StorageCall::GetWorldById, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 // World and map are read with separate statements: `DbWorld`
                 // reads by column name, `DbMap` positionally within its own
                 // result set.
-                let mut world_stmt = conn.prepare(&Self::world_select_sql("WHERE id = ?"))?;
+                let mut world_stmt = conn
+                    .prepare(&Self::world_select_sql("WHERE id = ?"))
+                    .db_context("Failed to prepare the world query by id")?;
                 let db_world = match world_stmt.query_row([id], DbWorld::from_row) {
                     Ok(w) => w,
                     Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
-                    Err(e) => return Err(EngineError::Database(e)),
+                    Err(e) => return Err(e).db_context("Failed to read the world by id"),
                 };
 
-                let mut map_stmt = conn.prepare(
-                    "SELECT id, world_id, map_data, created_at, updated_at FROM maps WHERE world_id = ?",
-                )?;
-                let db_map = map_stmt.query_row([db_world.id], DbMap::from_row)
-                    .map_err(EngineError::Database)?;
+                let mut map_stmt = conn
+                    .prepare(
+                        "SELECT id, world_id, map_data, created_at, updated_at FROM maps WHERE world_id = ?",
+                    )
+                    .db_context("Failed to prepare the map query by world id")?;
+                let db_map = map_stmt
+                    .query_row([db_world.id], DbMap::from_row)
+                    .db_context("Failed to read the map by world id")?;
 
                 let world_card = db_world.to_card()?;
                 let map: MapDef = serde_json::from_str(&db_map.map_data)
@@ -367,49 +342,27 @@ impl Storage {
 
                 Ok(Some(WorldWithMap { world_id: db_world.id, world_card, map }))
             }
-            Backend::InMemory(data) => {
-                Ok(data.worlds
-                    .iter()
-                    .find(|w| w.world_id == id)
-                    .map(|w| WorldWithMap {
-                        world_id: w.world_id,
-                        world_card: w.world_card.clone(),
-                        map: w.map.clone(),
-                    }))
-            }
         })
     }
 
     pub fn delete_world(&self, key: &str) -> Result<(), EngineError> {
-        self.with_backend_mut("delete_world", |backend| match backend {
+        self.with_backend_mut(StorageCall::DeleteWorld, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let count: i64 = conn.query_row(
-                    "SELECT COUNT(*) FROM games WHERE world_key = ?",
-                    [key],
-                    |row| row.get(0),
-                )?;
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM games WHERE world_key = ?",
+                        [key],
+                        |row| row.get(0),
+                    )
+                    .db_context("Failed to count the games of the world")?;
                 if count > 0 {
                     return Err(EngineError::WorldHasGames {
                         game_count: count as usize,
                     });
                 }
-                conn.execute("DELETE FROM worlds WHERE key = ?", [key])?;
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                let game_count = data.games.iter().filter(|g| g.world_key == key).count();
-                if game_count > 0 {
-                    return Err(EngineError::WorldHasGames { game_count });
-                }
-                // SQLite reaches the characters through the `world_id` foreign
-                // key's cascade; InMemory has no cascade, so drop them here.
-                if let Some(world) = data.worlds.iter().find(|w| w.world_card.key == key) {
-                    let world_id = world.world_id;
-                    data.characters
-                        .retain(|character| character.world_id != world_id);
-                }
-                data.worlds.retain(|w| w.world_card.key != key);
+                conn.execute("DELETE FROM worlds WHERE key = ?", [key])
+                    .db_context("Failed to delete the world")?;
                 Ok(())
             }
         })

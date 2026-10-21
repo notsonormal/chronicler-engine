@@ -6,7 +6,8 @@ use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::agent::{StoryEntry, WorldView};
+use crate::domain::model::agent::WorldView;
+use crate::domain::model::state::message_types::StoryRow;
 use crate::error::EngineError;
 use crate::test_support::fixtures::{TestSwipeState, TestMap, TestNpc, TestPersona};
 use crate::test_support::make_test_recorder;
@@ -27,7 +28,7 @@ fn test_quantifier_retry_on_low_confidence() {
     let carla = make_npc("carla", "Carla");
     let all_npcs = vec![carla];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<StoryEntry> = vec![];
+    let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -60,7 +61,7 @@ fn test_quantifier_no_retry_when_high_confidence() {
     let carla = make_npc("carla", "Carla");
     let all_npcs = vec![carla];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<StoryEntry> = vec![];
+    let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -220,12 +221,13 @@ fn determine_npcs_with_room(
     player_action: &str,
     recorder: &LlmCallRecorder,
 ) -> crate::domain::model::quantifier::QuantifierResult {
-    use crate::domain::model::agent::{HookInput, Kind, StoryEntry, WorldView};
+    use crate::domain::model::agent::{HookInput, Kind, WorldView};
+    use crate::domain::model::state::message_types::StoryRow;
     let map = map_with_room(current_room);
     let persona = TestPersona::standard();
     let npcs = npc_map_from_ids(npc_pool_ids);
     state.scene.npcs_in_area = scene_npcs.to_vec();
-    let story: Vec<StoryEntry> = Vec::new();
+    let story: Vec<StoryRow> = Vec::new();
     let world = WorldView {
         room: Some(current_room),
         map: &map,
@@ -365,7 +367,7 @@ fn test_quantifier_retry_on_llm_error() {
     let carla = make_npc("carla", "Carla");
     let all_npcs = vec![carla];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<StoryEntry> = vec![];
+    let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -422,7 +424,7 @@ fn test_quantifier_all_attempts_fail_fallback() {
     let room = make_room();
     let all_npcs: Vec<NpcCard> = vec![];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<StoryEntry> = vec![];
+    let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -450,7 +452,7 @@ fn test_quantifier_low_confidence_then_error_fallback() {
     let room = make_room();
     let all_npcs: Vec<NpcCard> = vec![];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<StoryEntry> = vec![];
+    let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
@@ -531,7 +533,7 @@ fn test_quantifier_routes_through_recorder_for_forensics() {
     let carla = make_npc("carla", "Carla");
     let all_npcs = vec![carla];
     let previous_npcs: Vec<NpcCard> = vec![];
-    let history: Vec<StoryEntry> = vec![];
+    let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,

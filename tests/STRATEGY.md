@@ -12,7 +12,7 @@ checks outside the tier model.
 
 | Directory | Tier | Faked | Real | Holds |
 |---|---|---|---|---|
-| `src/**/*_tests.rs` | **Unit** | both driven ports (`MockBackend`, in-memory `Storage`) | nothing | [the one rule](#the-one-rule): a seam contract's `CASE`s, a pure `domain/model/` function, or a file on the legacy list |
+| `src/**/*_tests.rs` | **Unit** | both driven ports (`MockBackend`, SQLite `:memory:` `Storage`) | nothing | [the one rule](#the-one-rule): a seam contract's `CASE`s, a pure `domain/model/` function, or a file on the legacy list |
 | `tests/http/` | **HTTP E2E (tier 1)** | LLM (`ScriptedModel`, one script entry per call) | axum router, SQLite `:memory:` storage | spec scenarios, asserted on [domain outcomes](#domain-outcome-the-tier-1-rule) |
 | `tests/http/requires_migration/` | tier 1, quarantine | as `tests/http/` | as `tests/http/` | legacy tests that wait for a spec; untagged, size pinned |
 | `tests/http/support/` | support for tier 1 | — | — | request builders, seeding fixtures, HTML assertions, app wiring |

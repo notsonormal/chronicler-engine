@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use crate::domain::model::character::{CharacterSheet, NpcCard};
 use crate::domain::model::map::{Direction, Room};
-use crate::domain::model::agent::StoryEntry;
-use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::state::message_types::{MessageType, StoryRow};
+use crate::test_support::fixtures::default_story_row;
 
 pub fn make_room() -> Room {
     Room {
@@ -38,15 +38,17 @@ pub fn make_npc(id: &str, name: &str) -> NpcCard {
     }
 }
 
-pub fn make_history() -> Vec<StoryEntry> {
+pub fn make_history() -> Vec<StoryRow> {
     vec![
-        StoryEntry {
+        StoryRow {
             text: "You enter the front gate.".to_string(),
             message_type: MessageType::Narration,
+            ..default_story_row(MessageType::Narration)
         },
-        StoryEntry {
+        StoryRow {
             text: "I'll follow you inside.".to_string(),
             message_type: MessageType::Input,
+            ..default_story_row(MessageType::Input)
         },
     ]
 }

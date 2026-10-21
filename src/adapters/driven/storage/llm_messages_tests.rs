@@ -1,6 +1,6 @@
 use chrono::Utc;
 use crate::domain::model::llm_message::LlmMessage;
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::sqlite_storage;
 
 fn dummy_llm_message(model: &str) -> crate::domain::model::llm_message::LlmMessage {
@@ -20,7 +20,7 @@ fn dummy_llm_message(model: &str) -> crate::domain::model::llm_message::LlmMessa
 }
 
 #[test]
-fn test_save_llm_message_in_memory() {
+fn test_save_llm_message() {
     let storage = Storage::new_in_memory();
     let msg = dummy_llm_message("model1");
     storage.save_llm_message(&msg).unwrap();
@@ -127,7 +127,7 @@ fn test_llm_message_cap_prunes_exact_50() {
 }
 
 #[test]
-fn test_llm_message_cap_prunes_in_memory() {
+fn test_llm_message_cap_prunes() {
     let storage = Storage::new_in_memory();
     for i in 0..55 {
         storage
@@ -329,7 +329,10 @@ fn test_llm_message_raw_json_blobs() {
 #[test]
 fn test_save_llm_message_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("save_llm_message", TestOverride::internal("save failed"));
+    handle.set(
+        StorageCall::SaveLlmMessage,
+        TestOverride::internal("save failed"),
+    );
 
     let msg = dummy_llm_message("m1");
     let result = storage.save_llm_message(&msg);
@@ -340,7 +343,7 @@ fn test_save_llm_message_failure() {
 fn test_list_latest_llm_messages_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     handle.set(
-        "list_latest_llm_messages",
+        StorageCall::ListLatestLlmMessages,
         TestOverride::config("list failed"),
     );
 

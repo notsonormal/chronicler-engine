@@ -9,17 +9,15 @@ title: Storage
 
 ## Backend and BackendKind
 
-- **`Backend`** identifies the real storage implementations: `Sqlite` and `InMemory`.
+- **`Backend`** identifies the real storage implementation: `Sqlite`. `Storage::new_in_memory()` opens a SQLite `:memory:` database.
 - **`BackendKind`** selects `Direct` access or `Test` failure injection around one `Backend`.
 - **Decorator invariant.** `Test` wraps a single `Backend`, never another `BackendKind`. The storage seam therefore permits at most one `Test` layer at a time.
-
-The records of a Game's story (the Message and Swipe rows, the dock record and the failure line) run on SQLite. The `InMemory` backend holds none of them.
 
 ## Game Scoping
 
 Every game-scoped read and write takes its Game as the first argument, typed
 `GameId` (`domain/model/game.rs`). The storage adapter unwraps the newtype where
-it meets a row, an SQL parameter or the in-memory maps, so no caller converts.
+it meets a row or an SQL parameter, so no caller converts.
 `Storage` holds no active-Game pointer. The one active Game of the server
 process lives in `ActiveGame` (`application/games/active.rs`).
 `GameCatalogue` is the only reader and the only writer of `ActiveGame`.
@@ -49,6 +47,7 @@ The job entry in memory holds the busy mark and the step name.
 
 - **`Tx`** holds the record writes of one unit, and every record write exists only on `Tx`. It exists on SQLite only. A `Tx` serves one Game, so no write reaches another Game.
 - **`TxToken`** is the capability that opens a unit. Its constructor is crate-private, and guardrail Rule 3 (call site) limits its callers to `GameWriter`'s registry and `test_support/`.
+- **`StorageCall`** is the typed key of one `Storage` method. The test layer fails a method by its `StorageCall`, so a test can fail one `Storage` method.
 - **`TxWrite`** is the typed key of one record write. A write checks its key before it writes, so a test can fail one write in the middle of a unit.
 - **`Storage::transaction_new_game`** opens a unit that creates a Game: it writes the Game row first, so the writes that follow it in the same unit know the new Game.
 
@@ -71,6 +70,10 @@ Settings occupy a singleton row in the `settings` table — the engine's only se
 
 - **`get_*`** returns an optional result when absence is a valid runtime state.
 - **`require_*`** returns a required result and turns absence into a typed error.
+
+## Errors
+
+A statement that SQLite refuses gives `EngineError::Database`. Its `context` names the storage operation that failed, and its `source` holds the rusqlite error. A rusqlite error becomes `EngineError` only through `db_context`, so every storage site names its context. A Message row with no Swipe row is a load error.
 
 ## Tables
 

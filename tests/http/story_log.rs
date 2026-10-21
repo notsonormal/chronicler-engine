@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
-    analysis_report, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder, TestNpc,
+    analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestNpc,
 };
 
 use crate::support::http_assertions::{
@@ -269,7 +270,7 @@ async fn test_story_log_icon_buttons_have_accessible_names() {
             ScriptedModel::new()
                 .narration("You look around.")
                 .analysis(analysis_report(&["npc_1"], None))
-                .failed(ModelRole::Event),
+                .failed(Role::Trigger),
         ))
         .build_with_state();
     assert!(post_action(&app, "look around").await.status().is_success());
@@ -308,7 +309,7 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
             .narration("The room waits.")
             .analysis(analysis_report(&[], None)),
     );
-    let hold = model.hold(ModelRole::Analysis);
+    let hold = model.hold(Role::Quantifier);
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::clone(&model))
         .build_with_state();

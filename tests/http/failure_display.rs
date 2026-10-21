@@ -2,11 +2,12 @@
 
 use std::sync::Arc;
 
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::test_support::active_game_of;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
-use chronicler_engine::adapters::driven::storage::{TestOverride, TxWrite};
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride, TxWrite};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
@@ -15,7 +16,7 @@ use chronicler_engine::domain::model::state::generation_status::{
 };
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::fixtures::llm_message;
-use chronicler_engine::test_support::{configured_runner, ModelRole, ScriptedModel, TestAppBuilder};
+use chronicler_engine::test_support::{configured_runner, ScriptedModel, TestAppBuilder};
 use chronicler_engine::test_support::empty_sqlite_storage;
 
 use crate::SettingsTestGuard;
@@ -339,7 +340,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 #[tokio::test]
 async fn test_failed_user_action_is_not_a_failed_poll() {
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        "update_game_config",
+        StorageCall::UpdateGameConfig,
         TestOverride::internal("update_game_config failure"),
     ));
     let (app, state) = TestAppBuilder::default_test()
@@ -375,7 +376,7 @@ async fn test_failed_user_action_is_not_a_failed_poll() {
 // [docs/specs/failure_display.md] SCENARIO: 38.9
 #[tokio::test]
 async fn test_empty_answer_keeps_its_own_line_clamps() {
-    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().empty(ModelRole::Narration)));
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().empty(Role::Narrator)));
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(

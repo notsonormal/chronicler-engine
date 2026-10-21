@@ -198,9 +198,25 @@ pub enum EngineError {
     #[error("Context overflow: requested {requested} tokens exceeds max {max}")]
     ContextOverflow { requested: usize, max: usize },
 
-    /// SQLite returned an error; source carries the rusqlite kind.
-    #[error("Database error: {0}")]
-    Database(#[from] rusqlite::Error),
+    /// SQLite refused a statement; `context` names the storage operation that failed and
+    /// `source` carries the rusqlite kind.
+    #[error("Database error: {context}: {source}")]
+    Database {
+        context: &'static str,
+        source: rusqlite::Error,
+    },
+}
+
+/// Names the storage operation behind a rusqlite failure. `EngineError` has no
+/// `From<rusqlite::Error>`, so every `?` on a rusqlite result passes through here.
+pub trait DatabaseContext<T> {
+    fn db_context(self, context: &'static str) -> Result<T>;
+}
+
+impl<T> DatabaseContext<T> for std::result::Result<T, rusqlite::Error> {
+    fn db_context(self, context: &'static str) -> Result<T> {
+        self.map_err(|source| EngineError::Database { context, source })
+    }
 }
 
 impl From<std::io::Error> for EngineError {

@@ -6,10 +6,11 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::test_support::{
-    analysis_report, empty_sqlite_storage, ModelRole, ScriptedModel, TestAppBuilder,
+    analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder,
 };
 
 use crate::support::http_assertions::{defined_icons, referenced_icons};
@@ -26,7 +27,7 @@ async fn test_generating_status_answers_from_live_registry() {
     );
 
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::clone(&model))
         .build_with_state();
@@ -51,7 +52,7 @@ async fn test_generating_status_answers_from_live_registry() {
             .narration("You look around.")
             .analysis(analysis_report(&[], None)),
     );
-    let hold = model.hold(ModelRole::Analysis);
+    let hold = model.hold(Role::Quantifier);
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::clone(&model))
         .build_with_state();
@@ -72,7 +73,7 @@ async fn test_generating_status_answers_from_live_registry() {
     );
 
     let (app, state) = TestAppBuilder::default_test()
-        .model(Arc::new(ScriptedModel::new().failed(ModelRole::Narration)))
+        .model(Arc::new(ScriptedModel::new().failed(Role::Narrator)))
         .build_with_state();
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
@@ -144,7 +145,7 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
 async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
     // A held Job is the busy state: the Game holds a Job entry.
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::clone(&model))
         .build_with_state();
@@ -195,7 +196,7 @@ async fn debug_state_json(app: &axum::Router) -> serde_json::Value {
 #[tokio::test]
 async fn test_the_debug_state_names_a_step_only_while_a_job_runs() {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::clone(&model))
         .build_with_state();
@@ -217,7 +218,7 @@ async fn test_the_debug_state_names_a_step_only_while_a_job_runs() {
     );
 
     let (app, state) = TestAppBuilder::default_test()
-        .model(Arc::new(ScriptedModel::new().failed(ModelRole::Narration)))
+        .model(Arc::new(ScriptedModel::new().failed(Role::Narrator)))
         .build_with_state();
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
@@ -243,7 +244,7 @@ async fn test_the_debug_state_names_a_step_only_while_a_job_runs() {
 #[tokio::test]
 async fn test_the_debug_state_answers_500_on_a_storage_failure() {
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        "stories_entries",
+        StorageCall::StoriesEntries,
         TestOverride::internal("stories_entries failure"),
     ));
     let (app, _state) = TestAppBuilder::default_test()

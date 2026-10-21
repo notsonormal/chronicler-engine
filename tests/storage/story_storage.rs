@@ -1,5 +1,6 @@
 //! The storage seam of the new records: the story reads, the dock record, the Game's failure line and the record writes of a transaction.
 
+use chronicler_engine::adapters::driven::storage::db::DbPool;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrite};
 use chronicler_engine::domain::model::dock::{DockRecord, Notice};
 use chronicler_engine::domain::model::game::{GameId, NewGame};
@@ -664,22 +665,6 @@ fn a_cleared_dock_record_keeps_its_row() {
     );
 }
 
-// CASE story-records-sqlite-only [failure]: the new records refuse the in-memory backend
-#[test]
-fn the_new_records_refuse_the_in_memory_backend() {
-    let storage = Storage::new_in_memory();
-    let game = GameId(1);
-
-    assert!(
-        storage.stories().tail(game).is_err(),
-        "the story reads hold no in-memory record"
-    );
-    assert!(
-        storage.docks().get(game).is_err(),
-        "the dock read holds no in-memory record"
-    );
-}
-
 // CASE story-active-swipe: the active Swipe of a Message of the Game reads back, and another Game's Message answers none
 #[test]
 fn the_active_swipe_of_a_message_reads_back() {
@@ -825,4 +810,70 @@ fn an_active_swipe_index_past_the_swipes_reads_as_the_first() {
 
     assert_eq!(tail.last.text(), "first swipe");
     assert_eq!(tail.last.active_swipe_index, 0);
+}
+
+// CASE message-without-swipe [failure]: a Message row with no Swipe row gives a load error
+#[test]
+fn a_message_with_no_swipe_is_a_load_error() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let game_id = game_without_messages(&storage, "Story");
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.insert_message(&narration_message("no swipe follows"))
+        })
+        .expect("the unit should succeed");
+
+    let error = storage
+        .stories()
+        .tail(game_id)
+        .expect_err("a Message with no Swipe cannot load");
+
+    assert!(
+        matches!(&error, EngineError::Internal(invariant) if invariant.invariant.contains("no swipe")),
+        "the load error names the missing Swipe, got: {error}"
+    );
+}
+
+// CASE db-error-context [failure]: a read that SQLite refuses gives `Database` with the context of its method
+#[test]
+fn a_failed_read_names_its_method_in_the_database_error() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone());
+    let game_id = game_without_messages(&storage, "Story");
+    pool.conn()
+        .execute("DROP TABLE game_docks", [])
+        .expect("the table should drop");
+    pool.conn()
+        .execute("DROP TABLE message_swipes", [])
+        .expect("the table should drop");
+
+    let dock_error = storage
+        .docks()
+        .get(game_id)
+        .expect_err("the dock read cannot run without its table");
+    let text_error = storage
+        .stories()
+        .has_text(game_id)
+        .expect_err("the text read cannot run without the Swipe table");
+
+    assert!(
+        matches!(
+            dock_error,
+            EngineError::Database {
+                context: "Failed to read the dock record",
+                ..
+            }
+        ),
+        "the dock read names itself, got: {dock_error}"
+    );
+    assert!(
+        matches!(
+            text_error,
+            EngineError::Database {
+                context: "Failed to read the story text",
+                ..
+            }
+        ),
+        "the text read names itself, got: {text_error}"
+    );
 }

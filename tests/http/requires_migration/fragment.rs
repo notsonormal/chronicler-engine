@@ -8,13 +8,14 @@ use axum::{
 };
 use tower::util::ServiceExt;
 
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, empty_sqlite_storage, ModelRole, ScriptedModel,
+    active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel,
 };
 use chronicler_engine::TestAppBuilder;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::support::app_wiring::app_with_model;
@@ -447,10 +448,10 @@ async fn test_list_games_fragment_escapes_html() {
 
 #[tokio::test]
 async fn test_list_games_fragment_storage_error() {
-    let storage = Arc::new(
-        empty_sqlite_storage()
-            .with_failure("list_games", TestOverride::config("list_games failed")),
-    );
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        StorageCall::ListGames,
+        TestOverride::config("list_games failed"),
+    ));
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 
@@ -737,7 +738,7 @@ async fn test_switch_swipe_handler_not_last() {
 async fn test_switch_swipe_handler_concurrent() {
     // The held narrator call is the busy state a swipe switch meets.
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::clone(&model))
         .build_with_state();

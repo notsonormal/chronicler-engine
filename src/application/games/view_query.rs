@@ -15,7 +15,7 @@ use crate::domain::model::game::GameId;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationStatus, Step};
-use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::error::EngineError;
 
@@ -123,13 +123,7 @@ impl GameViewQuery {
         let state = self.current_state(game_id)?;
         let tail = self.storage.stories().tail(game_id)?;
         let count = tail.as_ref().map(|tail| tail.count).unwrap_or(0);
-        let history_tail: Vec<MessageEntry> = self
-            .storage
-            .stories()
-            .entries(game_id, None, 5)?
-            .iter()
-            .map(MessageEntry::from)
-            .collect();
+        let history_tail = self.storage.stories().entries(game_id, None, 5)?;
         let status = self.status(game_id)?;
         let (generation_status, step, last_error) = match status {
             Status::Busy(step) => (GenerationStatus::Generating, Some(step), None),
@@ -167,14 +161,8 @@ impl GameViewQuery {
     pub fn get_story_log_entries(
         &self,
         game_id: GameId,
-    ) -> Result<(Vec<MessageEntry>, bool), ApplicationError> {
-        let entries: Vec<MessageEntry> = self
-            .storage
-            .stories()
-            .entries(game_id, None, STORY_LIMIT)?
-            .iter()
-            .map(MessageEntry::from)
-            .collect();
+    ) -> Result<(Vec<StoryRow>, bool), ApplicationError> {
+        let entries = self.storage.stories().entries(game_id, None, STORY_LIMIT)?;
         let can_retrigger = self
             .storage
             .stories()

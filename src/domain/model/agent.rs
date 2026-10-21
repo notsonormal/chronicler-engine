@@ -8,10 +8,10 @@ use serde::{Deserialize, Serialize};
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::state::generation_status::Step;
-use crate::domain::model::state::message_types::{MessageEntry, MessageType, StoryRow};
+use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::trigger_context::EventRecord;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Role {
     /// Writes a generation's Narration.
     Narrator,
@@ -87,30 +87,6 @@ impl Kind {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct StoryEntry {
-    pub message_type: MessageType,
-    pub text: String,
-}
-
-impl From<&MessageEntry> for StoryEntry {
-    fn from(entry: &MessageEntry) -> Self {
-        Self {
-            message_type: entry.message_type.clone(),
-            text: entry.text.clone(),
-        }
-    }
-}
-
-impl From<&StoryRow> for StoryEntry {
-    fn from(row: &StoryRow) -> Self {
-        Self {
-            message_type: row.message_type.clone(),
-            text: row.text.clone(),
-        }
-    }
-}
-
 pub const STORY_WINDOW: usize = 4;
 
 pub struct WorldView<'a> {
@@ -128,7 +104,7 @@ pub struct HookInput<'a> {
     /// The text the Job saved, for a hook that runs after the narrator call.
     pub text: Option<&'a str>,
     pub player_text: &'a str,
-    pub story: &'a [StoryEntry],
+    pub story: &'a [StoryRow],
     pub world: &'a WorldView<'a>,
     pub event: Option<&'a EventRecord>,
 }

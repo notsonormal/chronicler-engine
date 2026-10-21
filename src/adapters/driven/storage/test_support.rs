@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::adapters::driven::storage::core::StorageCall;
 use crate::adapters::driven::storage::transaction::TxWrite;
 use crate::error::{EngineError, InternalError};
 
@@ -20,16 +21,16 @@ pub(crate) enum ErrorKind {
 }
 
 pub struct TestFailureHandle {
-    pub(crate) overrides: Arc<Mutex<HashMap<&'static str, TestOverride>>>,
+    pub(crate) overrides: Arc<Mutex<HashMap<StorageCall, TestOverride>>>,
     pub(crate) writes: Arc<Mutex<HashMap<TxWrite, TestOverride>>>,
 }
 
 impl TestFailureHandle {
-    pub fn set(&self, method: &'static str, override_: TestOverride) {
+    pub fn set(&self, call: StorageCall, override_: TestOverride) {
         self.overrides
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(method, override_);
+            .insert(call, override_);
     }
 
     pub fn set_write(&self, write: TxWrite, override_: TestOverride) {
@@ -39,11 +40,11 @@ impl TestFailureHandle {
             .insert(write, override_);
     }
 
-    pub fn clear(&self, method: &'static str) {
+    pub fn clear(&self, call: StorageCall) {
         self.overrides
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(method);
+            .remove(&call);
     }
 
     pub fn clear_all(&self) {
@@ -55,44 +56,6 @@ impl TestFailureHandle {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
-    }
-
-    /// The keys still standing in the call and record-write override maps.
-    fn unconsumed_overrides(&self) -> (Vec<&'static str>, Vec<TxWrite>) {
-        let calls = self
-            .overrides
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .keys()
-            .cloned()
-            .collect();
-        let writes = self
-            .writes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .keys()
-            .cloned()
-            .collect();
-        (calls, writes)
-    }
-
-    #[allow(clippy::panic)]
-    pub fn assert_no_unconsumed(&self) {
-        let (calls, writes) = self.unconsumed_overrides();
-        if !calls.is_empty() || !writes.is_empty() {
-            panic!("Unconsumed overrides remain: calls={calls:?}, writes={writes:?}");
-        }
-    }
-}
-
-impl Drop for TestFailureHandle {
-    fn drop(&mut self) {
-        let (calls, writes) = self.unconsumed_overrides();
-        if !calls.is_empty() || !writes.is_empty() {
-            tracing::warn!(
-                "TestFailureHandle dropped with unconsumed overrides: calls={calls:?}, writes={writes:?}"
-            );
-        }
     }
 }
 

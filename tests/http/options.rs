@@ -3,13 +3,14 @@
 use std::sync::Arc;
 
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::domain::model::settings::{AppSettings, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    analysis_report, configured_runner_without, ModelRole, ScriptedModel, TestAppBuilder,
-    TestDataBuilder, TestMap, TestWorld,
+    analysis_report, configured_runner_without, ScriptedModel, TestAppBuilder, TestDataBuilder,
+    TestMap, TestWorld,
 };
 
 use crate::support::app_wiring::{app_with_script, app_with_script_and_agents};
@@ -504,7 +505,7 @@ async fn test_options_run_follows_a_failed_event_narration_http() {
         ScriptedModel::new()
             .narration("You examine the guard.")
             .analysis(analysis_report(&["npc_1"], None))
-            .failed(ModelRole::Event)
+            .failed(Role::Trigger)
             .options(SET_A),
     );
     let world_id = storage

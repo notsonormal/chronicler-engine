@@ -91,9 +91,7 @@ fn test_list_presets_quantifier_only() {
 }
 
 #[test]
-fn test_list_presets_keeps_the_insertion_order() {
-    // `PromptPreset` carries no timestamps, so the in-memory backend has no
-    // `updated_at` to order by and lists the library in insertion order.
+fn test_list_presets_lists_the_newest_save_first() {
     let storage = create_storage();
     storage
         .save_preset(&make_system_preset("first", "First"))
@@ -108,7 +106,7 @@ fn test_list_presets_keeps_the_insertion_order() {
     let presets = storage.list_presets(PresetType::System).unwrap();
 
     let ids: Vec<_> = presets.iter().map(|p| p.id.as_str()).collect();
-    assert_eq!(ids, ["first", "second", "third"]);
+    assert_eq!(ids, ["third", "second", "first"]);
 }
 
 #[test]

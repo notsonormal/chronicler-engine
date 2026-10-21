@@ -1,8 +1,7 @@
 use crate::application::agents::options::types::OptionsPromptContext;
 use crate::application::agents::options::prompt::OptionsPromptBuilder;
-use crate::domain::model::agent::StoryEntry;
-use crate::domain::model::state::message_types::MessageType;
-use crate::test_support::fixtures::{TestMap, TestNpc, TestPersona};
+use crate::domain::model::state::message_types::{MessageType, StoryRow};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona};
 
 fn make_context<'a>(
     map: &'a crate::domain::model::map::MapDef,
@@ -71,17 +70,20 @@ fn user_prompt_carries_room_npc_and_history_sections() {
     let map = TestMap::single_room("start");
     let room = map.get_room_by_id("start").expect("room exists");
     let history = vec![
-        StoryEntry {
+        StoryRow {
             text: "The hall is silent.".to_string(),
             message_type: MessageType::Narration,
+            ..default_story_row(MessageType::Narration)
         },
-        StoryEntry {
+        StoryRow {
             text: "I step inside.".to_string(),
             message_type: MessageType::Input,
+            ..default_story_row(MessageType::Input)
         },
-        StoryEntry {
+        StoryRow {
             text: "[System] note".to_string(),
             message_type: MessageType::System,
+            ..default_story_row(MessageType::System)
         },
     ];
     let npcs = vec![TestNpc::named("npc_1", "Carla")];

@@ -11,11 +11,11 @@ use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard, Rela
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::state::message_types::{MessageType, StoryRow};
 use crate::domain::model::world::WorldCard;
-use crate::test_support::fixtures::{TestMap, TestNpc, TestPersona, TestWorld};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona, TestWorld};
 use crate::test_support::{
-    make_test_recorder, make_test_recorder_with_storage, ModelCall, ModelRole, ScriptedModel,
+    make_test_recorder, make_test_recorder_with_storage, ModelCall, ScriptedModel,
 };
 use crate::domain::model::state::generation_status::GenerationFailure;
 
@@ -95,7 +95,7 @@ struct Fixture {
     persona: PersonaCard,
     characters: Vec<NpcCard>,
     present: Vec<NpcCard>,
-    history: Vec<MessageEntry>,
+    history: Vec<StoryRow>,
 }
 
 impl Fixture {
@@ -109,12 +109,12 @@ impl Fixture {
             persona: TestPersona::standard(),
             present: characters.clone(),
             characters,
-            history: vec![MessageEntry {
+            history: vec![StoryRow {
                 id: 1,
                 text: "You enter the inn.".to_string(),
                 message_type: MessageType::Narration,
                 timestamp: chrono::Utc::now(),
-                ..MessageEntry::default()
+                ..default_story_row(MessageType::Narration)
             }],
         }
     }
@@ -130,23 +130,19 @@ impl Fixture {
         self
     }
 
-    fn history_of(&self, count: usize) -> Vec<MessageEntry> {
+    fn history_of(&self, count: usize) -> Vec<StoryRow> {
         (0..count)
-            .map(|index| MessageEntry {
+            .map(|index| StoryRow {
                 id: index as u64,
                 text: format!("Entry {index} of the story, told at length so it spends tokens."),
                 message_type: MessageType::Narration,
                 timestamp: chrono::Utc::now(),
-                ..MessageEntry::default()
+                ..default_story_row(MessageType::Narration)
             })
             .collect()
     }
 
-    fn context<'a>(
-        &'a self,
-        history: &'a [MessageEntry],
-        user_message: &'a str,
-    ) -> PromptContext<'a> {
+    fn context<'a>(&'a self, history: &'a [StoryRow], user_message: &'a str) -> PromptContext<'a> {
         let room = self
             .map
             .get_room_by_id("room_1")
@@ -1000,7 +996,7 @@ fn test_an_empty_or_whitespace_only_answer_fails() {
 fn test_a_failed_call_fails_the_narration() {
     let fixture = Fixture::new();
     let context = fixture.context(&fixture.history, "I look around.");
-    let model = Arc::new(ScriptedModel::new().failed(ModelRole::Narration));
+    let model = Arc::new(ScriptedModel::new().failed(Role::Narrator));
 
     let result = narrate_with(&model, &context, &preset(), TokenBudget::fallback());
 
@@ -1076,7 +1072,7 @@ fn test_a_call_carries_the_role_the_caller_names() {
 #[test]
 fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
-    let model = Arc::new(ScriptedModel::new().failed(ModelRole::Narration));
+    let model = Arc::new(ScriptedModel::new().failed(Role::Narrator));
     let narrator = recording_narrator(model, &storage);
     let fixture = Fixture::new();
     let context = fixture.context(&fixture.history, "I look around.");

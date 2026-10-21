@@ -6,7 +6,7 @@ use crate::domain::model::character::PersonaCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::state::message_types::{StoryRow, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::world::WorldCard;
 use crate::application::prompting::token_budget as budget;
@@ -36,7 +36,7 @@ pub struct PromptContext<'a> {
     pub npcs: NpcContext<'a>,
     pub persona: &'a PersonaCard,
     pub user_message: &'a str,
-    pub history: &'a [MessageEntry],
+    pub history: &'a [StoryRow],
     pub template_vars: TemplateVars,
     /// Transient: never persisted; rendered as the final prompt layer.
     pub guide: Option<String>,
@@ -114,7 +114,7 @@ impl PromptContext<'_> {
         npcs: NpcContext<'a>,
         persona: &'a PersonaCard,
         user_message: &'a str,
-        history: &'a [MessageEntry],
+        history: &'a [StoryRow],
     ) -> PromptContext<'a> {
         PromptContext {
             world,
@@ -151,7 +151,7 @@ struct LayerRenderer<'a> {
     npcs: NpcContext<'a>,
     persona: &'a crate::domain::model::character::PersonaCard,
     user_message: &'a str,
-    history: &'a [MessageEntry],
+    history: &'a [StoryRow],
     system_prompt: String,
     post_history_prompt: String,
     template_vars: &'a TemplateVars,

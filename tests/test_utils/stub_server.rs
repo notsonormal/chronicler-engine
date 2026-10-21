@@ -33,7 +33,8 @@ use chronicler_engine::domain::model::llm_message::LlmMessage;
 use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig, NarratorMode};
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
-use chronicler_engine::domain::model::state::message_types::{MessageEntry, MessageType};
+use chronicler_engine::domain::model::state::message_types::{StoryRow, MessageType};
+use chronicler_engine::test_support::default_story_row;
 
 use super::server::{get_config_port, release_port_lock};
 use super::CONFIG_PATH;
@@ -61,7 +62,7 @@ fn header_html(degraded: bool) -> String {
 
 const NARRATIVE_TEXT: &str = "Welcome to the Test World, Test Player! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine.\n\nThe tavern around you is warm and inviting. Wooden beams stretch across the ceiling, and a crackling fire in the hearth casts dancing shadows on the walls. The smell of fresh bread and mulled cider fills the air.\n\nBehind the bar, the bartender wipes down a mug and glances your way. \"First time in the Test Realm?\" he asks with a knowing smile. \"Don't worry, everyone here is friendly. Mostly.\"\n\nA merchant in the corner adjusts her pack and catches your eye. \"If you're heading north to the village square, mind the cobblestones. They get slippery after dark,\" she advises.\n\nYou take a moment to gather your bearings. The road ahead promises adventure, but for now, the warmth of the tavern offers a brief respite.";
 
-fn story_log_html(entries: &[MessageEntry]) -> String {
+fn story_log_html(entries: &[StoryRow]) -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::NarrativeLogTemplate;
 
@@ -72,22 +73,22 @@ fn story_log_html(entries: &[MessageEntry]) -> String {
 
 /// The template renders swipe/retrigger controls only on the trailing entry, so
 /// the order of this vec is load-bearing.
-fn default_story_log_entries() -> Vec<MessageEntry> {
+fn default_story_log_entries() -> Vec<StoryRow> {
     vec![
-        MessageEntry {
+        StoryRow {
             id: 2,
             text: "look at the casle".to_string(),
             message_type: MessageType::Input,
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 7, 0).unwrap(),
-            ..Default::default()
+            ..default_story_row(MessageType::Input)
         },
-        MessageEntry {
+        StoryRow {
             id: 1,
             text: NARRATIVE_TEXT.to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 8, 0).unwrap(),
             room_report: Some("Test Tavern".to_string()),
-            ..Default::default()
+            ..default_story_row(MessageType::Narration)
         },
     ]
 }
@@ -711,12 +712,12 @@ async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String>
         .expect("stub narration lock poisoned")
         .clone()
     {
-        entries.push(MessageEntry {
+        entries.push(StoryRow {
             id: 4,
             text,
             message_type: MessageType::Narration,
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 9, 0).unwrap(),
-            ..Default::default()
+            ..default_story_row(MessageType::Narration)
         });
     }
     if state.deleted.load(SeqCst) {
@@ -725,16 +726,16 @@ async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String>
     Html(story_log_html(&entries))
 }
 
-fn story_log_entries_with_extra_oldest() -> Vec<MessageEntry> {
+fn story_log_entries_with_extra_oldest() -> Vec<StoryRow> {
     let mut entries = default_story_log_entries();
     entries.insert(
         0,
-        MessageEntry {
+        StoryRow {
             id: 3,
             text: "An older turn the poll will drop.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 6, 0).unwrap(),
-            ..Default::default()
+            ..default_story_row(MessageType::Narration)
         },
     );
     entries
@@ -777,23 +778,23 @@ async fn header_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     Html(header_html(state.header_degraded.load(SeqCst)))
 }
 
-fn swipe_script_entries(text: &str, active_swipe_index: usize) -> Vec<MessageEntry> {
-    vec![MessageEntry {
+fn swipe_script_entries(text: &str, active_swipe_index: usize) -> Vec<StoryRow> {
+    vec![StoryRow {
         id: 1,
         text: text.to_string(),
         message_type: MessageType::Narration,
         timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 7, 0).unwrap(),
         swipe_count: 2,
         active_swipe_index,
-        ..Default::default()
+        ..default_story_row(MessageType::Narration)
     }]
 }
 
-fn two_swipe_entries() -> Vec<MessageEntry> {
+fn two_swipe_entries() -> Vec<StoryRow> {
     swipe_script_entries("A tavern by night.", 1)
 }
 
-fn restored_swipe_entries() -> Vec<MessageEntry> {
+fn restored_swipe_entries() -> Vec<StoryRow> {
     swipe_script_entries("A road at dawn.", 0)
 }
 

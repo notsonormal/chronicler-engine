@@ -3,50 +3,48 @@
 
 use chrono::Utc;
 
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 use crate::domain::model::character::NpcCard;
-use crate::adapters::driven::storage::{Backend, Storage};
-use crate::adapters::driven::storage::in_memory_data::CharacterSeed;
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::character::DbCharacter;
 
 impl Storage {
     pub fn list_characters(&self, world_id: i64) -> Result<Vec<NpcCard>, EngineError> {
-        self.with_backend_mut("list_characters", |backend| match backend {
+        self.with_backend_mut(StorageCall::ListCharacters, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
                     "SELECT id, key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships, created_at, updated_at FROM characters WHERE world_id = ?",
-                )?;
+                ).db_context("Failed to prepare the characters query")?;
                 let rows = stmt
-                    .query_map([world_id], DbCharacter::from_row)?
+                    .query_map([world_id], DbCharacter::from_row)
+                    .db_context("Failed to query the characters")?
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(EngineError::Database)?;
+                    .db_context("Failed to read a character row")?;
                 rows.iter().map(DbCharacter::to_card).collect()
             }
-            Backend::InMemory(data) => Ok(data.characters.iter().filter(|c| c.world_id == world_id).map(|c| c.card.clone()).collect()),
         })
     }
 
     pub fn get_character(&self, world_id: i64, key: &str) -> Result<Option<NpcCard>, EngineError> {
-        self.with_backend_mut("get_character", |backend| match backend {
+        self.with_backend_mut(StorageCall::GetCharacter, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
                     "SELECT id, key, world_id, name, description, personality, scenario, example_dialogue, summary, profile_image, headshot_image, inventory, triggers, relationships, created_at, updated_at FROM characters WHERE world_id = ? AND key = ?",
-                )?;
+                ).db_context("Failed to prepare the character read")?;
                 let result = stmt.query_row(rusqlite::params![world_id, key], DbCharacter::from_row);
                 match result {
                     Ok(db_char) => Ok(Some(db_char.to_card()?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(e) => Err(EngineError::Database(e))
+                    Err(e) => Err(e).db_context("Failed to read the character"),
                 }
             }
-            Backend::InMemory(data) => Ok(data.characters.iter().find(|c| c.world_id == world_id && c.card.id == key).map(|c| c.card.clone())),
         })
     }
 
     pub fn seed_character(&self, world_id: i64, card: &NpcCard) -> Result<(), EngineError> {
-        self.with_backend_mut("seed_character", |backend| match backend {
+        self.with_backend_mut(StorageCall::SeedCharacter, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = Utc::now().to_rfc3339();
@@ -77,16 +75,8 @@ impl Storage {
                         now,
                         now,
                     ],
-                )?;
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                if !data.characters.iter().any(|c| c.world_id == world_id && c.card.id == card.id) {
-                    data.characters.push(CharacterSeed {
-                        world_id,
-                        card: card.clone(),
-                    });
-                }
+                )
+                .db_context("Failed to seed the character")?;
                 Ok(())
             }
         })

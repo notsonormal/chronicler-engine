@@ -31,7 +31,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `db.rs` — SQLite database connection pool
         - `docks.rs` — The dock record reads: the offered set and the notice of one Game
         - `games.rs` — Game storage operations
-        - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
         - `llm_messages.rs` — LLM message storage
         - `mod.rs` — Storage layer and database access
         - `personas.rs` — Persona storage operations
@@ -60,7 +59,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - **utils/**
           - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
           - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
-          - `records.rs` — Shared helpers of the story records: the in-memory refusal and the JSON columns
+          - `records.rs` — Shared helper of the story records: the check that a write names a Message of its Game
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation

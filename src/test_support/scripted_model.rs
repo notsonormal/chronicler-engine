@@ -16,48 +16,28 @@ use crate::application::ports::llm_provider::{
     LlmCallResult, LlmProvider, AGENT_DIALOGUE, AGENT_NARRATOR, AGENT_OPTIONS, AGENT_QUANTIFIER,
     AGENT_TRIGGER,
 };
+use crate::domain::model::agent::Role;
 use crate::error::{EngineError, NarrativeFailure};
 
 /// The words a stray call's failure carries, so an endpoint that cannot reach
 /// the fake (a support helper holding only the app) can still spot one.
 pub const STRAY_CALL_MARKER: &str = "did not script";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum ModelRole {
-    /// The turn's narration (`narrator`, `dialogue`).
-    Narration,
-    /// An event's narration (`trigger`).
-    Event,
-    /// The analysis of the narration (`quantifier`).
-    Analysis,
-    /// The offered-set generation (`options`).
-    Options,
-}
-
-impl ModelRole {
-    pub fn of_agent_name(agent_name: &str) -> Option<Self> {
-        match agent_name {
-            AGENT_NARRATOR | AGENT_DIALOGUE => Some(Self::Narration),
-            AGENT_TRIGGER => Some(Self::Event),
-            AGENT_QUANTIFIER => Some(Self::Analysis),
-            AGENT_OPTIONS => Some(Self::Options),
-            _ => None,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Narration => "narration",
-            Self::Event => "event narration",
-            Self::Analysis => "analysis",
-            Self::Options => "options",
-        }
+/// The model role a call's agent name stands for: the narrator and the dialogue
+/// agent share the narrator's script.
+fn role_of_agent_name(agent_name: &str) -> Option<Role> {
+    match agent_name {
+        AGENT_NARRATOR | AGENT_DIALOGUE => Some(Role::Narrator),
+        AGENT_TRIGGER => Some(Role::Trigger),
+        AGENT_QUANTIFIER => Some(Role::Quantifier),
+        AGENT_OPTIONS => Some(Role::Options),
+        _ => None,
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct ModelCall {
-    pub role: ModelRole,
+    pub role: Role,
     pub system_prompt: String,
     pub user_prompt: String,
     pub max_tokens: Option<u32>,
@@ -73,14 +53,14 @@ enum Reply {
 
 #[derive(Default)]
 struct Inner {
-    replies: HashMap<ModelRole, VecDeque<Reply>>,
+    replies: HashMap<Role, VecDeque<Reply>>,
     calls: Vec<ModelCall>,
-    stray: Vec<ModelRole>,
+    stray: Vec<Role>,
 }
 
 pub struct ScriptedModel {
     inner: Arc<Mutex<Inner>>,
-    hold: Mutex<Option<(ModelRole, Arc<HoldState>)>>,
+    hold: Mutex<Option<(Role, Arc<HoldState>)>>,
 }
 
 impl Default for ScriptedModel {
@@ -105,43 +85,43 @@ impl ScriptedModel {
 
     #[must_use]
     pub fn narration(self, text: impl Into<String>) -> Self {
-        self.reply(ModelRole::Narration, text)
+        self.reply(Role::Narrator, text)
     }
 
     #[must_use]
     pub fn event_narration(self, text: impl Into<String>) -> Self {
-        self.reply(ModelRole::Event, text)
+        self.reply(Role::Trigger, text)
     }
 
     #[must_use]
     pub fn analysis(self, text: impl Into<String>) -> Self {
-        self.reply(ModelRole::Analysis, text)
+        self.reply(Role::Quantifier, text)
     }
 
     #[must_use]
     pub fn options(self, text: impl Into<String>) -> Self {
-        self.reply(ModelRole::Options, text)
+        self.reply(Role::Options, text)
     }
 
     #[must_use]
-    pub fn reply(self, role: ModelRole, text: impl Into<String>) -> Self {
+    pub fn reply(self, role: Role, text: impl Into<String>) -> Self {
         self.push(role, Reply::Text(text.into()));
         self
     }
 
     #[must_use]
-    pub fn empty(self, role: ModelRole) -> Self {
+    pub fn empty(self, role: Role) -> Self {
         self.push(role, Reply::Text(String::new()));
         self
     }
 
     #[must_use]
-    pub fn failed(self, role: ModelRole) -> Self {
+    pub fn failed(self, role: Role) -> Self {
         self.push(role, Reply::Failed);
         self
     }
 
-    fn push(&self, role: ModelRole, reply: Reply) {
+    fn push(&self, role: Role, reply: Reply) {
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned script lock is a broken test"
         let mut inner = self.inner.lock().expect("scripted model script lock");
         inner.replies.entry(role).or_default().push_back(reply);
@@ -160,7 +140,7 @@ impl ScriptedModel {
     /// Holds the next `role` call until the returned hold releases it; calls the
     /// test scripts after that one pass through.
     #[must_use]
-    pub fn hold(&self, role: ModelRole) -> ModelHold {
+    pub fn hold(&self, role: Role) -> ModelHold {
         let state = Arc::new(HoldState {
             script: Arc::clone(&self.inner),
             sync: Mutex::new(HoldSync::default()),
@@ -178,7 +158,7 @@ impl ScriptedModel {
 
     /// Blocks a held call, and answers the hold it fired so the caller can
     /// report that the call took its answer.
-    fn block_if_held(&self, role: ModelRole) -> Option<Arc<HoldState>> {
+    fn block_if_held(&self, role: Role) -> Option<Arc<HoldState>> {
         let state = {
             // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
             let mut hold = self.hold.lock().expect("scripted model hold lock");
@@ -218,11 +198,11 @@ impl ScriptedModel {
                 let seen = inner
                     .calls
                     .iter()
-                    .map(|call| call.role.label())
+                    .map(|call| call.role.agent_name())
                     .collect::<Vec<_>>();
                 Err(EngineError::Config(format!(
                     "ScriptedModel: the test {STRAY_CALL_MARKER} a {} call; its calls so far: {seen:?}",
-                    call.role.label()
+                    call.role.agent_name()
                 )))
             }
         }
@@ -245,7 +225,7 @@ impl LlmProvider for ScriptedModel {
         user_prompt: &str,
         max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        let role = ModelRole::of_agent_name(agent_name)
+        let role = role_of_agent_name(agent_name)
             // arch-lint: allow(no-unwrap-expect) reason="test fake: an unknown agent name is a wiring bug"
             .expect("ScriptedModel: a call names one of the four model roles");
         let call = ModelCall {

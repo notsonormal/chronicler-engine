@@ -2,16 +2,14 @@
 //! The transaction: one unit of record writes that lands whole
 
 use crate::adapters::driven::storage::core::WriteOverrides;
-use crate::adapters::driven::storage::utils::{
-    no_in_memory, require_message_of_game, to_json, to_optional_json,
-};
-use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::utils::require_message_of_game;
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::domain::model::dock::DockRecord;
 use crate::domain::model::game::{GameId, NewGame};
 use crate::domain::model::message::{Message, Swipe, SwipeAt};
 use crate::domain::model::state::generation_status::GenerationFailure;
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 
 /// Keyed by a type, so a failure injection stays compiler-checked.
 /// [TRIVIAL_ENUM]
@@ -91,7 +89,7 @@ impl<'a> Tx<'a> {
                 request.options_always_on as i64,
             ],
         )
-        .map_err(|e| EngineError::Config(format!("Failed to create game: {e}")))?;
+        .db_context("Failed to create game")?;
         Ok(GameId(conn.last_insert_rowid() as u64))
     }
 
@@ -104,13 +102,13 @@ impl<'a> Tx<'a> {
                 "DELETE FROM games WHERE id = ?1",
                 rusqlite::params![self.game.0 as i64],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to delete game: {e}")))?;
+            .db_context("Failed to delete game")?;
         Ok(())
     }
 
     pub fn insert_message(&mut self, message: &Message) -> Result<u64, EngineError> {
         self.writes.fail_if_injected(TxWrite::InsertMessage)?;
-        let message_type_json = to_json("message type", &message.message_type)?;
+        let message_type_json = serde_json::to_string(&message.message_type)?;
         self.conn
             .execute(
                 "INSERT INTO messages (game_id, message_type, kind, timestamp, active_swipe_index)
@@ -118,12 +116,12 @@ impl<'a> Tx<'a> {
                 rusqlite::params![
                     self.game.0 as i64,
                     message_type_json,
-                    to_json("message kind", &message.kind)?,
+                    serde_json::to_string(&message.kind)?,
                     message.timestamp.to_rfc3339(),
                     message.active_swipe_index as i64,
                 ],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to insert message: {e}")))?;
+            .db_context("Failed to insert message")?;
         Ok(self.conn.last_insert_rowid() as u64)
     }
 
@@ -135,7 +133,7 @@ impl<'a> Tx<'a> {
                 "UPDATE messages SET active_swipe_index = ?1 WHERE id = ?2",
                 rusqlite::params![at.swipe as i64, at.message as i64],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to set the active swipe: {e}")))?;
+            .db_context("Failed to set the active swipe")?;
         Ok(())
     }
 
@@ -148,7 +146,7 @@ impl<'a> Tx<'a> {
                 "DELETE FROM messages WHERE id = ?1",
                 rusqlite::params![message as i64],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to delete message: {e}")))?;
+            .db_context("Failed to delete message")?;
         Ok(())
     }
 
@@ -168,11 +166,11 @@ impl<'a> Tx<'a> {
                     if swipe.impersonated { 1 } else { 0 },
                     swipe.guide_text.as_deref(),
                     swipe.impersonate_direction.as_deref(),
-                    to_json("swipe state", &swipe.state)?,
-                    to_json("swipe maker", &swipe.maker)?,
+                    serde_json::to_string(&swipe.state)?,
+                    serde_json::to_string(&swipe.maker)?,
                 ],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to insert swipe: {e}")))?;
+            .db_context("Failed to insert swipe")?;
         Ok(())
     }
 
@@ -184,7 +182,7 @@ impl<'a> Tx<'a> {
                 "UPDATE message_swipes SET text = ?1 WHERE message_id = ?2 AND swipe_index = ?3",
                 rusqlite::params![text, at.message as i64, at.swipe as i64],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to set the swipe text: {e}")))?;
+            .db_context("Failed to set the swipe text")?;
         Ok(())
     }
 
@@ -200,13 +198,13 @@ impl<'a> Tx<'a> {
             .execute(
                 "UPDATE message_swipes SET state = ?1, room_report = ?2 WHERE message_id = ?3 AND swipe_index = ?4",
                 rusqlite::params![
-                    to_json("swipe state", state)?,
+                    serde_json::to_string(state)?,
                     room_report,
                     at.message as i64,
                     at.swipe as i64,
                 ],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to set the swipe state: {e}")))?;
+            .db_context("Failed to set the swipe state")?;
         Ok(())
     }
 
@@ -219,11 +217,11 @@ impl<'a> Tx<'a> {
             .execute(
                 "UPDATE games SET failure = ?1 WHERE id = ?2",
                 rusqlite::params![
-                    to_optional_json("game failure", failure)?,
+                    failure.map(serde_json::to_string).transpose()?,
                     self.game.0 as i64
                 ],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to set the failure line: {e}")))?;
+            .db_context("Failed to set the failure line")?;
         Ok(())
     }
 
@@ -240,27 +238,36 @@ impl<'a> Tx<'a> {
     }
 
     fn write_dock(&mut self, record: &DockRecord) -> Result<(), EngineError> {
-        let offered = serde_json::to_string(&record.offered).map_err(|e| {
-            EngineError::Config(format!("Failed to serialize the offered set: {e}"))
-        })?;
+        let offered = serde_json::to_string(&record.offered)?;
         self.conn
             .execute(
                 "INSERT OR REPLACE INTO game_docks (game_id, offered, notice) VALUES (?1, ?2, ?3)",
                 rusqlite::params![
                     self.game.0 as i64,
                     offered,
-                    to_optional_json("dock notice", record.notice.as_ref())?,
+                    record
+                        .notice
+                        .as_ref()
+                        .map(serde_json::to_string)
+                        .transpose()?,
                 ],
             )
-            .map_err(|e| EngineError::Config(format!("Failed to write the dock record: {e}")))?;
+            .db_context("Failed to write the dock record")?;
         Ok(())
     }
 
     fn commit(self) -> Result<(), EngineError> {
         self.conn
             .commit()
-            .map_err(|e| EngineError::Config(format!("Failed to commit transaction: {e}")))
+            .db_context("Failed to commit transaction")
     }
+}
+
+/// The Game a unit serves: one that exists, or the one the unit creates first.
+/// [TRIVIAL_ENUM]
+enum UnitGame<'a> {
+    Existing(GameId),
+    New(&'a NewGame),
 }
 
 impl Storage {
@@ -271,19 +278,7 @@ impl Storage {
     where
         F: FnOnce(&mut Tx<'_>) -> Result<T, EngineError>,
     {
-        self.with_backend_writes("transaction", |backend, writes| match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                let unit = conn.unchecked_transaction().map_err(|e| {
-                    EngineError::Config(format!("Failed to begin transaction: {e}"))
-                })?;
-                let mut tx = Tx::new(unit, writes, game);
-                let value = f(&mut tx)?;
-                tx.commit()?;
-                Ok(value)
-            }
-            Backend::InMemory(_) => Err(no_in_memory("transaction")),
-        })
+        self.run_transaction(UnitGame::Existing(game), |_, tx| f(tx))
     }
 
     /// The create unit: the Game row goes first, so its id reaches the writes
@@ -297,20 +292,31 @@ impl Storage {
     where
         F: FnOnce(GameId, &mut Tx<'_>) -> Result<T, EngineError>,
     {
-        self.with_backend_writes("transaction", |backend, writes| match backend {
+        self.run_transaction(UnitGame::New(request), f)
+    }
+
+    fn run_transaction<F, T>(&self, unit_game: UnitGame<'_>, f: F) -> Result<T, EngineError>
+    where
+        F: FnOnce(GameId, &mut Tx<'_>) -> Result<T, EngineError>,
+    {
+        self.with_backend_writes(StorageCall::Transaction, |backend, writes| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
-                let unit = conn.unchecked_transaction().map_err(|e| {
-                    EngineError::Config(format!("Failed to begin transaction: {e}"))
-                })?;
-                writes.fail_if_injected(TxWrite::InsertGame)?;
-                let game_id = Tx::write_game_row(&unit, request)?;
-                let mut tx = Tx::new(unit, writes, game_id);
-                let value = f(game_id, &mut tx)?;
+                let unit = conn
+                    .unchecked_transaction()
+                    .db_context("Failed to begin transaction")?;
+                let game = match unit_game {
+                    UnitGame::Existing(game) => game,
+                    UnitGame::New(request) => {
+                        writes.fail_if_injected(TxWrite::InsertGame)?;
+                        Tx::write_game_row(&unit, request)?
+                    }
+                };
+                let mut tx = Tx::new(unit, writes, game);
+                let value = f(game, &mut tx)?;
                 tx.commit()?;
                 Ok(value)
             }
-            Backend::InMemory(_) => Err(no_in_memory("transaction")),
         })
     }
 }

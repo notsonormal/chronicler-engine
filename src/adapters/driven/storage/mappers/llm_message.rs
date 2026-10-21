@@ -13,7 +13,7 @@ impl TryFrom<&DbLlmMessage> for LlmMessage {
     fn try_from(db: &DbLlmMessage) -> Result<Self, Self::Error> {
         let created_at = DateTime::parse_from_rfc3339(&db.created_at)
             .map_err(|e| {
-                EngineError::Config(format!("Failed to parse llm_message created_at: {e}"))
+                EngineError::Parse(format!("Failed to parse llm_message created_at: {e}"))
             })?
             .with_timezone(&Utc);
 

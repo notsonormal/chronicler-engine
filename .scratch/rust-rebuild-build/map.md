@@ -45,6 +45,7 @@ Labels: wayfinder:map
 - [Triage the small items of the review, and choose the branch to merge](issues/26-triage-the-small-items-and-the-merge-branch.md) — candidate S2 goes into the plan (one preset module; a preset delete is refused while a Game uses it); M6 is closed; the plan takes findings 10, 11, 13, 16, 21 to 23, C-4, P-1 and parts of 26 to 29; `wf/rebuild-core` merges to `main` with `--no-ff`, then `wf/rebuild-review` is removed.
 - [Write the build plan of the response to the reviews](issues/27-write-the-build-plan-of-the-response.md) — [the plan](../../docs/plans/rust-rebuild-response-build-plan.md): nine slices on `wf/rebuild-response` (storage seam, story window, rooms, Quantifier result and Game rules, kind and plan rules, presets, failure lines and loop, step rule and narrator, small fixes), then the `--no-ff` merge; tickets 29 to 38.
 - [Confirm three fills of the build plan of the response](issues/28-confirm-the-fills-of-the-response-plan.md) — all option A (owner): `game_rules::apply` takes `kind: Kind` (amends ticket 20 Q13); a missing preset of any kind gives the `Record::Preset` line; `PresetMissing` goes.
+- [R1: the storage seam](issues/29-r1-storage-seam.md) — built: SQLite `:memory:` only; `StorageCall` key; `EngineError::Database { context, source }`; `StoryRow` is the one story entry.
 
 ## Not yet specified
 

@@ -1,15 +1,15 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! Preset storage operations
 
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::utils::name_is_available;
-use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::prompt_preset::DbPromptPreset;
 
 impl Storage {
     pub fn list_presets(&self, preset_type: PresetType) -> Result<Vec<PromptPreset>, EngineError> {
-        self.with_backend_mut("list_presets", |backend| match backend {
+        self.with_backend_mut(StorageCall::ListPresets, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -19,32 +19,24 @@ impl Storage {
                          WHERE preset_type = ?1
                          ORDER BY updated_at DESC",
                     )
-                    .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+                    .db_context("Failed to prepare the presets query")?;
 
                 let rows = stmt
                     .query_map([preset_type.as_str()], DbPromptPreset::from_row)
-                    .map_err(|e| EngineError::Config(format!("Failed to query presets: {e}")))?;
+                    .db_context("Failed to query presets")?;
 
                 let mut presets = Vec::new();
                 for row in rows {
-                    let db =
-                        row.map_err(|e| EngineError::Config(format!("Failed to read preset row: {e}")))?;
+                    let db = row.db_context("Failed to read preset row")?;
                     presets.push(db.into_preset()?);
                 }
                 Ok(presets)
-            }
-            Backend::InMemory(data) => {
-                Ok(data.presets
-                    .iter()
-                    .filter(|p| p.preset_type == preset_type)
-                    .cloned()
-                    .collect())
             }
         })
     }
 
     pub fn get_preset(&self, id: &str) -> Result<Option<PromptPreset>, EngineError> {
-        self.with_backend_mut("get_preset", |backend| match backend {
+        self.with_backend_mut(StorageCall::GetPreset, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -53,23 +45,19 @@ impl Storage {
                          FROM prompt_presets
                          WHERE id = ?1",
                     )
-                    .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+                    .db_context("Failed to prepare the preset query")?;
 
                 let mut rows = stmt
                     .query_map([id], DbPromptPreset::from_row)
-                    .map_err(|e| EngineError::Config(format!("Failed to query preset: {e}")))?;
+                    .db_context("Failed to query preset")?;
 
                 match rows.next() {
                     Some(row) => {
-                        let db = row
-                            .map_err(|e| EngineError::Config(format!("Failed to read preset row: {e}")))?;
+                        let db = row.db_context("Failed to read the preset row")?;
                         Ok(Some(db.into_preset()?))
                     }
                     None => Ok(None),
                 }
-            }
-            Backend::InMemory(data) => {
-                Ok(data.presets.iter().find(|p| p.id == id).cloned())
             }
         })
     }
@@ -87,21 +75,17 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn
                     .prepare("SELECT id, name FROM prompt_presets WHERE preset_type = ?1")
-                    .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+                    .db_context("Failed to prepare the preset names query")?;
 
                 let rows = stmt
                     .query_map([preset.preset_type.as_str()], |row| {
                         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                     })
-                    .map_err(|e| {
-                        EngineError::Config(format!("Failed to query preset names: {e}"))
-                    })?;
+                    .db_context("Failed to query preset names")?;
 
                 let mut existing = Vec::new();
                 for row in rows {
-                    existing.push(row.map_err(|e| {
-                        EngineError::Config(format!("Failed to read preset name: {e}"))
-                    })?);
+                    existing.push(row.db_context("Failed to read preset name")?);
                 }
 
                 name_is_available(
@@ -112,14 +96,6 @@ impl Storage {
                     Some(preset.id.as_str()),
                 )
             }
-            Backend::InMemory(data) => name_is_available(
-                data.presets
-                    .iter()
-                    .filter(|candidate| candidate.preset_type == preset.preset_type)
-                    .map(|candidate| (candidate.id.as_str(), candidate.name.as_str())),
-                &preset.name,
-                Some(preset.id.as_str()),
-            ),
         };
 
         if available {
@@ -134,7 +110,7 @@ impl Storage {
     }
 
     pub fn save_preset(&self, preset: &PromptPreset) -> Result<(), EngineError> {
-        self.with_backend_mut("save_preset", |backend| {
+        self.with_backend_mut(StorageCall::SavePreset, |backend| {
             Self::ensure_preset_name_available(backend, preset)?;
             Self::write_preset(backend, preset)
         })
@@ -177,31 +153,19 @@ impl Storage {
                             )))?,
                     ],
                 )
-                .map_err(|e| EngineError::Config(format!("Failed to save preset: {e}")))?;
+                .db_context("Failed to save preset")?;
 
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                if let Some(idx) = data.presets.iter().position(|p| p.id == preset.id) {
-                    data.presets[idx] = preset.clone();
-                } else {
-                    data.presets.push(preset.clone());
-                }
                 Ok(())
             }
         }
     }
 
     pub fn delete_preset(&self, id: &str) -> Result<(), EngineError> {
-        self.with_backend_mut("delete_preset", |backend| match backend {
+        self.with_backend_mut(StorageCall::DeletePreset, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 conn.execute("DELETE FROM prompt_presets WHERE id = ?1", [id])
-                    .map_err(|e| EngineError::Config(format!("Failed to delete preset: {e}")))?;
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                data.presets.retain(|p| p.id != id);
+                    .db_context("Failed to delete preset")?;
                 Ok(())
             }
         })

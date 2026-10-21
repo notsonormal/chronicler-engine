@@ -6,11 +6,12 @@ use axum::http::StatusCode;
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, empty_sqlite_storage, ModelRole, ScriptedModel,
-    TestAppBuilder, TestMap, TestNpc,
+    active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder, TestMap,
+    TestNpc,
 };
 
 use crate::support::app_wiring::app_with_a_triggered_npc;
@@ -35,7 +36,7 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
     let model = ScriptedModel::new()
         .narration("Main narration")
         .analysis(analysis_report(&["npc_1"], None))
-        .failed(ModelRole::Event)
+        .failed(Role::Trigger)
         .event_narration("The event fires again.")
         .analysis(analysis_report(&["npc_1"], None));
     let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
@@ -82,7 +83,7 @@ async fn test_retrigger_does_not_move_the_player_http() {
     let model = ScriptedModel::new()
         .narration("You walk into the next room.")
         .analysis(analysis_report(&["npc_1"], Some("room2")))
-        .failed(ModelRole::Event)
+        .failed(Role::Trigger)
         .event_narration("The event fires again.")
         .analysis(analysis_report(&[], Some("room_1")));
     let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
@@ -219,8 +220,8 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
     let model = ScriptedModel::new()
         .narration("Main narration")
         .analysis(analysis_report(&["npc_1"], None))
-        .failed(ModelRole::Event)
-        .failed(ModelRole::Event);
+        .failed(Role::Trigger)
+        .failed(Role::Trigger);
     let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -307,7 +308,7 @@ async fn test_retrigger_no_game_context_returns_400_http() {
 async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
     // The held Options refresh is the busy state retrigger meets.
     let model = Arc::new(ScriptedModel::new().options(OFFERED_SET));
-    let hold = model.hold(ModelRole::Options);
+    let hold = model.hold(Role::Options);
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::clone(&model))
         .build_with_state();

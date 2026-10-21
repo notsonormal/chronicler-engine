@@ -4,10 +4,10 @@
 use askama::Template;
 
 use crate::domain::model::llm_message::LlmMessage;
-use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::state::message_types::StoryRow;
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::view_models::{
-    LlmMessageView, MessageEntryView, NpcPortraitView, OptionsDockViewModel, PreviewIssueView,
+    LlmMessageView, StoryRowView, NpcPortraitView, OptionsDockViewModel, PreviewIssueView,
     VisualSidebarViewModel,
 };
 
@@ -26,12 +26,12 @@ pub struct HeaderTemplate {
     ext = "html"
 )]
 pub struct NarrativeLogTemplate {
-    pub entries: Vec<MessageEntryView>,
+    pub entries: Vec<StoryRowView>,
 }
 
 impl NarrativeLogTemplate {
-    pub fn new(entries: &[MessageEntry], has_last_trigger: bool) -> Self {
-        let mut views: Vec<MessageEntryView> = entries.iter().map(MessageEntryView::from).collect();
+    pub fn new(entries: &[StoryRow], has_last_trigger: bool) -> Self {
+        let mut views: Vec<StoryRowView> = entries.iter().map(StoryRowView::from).collect();
         if let Some(last) = views.last_mut() {
             let is_narration = last.log_type == "narration";
             let is_event_continuation = last.event_header.is_some();

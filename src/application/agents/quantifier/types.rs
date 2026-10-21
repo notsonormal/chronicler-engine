@@ -3,7 +3,7 @@
 
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::Room;
-use crate::domain::model::agent::StoryEntry;
+use crate::domain::model::state::message_types::StoryRow;
 
 pub use crate::domain::model::quantifier::{
     MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType,
@@ -21,7 +21,7 @@ pub struct QuantifierPromptContext<'a> {
     pub all_known_npcs: &'a [NpcCard],
     pub all_rooms: &'a [RoomInfo],
     pub player_name: &'a str,
-    pub recent_history: &'a [StoryEntry],
+    pub recent_history: &'a [StoryRow],
     pub player_action: &'a str,
     pub quantifier_prompt_override: Option<String>,
 }

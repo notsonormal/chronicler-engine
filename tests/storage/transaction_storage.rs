@@ -11,18 +11,6 @@ const WORLD_KEY: &str = "seam_world";
 const FUTURE_MESSAGE_TIME: &str = "2099-01-01T00:00:00+00:00";
 const PAST_MESSAGE_TIME: &str = "2020-01-01T00:00:00+00:00";
 
-fn backends() -> Vec<(&'static str, Storage)> {
-    vec![
-        (
-            "sqlite",
-            chronicler_engine::test_support::empty_sqlite_storage(),
-        ),
-        ("in-memory", Storage::new_in_memory()),
-    ]
-}
-
-/// The in-memory backend holds no Message, so a case that orders by Message runs
-/// on SQLite alone.
 fn sqlite() -> Storage {
     chronicler_engine::test_support::empty_sqlite_storage()
 }
@@ -187,20 +175,7 @@ fn tx_delete_game_removes_the_game_and_its_records() {
     );
 }
 
-// CASE storage-tx-no-in-memory-arm [failure]: the in-memory backend refuses a unit
-#[test]
-fn transaction_refuses_the_in_memory_backend() {
-    let storage = Storage::new_in_memory();
-
-    let result = storage.transaction(GameId(1), tx_token(), |_tx| Ok(()));
-
-    assert!(
-        result.is_err(),
-        "the in-memory backend holds no unit; tier 1 runs on SQLite"
-    );
-}
-
-// CASE storage-newest-game-message: a Game's newest Message answers before its `updated_at` (SQLite: the in-memory backend holds no Message)
+// CASE storage-newest-game-message: a Game's newest Message answers before its `updated_at`
 #[test]
 fn newest_game_of_world_uses_the_newest_message() {
     let storage = sqlite();
@@ -215,32 +190,35 @@ fn newest_game_of_world_uses_the_newest_message() {
     );
 }
 
-// CASE storage-newest-game-updated-at: without a Message, `updated_at` answers
+// CASE storage-newest-game-updated-at: `updated_at` answers when a Game has no Message, and a newer Game with no Message beats one with an old Message; the higher id alone does not win
 #[test]
 fn newest_game_of_world_falls_back_to_updated_at() {
     let storage = sqlite();
-    let with_old_message = create_game(&storage, "With old message");
-    insert_message_at(&storage, with_old_message, PAST_MESSAGE_TIME);
-    let without_message = create_game(&storage, "Without message");
+    let touched_later = create_game(&storage, "Touched later");
+    let higher_id = create_game(&storage, "Higher id");
+    storage
+        .touch_game_updated_at(touched_later)
+        .expect("touching the Game should succeed");
 
-    assert_eq!(
-        storage.newest_game_of_world(WORLD_KEY).unwrap(),
-        Some(without_message),
-        "a Game with no Message is keyed by `updated_at`"
+    assert!(
+        higher_id.0 > touched_later.0,
+        "the test data needs the newer id"
     );
-}
-
-// CASE storage-newest-game-in-memory: the in-memory backend orders by `updated_at` alone
-#[test]
-fn newest_game_of_world_in_memory_orders_by_updated_at() {
-    let storage = Storage::new_in_memory();
-    create_game(&storage, "First");
-    let second = create_game(&storage, "Second");
-
     assert_eq!(
         storage.newest_game_of_world(WORLD_KEY).unwrap(),
-        Some(second),
-        "the newer Game answers"
+        Some(touched_later),
+        "a Game with no Message is keyed by `updated_at`, and the higher id does not win"
+    );
+
+    let crossover = sqlite();
+    let with_old_message = create_game(&crossover, "With old message");
+    insert_message_at(&crossover, with_old_message, PAST_MESSAGE_TIME);
+    let without_message = create_game(&crossover, "Without message");
+
+    assert_eq!(
+        crossover.newest_game_of_world(WORLD_KEY).unwrap(),
+        Some(without_message),
+        "a Game with an old Message loses to a newer Game with no Message"
     );
 }
 
@@ -263,22 +241,19 @@ fn newest_game_of_world_breaks_a_tie_on_the_higher_id() {
 // CASE storage-newest-game-unknown-world: a World with no Game answers None, and another World's Game does not answer
 #[test]
 fn newest_game_of_world_ignores_other_worlds() {
-    for (label, storage) in backends() {
-        create_game(&storage, "Elsewhere");
-        let other = chronicler_engine::test_support::seed_game_row(
-            &storage,
-            &new_game("Other", "other_world"),
-        );
+    let storage = sqlite();
+    create_game(&storage, "Elsewhere");
+    let other =
+        chronicler_engine::test_support::seed_game_row(&storage, &new_game("Other", "other_world"));
 
-        assert_eq!(
-            storage.newest_game_of_world("no_such_world").unwrap(),
-            None,
-            "{label}: a World with no Game has no newest Game"
-        );
-        assert_eq!(
-            storage.newest_game_of_world("other_world").unwrap(),
-            Some(other),
-            "{label}: the lookup filters by World"
-        );
-    }
+    assert_eq!(
+        storage.newest_game_of_world("no_such_world").unwrap(),
+        None,
+        "a World with no Game has no newest Game"
+    );
+    assert_eq!(
+        storage.newest_game_of_world("other_world").unwrap(),
+        Some(other),
+        "the lookup filters by World"
+    );
 }

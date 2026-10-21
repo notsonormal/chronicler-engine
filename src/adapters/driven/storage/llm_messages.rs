@@ -1,8 +1,8 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! LLM message storage
 
-use crate::error::EngineError;
-use crate::adapters::driven::storage::{Backend, Storage};
+use crate::error::{DatabaseContext, EngineError};
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::llm_message::DbLlmMessage;
 use crate::domain::model::llm_message::LlmMessage;
 
@@ -12,7 +12,7 @@ pub const LLM_MESSAGE_RETENTION_LIMIT: usize = 50;
 
 impl Storage {
     pub fn save_llm_message(&self, message: &LlmMessage) -> Result<(), EngineError> {
-        self.with_backend_mut("save_llm_message", |backend| match backend {
+        self.with_backend_mut(StorageCall::SaveLlmMessage, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let db_msg = DbLlmMessage::from(message);
@@ -34,7 +34,7 @@ impl Storage {
                         db_msg.created_at,
                     ],
                 )
-                .map_err(|e| EngineError::Config(format!("Failed to save LLM message: {e}")))?;
+                .db_context("Failed to save LLM message")?;
 
                 conn.execute(
                     "DELETE FROM llm_messages
@@ -43,22 +43,15 @@ impl Storage {
                      )",
                     [LLM_MESSAGE_RETENTION_LIMIT as i64],
                 )
-                .map_err(|e| EngineError::Config(format!("Failed to prune LLM messages: {e}")))?;
+                .db_context("Failed to prune LLM messages")?;
 
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                data.llm_messages.push(message.clone());
-                if data.llm_messages.len() > LLM_MESSAGE_RETENTION_LIMIT {
-                    data.llm_messages.remove(0);
-                }
                 Ok(())
             }
         })
     }
 
     pub fn list_latest_llm_messages(&self, limit: usize) -> Result<Vec<LlmMessage>, EngineError> {
-        self.with_backend_mut("list_latest_llm_messages", |backend| match backend {
+        self.with_backend_mut(StorageCall::ListLatestLlmMessages, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -69,24 +62,19 @@ impl Storage {
                          ORDER BY created_at DESC
                          LIMIT ?1",
                     )
-                    .map_err(|e| EngineError::Config(format!("Failed to prepare query: {e}")))?;
+                    .db_context("Failed to prepare the LLM messages query")?;
 
                 let rows = stmt
                     .query_map([limit as i64], DbLlmMessage::from_row)
-                    .map_err(|e| EngineError::Config(format!("Failed to query LLM messages: {e}")))?;
+                    .db_context("Failed to query LLM messages")?;
 
                 let mut messages = Vec::new();
                 for row in rows {
-                    let db_msg = row
-                        .map_err(|e| EngineError::Config(format!("Failed to read LLM message row: {e}")))?;
+                    let db_msg = row.db_context("Failed to read LLM message row")?;
                     messages.push(LlmMessage::try_from(&db_msg)?);
                 }
                 messages.reverse();
                 Ok(messages)
-            }
-            Backend::InMemory(data) => {
-                let start = data.llm_messages.len().saturating_sub(limit);
-                Ok(data.llm_messages[start..].to_vec())
             }
         })
     }

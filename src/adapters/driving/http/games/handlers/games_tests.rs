@@ -1,7 +1,7 @@
 use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driven::storage::TestOverride;
+use crate::adapters::driven::storage::{StorageCall, TestOverride};
 use crate::adapters::driving::http::games::handlers::{
     list_games_fragment, switch_game_handler, switch_game_mode_handler,
     update_game_posture_handler, update_game_presets_handler, GameModeForm, GamePostureForm,
@@ -217,7 +217,7 @@ async fn test_posture_fragment_renders_preset_load_error_span() {
         .unwrap();
 
     handle.set(
-        "list_presets",
+        StorageCall::ListPresets,
         TestOverride::internal("simulated preset library failure"),
     );
 
@@ -246,5 +246,5 @@ async fn test_posture_fragment_renders_preset_load_error_span() {
         "preset selects must be skipped on load failure: {body}"
     );
 
-    handle.clear("list_presets");
+    handle.clear(StorageCall::ListPresets);
 }

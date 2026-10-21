@@ -3,14 +3,14 @@
 
 use rusqlite::Connection;
 
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 
 pub(crate) fn parse_datetime(
     rfc3339: &str,
     field: &str,
 ) -> Result<chrono::DateTime<chrono::Utc>, EngineError> {
     chrono::DateTime::parse_from_rfc3339(rfc3339)
-        .map_err(|e| EngineError::Config(format!("Invalid {field}: {e}")))
+        .map_err(|e| EngineError::Parse(format!("Invalid {field}: {e}")))
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
@@ -39,12 +39,12 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
                 "SELECT name FROM games \
                  WHERE world_key NOT IN (SELECT key FROM worlds)",
             )
-            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            .db_context("Migration failed")?;
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            .db_context("Migration failed")?;
         rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
+            .db_context("Migration failed")
     }
 
     let version: i32 = conn
@@ -56,12 +56,9 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     // the single commit is still fsynced, so durability is unchanged.
     let tx = conn
         .unchecked_transaction()
-        .map_err(|e| EngineError::Config(format!("Failed to begin migration: {e}")))?;
+        .db_context("Failed to begin migration")?;
     let conn = &tx;
-    let exec = |sql: &str| {
-        conn.execute(sql, [])
-            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))
-    };
+    let exec = |sql: &str| conn.execute(sql, []).db_context("Migration failed");
 
     if due(9) {
         exec(
@@ -158,7 +155,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         exec("CREATE INDEX IF NOT EXISTS idx_prompt_presets_type ON prompt_presets(preset_type)")?;
 
         conn.pragma_update(None, "user_version", 9)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(10) {
@@ -247,7 +244,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         )?;
 
         conn.pragma_update(None, "user_version", 11)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(12) {
@@ -262,7 +259,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         )?;
 
         conn.pragma_update(None, "user_version", 12)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(13) {
@@ -270,7 +267,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         exec("ALTER TABLE games ADD COLUMN persona_name TEXT NOT NULL DEFAULT ''")?;
         exec("ALTER TABLE worlds DROP COLUMN player_key")?;
         conn.pragma_update(None, "user_version", 13)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(14) {
@@ -278,7 +275,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
             exec("ALTER TABLE worlds DROP COLUMN starting_room_id")?;
         }
         conn.pragma_update(None, "user_version", 14)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(15) {
@@ -286,7 +283,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
             exec("ALTER TABLE message_swipes ADD COLUMN replay TEXT")?;
         }
         conn.pragma_update(None, "user_version", 15)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(16) {
@@ -297,7 +294,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
             )?;
         }
         conn.pragma_update(None, "user_version", 16)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(17) {
@@ -305,7 +302,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
             exec("ALTER TABLE messages DROP COLUMN sender")?;
         }
         conn.pragma_update(None, "user_version", 17)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(18) {
@@ -322,7 +319,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
             )?;
         }
         conn.pragma_update(None, "user_version", 18)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(19) {
@@ -432,7 +429,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 19)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(20) {
@@ -466,7 +463,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         )?;
 
         conn.pragma_update(None, "user_version", 20)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(21) {
@@ -480,7 +477,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 21)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(22) {
@@ -504,7 +501,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 22)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(23) {
@@ -535,7 +532,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 23)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(24) {
@@ -574,7 +571,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 24)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(25) {
@@ -588,12 +585,12 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         let legacy_rows: Vec<(i64, String)> = {
             let mut stmt = conn
                 .prepare("SELECT id, name FROM games WHERE display_name = ''")
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+                .db_context("Migration failed")?;
             let rows = stmt
                 .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+                .db_context("Migration failed")?;
             rows.collect::<Result<Vec<_>, _>>()
-                .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?
+                .db_context("Migration failed")?
         };
         for (id, name) in legacy_rows {
             let display_name = crate::domain::model::utils::game_name::default_display_name(&name);
@@ -601,11 +598,11 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
                 "UPDATE games SET display_name = ?1 WHERE id = ?2",
                 rusqlite::params![display_name, id],
             )
-            .map_err(|e| EngineError::Config(format!("Migration failed: {e}")))?;
+            .db_context("Migration failed")?;
         }
 
         conn.pragma_update(None, "user_version", 25)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(26) {
@@ -629,7 +626,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 26)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(27) {
@@ -659,7 +656,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         )?;
 
         conn.pragma_update(None, "user_version", 27)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
     if due(28) {
@@ -702,11 +699,10 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         )?;
 
         conn.pragma_update(None, "user_version", 28)
-            .map_err(|e| EngineError::Config(format!("Failed to set user_version: {e}")))?;
+            .db_context("Failed to set user_version")?;
     }
 
-    tx.commit()
-        .map_err(|e| EngineError::Config(format!("Failed to commit migrations: {e}")))?;
+    tx.commit().db_context("Failed to commit migrations")?;
 
     Ok(())
 }

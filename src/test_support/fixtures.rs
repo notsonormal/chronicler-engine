@@ -13,12 +13,12 @@ use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::message_types::{MessageKind, MessageType};
+use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
 use crate::adapters::driven::storage::TxToken;
 use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::world::{WorldCard, WorldManifest};
-use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::transaction::Tx;
 use crate::application::llm_recorder::SaveLlmMessageFn;
@@ -461,38 +461,10 @@ pub fn test_new_game(
 /// opening Narration.
 pub fn seed_game_row(storage: &Storage, request: &crate::domain::model::game::NewGame) -> GameId {
     storage
-        .with_backend_mut("seed_game_row", |backend| match backend {
+        .with_backend_mut(StorageCall::SeedGameRow, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 Ok(Tx::write_game_row(&conn, request)?)
-            }
-            Backend::InMemory(data) => {
-                let id = data.next_game_id;
-                data.next_game_id += 1;
-                let now = chrono::Utc::now();
-                data.games.push(crate::domain::model::game::Game {
-                    id,
-                    world_name: request.world_name.clone(),
-                    world_key: request.world_key.clone(),
-                    persona_key: request.persona_key.clone(),
-                    persona_name: request.persona_name.clone(),
-                    name: request.name.clone(),
-                    display_name: request.display_name(),
-                    created_at: now,
-                    updated_at: now,
-                    narrator_mode: request.narrator_mode,
-                    narrative_perspective: request.narrative_perspective,
-                    narrative_tense: request.narrative_tense,
-                    active_system_prompt_preset_id: request.system_prompt_preset_id.clone(),
-                    active_quantifier_prompt_preset_id: request.quantifier_prompt_preset_id.clone(),
-                    active_impersonate_prompt_preset_id: request
-                        .impersonate_prompt_preset_id
-                        .clone(),
-                    active_options_prompt_preset_id: request.options_prompt_preset_id.clone(),
-                    options_always_on: request.options_always_on,
-                    failure: None,
-                });
-                Ok(GameId(id))
             }
         })
         // arch-lint: allow(no-unwrap-expect) reason="test fixture panics when the seed write fails"
@@ -518,6 +490,27 @@ pub fn dummy_message(text: &str) -> Message {
         MessageKind::TypedInput,
         Swipe::new(text, Maker::Player, TestSwipeState::in_room("room1")),
     )
+}
+
+/// A story entry of a one-Swipe Message with no headers, for a test to override
+/// the fields it asserts on. The kind follows the type; no generation writes a
+/// System Message, so that type takes the Narration kind.
+pub fn default_story_row(message_type: MessageType) -> StoryRow {
+    let kind = match message_type {
+        MessageType::Input => MessageKind::TypedInput,
+        MessageType::Narration | MessageType::System => MessageKind::Narration,
+    };
+    StoryRow {
+        id: 0,
+        kind,
+        message_type,
+        timestamp: chrono::Utc::now(),
+        text: String::new(),
+        room_report: None,
+        event_header: None,
+        swipe_count: 1,
+        active_swipe_index: 0,
+    }
 }
 
 pub fn llm_message(

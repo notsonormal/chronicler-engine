@@ -260,10 +260,7 @@ impl GameWriter {
                 offered: self.dock_of(game)?.offered,
                 notice: None,
             };
-            units.open(game, |tx| {
-                tx.set_game_failure(None)?;
-                tx.put_dock(&record)
-            })
+            units.open(game, |tx| Self::clear_failure_and_put_dock(tx, &record))
         })
     }
 
@@ -288,8 +285,7 @@ impl GameWriter {
             units
                 .open(game, |tx| {
                     tx.set_active_swipe(at)?;
-                    tx.put_dock(&DockRecord::default())?;
-                    tx.set_game_failure(None)
+                    Self::clear_failure_and_put_dock(tx, &DockRecord::default())
                 })
                 .map_err(|error| self.save_failed(game, &error, units))
         })
@@ -323,8 +319,7 @@ impl GameWriter {
             units
                 .open(game, |tx| {
                     tx.delete_message(last.last.id)?;
-                    tx.put_dock(&DockRecord::default())?;
-                    tx.set_game_failure(None)
+                    Self::clear_failure_and_put_dock(tx, &DockRecord::default())
                 })
                 .map_err(|error| self.save_failed(game, &error, units))
         })
@@ -586,6 +581,13 @@ impl GameWriter {
             .and_then(|npc| npc.triggers.get(trigger.trigger_idx))
             .map(|trigger| trigger.narration.narration_prompt.clone())
             .ok_or_else(|| self.missing(game, "the trigger", units))
+    }
+
+    /// The end of a request that changes the story under a Game with no running
+    /// Job: the failure line goes, and the dock holds `record`.
+    fn clear_failure_and_put_dock(tx: &mut Tx<'_>, record: &DockRecord) -> Result<(), EngineError> {
+        tx.set_game_failure(None)?;
+        tx.put_dock(record)
     }
 
     fn accept_unit(&self, game: GameId, units: &Units) -> Result<(), Refusal> {

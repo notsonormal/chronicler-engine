@@ -6,16 +6,13 @@ use std::sync::Arc;
 use crate::application::agents::quantifier::agent::QuantifierAgent;
 use crate::application::agents::trait_def::AnalysisAgent;
 use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, BackendSelector, Confidence, Hook, HookInput, Kind, StoryEntry,
-    WorldView,
+    AgentConfig, AgentSettings, BackendSelector, Confidence, Hook, HookInput, Kind, Role, WorldView,
 };
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::MapDef;
-use crate::domain::model::state::message_types::MessageType;
-use crate::test_support::fixtures::{TestMap, TestNpc, TestPersona};
-use crate::test_support::{
-    make_test_recorder, make_test_recorder_with_storage, ModelRole, ScriptedModel,
-};
+use crate::domain::model::state::message_types::{MessageType, StoryRow};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona};
+use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
 
 const NPC_ID: &str = "npc_1";
 
@@ -39,7 +36,7 @@ struct Turn {
     persona: crate::domain::model::character::PersonaCard,
     characters: HashMap<String, NpcCard>,
     present: Vec<NpcCard>,
-    story: Vec<StoryEntry>,
+    story: Vec<StoryRow>,
     text: String,
 }
 
@@ -57,9 +54,10 @@ impl Turn {
             persona,
             characters,
             present: npcs.clone(),
-            story: vec![StoryEntry {
+            story: vec![StoryRow {
                 message_type: MessageType::Narration,
                 text: "The innkeeper glances your way.".to_string(),
+                ..default_story_row(MessageType::Narration)
             }],
             text: "You look around the inn.".to_string(),
         }
@@ -196,8 +194,8 @@ fn test_a_transport_failure_keeps_the_scenes_characters() {
     let turn = Turn::new();
     let model = Arc::new(
         ScriptedModel::new()
-            .failed(ModelRole::Analysis)
-            .failed(ModelRole::Analysis),
+            .failed(Role::Quantifier)
+            .failed(Role::Quantifier),
     );
     let world = turn.world();
     let output = quantifier(Arc::clone(&model))
@@ -287,8 +285,8 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
     let model = Arc::new(
         ScriptedModel::new()
-            .failed(ModelRole::Analysis)
-            .failed(ModelRole::Analysis),
+            .failed(Role::Quantifier)
+            .failed(Role::Quantifier),
     );
     let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
     let agent = QuantifierAgent::from_config(&config(), recorder).expect("the quantifier builds");
