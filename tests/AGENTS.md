@@ -78,6 +78,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
+    - `autoplay.rs` — HTTP E2E tests for Autoplay (autoplay.md 41.*): the run of Jobs, its three ends, the view-only Game, the progress status, and the config writes a run refuses.
     - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite, the generating-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
     - `failure_display.rs` — HTTP E2E tests for the failure display, tagged against `docs/specs/failure_display.md`.
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
