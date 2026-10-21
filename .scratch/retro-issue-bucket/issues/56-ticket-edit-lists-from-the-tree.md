@@ -1,7 +1,7 @@
 # Build a ticket's list of edits from the tree, not from memory
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -17,3 +17,10 @@ Which guard fits?
 ## Context
 
 - Source: `/retro` 2026-10-19 on the core step of the Rust rebuild (ticket 07, C5 doc review finding; C6 section, "Deviations from the plan" 1).
+
+## Answer
+
+2026-10-21. **Dropped (weak); folded into [75](75-lead-delegate-brief-quality.md).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- Both instances live in the closed `rust-rebuild-build` map; nothing in the tree is left to check, and the reviews caught both.
+- If 75 adopts a brief checklist, add: build each edit list from `git diff --stat` or `rg`, and name the command.

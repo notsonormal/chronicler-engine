@@ -1,7 +1,7 @@
 # Give the Lead the file tools it needs to check a quote
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -23,3 +23,10 @@ How much file access should a Lead hold?
 - Correction to the Manager's list: in all six rosters the `reviewer` definition WAS present (`tools read, ls, find, grep, bash`), and tickets 09, 10, 12 (three reviews) and 13 delegated it. "Leads have no reviewer definition" does not hold for these six sessions.
 - Related: [Deliver the tail of a long delegated report](41-delegated-report-truncation.md).
 - More evidence (`/retro` 2026-10-19, whole-rebuild review): every agent had `read`, but `read` returns no line numbers, so each `file:line` citation went through `cat -n`, `sed -n` or `grep -n`. The simplify pass pulled 570 KB of tool output in 68 calls (`a4c24ef9` entries 27, 29, 74), and about 40 of test-police's 142 bash calls were line-range reads. This may be a harness change, not a repo change.
+
+## Answer
+
+2026-10-21. **Dropped (stale).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- The herdsman Lead (`leadTools: []`) is gone. Delegation is now the repo-side `.pi/extensions/delegate/` (`f3af8992`, 2026-10-18), and the parent session keeps its own tools.
+- The residual point (`read` returns no line numbers) is the pi harness, not this repo. Reopen only if a tools-less coordinator returns.

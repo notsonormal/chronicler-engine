@@ -1,7 +1,7 @@
 # Show the next free scenario number for a spec
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -17,3 +17,10 @@ How should an agent find the next free number?
 ## Context
 
 - Source: `/retro` 2026-10-11, implementer session `01a12ac6-5809` (entries around 11:45:09–11:45:22).
+
+## Answer
+
+2026-10-21. **Dropped (weak); folded into [64](64-show-scenario-helper.md).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- The premise holds (no retired-number record in `docs/specs/`), but the cost was a few `git log -S` calls.
+- If 64 builds a scenario helper on `validate_feature_spec.py`, a `--next` flag is cheap there.

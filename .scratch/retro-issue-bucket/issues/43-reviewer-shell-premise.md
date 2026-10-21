@@ -1,7 +1,7 @@
 # Drop the `reviewer`-has-no-shell premise from the review skills
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -21,3 +21,10 @@ How should the skills word it?
 - Roster evidence: all six Lead sessions list `reviewer — … | tools read, ls, find, grep, bash`.
 - Direct-read evidence: review-standards (`01a12c70-8313-7732-98d7-d5b2d07ac530`) read `CODING_STANDARDS.md`, `tests/STRATEGY.md`, `CONTEXT.md`, `docs/AGENTS.md`, `.agents/skills/*/SKILL.md` from the tree plus one bundle patch; review-spec (`01a12c70-90fa-72fb-844d-ee138e30611f`) ran `git diff c739932f..HEAD`, `grep -rn … src/ / assets/`, and read `tests/http/swipe_new.rs`, `assets/index.html` — never the bundle.
 - Related: [Let the review bundle take a path list](32-review-bundle-path-scope.md), [Never tell a review axis to skip `tooling.patch`](21-review-bundle-tooling-patch.md).
+
+## Answer
+
+2026-10-21. **Dropped (stale).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- Both quoted sentences are gone (removed in `8a8ba6bb`); `rg "no shell" .agents/skills/` finds nothing.
+- The roles now live in `.pi/agents/*.md`, and every role grants `bash`. The cited `/home/node/.pi/agent/agents/reviewer.md` does not exist.

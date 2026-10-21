@@ -1,7 +1,7 @@
 # Run every non-browser binary as the focused check, not a hand-picked list
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -19,3 +19,11 @@ Where should the rule live?
 - Source: `/retro` 2026-10-19 on the core step of the Rust rebuild (ticket 07, "C5 commit gate" note of 2026-10-18 ~23:05).
 - Evidence: `logs/build_history.txt`, the C5 full gates of 2026-10-18 ~23:00; the fix in `src/bootstrap/run.rs` `prepare_data` calls `storage.require_persona` before `resolve_boot_game`.
 - More evidence (`/retro` 2026-10-19, whole-rebuild review, implementer `eaa0aa4a` entries 202 to 221): the narrow loop was `clippy`, `--test-target lib`, `http`, `storage`. The `--no-browser` gate then failed in the guardrails binary on `guardrails_long_comment_runs` (a 5-line doc comment the agent wrote in `gate.rs`). One 43 s gate, three diagnosis turns and an 88 s second gate: about 27 % of the session. `CODING_STANDARDS.md` does not name the 5-line rule; only the generated `guardrails.md` does.
+
+## Answer
+
+2026-10-21. **Dropped (weak); answered by [80](80-simple-after-plan-slice-mode.md).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- The proposed rule (`integration` before done) would miss the ticket's own second incident: `integration` excludes the `guardrails` binary (`AGENTS.md`, Development Loop table).
+- Option A conflicts with decision 39: the Development Loop defines no "done".
+- 80's slice branch (owner choice, 2026-10-21) already has the implementer run `python build.py --no-browser` once before it reports, which covers guardrails.

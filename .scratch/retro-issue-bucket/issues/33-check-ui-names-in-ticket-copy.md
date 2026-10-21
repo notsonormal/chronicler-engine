@@ -1,7 +1,7 @@
 # Check that user-facing copy in a ticket names controls that exist
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -23,3 +23,10 @@ Where should the check live?
 - `src/adapters/driving/http/settings/handlers/settings.rs`: the connection is built with `max_tokens: None`.
 - `src/application/prompting/token_budget.rs`: `MAX_RESPONSE_TOKENS = 2048`.
 - `.agents/skills/wayfinder/SKILL.md`: the Ticket Types section.
+
+## Answer
+
+2026-10-21. **Dropped (weak); folded into [75](75-lead-delegate-brief-quality.md).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- The instance is fixed: the `TokenBudgetSpent` copy is now at `src/domain/model/state/generation_status.rs:31` and names no control.
+- One incident, and the spec review caught it. "Check named UI controls in the tree" becomes one example in 75's brief checklist.

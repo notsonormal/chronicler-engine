@@ -15,3 +15,7 @@ Spec scenarios are `#### Scenario <n>: <title>` blocks in `docs/specs/*.md`. In 
 
 - Source: `/retro` 2026-10-19 on the whole-rebuild review: lead session `01a15614` and its subagents.
 - Scout `e3690c86` entries 121, 128, 140, 172, 198, 203; wrong guess 47 to 48. Scout `69910b82` entries 36, 94. Scout `69dd27b4` entries 107, 109.
+
+## Comments
+
+- 2026-10-21, triage pass 2: Ticket [36](36-next-free-scenario-number.md) folded in: a `--next` flag that prints the next free scenario number.

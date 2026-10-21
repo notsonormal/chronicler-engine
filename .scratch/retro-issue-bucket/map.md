@@ -26,6 +26,13 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **30 — implementation of 03 and 22.** `build.py`, its tests, `AGENTS.md`, `tests/AGENTS.md`, `ENVIRONMENT.md`. [30](./issues/30-gate-no-browser-and-verdict-record.md)
 - **39 — Development Loop is information only.** A table of commands with coverage and cost; no "done" definition, because the work assignment sets it. Delete `unit`; `guardrails` takes in `architecture`; `fmt` and `check` leave `AGENTS.md`. [39](./issues/39-rethink-the-development-loop-section.md)
 - **48 — implementation of 39.** `unit` and `architecture` subcommands gone (`guardrails` runs both binaries); `AGENTS.md` Development Loop is one command table; DB/data paragraph in `ENVIRONMENT.md`. Two stale pointers left: `.cargo/config.toml` (seed signature) and the permissions `reason` (user edit). [48](./issues/48-trim-build-commands-and-development-loop.md)
+- **50 — dead-path guardrails.** Option C with A, built in core step C4 and merged to `main`. Residual: exemption paths are not checked. [50](./issues/50-dead-path-guardrails.md)
+- **37 and 29 — comment finder covers JavaScript and Python.** Every mode reads `.js` (all comment forms, `*.min.js` skipped); `--all` adds root and `scripts/` Python; the JS re-run waits for 38. [37](./issues/37-comment-finder-javascript-coverage.md), [29](./issues/29-comment-finder-python-coverage.md)
+- **80 and 72 — slice mode for `/simple-after-plan`.** Five-step section: implementer cleans comments and runs `--no-browser`; one combined reviewer; fixes to the resumed implementer; full gate once, then commit; retro once per effort. `/code-review` unchanged. [80](./issues/80-simple-after-plan-slice-mode.md), [72](./issues/72-code-review-single-session-mode.md)
+- **Triage pass 2 drops (2026-10-21).** Closed with a written reason in each ticket; see [`triage.md`](./triage.md) pass 2.
+  - Stale: [40](./issues/40-lead-file-tools.md) (delegation is now `.pi/extensions/delegate/`), [41](./issues/41-delegated-report-truncation.md) (the cut names `result.json`), [43](./issues/43-reviewer-shell-premise.md) (every role grants `bash`).
+  - Weak: [31](./issues/31-skip-browser-tier-on-unchanged-inputs.md) (`--no-browser` covers it; the skip would have saved no run).
+  - Folded: [33](./issues/33-check-ui-names-in-ticket-copy.md) and [56](./issues/56-ticket-edit-lists-from-the-tree.md) into 75; [36](./issues/36-next-free-scenario-number.md) into 64; [53](./issues/53-focused-checks-miss-a-binary.md) into 80; [55](./issues/55-tier1-oracle-production-writes.md) into 23.
 
 ## Not yet specified
 
@@ -38,7 +45,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 
 ## Open tickets
 
-All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect run; 10–29 came from it. Source evidence for 10–29: [`assets/reflect-2026-10-07/`](./assets/reflect-2026-10-07/README.md).
+All are grilling (HITL) and unblocked. Each ticket names its source session in its Context. Source evidence for 10–29: [`assets/reflect-2026-10-07/`](./assets/reflect-2026-10-07/README.md). Verdicts and clusters for every open ticket: [`triage.md`](./triage.md).
 
 - [01 — Give ticket resolution an owner after the commit](./issues/01-ticket-resolution-owner-after-commit.md)
 - [02 — Take the quarantine count out of parallel-ticket conflicts](./issues/02-quarantine-pin-parallel-conflicts.md)
@@ -66,11 +73,40 @@ All are grilling (HITL) and unblocked. Ticket 01 predates the 2026-10-07 reflect
 - [26 — Allocate the probe server a free port under concurrency](./issues/26-probe-server-port-allocation.md)
 - [27 — Give every review finding an evidence class](./issues/27-review-finding-evidence-class.md)
 - [28 — Add a usage-evidence phase to `chronicler-docs-hygiene`](./issues/28-docs-hygiene-usage-evidence.md)
-- [29 — Cover Python in the comment finder's full sweep](./issues/29-comment-finder-python-coverage.md)
-- [31 — Skip the browser tier when its inputs have not changed since a green run](./issues/31-skip-browser-tier-on-unchanged-inputs.md) (from the 2026-10-09 retro of session `01a12280`)
-- [32 — Let the review bundle take a path list](./issues/32-review-bundle-path-scope.md) (from the 2026-10-10 retro of the ticket-08 session)
-- [33 — Check that user-facing copy in a ticket names controls that exist](./issues/33-check-ui-names-in-ticket-copy.md) (from the 2026-10-10 retro of the ticket-08 session)
-- [34 — Sweep every caller when a change alters what a port returns](./issues/34-sweep-callers-of-a-changed-seam.md) (from the 2026-10-10 retro of the ticket-08 session)
-- [35 — Lint a spec scenario's shape and vocabulary](./issues/35-lint-spec-scenario-shape.md) (from the 2026-10-11 retro of the doc-spec boundary follow-ups session)
-- [36 — Show the next free scenario number for a spec](./issues/36-next-free-scenario-number.md) (from the 2026-10-11 retro of the doc-spec boundary follow-ups session)
-- [50 — Make the two path-limited guardrails check real files](./issues/50-dead-path-guardrails.md) (from the 2026-10-14 grilling of turn-state-model ticket 25)
+- [32 — Let the review bundle take a path list](./issues/32-review-bundle-path-scope.md)
+- [34 — Sweep every caller when a change alters what a port returns](./issues/34-sweep-callers-of-a-changed-seam.md)
+- [35 — Lint a spec scenario's shape and vocabulary](./issues/35-lint-spec-scenario-shape.md)
+- [38 — Audit the bloated comments in the dense files](./issues/38-audit-bloated-comments.md)
+- [42 — Check the tickets a doc review is about to make false](./issues/42-doc-review-ticket-claims.md)
+- [44 — Decide whether the comment pass renames or gates instead of delete-and-flag](./issues/44-comment-pass-rename-or-gate.md)
+- [45 — Reconcile a ticket's Done-when with its Answer at resolution](./issues/45-done-when-versus-answer.md)
+- [46 — Never issue a commit in the same step as the edit it commits](./issues/46-commit-in-its-own-step.md)
+- [47 — Read the next free bucket number across every checkout](./issues/47-next-free-bucket-number.md)
+- [49 — Stop the comment pass from deleting code inside string literals](./issues/49-comment-pass-code-inside-string-literals.md)
+- [51 — Give each branch of a design rule a test before the review passes](./issues/51-design-rule-branch-without-a-test.md)
+- [52 — Make the comment pass list every deleted reason comment](./issues/52-comment-pass-deletes-real-reasons.md)
+- [54 — State that a scenario's Given must be a state a client can reach](./issues/54-spec-given-a-client-can-reach.md)
+- [57 — Check the docs again after the code-changing steps of the after-plan workflow](./issues/57-after-plan-docs-after-code-fixes.md)
+- [58 — Say how to find the fixed point of a review for a multi-branch wayfinder effort](./issues/58-after-plan-fixed-point-of-a-map.md)
+- [59 — Let the review bundle diff a ref against the working tree](./issues/59-review-bundle-ref-plus-uncommitted.md)
+- [60 — Give the duplicate step a row in the Step Timing Summary](./issues/60-timing-summary-lists-every-step.md)
+- [61 — Say how an after-plan workflow closes out a wayfinder execution map](./issues/61-wayfinder-close-out-of-an-execution-map.md)
+- [62 — Reword the build timeout instruction so it does not read as the `timeout` command](./issues/62-agents-md-timeout-wording.md)
+- [63 — Deny `rg -r` and `rg -rn` with a reason in the permission config](./issues/63-deny-rg-replace-flag.md)
+- [64 — Give agents one way to print a spec scenario by number](./issues/64-show-scenario-helper.md)
+- [65 — Check that every backticked identifier in a Diátaxis doc exists in the tree](./issues/65-docs-identifier-check.md)
+- [66 — Make the docs-hygiene skill run its validator under a no-build brief](./issues/66-docs-hygiene-runs-the-validator.md)
+- [67 — Make a red gate name the failing test and its message](./issues/67-gate-failure-names-the-test.md)
+- [68 — Put formatting into the narrow dev loop](./issues/68-narrow-loop-runs-fmt.md)
+- [69 — Give implementers a safe way to rewrite many call sites](./issues/69-codemod-for-multi-site-rewrites.md)
+- [70 — Give agents one call that waits for a running build](./issues/70-build-wait-helper.md)
+- [71 — Scope the coverage step and the target dir of `/test-police`](./issues/71-test-police-coverage-and-target-dir.md)
+- [73 — Show how to slice one file out of a bundle patch](./issues/73-bundle-readme-patch-slice.md)
+- [74 — Make `build_slot.py --status` give one verdict](./issues/74-build-slot-status-stale-holder.md)
+- [75 — Check a delegate brief for unresolved references and stale premises](./issues/75-lead-delegate-brief-quality.md)
+- [76 — Name the tier-1 wait helpers in `tests/AGENTS.md`](./issues/76-tests-agents-names-wait-helpers.md)
+- [77 — Plan text asks for free functions that the free-fn guardrail refuses](./issues/77-plan-text-versus-free-fn-guardrail.md)
+- [78 — A stale `guardrails.md` fails `build.py` before the hook can regenerate it](./issues/78-stale-guardrails-doc-fails-the-gate.md)
+- [79 — `ScriptedModel` does not fail on a scripted reply that no call uses](./issues/79-scripted-model-unused-replies.md)
+- [81 — The plan review checks each test row and Done-when against its Content item](./issues/81-plan-review-checks-rows-against-content.md)
+- [82 — Lint the mechanical part of the recurring `docs/diataxis/` review findings](./issues/82-lint-recurring-diataxis-doc-findings.md)

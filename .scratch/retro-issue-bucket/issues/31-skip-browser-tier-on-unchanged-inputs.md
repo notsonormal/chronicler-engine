@@ -1,7 +1,7 @@
 # Skip the browser tier when its inputs have not changed since a green run
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -24,3 +24,12 @@ Should `python build.py` skip the browser tier when every file the browser tests
 - **"Green" changes meaning.** `AGENTS.md` defines green as the full gate on the reported tree. A skipped tier needs a new definition, or the skip must be opt-in.
 - **A missed input gives a false green.** Candidate inputs: `src/`, `assets/`, `data/`, `tests/browser/`, `tests/test_utils/`, `Cargo.toml`, `Cargo.lock`, `.config/nextest.toml`, the Rust toolchain, the Playwright/Chromium version. Unknown: whether that list is complete.
 - **Option to compare.** Drop the idea, and keep the browser tier unconditional in the full gate.
+
+## Answer
+
+2026-10-21. **Dropped (weak).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- `python build.py --no-browser` (ticket 30) already gives the opt-in skip, and the build journal records a tree identity (`build.py` `_tree_identity`).
+- `AGENTS.md` no longer defines "green" (tickets 39 and 48), and the `--no-fmt` cause is gone with `## Concurrent Builds`.
+- The ticket's own evidence says the skip would have saved no run. An input digest risks a false green for at most one saved run per effort.
+- Decision 03 stands: iterate with `--no-browser`, run the full gate once.

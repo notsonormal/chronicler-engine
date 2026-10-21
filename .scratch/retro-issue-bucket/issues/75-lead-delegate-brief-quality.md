@@ -15,3 +15,7 @@ Three briefs of the lead in this run cost their agents time. A fix row said "lik
 
 - Source: `/retro` 2026-10-19 on the whole-rebuild review: lead session `01a15614` and its subagents.
 - Implementer `eaa0aa4a` thinking at 73; scout `699961ee` final message (two premises not confirmed); scout `e3690c86` Part B.
+
+## Comments
+
+- 2026-10-21, triage pass 2: Tickets [33](33-check-ui-names-in-ticket-copy.md) and [56](56-ticket-edit-lists-from-the-tree.md) folded in: check named UI controls in the tree; build each edit list from `git diff --stat` or `rg`. Note: 11's "scout has no shell" premise is stale (`.pi/agents/scout.md` grants `bash`).

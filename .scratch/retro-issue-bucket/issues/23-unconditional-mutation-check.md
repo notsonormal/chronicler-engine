@@ -23,3 +23,7 @@ Should the check be unconditional in some cases?
 - `tests/http/games_switch.rs` — scenario 18.3; the fix replaced `let _ = try_claim(...)` with `assert!(...)`.
 - `.agents/skills/tdd/SKILL.md:51` — "when a test looks suspicious".
 - `tests/AGENTS.md` rule 5 — "Investigate pre-existing and flaky failures too".
+
+## Comments
+
+- 2026-10-21, triage pass 2: Ticket [55](55-tier1-oracle-production-writes.md) folded in: widen the trigger to "a test that turns green in a step that changes its subject".

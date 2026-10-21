@@ -1,7 +1,7 @@
 # Make the two path-limited guardrails check real files
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -27,3 +27,11 @@ Recommendation: C with A. Today, neither rule would find a violation in `adapter
 - **Skills:** `/grilling`.
 
 **2026-10-19, lead (evidence for the owner's status change).** The core step's C4 built option C with A. Both walkers now take the HTTP adapter's folder: `check_handler_return_type` uses `HTTP_ADAPTER_SCOPE`, and `check_server_layer_boundaries` checks `adapters/driving/http/` with `SwipeState` as its banned type (`tests/infrastructure/guardrails/layers.rs`). The meta rule is in place: a path-limited check whose scope matches no file reports `dead_scope_violation` (`tests/infrastructure/guardrails/mod.rs`), and a walker row reports `dead_path_violation` (`walkers.rs`, tested in `walker_tests.rs::a_dead_path_names_the_rule_and_the_scope`). The branch is `wf/rebuild-core`, not yet on `main`. Recommendation: resolve this ticket when the core step merges to `main`.
+
+## Answer
+
+2026-10-21. **Resolved: option C with A, built in core step C4.** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- The fix is on `main`: `51efaafc` (C4), merged in `22a8f090`. Both walkers use the HTTP adapter's folder (`HTTP_ADAPTER_SCOPE` in `tests/infrastructure/guardrails/layers.rs`).
+- The meta rule is in place: `dead_scope_violation` (`tests/infrastructure/guardrails/mod.rs`) and `dead_path_violation` (`walkers.rs`, tested in `walker_tests.rs`).
+- Residual, not part of this answer: the meta rule checks scope paths, not exemption paths. `structure.rs:135` (`server/mod.rs`) and `free_fn.rs:22-28` (`application/generation/slot.rs`, `application/pipeline/spawn.rs`) name no file, and `layers.rs:280` passes whatever the `mod.rs` skip does. Candidate for a new ticket.

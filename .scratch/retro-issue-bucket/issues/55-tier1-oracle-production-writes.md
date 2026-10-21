@@ -1,7 +1,7 @@
 # Check that a tier-1 assertion reads state the code under test writes
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -17,3 +17,10 @@ Which guard fits?
 ## Context
 
 - Source: `/retro` 2026-10-19 on the core step of the Rust rebuild (ticket 07, "C5 fix pass 2"; ticket 06 retro for P5).
+
+## Answer
+
+2026-10-21. **Dropped (stale); the rule folds into [23](23-unconditional-mutation-check.md).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- C6 deleted the Snapshot (`plumbing.rs` migration drops its tables), so the instance cannot recur.
+- The general rule is 23's break-and-watch. Widen 23's trigger to "a test that turns green in a step that changes its subject".

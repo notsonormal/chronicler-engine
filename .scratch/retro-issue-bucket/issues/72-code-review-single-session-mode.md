@@ -1,7 +1,7 @@
 # Give `/code-review` a single-session mode
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -15,3 +15,7 @@ Blocked by: —
 
 - Source: `/retro` 2026-10-19 on the whole-rebuild review: lead session `01a15614` and its subagents.
 - `.agents/skills/code-review/SKILL.md` line 11 and section 4; reviewer `20247c8f`.
+
+## Answer
+
+2026-10-21. **Resolved by [80](80-simple-after-plan-slice-mode.md); `/code-review` does not change.** The slice mode of `/simple-after-plan` runs one `reviewer` that checks spec, standards and comments/docs in one pass. That is the single-session review this ticket asked for. The full branch still calls `/code-review` with its two subagents.

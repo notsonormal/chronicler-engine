@@ -1,7 +1,7 @@
 # Deliver the tail of a long delegated report
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -22,3 +22,11 @@ Where should a report that exceeds the cap go?
 - The truncation notice names the loss, so the failure is legible; what is missing is any recovery path that does not cost a whole agent.
 - Related: issue 08 (`read` with `limit=0` returns nothing) is the neighbouring read-side gap.
 - More evidence (`/retro` 2026-10-19, whole-rebuild review, lead `01a15614`): the thermo-nuclear reviewer's 20,090-character report arrived truncated before its closing section ("What would make this approvable … H"). The notice named `/home/node/.pi/agent/delegate/0ec8f36d/result.json`, and the lead read the tail from it with one `python` call. The recovery path exists now, but it is not a documented step.
+
+## Answer
+
+2026-10-21. **Dropped (stale).** Triage pass 2 (`../triage.md`), HEAD `511e28dd`; the owner approved the close.
+
+- The cut now lives in repo code: `.pi/extensions/delegate/lib.ts:206-210` cuts at 20 000 chars and appends `[truncated; full result in <result.json>]`.
+- The cut is not silent, and the notice names the recovery file. Briefs that ask for a report in `tmp/` and a short reply avoid it.
+- Optional later: raise the cap in the extension.

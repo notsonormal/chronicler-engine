@@ -25,3 +25,7 @@ Some files carry long "why" comment blocks that read as design notes. The commen
 - `CODING_STANDARDS.md` "Code comments": "Comments explain the WHY only when non-obvious". The rule has no length limit and no place named for a long reason.
 - Candidates: a density ranking (`rg -c` comment lines per file under `src/`, `tests/`, `assets/`) to choose the audit set; a length rule for "why" comments; where long reasons go (reference doc, ticket Answer, commit message).
 - Related: [Cover JavaScript in the comment finder](37-comment-finder-javascript-coverage.md) (the JS files must be in the finder's scope first), [Scope the comment pass to the lines the diff adds](12-comment-pass-scope-to-the-diff.md).
+
+## Comments
+
+- 2026-10-21: ticket [37](37-comment-finder-javascript-coverage.md) is done; `comment_finder.py` now lists JS (all forms) and Python under `--all`. The deferred re-run of the comment pass on `assets/dashboard-panels.js` and `assets/dashboard-errors.js` belongs here, after the length rule.
