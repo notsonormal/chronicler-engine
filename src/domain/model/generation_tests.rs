@@ -644,3 +644,67 @@ fn options_follow() {
         );
     }
 }
+
+fn tail_ending_in(message_type: MessageType, kind: MessageKind) -> Tail {
+    let mut last = Message::new(message_type, kind, swipe("last", state_in("room1", None)));
+    last.id = 9;
+    Tail {
+        last,
+        state_before_last: None,
+        count: 2,
+    }
+}
+
+#[test]
+fn next_in_run_continues_an_unanswered_input() {
+    let rows = [
+        ("a typed Input", MessageKind::TypedInput),
+        ("an Impersonate Input", MessageKind::ImpersonateInput),
+    ];
+    for (label, kind) in rows {
+        let tail = tail_ending_in(MessageType::Input, kind);
+        let next = JobRequest::next_in_run(Some(&tail));
+        assert_eq!(next, JobRequest::Action(String::new()), "{label}");
+        assert!(next.is_continue(), "{label}");
+    }
+}
+
+#[test]
+fn next_in_run_impersonates_after_any_other_end_of_the_story() {
+    let rows = [
+        (
+            "a Narration",
+            Some(tail_ending_in(
+                MessageType::Narration,
+                MessageKind::Narration,
+            )),
+        ),
+        (
+            "an event Narration",
+            Some(tail_ending_in(
+                MessageType::Narration,
+                MessageKind::EventNarration(event_record()),
+            )),
+        ),
+        ("an empty story", None),
+    ];
+    for (label, tail) in rows {
+        let next = JobRequest::next_in_run(tail.as_ref());
+        assert_eq!(next, JobRequest::Impersonate(None), "{label}");
+        assert!(!next.is_continue(), "{label}");
+    }
+}
+
+#[test]
+fn only_a_bare_action_is_a_continue() {
+    let rows = [
+        (JobRequest::Action("look".to_string()), false),
+        (JobRequest::Guide(String::new()), false),
+        (JobRequest::Impersonate(None), false),
+        (JobRequest::Retry, false),
+        (JobRequest::Action(String::new()), true),
+    ];
+    for (request, expected) in rows {
+        assert_eq!(request.is_continue(), expected, "{request:?}");
+    }
+}

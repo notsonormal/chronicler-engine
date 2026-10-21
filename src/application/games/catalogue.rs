@@ -127,41 +127,45 @@ impl GameCatalogue {
         perspective: NarrativePerspective,
         tense: NarrativeTense,
     ) -> Result<Game, ApplicationError> {
-        let mut game = self.require_game(id)?;
-        game.narrative_perspective = perspective;
-        game.narrative_tense = tense;
-        self.storage.update_game_config(&game)?;
-        Ok(game)
+        self.write_config(id, || {
+            let mut game = self.require_game(id)?;
+            game.narrative_perspective = perspective;
+            game.narrative_tense = tense;
+            self.storage.update_game_config(&game)?;
+            Ok(game)
+        })
     }
 
     /// A deliberately-set perspective survives the switch; only the other mode's
     /// default is nudged.
     pub fn switch_mode(&self, id: u64, mode: NarratorMode) -> Result<Game, ApplicationError> {
-        let mut game = self.require_game(id)?;
-        if game.narrator_mode == mode {
-            return Ok(game);
-        }
+        self.write_config(id, || {
+            let mut game = self.require_game(id)?;
+            if game.narrator_mode == mode {
+                return Ok(game);
+            }
 
-        let bundle = {
-            let settings = self.storage.get_settings()?;
-            settings.mode_preset_registry.bundle_for(mode)
-        };
-        game.narrator_mode = mode;
-        game.active_system_prompt_preset_id = bundle.system_prompt_preset_id;
-        game.active_quantifier_prompt_preset_id = bundle.quantifier_prompt_preset_id;
-        game.active_impersonate_prompt_preset_id = bundle.impersonate_prompt_preset_id;
+            let bundle = {
+                let settings = self.storage.get_settings()?;
+                settings.mode_preset_registry.bundle_for(mode)
+            };
+            game.narrator_mode = mode;
+            game.active_system_prompt_preset_id = bundle.system_prompt_preset_id;
+            game.active_quantifier_prompt_preset_id = bundle.quantifier_prompt_preset_id;
+            game.active_impersonate_prompt_preset_id = bundle.impersonate_prompt_preset_id;
 
-        let other_default = match mode {
-            NarratorMode::Novel => NarratorMode::InteractiveFiction,
-            NarratorMode::InteractiveFiction => NarratorMode::Novel,
-        }
-        .default_perspective();
-        if game.narrative_perspective == other_default {
-            game.narrative_perspective = mode.default_perspective();
-        }
+            let other_default = match mode {
+                NarratorMode::Novel => NarratorMode::InteractiveFiction,
+                NarratorMode::InteractiveFiction => NarratorMode::Novel,
+            }
+            .default_perspective();
+            if game.narrative_perspective == other_default {
+                game.narrative_perspective = mode.default_perspective();
+            }
 
-        self.storage.update_game_config(&game)?;
-        Ok(game)
+            self.storage.update_game_config(&game)?;
+            Ok(game)
+        })
     }
 
     /// A mode-tagged preset that disallows the game's mode is accepted only when
@@ -171,30 +175,42 @@ impl GameCatalogue {
         id: u64,
         selection: PresetSelection,
     ) -> Result<Game, ApplicationError> {
-        let mut game = self.require_game(id)?;
-        for (preset_type, new_id) in selection.slots() {
-            // An unchanged stored id skips validation, so saving the form never
-            // fails on a stale or deleted selection.
-            if new_id == game.active_preset_id(preset_type) {
-                continue;
+        self.write_config(id, || {
+            let mut game = self.require_game(id)?;
+            for (preset_type, new_id) in selection.slots() {
+                // An unchanged stored id skips validation, so saving the form never
+                // fails on a stale or deleted selection.
+                if new_id == game.active_preset_id(preset_type) {
+                    continue;
+                }
+                let preset = self.storage.get_preset(new_id)?.ok_or_else(|| {
+                    ApplicationError::validation(format!("Preset not found: {new_id}"))
+                })?;
+                // Options presets serve both modes from one slot, so their
+                // allowed_modes never gate the selection.
+                if preset_type.is_mode_tagged() && !preset.allows(game.narrator_mode) {
+                    return Err(ApplicationError::validation(format!(
+                        "Preset not allowed for {} mode",
+                        game.narrator_mode.as_str()
+                    )));
+                }
             }
-            let preset = self.storage.get_preset(new_id)?.ok_or_else(|| {
-                ApplicationError::validation(format!("Preset not found: {new_id}"))
-            })?;
-            // Options presets serve both modes from one slot, so their
-            // allowed_modes never gate the selection.
-            if preset_type.is_mode_tagged() && !preset.allows(game.narrator_mode) {
-                return Err(ApplicationError::validation(format!(
-                    "Preset not allowed for {} mode",
-                    game.narrator_mode.as_str()
-                )));
+            for (preset_type, new_id) in selection.slots() {
+                game.set_active_preset_id(preset_type, new_id.to_string());
             }
-        }
-        for (preset_type, new_id) in selection.slots() {
-            game.set_active_preset_id(preset_type, new_id.to_string());
-        }
-        self.storage.update_game_config(&game)?;
-        Ok(game)
+            self.storage.update_game_config(&game)?;
+            Ok(game)
+        })
+    }
+
+    fn write_config(
+        &self,
+        id: u64,
+        write: impl FnOnce() -> Result<Game, ApplicationError>,
+    ) -> Result<Game, ApplicationError> {
+        self.game_writer
+            .config_write(GameId(id), write)
+            .map_err(|_run_held| ApplicationError::still_thinking())?
     }
 
     fn require_game(&self, id: u64) -> Result<Game, ApplicationError> {

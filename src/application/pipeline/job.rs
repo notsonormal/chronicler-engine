@@ -11,7 +11,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
 use crate::application::generation::gate::{
-    GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, SavedText,
+    GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, RunId, RunRefusal, SavedText,
 };
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
@@ -40,6 +40,24 @@ pub struct JobDeps {
     pub tasks: Arc<JobTasks>,
 }
 
+/// How a Job ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JobEnd {
+    /// Every part ran, and the Job wrote no failure line.
+    Done,
+    /// A part failed; the Job tried to write its failure line.
+    Failed,
+    /// A stop, a reset or a delete ended the Job: its writes landed nowhere.
+    EntryMoved,
+}
+
+/// The Job of one run, after it ended.
+pub struct RunJobEnd {
+    /// The request the run chose for this Job.
+    pub request: JobRequest,
+    pub end: JobEnd,
+}
+
 pub struct Job {
     writer: JobWriter,
     narrator: Arc<Narrator>,
@@ -65,39 +83,71 @@ impl Job {
         request: JobRequest,
     ) -> Result<(), Refusal> {
         let (job_writer, plan) = writer.accept(game, request)?;
+        let span = Self::span_of(&job_writer, &plan);
+        let job = Self::new(job_writer, &deps);
+        let handle = tokio::task::spawn_blocking(move || {
+            let _entered = span.enter();
+            job.run(plan);
+        });
+        deps.tasks.watch(handle);
+        Ok(())
+    }
+
+    /// One Job of a run, accepted under the run hold and run to its end on the
+    /// calling thread, so the run's driver starts no second Job before this one
+    /// ends.
+    #[instrument(
+        skip(writer, deps),
+        fields(
+            game = %game,
+            run = ?run,
+            job = tracing::field::Empty,
+            kind = tracing::field::Empty,
+            step = tracing::field::Empty
+        )
+    )]
+    pub fn run_for_run(
+        writer: &GameWriter,
+        deps: &JobDeps,
+        game: GameId,
+        run: RunId,
+    ) -> Result<RunJobEnd, RunRefusal> {
+        let accepted = writer.accept_for_run(game, run)?;
+        Self::span_of(&accepted.writer, &accepted.plan);
+        let job = Self::new(accepted.writer, deps);
+        let end = job.run(accepted.plan);
+        Ok(RunJobEnd {
+            request: accepted.request,
+            end,
+        })
+    }
+
+    fn new(writer: JobWriter, deps: &JobDeps) -> Self {
+        Self {
+            writer,
+            narrator: Arc::clone(&deps.narrator),
+            agent_runner: Arc::clone(&deps.agent_runner),
+            presets: PromptPresetService::new(Arc::clone(&deps.storage)),
+            storage: Arc::clone(&deps.storage),
+        }
+    }
+
+    /// Fills the span fields that only the accepted Job knows, and returns the span.
+    fn span_of(writer: &JobWriter, plan: &JobPlan) -> tracing::Span {
         let span = tracing::Span::current();
-        span.record("job", job_writer.job_id());
+        span.record("job", writer.job_id());
         span.record(
             "kind",
             tracing::field::debug(plan.first.as_ref().map(GenerationOrder::kind)),
         );
         span.record("step", tracing::field::debug(plan.first_step()));
-
-        let JobDeps {
-            narrator,
-            agent_runner,
-            storage,
-            tasks,
-        } = deps;
-        let job = Self {
-            writer: job_writer,
-            narrator,
-            agent_runner,
-            presets: PromptPresetService::new(Arc::clone(&storage)),
-            storage,
-        };
-        let handle = tokio::task::spawn_blocking(move || {
-            let _entered = span.enter();
-            job.run(plan);
-        });
-        tasks.watch(handle);
-        Ok(())
+        span
     }
 
     /// A step that fails ends the Job, and every save unit that landed before it
     /// stays. The Options run follows a Narration that was saved, whatever failed
     /// after it except a moved entry.
-    fn run(&self, plan: JobPlan) {
+    fn run(&self, plan: JobPlan) -> JobEnd {
         let JobPlan {
             mut input,
             first,
@@ -124,7 +174,7 @@ impl Job {
                 }
             }
         }
-        self.end(failure);
+        self.end(failure)
     }
 
     /// The request's Input save runs after the room check, so an invalid room saves
@@ -340,22 +390,36 @@ impl Job {
         )
     }
 
-    fn end(&self, failure: Option<JobFailure>) {
+    fn end(&self, failure: Option<JobFailure>) -> JobEnd {
         match failure {
-            None => {}
+            None => JobEnd::Done,
             Some(JobFailure::Line(line)) => {
                 tracing::warn!("job {}: {line:?}", self.writer.job_id());
-                if let Err(refused) = self.writer.save_failure(line) {
-                    tracing::warn!(
-                        "job {}: the failure line was refused: {refused:?}",
-                        self.writer.job_id()
-                    );
+                match self.writer.save_failure(line) {
+                    Ok(()) => JobEnd::Failed,
+                    Err(JobFailure::EntryMoved) => {
+                        tracing::warn!(
+                            "job {}: the failure line was refused: the entry moved on",
+                            self.writer.job_id()
+                        );
+                        JobEnd::EntryMoved
+                    }
+                    Err(refused) => {
+                        tracing::warn!(
+                            "job {}: the failure line was refused: {refused:?}",
+                            self.writer.job_id()
+                        );
+                        JobEnd::Failed
+                    }
                 }
             }
-            Some(JobFailure::EntryMoved) => tracing::warn!(
-                "job {}: the entry moved on; the Job ends",
-                self.writer.job_id()
-            ),
+            Some(JobFailure::EntryMoved) => {
+                tracing::warn!(
+                    "job {}: the entry moved on; the Job ends",
+                    self.writer.job_id()
+                );
+                JobEnd::EntryMoved
+            }
         }
     }
 

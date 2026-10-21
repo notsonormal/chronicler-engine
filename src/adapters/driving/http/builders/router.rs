@@ -9,6 +9,7 @@ use tower_http::services::ServeDir;
 
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::action;
+use crate::adapters::driving::http::autoplay;
 use crate::adapters::driving::http::chat_window;
 use crate::adapters::driving::http::debug;
 use crate::adapters::driving::http::games;
@@ -45,6 +46,10 @@ pub fn build_router(app_state: AppState) -> Router {
         .route(
             "/action/confirm",
             post(action::handlers::action_confirm_handler),
+        )
+        .route(
+            "/autoplay",
+            post(autoplay::handlers::start_autoplay_handler),
         )
         .route(
             "/history/:id",

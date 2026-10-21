@@ -2,6 +2,7 @@
 //! Application layer services and game flow orchestration
 
 pub mod agents;
+pub mod autoplay;
 pub mod connection_test_service;
 #[cfg(test)]
 mod connection_test_service_tests;

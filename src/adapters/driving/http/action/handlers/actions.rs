@@ -25,6 +25,8 @@ use crate::adapters::driving::http::utils::response::{internal_error, ok};
 /// markup; the stub server answers a refused Action with it.
 pub const BUSY_STATUS: &str = "<span class=\"status wait\">Still thinking...</span>";
 
+pub const THINKING_STATUS: &str = "<span class=\"status thinking\">Thinking...</span>";
+
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
     pub command: String,
@@ -38,7 +40,7 @@ fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Respon
         Action::Options => JobRequest::Options,
     };
     match Job::start(&state.game_writer, state.job_deps.clone(), game_id, request) {
-        Ok(()) => ok("<span class=\"status thinking\">Thinking...</span>"),
+        Ok(()) => ok(THINKING_STATUS),
         Err(refusal) => refusal.into_response(),
     }
 }

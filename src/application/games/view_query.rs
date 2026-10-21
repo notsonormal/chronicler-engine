@@ -7,13 +7,13 @@ use crate::adapters::driven::storage::llm_messages::LLM_MESSAGE_RETENTION_LIMIT;
 use crate::adapters::driven::storage::Storage;
 use crate::application::debug::DebugStateView;
 use crate::application::errors::ApplicationError;
-use crate::application::generation::gate::GameWriter;
+use crate::application::generation::gate::{Busy, GameWriter};
 use crate::domain::model::agent::Role;
 use crate::domain::model::dock::DockRecord;
 use crate::domain::model::game::GameId;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::message::Message;
-use crate::domain::model::state::generation_status::{GenerationFailure, GenerationStatus, Step};
+use crate::domain::model::state::generation_status::{GenerationFailure, GenerationStatus};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::story_window::{StoryWindow, StoryWindowEntry};
 use crate::error::EngineError;
@@ -30,8 +30,8 @@ pub struct RoleHealth {
 
 /// The status rule: busy first, then the Game's failure line, then idle.
 pub enum Status {
-    /// A Job runs: the status shows its step.
-    Busy(Step),
+    /// A Job runs or a run holds the Game.
+    Busy(Busy),
     /// The Game holds a failure line.
     Failed(GenerationFailure),
     /// Nothing runs and no line stands.
@@ -127,7 +127,7 @@ impl GameViewQuery {
         let history_tail = self.storage.stories().entries(game_id, None, 5)?;
         let status = self.status(game_id)?;
         let (generation_status, step, last_error) = match status {
-            Status::Busy(step) => (GenerationStatus::Generating, Some(step), None),
+            Status::Busy(busy) => (GenerationStatus::Generating, busy.step().cloned(), None),
             Status::Failed(failure) => (
                 GenerationStatus::Error(failure.clone()),
                 None,
@@ -202,8 +202,8 @@ impl GameViewQuery {
     }
 
     pub fn status(&self, game_id: GameId) -> Result<Status, EngineError> {
-        if let Some(step) = self.busy_step(game_id) {
-            return Ok(Status::Busy(step));
+        if let Some(busy) = self.writer.busy(game_id) {
+            return Ok(Status::Busy(busy));
         }
         Ok(
             match self
@@ -217,12 +217,8 @@ impl GameViewQuery {
         )
     }
 
-    pub fn busy_step(&self, game_id: GameId) -> Option<Step> {
-        self.writer.busy_step(game_id)
-    }
-
     pub fn is_busy(&self, game_id: GameId) -> bool {
-        self.busy_step(game_id).is_some()
+        self.writer.busy(game_id).is_some()
     }
 
     pub fn game_display_name(&self, game_id: GameId) -> Result<String, ApplicationError> {

@@ -15,6 +15,10 @@ impl ApplicationError {
         Self::Validation(msg.into())
     }
 
+    pub fn still_thinking() -> Self {
+        Self::validation("Still thinking...")
+    }
+
     /// Lifts an engine error, keeping a domain refusal on the variant the HTTP
     /// layer renders as a user-facing rejection. Distinct from the `From`
     /// impl, which keeps every engine error on `Engine` for a `?` conversion.

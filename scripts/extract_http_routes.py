@@ -20,6 +20,7 @@ AREA_GROUPS: tuple[tuple[str, str], ...] = (
     ("chat_window::", "Core"),
     ("debug::", "Core"),
     ("action::", "Action"),
+    ("autoplay::", "Autoplay"),
     ("history::", "History"),
     ("layout::", "Layout fragments"),
     ("games::", "Games"),

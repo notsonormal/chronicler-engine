@@ -158,6 +158,25 @@ pub enum JobRequest {
     Retrigger,
 }
 
+impl JobRequest {
+    /// The next request of an Autoplay run, and also its first: an Input that no
+    /// Narration answers gets a Continue, and any other end of the story gets an
+    /// Impersonate that writes the Persona's next Input.
+    pub fn next_in_run(tail: Option<&Tail>) -> Self {
+        match tail {
+            Some(tail) if tail.last.message_type == MessageType::Input => {
+                Self::Action(String::new())
+            }
+            _ => Self::Impersonate(None),
+        }
+    }
+
+    /// The Continue Job is the one that ends a cycle of a run.
+    pub fn is_continue(&self) -> bool {
+        matches!(self, Self::Action(text) if text.is_empty())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptionsRun {
     /// The run follows the Job's last Narration, when the toggle is on.

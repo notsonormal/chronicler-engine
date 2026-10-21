@@ -31,7 +31,13 @@ A Retrigger is allowed when `Tail::retrigger_allowed` says so: the last Message 
 
 `GameWriter` owns one registry of **job entries**, one for each busy Game. A job entry holds the Job's id and the current `Step`. A Game is busy when its job entry exists.
 
-No saved record holds the busy mark or the step. A restart loses every job entry, so every Game is idle after a start.
+An Autoplay run makes a **run hold** in the same registry as the job entries. A run hold names the run, the Continue Jobs of the run that ended without a failure line, and the budget. It lasts from the start of the run to its end, also between two Jobs of the run. A Game is busy when its job entry or its run hold exists.
+
+- While a run hold exists, the busy rule refuses every story write with "Still thinking...". Only an accept that names the run's own id passes.
+- A run ends when its budget is spent, when a Job ends with a failure line, or when its run hold is gone. A stop, a reset and a delete remove the run hold with the job entry.
+- A write of the Game's config columns (the Narrator Mode, the posture and the preset selections) is refused with "Still thinking..." while a run hold exists.
+
+No saved record holds the busy mark, the step or the run hold. A restart loses every job entry and every run hold, so every Game is idle after a start.
 
 ## The Writer Rule
 
@@ -40,7 +46,7 @@ No saved record holds the busy mark or the step. A restart loses every job entry
 - `accept` reads the end of the story and asks `JobPlan::for_request` for the plan. It then checks that the records the plan names exist: the Game, the Persona and the start state.
 - Each save method of a `JobWriter` checks, in one hold of the registry, that the job entry of the Game still holds the Job's id. When the check fails, the save is refused and the Job ends with no further write.
 - A stop, a reset and a delete of the Game remove the job entry. A late save of their Job lands nowhere.
-- A hold covers one check and its save units. No hold spans an LLM call, so the Jobs of different Games run at the same time.
+- One hold of the registry covers one check and its save units. No hold of the registry spans an LLM call, so the Jobs of different Games run at the same time.
 - An edit, a delete and a swipe switch are refused while the Game is busy. The refusal comes before every other check.
 
 ## Steps
@@ -83,7 +89,7 @@ One rule picks the failure line of a part. `accept` and the Job use the same rul
 
 ## Status
 
-The status of a Game has one rule. A busy Game shows the step of its job entry. A Game that is not busy and holds a failure line shows that line. Any other Game is idle. The accept unit clears the failure line, and a stop, a swipe switch and a delete clear it too.
+The status of a Game has one rule. A busy Game shows the step of its job entry. A Game with a run hold also shows the progress of the run: the number of the cycle in progress and the budget. A Game that is not busy and holds a failure line shows that line. Any other Game is idle. The accept unit clears the failure line, and a stop, a swipe switch and a delete clear it too.
 
 `GameViewQuery` holds the rule. The reason for its two sources is in the Explanation doc listed below.
 
@@ -91,7 +97,7 @@ The status of a Game has one rule. A busy Game shows the step of its job entry. 
 
 A **stop** removes the job entry, clears the failure line and clears the notice of the dock record. The Game is idle at once. The Job starts no further step, and the id check refuses any later save of the stopped Job. Every save unit that landed before the stop stays. A model call that runs when the stop comes runs to its end, and the id check refuses its answer.
 
-A **reset** creates a new Game and removes the active Game with its job entry. Both writes land in one hold. A Job that ran on the removed Game writes nothing more.
+A **reset** creates a new Game and removes the active Game with its job entry. Both writes land in one hold of the registry. A Job that ran on the removed Game writes nothing more.
 
 ## The State of a Game
 
