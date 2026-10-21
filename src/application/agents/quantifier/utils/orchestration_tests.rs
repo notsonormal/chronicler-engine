@@ -16,6 +16,7 @@ use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, 
 use crate::test_support::quantifier::{make_npc, make_room};
 use crate::application::agents::quantifier::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext,
+    QuantifierReading,
 };
 
 fn recorder_with(backend: impl LlmProvider + 'static) -> Arc<LlmCallRecorder> {
@@ -220,7 +221,7 @@ fn determine_npcs_with_room(
     scene_npcs: &[NpcCard],
     player_action: &str,
     recorder: &LlmCallRecorder,
-) -> crate::domain::model::quantifier::QuantifierResult {
+) -> QuantifierReading {
     use crate::domain::model::agent::{HookInput, Kind, WorldView};
     use crate::domain::model::state::message_types::StoryRow;
     let map = map_with_room(current_room);
@@ -481,7 +482,6 @@ fn test_static_npc_result_preserves_movement() {
     let movement = MovementParseResult {
         movement_type: Some(MovementType::Leaving),
         destination: Some("garden".to_string()),
-        confidence: QuantifierConfidence::Medium,
     };
 
     let npcs = std::collections::HashMap::new();

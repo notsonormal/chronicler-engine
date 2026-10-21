@@ -5,22 +5,18 @@ use std::sync::Arc;
 
 use proptest::prelude::*;
 
-use crate::domain::model::state::trigger_context::TriggerRef;
+use crate::domain::model::agent::Kind;
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
-use crate::domain::model::quantifier::{
-    MovementParseResult, MovementType, NpcEvent, NpcTransitionType, QuantifierConfidence,
-    QuantifierParseResult, QuantifierResult,
-};
+use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::movement::MovementState;
 use crate::domain::model::state::scene_state::SceneState;
 use crate::domain::model::state::swipe_state::SwipeState;
+use crate::domain::model::state::trigger_context::{EventRecord, TriggerRef};
 use crate::domain::model::trigger::{
     ComparisonOperator, NpcEncounterLog, Trigger, TriggerNarration, TriggerRequirement,
 };
-use crate::domain::model::utils::game_rules::{
-    apply_game_rules, GameRuleRequest, GameRulesOutcome, TriggerMatch,
-};
+use crate::domain::model::utils::game_rules::{apply, GameWorld, RulesOutcome};
 use crate::test_support::*;
 
 struct RulesDeps {
@@ -57,7 +53,6 @@ fn swipe_with(room_id: &str, present: Vec<NpcCard>, log: NpcEncounterLog) -> Swi
         },
         scene: SceneState {
             npcs_in_area: present,
-            ..Default::default()
         },
         npc_encounter_log: log,
     }
@@ -75,58 +70,45 @@ fn log_of(npc_id: &str, times_met: u32, currently_meeting: bool) -> NpcEncounter
 
 fn quantifier(npc_ids: &[&str], destination: Option<&str>) -> QuantifierResult {
     QuantifierResult {
-        npcs: QuantifierParseResult {
-            npc_ids: npc_ids.iter().map(|id| id.to_string()).collect(),
-            confidence: QuantifierConfidence::High,
-        },
-        movement: match destination {
-            Some(destination) => MovementParseResult {
-                movement_type: Some(MovementType::Entering),
-                destination: Some(destination.to_string()),
-                confidence: QuantifierConfidence::High,
-            },
-            None => MovementParseResult::default(),
-        },
+        present: npc_ids.iter().map(|id| id.to_string()).collect(),
+        destination: destination.map(str::to_string),
     }
+}
+
+fn rule_step_of(
+    kind: Kind,
+    swipe: &mut SwipeState,
+    result: &QuantifierResult,
+    deps: &RulesDeps,
+) -> Result<RulesOutcome, crate::error::EngineError> {
+    let world = GameWorld {
+        map: &deps.map,
+        characters: &deps.npcs,
+        persona_name: &deps.persona.sheet.name,
+    };
+    let outcome = apply(swipe.clone(), result, &world, kind)?;
+    *swipe = outcome.state.clone();
+    Ok(outcome)
 }
 
 fn rule_step(
     swipe: &mut SwipeState,
-    quantifier_result: &QuantifierResult,
+    result: &QuantifierResult,
     deps: &RulesDeps,
-) -> Result<GameRulesOutcome, crate::error::EngineError> {
-    apply_game_rules(
-        swipe,
-        GameRuleRequest::Analysis {
-            quantifier_result,
-            persona_name: &deps.persona.sheet.name,
+) -> Result<RulesOutcome, crate::error::EngineError> {
+    rule_step_of(Kind::Narration, swipe, result, deps)
+}
+
+fn event_record_of(npc_id: &str, trigger_name: &str, repeat: bool) -> EventRecord {
+    EventRecord {
+        trigger: TriggerRef {
+            npc_id: npc_id.to_string(),
+            trigger_idx: 0,
+            trigger_name: trigger_name.to_string(),
+            trigger_repeat: repeat,
         },
-        &deps.map,
-        &deps.npcs,
-    )
-}
-
-fn trigger_step(
-    swipe: &mut SwipeState,
-    trigger: &TriggerRef,
-    text: &str,
-    deps: &RulesDeps,
-) -> GameRulesOutcome {
-    apply_game_rules(
-        swipe,
-        GameRuleRequest::TriggerNarration { trigger, text },
-        &deps.map,
-        &deps.npcs,
-    )
-    .expect("a Trigger narration rule step cannot fail")
-}
-
-fn trigger_ref(npc_id: &str, trigger_name: &str, repeat: bool) -> TriggerRef {
-    TriggerRef {
-        npc_id: npc_id.to_string(),
-        trigger_idx: 0,
-        trigger_name: trigger_name.to_string(),
-        trigger_repeat: repeat,
+        header_name: trigger_name.to_string(),
+        direction: "A direction.".to_string(),
     }
 }
 
@@ -234,10 +216,10 @@ fn trigger_case(
     }
 }
 
-fn matched(swipe: &mut SwipeState, deps: &RulesDeps, named: &[&str]) -> Option<TriggerMatch> {
+fn matched(swipe: &mut SwipeState, deps: &RulesDeps, named: &[&str]) -> Option<EventRecord> {
     rule_step(swipe, &quantifier(named, None), deps)
         .expect("the rule step keeps the state consistent")
-        .trigger_match
+        .fired
 }
 
 #[test]
@@ -245,10 +227,9 @@ fn test_the_step_without_a_movement_keeps_the_room() {
     let deps = deps_with_carla("room1");
     let mut swipe = swipe_in("room1");
 
-    let outcome = rule_step(&mut swipe, &quantifier(&["carla"], None), &deps).unwrap();
+    rule_step(&mut swipe, &quantifier(&["carla"], None), &deps).unwrap();
 
     assert_eq!(swipe.movement.current_room_id, "room1");
-    assert!(outcome.unknown_location.is_none());
 }
 
 #[test]
@@ -272,10 +253,10 @@ fn test_the_step_walks_into_a_room_of_the_map() {
     );
     let mut swipe = swipe_in("room1");
 
-    let outcome = rule_step(&mut swipe, &quantifier(&["carla"], Some("room2")), &deps).unwrap();
+    rule_step(&mut swipe, &quantifier(&["carla"], Some("room2")), &deps).unwrap();
 
     assert_eq!(swipe.movement.current_room_id, "room2");
-    assert!(outcome.unknown_location.is_none());
+    assert!(swipe.movement.dynamic_rooms.is_empty());
 }
 
 #[test]
@@ -285,7 +266,7 @@ fn test_the_step_adds_a_room_the_map_does_not_know() {
     for destination in ["nonexistent_room", ""] {
         let mut swipe = swipe_in("room1");
 
-        let outcome = rule_step(&mut swipe, &quantifier(&[], Some(destination)), &deps).unwrap();
+        rule_step(&mut swipe, &quantifier(&[], Some(destination)), &deps).unwrap();
 
         assert!(
             swipe.movement.current_room_id.starts_with("dynamic_"),
@@ -298,14 +279,6 @@ fn test_the_step_adds_a_room_the_map_does_not_know() {
                 .contains_key(&swipe.movement.current_room_id),
             "the rules added the room they walked into"
         );
-        assert_eq!(
-            outcome
-                .unknown_location
-                .as_ref()
-                .map(|room| room.id.clone()),
-            Some(swipe.movement.current_room_id.clone()),
-            "the notice names the room the rules added"
-        );
     }
 }
 
@@ -317,10 +290,14 @@ fn test_the_step_uses_a_room_the_rules_added() {
     let added_id = added.id.clone();
     swipe.movement.dynamic_rooms.insert(added_id.clone(), added);
 
-    let outcome = rule_step(&mut swipe, &quantifier(&[], Some(&added_id)), &deps).unwrap();
+    rule_step(&mut swipe, &quantifier(&[], Some(&added_id)), &deps).unwrap();
 
     assert_eq!(swipe.movement.current_room_id, added_id);
-    assert!(outcome.unknown_location.is_none());
+    assert_eq!(
+        swipe.movement.dynamic_rooms.len(),
+        1,
+        "the room is used, not added again"
+    );
 }
 
 #[test]
@@ -374,9 +351,9 @@ fn test_the_step_matches_a_first_encounter_trigger() {
     let matched =
         matched(&mut case.swipe, &case.deps, &["gabriella"]).expect("the first meeting matches");
 
-    assert_eq!(matched.npc_id, "gabriella");
-    assert_eq!(matched.trigger_idx, 0);
-    assert!(!matched.trigger_repeat);
+    assert_eq!(matched.trigger.npc_id, "gabriella");
+    assert_eq!(matched.trigger.trigger_idx, 0);
+    assert!(!matched.trigger.trigger_repeat);
 }
 
 #[test]
@@ -420,7 +397,7 @@ fn test_a_global_trigger_matches_for_a_character_outside_the_scene() {
     let matched = matched(&mut case.swipe, &case.deps, &[])
         .expect("a global Trigger fires for a Character not in the scene");
 
-    assert_eq!(matched.npc_id, "gabriella");
+    assert_eq!(matched.trigger.npc_id, "gabriella");
 }
 
 #[test]
@@ -501,42 +478,43 @@ fn test_the_trigger_index_skips_the_triggers_before_it() {
 
     let matched = rule_step(&mut swipe, &quantifier(&[], None), &deps)
         .expect("the rule step keeps the state consistent")
-        .trigger_match
+        .fired
         .expect("the second Trigger matches");
-    assert_eq!(matched.trigger_idx, 1, "the index is the Trigger's own");
+    assert_eq!(
+        matched.trigger.trigger_idx, 1,
+        "the index is the Trigger's own"
+    );
 
     swipe.npc_encounter_log.mark_trigger_fired("gabriella", 1);
     assert!(
         rule_step(&mut swipe, &quantifier(&[], None), &deps)
             .expect("the rule step keeps the state consistent")
-            .trigger_match
+            .fired
             .is_none(),
         "both Triggers are now skipped"
     );
 }
 
 #[test]
-fn test_a_landed_one_shot_trigger_does_not_match_again() {
+fn test_a_one_shot_trigger_does_not_fire_again_from_the_state_of_its_event() {
     let mut case = trigger_case(
         make_trigger(requirement(ComparisonOperator::Gte, 0), false),
         false,
         false,
         0,
     );
-    let trigger = trigger_ref("gabriella", "Test Event", false);
 
-    assert!(matched(&mut case.swipe, &case.deps, &["gabriella"]).is_some());
+    let fired = matched(&mut case.swipe, &case.deps, &["gabriella"]).expect("the Trigger fires");
 
-    let outcome = trigger_step(&mut case.swipe, &trigger, "Gabriella appears.", &case.deps);
-    assert!(outcome.trigger_narration_landed);
+    let mut event_state = case.swipe.pre_analysis(Some(&fired));
     assert!(
-        matched(&mut case.swipe, &case.deps, &["gabriella"]).is_none(),
+        matched(&mut event_state, &case.deps, &["gabriella"]).is_none(),
         "a one-shot Trigger fires once"
     );
 }
 
 #[test]
-fn test_the_step_reads_times_met_before_the_character_events_advance_it() {
+fn game_rules_times_met_before_encounters() {
     let npc = TestNpc::with_times_met_trigger("carla", "Carla", ComparisonOperator::Eq, 0);
     let deps = rules_deps(TestMap::single_room("test_room"), vec![npc]);
     let mut swipe = swipe_in("test_room");
@@ -544,121 +522,118 @@ fn test_the_step_reads_times_met_before_the_character_events_advance_it() {
     let outcome = rule_step(&mut swipe, &quantifier(&["carla"], None), &deps).unwrap();
 
     assert!(
-        outcome.trigger_match.is_some(),
-        "trigger should have fired (evaluated before times_met increment)"
+        outcome.fired.is_some(),
+        "a first-encounter Trigger fires on the Narration that brings its Character"
     );
     assert_eq!(swipe.npc_encounter_log.get_times_met("carla"), 1);
 }
 
 #[test]
-fn test_apply_npc_events_entered() {
-    let deps = deps_with_carla("test_room");
-    let mut swipe = swipe_in("test_room");
-    let events = vec![NpcEvent {
-        npc_id: "carla".to_string(),
-        event_type: NpcTransitionType::Entered,
-    }];
+fn game_rules_event_no_movement() {
+    let deps = rules_deps(
+        TestMap::two_rooms("room1", "room2"),
+        vec![TestNpc::named("carla", "Carla")],
+    );
+    let mut swipe = swipe_in("room1");
 
-    apply_game_rules(
+    rule_step_of(
+        Kind::Event,
         &mut swipe,
-        GameRuleRequest::NpcEvents(&events),
-        &deps.map,
-        &deps.npcs,
+        &quantifier(&["carla"], Some("room2")),
+        &deps,
     )
     .unwrap();
 
-    assert!(swipe.npc_encounter_log.is_currently_meeting("carla"));
+    assert_eq!(swipe.movement.current_room_id, "room1");
+    assert!(swipe.movement.dynamic_rooms.is_empty());
+    assert!(
+        swipe.npc_encounter_log.is_currently_meeting("carla"),
+        "an event still updates the Characters present"
+    );
 }
 
 #[test]
-fn test_apply_npc_events_left() {
-    let deps = deps_with_carla("test_room");
-    let mut swipe = swipe_in("test_room");
-    swipe.npc_encounter_log.set_currently_meeting("carla", true);
-    let events = vec![NpcEvent {
-        npc_id: "carla".to_string(),
-        event_type: NpcTransitionType::Left,
-    }];
+fn game_rules_event_no_trigger() {
+    let mut case = trigger_case(
+        make_trigger(requirement(ComparisonOperator::Gte, 0), true),
+        false,
+        false,
+        0,
+    );
+    case.swipe.trigger_context = Some(event_record_of("gabriella", "Earlier Event", false));
 
-    apply_game_rules(
-        &mut swipe,
-        GameRuleRequest::NpcEvents(&events),
-        &deps.map,
-        &deps.npcs,
+    let outcome = rule_step_of(
+        Kind::Event,
+        &mut case.swipe,
+        &quantifier(&["gabriella"], None),
+        &case.deps,
     )
     .unwrap();
 
-    assert!(!swipe.npc_encounter_log.is_currently_meeting("carla"));
+    assert!(
+        outcome.fired.is_none(),
+        "a Trigger condition holds, and none fires"
+    );
+    assert!(outcome.state.trigger_context.is_none());
+
+    let mut control = trigger_case(
+        make_trigger(requirement(ComparisonOperator::Gte, 0), true),
+        false,
+        false,
+        0,
+    );
+    let control_outcome = rule_step_of(
+        Kind::Narration,
+        &mut control.swipe,
+        &quantifier(&["gabriella"], None),
+        &control.deps,
+    )
+    .unwrap();
+    assert!(
+        control_outcome.fired.is_some(),
+        "the same input fires the Trigger for a Narration"
+    );
 }
 
 #[test]
-fn test_apply_npc_events_increments_times_met() {
-    let deps = deps_with_carla("test_room");
-    let mut swipe = swipe_in("test_room");
-    let initial_times = swipe.npc_encounter_log.get_times_met("carla");
-    let events = vec![NpcEvent {
-        npc_id: "carla".to_string(),
-        event_type: NpcTransitionType::Entered,
-    }];
+fn game_rules_narration_replaces_the_trigger_context() {
+    let deps = deps_with_carla("room1");
+    let mut swipe = swipe_in("room1");
+    swipe.trigger_context = Some(event_record_of("carla", "Earlier Event", false));
 
-    apply_game_rules(
-        &mut swipe,
-        GameRuleRequest::NpcEvents(&events),
-        &deps.map,
-        &deps.npcs,
+    let outcome = rule_step(&mut swipe, &quantifier(&["carla"], None), &deps).unwrap();
+
+    assert!(outcome.fired.is_none());
+    assert!(
+        swipe.trigger_context.is_none(),
+        "a Narration that fires no Trigger leaves no trigger context"
+    );
+}
+
+#[test]
+fn game_rules_fired_record_rendered() {
+    let mut trigger = make_trigger(requirement(ComparisonOperator::Eq, 0), false);
+    trigger.narration.narration_prompt = "{{user}} hears the gate open.".to_string();
+    let mut case = trigger_case(trigger, false, false, 0);
+    let persona_name = case.deps.persona.sheet.name.clone();
+
+    let outcome = rule_step(
+        &mut case.swipe,
+        &quantifier(&["gabriella"], None),
+        &case.deps,
     )
     .unwrap();
 
+    let fired = outcome.fired.expect("the Trigger fires");
     assert_eq!(
-        swipe.npc_encounter_log.get_times_met("carla"),
-        initial_times + 1
+        fired.direction,
+        format!("{persona_name} hears the gate open.")
     );
-}
-
-#[test]
-fn test_a_trigger_narration_marks_a_one_shot_trigger_fired() {
-    let deps = deps_with_carla("test_room");
-    let mut swipe = swipe_in("test_room");
-    let trigger = trigger_ref("carla", "Carla Introduction", false);
-
-    let outcome = trigger_step(&mut swipe, &trigger, "Some text.", &deps);
-
-    assert!(outcome.trigger_narration_landed);
-    assert!(
-        swipe.npc_encounter_log.is_trigger_fired("carla", 0),
-        "a one-shot Trigger is marked fired"
-    );
-}
-
-#[test]
-fn test_a_trigger_narration_does_not_mark_a_repeating_trigger_fired() {
-    let deps = deps_with_carla("test_room");
-    let mut swipe = swipe_in("test_room");
-    let trigger = trigger_ref("carla", "Carla Greeting", true);
-
-    trigger_step(&mut swipe, &trigger, "Some text.", &deps);
-
-    assert!(
-        !swipe.npc_encounter_log.is_trigger_fired("carla", 0),
-        "a repeating Trigger is never marked fired"
-    );
-}
-
-#[test]
-fn test_an_empty_trigger_narration_lands_nothing() {
-    let deps = deps_with_carla("test_room");
-    let mut swipe = swipe_in("test_room");
-    let trigger = trigger_ref("carla", "Carla Introduction", false);
-
-    for text in ["", "   "] {
-        let outcome = trigger_step(&mut swipe, &trigger, text, &deps);
-
-        assert!(!outcome.trigger_narration_landed);
-    }
-
-    assert!(
-        !swipe.npc_encounter_log.is_trigger_fired("carla", 0),
-        "an empty narration fires nothing"
+    assert_eq!(fired.header_name, "Test Event");
+    assert_eq!(
+        outcome.state.trigger_context,
+        Some(fired),
+        "the trigger context is the fired record"
     );
 }
 
@@ -677,7 +652,7 @@ fn test_state_mutation_order() {
     let outcome = rule_step(&mut swipe, &quantifier(&[npc_id], None), &deps).unwrap();
 
     assert!(
-        outcome.trigger_match.is_some(),
+        outcome.fired.is_some(),
         "trigger should have fired (evaluated before times_met increment)"
     );
     assert_eq!(
@@ -706,14 +681,14 @@ proptest! {
         let mut swipe = swipe_with("room1", present, log_of("carla", times_met, present_before));
         let named: Vec<&str> = if named_now { vec!["carla"] } else { vec![] };
 
-        let outcome = rule_step(&mut swipe, &quantifier(&named, destination), &deps)
+        rule_step(&mut swipe, &quantifier(&named, destination), &deps)
             .expect("the rule step leaves a consistent state");
 
         let scene: Vec<&str> = swipe.scene.npcs_in_area.iter().map(|npc| npc.id.as_str()).collect();
-        prop_assert_eq!(scene, named.clone(), "the scene is what the analysis named");
+        prop_assert_eq!(scene, named.clone(), "the scene is what the Quantifier named");
         let known = matches!(destination, None | Some("room1") | Some("room2"));
         prop_assert_eq!(
-            outcome.unknown_location.is_none(),
+            swipe.movement.dynamic_rooms.is_empty(),
             known,
             "only a destination the map does not know adds a room"
         );
@@ -725,23 +700,23 @@ proptest! {
     }
 
     #[test]
-    fn prop_npc_events_keep_the_state_consistent(
+    fn prop_a_character_that_enters_or_leaves_keeps_the_state_consistent(
         npc_id in "[a-z]{1,10}",
-        transition in prop_oneof![
-            Just(NpcTransitionType::Entered),
-            Just(NpcTransitionType::Left),
-        ],
+        present_before in any::<bool>(),
+        named_now in any::<bool>(),
     ) {
-        let deps = rules_deps(TestMap::single_room("room1"), vec![TestNpc::named(&npc_id, &npc_id)]);
-        let mut swipe = swipe_in("room1");
-        let events = vec![NpcEvent { npc_id, event_type: transition }];
+        let npc = TestNpc::named(&npc_id, &npc_id);
+        let deps = rules_deps(TestMap::single_room("room1"), vec![npc.clone()]);
+        let present = if present_before { vec![npc] } else { vec![] };
+        let mut swipe = swipe_with("room1", present, log_of(&npc_id, 1, present_before));
+        let named: Vec<&str> = if named_now { vec![npc_id.as_str()] } else { vec![] };
 
-        apply_game_rules(&mut swipe, GameRuleRequest::NpcEvents(&events), &deps.map, &deps.npcs)
+        rule_step(&mut swipe, &quantifier(&named, None), &deps)
             .expect("the Character events leave a consistent state");
     }
 
     #[test]
-    fn prop_analysis_preserves_the_mutation_order(
+    fn prop_the_step_preserves_the_mutation_order(
         times_met in 0u32..3,
     ) {
         let npc = TestNpc::with_times_met_trigger(
@@ -757,7 +732,7 @@ proptest! {
             .expect("the rule step keeps the state consistent");
 
         prop_assert!(
-            outcome.trigger_match.is_some(),
+            outcome.fired.is_some(),
             "a Trigger that meets its requirement before the events fires"
         );
         prop_assert_eq!(
@@ -783,9 +758,9 @@ proptest! {
             "a fired one-shot Trigger does not match"
         );
         if let Some(matched) = matched {
-            prop_assert_eq!(matched.npc_id, "gabriella");
-            prop_assert_eq!(matched.trigger_idx, 0);
-            prop_assert_eq!(matched.trigger_repeat, repeat);
+            prop_assert_eq!(matched.trigger.npc_id, "gabriella");
+            prop_assert_eq!(matched.trigger.trigger_idx, 0);
+            prop_assert_eq!(matched.trigger.trigger_repeat, repeat);
         }
     }
 
@@ -795,16 +770,15 @@ proptest! {
         fired_before in any::<bool>(),
     ) {
         let trigger = make_trigger(requirement(ComparisonOperator::Gte, 0), repeat);
-        let mut case = trigger_case(trigger, fired_before, false, 0);
-        let trigger = trigger_ref("gabriella", "Test Event", repeat);
+        let case = trigger_case(trigger, fired_before, false, 0);
+        let record = event_record_of("gabriella", "Test Event", repeat);
 
-        let outcome = trigger_step(&mut case.swipe, &trigger, "Gabriella appears.", &case.deps);
-        prop_assert!(outcome.trigger_narration_landed);
+        let mut event_state = case.swipe.pre_analysis(Some(&record));
 
         prop_assert_eq!(
-            matched(&mut case.swipe, &case.deps, &["gabriella"]).is_some(),
+            matched(&mut event_state, &case.deps, &["gabriella"]).is_some(),
             repeat,
-            "only a repeating Trigger matches after its narration landed"
+            "only a repeating Trigger matches from the state of its event"
         );
     }
 
@@ -829,7 +803,7 @@ proptest! {
 
         prop_assert_eq!(arrived.clone(), destination.to_string());
         prop_assert_eq!(
-            outcome.trigger_match.is_some(),
+            outcome.fired.is_some(),
             room_id.is_none_or(|room_id| room_id == arrived),
             "a room-limited Trigger fires only in its room"
         );
@@ -850,7 +824,7 @@ proptest! {
             .expect("the rule step keeps the state consistent");
 
         let in_scene = swipe.scene.npcs_in_area.iter().any(|npc| npc.id == "carla");
-        prop_assert_eq!(in_scene, named_now, "the scene is what the analysis named");
+        prop_assert_eq!(in_scene, named_now, "the scene is what the Quantifier named");
         prop_assert_eq!(
             swipe.npc_encounter_log.is_currently_meeting("carla"),
             named_now,

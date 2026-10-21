@@ -3,12 +3,63 @@
 
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::Room;
+use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::message_types::StoryRow;
 
-pub use crate::domain::model::quantifier::{
-    MovementParseResult, MovementType, NpcEvent, NpcEventList, NpcTransitionType,
-    QuantifierConfidence, QuantifierParseResult, QuantifierResult,
-};
+/// How sure the Quantifier is of its answer. It stays inside the Quantifier: the
+/// retry and the fallback read it, and the Quantifier result does not carry it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum QuantifierConfidence {
+    /// JSON parsed successfully and all NPC IDs are valid.
+    High,
+    /// Text fallback was used; some valid NPC IDs were found.
+    Medium,
+    /// No valid NPC IDs could be extracted; fallback data should be used.
+    #[default]
+    Low,
+}
+
+impl QuantifierConfidence {
+    pub(crate) fn is_low(self) -> bool {
+        matches!(self, Self::Low)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct QuantifierParseResult {
+    pub npc_ids: Vec<String>,
+    pub confidence: QuantifierConfidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum MovementType {
+    /// The player is entering a new room.
+    Entering,
+    /// The player is leaving the current room.
+    Leaving,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct MovementParseResult {
+    pub movement_type: Option<MovementType>,
+    pub destination: Option<String>,
+}
+
+/// One parsed answer of the model: the Characters present and the movement.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct QuantifierReading {
+    pub npcs: QuantifierParseResult,
+    pub movement: MovementParseResult,
+}
+
+impl QuantifierReading {
+    pub(crate) fn into_result(self) -> QuantifierResult {
+        QuantifierResult {
+            present: self.npcs.npc_ids,
+            destination: self.movement.destination,
+        }
+    }
+}
 
 pub struct RoomInfo {
     pub id: String,

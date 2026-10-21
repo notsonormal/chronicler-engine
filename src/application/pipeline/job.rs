@@ -23,14 +23,14 @@ use crate::domain::model::generation::{GenerationOrder, Place};
 use crate::domain::model::map::Room;
 use crate::domain::model::message::{StoredInputs, SwipeAt};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::quantifier::{MovementParseResult, QuantifierResult};
+use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::trigger_context::EventRecord;
 use crate::domain::model::tail::Tail;
-use crate::domain::model::utils::game_rules::{apply_game_rules, GameRuleRequest};
+use crate::domain::model::utils::game_rules;
 use crate::error::EngineError;
 
 #[derive(Clone)]
@@ -265,27 +265,27 @@ impl Job {
             });
         }
 
-        // The analysis must not see the new text, so the window ends at the Message
+        // The Quantifier must not see the new text, so the window ends at the Message
         // the text save made.
         let history = self.window_before(Some(at.message), STORY_WINDOW)?;
         let player_text = Self::player_text(input, &history);
-        let analysis = match self.run_step(Step::Quantifying, kind, || {
-            self.analyse_step(order, &bundle, &start, &narrated, &history, &player_text)
+        let quantified = match self.run_step(Step::Quantifying, kind, || {
+            self.quantify_step(order, &bundle, &start, &narrated, &history, &player_text)
         }) {
-            Ok(analysis) => analysis,
+            Ok(quantified) => quantified,
             Err(failure) => return Err(Ended::after_text_save(failure, kind)),
         };
 
-        let mut state = start.clone();
-        let fired = match self.run_step(Step::Quantifying, kind, || {
-            self.apply_rules(order, &bundle, &mut state, &analysis, &narrated)
+        let outcome = match self.run_step(Step::Quantifying, kind, || {
+            self.rules_step(kind, &bundle, at, &quantified)
         }) {
-            Ok(fired) => fired,
+            Ok(outcome) => outcome,
             Err(failure) => return Err(Ended::after_text_save(failure, kind)),
         };
+        let fired = outcome.fired;
         match self.run_step(Step::Quantifying, kind, || {
             self.writer
-                .save_state_update(saved, state)
+                .save_state_update(saved, outcome.state)
                 .map_err(Failure::from)
         }) {
             Ok(()) => {}
@@ -393,7 +393,7 @@ impl Job {
         }
     }
 
-    fn analyse_step(
+    fn quantify_step(
         &self,
         order: &GenerationOrder,
         bundle: &WorldBundle,
@@ -419,67 +419,21 @@ impl Job {
         };
         Ok(self
             .agent_runner
-            .analysis(&input, &self.analysis_settings()?))
+            .after_narration(&input, &self.quantifier_settings()?))
     }
 
-    fn apply_rules(
+    /// The rules start from the state of the text save. For an event, that state
+    /// already marks the one-shot Trigger fired.
+    fn rules_step(
         &self,
-        order: &GenerationOrder,
+        kind: Kind,
         bundle: &WorldBundle,
-        state: &mut SwipeState,
-        analysis: &QuantifierResult,
-        text: &str,
-    ) -> Result<Option<EventRecord>, Failure> {
-        if order.kind == Kind::Event {
-            let record = order
-                .event
-                .as_ref()
-                .ok_or_else(|| Failure::missing("the event record"))?;
-            // An event generation moves nobody and fires no Trigger: the movement
-            // is taken out, and the Trigger the rules report is ignored.
-            let still = QuantifierResult {
-                movement: MovementParseResult::default(),
-                ..analysis.clone()
-            };
-            apply_game_rules(
-                state,
-                GameRuleRequest::Analysis {
-                    quantifier_result: &still,
-                    persona_name: &bundle.persona.sheet.name,
-                },
-                &bundle.map,
-                &bundle.npcs,
-            )
-            .map_err(Self::contradiction)?;
-            apply_game_rules(
-                state,
-                GameRuleRequest::TriggerNarration {
-                    trigger: &record.trigger,
-                    text,
-                },
-                &bundle.map,
-                &bundle.npcs,
-            )
-            .map_err(Self::contradiction)?;
-            state.trigger_context = None;
-            return Ok(None);
-        }
-
-        let outcome = apply_game_rules(
-            state,
-            GameRuleRequest::Analysis {
-                quantifier_result: analysis,
-                persona_name: &bundle.persona.sheet.name,
-            },
-            &bundle.map,
-            &bundle.npcs,
-        )
-        .map_err(Self::contradiction)?;
-        let fired = outcome.trigger_match.as_ref().map(EventRecord::from);
-        // The Swipe an analysed generation leaves holds the Trigger that fired, so
-        // a Retrigger is allowed on it.
-        state.trigger_context = fired.as_ref().map(|record| record.trigger.clone());
-        Ok(fired)
+        at: SwipeAt,
+        quantified: &QuantifierResult,
+    ) -> Result<game_rules::RulesOutcome, Failure> {
+        let state = self.swipe_state_at(at, "the saved state")?;
+        game_rules::apply(state, quantified, &bundle.game_world(), kind)
+            .map_err(Self::contradiction)
     }
 
     fn options_step(&self, run: OptionsRun, after_narration: bool) -> Result<(), Failure> {
@@ -515,7 +469,10 @@ impl Job {
                 event: None,
             };
 
-            let outcome = match self.agent_runner.options(&input, &self.options_settings()?) {
+            let outcome = match self
+                .agent_runner
+                .end_of_job(&input, &self.options_settings()?)
+            {
                 Ok(Some(offered)) => OptionsResult::Offered(offered),
                 Ok(None) => OptionsResult::Unavailable {
                     reason: "Options agent is not available".to_string(),
@@ -681,11 +638,15 @@ impl Job {
     }
 
     fn start_state(&self, order: &GenerationOrder) -> Result<SwipeState, Failure> {
+        self.swipe_state_at(order.start, "the start state")
+    }
+
+    fn swipe_state_at(&self, at: SwipeAt, what: &str) -> Result<SwipeState, Failure> {
         self.storage
             .stories()
-            .swipe_state(self.writer.game(), order.start)
+            .swipe_state(self.writer.game(), at)
             .map_err(Failure::from)?
-            .ok_or_else(|| Failure::missing("the start state"))
+            .ok_or_else(|| Failure::missing(what))
     }
 
     fn preset(&self, preset_id: &str) -> Result<(PromptPreset, String), Failure> {
@@ -717,7 +678,7 @@ impl Job {
         Ok(self.game_row()?.options_always_on)
     }
 
-    fn analysis_settings(&self) -> Result<AgentSettings, Failure> {
+    fn quantifier_settings(&self) -> Result<AgentSettings, Failure> {
         Ok(AgentSettings {
             preset: self.preset_text(Storage::active_quantifier_preset_id)?,
             max_tokens: None,

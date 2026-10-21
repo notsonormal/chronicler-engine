@@ -10,17 +10,17 @@ use crate::application::agents::quantifier::parser::parse_with_movement;
 use crate::application::agents::quantifier::prompt::QuantifierPromptBuilder;
 use crate::application::agents::quantifier::types::{
     MovementParseResult, QuantifierConfidence, QuantifierParseResult, QuantifierPromptContext,
-    QuantifierResult, RoomInfo,
+    QuantifierReading, RoomInfo,
 };
 
-pub fn determine_npcs_in_room(
+pub(crate) fn determine_npcs_in_room(
     input: &HookInput,
     recorder: &LlmCallRecorder,
     settings: &AgentSettings,
-) -> Result<QuantifierResult, EngineError> {
+) -> Result<QuantifierReading, EngineError> {
     let text = input
         .text
-        .ok_or_else(|| EngineError::Config("the analysis needs the saved text".into()))?;
+        .ok_or_else(|| EngineError::Config("the Quantifier needs the saved text".into()))?;
     let world = input.world;
     let current_room = world.room.ok_or_else(|| {
         EngineError::RoomNotFound("current room not set in the hook input".into())
@@ -61,7 +61,7 @@ pub(crate) fn quantify_room_with_llm_call(
     context: &QuantifierPromptContext,
     recorder: &LlmCallRecorder,
     max_tokens: Option<u32>,
-) -> QuantifierResult {
+) -> QuantifierReading {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
         room: context.room,
         previous_room_npcs: context.previous_room_npcs,
@@ -143,7 +143,7 @@ pub(crate) fn quantify_room_with_llm_call(
         "[Quantifier] All attempts failed, using fallback NPC IDs. Last error: {}",
         last_error.as_deref().unwrap_or("unknown")
     );
-    QuantifierResult {
+    QuantifierReading {
         npcs: QuantifierParseResult {
             npc_ids: Vec::new(),
             confidence: QuantifierConfidence::Low,
@@ -151,15 +151,14 @@ pub(crate) fn quantify_room_with_llm_call(
         movement: MovementParseResult {
             movement_type: None,
             destination: None,
-            confidence: QuantifierConfidence::Low,
         },
     }
 }
 
 pub(crate) fn process_quantifier_result(
-    result: QuantifierResult,
+    result: QuantifierReading,
     world: &crate::domain::model::agent::WorldView<'_>,
-) -> QuantifierResult {
+) -> QuantifierReading {
     match result.npcs.confidence {
         QuantifierConfidence::High | QuantifierConfidence::Medium => {
             tracing::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
@@ -170,7 +169,7 @@ pub(crate) fn process_quantifier_result(
                 .into_iter()
                 .filter(|id| world.characters.contains_key(id))
                 .collect();
-            QuantifierResult {
+            QuantifierReading {
                 npcs: QuantifierParseResult {
                     npc_ids,
                     confidence: result.npcs.confidence,
@@ -188,10 +187,10 @@ pub(crate) fn process_quantifier_result(
 pub(crate) fn static_npc_result(
     world: &crate::domain::model::agent::WorldView<'_>,
     movement: MovementParseResult,
-) -> QuantifierResult {
+) -> QuantifierReading {
     let npc_ids = world.present.iter().map(|n| n.id.clone()).collect();
 
-    QuantifierResult {
+    QuantifierReading {
         npcs: QuantifierParseResult {
             npc_ids,
             confidence: QuantifierConfidence::Low,

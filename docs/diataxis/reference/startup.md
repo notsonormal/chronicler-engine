@@ -87,10 +87,6 @@ The schema files are authoritative for seed-file fields and validation.
 
 `Trigger.requirement` carries an `operator` and a `threshold`. The operator vocabulary is `Eq`, `Lt`, and `Gte`; runtime evaluation occurs in the trigger evaluation step.
 
-### NPC event confidence
-
-`NpcEvent.confidence` uses the `QuantifierConfidence` variants `High`, `Medium`, and `Low`. The events-diff path emits `Medium` when at least one transition occurred and `Low` when the previous and current NPC sets matched.
-
 ## Document References
 
 - [Storage design](../explanation/storage_design.md) — current-understanding rationale for the bootstrap flow, seed ordering, and seed files as templates.

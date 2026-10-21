@@ -9,6 +9,7 @@ use chrono::Utc;
 use crate::error::{DatabaseContext, EngineError};
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
+use crate::domain::model::utils::game_rules::GameWorld;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::map::DbMap;
@@ -27,6 +28,17 @@ pub struct WorldBundle {
     pub map: Arc<MapDef>,
     pub persona: Arc<PersonaCard>,
     pub npcs: HashMap<String, NpcCard>,
+}
+
+impl WorldBundle {
+    /// What the Game rules read of the World.
+    pub fn game_world(&self) -> GameWorld<'_> {
+        GameWorld {
+            map: &self.map,
+            characters: &self.npcs,
+            persona_name: &self.persona.sheet.name,
+        }
+    }
 }
 
 impl Storage {

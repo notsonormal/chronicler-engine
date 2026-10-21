@@ -5,9 +5,9 @@ title: Agent System Design
 
 ## The agent abstraction
 
-Each agent implements a hook trait: `AnalysisAgent` or `OptionsAgent`. The `AgentRunner` holds the set that the bootstrap wired in. The analysis hook iterates over the analysis Agents in the runner, including the empty set. The Options hook holds at most one Agent. A Job runs correctly with zero agents configured.
+Each agent implements a hook trait: `AfterNarrationAgent` or `EndOfJobAgent`. The `AgentRunner` holds the set that the bootstrap wired in. The after-narration hook and the end-of-Job hook each hold at most one Agent. A Job runs correctly with zero agents configured.
 
-The trait-plus-runner shape keeps the Job indifferent to which post-processing concerns exist. Adding an agent of a known type is a wiring change in bootstrap; a new agent type also needs an arm in `AgentRunner::from_configs`. Removing one is removing it from the runner. Reordering is changing the iteration order. None of these changes require editing the Job itself. Each hook has one output type. The compiler rejects an Agent whose answer the hook cannot save.
+The trait-plus-runner shape keeps the Job indifferent to which post-processing concerns exist. Adding an agent of a known type is a wiring change in bootstrap; a new agent type also needs an arm in `AgentRunner::from_configs`. Removing one is removing it from the runner. None of these changes require editing the Job itself. Each Agent gives one kind of result, and each kind of result has one landing. The compiler rejects an Agent whose answer the hook cannot save.
 
 ## Per-agent LLM backends
 
@@ -19,7 +19,7 @@ The wiring keeps the two paths independent. `AppSettings` carries separate `narr
 
 ## Hooks, and the ones that wait for their first Agent
 
-The split separates what a generation's own analysis lands in (the patch that the game rules apply) from what outlives the generation (the offered set that the Options dock shows). The design names two more hooks, before narration and rewrite. Each comes with its first Agent, because a hook with no Agent never runs.
+The split separates what a generation's own result lands in (the Quantifier result that the game rules apply) from what outlives the generation (the offered set that the Options dock shows). The design names the before-narration hook as well. It comes with its first Agent, because a hook with no Agent never runs.
 
 ## The quantifier's role
 

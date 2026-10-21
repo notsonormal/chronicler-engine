@@ -169,11 +169,11 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             ),
             (
                 "application/generation/gate.rs",
-                "fn analyse(hook: Box<dyn AnalysisAgent>) {\n    hook.run();\n}\n",
+                "fn analyse(hook: Box<dyn AfterNarrationAgent>) {\n    hook.run();\n}\n",
             ),
             (
                 "application/generation/gate.rs",
-                "fn offer(hook: &OptionsAgent) {\n    hook.run();\n}\n",
+                "fn offer(hook: &EndOfJobAgent) {\n    hook.run();\n}\n",
             ),
             (
                 "application/generation/gate.rs",
@@ -183,8 +183,8 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
         names: &[
             "type `Narrator`",
             "import `AgentRunner`",
-            "trait bound `AnalysisAgent`",
-            "type `OptionsAgent`",
+            "trait bound `AfterNarrationAgent`",
+            "type `EndOfJobAgent`",
         ],
     },
     // The `NameContains` kind catches a family of names that share one word, and
@@ -206,13 +206,13 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
         row: BannedNameRow {
             rule: FIXTURE_RULE,
             scope: "application/generation/",
-            banned: &[BannedName::NamePrefix("AnalysisAgent")],
+            banned: &[BannedName::NamePrefix("AfterNarrationAgent")],
         },
         files: &[(
             "application/generation/gate.rs",
-            "fn analyse(hook: Box<dyn AnalysisAgent>) {\n    hook.run();\n}\n",
+            "fn analyse(hook: Box<dyn AfterNarrationAgent>) {\n    hook.run();\n}\n",
         )],
-        names: &["trait bound `AnalysisAgent`"],
+        names: &["trait bound `AfterNarrationAgent`"],
     },
 ];
 
@@ -372,8 +372,8 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             scope: "",
             callees: &[
                 "Narrator::narrate",
-                "AgentRunner::analysis",
-                "AgentRunner::options",
+                "AgentRunner::after_narration",
+                "AgentRunner::end_of_job",
             ],
             allowed: &[
                 "application/pipeline/job.rs",
@@ -383,7 +383,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         files: &[
             (
                 "application/pipeline/job.rs",
-                "fn narrate_step(&self) {\n    self.narrator.narrate(role);\n    self.agent_runner.analysis(&input);\n    self.agent_runner.options(&input);\n}\n",
+                "fn narrate_step(&self) {\n    self.narrator.narrate(role);\n    self.agent_runner.after_narration(&input);\n    self.agent_runner.end_of_job(&input);\n}\n",
             ),
             (
                 "application/generation/gate.rs",
@@ -391,13 +391,13 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             ),
             (
                 "application/games/catalogue.rs",
-                "fn rogue(&self) {\n    self.agent_runner.options(&input);\n    AgentRunner::analysis(&runner, &input);\n}\n",
+                "fn rogue(&self) {\n    self.agent_runner.end_of_job(&input);\n    AgentRunner::after_narration(&runner, &input);\n}\n",
             ),
         ],
         names: &[
             "call to `Narrator::narrate`",
-            "call to `AgentRunner::options`",
-            "call to `AgentRunner::analysis`",
+            "call to `AgentRunner::end_of_job`",
+            "call to `AgentRunner::after_narration`",
         ],
     },
 ];

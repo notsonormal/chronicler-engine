@@ -1,7 +1,5 @@
 use crate::application::agents::quantifier::parser::{extract_npcs, parse_with_movement};
-use crate::domain::model::quantifier::{
-    MovementType, NpcEventList, NpcTransitionType, QuantifierConfidence,
-};
+use crate::application::agents::quantifier::types::{MovementType, QuantifierConfidence};
 
 #[test]
 fn test_parse_json_response() {
@@ -101,7 +99,7 @@ fn test_parse_json_empty_array() {
 }
 
 #[test]
-fn test_quantifier_confidence_levels() {
+fn test_the_parser_grades_json_text_and_noise_differently() {
     let high_result = extract_npcs(r#"{"npcs_in_room": ["carla"]}"#, &["carla".to_string()]);
     assert_eq!(high_result.confidence, QuantifierConfidence::High);
 
@@ -199,7 +197,6 @@ fn test_parse_movement_text_fallback_no_movement() {
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.npcs.confidence, QuantifierConfidence::Medium);
     assert_eq!(result.movement.movement_type, None);
-    assert_eq!(result.movement.confidence, QuantifierConfidence::Low);
 }
 
 #[test]
@@ -222,111 +219,4 @@ fn test_parse_response_json_with_movement_null_type() {
     assert_eq!(result.npcs.npc_ids, vec!["carla"]);
     assert_eq!(result.movement.movement_type, None);
     assert_eq!(result.movement.destination, Some("hall".to_string()));
-}
-
-#[test]
-fn test_compute_npc_events_empty_previous() {
-    let previous: Vec<String> = vec![];
-    let current = vec!["carla".to_string()];
-
-    let result = NpcEventList::from_diff(&previous, &current);
-
-    assert_eq!(result.events.len(), 1);
-    assert_eq!(result.events[0].npc_id, "carla");
-    assert_eq!(result.events[0].event_type, NpcTransitionType::Entered);
-    assert_eq!(result.confidence, QuantifierConfidence::Medium);
-}
-
-#[test]
-fn test_compute_npc_events_no_changes() {
-    let previous = vec!["carla".to_string()];
-    let current = vec!["carla".to_string()];
-
-    let result = NpcEventList::from_diff(&previous, &current);
-
-    assert!(result.events.is_empty());
-    assert_eq!(result.confidence, QuantifierConfidence::Low);
-}
-
-#[test]
-fn test_compute_npc_events_npc_left() {
-    let previous = vec!["carla".to_string()];
-    let current: Vec<String> = vec![];
-
-    let result = NpcEventList::from_diff(&previous, &current);
-
-    assert_eq!(result.events.len(), 1);
-    assert_eq!(result.events[0].npc_id, "carla");
-    assert_eq!(result.events[0].event_type, NpcTransitionType::Left);
-    assert_eq!(result.confidence, QuantifierConfidence::Medium);
-}
-
-#[test]
-fn test_compute_npc_events_mixed() {
-    let previous = vec!["carla".to_string(), "derek".to_string()];
-    let current = vec!["carla".to_string(), "gabriella".to_string()];
-
-    let result = NpcEventList::from_diff(&previous, &current);
-
-    assert_eq!(result.events.len(), 2);
-    let entered = result
-        .events
-        .iter()
-        .find(|e| e.npc_id == "gabriella")
-        .expect("Gabriella should be in events");
-    assert_eq!(entered.event_type, NpcTransitionType::Entered);
-    let left = result
-        .events
-        .iter()
-        .find(|e| e.npc_id == "derek")
-        .expect("Derek should be in events");
-    assert_eq!(left.event_type, NpcTransitionType::Left);
-
-    assert!(!result.events.iter().any(|e| e.npc_id == "carla"));
-}
-
-#[test]
-fn test_compute_npc_events_multiple_entered() {
-    let previous: Vec<String> = vec![];
-    let current = vec!["carla".to_string(), "gabriella".to_string()];
-
-    let result = NpcEventList::from_diff(&previous, &current);
-
-    assert_eq!(result.events.len(), 2);
-    assert!(
-        result
-            .events
-            .iter()
-            .all(|e| e.event_type == NpcTransitionType::Entered)
-    );
-    assert!(result.events.iter().any(|e| e.npc_id == "carla"));
-    assert!(result.events.iter().any(|e| e.npc_id == "gabriella"));
-}
-
-#[test]
-fn test_compute_npc_events_both_empty() {
-    let previous: Vec<String> = vec![];
-    let current: Vec<String> = vec![];
-
-    let result = NpcEventList::from_diff(&previous, &current);
-
-    assert!(result.events.is_empty());
-    assert_eq!(result.confidence, QuantifierConfidence::Low);
-}
-
-#[test]
-fn test_compute_npc_events_all_left() {
-    let previous = vec!["carla".to_string(), "gabriella".to_string()];
-    let current: Vec<String> = vec![];
-
-    let result = NpcEventList::from_diff(&previous, &current);
-
-    assert_eq!(result.events.len(), 2);
-    assert!(
-        result
-            .events
-            .iter()
-            .all(|e| e.event_type == NpcTransitionType::Left)
-    );
-    assert_eq!(result.confidence, QuantifierConfidence::Medium);
 }

@@ -163,7 +163,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **agents/**
       - `mod.rs` — Agent hooks: the hook traits and the AgentRunner
       - `runner.rs` — Agent runner: the Agents of each hook, built from their configuration
-      - `trait_def.rs` — Agent hook traits
+      - `trait_def.rs` — Agent hook traits: one trait per hook, each giving its own kind of result
       - **options/**
         - `agent.rs` — Options agent implementation.
         - `mod.rs` — Options agent system — generates the pickable next-action option set.
@@ -237,7 +237,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
-      - `quantifier.rs` — Quantifier types for narrative evaluation
+      - `quantifier.rs` — The Quantifier result and the Character transitions the Game rules derive from it
       - `scenario.rs` — Scenario definitions and world data
       - `settings.rs` — Settings and configuration types
       - `story_window.rs` — The story window: the newest entries of the story, with the room each one shows, and the end-of-story facts that go with them
@@ -250,9 +250,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state
-        - `scene_state.rs` — Current scene NPCs and quantifier confidence
+        - `scene_state.rs` — Current scene NPCs
         - `swipe_state.rs` — The game state of one Swipe: movement, scene and encounter log
-        - `trigger_context.rs` — The Trigger reference of a Swipe state and the event record of an event Narration
+        - `trigger_context.rs` — The Trigger reference of an event record, and the event record of a fired Trigger
       - **utils/**
         - `game_name.rs` — Game name generation with date-based disambiguation.
         - `game_rules.rs` — The game rules: movement, the Characters present and the Triggers, as a pure function of the Swipe state

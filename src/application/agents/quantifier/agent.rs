@@ -4,16 +4,16 @@
 use std::sync::Arc;
 
 use crate::error::EngineError;
-use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, AnalysisOutput, Confidence, HookInput, StatePatch,
-};
+use crate::domain::model::agent::{AgentConfig, AgentSettings, HookInput};
+use crate::domain::model::quantifier::QuantifierResult;
 
-use crate::application::agents::trait_def::AnalysisAgent;
+use crate::application::agents::trait_def::AfterNarrationAgent;
 use crate::application::llm_recorder::LlmCallRecorder;
 #[cfg(feature = "testing")]
 use crate::application::ports::llm_provider::LlmProvider;
 
-use super::determine_npcs_in_room;
+use super::types::QuantifierReading;
+use super::utils::orchestration::determine_npcs_in_room;
 
 pub struct QuantifierAgent {
     name: String,
@@ -49,7 +49,7 @@ impl QuantifierAgent {
     }
 }
 
-impl AnalysisAgent for QuantifierAgent {
+impl AfterNarrationAgent for QuantifierAgent {
     fn name(&self) -> &str {
         &self.name
     }
@@ -58,13 +58,8 @@ impl AnalysisAgent for QuantifierAgent {
         &self,
         input: &HookInput,
         settings: &AgentSettings,
-    ) -> Result<AnalysisOutput, EngineError> {
-        let result = determine_npcs_in_room(input, self.recorder.as_ref(), settings)?;
-
-        Ok(AnalysisOutput(StatePatch {
-            npc_ids: result.npcs.npc_ids,
-            movement_destination: result.movement.destination,
-            confidence: Confidence::from(result.npcs.confidence),
-        }))
+    ) -> Result<QuantifierResult, EngineError> {
+        determine_npcs_in_room(input, self.recorder.as_ref(), settings)
+            .map(QuantifierReading::into_result)
     }
 }

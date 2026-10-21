@@ -40,6 +40,8 @@ mod message_tests;
 #[cfg(test)]
 mod prompt_preset_tests;
 #[cfg(test)]
+mod quantifier_tests;
+#[cfg(test)]
 mod scenario_tests;
 #[cfg(test)]
 mod settings_tests;

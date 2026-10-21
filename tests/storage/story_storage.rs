@@ -347,7 +347,7 @@ fn the_window_read_carries_whether_the_end_of_the_story_allows_a_retrigger() {
     );
 
     let triggered = SwipeState {
-        trigger_context: Some(event_record().trigger),
+        trigger_context: Some(event_record()),
         ..state_in("room1")
     };
     storage

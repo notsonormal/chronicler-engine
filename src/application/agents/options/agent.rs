@@ -7,7 +7,7 @@ use crate::error::EngineError;
 use crate::domain::model::agent::{AgentConfig, AgentSettings, HookInput, OfferedSet};
 
 use crate::application::agents::options::utils::orchestration::generate_options;
-use crate::application::agents::trait_def::OptionsAgent;
+use crate::application::agents::trait_def::EndOfJobAgent;
 use crate::application::llm_recorder::LlmCallRecorder;
 #[cfg(feature = "testing")]
 use crate::application::ports::llm_provider::LlmProvider;
@@ -46,7 +46,7 @@ impl OptionsGeneratorAgent {
     }
 }
 
-impl OptionsAgent for OptionsGeneratorAgent {
+impl EndOfJobAgent for OptionsGeneratorAgent {
     fn name(&self) -> &str {
         &self.name
     }

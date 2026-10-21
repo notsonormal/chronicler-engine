@@ -1,13 +1,14 @@
-//! Seam contract of the Quantifier, the analysis hook's Agent.
+//! Seam contract of the Quantifier, the after-narration hook's Agent.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::application::agents::quantifier::agent::QuantifierAgent;
-use crate::application::agents::trait_def::AnalysisAgent;
+use crate::application::agents::trait_def::AfterNarrationAgent;
 use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, BackendSelector, Confidence, Hook, HookInput, Kind, Role, WorldView,
+    AgentConfig, AgentSettings, BackendSelector, HookInput, Kind, Role, WorldView,
 };
+use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
@@ -22,7 +23,6 @@ fn config() -> AgentConfig {
         agent_type: "quantifier".to_string(),
         enabled: true,
         backend: BackendSelector::UseNamed("quantifier".to_string()),
-        hook: Hook::Analysis,
     }
 }
 
@@ -110,18 +110,54 @@ fn settings() -> AgentSettings {
     AgentSettings::default()
 }
 
+// CASE quantifier-result-output: the Agent returns a Quantifier result of the Characters present and the destination.
+#[test]
+fn test_the_agent_returns_a_quantifier_result() {
+    let turn = Turn::new();
+    let model = Arc::new(ScriptedModel::new().analysis(
+        r#"{"npcs_in_room": ["npc_1"], "movement": {"type": "Entering", "destination": "room2"}}"#,
+    ));
+    let world = turn.world();
+    let result = quantifier(Arc::clone(&model))
+        .run(&turn.input(&world), &settings())
+        .expect("a parsed report is a result");
+
+    assert_eq!(
+        result,
+        QuantifierResult {
+            present: vec![NPC_ID.to_string()],
+            destination: Some("room2".to_string()),
+        }
+    );
+}
+
 // CASE quantifier-npc-ids: a parsed room report names the Characters present.
 #[test]
 fn test_parsed_report_names_the_characters_present() {
     let turn = Turn::new();
     let model = Arc::new(ScriptedModel::new().analysis(r#"{"npcs_in_room": ["npc_1"]}"#));
     let world = turn.world();
-    let output = quantifier(Arc::clone(&model))
+    let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
-        .expect("a parsed report is an output");
+        .expect("a parsed report is a result");
 
-    assert_eq!(output.0.npc_ids, vec![NPC_ID.to_string()]);
-    assert_eq!(output.0.confidence, Confidence::High);
+    assert_eq!(result.present, vec![NPC_ID.to_string()]);
+}
+
+// CASE quantifier-empty-report: an empty report replaces the scene's Characters.
+#[test]
+fn test_an_empty_report_replaces_the_scenes_characters() {
+    let turn = Turn::new();
+    let model = Arc::new(ScriptedModel::new().analysis(r#"{"npcs_in_room": []}"#));
+    let world = turn.world();
+    let result = quantifier(Arc::clone(&model))
+        .run(&turn.input(&world), &settings())
+        .expect("a parsed report is a result");
+
+    assert!(
+        result.present.is_empty(),
+        "a report that names nobody beats the scene's Characters"
+    );
 }
 
 // CASE quantifier-unknown-id: an id the World does not know is dropped.
@@ -131,11 +167,11 @@ fn test_an_unknown_character_id_is_dropped() {
     let model =
         Arc::new(ScriptedModel::new().analysis(r#"{"npcs_in_room": ["npc_1", "someone_else"]}"#));
     let world = turn.world();
-    let output = quantifier(Arc::clone(&model))
+    let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
-        .expect("a parsed report is an output");
+        .expect("a parsed report is a result");
 
-    assert_eq!(output.0.npc_ids, vec![NPC_ID.to_string()]);
+    assert_eq!(result.present, vec![NPC_ID.to_string()]);
 }
 
 // CASE quantifier-movement: a parsed report names the room the player enters.
@@ -146,14 +182,14 @@ fn test_parsed_report_names_the_room_the_player_enters() {
         r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#,
     ));
     let world = turn.world();
-    let output = quantifier(Arc::clone(&model))
+    let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
-        .expect("a parsed report is an output");
+        .expect("a parsed report is a result");
 
-    assert_eq!(output.0.movement_destination.as_deref(), Some("room2"));
+    assert_eq!(result.destination.as_deref(), Some("room2"));
 }
 
-// CASE quantifier-low-confidence: an unparseable answer falls back to the scene's Characters, with Low confidence.
+// CASE quantifier-low-confidence: an unparseable answer falls back to the scene's Characters.
 #[test]
 fn test_an_unparseable_answer_keeps_the_scenes_characters() {
     let turn = Turn::new();
@@ -163,12 +199,12 @@ fn test_an_unparseable_answer_keeps_the_scenes_characters() {
             .analysis("Still no room report."),
     );
     let world = turn.world();
-    let output = quantifier(Arc::clone(&model))
+    let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
-        .expect("the fallback is an output");
+        .expect("the fallback is a result");
 
-    assert_eq!(output.0.npc_ids, vec![NPC_ID.to_string()]);
-    assert_eq!(output.0.confidence, Confidence::Low);
+    assert_eq!(result.present, vec![NPC_ID.to_string()]);
+    assert_eq!(result.destination, None);
 }
 
 // CASE quantifier-retry: a low-confidence first answer is read again, and the second answer wins.
@@ -178,14 +214,24 @@ fn test_a_low_confidence_answer_is_read_again() {
     let model = Arc::new(
         ScriptedModel::new()
             .analysis("no report in this answer")
-            .analysis(r#"{"npcs_in_room": ["npc_1"]}"#),
+            .analysis(
+                r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#,
+            ),
     );
     let world = turn.world();
-    let output = quantifier(Arc::clone(&model))
+    let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
-        .expect("the second answer is an output");
+        .expect("the second answer is a result");
 
-    assert_eq!(output.0.confidence, Confidence::High);
+    assert_eq!(model.calls().len(), 2, "the first answer is read again");
+    assert_eq!(
+        result,
+        QuantifierResult {
+            present: vec![],
+            destination: Some("room2".to_string()),
+        },
+        "the second answer wins"
+    );
 }
 
 // CASE quantifier-transport-failure: both attempts fail and the fallback keeps the scene's Characters.
@@ -198,12 +244,11 @@ fn test_a_transport_failure_keeps_the_scenes_characters() {
             .failed(Role::Quantifier),
     );
     let world = turn.world();
-    let output = quantifier(Arc::clone(&model))
+    let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
-        .expect("the fallback is an output");
+        .expect("the fallback is a result");
 
-    assert_eq!(output.0.npc_ids, vec![NPC_ID.to_string()]);
-    assert_eq!(output.0.confidence, Confidence::Low);
+    assert_eq!(result.present, vec![NPC_ID.to_string()]);
 }
 
 // CASE quantifier-no-text: a hook input without saved text fails.
@@ -214,7 +259,7 @@ fn test_a_hook_input_without_text_fails() {
     let world = turn.world();
     let result = quantifier(Arc::clone(&model)).run(&turn.input_without_text(&world), &settings());
 
-    assert!(result.is_err(), "the analysis needs the saved text");
+    assert!(result.is_err(), "the Quantifier needs the saved text");
 }
 
 // CASE quantifier-no-room: a hook input without a room fails.
@@ -225,7 +270,7 @@ fn test_a_hook_input_without_a_room_fails() {
     let world = turn.world_without_room();
     let result = quantifier(Arc::clone(&model)).run(&turn.input(&world), &settings());
 
-    assert!(result.is_err(), "the analysis needs the room it reads");
+    assert!(result.is_err(), "the Quantifier needs the room it reads");
 }
 
 // CASE quantifier-preset: the settings' preset text reaches the prompt.

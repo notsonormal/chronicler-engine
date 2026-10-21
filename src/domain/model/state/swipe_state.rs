@@ -11,16 +11,16 @@ use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::trigger::NpcEncounterLog;
 use super::movement::MovementState;
 use super::scene_state::SceneState;
-use super::trigger_context::{EventRecord, TriggerRef};
+use super::trigger_context::EventRecord;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SwipeState {
     pub movement: MovementState,
     pub scene: SceneState,
     pub npc_encounter_log: NpcEncounterLog,
-    /// The Trigger that fired for this Swipe.
+    /// The event record of the Trigger that fired for this Swipe.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trigger_context: Option<TriggerRef>,
+    pub trigger_context: Option<EventRecord>,
 }
 
 impl SwipeState {

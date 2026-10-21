@@ -5,7 +5,7 @@ title: Rust Idioms
 
 ## Concrete services and the backend enum
 
-`Job`, `GameWriter` and the catalogue collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum with one variant, `Sqlite`, plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the `AgentRunner`'s `Box<dyn AnalysisAgent>` for heterogeneous agent dispatch).
+`Job`, `GameWriter` and the catalogue collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum with one variant, `Sqlite`, plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the `AgentRunner`'s `Box<dyn AfterNarrationAgent>` for heterogeneous agent dispatch).
 
 Tests and production construct the same SQLite backend. Tests open it on a `:memory:` database, and production opens it on a file. The surrounding code is the same struct. Each call site reads the same concrete type, which avoids threading a type parameter through the application to make storage polymorphic.
 

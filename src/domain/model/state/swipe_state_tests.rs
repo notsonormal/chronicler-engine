@@ -75,12 +75,7 @@ fn event_record(repeat: bool) -> crate::domain::model::state::trigger_context::E
 #[test]
 fn pre_analysis_clears_the_trigger_context() {
     let mut state = SwipeState::starting(Some(&scenario_with(&[])), &characters(&[]), "room1");
-    state.trigger_context = Some(crate::domain::model::state::trigger_context::TriggerRef {
-        npc_id: "npc_1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "The gate opens".to_string(),
-        trigger_repeat: false,
-    });
+    state.trigger_context = Some(event_record(false));
 
     let pre = state.pre_analysis(None);
 

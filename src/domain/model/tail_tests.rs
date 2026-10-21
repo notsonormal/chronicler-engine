@@ -11,7 +11,7 @@ use super::state::trigger_context::{EventRecord, TriggerRef};
 use super::tail::Tail;
 use super::trigger::NpcEncounterLog;
 
-fn state_in(room: &str, trigger_context: Option<TriggerRef>) -> SwipeState {
+fn state_in(room: &str, trigger_context: Option<EventRecord>) -> SwipeState {
     SwipeState {
         movement: MovementState {
             current_room_id: room.to_string(),
@@ -138,7 +138,7 @@ fn current_state_is_none_when_the_active_swipe_is_missing() {
 #[test]
 fn retrigger_allowed_is_true_for_a_narration_with_a_trigger_context() {
     let mut tail = tail_after_one_message(MessageKind::Narration);
-    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
+    tail.last.swipes[1].state = state_in("room3", Some(event_record()));
 
     assert!(tail.retrigger_allowed());
 }
@@ -146,7 +146,7 @@ fn retrigger_allowed_is_true_for_a_narration_with_a_trigger_context() {
 #[test]
 fn retrigger_allowed_is_true_for_an_impersonate_input_with_a_trigger_context() {
     let mut tail = tail_after_one_message(MessageKind::ImpersonateInput);
-    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
+    tail.last.swipes[1].state = state_in("room3", Some(event_record()));
 
     assert!(tail.retrigger_allowed());
 }
@@ -154,7 +154,7 @@ fn retrigger_allowed_is_true_for_an_impersonate_input_with_a_trigger_context() {
 #[test]
 fn retrigger_allowed_is_false_for_an_event_narration_with_a_trigger_context() {
     let mut tail = tail_after_one_message(MessageKind::EventNarration(event_record()));
-    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
+    tail.last.swipes[1].state = state_in("room3", Some(event_record()));
 
     assert!(!tail.retrigger_allowed());
 }
@@ -162,7 +162,7 @@ fn retrigger_allowed_is_false_for_an_event_narration_with_a_trigger_context() {
 #[test]
 fn retrigger_allowed_is_false_for_a_typed_input_with_a_trigger_context() {
     let mut tail = tail_after_one_message(MessageKind::TypedInput);
-    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
+    tail.last.swipes[1].state = state_in("room3", Some(event_record()));
 
     assert!(!tail.retrigger_allowed());
 }
@@ -281,7 +281,7 @@ fn redo_of_a_typed_input_is_a_user_regen() {
 #[test]
 fn retrigger_is_a_new_event_message_from_the_current_state() {
     let mut tail = tail_after_one_message(MessageKind::Narration);
-    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
+    tail.last.swipes[1].state = state_in("room3", Some(event_record()));
 
     let order = tail.retrigger().expect("the Trigger continues the story");
 
@@ -289,15 +289,16 @@ fn retrigger_is_a_new_event_message_from_the_current_state() {
     assert_eq!(order.place, Place::NewMessage);
     assert_eq!(order.start, tail.current_at());
     assert_eq!(
-        order.event, None,
-        "the step reads the event record's direction from the World"
+        order.event,
+        Some(event_record()),
+        "the order holds the event record of the trigger context"
     );
 }
 
 #[test]
 fn retrigger_is_none_for_an_event_narration() {
     let mut tail = tail_after_one_message(MessageKind::EventNarration(event_record()));
-    tail.last.swipes[1].state = state_in("room3", Some(trigger()));
+    tail.last.swipes[1].state = state_in("room3", Some(event_record()));
 
     assert!(tail.retrigger().is_none());
 }

@@ -64,8 +64,7 @@ impl Tail {
     }
 
     /// The event Narration as a new Message at the end of the story, from the
-    /// current state. The event record's narration direction comes from the World,
-    /// so the step fills it.
+    /// event record in the trigger context of the current state.
     pub fn retrigger(&self) -> Option<GenerationOrder> {
         if !self.retrigger_allowed() {
             return None;
@@ -75,7 +74,7 @@ impl Tail {
             place: Place::NewMessage,
             start: self.current_at(),
             inputs: StoredInputs::default(),
-            event: None,
+            event: self.current_state()?.trigger_context.clone(),
         })
     }
 

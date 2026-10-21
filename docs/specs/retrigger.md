@@ -31,6 +31,18 @@ And the Game is no longer busy
 Then the player still stands in "room2" (a retrigger applies no movement)
 ```
 
+#### Scenario 13.3: Retrigger sends the rendered direction to the model
+
+```gherkin
+Given a Game whose current state holds a trigger context
+And the last Message is a non-event Narration
+And the Trigger's direction names the player with the placeholder {{user}}
+When the client sends POST /retrigger
+And the Game is no longer busy
+Then the event narration call carries the Trigger's direction with the Persona's name in place of {{user}}
+And the call carries no unreplaced {{user}}
+```
+
 ### Retrigger error cases
 
 #### Scenario 14.1: Retrigger with no trigger context returns 400

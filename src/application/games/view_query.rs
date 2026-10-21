@@ -152,7 +152,6 @@ impl GameViewQuery {
             dynamic_rooms: state.movement.dynamic_rooms.keys().cloned().collect(),
             dynamic_room_count: state.movement.dynamic_rooms.len(),
             last_error,
-            quantifier_confidence: state.scene.quantifier_confidence.clone(),
             backend_name: None,
             model_name: None,
             current_options: self.dock(game_id)?.offered,

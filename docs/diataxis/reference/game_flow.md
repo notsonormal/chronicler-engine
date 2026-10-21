@@ -13,7 +13,7 @@ These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/opti
 
 - A Job runs on the Game that its request named. Every write of the Job names that Game, so a Game switch does not change a running Job.
 - A Game has at most one Job. A second request for a busy Game is refused.
-- A Job runs at most two generations: the Narration, and the event Narration of a Trigger that the analysis found. It then runs at most one Options run.
+- A Job runs at most two generations: the Narration, and the event Narration of a Trigger that the game rules fired. It then runs at most one Options run.
 - A part that fails ends the Job. Every save unit that landed before the failure stays. When the first generation saved its Narration, the Options run still runs, even when the event generation fails.
 
 A `JobPlan` holds the order of one request, and a `GenerationOrder` the order of one generation.
@@ -47,8 +47,8 @@ flowchart TD
     Room --> Input[Input save: free text only]
     Input --> Narrate[narrator call]
     Narrate --> TextSave[text save]
-    TextSave --> Analysis[analysis hook]
-    Analysis --> Rules[game rules]
+    TextSave --> AfterNarration[after-narration hook]
+    AfterNarration --> Rules[game rules]
     Rules --> Update[state update]
     Update -->|Trigger found| Event[event generation: the same parts]
     Update -->|No Trigger| Options[Options run]
@@ -56,8 +56,8 @@ flowchart TD
     Options --> End([Job ends])
 ```
 
-- The text save shows the text in the story log. The analysis and the state update follow it.
-- A user regen ends at the text save. It has no analysis.
+- The text save shows the text in the story log. The after-narration hook, the game rules and the state update follow it.
+- A user regen ends at the text save. It runs no after-narration hook.
 - A part that fails writes the failure line, which is a save unit, and the Job ends.
 
 ## Status
@@ -100,30 +100,30 @@ A Game switch moves the active-Game pointer and touches the Game's `updated_at`.
 
 ## Trigger Evaluation
 
-Trigger evaluation runs inside the game rules, after the analysis hook. The first matching Trigger starts one event generation. The event record keeps the Trigger name, and the name becomes the event header of the event Narration's Message.
+Trigger evaluation runs inside the game rules, after the after-narration hook. The first matching Trigger fires. The game rules return the event record of the fired Trigger, with its direction rendered. The record becomes the trigger context of the Swipe state, and it starts one event generation. The Trigger name becomes the event header of the event Narration's Message.
 
 ### Mutation Order
 
-The game rules apply the analysis in this order:
+The game rules apply the Quantifier result in this order:
 
 1. Movement resolves.
-2. The Characters present are set from the analysis.
+2. The Characters present are set from the Quantifier result.
 3. Trigger requirements read the encounter records, before the next part of the generation changes them.
 4. Character enter and leave events update `currently_meeting` and `times_met`.
 
-The event generation starts from the Swipe state that the state update saved. Its analysis runs with the movement taken out, and a Trigger that its rules report is ignored. A one-shot Trigger counts as fired from the pre-analysis state of its event Narration onward.
+The event generation starts from the Swipe state that the state update saved. Its game rules run with no movement and no Trigger check, and its Swipe state holds no trigger context. A one-shot Trigger counts as fired from the pre-analysis state of its event Narration onward.
 
 ## Game Rules
 
-`apply_game_rules` in `domain/model/utils/game_rules.rs` holds the game rules. It changes a `SwipeState` and returns an outcome. The Job turns the outcome into the state update.
+`game_rules::apply` in `domain/model/utils/game_rules.rs` holds the game rules. The Job calls it once per generation. It returns the new Swipe state and the event record of a fired Trigger. The storage adapter builds the `GameWorld`.
 
 ## Retry Flow
 
-A Retry redoes the generation of the kind that the last Message holds, as a new Swipe on that Message. It starts from the start state of that Message. A Retrigger writes a new event Narration from the current state and its trigger context.
+A Retry redoes the generation of the kind that the last Message holds, as a new Swipe on that Message. It starts from the start state of that Message. A Retrigger writes a new event Narration from the event record in the trigger context of the current state.
 
 ## Movement Branch
 
-Movement is a branch of the analysis hook:
+Movement is a branch of the game rules:
 
 - Movement occurs when the Quantifier derives a destination from the narrator's latest outcome.
 - A static match updates `movement.current_room_id`. An unmatched destination creates a dynamic pseudo-room, stores it in `movement.dynamic_rooms`, and makes it current.

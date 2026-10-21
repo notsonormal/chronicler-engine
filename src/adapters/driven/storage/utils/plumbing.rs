@@ -14,7 +14,7 @@ pub(crate) fn parse_datetime(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
-const LATEST_VERSION: i32 = 29;
+const LATEST_VERSION: i32 = 30;
 
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
     migrate_up_to(conn, LATEST_VERSION)
@@ -710,6 +710,18 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 29)
+            .db_context("Failed to set user_version")?;
+    }
+
+    if due(30) {
+        // The trigger context of a Swipe state changed from a Trigger reference to the
+        // whole event record, so the Games the older code saved cannot be read.
+        exec("DELETE FROM game_docks")?;
+        exec("DELETE FROM message_swipes")?;
+        exec("DELETE FROM messages")?;
+        exec("DELETE FROM games")?;
+
+        conn.pragma_update(None, "user_version", 30)
             .db_context("Failed to set user_version")?;
     }
 

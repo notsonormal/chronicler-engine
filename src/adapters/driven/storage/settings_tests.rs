@@ -1,7 +1,7 @@
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::domain::model::{
-    agent::{AgentConfig, BackendSelector, Hook},
+    agent::{AgentConfig, BackendSelector},
     settings::{AppSettings, LlmProviderConfig, NarratorMode, TextCheckMode, TextCheckSettings},
 };
 use crate::error::EngineError;
@@ -229,7 +229,6 @@ fn test_save_then_get_settings_roundtrip() {
             agent_type: "PreGeneration".into(),
             enabled: true,
             backend: BackendSelector::UseMain,
-            hook: Hook::Analysis,
         }],
         ..Default::default()
     };
@@ -296,7 +295,6 @@ fn test_save_then_get_settings_roundtrip_sqlite() {
             agent_type: "PreGeneration".into(),
             enabled: true,
             backend: BackendSelector::UseMain,
-            hook: Hook::Analysis,
         }],
         ..Default::default()
     };
@@ -511,7 +509,6 @@ fn test_save_then_get_settings_preserves_agents() {
         agent_type: "Custom".into(),
         enabled: false,
         backend: BackendSelector::UseNamed("special-conn".into()),
-        hook: Hook::Options,
     };
 
     let settings = AppSettings {
@@ -531,7 +528,6 @@ fn test_save_then_get_settings_preserves_agents() {
         loaded_agent.backend,
         BackendSelector::UseNamed("special-conn".into())
     );
-    assert_eq!(loaded_agent.hook, Hook::Options);
 }
 
 #[test]
@@ -542,7 +538,6 @@ fn test_save_then_get_settings_preserves_agents_sqlite() {
         agent_type: "Custom".into(),
         enabled: false,
         backend: BackendSelector::UseNamed("special-conn".into()),
-        hook: Hook::Options,
     };
 
     let settings = AppSettings {
@@ -562,7 +557,6 @@ fn test_save_then_get_settings_preserves_agents_sqlite() {
         loaded_agent.backend,
         BackendSelector::UseNamed("special-conn".into())
     );
-    assert_eq!(loaded_agent.hook, Hook::Options);
 }
 
 #[test]
@@ -682,7 +676,7 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 29);
+    assert_eq!(version, 30);
 }
 
 #[test]

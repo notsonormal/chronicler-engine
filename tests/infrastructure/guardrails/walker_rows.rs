@@ -17,8 +17,8 @@ pub const BANNED_NAME_ROWS: &[BannedNameRow] = &[
         banned: &[StaticItem, NamePrefix("Atomic")],
     },
     // Rule 6: the guard never spans a model call. `gate.rs` holds the guard for one
-    // check and its writes, so the narrator or an Agent (an analysis Agent, an
-    // Options Agent, their runner) named in that file would let a call run under it.
+    // check and its writes, so the narrator or an Agent (an after-narration Agent, an
+    // end-of-Job Agent, their runner) named in that file would let a call run under it.
     BannedNameRow {
         rule: 6,
         scope: "application/generation/gate.rs",
@@ -30,8 +30,8 @@ pub const BANNED_NAME_ROWS: &[BannedNameRow] = &[
 // list is one named const the row points at.
 pub const GENERATION_CALLEES: &[&str] = &[
     "Narrator::narrate",
-    "AgentRunner::analysis",
-    "AgentRunner::options",
+    "AgentRunner::after_narration",
+    "AgentRunner::end_of_job",
 ];
 
 // What may make those calls: the Job, and the `Narrator` seam contract, which calls

@@ -16,7 +16,7 @@ pub enum BannedName {
     /// expression path.
     NamePrefix(&'static str),
     /// A name that holds this part, which covers a family of names that share one
-    /// word (an `AnalysisAgent`, an `OptionsAgent`, an `AgentRunner`).
+    /// word (an `AfterNarrationAgent`, an `EndOfJobAgent`, an `AgentRunner`).
     NameContains(&'static str),
 }
 
@@ -248,7 +248,7 @@ impl<'ast> Visit<'ast> for BannedNameVisitor<'_> {
         syn::visit::visit_expr_path(self, node);
     }
 
-    /// A trait bound, as in `Box<dyn AnalysisAgent>`: the trait's own path is not a
+    /// A trait bound, as in `Box<dyn AfterNarrationAgent>`: the trait's own path is not a
     /// type path, so the type and import walks do not reach it.
     fn visit_trait_bound(&mut self, node: &'ast syn::TraitBound) {
         if let Some(segment) = node.path.segments.last() {

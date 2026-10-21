@@ -15,7 +15,6 @@ use crate::domain::model::message::{Maker, Message, StoredInputs, Swipe, SwipeAt
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::{EventRecord, TriggerRef};
 use crate::domain::model::tail::Tail;
 use crate::domain::model::utils::generation_record;
 use crate::error::EngineError;
@@ -231,8 +230,8 @@ impl GameWriter {
         self.hold(|entries, units| {
             Self::require_idle(entries, game)?;
             let tail = self.tail_or_refuse(game, units)?;
-            let mut plan = self.plan_for(game, &request, tail.as_ref(), units)?;
-            self.require_job_data(game, &mut plan, tail.as_ref(), units)?;
+            let plan = self.plan_for(game, &request, tail.as_ref(), units)?;
+            self.require_job_data(game, &plan, units)?;
             let step = plan.first_step();
             // The unit lands before the entry: a refused accept makes no entry, so a
             // Game is never busy for a Job that never started.
@@ -514,13 +513,7 @@ impl GameWriter {
             .ok_or_else(|| self.missing(game, "the story", units))
     }
 
-    fn require_job_data(
-        &self,
-        game: GameId,
-        plan: &mut JobPlan,
-        tail: Option<&Tail>,
-        units: &Units,
-    ) -> Result<(), Refusal> {
+    fn require_job_data(&self, game: GameId, plan: &JobPlan, units: &Units) -> Result<(), Refusal> {
         let row = match self.storage.get_game(game.0) {
             Ok(Some(row)) => row,
             Ok(None) => return Err(self.missing(game, "the game", units)),
@@ -530,7 +523,7 @@ impl GameWriter {
             return Err(self.unreadable(game, "the persona", &error, units));
         }
 
-        let Some(order) = &mut plan.first else {
+        let Some(order) = &plan.first else {
             return Ok(());
         };
         match self.storage.stories().swipe_state(game, order.start) {
@@ -541,46 +534,7 @@ impl GameWriter {
         if order.kind == Kind::Impersonate && order.inputs.impersonate_direction.is_none() {
             return Err(self.missing(game, "the impersonate direction", units));
         }
-        if order.kind == Kind::Event && order.event.is_none() {
-            order.event = Some(self.event_record(game, tail, units)?);
-        }
         Ok(())
-    }
-
-    fn event_record(
-        &self,
-        game: GameId,
-        tail: Option<&Tail>,
-        units: &Units,
-    ) -> Result<EventRecord, Refusal> {
-        let trigger = tail
-            .and_then(Tail::current_state)
-            .and_then(|state| state.trigger_context.clone())
-            .ok_or_else(|| self.missing(game, "the trigger context", units))?;
-        let direction = self.trigger_direction(game, &trigger, units)?;
-        Ok(EventRecord {
-            header_name: trigger.trigger_name.clone(),
-            trigger,
-            direction,
-        })
-    }
-
-    fn trigger_direction(
-        &self,
-        game: GameId,
-        trigger: &TriggerRef,
-        units: &Units,
-    ) -> Result<String, Refusal> {
-        let bundle = self
-            .storage
-            .world_bundle_for(game.0)
-            .map_err(|error| self.unreadable(game, "the World", &error, units))?;
-        bundle
-            .npcs
-            .get(&trigger.npc_id)
-            .and_then(|npc| npc.triggers.get(trigger.trigger_idx))
-            .map(|trigger| trigger.narration.narration_prompt.clone())
-            .ok_or_else(|| self.missing(game, "the trigger", units))
     }
 
     /// The end of a request that changes the story under a Game with no running

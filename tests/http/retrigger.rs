@@ -10,8 +10,8 @@ use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder, TestMap,
-    TestNpc,
+    active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder,
+    TestDataBuilder, TestMap, TestNpc,
 };
 
 use crate::support::app_wiring::app_with_a_triggered_npc;
@@ -115,6 +115,66 @@ async fn test_retrigger_does_not_move_the_player_http() {
     assert_eq!(
         room_before, room_after,
         "retrigger must not re-run quantifier (room unchanged)"
+    );
+}
+
+// [docs/specs/retrigger.md] SCENARIO: 13.3
+#[tokio::test]
+async fn test_retrigger_sends_the_rendered_direction_to_the_model_http() {
+    let mut npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    npc.triggers[0].narration.narration_prompt = "{{user}} notices the lamp.".to_string();
+    let model = Arc::new(
+        ScriptedModel::new()
+            .narration("Main narration")
+            .analysis(analysis_report(&["npc_1"], None))
+            .failed(Role::Trigger)
+            .event_narration("The event fires again.")
+            .analysis(analysis_report(&["npc_1"], None)),
+    );
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::single_room("room_1"))
+        .npcs(vec![npc])
+        .build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .model(Arc::clone(&model))
+        .build_with_state();
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should settle after its failed continuation"
+    );
+
+    let resp = post_empty(&app, "/retrigger").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(
+        wait_settled(&state, 2000).await,
+        "retrigger should complete"
+    );
+
+    let event_calls: Vec<_> = model
+        .calls()
+        .into_iter()
+        .filter(|call| call.role == Role::Trigger)
+        .collect();
+    assert_eq!(
+        event_calls.len(),
+        2,
+        "the Action's event call and the Retrigger's"
+    );
+    let retrigger_call = event_calls.last().expect("the Retrigger's event call");
+    let prompt = format!(
+        "{}\n{}",
+        retrigger_call.system_prompt, retrigger_call.user_prompt
+    );
+    assert!(
+        prompt.contains("Test Player notices the lamp."),
+        "the call carries the rendered direction: {prompt}"
+    );
+    assert!(
+        !prompt.contains("{{user}}"),
+        "the call carries no unreplaced placeholder: {prompt}"
     );
 }
 

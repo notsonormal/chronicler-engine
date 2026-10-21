@@ -22,7 +22,6 @@ pub struct DebugStateView {
     pub dynamic_rooms: Vec<String>,
     pub dynamic_room_count: usize,
     pub last_error: Option<String>,
-    pub quantifier_confidence: Option<String>,
     pub backend_name: Option<String>,
     pub model_name: Option<String>,
     pub current_options: Vec<String>,
