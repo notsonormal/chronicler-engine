@@ -1,7 +1,7 @@
 # Merge the response to `main`
 
 Type: task (AFK)
-Status: open
+Status: claimed
 Blocked by: 37
 
 ## Question
