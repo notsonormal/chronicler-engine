@@ -8,13 +8,14 @@ use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
-    analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestNpc,
+    active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder,
+    TestDataBuilder, TestNpc,
 };
 
 use crate::support::http_assertions::{
     icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
 };
-use crate::support::http_fixtures::story_of;
+use crate::support::http_fixtures::{append_narrations, story_of};
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_empty, post_form, response_body,
     wait_settled,
@@ -227,6 +228,104 @@ async fn test_delete_removes_entry_from_fragment_http() {
     );
 }
 
+/// The `.log-entry` blocks of the fragment, as the Message id and the markup of each.
+fn log_entries(body: &str) -> Vec<(u64, &str)> {
+    body.split(r#"<div class="log-entry"#)
+        .skip(1)
+        .map(|entry| {
+            let id = entry
+                .split(r#"data-id=""#)
+                .nth(1)
+                .and_then(|rest| rest.split('"').next())
+                .and_then(|id| id.parse().ok())
+                .expect("every log entry names its Message");
+            (id, entry)
+        })
+        .collect()
+}
+
+/// A Game whose story holds 53 Messages: its opening and 52 padded Narrations.
+fn long_story_app() -> (
+    axum::Router,
+    chronicler_engine::adapters::driving::http::AppState,
+) {
+    let storage = Arc::new(empty_sqlite_storage());
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    append_narrations(&storage, active_game_of(&state), 52, |index| {
+        format!("Padded Narration {index}.")
+    });
+    assert_eq!(story_of(&state).len(), 53, "the story holds 53 Messages");
+    (app, state)
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.11
+#[tokio::test]
+async fn test_the_story_log_of_a_long_story_ends_at_the_last_message() {
+    let (app, state) = long_story_app();
+    let story = story_of(&state);
+
+    let body = fetch_body(&app, "/fragment/story-log").await;
+
+    let entries = log_entries(&body);
+    assert_eq!(entries.len(), 50, "the window holds 50 entries: {body}");
+    assert_eq!(
+        entries.first().map(|(id, _)| *id),
+        Some(story[3].id),
+        "the first entry is the fourth stored Message"
+    );
+    assert_eq!(
+        entries.last().map(|(id, _)| *id),
+        story.last().map(|message| message.id),
+        "the last entry is the last stored Message"
+    );
+    for (position, (id, markup)) in entries.iter().enumerate() {
+        let is_last = position == entries.len() - 1;
+        assert_eq!(
+            markup.contains("delete-btn"),
+            is_last,
+            "only the last entry (id {id}) carries Delete"
+        );
+        assert_eq!(
+            markup.contains(r#"title="Retry""#),
+            is_last,
+            "only the last entry (id {id}) carries Retry"
+        );
+    }
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.12
+#[tokio::test]
+async fn test_delete_last_in_a_long_story_removes_the_entry_the_player_sees() {
+    let (app, state) = long_story_app();
+    let story = story_of(&state);
+    let before = fetch_body(&app, "/fragment/story-log").await;
+    assert_eq!(log_entries(&before).len(), 50);
+
+    let resp = post_empty(&app, "/history/delete").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let after = fetch_body(&app, "/fragment/story-log").await;
+    let entries = log_entries(&after);
+    assert_eq!(entries.len(), 50, "the window stays full: {after}");
+    let deleted = story[52].id;
+    assert_eq!(
+        entries.last().map(|(id, _)| *id),
+        Some(story[51].id),
+        "the last entry is the Message before the deleted one"
+    );
+    assert!(
+        entries.iter().all(|(id, _)| *id != deleted),
+        "no entry holds the deleted Message"
+    );
+    assert_eq!(
+        entries.first().map(|(id, _)| *id),
+        Some(story[2].id),
+        "the first entry is the third stored Message"
+    );
+}
+
 // The shell swaps this fragment into its own `#story-log`, so a second
 // container here would nest on every swap.
 // [docs/specs/story_log.md] SCENARIO: 8.5
@@ -336,4 +435,26 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
         wait_settled(&state, 1000).await,
         "the released Job should complete"
     );
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.13
+#[tokio::test]
+async fn test_in_a_long_story_the_oldest_entry_shows_its_room() {
+    let (app, _state) = long_story_app();
+
+    let body = fetch_body(&app, "/fragment/story-log").await;
+
+    let entries = log_entries(&body);
+    assert_eq!(entries.len(), 50, "the window holds 50 entries: {body}");
+    let (first_id, first) = entries[0];
+    assert!(
+        first.contains(r#"<span class="location-header">Test Room</span>"#),
+        "the oldest entry (id {first_id}) shows its room: {first}"
+    );
+    for (id, markup) in &entries[1..] {
+        assert!(
+            !markup.contains("location-header"),
+            "entry {id} holds the room the entry before it holds, so it shows none"
+        );
+    }
 }

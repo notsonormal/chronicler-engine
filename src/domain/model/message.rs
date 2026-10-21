@@ -33,7 +33,6 @@ pub enum Maker {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Swipe {
     pub text: String,
-    pub room_report: Option<String>,
     pub event_header: Option<String>,
     #[serde(default)]
     pub impersonated: bool,
@@ -49,7 +48,6 @@ impl Swipe {
     pub fn new(text: impl Into<String>, maker: Maker, state: SwipeState) -> Self {
         Self {
             text: text.into(),
-            room_report: None,
             event_header: None,
             impersonated: false,
             guide_text: None,
@@ -105,10 +103,6 @@ impl Message {
 
     pub fn text(&self) -> &str {
         self.active_swipe().map(|s| s.text.as_str()).unwrap_or("")
-    }
-
-    pub fn room_report(&self) -> Option<&str> {
-        self.active_swipe().and_then(|s| s.room_report.as_deref())
     }
 
     pub fn event_header(&self) -> Option<&str> {

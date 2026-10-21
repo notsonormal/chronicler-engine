@@ -35,7 +35,6 @@ pub struct StoryRow {
     pub message_type: MessageType,
     pub timestamp: DateTime<Utc>,
     pub text: String,
-    pub room_report: Option<String>,
     pub event_header: Option<String>,
     pub swipe_count: usize,
     pub active_swipe_index: usize,

@@ -14,7 +14,7 @@ pub(crate) fn parse_datetime(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
-const LATEST_VERSION: i32 = 28;
+const LATEST_VERSION: i32 = 29;
 
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
     migrate_up_to(conn, LATEST_VERSION)
@@ -699,6 +699,17 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         )?;
 
         conn.pragma_update(None, "user_version", 28)
+            .db_context("Failed to set user_version")?;
+    }
+
+    if due(29) {
+        // The story log derives the room it shows from each Swipe's state, so the
+        // stored room name has no reader.
+        if column_exists(conn, "message_swipes", "room_report") {
+            exec("ALTER TABLE message_swipes DROP COLUMN room_report")?;
+        }
+
+        conn.pragma_update(None, "user_version", 29)
             .db_context("Failed to set user_version")?;
     }
 

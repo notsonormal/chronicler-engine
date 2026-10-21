@@ -82,11 +82,19 @@ Each Swipe holds one **Swipe state**: the room, the added rooms, the Characters 
 - A stop or a restart between the two writes leaves the Swipe with its pre-analysis state.
 - An edit changes the text of a Swipe only. A swipe switch and a delete change which Swipe state is current. They write no Swipe state.
 
-A Swipe also holds the room report that its Message shows. An event Narration's Message holds its **event record**, the Trigger that started it.
+An event Narration's Message holds its **event record**, the Trigger that started it.
+
+The room is one fact: the room of the Swipe state. `SwipeState::room` finds it: a map room, else an added room.
+
+## The Story Window
+
+The story log shows the **story window**: the newest Messages of the Game, oldest first. `GameViewQuery::story_window` reads the entries and the end-of-story facts in one storage read, so a Job cannot save a Message between them. The facts include whether a Retrigger is allowed. The last entry of the window is the last Message of the story, and the last-entry controls act on it.
+
+The story log derives the room name that a Message shows from the Swipe state of its active Swipe. A Message shows its room name when that name differs from the room name of the Message before it. The oldest Message of the window always shows its room name. Two rooms with one name count as one room name.
 
 ## Create and Reset
 
-One save unit creates a Game. It writes the Game record, an empty dock record and the opening Narration. The opening Narration holds one Swipe: the World's opening text, which can be empty, the starting state, and the starting room as its room report. No LLM call writes it. A reset runs the same unit, so a Game always holds its opening Narration.
+One save unit creates a Game. It writes the Game record, an empty dock record and the opening Narration. The opening Narration holds one Swipe: the World's opening text, which can be empty, and the starting state. No LLM call writes it. A reset runs the same unit, so a Game always holds its opening Narration.
 
 A Game switch moves the active-Game pointer and touches the Game's `updated_at`. `GameCatalogue` is the only writer of the pointer.
 
@@ -119,7 +127,6 @@ Movement is a branch of the analysis hook:
 
 - Movement occurs when the Quantifier derives a destination from the narrator's latest outcome.
 - A static match updates `movement.current_room_id`. An unmatched destination creates a dynamic pseudo-room, stores it in `movement.dynamic_rooms`, and makes it current.
-- The room a movement lands in is the room report of the Swipe whose generation moved the player.
 - Movement detection runs for a Narration and an Impersonate. An event generation moves nobody and updates the Characters present.
 
 Dynamic rooms travel with the Swipe state.

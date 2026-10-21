@@ -155,13 +155,12 @@ impl<'a> Tx<'a> {
         require_message_of_game(&self.conn, at.message, self.game)?;
         self.conn
             .execute(
-                "INSERT INTO message_swipes (message_id, swipe_index, text, room_report, event_header, impersonated, guide_text, impersonate_direction, state, maker)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                "INSERT INTO message_swipes (message_id, swipe_index, text, event_header, impersonated, guide_text, impersonate_direction, state, maker)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 rusqlite::params![
                     at.message as i64,
                     at.swipe as i64,
                     &swipe.text,
-                    swipe.room_report.as_deref(),
                     swipe.event_header.as_deref(),
                     if swipe.impersonated { 1 } else { 0 },
                     swipe.guide_text.as_deref(),
@@ -186,20 +185,14 @@ impl<'a> Tx<'a> {
         Ok(())
     }
 
-    pub fn set_swipe_state(
-        &mut self,
-        at: SwipeAt,
-        state: &SwipeState,
-        room_report: Option<&str>,
-    ) -> Result<(), EngineError> {
+    pub fn set_swipe_state(&mut self, at: SwipeAt, state: &SwipeState) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::SetSwipeState)?;
         require_message_of_game(&self.conn, at.message, self.game)?;
         self.conn
             .execute(
-                "UPDATE message_swipes SET state = ?1, room_report = ?2 WHERE message_id = ?3 AND swipe_index = ?4",
+                "UPDATE message_swipes SET state = ?1 WHERE message_id = ?2 AND swipe_index = ?3",
                 rusqlite::params![
                     serde_json::to_string(state)?,
-                    room_report,
                     at.message as i64,
                     at.swipe as i64,
                 ],

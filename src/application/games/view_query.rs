@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::llm_messages::LLM_MESSAGE_RETENTION_LIMIT;
-use crate::adapters::driven::storage::stories::STORY_LIMIT;
 use crate::adapters::driven::storage::Storage;
 use crate::application::debug::DebugStateView;
 use crate::application::errors::ApplicationError;
@@ -15,9 +14,12 @@ use crate::domain::model::game::GameId;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::message::Message;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationStatus, Step};
-use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
+use crate::domain::model::story_window::{StoryWindow, StoryWindowEntry};
 use crate::error::EngineError;
+
+/// How many of the newest Messages the story log shows.
+const STORY_WINDOW_SIZE: usize = 50;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoleHealth {
@@ -58,9 +60,8 @@ impl GameViewQuery {
         let map = &world_with_map.map;
         let state = self.current_state(game_id)?;
         let room_id = &state.movement.current_room_id;
-        let room = map
-            .get_room_by_id(room_id)
-            .or_else(|| state.movement.dynamic_rooms.get(room_id))
+        let room = state
+            .room(map)
             .ok_or_else(|| ApplicationError::from(EngineError::RoomNotFound(room_id.clone())))?;
 
         let image_path = room
@@ -158,23 +159,37 @@ impl GameViewQuery {
         })
     }
 
-    pub fn get_story_log_entries(
-        &self,
-        game_id: GameId,
-    ) -> Result<(Vec<StoryRow>, bool), ApplicationError> {
-        let entries = self.storage.stories().entries(game_id, None, STORY_LIMIT)?;
-        let can_retrigger = self
-            .storage
-            .stories()
-            .tail(game_id)?
-            .is_some_and(|tail| tail.retrigger_allowed());
-        Ok((entries, can_retrigger))
+    pub fn story_window(&self, game_id: GameId) -> Result<StoryWindow, ApplicationError> {
+        let read = self.storage.stories().window(game_id, STORY_WINDOW_SIZE)?;
+        if read.entries.is_empty() {
+            return Ok(StoryWindow {
+                entries: Vec::new(),
+                retrigger_allowed: read.retrigger_allowed,
+            });
+        }
+        let game = self.storage.require_game(game_id.0)?;
+        let world = self.storage.require_world(&game.world_key)?;
+        let room_names: Vec<Option<String>> = read
+            .entries
+            .iter()
+            .map(|(_, state)| state.room(&world.map).map(|room| room.name.clone()))
+            .collect();
+        let entries = read
+            .entries
+            .into_iter()
+            .zip(StoryWindow::room_headers(&room_names))
+            .map(|((row, _), room_header)| StoryWindowEntry { row, room_header })
+            .collect();
+        Ok(StoryWindow {
+            entries,
+            retrigger_allowed: read.retrigger_allowed,
+        })
     }
 
     /// Every Message of the story with all its Swipes, oldest first.
     ///
-    /// Only tests call it: they check the stored inputs and the room report of
-    /// a Swipe that is not active, which no production read returns.
+    /// Only tests call it: they check the stored inputs of a Swipe that is not
+    /// active, which no production read returns.
     pub fn story_messages(&self, game_id: GameId) -> Result<Vec<Message>, ApplicationError> {
         self.storage.stories().messages(game_id).map_err(Into::into)
     }

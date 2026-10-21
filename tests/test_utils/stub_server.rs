@@ -65,8 +65,13 @@ const NARRATIVE_TEXT: &str = "Welcome to the Test World, Test Player! This is a 
 fn story_log_html(entries: &[StoryRow]) -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::NarrativeLogTemplate;
+    use chronicler_engine::test_support::fixtures::window_entries;
 
-    NarrativeLogTemplate::new(entries, true)
+    let mut window = window_entries(entries);
+    if let Some(opening) = window.iter_mut().find(|entry| entry.row.id == 1) {
+        opening.room_header = Some("Test Tavern".to_string());
+    }
+    NarrativeLogTemplate::new(&window, true)
         .render()
         .expect("render story log")
 }
@@ -87,7 +92,6 @@ fn default_story_log_entries() -> Vec<StoryRow> {
             text: NARRATIVE_TEXT.to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 8, 0).unwrap(),
-            room_report: Some("Test Tavern".to_string()),
             ..default_story_row(MessageType::Narration)
         },
     ]

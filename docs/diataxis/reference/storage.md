@@ -29,7 +29,7 @@ process lives in `ActiveGame` (`application/games/active.rs`).
 |---|---|---|
 | Game | The World, the Persona, the prompt presets, the always-on toggle, the names, and the **failure line** | `games` |
 | Message | The place in the story, its kind (typed Input, Impersonate Input, Narration or event Narration) and the active Swipe. An event Narration also holds its event record. | `messages` |
-| Swipe | The text, the stored inputs of its generation, the maker, the room report and the **Swipe state** | `message_swipes` |
+| Swipe | The text, the stored inputs of its generation, the maker and the **Swipe state** | `message_swipes` |
 | Dock record | The offered set and at most one notice. A Game has one. | `game_docks` |
 
 The job entry in memory holds the busy mark and the step name.
@@ -38,7 +38,7 @@ The job entry in memory holds the busy mark and the step name.
 
 `Storage::stories()` and `Storage::docks()` return read handles. Each read names its Game.
 
-- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, and the entries of a window. It reads no more of the story than its answer needs.
+- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, the entries before a Message, and the story window: the newest entries, each with its Swipe state, and the end-of-story facts, in one read. It reads no more of the story than its answer needs.
 - **`DockReads`** (`docks.rs`) reads the dock record of a Game.
 
 ## Transactions
@@ -87,7 +87,7 @@ The schema has 11 tables, organized into three logical clusters:
 
 - **`games`** — top-level game session record. It holds the failure line of the Game.
 - **`messages`** — the story of a Game in order. Each row is one Message, written by a save unit. There is exactly one story per game.
-- **`message_swipes`** — the Swipes of a Message. A Swipe holds the text, the stored inputs of its generation (so a Retry of that Swipe re-applies the same steering), the maker, the room report and its Swipe state.
+- **`message_swipes`** — the Swipes of a Message. A Swipe holds the text, the stored inputs of its generation (so a Retry of that Swipe re-applies the same steering), the maker and its Swipe state.
 - **`game_docks`** — the dock record of a Game: the offered set and the notice.
 
 ### World catalogue cluster

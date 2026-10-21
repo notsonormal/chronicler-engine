@@ -60,6 +60,7 @@ pub enum StorageCall {
     StoriesMessages,
     StoriesSwipeState,
     StoriesTail,
+    StoriesWindow,
     TouchGameUpdatedAt,
     Transaction,
     UpdateGameConfig,

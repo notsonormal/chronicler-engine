@@ -3,8 +3,9 @@
 use std::collections::HashMap;
 
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::map::Room;
 use crate::domain::model::scenario::StartingScenario;
-use crate::test_support::TestNpc;
+use crate::test_support::{TestMap, TestNpc};
 
 use super::swipe_state::SwipeState;
 
@@ -103,4 +104,24 @@ fn pre_analysis_of_a_repeatable_trigger_marks_nothing() {
     let pre = state.pre_analysis(Some(&event_record(true)));
 
     assert!(!pre.npc_encounter_log.is_trigger_fired("npc_1", 0));
+}
+
+#[test]
+fn room_added_room_finds_a_map_room_else_an_added_room_else_none() {
+    let map = TestMap::single_room("room1");
+    let mut state = SwipeState::starting(None, &characters(&[]), "room1");
+    assert_eq!(state.room(&map).map(|room| room.id.as_str()), Some("room1"));
+
+    let added = Room::new_dynamic("Misty Glade", "A glade.");
+    state.movement.current_room_id = added.id.clone();
+    assert!(state.room(&map).is_none(), "an unknown room is none");
+
+    state
+        .movement
+        .dynamic_rooms
+        .insert(added.id.clone(), added.clone());
+    assert_eq!(
+        state.room(&map).map(|room| room.name.as_str()),
+        Some("Misty Glade")
+    );
 }

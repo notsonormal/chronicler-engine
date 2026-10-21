@@ -10,31 +10,23 @@ fn message(text: &str, message_type: MessageType) -> Message {
     Message::new(message_type, MessageKind::Narration, swipe(text))
 }
 
-fn message_with_headers(
+fn message_with_event_header(
     text: &str,
     message_type: MessageType,
-    room_report: Option<&str>,
     event_header: Option<&str>,
 ) -> Message {
     let mut message = message(text, message_type);
-    message.swipes[0].room_report = room_report.map(str::to_string);
     message.swipes[0].event_header = event_header.map(str::to_string);
     message
 }
 
 #[test]
 fn test_message_new_sets_fields() {
-    let msg = message_with_headers(
-        "Hello world",
-        MessageType::Input,
-        Some("Location"),
-        Some("Event"),
-    );
+    let msg = message_with_event_header("Hello world", MessageType::Input, Some("Event"));
 
     assert_eq!(msg.id, 0);
     assert_eq!(msg.text(), "Hello world");
     assert_eq!(msg.message_type, MessageType::Input);
-    assert_eq!(msg.room_report(), Some("Location"));
     assert_eq!(msg.event_header(), Some("Event"));
 }
 
@@ -56,10 +48,9 @@ fn test_message_new_generates_timestamp() {
 }
 #[test]
 fn test_message_set_event_header() {
-    let mut msg = message_with_headers(
+    let mut msg = message_with_event_header(
         "Test narration",
         MessageType::Narration,
-        Some("Test Location"),
         Some("Original Event"),
     );
     assert_eq!(msg.event_header(), Some("Original Event"));
@@ -89,26 +80,19 @@ fn test_message_from_db() {
 }
 #[test]
 fn test_message_swipe_fields_roundtrip() {
-    let mut msg = message_with_headers(
-        "Original text",
-        MessageType::Narration,
-        Some("Room A"),
-        Some("EventX"),
-    );
+    let mut msg =
+        message_with_event_header("Original text", MessageType::Narration, Some("EventX"));
 
     msg.swipes.push(Swipe {
-        room_report: Some("Room B".to_string()),
         event_header: Some("EventY".to_string()),
         ..swipe("Swiped text")
     });
 
     assert_eq!(msg.text(), "Original text");
-    assert_eq!(msg.room_report(), Some("Room A"));
     assert_eq!(msg.event_header(), Some("EventX"));
 
     msg.set_active_swipe(1);
     assert_eq!(msg.text(), "Swiped text");
-    assert_eq!(msg.room_report(), Some("Room B"));
     assert_eq!(msg.event_header(), Some("EventY"));
 
     msg.set_active_swipe(0);

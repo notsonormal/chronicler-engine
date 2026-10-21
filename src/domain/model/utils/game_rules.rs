@@ -41,7 +41,6 @@ pub enum GameRuleRequest<'a> {
 /// The rules write no story: the caller turns these into writes.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct GameRulesOutcome {
-    pub arrived_room_name: Option<String>,
     /// The room the rules added, because no room known to the map had the destination.
     pub unknown_location: Option<Room>,
     /// The Trigger that matched, read before the Character events advanced `times_met`.
@@ -127,7 +126,7 @@ fn analysis(
     Ok(outcome)
 }
 
-/// No destination moves nobody and reports no room.
+/// No destination moves nobody.
 fn movement(
     state: &mut SwipeState,
     destination: Option<&str>,
@@ -146,7 +145,6 @@ fn movement(
         }
     }
     GameRulesOutcome {
-        arrived_room_name: room_name(state, map),
         unknown_location,
         ..Default::default()
     }
@@ -171,7 +169,7 @@ fn attempt_movement(state: &mut SwipeState, destination: &str, map: &MapDef) -> 
 }
 
 fn walk(state: &mut SwipeState, map: &MapDef, room_id: &str) -> Result<()> {
-    if room_of(state, map, room_id).is_none() {
+    if state.room_by_id(map, room_id).is_none() {
         return Err(EngineError::Navigation(
             "You don't see a way to go there.".to_string(),
         ));
@@ -179,15 +177,6 @@ fn walk(state: &mut SwipeState, map: &MapDef, room_id: &str) -> Result<()> {
 
     state.movement.current_room_id = room_id.to_string();
     Ok(())
-}
-
-fn room_of<'a>(state: &'a SwipeState, map: &'a MapDef, room_id: &str) -> Option<&'a Room> {
-    map.get_room_by_id(room_id)
-        .or_else(|| state.movement.dynamic_rooms.get(room_id))
-}
-
-fn room_name(state: &SwipeState, map: &MapDef) -> Option<String> {
-    room_of(state, map, &state.movement.current_room_id).map(|room| room.name.clone())
 }
 
 fn apply_npc_events(state: &mut SwipeState, events: &[NpcEvent]) {
@@ -306,7 +295,7 @@ pub(crate) fn assert_state_consistency(
 
 #[cfg(feature = "diagnostics")]
 fn assert_room_exists(state: &SwipeState, map: &MapDef) -> Result<()> {
-    if room_of(state, map, &state.movement.current_room_id).is_none() {
+    if state.room(map).is_none() {
         return Err(EngineError::Internal(InternalError::new(format!(
             "current_room_id '{}' not found in map or dynamic_rooms",
             state.movement.current_room_id

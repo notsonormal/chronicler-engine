@@ -655,20 +655,28 @@ async fn test_switch_swipe_handler_success() {
     );
 
     let game = active_game_of(&state);
-    let (entries, _) = state
+    let entries: Vec<_> = state
         .game_view_query
-        .get_story_log_entries(game)
-        .expect("the story reads back");
+        .story_window(game)
+        .expect("the story reads back")
+        .entries
+        .into_iter()
+        .map(|entry| entry.row)
+        .collect();
     let last = entries.last().expect("the Retry's Narration is the last");
     assert_eq!(last.swipe_count, 2, "the Retry appended a Swipe");
 
     let response = post_empty(&app, &format!("/message/{}/swipe/0", last.id)).await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    let (entries, _) = state
+    let entries: Vec<_> = state
         .game_view_query
-        .get_story_log_entries(game)
-        .expect("the story reads back");
+        .story_window(game)
+        .expect("the story reads back")
+        .entries
+        .into_iter()
+        .map(|entry| entry.row)
+        .collect();
     assert_eq!(
         entries
             .last()
@@ -712,10 +720,14 @@ async fn test_switch_swipe_handler_not_last() {
     );
 
     let game = active_game_of(&state);
-    let (entries, _) = state
+    let entries: Vec<_> = state
         .game_view_query
-        .get_story_log_entries(game)
-        .expect("the story reads back");
+        .story_window(game)
+        .expect("the story reads back")
+        .entries
+        .into_iter()
+        .map(|entry| entry.row)
+        .collect();
     let input = entries
         .iter()
         .rev()

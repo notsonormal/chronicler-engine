@@ -42,10 +42,10 @@ And a Retry of that Action's Narration that stayed in "room_1"
 And the Action's Narration has two Swipes
 When the client switches to the first Swipe
 Then the player stands in "room2"
-And that Narration reports the room "Room room2"
+And the story log shows the room "Room room2" on that Narration
 When the client switches to the second Swipe
 Then the player stands in "room_1"
-And that Narration reports no room
+And the story log shows no room on that Narration
 ```
 
 #### Scenario 36.5: A swipe index past the last Swipe is refused

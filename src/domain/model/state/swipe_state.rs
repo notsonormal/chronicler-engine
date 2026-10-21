@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::trigger::NpcEncounterLog;
 use super::movement::MovementState;
@@ -41,6 +42,16 @@ impl SwipeState {
             state.init_scenario_npcs(scenario, characters);
         }
         state
+    }
+
+    /// The room the player stands in: a map room, else an added room.
+    pub fn room<'a>(&'a self, map: &'a MapDef) -> Option<&'a Room> {
+        self.room_by_id(map, &self.movement.current_room_id)
+    }
+
+    pub fn room_by_id<'a>(&'a self, map: &'a MapDef, room_id: &str) -> Option<&'a Room> {
+        map.get_room_by_id(room_id)
+            .or_else(|| self.movement.dynamic_rooms.get(room_id))
     }
 
     /// The state a Swipe holds from the text save until its analysis updates it:

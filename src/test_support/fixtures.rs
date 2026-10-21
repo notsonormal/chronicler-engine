@@ -14,6 +14,7 @@ use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, Narra
 use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
+use crate::domain::model::story_window::StoryWindowEntry;
 use crate::adapters::driven::storage::TxToken;
 use crate::domain::model::trigger::{ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement};
 use crate::domain::model::scenario::StartingScenario;
@@ -506,11 +507,20 @@ pub fn default_story_row(message_type: MessageType) -> StoryRow {
         message_type,
         timestamp: chrono::Utc::now(),
         text: String::new(),
-        room_report: None,
         event_header: None,
         swipe_count: 1,
         active_swipe_index: 0,
     }
+}
+
+/// The entries of a story window that show no room header.
+pub fn window_entries(rows: &[StoryRow]) -> Vec<StoryWindowEntry> {
+    rows.iter()
+        .map(|row| StoryWindowEntry {
+            row: row.clone(),
+            room_header: None,
+        })
+        .collect()
 }
 
 pub fn llm_message(

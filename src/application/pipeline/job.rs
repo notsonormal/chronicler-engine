@@ -20,7 +20,7 @@ use crate::domain::model::agent::{AgentSettings, HookInput, Kind, WorldView, STO
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::game::{Game, GameId};
 use crate::domain::model::generation::{GenerationOrder, Place};
-use crate::domain::model::map::{MapDef, Room};
+use crate::domain::model::map::Room;
 use crate::domain::model::message::{StoredInputs, SwipeAt};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::quantifier::{MovementParseResult, QuantifierResult};
@@ -45,11 +45,6 @@ struct Generated {
     narration: bool,
     at: SwipeAt,
     fired: Option<EventRecord>,
-}
-
-struct RuleOutcome {
-    fired: Option<EventRecord>,
-    room_report: Option<String>,
 }
 
 #[derive(Debug)]
@@ -282,16 +277,15 @@ impl Job {
         };
 
         let mut state = start.clone();
-        let rules = match self.run_step(Step::Quantifying, kind, || {
+        let fired = match self.run_step(Step::Quantifying, kind, || {
             self.apply_rules(order, &bundle, &mut state, &analysis, &narrated)
         }) {
-            Ok(rules) => rules,
+            Ok(fired) => fired,
             Err(failure) => return Err(Ended::after_text_save(failure, kind)),
         };
-        let RuleOutcome { fired, room_report } = rules;
         match self.run_step(Step::Quantifying, kind, || {
             self.writer
-                .save_state_update(saved, state, room_report)
+                .save_state_update(saved, state)
                 .map_err(Failure::from)
         }) {
             Ok(()) => {}
@@ -339,11 +333,11 @@ impl Job {
         bundle: &'s WorldBundle,
         start: &'s SwipeState,
     ) -> Result<&'s Room, Failure> {
-        Self::room_of(start, &bundle.map).ok_or_else(|| {
+        start.room(&bundle.map).ok_or_else(|| {
             // The engine has no error behind this one: the room it stands in is
             // simply not on the map.
             Failure::Line(GenerationFailure::missing_room(
-                Self::room_name(bundle, &start.movement.current_room_id),
+                start.movement.current_room_id.clone(),
                 None,
             ))
         })
@@ -409,7 +403,7 @@ impl Job {
         player_text: &str,
     ) -> Result<QuantifierResult, Failure> {
         let world = WorldView {
-            room: Self::room_of(start, &bundle.map),
+            room: start.room(&bundle.map),
             map: &bundle.map,
             persona: &bundle.persona,
             characters: &bundle.npcs,
@@ -428,8 +422,6 @@ impl Job {
             .analysis(&input, &self.analysis_settings()?))
     }
 
-    /// An event generation writes no room report, so the opening's room stays the one
-    /// the text save wrote.
     fn apply_rules(
         &self,
         order: &GenerationOrder,
@@ -437,7 +429,7 @@ impl Job {
         state: &mut SwipeState,
         analysis: &QuantifierResult,
         text: &str,
-    ) -> Result<RuleOutcome, Failure> {
+    ) -> Result<Option<EventRecord>, Failure> {
         if order.kind == Kind::Event {
             let record = order
                 .event
@@ -470,10 +462,7 @@ impl Job {
             )
             .map_err(Self::contradiction)?;
             state.trigger_context = None;
-            return Ok(RuleOutcome {
-                fired: None,
-                room_report: None,
-            });
+            return Ok(None);
         }
 
         let outcome = apply_game_rules(
@@ -490,14 +479,7 @@ impl Job {
         // The Swipe an analysed generation leaves holds the Trigger that fired, so
         // a Retrigger is allowed on it.
         state.trigger_context = fired.as_ref().map(|record| record.trigger.clone());
-        let room_report = match &outcome.arrived_room_name {
-            Some(room_name) => Some(room_name.clone()),
-            None if self.is_the_opening(order)? => {
-                Some(Self::room_name(bundle, &state.movement.current_room_id))
-            }
-            None => None,
-        };
-        Ok(RuleOutcome { fired, room_report })
+        Ok(fired)
     }
 
     fn options_step(&self, run: OptionsRun, after_narration: bool) -> Result<(), Failure> {
@@ -518,7 +500,7 @@ impl Job {
             // them.
             let story = self.window_before(None, STORY_WINDOW)?;
             let world = WorldView {
-                room: Self::room_of(&start, &bundle.map),
+                room: start.room(&bundle.map),
                 map: &bundle.map,
                 persona: &bundle.persona,
                 characters: &bundle.npcs,
@@ -634,13 +616,6 @@ impl Job {
             .map_err(Failure::from)
     }
 
-    fn is_the_opening(&self, order: &GenerationOrder) -> Result<bool, Failure> {
-        if order.place != Place::NewSwipeOnLast {
-            return Ok(false);
-        }
-        Ok(self.tail()?.count == 1)
-    }
-
     fn end(&self, failure: Failure) {
         match failure {
             Failure::Line(failure) => {
@@ -683,24 +658,6 @@ impl Job {
             GenerationFailureKind::Contradiction,
             error.to_string(),
         ))
-    }
-
-    fn room_of<'s>(state: &'s SwipeState, map: &'s MapDef) -> Option<&'s Room> {
-        map.get_room_by_id(&state.movement.current_room_id)
-            .or_else(|| {
-                state
-                    .movement
-                    .dynamic_rooms
-                    .get(&state.movement.current_room_id)
-            })
-    }
-
-    fn room_name(bundle: &WorldBundle, room_id: &str) -> String {
-        bundle
-            .map
-            .get_room_by_id(room_id)
-            .map(|room| room.name.clone())
-            .unwrap_or_else(|| room_id.to_string())
     }
 
     fn world_bundle(&self) -> Result<WorldBundle, Failure> {

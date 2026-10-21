@@ -240,6 +240,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `quantifier.rs` — Quantifier types for narrative evaluation
       - `scenario.rs` — Scenario definitions and world data
       - `settings.rs` — Settings and configuration types
+      - `story_window.rs` — The story window: the newest entries of the story, with the room each one shows, and the end-of-story facts that go with them
       - `tail.rs` — The end of the story, and the rules derived from it
       - `template.rs` — Template placeholder substitution for author-controlled text fields.
       - `trigger.rs` — Trigger conditions and event types

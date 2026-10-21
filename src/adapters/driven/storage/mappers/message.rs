@@ -32,7 +32,6 @@ impl TryFrom<&DbSwipe> for Swipe {
     fn try_from(db_swipe: &DbSwipe) -> Result<Self, Self::Error> {
         Ok(Swipe {
             text: db_swipe.text.clone(),
-            room_report: db_swipe.room_report.clone(),
             event_header: db_swipe.event_header.clone(),
             impersonated: db_swipe.impersonated != 0,
             guide_text: db_swipe.guide_text.clone(),

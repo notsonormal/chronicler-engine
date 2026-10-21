@@ -624,7 +624,6 @@ impl GameWriter {
         );
         Ok(crate::domain::model::utils::opening::opening_message(
             world,
-            &world_with_map.map,
             &persona.sheet.name,
             state,
         ))
@@ -699,7 +698,7 @@ impl JobWriter {
             let empties_the_dock = Self::empties_the_dock(order.kind);
             let at = match order.place {
                 Place::NewMessage => {
-                    let swipe = Self::text_swipe(order, text, pre, None);
+                    let swipe = Self::text_swipe(order, text, pre);
                     let message = Message::new(
                         generation_record::message_type(order.kind),
                         Self::message_kind_of(order)?,
@@ -709,11 +708,7 @@ impl JobWriter {
                 }
                 Place::NewSwipeOnLast => {
                     let tail = self.tail_of()?;
-                    let room_report = match tail.count {
-                        1 => self.opening_room_report(&pre.movement.current_room_id),
-                        _ => None,
-                    };
-                    let swipe = Self::text_swipe(order, text, pre, room_report);
+                    let swipe = Self::text_swipe(order, text, pre);
                     self.write_new_swipe(&tail, &swipe, empties_the_dock, units)?
                 }
             };
@@ -722,16 +717,9 @@ impl JobWriter {
     }
 
     /// Takes `saved` by value, so one Swipe's state is written at most twice.
-    pub fn save_state_update(
-        &self,
-        saved: SavedText,
-        state: SwipeState,
-        room_report: Option<String>,
-    ) -> Result<(), Stopped> {
+    pub fn save_state_update(&self, saved: SavedText, state: SwipeState) -> Result<(), Stopped> {
         self.hold(|_entry, units| {
-            Self::unit(units, self.game, |tx| {
-                tx.set_swipe_state(saved.at, &state, room_report.as_deref())
-            })
+            Self::unit(units, self.game, |tx| tx.set_swipe_state(saved.at, &state))
         })
     }
 
@@ -805,24 +793,6 @@ impl JobWriter {
         }
     }
 
-    fn opening_room_report(&self, room_id: &str) -> Option<String> {
-        let world_key = self
-            .writer
-            .storage
-            .get_game(self.game.0)
-            .ok()
-            .flatten()?
-            .world_key;
-        let world = self.writer.storage.require_world(&world_key).ok()?;
-        Some(
-            world
-                .map
-                .get_room_by_id(room_id)
-                .map(|room| room.name.clone())
-                .unwrap_or_else(|| room_id.to_string()),
-        )
-    }
-
     fn write_new_message(
         &self,
         message: &Message,
@@ -866,14 +836,8 @@ impl JobWriter {
         Ok(at)
     }
 
-    fn text_swipe(
-        order: &GenerationOrder,
-        text: String,
-        pre: SwipeState,
-        room_report: Option<String>,
-    ) -> Swipe {
+    fn text_swipe(order: &GenerationOrder, text: String, pre: SwipeState) -> Swipe {
         Swipe {
-            room_report,
             event_header: order
                 .event
                 .as_ref()

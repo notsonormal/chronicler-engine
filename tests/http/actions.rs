@@ -5,9 +5,11 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
+use chronicler_engine::adapters::driving::http::AppState;
 
 use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
+use chronicler_engine::domain::model::map::Room;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
@@ -18,7 +20,9 @@ use crate::support::app_wiring::{app_with_model, app_with_model_and_settings};
 use crate::support::http_assertions::{
     assert_story_log_ends_with_message, llm_call_count, status_error_message,
 };
-use crate::support::http_fixtures::{break_start_room, story_of, OFFERED_SET};
+use crate::support::http_fixtures::{
+    break_start_room, corrupt_start_state, room_header_of, story_of, OFFERED_SET,
+};
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
     response_body, wait_settled,
@@ -855,7 +859,7 @@ async fn test_slash_command_bypasses_text_check_http() {
 
 // [docs/specs/actions.md] SCENARIO: 1.14
 #[tokio::test]
-async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
+async fn test_moving_narration_shows_the_room_it_arrives_in_http() {
     let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
@@ -884,18 +888,18 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         .rfind(|m| m.message_type == MessageType::Narration)
         .expect("the Action appends a Narration");
     assert_eq!(
-        narration.room_report(),
+        room_header_of(&state, narration.id).as_deref(),
         Some("Room room2"),
-        "the Narration that moved the player must report the room it arrived in"
+        "the Narration that moved the player shows the room it arrived in"
     );
     let input = messages
         .iter()
         .find(|m| m.message_type == MessageType::Input)
         .expect("the Action appends a player input");
     assert_eq!(
-        input.room_report(),
+        room_header_of(&state, input.id),
         None,
-        "the player input that leaves a room must not carry the old room's name"
+        "the player input that leaves a room shows no room"
     );
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -915,10 +919,135 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         2,
         "the second Action adds a player input and a Narration"
     );
+    let later_headers: Vec<_> = later.iter().map(|m| room_header_of(&state, m.id)).collect();
     assert!(
-        later.iter().all(|m| m.room_report().is_none()),
-        "the room name must not leak onto the Action after the movement: {:?}",
-        later.iter().map(|m| m.room_report()).collect::<Vec<_>>()
+        later_headers.iter().all(Option::is_none),
+        "the room name must not repeat on the Action after the movement: {later_headers:?}"
+    );
+}
+
+fn last_narration_id(state: &AppState) -> u64 {
+    story_of(state)
+        .iter()
+        .rfind(|m| m.message_type == MessageType::Narration)
+        .expect("the Action appends a Narration")
+        .id
+}
+
+fn current_room_id(state: &AppState) -> String {
+    state
+        .game_view_query
+        .get_debug_state(active_game_of(state))
+        .expect("get_debug_state should succeed")
+        .current_room_id
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.15
+#[tokio::test]
+async fn test_narration_that_names_the_current_room_shows_no_room_http() {
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You look around.")
+                .analysis(analysis_report(&[], Some("room_1"))),
+        ))
+        .build_with_state();
+
+    assert!(post_action(&app, "look around").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should complete"
+    );
+
+    assert_eq!(current_room_id(&state), "room_1", "the player did not move");
+    assert_eq!(
+        room_header_of(&state, last_narration_id(&state)),
+        None,
+        "naming the room the player is in changes no room name"
+    );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.16
+#[tokio::test]
+async fn test_two_added_rooms_with_the_same_name_show_one_room_name_http() {
+    let storage = Arc::new(empty_sqlite_storage());
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You walk on.")
+                .analysis(analysis_report(&[], Some("Misty Glade"))),
+        ))
+        .build_with_state();
+    let seeded_room = Room {
+        id: "dynamic_seeded".to_string(),
+        ..Room::new_dynamic("Misty Glade", "A glade the player already stands in.")
+    };
+    corrupt_start_state(&storage, active_game_of(&state), |start| {
+        start
+            .movement
+            .dynamic_rooms
+            .insert(seeded_room.id.clone(), seeded_room.clone());
+        start.movement.current_room_id = seeded_room.id.clone();
+    });
+
+    assert!(post_action(&app, "walk on").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should complete"
+    );
+
+    let room_id = current_room_id(&state);
+    assert!(
+        room_id.starts_with("dynamic_") && room_id != seeded_room.id,
+        "the move added a second room: {room_id}"
+    );
+    let (room_name, _image) = state
+        .game_view_query
+        .get_current_room_view(active_game_of(&state))
+        .expect("the current room reads back");
+    assert_eq!(
+        room_name, "Misty Glade",
+        "the second room carries the same name"
+    );
+    assert_eq!(
+        room_header_of(&state, last_narration_id(&state)),
+        None,
+        "two added rooms with one name show one room name"
+    );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.17
+#[tokio::test]
+async fn test_a_move_between_two_map_rooms_with_the_same_name_shows_no_room_http() {
+    let mut map = TestMap::two_rooms("room_1", "room2");
+    let shared_name = map.overworld.regions[0].rooms[0].name.clone();
+    map.overworld.regions[0].rooms[1].name = shared_name;
+    let data = TestDataBuilder::default_test().map(map).build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You walk north.")
+                .analysis(analysis_report(&[], Some("room2"))),
+        ))
+        .build_with_state();
+
+    assert!(post_action(&app, "walk north").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should complete"
+    );
+
+    assert_eq!(current_room_id(&state), "room2", "the player moved");
+    assert_eq!(
+        room_header_of(&state, last_narration_id(&state)),
+        None,
+        "the two rooms share a name, so the move shows no room"
     );
 }
 

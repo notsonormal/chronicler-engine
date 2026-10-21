@@ -128,7 +128,6 @@ impl TestAppBuilder {
         storage.transaction(game_id, crate::test_support::tx_token(), |tx| {
             let opening = crate::domain::model::utils::opening::opening_message(
                 &data.world,
-                &data.map,
                 &data.persona.sheet.name,
                 state.clone(),
             );

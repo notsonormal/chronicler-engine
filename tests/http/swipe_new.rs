@@ -16,7 +16,7 @@ use chronicler_engine::test_support::{
 
 use crate::support::app_wiring::{app_with_a_triggered_npc, app_with_model, app_with_model_and_storage};
 use crate::support::http_assertions::{assert_still_thinking, status_error_message};
-use crate::support::http_fixtures::{break_start_room, story_of};
+use crate::support::http_fixtures::{break_start_room, room_header_of, story_of};
 use crate::support::http_requests::{
     fetch_generating_status, post_action, post_empty, post_form, wait_settled,
 };
@@ -176,13 +176,17 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
         .rfind(|m| m.message_type == MessageType::Narration)
         .expect("the generation appends a Narration");
     assert_eq!(
-        narration.room_report(),
+        room_header_of(&state, narration.id).as_deref(),
         Some("Room room2"),
-        "the redo's Swipe reports the room it moved the player into"
+        "the redo's Swipe shows the room it moved the player into"
     );
+
+    let resp = post_empty(&app, &format!("/message/{}/swipe/0", narration.id)).await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        narration.swipes[0].room_report, None,
-        "the first Swipe's own generation did not move, so it reports no room"
+        room_header_of(&state, narration.id),
+        None,
+        "after a switch to the first Swipe, whose generation did not move, the Narration shows no room"
     );
 }
 
@@ -340,7 +344,7 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 9.8
 #[tokio::test]
-async fn test_retry_swipe_without_movement_reports_no_room_http() {
+async fn test_retry_swipe_without_movement_shows_no_room_http() {
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
@@ -360,6 +364,17 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
         "the moving Action should complete"
     );
 
+    let moved = story_of(&state)
+        .iter()
+        .rfind(|m| m.message_type == MessageType::Narration)
+        .expect("the Action appends a Narration")
+        .id;
+    assert_eq!(
+        room_header_of(&state, moved).as_deref(),
+        Some("Room room2"),
+        "the first Swipe arrived in room2"
+    );
+
     let resp = post_empty(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
@@ -375,14 +390,17 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
         "the redo appends one Swipe to the Narration"
     );
     assert_eq!(
-        narration.room_report(),
+        room_header_of(&state, narration.id),
         None,
         "a redo that stays put must not keep the room its sibling arrived in"
     );
+
+    let resp = post_empty(&app, &format!("/message/{}/swipe/0", narration.id)).await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        narration.swipes[0].room_report.as_deref(),
+        room_header_of(&state, narration.id).as_deref(),
         Some("Room room2"),
-        "the first Swipe keeps the room its own generation arrived in"
+        "after a switch to the first Swipe, the Narration shows the room its own generation arrived in"
     );
 }
 
@@ -770,18 +788,18 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
         .find(|m| m.id == event_id)
         .expect("the event Message exists");
     assert_eq!(
-        event_narration.room_report(),
+        room_header_of(&state, event_narration.id),
         None,
-        "the event continuation must not carry the room the main Narration arrived in"
+        "the event continuation must not repeat the room the main Narration arrived in"
     );
     let main_narration = messages
         .iter()
         .rfind(|m| m.message_type == MessageType::Narration && m.event_header().is_none())
         .expect("the Action's main Narration exists");
     assert_eq!(
-        main_narration.room_report(),
+        room_header_of(&state, main_narration.id).as_deref(),
         Some("Room room2"),
-        "the movement into \"room2\" must report that room's display name"
+        "the movement into \"room2\" must show that room's display name"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
@@ -802,13 +820,17 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
         "event retry appends exactly one swipe"
     );
     assert_eq!(
-        event_narration.room_report(),
+        room_header_of(&state, event_narration.id),
         None,
         "the redo's Swipe must not invent a room its siblings do not carry"
     );
+
+    let resp = post_empty(&app, &format!("/message/{event_id}/swipe/0")).await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        event_narration.swipes[0].room_report, None,
-        "switching between the event's Swipes must not add or remove a room name"
+        room_header_of(&state, event_id),
+        None,
+        "after a switch to the first Swipe, the event Narration still shows no room"
     );
 }
 
@@ -1447,7 +1469,7 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 22.5
 #[tokio::test]
-async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
+async fn test_guided_retry_shows_the_room_its_redo_arrives_in_http() {
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
@@ -1486,9 +1508,9 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
         .find(|m| m.is_guided())
         .expect("the guided generation appends a guided Narration");
     assert_eq!(
-        guided.room_report(),
+        room_header_of(&state, guided.id),
         None,
-        "a guided Narration that stayed put must not take the previous Action's room"
+        "a guided Narration that stayed put must not repeat the previous Action's room"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
@@ -1509,12 +1531,16 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
         "the redo appends one Swipe to the guided Narration"
     );
     assert_eq!(
-        guided.room_report(),
+        room_header_of(&state, guided.id).as_deref(),
         Some("Room room_1"),
-        "the redo's Swipe reports the room its own generation arrived in"
+        "the redo's Swipe shows the room its own generation arrived in"
     );
+
+    let resp = post_empty(&app, &format!("/message/{}/swipe/0", guided.id)).await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        guided.swipes[0].room_report, None,
-        "the first Swipe keeps its own, room-less generation"
+        room_header_of(&state, guided.id),
+        None,
+        "after a switch to the first Swipe, the guided Narration shows no room"
     );
 }

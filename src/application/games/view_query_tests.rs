@@ -53,14 +53,14 @@ fn test_list_latest_llm_messages_empty() {
 }
 
 #[test]
-fn test_get_story_log_entries_empty() {
+fn test_story_window_empty() {
     let app = minimal_app_no_game();
-    let (entries, has_trigger) = app
+    let window = app
         .game_view_query
-        .get_story_log_entries(active_game_of(&app))
+        .story_window(active_game_of(&app))
         .unwrap();
-    assert!(entries.is_empty());
-    assert!(!has_trigger);
+    assert!(window.entries.is_empty());
+    assert!(!window.retrigger_allowed);
 }
 
 #[test]

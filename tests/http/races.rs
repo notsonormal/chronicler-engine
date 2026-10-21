@@ -17,7 +17,7 @@ use chronicler_engine::test_support::{
 
 use crate::support::app_wiring::{app_with_model, app_with_script};
 use crate::support::http_assertions::{assert_still_thinking, llm_call_count, STILL_THINKING};
-use crate::support::http_fixtures::{story_of, OFFERED_SET};
+use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
 use crate::support::http_requests::{
     fetch_body, post_action, post_empty, post_form, response_body, wait_for_jobs, wait_idle,
     wait_settled,
@@ -988,9 +988,9 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             );
             let narration = job_narration.expect("the text save wrote the Narration");
             assert_eq!(
-                narration.room_report(),
+                room_header_of(&start.state, narration.id),
                 None,
-                "{label}: the pre-analysis state names no room, so the player has not moved"
+                "{label}: the pre-analysis state is the start state, so the player has not moved"
             );
             assert_eq!(
                 narration.event_header(),
@@ -1016,9 +1016,9 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             let narration = job_narration.expect("the text save wrote the Narration");
             let expected = format!("Room {room}");
             assert_eq!(
-                narration.room_report(),
+                room_header_of(&start.state, narration.id).as_deref(),
                 Some(expected.as_str()),
-                "{label}: the state update landed, so the Narration reports the room it arrived in"
+                "{label}: the state update landed, so the Narration shows the room it arrived in"
             );
             let dock = fetch_body(&start.app, "/fragment/options-dock").await;
             assert!(
@@ -1040,9 +1040,9 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                 .find(|message| message.message_type == MessageType::Input)
                 .expect("the text save wrote the Input");
             assert_eq!(
-                impersonate_input.room_report(),
+                room_header_of(&start.state, impersonate_input.id),
                 None,
-                "{label}: the pre-analysis state reports no room"
+                "{label}: the pre-analysis state is the start state, so the Input shows no room"
             );
             // The refused state update is what keeps the player where it started,
             // so the current state still names the starting room.

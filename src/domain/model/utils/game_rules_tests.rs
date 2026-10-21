@@ -241,17 +241,13 @@ fn matched(swipe: &mut SwipeState, deps: &RulesDeps, named: &[&str]) -> Option<T
 }
 
 #[test]
-fn test_the_step_without_a_movement_keeps_the_room_and_reports_no_arrival() {
+fn test_the_step_without_a_movement_keeps_the_room() {
     let deps = deps_with_carla("room1");
     let mut swipe = swipe_in("room1");
 
     let outcome = rule_step(&mut swipe, &quantifier(&["carla"], None), &deps).unwrap();
 
     assert_eq!(swipe.movement.current_room_id, "room1");
-    assert!(
-        outcome.arrived_room_name.is_none(),
-        "no arrival reports no room"
-    );
     assert!(outcome.unknown_location.is_none());
 }
 
@@ -279,7 +275,6 @@ fn test_the_step_walks_into_a_room_of_the_map() {
     let outcome = rule_step(&mut swipe, &quantifier(&["carla"], Some("room2")), &deps).unwrap();
 
     assert_eq!(swipe.movement.current_room_id, "room2");
-    assert_eq!(outcome.arrived_room_name.as_deref(), Some("Room room2"));
     assert!(outcome.unknown_location.is_none());
 }
 
@@ -296,11 +291,13 @@ fn test_the_step_adds_a_room_the_map_does_not_know() {
             swipe.movement.current_room_id.starts_with("dynamic_"),
             "an unknown destination becomes a room of its own"
         );
-        let added = swipe
-            .movement
-            .dynamic_rooms
-            .get(&swipe.movement.current_room_id)
-            .expect("the rules added the room they walked into");
+        assert!(
+            swipe
+                .movement
+                .dynamic_rooms
+                .contains_key(&swipe.movement.current_room_id),
+            "the rules added the room they walked into"
+        );
         assert_eq!(
             outcome
                 .unknown_location
@@ -308,10 +305,6 @@ fn test_the_step_adds_a_room_the_map_does_not_know() {
                 .map(|room| room.id.clone()),
             Some(swipe.movement.current_room_id.clone()),
             "the notice names the room the rules added"
-        );
-        assert_eq!(
-            outcome.arrived_room_name.as_deref(),
-            Some(added.name.as_str())
         );
     }
 }
@@ -328,22 +321,6 @@ fn test_the_step_uses_a_room_the_rules_added() {
 
     assert_eq!(swipe.movement.current_room_id, added_id);
     assert!(outcome.unknown_location.is_none());
-    assert_eq!(outcome.arrived_room_name.as_deref(), Some("Secret Cave"));
-}
-
-#[test]
-fn test_the_step_reports_the_room_it_arrived_in() {
-    let deps = deps_with_carla("test_room");
-    let mut swipe = swipe_in("test_room");
-
-    let outcome = rule_step(
-        &mut swipe,
-        &quantifier(&["carla"], Some("test_room")),
-        &deps,
-    )
-    .unwrap();
-
-    assert_eq!(outcome.arrived_room_name.as_deref(), Some("Room test_room"));
 }
 
 #[test]

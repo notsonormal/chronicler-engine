@@ -87,10 +87,7 @@ fn add_message(storage: &Storage, game: GameId, text: &str, room: &str) -> u64 {
                     message: message_id,
                     swipe: 0,
                 },
-                &Swipe {
-                    room_report: Some(room.to_string()),
-                    ..narration_swipe(text, state_in(room))
-                },
+                &narration_swipe(text, state_in(room)),
             )
         })
         .expect("the unit should succeed");
@@ -110,10 +107,7 @@ fn game_with_message(storage: &Storage, name: &str, text: &str, room: &str) -> (
                     message: message_id,
                     swipe: 0,
                 },
-                &Swipe {
-                    room_report: Some(room.to_string()),
-                    ..narration_swipe(text, state_in(room))
-                },
+                &narration_swipe(text, state_in(room)),
             )
         })
         .expect("the create unit should succeed");
@@ -202,7 +196,7 @@ fn the_state_a_unit_wrote_reads_back() {
 
     storage
         .transaction(game_id, tx_token(), |tx| {
-            tx.set_swipe_state(at, &state_in("room2"), None)
+            tx.set_swipe_state(at, &state_in("room2"))
         })
         .expect("the state update should succeed");
 
@@ -212,34 +206,6 @@ fn the_state_a_unit_wrote_reads_back() {
         .expect("the state read should succeed")
         .expect("the Swipe holds a state");
     assert_eq!(state.movement.current_room_id, "room2");
-}
-
-// CASE story-swipe-state-room-report: the state update writes the room report with the state
-#[test]
-fn the_state_update_writes_the_room_report_with_the_state() {
-    let storage = chronicler_engine::test_support::empty_sqlite_storage();
-    let (game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
-    let at = SwipeAt {
-        message: message_id,
-        swipe: 0,
-    };
-
-    storage
-        .transaction(game_id, tx_token(), |tx| {
-            tx.set_swipe_state(at, &state_in("room2"), Some("Room Two"))
-        })
-        .expect("the state update should succeed");
-
-    let tail = storage
-        .stories()
-        .tail(game_id)
-        .expect("the story read should succeed")
-        .expect("the story holds a Message");
-    assert_eq!(
-        tail.last.room_report(),
-        Some("Room Two"),
-        "the room report is written with the state"
-    );
 }
 
 // CASE story-swipe-state-none: a Swipe the story does not hold answers no state
@@ -331,6 +297,83 @@ fn a_write_to_another_game_message_is_refused() {
     );
 }
 
+// CASE story-window-newest-entries: the window read takes the newest entries, oldest first
+#[test]
+fn the_window_read_takes_the_newest_entries_oldest_first() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, _first_id) = game_with_message(&storage, "Story", "first text", "room1");
+    add_message(&storage, game_id, "second text", "room2");
+    add_message(&storage, game_id, "third text", "room3");
+
+    let window = storage
+        .stories()
+        .window(game_id, 2)
+        .expect("the window read should succeed");
+
+    let texts: Vec<&str> = window
+        .entries
+        .iter()
+        .map(|(entry, _)| entry.text.as_str())
+        .collect();
+    assert_eq!(
+        texts,
+        ["second text", "third text"],
+        "the newest two, oldest first"
+    );
+    let rooms: Vec<&str> = window
+        .entries
+        .iter()
+        .map(|(_, state)| state.movement.current_room_id.as_str())
+        .collect();
+    assert_eq!(
+        rooms,
+        ["room2", "room3"],
+        "each entry carries the state of its active Swipe"
+    );
+}
+
+// CASE story-window-retrigger-allowed: the window read carries whether the end of the story allows a Retrigger
+#[test]
+fn the_window_read_carries_whether_the_end_of_the_story_allows_a_retrigger() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, _first_id) = game_with_message(&storage, "Story", "first text", "room1");
+    let window = storage
+        .stories()
+        .window(game_id, 50)
+        .expect("the window read should succeed");
+    assert!(
+        !window.retrigger_allowed,
+        "a story whose last state holds no trigger context allows no Retrigger"
+    );
+
+    let triggered = SwipeState {
+        trigger_context: Some(event_record().trigger),
+        ..state_in("room1")
+    };
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            let message = narration_message("second text");
+            let message_id = tx.insert_message(&message)?;
+            tx.insert_swipe(
+                SwipeAt {
+                    message: message_id,
+                    swipe: 0,
+                },
+                &narration_swipe("second text", triggered),
+            )
+        })
+        .expect("the unit should succeed");
+
+    let window = storage
+        .stories()
+        .window(game_id, 50)
+        .expect("the window read should succeed");
+    assert!(
+        window.retrigger_allowed,
+        "a last Narration with a trigger context allows a Retrigger"
+    );
+}
+
 // CASE story-entries-window: the entries read takes the newest Messages before a Message
 #[test]
 fn the_entries_read_takes_the_newest_messages_before_a_message() {
@@ -348,7 +391,7 @@ fn the_entries_read_takes_the_newest_messages_before_a_message() {
     assert_eq!(entries[0].text, "second text", "the newest before the cut");
 }
 
-// CASE story-entries-entry-fields: an entry carries the active Swipe's text, room report, event header and count
+// CASE story-entries-entry-fields: an entry carries the active Swipe's text, event header and count
 #[test]
 fn an_entry_carries_the_active_swipe_and_its_headers() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
@@ -361,7 +404,6 @@ fn an_entry_carries_the_active_swipe_and_its_headers() {
                     swipe: 1,
                 },
                 &Swipe {
-                    room_report: Some("Room Two".to_string()),
                     event_header: Some("Event".to_string()),
                     ..swipe("other text")
                 },
@@ -382,11 +424,6 @@ fn an_entry_carries_the_active_swipe_and_its_headers() {
     assert_eq!(
         entries[0].text, "other text",
         "the entry reads the active Swipe's text"
-    );
-    assert_eq!(
-        entries[0].room_report.as_deref(),
-        Some("Room Two"),
-        "the entry carries the active Swipe's room report"
     );
     assert_eq!(
         entries[0].event_header.as_deref(),
@@ -457,9 +494,9 @@ fn a_deleted_message_leaves_the_story() {
     assert_eq!(tail.last.text(), "second text");
 }
 
-// CASE story-set-swipe-text: an edited text lands and leaves the room report alone
+// CASE story-set-swipe-text: an edited text lands
 #[test]
-fn an_edited_text_lands_and_leaves_the_room_report_alone() {
+fn an_edited_text_lands() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
     let (game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
     let at = SwipeAt {
@@ -478,11 +515,6 @@ fn an_edited_text_lands_and_leaves_the_room_report_alone() {
         .entries(game_id, None, 10)
         .expect("the entries read should succeed");
     assert_eq!(entries[0].text, "edited text");
-    assert_eq!(
-        entries[0].room_report.as_deref(),
-        Some("room1"),
-        "an edit changes the text only"
-    );
 }
 
 // CASE story-write-injection [failure]: a unit whose later record write fails leaves no row
@@ -510,7 +542,7 @@ fn the_failed_state_update_rolls_the_whole_unit_back() {
             },
             &narration_swipe("rolled back", state_in("room2")),
         )?;
-        tx.set_swipe_state(at, &state_in("room2"), None)
+        tx.set_swipe_state(at, &state_in("room2"))
     });
 
     assert!(

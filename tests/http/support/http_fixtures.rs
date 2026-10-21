@@ -24,6 +24,19 @@ pub fn story_of(state: &AppState) -> Vec<Message> {
         .expect("the story log reads back")
 }
 
+/// The room name the story log shows on a Message, read through the story window.
+pub fn room_header_of(state: &AppState, message: u64) -> Option<String> {
+    state
+        .game_view_query
+        .story_window(active_game_of(state))
+        .expect("the story window reads back")
+        .entries
+        .into_iter()
+        .find(|entry| entry.row.id == message)
+        .expect("the Message is in the story window")
+        .room_header
+}
+
 /// The offered set an Options call installs, in the shape the parser reads.
 pub const OFFERED_SET: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -100,7 +113,7 @@ pub fn seed_offered_set(state: &AppState, options: &[&str]) {
 }
 
 /// Pads the story with `count` Narration Messages, each with one Swipe that holds
-/// the current state. They carry no Input and no room report, so a test that
+/// the current state. They carry no Input and hold the same room, so a test that
 /// needs a long story reads padding and not a turned scene.
 pub fn append_narrations(
     storage: &Storage,
@@ -118,10 +131,7 @@ pub fn append_narrations(
         .transaction(game, tx_token(), |tx| {
             for index in 0..count {
                 let narration = text(index);
-                let swipe = Swipe {
-                    room_report: None,
-                    ..Swipe::new(narration, Maker::Narrator, state.clone())
-                };
+                let swipe = Swipe::new(narration, Maker::Narrator, state.clone());
                 let message = Message::new(
                     MessageType::Narration,
                     MessageKind::Narration,
@@ -157,7 +167,7 @@ pub fn corrupt_start_state(storage: &Storage, game: GameId, edit: impl FnOnce(&m
         .expect("a generated Swipe holds a state");
     edit(&mut broken);
     storage
-        .transaction(game, tx_token(), |tx| tx.set_swipe_state(at, &broken, None))
+        .transaction(game, tx_token(), |tx| tx.set_swipe_state(at, &broken))
         .expect("the broken state should persist");
 }
 

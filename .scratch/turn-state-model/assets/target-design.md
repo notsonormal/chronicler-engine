@@ -61,7 +61,7 @@ These terms are new or changed. Ticket 24 put **Job**, **Game rules** and the ne
 | Game | The World, the Persona, the prompt presets, the always-on toggle, the names. The **failure line**: none, or a failure kind with its raw text. | create, reset, the accept step of a Job, the Job, stop, swipe switch, delete |
 | Dock record (one per Game) | The offered set (a list, which can be empty) and the notice field (none, or a reason line with its raw text). | the Job, swipe switch, delete, stop, create, reset |
 | Message | The Game, the place in the story, the kind (typed Input, Impersonate Input, Narration, event Narration), the active Swipe. An event Narration also holds its event record. | create, reset, the Job, delete |
-| Swipe | The Message, the number, the text, the stored inputs (the guide, the impersonate direction, the impersonated mark), the maker (the World's opening text, the player, or the narrator), the room report (a room or none), the Swipe state. | create, reset, the Job (text save and state update), edit (text only) |
+| Swipe | The Message, the number, the text, the stored inputs (the guide, the impersonate direction, the impersonated mark), the maker (the World's opening text, the player, or the narrator), the Swipe state. | create, reset, the Job (text save and state update), edit (text only) |
 
 No other record holds game state. No saved record holds the busy mark or the step name. [D-01; D-05]
 
@@ -83,7 +83,7 @@ No other record holds game state. No saved record holds the busy mark or the ste
 | Status | If busy: the step name of the job entry. Else, if the Game holds a failure line: the failure line. Else: idle. | R-10, R-21, R-37, R-71, R-72 |
 | Retrigger allowed | The last Message is a Narration that is not an event Narration, or an Impersonate Input, and the current state holds a trigger context | R-17, R-36, R-62, R-65 |
 | One-shot Trigger fired | The Trigger is in the fired set of the start state of the generation that evaluates it | R-16, OR-13 |
-| Room shown on a Message | The room report of its active Swipe | R-23, R-25 |
+| Room shown on a Message | The room name of its active Swipe state, when it differs from the room name of the Message before it. The oldest Message of the story window always shows its room name. | R-22, R-23 |
 | Event header | The Trigger name in the Message's event record | R-13 |
 
 ## 3. Writes
@@ -96,12 +96,12 @@ Only the Job that makes a Swipe writes its Swipe state. It writes it at most twi
 
 | Unit | Writes | Requirements |
 |---|---|---|
-| Create, reset | The Game record; an empty dock record; the opening Narration with one Swipe: the World's opening text (which can be empty), the starting state (the starting room; the starting Characters, each met once and met now; no added rooms; no fired Triggers; no trigger context), and the starting room as its room report. A reset first removes the active Game with all its records. | R-25a, R-39, R-77, R-78, OR-06, OR-43, OR-46 |
+| Create, reset | The Game record; an empty dock record; the opening Narration with one Swipe: the World's opening text (which can be empty), the starting state (the starting room; the starting Characters, each met once and met now; no added rooms; no fired Triggers; no trigger context). A reset first removes the active Game with all its records. | R-39, R-77, R-78, OR-06, OR-43, OR-46 |
 | Accept | The failure line becomes none. (The job entry is made in memory under the same guard.) | R-21a, D-20 |
 | Accept refused with 500 | The failure line names the missing data. No job entry. | R-46, R-91 |
-| Input save (free text) | The Input Message with one Swipe: the command text, maker the player, the current state as its Swipe state, no room report. | R-02, R-22, R-39 |
-| Text save | A new Message, or a new Swipe on the last Message, made active. Its text, its stored inputs, its first Swipe state (the pre-analysis state; for a user regen, the start state) and its room report (none; for a Swipe of the opening, the starting room). When the new text is a Narration of any kind: the offered set becomes empty and the notice becomes none. When it is an Input (Impersonate, user regen): the dock record does not change. | R-11a, R-13, R-25a, R-30, R-32, R-41, R-64, R-85, R-90 |
-| State update | The Swipe state and the room report of the Swipe that the text save made. | R-11, R-11a, R-22, R-23 |
+| Input save (free text) | The Input Message with one Swipe: the command text, maker the player, the current state as its Swipe state. | R-02, R-22, R-39 |
+| Text save | A new Message, or a new Swipe on the last Message, made active. Its text, its stored inputs, and its first Swipe state (the pre-analysis state; for a user regen, the start state). When the new text is a Narration of any kind: the offered set becomes empty and the notice becomes none. When it is an Input (Impersonate, user regen): the dock record does not change. | R-11a, R-13, R-30, R-32, R-41, R-64, R-85, R-90 |
+| State update | The Swipe state of the Swipe that the text save made. | R-11, R-11a, R-22 |
 | Failure line | The failure kind and raw text of a step that failed. | R-17, R-19, R-20, R-21 |
 | Options save | Success: the new offered set; the notice becomes none. Failure or no Options call after a Narration: the offered set stays empty, and the notice holds the reason. Failure or no Options call for `/options`: the offered set stays as it was, and the notice holds the reason. | R-28, R-29, R-33, R-83, R-85, OR-41 |
 | Swipe switch | The active Swipe of the last Message; the offered set becomes empty; the notice becomes none; the failure line becomes none. | R-35, R-37, R-38, R-21a, R-85 |
@@ -175,12 +175,12 @@ Every generation of every kind runs these steps. The kind changes the inputs, an
 
 **The Swipe state that each kind leaves at the end of its generation** [D-13]. Before the state update, an analysed kind holds its pre-analysis state (§1).
 
-| Kind | Swipe state | Trigger context | Fired set | Room report |
-|---|---|---|---|---|
-| Narration, Impersonate | the game rules' new state | the Trigger that fired, or none | not changed | the room that the game rules moved the player to, or none. The opening: the room after it (R-25a). |
-| Event Narration | the game rules' new state, with no movement | none | the event's Trigger is added, if it is one-shot | none (R-24) |
-| User regen (no state update) | the start state | as in the start state | not changed | none |
-| Typed Input (Input save, no analysis) | the current state | as in the current state | not changed | none |
+| Kind | Swipe state | Trigger context | Fired set |
+|---|---|---|---|
+| Narration, Impersonate | the game rules' new state | the Trigger that fired, or none | not changed |
+| Event Narration | the game rules' new state, with no movement | none | the event's Trigger is added, if it is one-shot |
+| User regen (no state update) | the start state | as in the start state | not changed |
+| Typed Input (Input save, no analysis) | the current state | as in the current state | not changed |
 
 So a one-shot Trigger counts as fired only from its event Narration onward. A delete of that event Narration gives back a state in which it did not fire (R-16, OR-05, OR-13). Each analysed generation leaves its own trigger context (R-17a, OR-26).
 
@@ -196,7 +196,7 @@ So a one-shot Trigger counts as fired only from its event Narration onward. A de
 | Text save | "narrating" or "generating-event" | the unit, whole or not at all | if a stop takes the guard first, the unit is refused, and nothing stays. Else the text stays. |
 | Analysis, game rules | "quantifying" | the text, with its pre-analysis state and its dock change | the text stays, with its pre-analysis state: the player has not moved, and no Trigger fired. A Retry can redo it. |
 | State update | "quantifying" | the update, whole or not at all | if a stop takes the guard first, the update is refused, and the pre-analysis state stays. Else the analysed state stays. |
-| After the state update | the next step | the text, with its analysed Swipe state and room report | all of it stays |
+| After the state update | the next step | the text, with its analysed Swipe state | all of it stays |
 
 The Job has the same states one level up. Between two generations, and during the Options run, everything that an earlier step saved stays after a stop or a restart (R-81, R-93, OR-51, OR-53). After the last step, the Job removes its job entry under the guard, if the entry still holds its id.
 
@@ -265,7 +265,7 @@ One short line per failure kind. The raw text goes in the disclosure (R-21). The
 
 | View | Reads |
 |---|---|
-| Story log | The Messages in order: the active Swipe text, its room report, the event header, the Swipe count. Delete when the story holds more than one Message. Retrigger when §2.3 allows it. |
+| Story log | The Messages in order: the active Swipe text, the room name that it shows (§2.3), the event header, the Swipe count. Delete when the story holds more than one Message. Retrigger when §2.3 allows it. |
 | Dock | The notice, if the dock record holds one; else the offered set. Controls off while busy. |
 | Status line, `GET /status/generating` | The status rule of §2.3 |
 | Debug route | Busy (§2.3) |
@@ -275,7 +275,7 @@ One short line per failure kind. The raw text goes in the disclosure (R-21). The
 ## 7. Trade-offs and assumptions
 
 - **A full Swipe state per Swipe.** Storage grows with the number of Swipes times the size of the state. The state is small: rooms, Characters, encounter counts, Trigger ids (inferred). In return, R-36, R-39, R-55 and R-76 hold with no replay and no restore step. Marinara makes the same trade: one state row per message and Swipe (research 14). [D-01]
-- **The text shows at once, and the state follows.** The story log shows a new text as soon as the narrator call returns (R-11a). Its room report and its game state follow after the analysis, a few seconds later. So one writer writes the Swipe state twice (D-03). A stop or a restart during the analysis leaves a text whose analysis did not run: the player did not move, and no Trigger fired. The player can Retry it, or play on.
+- **The text shows at once, and the state follows.** The story log shows a new text as soon as the narrator call returns (R-11a). Its game state, and so the room that the Message shows, follows after the analysis, a few seconds later. So one writer writes the Swipe state twice (D-03). A stop or a restart during the analysis leaves a text whose analysis did not run: the player did not move, and no Trigger fired. The player can Retry it, or play on.
 - **Memory-only busy.** A second process would not see the busy mark. E-01 says that one process uses the database.
 - **Cancel.** The design does not need the LLM connection to support cancel. The job id check makes a late answer harmless. Cancel only saves the cost of the call.
 - **Window of 4.** Today's value. The spec says "a short window" and gives no size.
@@ -304,19 +304,19 @@ Ticket 23 compares each row with the code.
 | D-10 | A stop drops only the step that runs: a narrator call, an analysis or an Options run. What the Job saved stays. | OR-51, OR-52, OR-53; T22 R2 Q2; T22 R3 Q1 | Undo the whole request (OR-31 as written); undo every generation but keep the Input |
 | D-11 | A stop cancels the LLM call when it can. The job id check makes a late answer harmless in all cases. | R-09, R-81; ST (`stopGeneration`); Marinara (`POST /api/generate/abort`) | — |
 | D-12 | For an event generation, the movement is taken out of the analysis before the game rules, and a Trigger that they report is ignored. | OR-15 (free); GLM §6.1g; Kimi §5.4; Opus A-2 | Tell the Quantifier not to report a movement (a prompt rule that a model can break) |
-| D-13 | The Swipe state of each kind, as in the table of §4.3 | R-16, R-17a, R-18, R-22, R-24, R-25a, R-39; OR-05, OR-26 | — |
+| D-13 | The Swipe state of each kind, as in the table of §4.3 | R-16, R-17a, R-18, R-22, R-39; OR-05, OR-26 | — |
 | D-14 | The event Narration's Message keeps its event record. | R-54, R-56; Opus (event record) | Reading the trigger context from the state again (fails after a delete, R-56) |
 | D-15 | Every Narration save empties the offered set and clears the notice. An Input save leaves the dock record. | R-30, R-31, R-32, R-85 | — |
 | D-16 | The plans of §4.2 and the steps of §4.3 are the behaviour. The code shape is the plan's choice. One constraint: every kind of generation runs through one `generate` with the steps of §4.3 (T25 Q1). | T22 R2 Q4 (Option C); T25 Q1 | One step runner (Option A); one function per request (Option B, code) |
 | D-17 | What each LLM call reads, as in §4.6 | free point; code; GLM A1 | A window of 8 (GLM A1) |
 | D-18 | The failure lines of §4.7 | free point; R-21; code (`generation_failure_summary`); T22 R3 Q2 (accepted) | — |
-| D-19 | The room report is on the Swipe. It is written with the Swipe state, at the text save and at the state update. | R-22 to R-25a; T-03; code (commit `72cfffdc` put the arriving room on the Swipe) | A room report taken from the Swipe state (it cannot tell "moved to the same room" from "did not move") |
+| D-19 | The room is one fact: the room of the Swipe state. The story log derives the room that a Message shows. A Message shows the room name of its active Swipe state when it differs from the room name of the Message before it, and the oldest Message of the story window always shows its room name. No record stores a room name for the story log. | R-22, R-23; T-03; ticket 25 (owner, 2026-10-20) | A stored room report on each Swipe (a second fact that a writer keeps equal to the Swipe state, with an opening exception and three "Retry of the opening?" checks); the room on every Message; a comparison by room id |
 | D-20 | The accept unit clears the failure line in storage. | R-21a. Inferred: else a restart during a new Job shows the old failure again. | Clear it at the end of the Job |
 | D-21 | A `500` check failure writes the failure line and makes no job entry. | R-46, R-91 | — |
 | D-22 | The terms Swipe state, start state, current state and pre-analysis state. "Snapshot" stays the term for today's code. | T22 R2 Q5; T22 R3 Q1 (pre-analysis state) | Snapshot with a new meaning; no noun |
 | D-23 | The header banner reads the LLM call log. | R-87, OR-50; code (`GameViewQuery::role_health`) | — |
 | D-24 | No start-up pass and no "heal" step. | follows from D-05; premise: F-7 | A start-up pass that clears busy marks (Kimi) |
-| D-25 | One create unit for create and reset. No LLM opening. | R-77, OR-06, OR-46, R-25a | An LLM opening at each start (code; S-3, AD-10) |
+| D-25 | One create unit for create and reset. No LLM opening. | R-77, OR-06, OR-46 | An LLM opening at each start (code; S-3, AD-10) |
 | D-26 | The active-Game pointer stays as today. | outside the spec; code (`resolve_game_id`) | A saved Active-Game record (Opus §2.3) |
 | D-27 | The term **Job** names the background work of one accepted Action, Retry, Retrigger or Options request. "Work" and "Action Pipeline" go. "Turn" stays deprecated. | T25 Q5, Q7; T24 Q4 | "Turn": one Job holds several Messages, and a Retry and an Options request are Jobs but not turns |
 | D-28 | The term **game rules** names step 5 of §4.3. The World is the template; the Game is the playthrough whose state the step changes. | T24 Q8 | "World rules" (version 1); "update game state" (close to step 6, the state update) |
@@ -357,7 +357,7 @@ The rows of [research 16](research-16-clean-room-collapse.md) §2, and row W. Va
 | AD-17 | open (outside) | The LLM transport. |
 | T-01 | settled | §2 to §5 state the records, the states of a generation and of a Job, and the writer rule. Ticket 01 can take this design as its candidate. |
 | T-02 | settled | Notices are in the dock record, not in the story (D-06). No call reads the dock record (§4.6). The only notice is the R-83 notice (R-86). |
-| T-03 | settled | The room and the room report are both on the Swipe, and the same save units write both (D-01, D-19). A swipe switch gives back the room of the active Swipe. |
+| T-03 | settled | The room is on the Swipe, in its Swipe state. The story log derives the room that a Message shows from it (D-01, D-19). A swipe switch gives back the room of the active Swipe. |
 | S-1 | settled | The analysis updates the Swipe state of its own Swipe (D-04). Today the pointer never moves after its first save (research 04, R2). A Swipe keeps its pre-analysis state only when a stop or a restart cut its analysis off. |
 | S-2 | settled | A re-impersonate runs the analysis and the game rules (R-60; §4.5). |
 | S-3 | moot | No arrival exists (D-25). The create unit writes the opening before any Job can start. |
@@ -370,7 +370,7 @@ The rows of [research 16](research-16-clean-room-collapse.md) §2, and row W. Va
 | F-7 | settled | The busy mark is in memory only, so a restart cannot leave a stale one (D-05, D-24). |
 | F-8 | settled | An event redo starts from the Swipe state of the Message that fired the Trigger (§4.5; R-55). The fixture drift is test code, which the design does not cover. |
 | F-9 | settled | A failure goes to the failure line, never into the story (§3.2; R-17, R-84). |
-| F-10 | settled | The room report is written with the Swipe state of its own Swipe (D-19). |
+| F-10 | settled | No writer writes the room that a Message shows: the story log derives it from the Swipe states (D-19). |
 | O-1 | settled | Each Swipe state holds the trigger context of its own generation (D-13; R-17a). |
 | O-2 | settled | A Retry starts from the state of the Message before the last Message, never from an earlier Input (D-02; R-40). |
 | O-3 | settled | The `500` check reads the same records that the redo uses (§4.5; D-21). |

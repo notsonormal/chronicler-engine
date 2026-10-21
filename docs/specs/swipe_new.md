@@ -31,8 +31,9 @@ And the Game is no longer busy
 And the client sends POST /swipe/new
 And the Game is no longer busy
 Then the player stands in "room2" (the Quantifier re-ran on the redo)
-And the Narration entry's active swipe reports the room "Room room2"
-And its first swipe reports no room (that generation did not move)
+And the story log shows the room "Room room2" on the Narration entry
+When the client switches to its first swipe
+Then the story log shows no room on the Narration entry (that generation did not move)
 ```
 
 #### Scenario 9.3: Main retry preserves the input message
@@ -79,17 +80,18 @@ And the Game is no longer busy
 Then the generation status is Idle (retry completes even with no movement)
 ```
 
-#### Scenario 9.8: A main retry whose redo stays put reports no room
+#### Scenario 9.8: A main retry whose redo stays put shows no room
 
 ```gherkin
 Given a game state whose first Action moved the player into "room2"
-And the Narration entry's first swipe reports the room "Room room2"
+And the story log shows the room "Room room2" on the Narration entry
 And a quantifier backend that returns no movement for the retry prompt
 When the client sends POST /swipe/new
 And the Game is no longer busy
 Then the Narration entry has 2 swipes
-And its active swipe reports no room (the redo must not keep its sibling's room)
-And its first swipe still reports the room "Room room2"
+And the story log shows no room on the Narration entry (the redo must not keep its sibling's room)
+When the client switches to its first swipe
+Then the story log shows the room "Room room2" on the Narration entry
 ```
 
 A switch to another Swipe gives back the state of that Swipe; `swipe_switch.md` 36.4 covers it.
@@ -172,12 +174,14 @@ Then Gabriella's encounter count is 0, as it is without the switch
 
 ```gherkin
 Given a game state whose event Narration follows the movement into "room2"
-And the Narration that moved the player reports the room "Room room2"
-And that event Narration's Swipe reports no room
+And the story log shows the room "Room room2" on the Narration that moved the player
+And the story log shows no room on that event Narration
 When the client sends POST /swipe/new
 And the Game is no longer busy
 Then the event Narration has 2 swipes
-And neither the new active swipe nor the first swipe reports a room
+And the story log shows no room on the event Narration
+When the client switches to its first swipe
+Then the story log shows no room on the event Narration
 ```
 
 ### Retry error cases
@@ -328,19 +332,20 @@ Then a new swipe is appended and its stored inputs re-apply (impersonated with t
 And the narrator generation's recorded prompt contains the preset's current instructions
 ```
 
-#### Scenario 22.5: A guided retry reports the room its redo arrives in
+#### Scenario 22.5: A guided retry shows the room its redo arrives in
 
 ```gherkin
 Given a game state whose Action before a guided Narration moved the player into "room2"
 And a quantifier backend that reports no movement for the guided generation and movement back to "room_1" for the redo
 When the client sends POST /action with command="/guide look for the key"
 And the Game is no longer busy
-Then the guided Narration reports no room (it stayed put)
+Then the story log shows no room on the guided Narration (it stayed put)
 When the client sends POST /swipe/new
 And the Game is no longer busy
 Then the guided Narration has 2 swipes
-And its active swipe reports the room "Room room_1"
-And its first swipe reports no room
+And the story log shows the room "Room room_1" on the guided Narration
+When the client switches to its first swipe
+Then the story log shows no room on the guided Narration
 ```
 
 ---

@@ -10,7 +10,7 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::app_wiring::app_with_script;
-use crate::support::http_fixtures::{story_of, OFFERED_SET};
+use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
 use crate::support::http_requests::{fetch_body, post_action, post_empty, response_body, wait_settled};
 
 /// The first swipe switch the rendered log offers, as `(message id, target
@@ -172,12 +172,6 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
     let (message_id, target) = last_message_with_two_swipes(&app, &state).await;
     assert_eq!(target, 0, "the log offers the other Swipe of the pair");
 
-    let narration = |state: &AppState| {
-        story_of(state)
-            .into_iter()
-            .find(|message| message.id == message_id)
-            .expect("the Narration survives the switch")
-    };
     let room = |state: &AppState| {
         state
             .game_view_query
@@ -187,7 +181,7 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
     };
 
     assert_eq!(room(&state), "room_1", "the Retry stayed put");
-    assert_eq!(narration(&state).room_report(), None);
+    assert_eq!(room_header_of(&state, message_id), None);
 
     let resp = post_empty(&app, &format!("/message/{message_id}/swipe/{target}")).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -198,9 +192,9 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
         "the first Swipe's state names the room its generation arrived in"
     );
     assert_eq!(
-        narration(&state).room_report(),
+        room_header_of(&state, message_id).as_deref(),
         Some("Room room2"),
-        "the first Swipe reports the room it arrived in"
+        "the Narration shows the room its first Swipe arrived in"
     );
 
     let resp = post_empty(&app, &format!("/message/{message_id}/swipe/1")).await;
@@ -211,5 +205,5 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
         "room_1",
         "the second Swipe's state comes back"
     );
-    assert_eq!(narration(&state).room_report(), None);
+    assert_eq!(room_header_of(&state, message_id), None);
 }

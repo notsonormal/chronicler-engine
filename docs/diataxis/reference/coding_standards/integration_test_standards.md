@@ -230,8 +230,8 @@ Entries are keyed by role (`ModelRole`), so a test declares `.narration("…")`,
 `.event_narration("…")`, `.analysis(analysis_report(&[], Some("room2")))`,
 `.options(set_a)` and the shorthand `.turn("…")` (a narration and the analysis
 of it) without depending on the order the roles interleave. The analysis entry
-is a parsed room report (`analysis_report`), which is what makes a generation's
-analysis confident.
+is a parsed Quantifier answer (`analysis_report`), which is what makes a
+generation's analysis confident.
 
 Hand the model to the app with `app_with_script` /
 `app_with_model_and_storage` (`tests/http/support/app_wiring.rs`), or with
