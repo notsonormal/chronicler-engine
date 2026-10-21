@@ -213,13 +213,10 @@ pub enum RunRefusal {
     /// The run hold of the Game is gone or holds another run's id: a stop, a reset
     /// or a delete ended the run. Nothing is written.
     Ended,
-    /// The accept refused the request, and wrote the Game's failure line if the
-    /// refusal has one.
+    /// The accept, or the end of a cycle, refused, and wrote the Game's failure line
+    /// if the refusal has one.
     Refused(Refusal),
 }
-
-#[derive(Debug)]
-pub struct RunEnded;
 
 #[derive(Debug)]
 pub struct RunHeld;
@@ -227,7 +224,6 @@ pub struct RunHeld;
 pub struct AcceptedJob {
     pub writer: JobWriter,
     pub plan: JobPlan,
-    pub request: JobRequest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -348,7 +344,6 @@ impl GameWriter {
                 id: job_id,
             },
             plan,
-            request,
         })
     }
 
@@ -373,15 +368,31 @@ impl GameWriter {
         })
     }
 
-    /// Counts one more cycle in the run hold, and removes the run hold in the same
-    /// registry hold when that cycle was the last one of the budget.
-    pub fn finish_cycle(&self, game: GameId, run: RunId) -> Result<CycleEnd, RunEnded> {
-        self.hold(|holds, _units| {
+    /// `None` when the story ends on an Input: no answer yet, so nothing is counted.
+    /// The budget's last cycle removes the run hold in the same registry hold. An
+    /// unreadable story ends the run with its failure line.
+    pub fn finish_cycle(&self, game: GameId, run: RunId) -> Result<Option<CycleEnd>, RunRefusal> {
+        self.hold(|holds, units| {
+            let tail = self.storage.stories().tail(game);
             let hold = holds
                 .runs
                 .get_mut(&game)
                 .filter(|hold| hold.id == run)
-                .ok_or(RunEnded)?;
+                .ok_or(RunRefusal::Ended)?;
+            let tail = match tail {
+                Ok(tail) => tail,
+                Err(error) => {
+                    let refusal = self.unreadable(game, Record::Story, &error, units);
+                    holds.runs.remove(&game);
+                    return Err(RunRefusal::Refused(refusal));
+                }
+            };
+            let answered = tail
+                .as_ref()
+                .is_some_and(|tail| tail.last.message_type != MessageType::Input);
+            if !answered {
+                return Ok(None);
+            }
             hold.done += 1;
             let end = CycleEnd {
                 cycle: hold.done,
@@ -390,7 +401,7 @@ impl GameWriter {
             if end.budget_reached() {
                 holds.runs.remove(&game);
             }
-            Ok(end)
+            Ok(Some(end))
         })
     }
 

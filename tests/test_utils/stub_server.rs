@@ -229,6 +229,7 @@ struct StubState {
     newest_narration: std::sync::Mutex<Option<String>>,
     extra_oldest: std::sync::atomic::AtomicBool,
     save_succeeds: std::sync::atomic::AtomicBool,
+    save_refused_as_busy: std::sync::atomic::AtomicBool,
     delete_succeeds: std::sync::atomic::AtomicBool,
     deleted: std::sync::atomic::AtomicBool,
     header_degraded: std::sync::atomic::AtomicBool,
@@ -267,6 +268,7 @@ impl StubServer {
             newest_narration: std::sync::Mutex::new(None),
             extra_oldest: std::sync::atomic::AtomicBool::new(false),
             save_succeeds: std::sync::atomic::AtomicBool::new(false),
+            save_refused_as_busy: std::sync::atomic::AtomicBool::new(false),
             delete_succeeds: std::sync::atomic::AtomicBool::new(false),
             deleted: std::sync::atomic::AtomicBool::new(false),
             header_degraded: std::sync::atomic::AtomicBool::new(false),
@@ -438,6 +440,12 @@ impl StubSaveHandle {
         self.state
             .save_succeeds
             .store(succeeds, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn set_save_refused_as_busy(&self, refused: bool) {
+        self.state
+            .save_refused_as_busy
+            .store(refused, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn set_delete_succeeds(&self, succeeds: bool) {
@@ -993,6 +1001,12 @@ async fn delete_world(State(state): State<Arc<StubState>>) -> Response<Body> {
 }
 
 async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
+    if state
+        .save_refused_as_busy
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+    }
     if state
         .save_succeeds
         .load(std::sync::atomic::Ordering::SeqCst)

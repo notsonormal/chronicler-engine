@@ -33,9 +33,11 @@ Autoplay lets the engine play the Persona by itself. A run starts ordinary Jobs,
 | Q17 | A start on a busy or held Game is refused with "Still thinking..." |
 | Q19 | No limit on parallel runs across Games |
 | Q20 | A run is **a series of ordinary Jobs under a run hold**. The run hold keeps the Game reserved between two Jobs of the run. The Job is unchanged (plan review, replaces the earlier "one long Job") |
+| Q21 | A cycle ends when a Job leaves the story on a Narration: the Input is answered by a Continue or by a Trigger's event Narration (owner, slice 2). The budget counts these answered Inputs |
+| Q22 | A normal Job gets no Stop button. Only a run holds the Stop control (owner, slice 2) |
 | Config | While a run holds the Game, the config writes are refused (§5). A normal Job does not refuse them, so Scenario 6.4 stays |
 
-**The budget counts Continue Jobs.** The budget counts the Continue Jobs of the run that end without a failure line. It has no special rule for the first cycle (owner, Q10 follow-up).
+**The budget counts answered Inputs.** A cycle ends when a Job of the run ends without a failure line and leaves the story on a Narration (Q21). The budget counts these cycles. It has no special rule for the first cycle (owner, Q10 follow-up).
 
 ## 2. The facts the design rests on
 
@@ -64,7 +66,7 @@ Run R holds the Game ───────────────────�
 
 ### 3.1 The run hold
 
-- The `GameWriter` registry gains a **run hold** per Game, next to the job entries and under the same lock. A run hold has its run id, the Continue Jobs done and the budget.
+- The `GameWriter` registry gains a **run hold** per Game, next to the job entries and under the same lock. A run hold has its run id, the cycles done and the budget.
 - While a run hold exists, every write that `require_idle` guards is refused with "Still thinking...", also between two Jobs of the run. Only an accept that names the run's own id passes.
 - `stop`, `replace` and `delete` remove the run hold with the job entry, in the same hold.
 - The start (`GameWriter::start_run` or similar) checks that the Game has no job entry and no run hold, and then makes the run hold. A budget of 0 is a bad request (`400`).
@@ -79,7 +81,7 @@ Run R holds the Game ───────────────────�
 - A new driver in `application/autoplay/` runs the run. It is one blocking task, watched by `JobTasks`, so a tier-1 test waits for the whole run.
 - Each loop step: read the end of the story, ask the rule of §3.2 for the next request, accept it for the run, and run the Job to its end in the driver's own task. The driver does not start a second Job before the first ends.
 - `Job` gives the driver a way to run one accepted Job and return how it ended: done, a failure line, or the entry moved. `Job::start` keeps its behaviour for every other caller. The implementer chooses the split, for example an accept-and-run function next to `Job::start`.
-- After a Continue Job that ended done, the driver adds one to the progress in the run hold.
+- After a Job that ended done, the driver asks the run hold to end the cycle. The run hold reads the end of the story in the same registry hold. When the last Message is an Input, it counts nothing and the run goes on. Otherwise it adds one to the progress. A story that cannot be read ends the run with the failure line of the story.
 - The run ends, and the driver removes the run hold, when:
   - the budget is reached;
   - a Job ended with a failure line. The line stays on the Game, because no later accept clears it;
@@ -111,7 +113,7 @@ Run R holds the Game ───────────────────�
 
 - A run on a fresh Game with a budget of 2 saves Impersonate Input, Narration, Impersonate Input, Narration, and the Game is then idle.
 - A run whose last Message is an unanswered Input starts with a Continue. That Continue counts as cycle 1.
-- A Trigger that fires inside a Continue Job adds its event Narration to the cycle. The budget counts only the Continue Jobs.
+- A Trigger that fires inside a Continue Job adds its event Narration to the cycle. The budget counts the answered Inputs. A Trigger that fires in an Impersonate Job answers its Input with the event Narration and ends the cycle.
 - A failed narrator call ends the run, and the failure line stays on the Game. No later Job starts.
 - A failed Options run writes its Notice, and the run continues.
 - A stop during a Job of a run ends the run. The Job's late answer changes nothing (as Scenario 39.5).
@@ -150,9 +152,7 @@ The rename of a Game (`POST /games/{id}/rename`) changes only its display name, 
 
 ## 6. Slice 2: the dashboard
 
-**Branch:** `autoplay-dashboard`. Starts after slice 1 merges.
-
-Between the merge of slice 1 and slice 2, `assets/dashboard-action-area.js` does not know the progress answer of the status poll. No dashboard control starts a run before slice 2, so only a direct HTTP start shows the gap.
+**Branch:** `autoplay-engine`, the same branch as slice 1, on top of its commit (owner, 2026-10-21).
 
 **Content.**
 

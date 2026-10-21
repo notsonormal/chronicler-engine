@@ -18,6 +18,7 @@ use chronicler_engine::test_support::{
 
 use crate::support::app_wiring::{app_with_a_triggered_npc, app_with_script};
 use crate::support::http_assertions::assert_still_thinking;
+use crate::support::http_fixtures::seed_offered_set;
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_empty, post_form, response_body,
     wait_for_jobs, wait_settled,
@@ -208,7 +209,7 @@ async fn test_a_trigger_in_a_continue_job_adds_its_event_narration_to_the_cycle(
             SECOND_NARRATION
         ],
         "the event Narration is part of the first cycle: the second cycle follows it, \
-         and the budget of 2 counts the Continue Jobs only"
+         and the budget of 2 counts the answered Inputs"
     );
     assert!(
         story
@@ -219,6 +220,42 @@ async fn test_a_trigger_in_a_continue_job_adds_its_event_narration_to_the_cycle(
             .is_some(),
         "the third Message is the event Narration"
     );
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.21
+#[tokio::test]
+async fn test_a_trigger_in_an_impersonate_job_answers_the_input_and_ends_the_cycle() {
+    const EVENT_NARRATION: &str = "The NPC greets you warmly.";
+    let npc =
+        TestNpc::with_room_scoped_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0, "room2");
+    let model = ScriptedModel::new()
+        .narration(FIRST_INPUT)
+        .after_narration(analysis_report(&["npc_1"], Some("room2")))
+        .event_narration(EVENT_NARRATION)
+        .after_narration(analysis_report(&["npc_1"], None))
+        .narration(SECOND_INPUT)
+        .after_narration(analysis_report(&[], None))
+        .narration(SECOND_NARRATION)
+        .after_narration(analysis_report(&[], None));
+    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+    let game = active_game_of(&state);
+
+    let started = start_autoplay(&app, "cycles=2").await;
+    assert!(started.status().is_success(), "the start should accept");
+    wait_for_run(&state, game).await;
+
+    assert_eq!(
+        story_after_opening(&state, game),
+        vec![
+            (MessageType::Input, FIRST_INPUT.to_string()),
+            (MessageType::Narration, EVENT_NARRATION.to_string()),
+            (MessageType::Input, SECOND_INPUT.to_string()),
+            (MessageType::Narration, SECOND_NARRATION.to_string()),
+        ],
+        "the event Narration answers the first Input and ends the first cycle: \
+         three Jobs run, and an unscripted fourth call would fail the run"
+    );
+    assert_status(&app, "idle", "the Game is idle after the run").await;
 }
 
 // [docs/specs/autoplay.md] SCENARIO: 41.4
@@ -941,4 +978,218 @@ async fn test_the_end_of_a_stopped_run_does_not_release_the_run_that_started_aft
         ],
         "run B played its own budget of 1 cycle"
     );
+}
+
+fn button_tags_with_class(html: &str, class: &str) -> Vec<String> {
+    html.split("<button")
+        .skip(1)
+        .filter_map(|rest| rest.split('>').next())
+        .filter(|tag| tag.contains(class))
+        .map(|tag| tag.to_string())
+        .collect()
+}
+
+fn story_changing_controls(story_log: &str) -> Vec<String> {
+    let mut controls = button_tags_with_class(story_log, "edit-btn");
+    controls.extend(button_tags_with_class(story_log, "delete-btn"));
+    controls.extend(
+        button_tags_with_class(story_log, "swipe-btn")
+            .into_iter()
+            .filter(|tag| {
+                tag.contains("aria-label=\"Retry\"")
+                    || tag.contains("aria-label=\"Previous swipe\"")
+            }),
+    );
+    controls
+}
+
+fn assert_controls(controls: &[String], disabled: bool, label: &str) {
+    assert!(
+        controls.len() >= 4,
+        "{label}: expected Edit, Delete, Previous swipe and Retry controls, got {controls:?}"
+    );
+    for control in controls {
+        assert_eq!(
+            control.contains(" disabled"),
+            disabled,
+            "{label}: {control}"
+        );
+    }
+}
+
+fn assert_dock_controls(dock: &str, disabled: bool, label: &str) {
+    let buttons = button_tags_with_class(dock, "option-btn");
+    assert!(
+        !buttons.is_empty(),
+        "{label}: the dock offers options: {dock}"
+    );
+    for button in buttons {
+        assert_eq!(button.contains(" disabled"), disabled, "{label}: {button}");
+    }
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.18
+#[tokio::test]
+async fn test_while_a_run_holds_the_game_the_story_log_renders_its_controls_disabled() {
+    let model = Arc::new(
+        ScriptedModel::new()
+            .turn(FIRST_NARRATION)
+            .narration(SECOND_NARRATION)
+            .after_narration(analysis_report(&[], None)),
+    );
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
+    let game = active_game_of(&state);
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job settles");
+    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Retry settles");
+    seed_offered_set(&state, &["Ask the bartender"]);
+
+    let before = fetch_body(&app, "/fragment/story-log").await;
+    assert_controls(&story_changing_controls(&before), false, "no run");
+    assert_dock_controls(
+        &fetch_body(&app, "/fragment/options-dock").await,
+        false,
+        "no run",
+    );
+
+    state
+        .game_writer
+        .start_run(game, 2)
+        .expect("a run starts on an idle Game");
+    let during = fetch_body(&app, "/fragment/story-log").await;
+    assert_controls(
+        &story_changing_controls(&during),
+        true,
+        "a run holds the Game",
+    );
+    assert_dock_controls(
+        &fetch_body(&app, "/fragment/options-dock").await,
+        true,
+        "a run holds the Game",
+    );
+    assert!(
+        during.contains(SECOND_NARRATION) && during.contains("look"),
+        "the entries and their text are as before"
+    );
+
+    stop(&app).await;
+    let after = fetch_body(&app, "/fragment/story-log").await;
+    assert_controls(&story_changing_controls(&after), false, "after the stop");
+    assert_dock_controls(
+        &fetch_body(&app, "/fragment/options-dock").await,
+        false,
+        "after the stop",
+    );
+}
+
+fn item_of_game<'a>(games_panel: &'a str, game_name: &str) -> &'a str {
+    let name = format!("<span class=\"game-name\">{game_name}</span>");
+    let start = games_panel
+        .find(&name)
+        .unwrap_or_else(|| panic!("the Games panel lists {game_name}"));
+    let end = games_panel[start..]
+        .find("<div class=\"game-actions\">")
+        .map(|offset| start + offset)
+        .expect("the item has its actions");
+    &games_panel[start..end]
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.19
+#[tokio::test]
+async fn test_the_games_fragment_marks_a_game_that_a_run_holds() {
+    let model = Arc::new(ScriptedModel::new());
+    let (app, state, storage) = app_with_script(Arc::clone(&model));
+    let game_a = active_game_of(&state);
+    let name_a = state
+        .game_view_query
+        .game_display_name(game_a)
+        .expect("Game A reads back");
+    let persona_key = storage
+        .require_game(game_a.0)
+        .expect("Game A reads back")
+        .persona_key;
+    assert!(
+        post_form(
+            &app,
+            "/games",
+            &format!("world_key=test&persona_key={persona_key}"),
+        )
+        .await
+        .status()
+        .is_success()
+    );
+    let game_b = active_game_of(&state);
+    let name_b = state
+        .game_view_query
+        .game_display_name(game_b)
+        .expect("Game B reads back");
+    assert_ne!(name_a, name_b, "the two Games have distinct names");
+
+    state
+        .game_writer
+        .start_run(game_a, 2)
+        .expect("a run starts on idle Game A");
+    let panel = fetch_body(&app, "/fragment/games").await;
+    assert!(
+        item_of_game(&panel, &name_a).contains("run-badge"),
+        "the saved Game that a run holds carries the badge"
+    );
+    assert!(
+        !item_of_game(&panel, &name_b).contains("run-badge"),
+        "the active Game that no run holds carries no badge"
+    );
+
+    state
+        .game_writer
+        .start_run(game_b, 2)
+        .expect("a run starts on idle Game B");
+    let panel = fetch_body(&app, "/fragment/games").await;
+    assert!(
+        item_of_game(&panel, &name_b).contains("run-badge"),
+        "the active Game that a run holds carries the badge"
+    );
+}
+
+const CONFIG_SELECT_IDS: [&str; 7] = [
+    "game-narrator-mode",
+    "game-narrative-perspective",
+    "game-narrative-tense",
+    "game-system-preset",
+    "game-quantifier-preset",
+    "game-impersonate-preset",
+    "game-options-preset",
+];
+
+fn assert_config_selects(games_panel: &str, disabled: bool, label: &str) {
+    for id in CONFIG_SELECT_IDS {
+        let marker = format!("id=\"{id}\"");
+        let start = games_panel
+            .find(&marker)
+            .unwrap_or_else(|| panic!("{label}: the panel renders #{id}"));
+        let tag = games_panel[start..]
+            .split('>')
+            .next()
+            .expect("the select tag ends");
+        assert_eq!(tag.contains(" disabled"), disabled, "{label}: #{id}");
+    }
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.20
+#[tokio::test]
+async fn test_while_a_run_holds_the_game_its_config_controls_render_disabled() {
+    let model = Arc::new(ScriptedModel::new());
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
+    let game = active_game_of(&state);
+
+    state
+        .game_writer
+        .start_run(game, 2)
+        .expect("a run starts on an idle Game");
+    let during = fetch_body(&app, "/fragment/games").await;
+    assert_config_selects(&during, true, "a run holds the Game");
+
+    stop(&app).await;
+    let after = fetch_body(&app, "/fragment/games").await;
+    assert_config_selects(&after, false, "after the stop");
 }

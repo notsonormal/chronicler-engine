@@ -170,11 +170,6 @@ impl JobRequest {
             _ => Self::Impersonate(None),
         }
     }
-
-    /// The Continue Job is the one that ends a cycle of a run.
-    pub fn is_continue(&self) -> bool {
-        matches!(self, Self::Action(text) if text.is_empty())
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

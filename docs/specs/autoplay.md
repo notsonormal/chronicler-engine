@@ -5,7 +5,7 @@ Endpoints:
 - `POST /status/reset-generating` (the stop)
 - `GET /status/generating` (the progress)
 
-An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one after the other: an `/impersonate` Job, then a Continue Job that answers the Input the first one wrote. The run holds its Game from its start to its end, also between two Jobs. One **cycle** is one Impersonate Job and the Continue Job that answers it, with the event Narration of a Trigger that fires in the Continue Job. The **budget** is the number of cycles. It counts the Continue Jobs of the run that end without a failure line.
+An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one after the other: an `/impersonate` Job, then a Continue Job that answers the Input the first one wrote. The run holds its Game from its start to its end, also between two Jobs. A **cycle** ends when a Job of the run ends without a failure line and leaves the story on a Narration. So an Input is answered by a Continue Job, or by the event Narration of a Trigger that fires in the Job that wrote the Input. The **budget** is the number of cycles: it counts the answered Inputs of the run.
 
 The next Job of a run is a Continue when the last Message is an Input, and an Impersonate in every other case. This rule also picks the first Job.
 
@@ -237,5 +237,63 @@ And a typed action answers "Still thinking..."
 When the model answer of run B arrives
 And run B ends
 Then the story log holds the Messages of run B's budget
+And the Game is idle
+```
+
+#### Scenario 41.18: While a run holds the Game, the story log and the options dock render their story-changing controls disabled
+
+```gherkin
+Given a Game whose last Message is a Narration with two Swipes, the second one active
+And an offered set of options in the dock
+When the client GET /fragment/story-log and GET /fragment/options-dock
+Then no Edit, Delete, Previous swipe or Retry control carries the `disabled` attribute
+And no option button carries the `disabled` attribute
+
+Given a run that holds the Game with no Job running
+When the client GET /fragment/story-log and GET /fragment/options-dock
+Then every Edit, Delete, Previous swipe and Retry control carries the `disabled` attribute
+And every option button carries the `disabled` attribute
+And the entries and their text are as before
+
+When the client POST /status/reset-generating
+And the client GET /fragment/story-log and GET /fragment/options-dock
+Then none of those controls carries the `disabled` attribute
+```
+
+#### Scenario 41.19: The Games fragment marks a Game that a run holds
+
+```gherkin
+Given two Games, with the second one active
+And a run that holds the first Game with no Job running
+When the client GET /fragment/games
+Then the item of the first Game carries a `.run-badge`
+And the item of the active Game carries no `.run-badge`
+
+Given a run that holds the active Game with no Job running
+When the client GET /fragment/games
+Then the item of the active Game carries a `.run-badge`
+```
+
+#### Scenario 41.20: While a run holds the Game, its config controls render disabled
+
+```gherkin
+Given a run that holds the active Game with no Job running
+When the client GET /fragment/games
+Then the Narrator Mode, Perspective, Tense and four preset selects of the active Game carry the `disabled` attribute
+
+When the client POST /status/reset-generating
+And the client GET /fragment/games
+Then none of those selects carries the `disabled` attribute
+```
+
+#### Scenario 41.21: A Trigger that fires in an Impersonate Job answers the Input and ends the cycle
+
+```gherkin
+Given a Game whose analysis of an Impersonate Job fires a Trigger
+When the client POST /autoplay with cycles=2
+And the run ends
+Then the story log holds, after the opening Narration, the first Impersonate Input, the event Narration of the Trigger, the second Impersonate Input and a Narration, in this order
+And the event Narration ends the first cycle, so the run ends after two cycles
+And the run made three Jobs: two Impersonate Jobs and one Continue Job
 And the Game is idle
 ```

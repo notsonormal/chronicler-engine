@@ -4,12 +4,13 @@
 use crate::adapters::driving::http::games::templates::GameRowView;
 use crate::domain::model::game::Game;
 
-pub fn game_to_view(game: Game) -> GameRowView {
+pub fn game_to_view(game: Game, run_held: bool) -> GameRowView {
     GameRowView {
         id: game.id,
         display_name: game.display_name.clone(),
         world_name: game.world_name.clone(),
         persona_name: game.persona_name.clone(),
+        run_held,
     }
 }
 

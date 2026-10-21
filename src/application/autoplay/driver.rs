@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::application::generation::gate::{GameWriter, Refusal, RunEnded, RunId, RunRefusal};
+use crate::application::generation::gate::{GameWriter, Refusal, RunId, RunRefusal};
 use crate::application::pipeline::job::{Job, JobDeps, JobEnd};
 use crate::domain::model::game::GameId;
 
@@ -18,8 +18,8 @@ enum RunEnd {
     BudgetReached,
     /// A Job ended with a failure line, and no later accept clears it.
     JobFailed,
-    /// The accept of a Job refused its request. A refusal that has a failure line
-    /// wrote it.
+    /// The accept of a Job refused its request, or the end of a cycle could not read
+    /// the story. A refusal that has a failure line wrote it.
     Refused,
     /// A stop, a reset or a delete removed the run hold.
     Stopped,
@@ -66,25 +66,27 @@ impl AutoplayRun {
     /// starts no Job before the one before it ended.
     fn run_jobs(&self) -> RunEnd {
         loop {
-            let job = match Job::run_for_run(&self.writer, &self.deps, self.game, self.run) {
-                Ok(job) => job,
+            let end = match Job::run_for_run(&self.writer, &self.deps, self.game, self.run) {
+                Ok(end) => end,
                 Err(RunRefusal::Ended) => return RunEnd::Stopped,
                 Err(RunRefusal::Refused(refusal)) => {
                     tracing::warn!(game = %self.game, run = ?self.run, "the run's Job was refused: {refusal:?}");
                     return RunEnd::Refused;
                 }
             };
-            match job.end {
+            match end {
                 JobEnd::Done => {}
                 JobEnd::Failed => return RunEnd::JobFailed,
                 JobEnd::EntryMoved => return RunEnd::Stopped,
             }
-            if !job.request.is_continue() {
-                continue;
-            }
             match self.writer.finish_cycle(self.game, self.run) {
-                Err(RunEnded) => return RunEnd::Stopped,
-                Ok(cycle) => {
+                Err(RunRefusal::Ended) => return RunEnd::Stopped,
+                Err(RunRefusal::Refused(refusal)) => {
+                    tracing::warn!(game = %self.game, run = ?self.run, "the end of a cycle was refused: {refusal:?}");
+                    return RunEnd::Refused;
+                }
+                Ok(None) => {}
+                Ok(Some(cycle)) => {
                     tracing::info!(
                         game = %self.game,
                         run = ?self.run,

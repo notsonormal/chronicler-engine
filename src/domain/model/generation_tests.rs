@@ -665,7 +665,6 @@ fn next_in_run_continues_an_unanswered_input() {
         let tail = tail_ending_in(MessageType::Input, kind);
         let next = JobRequest::next_in_run(Some(&tail));
         assert_eq!(next, JobRequest::Action(String::new()), "{label}");
-        assert!(next.is_continue(), "{label}");
     }
 }
 
@@ -691,20 +690,5 @@ fn next_in_run_impersonates_after_any_other_end_of_the_story() {
     for (label, tail) in rows {
         let next = JobRequest::next_in_run(tail.as_ref());
         assert_eq!(next, JobRequest::Impersonate(None), "{label}");
-        assert!(!next.is_continue(), "{label}");
-    }
-}
-
-#[test]
-fn only_a_bare_action_is_a_continue() {
-    let rows = [
-        (JobRequest::Action("look".to_string()), false),
-        (JobRequest::Guide(String::new()), false),
-        (JobRequest::Impersonate(None), false),
-        (JobRequest::Retry, false),
-        (JobRequest::Action(String::new()), true),
-    ];
-    for (request, expected) in rows {
-        assert_eq!(request.is_continue(), expected, "{request:?}");
     }
 }

@@ -51,13 +51,6 @@ pub enum JobEnd {
     EntryMoved,
 }
 
-/// The Job of one run, after it ended.
-pub struct RunJobEnd {
-    /// The request the run chose for this Job.
-    pub request: JobRequest,
-    pub end: JobEnd,
-}
-
 pub struct Job {
     writer: JobWriter,
     narrator: Arc<Narrator>,
@@ -111,15 +104,11 @@ impl Job {
         deps: &JobDeps,
         game: GameId,
         run: RunId,
-    ) -> Result<RunJobEnd, RunRefusal> {
+    ) -> Result<JobEnd, RunRefusal> {
         let accepted = writer.accept_for_run(game, run)?;
         Self::span_of(&accepted.writer, &accepted.plan);
         let job = Self::new(accepted.writer, deps);
-        let end = job.run(accepted.plan);
-        Ok(RunJobEnd {
-            request: accepted.request,
-            end,
-        })
+        Ok(job.run(accepted.plan))
     }
 
     fn new(writer: JobWriter, deps: &JobDeps) -> Self {

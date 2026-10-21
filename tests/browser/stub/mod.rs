@@ -4,6 +4,7 @@
 pub use super::*;
 
 mod announcements;
+mod autoplay;
 mod dashboard;
 mod failure_display;
 mod form_failures;

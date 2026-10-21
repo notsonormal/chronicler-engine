@@ -151,6 +151,13 @@ function cancelEdit() {
   if (editBtn) editBtn.focus();
 }
 
+// A 200 can still refuse a story write: a Job or an Autoplay run holds the Game.
+function answeredWaitStatus(body) {
+  return body.includes('class="status wait"');
+}
+
+const GAME_BUSY_DETAIL = "Still thinking...";
+
 function submitEdit() {
   if (editState === null) return;
   clearInlineError(storyLogErrorSlot());
@@ -158,6 +165,7 @@ function submitEdit() {
   const formData = new URLSearchParams();
   formData.append("text", newText);
   // Kept set until the outcome is known, so a failed save can restore the entry.
+  let editKeptOpen = false;
   fetch(`/history/${editState.id}`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -165,6 +173,19 @@ function submitEdit() {
   })
     .then((response) => {
       if (!response.ok) return throwServerDetail(response);
+      return response.text();
+    })
+    .then((body) => {
+      if (answeredWaitStatus(body)) {
+        // The editor keeps the player's text and the poll stays paused, so
+        // the player can save again once the Game is free.
+        editKeptOpen = true;
+        showStoryLogError(
+          "The Game is busy, so the edit was not saved.",
+          GAME_BUSY_DETAIL,
+        );
+        return;
+      }
       // The lock stays until the resumed poll replaces the entry's
       // controls, so a second editor cannot open on a stale textarea.
       clearEditState();
@@ -175,7 +196,7 @@ function submitEdit() {
       showStoryLogError("Failed to save the message.", err.message);
     })
     .finally(() => {
-      resumePolling();
+      if (!editKeptOpen) resumePolling();
     });
 }
 
@@ -223,6 +244,13 @@ function switchSwipe(messageId, index) {
       return response.text();
     })
     .then((html) => {
+      if (answeredWaitStatus(html)) {
+        showStoryLogError(
+          "The Game is busy, so the swipe was not switched.",
+          GAME_BUSY_DETAIL,
+        );
+        return;
+      }
       document.getElementById("story-log").innerHTML = html;
       // The restore is settled: drop any stale generating label without waiting for the 5s poll.
       resetStatusToReady();

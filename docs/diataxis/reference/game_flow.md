@@ -31,7 +31,7 @@ A Retrigger is allowed when `Tail::retrigger_allowed` says so: the last Message 
 
 `GameWriter` owns one registry of **job entries**, one for each busy Game. A job entry holds the Job's id and the current `Step`. A Game is busy when its job entry exists.
 
-An Autoplay run makes a **run hold** in the same registry as the job entries. A run hold names the run, the Continue Jobs of the run that ended without a failure line, and the budget. It lasts from the start of the run to its end, also between two Jobs of the run. A Game is busy when its job entry or its run hold exists.
+An Autoplay run makes a **run hold** in the same registry as the job entries. A run hold names the run, the count of ended cycles, and the budget. A cycle ends when a Job of the run ends without a failure line and leaves the story on a Narration. A run hold lasts from the start of the run to its end, also between two Jobs of the run. A Game is busy when its job entry or its run hold exists.
 
 - While a run hold exists, the busy rule refuses every story write with "Still thinking...". Only an accept that names the run's own id passes.
 - A run ends when its budget is spent, when a Job ends with a failure line, or when its run hold is gone. A stop, a reset and a delete remove the run hold with the job entry.

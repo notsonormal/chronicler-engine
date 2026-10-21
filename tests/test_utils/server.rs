@@ -272,67 +272,101 @@ pub fn start_server_with_env(port: u16, world: &str, persona: &str) -> StartServ
 /// migrations on open, so a second process writing it would collide. Run after
 /// `wait_for_server`.
 pub async fn inject_mock_connections(port: u16) {
-    let client = reqwest::Client::new();
-    let base = format!("http://127.0.0.1:{port}");
+    let id = add_connection(port, "test-mock", "mock", "mock-model", "").await;
+    for role in ["set-narrator", "set-quantifier"] {
+        set_connection_role(port, role, &id).await;
+    }
+}
 
-    let resp = client
-        .post(format!("{base}/connections/add"))
+/// A model that takes a request and never answers, so a Job sits at its model call
+/// until a stop ends it. The mock model answers at once, so a test that needs a run
+/// to hold its Game for a while narrates through this instead.
+pub struct SilentModel {
+    listener_task: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for SilentModel {
+    fn drop(&mut self) {
+        self.listener_task.abort();
+    }
+}
+
+/// Make the engine's narrator a `SilentModel`. Run after `inject_mock_connections`;
+/// the quantifier stays the mock.
+pub async fn inject_silent_narrator(port: u16) -> SilentModel {
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .expect("bind the silent model");
+    let model_port = listener.local_addr().expect("silent model address").port();
+    let listener_task = tokio::spawn(async move {
+        let mut open_requests = Vec::new();
+        while let Ok((stream, _)) = listener.accept().await {
+            open_requests.push(stream);
+        }
+    });
+    let base_url = format!("http://127.0.0.1:{model_port}");
+    let id = add_connection(port, "test-silent", "ollama", "silent-model", &base_url).await;
+    set_connection_role(port, "set-narrator", &id).await;
+    SilentModel { listener_task }
+}
+
+async fn add_connection(
+    port: u16,
+    name: &str,
+    provider: &str,
+    model: &str,
+    base_url: &str,
+) -> String {
+    let resp = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/connections/add"))
         .form(&[
-            ("conn_name", "test-mock"),
-            ("conn_provider", "mock"),
-            ("conn_model", "mock-model"),
+            ("conn_name", name),
+            ("conn_provider", provider),
+            ("conn_model", model),
             ("conn_api_key", ""),
-            ("conn_base_url", ""),
+            ("conn_base_url", base_url),
             ("single_user_message", "false"),
         ])
         .send()
         .await
-        .expect("add mock connection should reach the engine");
+        .unwrap_or_else(|e| panic!("add the {name} connection should reach the engine: {e}"));
     assert!(
         resp.status().is_success(),
-        "adding the mock connection returned {}",
+        "adding the {name} connection returned {}",
         resp.status()
     );
-    let body = resp.text().await.expect("add mock connection body");
-    let id = extract_connection_id(&body).unwrap_or_else(|| {
-        panic!("could not find the new connection id in the rendered settings panel")
-    });
-
-    for action in ["set-narrator", "set-quantifier"] {
-        let resp = client
-            .post(format!("{base}/connections/{action}"))
-            .form(&[("connection_id", id.as_str())])
-            .send()
-            .await
-            .unwrap_or_else(|e| panic!("{action} for {id}: {e}"));
-        assert!(
-            resp.status().is_success(),
-            "{action} for {id} returned {}",
-            resp.status()
-        );
-        let body = resp.text().await.expect("set role body");
-        assert!(
-            !body.contains("error-message"),
-            "{action} reported an error: {body}"
-        );
-    }
+    let body = resp.text().await.expect("add connection body");
+    extract_connection_id(&body, name).unwrap_or_else(|| {
+        panic!("could not find the {name} connection in the rendered settings panel")
+    })
 }
 
-/// The id of the connection just added — `add_connection_handler` generates
-/// `conn-<millis>` ids, while seeded connections carry author-chosen ids, so
-/// scan every `hx-post` rather than taking the first.
-fn extract_connection_id(html: &str) -> Option<String> {
-    let marker = "hx-post=\"/connections/";
-    let mut rest = html;
-    while let Some(start) = rest.find(marker) {
-        rest = &rest[start + marker.len()..];
-        let end = rest.find(['"', '/'])?;
-        let id = &rest[..end];
-        if id.starts_with("conn-") {
-            return Some(id.to_string());
-        }
-    }
-    None
+async fn set_connection_role(port: u16, action: &str, id: &str) {
+    let resp = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/connections/{action}"))
+        .form(&[("connection_id", id)])
+        .send()
+        .await
+        .unwrap_or_else(|e| panic!("{action} for {id}: {e}"));
+    assert!(
+        resp.status().is_success(),
+        "{action} for {id} returned {}",
+        resp.status()
+    );
+    let body = resp.text().await.expect("set role body");
+    assert!(
+        !body.contains("error-message"),
+        "{action} reported an error: {body}"
+    );
+}
+
+fn extract_connection_id(html: &str, name: &str) -> Option<String> {
+    let marker = format!("<span class=\"connection-name\">{name}</span>");
+    let after_name = &html[html.find(&marker)? + marker.len()..];
+    let route = "hx-post=\"/connections/";
+    let after_route = &after_name[after_name.find(route)? + route.len()..];
+    let end = after_route.find(['"', '/'])?;
+    Some(after_route[..end].to_string())
 }
 
 pub async fn wait_for_server(port: u16, max_attempts: usize) -> bool {

@@ -221,6 +221,11 @@ impl GameViewQuery {
         self.writer.busy(game_id).is_some()
     }
 
+    /// A run holds the Game, also between two Jobs of the run. A plain Job does not.
+    pub fn run_holds(&self, game_id: GameId) -> bool {
+        matches!(self.writer.busy(game_id), Some(Busy::Run { .. }))
+    }
+
     pub fn game_display_name(&self, game_id: GameId) -> Result<String, ApplicationError> {
         let storage = &self.storage;
         match storage.get_game(game_id.0)? {
