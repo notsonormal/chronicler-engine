@@ -3,6 +3,7 @@
 
 use crate::domain::model::agent::Kind;
 use crate::domain::model::message::{Maker, Swipe, SwipeAt};
+use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::state::generation_status::{Record, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
@@ -28,6 +29,25 @@ pub enum Generation {
     Event(EventRecord),
 }
 
+impl Generation {
+    pub fn kind(&self) -> Kind {
+        match self {
+            Self::Narration { .. } => Kind::Narration,
+            Self::Impersonate { .. } => Kind::Impersonate,
+            Self::UserRegen => Kind::UserRegen,
+            Self::Event(_) => Kind::Event,
+        }
+    }
+
+    /// The kind of preset the narration call renders: an Impersonate has its own.
+    pub fn preset_type(&self) -> PresetType {
+        match self {
+            Self::Impersonate { .. } => PresetType::Impersonate,
+            _ => PresetType::System,
+        }
+    }
+}
+
 /// The order holds ids and texts only: the first step of the generation loads the
 /// Swipe state of `start` itself.
 #[derive(Debug, Clone, PartialEq)]
@@ -48,12 +68,7 @@ pub struct NewSwipe {
 
 impl GenerationOrder {
     pub fn kind(&self) -> Kind {
-        match self.generation {
-            Generation::Narration { .. } => Kind::Narration,
-            Generation::Impersonate { .. } => Kind::Impersonate,
-            Generation::UserRegen => Kind::UserRegen,
-            Generation::Event(_) => Kind::Event,
-        }
+        self.generation.kind()
     }
 
     /// The event Narration of a fired Trigger, a new Message after the Message the

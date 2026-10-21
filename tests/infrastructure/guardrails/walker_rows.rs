@@ -76,7 +76,7 @@ pub const CALL_SITE_ROWS: &[CallSiteRow] = &[
     },
 ];
 
-// The records rule 7 bans from a Job field: the six names fit no single row field
+// The records rule 7 bans from a Job field and a Job parameter: the six names fit no single row field
 // line, so the list is one named const the row points at.
 pub const JOB_RECORD_TYPES: &[&str] = &[
     "Game",
@@ -89,12 +89,14 @@ pub const JOB_RECORD_TYPES: &[&str] = &[
 
 pub const TYPE_CHECK_ROWS: &[TypeCheckRow] = &[
     // Rule 7: between steps, pass ids. A Job holds no record field, so a record a
-    // step loads cannot go stale in another step's hands.
+    // step loads cannot go stale in another step's hands; and no function of
+    // `job.rs` takes a record parameter, because each step loads the records it
+    // uses itself.
     TypeCheckRow {
         rule: 7,
         scope: "application/pipeline/job.rs",
         banned_types: JOB_RECORD_TYPES,
-        position: TypeCheckPosition::Fields,
+        position: TypeCheckPosition::FieldsAndParameters,
     },
 ];
 

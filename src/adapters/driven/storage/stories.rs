@@ -44,7 +44,7 @@ impl StoryReads<'_> {
     pub fn tail(&self, game: GameId) -> Result<Option<Tail>, EngineError> {
         self.storage
             .with_backend_mut(StorageCall::StoriesTail, |backend| match backend {
-                Backend::Sqlite { pool } => Self::tail_of(&pool.conn(), game),
+                Backend::Sqlite { pool } => Self::read_tail(&pool.conn(), game),
             })
     }
 
@@ -58,7 +58,7 @@ impl StoryReads<'_> {
                     let conn = pool.conn();
                     let entries = Self::window_entries_of(&conn, game, limit)?;
                     let retrigger_allowed =
-                        Self::tail_of(&conn, game)?.is_some_and(|tail| tail.retrigger_allowed());
+                        Self::read_tail(&conn, game)?.is_some_and(|tail| tail.retrigger_allowed());
                     Ok(StoryWindowRead {
                         entries,
                         retrigger_allowed,
@@ -67,7 +67,7 @@ impl StoryReads<'_> {
             })
     }
 
-    fn tail_of(conn: &rusqlite::Connection, game: GameId) -> Result<Option<Tail>, EngineError> {
+    fn read_tail(conn: &rusqlite::Connection, game: GameId) -> Result<Option<Tail>, EngineError> {
         let count = Self::message_count(conn, game)?;
         if count == 0 {
             return Ok(None);

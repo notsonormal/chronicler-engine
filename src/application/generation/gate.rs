@@ -223,11 +223,13 @@ impl GameWriter {
 
     pub fn stop(&self, game: GameId) -> Result<(), EngineError> {
         self.hold(|entries, units| {
-            entries.remove(&game);
+            // The read goes first: a failed read leaves the Job running, and the stop
+            // answers that it failed.
             let record = DockRecord {
                 offered: self.dock_of(game)?.offered,
                 notice: None,
             };
+            entries.remove(&game);
             units.open(game, |tx| Self::clear_failure_and_put_dock(tx, &record))
         })
     }
@@ -502,10 +504,9 @@ impl JobWriter {
             .map_err(|error| GenerationFailure::save_failed(&error).into())
     }
 
-    pub fn save_input(&self, text: &str, start: SwipeAt) -> Result<SwipeAt, JobFailure> {
+    pub fn save_input(&self, text: &str, start: &SwipeState) -> Result<SwipeAt, JobFailure> {
         self.hold(|_entry, units| {
-            let state = self.state_at(start)?;
-            let swipe = Swipe::new(text, Maker::Player, state);
+            let swipe = Swipe::new(text, Maker::Player, start.clone());
             let message = Message::new(MessageType::Input, MessageKind::TypedInput, swipe.clone());
 
             Self::unit(units, self.game, |tx| {
@@ -525,6 +526,7 @@ impl JobWriter {
         order: &GenerationOrder,
         text: String,
         start: &SwipeState,
+        tail: &Tail,
     ) -> Result<SavedText, JobFailure> {
         self.hold(|_entry, units| {
             let empties_the_dock = order.kind().saves_a_narration();
@@ -539,8 +541,7 @@ impl JobWriter {
                     self.write_new_message(&message, &swipe, empties_the_dock, units)?
                 }
                 Place::NewSwipeOnLast => {
-                    let tail = self.tail_of()?;
-                    self.write_new_swipe(&tail, &swipe, empties_the_dock, units)?
+                    self.write_new_swipe(tail, &swipe, empties_the_dock, units)?
                 }
             };
             Ok(SavedText { at })
@@ -562,29 +563,19 @@ impl JobWriter {
         })
     }
 
-    /// `after_narration`: the Narration's text save already emptied the offered set,
-    /// so the notice stands alone; an on-demand run keeps the set it found.
-    pub fn save_options(
-        &self,
-        result: OptionsResult,
-        after_narration: bool,
-    ) -> Result<(), JobFailure> {
-        self.hold(|_entry, units| {
-            let record = match (result, after_narration) {
-                (OptionsResult::Offered(offered), _) => DockRecord {
+    /// A failed run writes the notice only: the set the dock holds stays, and after a
+    /// Narration the text save already emptied it.
+    pub fn save_options(&self, result: OptionsResult) -> Result<(), JobFailure> {
+        self.hold(|_entry, units| match result {
+            OptionsResult::Offered(offered) => Self::unit(units, self.game, |tx| {
+                tx.put_dock(&DockRecord {
                     offered,
                     notice: None,
-                },
-                (OptionsResult::Unavailable { reason, raw }, true) => DockRecord {
-                    offered: Vec::new(),
-                    notice: Some(Notice { reason, raw }),
-                },
-                (OptionsResult::Unavailable { reason, raw }, false) => DockRecord {
-                    offered: self.dock()?.offered,
-                    notice: Some(Notice { reason, raw }),
-                },
-            };
-            Self::unit(units, self.game, |tx| tx.put_dock(&record))
+                })
+            }),
+            OptionsResult::Unavailable { reason, raw } => Self::unit(units, self.game, |tx| {
+                tx.put_dock_notice(&Notice { reason, raw })
+            }),
         })
     }
 
@@ -594,29 +585,6 @@ impl JobWriter {
             entry.step = step;
             Ok(())
         })
-    }
-
-    fn dock(&self) -> Result<DockRecord, JobFailure> {
-        match self.writer.storage.docks().get(self.game) {
-            Ok(record) => Ok(record.unwrap_or_default()),
-            Err(error) => Err(GenerationFailure::unreadable(Record::Dock, &error).into()),
-        }
-    }
-
-    fn state_at(&self, at: SwipeAt) -> Result<SwipeState, JobFailure> {
-        match self.writer.storage.stories().swipe_state(self.game, at) {
-            Ok(Some(state)) => Ok(state),
-            Ok(None) => Err(GenerationFailure::missing(Record::StartState).into()),
-            Err(error) => Err(GenerationFailure::unreadable(Record::StartState, &error).into()),
-        }
-    }
-
-    fn tail_of(&self) -> Result<Tail, JobFailure> {
-        match self.writer.storage.stories().tail(self.game) {
-            Ok(Some(tail)) => Ok(tail),
-            Ok(None) => Err(GenerationFailure::missing(Record::Story).into()),
-            Err(error) => Err(GenerationFailure::unreadable(Record::Story, &error).into()),
-        }
     }
 
     fn write_new_message(

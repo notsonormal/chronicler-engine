@@ -4,7 +4,7 @@
 use crate::adapters::driven::storage::core::WriteOverrides;
 use crate::adapters::driven::storage::utils::require_message_of_game;
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
-use crate::domain::model::dock::DockRecord;
+use crate::domain::model::dock::{DockRecord, Notice};
 use crate::domain::model::game::{GameId, NewGame};
 use crate::domain::model::message::{Message, Swipe, SwipeAt};
 use crate::domain::model::state::generation_status::GenerationFailure;
@@ -25,6 +25,7 @@ pub enum TxWrite {
     SetSwipeState,
     SetGameFailure,
     PutDock,
+    PutDockNotice,
     ClearDock,
 }
 
@@ -221,6 +222,19 @@ impl<'a> Tx<'a> {
     pub fn put_dock(&mut self, record: &DockRecord) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::PutDock)?;
         self.write_dock(record)
+    }
+
+    /// Replaces the notice and keeps the offered set the row holds.
+    pub fn put_dock_notice(&mut self, notice: &Notice) -> Result<(), EngineError> {
+        self.writes.fail_if_injected(TxWrite::PutDockNotice)?;
+        self.conn
+            .execute(
+                "INSERT INTO game_docks (game_id, notice) VALUES (?1, ?2) \
+                 ON CONFLICT(game_id) DO UPDATE SET notice = excluded.notice",
+                rusqlite::params![self.game.0 as i64, serde_json::to_string(notice)?],
+            )
+            .db_context("Failed to write the dock notice")?;
+        Ok(())
     }
 
     /// The row stays, with no offered set and no notice: a Game holds one dock

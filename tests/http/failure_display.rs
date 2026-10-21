@@ -659,13 +659,13 @@ async fn preset_game_read_fails() {
     );
 }
 
-/// A Job whose Narration call is held while `call` starts to fail: the Job reads
+/// A Job whose call of `held` is held while `call` starts to fail: the Job reads
 /// again after the call, so the refused read is one of the steps behind it.
-async fn status_after_a_read_fails_behind_the_narration(call: StorageCall) -> (String, usize) {
+async fn status_after_a_read_fails_behind_a_call(call: StorageCall, held: Role) -> (String, usize) {
     let _guard = SettingsTestGuard::new();
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(Role::Narrator);
+    let hold = model.hold(held);
     let (app, state, _storage) = app_with_model_and_storage(
         Arc::new(storage),
         Arc::clone(&model),
@@ -676,7 +676,7 @@ async fn status_after_a_read_fails_behind_the_narration(call: StorageCall) -> (S
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
         hold.wait_started(1000),
-        "the held narration call should reach the model"
+        "the held call should reach the model"
     );
     failures.set(call, TestOverride::internal("the read is refused"));
     hold.release();
@@ -700,11 +700,22 @@ async fn status_after_a_read_fails_behind_the_narration(call: StorageCall) -> (S
 #[tokio::test]
 async fn job_read_names_record_story_and_saved_state() {
     let rows = [
-        (StorageCall::StoriesEntries, "the story"),
-        (StorageCall::StoriesSwipeState, "the saved state"),
+        (StorageCall::StoriesEntries, Role::Narrator, "the story", 2),
+        (
+            StorageCall::StoriesSwipeState,
+            Role::Narrator,
+            "the start state",
+            1,
+        ),
+        (
+            StorageCall::StoriesSwipeState,
+            Role::Quantifier,
+            "the saved state",
+            2,
+        ),
     ];
-    for (call, record) in rows {
-        let (body, narrations) = status_after_a_read_fails_behind_the_narration(call).await;
+    for (call, held, record, expected_narrations) in rows {
+        let (body, narrations) = status_after_a_read_fails_behind_a_call(call, held).await;
         let line = format!("The data for this request is missing: {record}.");
         assert!(
             body.contains(&line),
@@ -719,8 +730,8 @@ async fn job_read_names_record_story_and_saved_state() {
             "{call:?}: the storage error is reachable in the disclosure: {body}"
         );
         assert_eq!(
-            narrations, 2,
-            "{call:?}: the Narration saved before the read stays beside the opening"
+            narrations, expected_narrations,
+            "{call:?} behind the {held:?} call: the Narrations in the story log"
         );
     }
 }

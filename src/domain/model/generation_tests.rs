@@ -5,6 +5,7 @@ use super::generation::{
     Generation, GenerationOrder, JobPlan, JobRequest, OptionsRun, PlanRefusal, Place, StoryEnd,
 };
 use super::message::{Maker, Message, Swipe, SwipeAt};
+use super::prompt_preset::PresetType;
 use super::state::generation_status::{Record, Step};
 use super::state::message_types::{MessageKind, MessageType};
 use super::state::movement::MovementState;
@@ -504,6 +505,28 @@ fn write_the_record_of_each_kind() {
         assert_eq!(written.kind, message_kind, "{kind:?}");
         assert_eq!(written.swipe.maker, maker, "{kind:?}");
         assert_eq!(written.swipe.text, "text");
+    }
+}
+
+#[test]
+fn preset_type_by_kind() {
+    let rows = [
+        (Generation::Narration { guide: None }, PresetType::System),
+        (
+            Generation::Impersonate { direction: None },
+            PresetType::Impersonate,
+        ),
+        (Generation::UserRegen, PresetType::System),
+        (Generation::Event(event_record()), PresetType::System),
+    ];
+
+    for (generation, preset_type) in rows {
+        assert_eq!(
+            generation.preset_type(),
+            preset_type,
+            "{:?}",
+            generation.kind()
+        );
     }
 }
 

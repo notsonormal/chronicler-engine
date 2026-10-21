@@ -10,24 +10,23 @@ use crate::adapters::driven::storage::stories::STORY_LIMIT;
 use crate::adapters::driven::storage::Storage;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
-use crate::application::generation::gate::{GameWriter, JobFailure, JobWriter, OptionsResult, Refusal};
+use crate::application::generation::gate::{
+    GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, SavedText,
+};
 use crate::application::generation::job_tasks::JobTasks;
-use crate::application::narration::narrator::Narrator;
+use crate::application::narration::narrator::{NarrationValues, Narrator};
 use crate::application::prompting::token_budget::TokenBudget;
-use crate::application::prompting::{NpcContext, PromptContext};
-use crate::domain::model::agent::{AgentSettings, HookInput, Kind, WorldView, STORY_WINDOW};
+use crate::application::prompting::NpcContext;
+use crate::domain::model::agent::{AgentSettings, HookInput, Kind, STORY_WINDOW};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::game::{Game, GameId};
-use crate::domain::model::generation::{
-    Generation, GenerationOrder, JobPlan, JobRequest, OptionsRun, Place,
-};
-use crate::domain::model::map::Room;
+use crate::domain::model::generation::{GenerationOrder, JobPlan, JobRequest, OptionsRun, Place};
 use crate::domain::model::message::SwipeAt;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
-use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
+use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
 use crate::domain::model::utils::game_rules;
@@ -129,7 +128,9 @@ impl Job {
     }
 
     /// The request's Input save runs after the room check, so an invalid room saves
-    /// no Input. A fired Trigger gives the event order that follows.
+    /// no Input. Each step loads by id what it uses and returns its result; only
+    /// ids, texts and step results move between steps. A fired Trigger gives the
+    /// event order that follows.
     fn generate(
         &self,
         order: &GenerationOrder,
@@ -138,25 +139,16 @@ impl Job {
     ) -> Result<Option<GenerationOrder>, JobFailure> {
         let kind = order.kind();
         let step = kind.step();
-        let bundle = self.world_bundle()?;
-        let start = self.start_state(order)?;
 
-        self.run_step(step.clone(), kind, || self.room_check(&bundle, &start))?;
+        self.run_step(step.clone(), Some(kind), || self.room_check(order))?;
 
         if let Some(text) = input {
-            let at = order.start;
-            self.run_step(step.clone(), kind, || {
-                self.writer.save_input(text, at).map(|_| ())
-            })?;
+            self.run_step(step.clone(), Some(kind), || self.save_input(order, text))?;
         }
 
-        let narrated = self.run_step(step.clone(), kind, || {
-            self.narrate_step(order, &bundle, &start, input)
-        })?;
+        let text = self.run_step(step.clone(), Some(kind), || self.narrate(order, input))?;
 
-        let saved = self.run_step(step, kind, || {
-            self.writer.save_text(order, narrated.clone(), &start)
-        })?;
+        let saved = self.run_step(step, Some(kind), || self.save_text(order, text.clone()))?;
         let at = saved.at();
         *narration_saved |= kind.saves_a_narration();
 
@@ -164,27 +156,16 @@ impl Job {
             return Ok(None);
         }
 
-        // The Quantifier must not see the new text, so the window ends at the Message
-        // the text save made.
-        let history = self.window_before(Some(at.message), STORY_WINDOW)?;
-        let player_text = Self::player_text(input, &history);
-        let quantified = self.run_step(Step::Quantifying, kind, || {
-            self.quantify_step(&bundle, &start, &narrated, &history, &player_text)
+        let quantified = self.run_step(Step::Quantifying, Some(kind), || {
+            self.analyse(order, at, &text, input)
         })?;
-
-        let outcome = self.run_step(Step::Quantifying, kind, || {
-            self.rules_step(kind, &bundle, at, &quantified)
-        })?;
-        self.run_step(Step::Quantifying, kind, || {
-            self.writer.save_state_update(saved, outcome.state)
-        })?;
-
-        Ok(outcome
-            .fired
-            .map(|record| GenerationOrder::event_after(at, record)))
+        self.run_step(Step::Quantifying, Some(kind), || {
+            self.update_state(order, saved, &quantified)
+        })
     }
 
-    /// Every step goes through here, so a step cannot forget its status name.
+    /// Every step goes through here, so a step cannot forget its status name. The
+    /// Options run belongs to no generation, so it names no kind.
     #[instrument(
         skip(self, run),
         fields(game = %self.writer.game(), job = self.writer.job_id(), kind = ?kind, step = ?step)
@@ -192,122 +173,122 @@ impl Job {
     fn run_step<T>(
         &self,
         step: Step,
-        kind: Kind,
+        kind: Option<Kind>,
         run: impl FnOnce() -> Result<T, JobFailure>,
     ) -> Result<T, JobFailure> {
         self.writer.step(step)?;
         run()
     }
 
-    fn room_check(&self, bundle: &WorldBundle, start: &SwipeState) -> Result<(), JobFailure> {
-        self.resolve_room(bundle, start).map(|_| ())
+    fn room_check(&self, order: &GenerationOrder) -> Result<(), JobFailure> {
+        let bundle = self.world_bundle()?;
+        let start = self.start_state(order)?;
+        start
+            .room(&bundle.map)
+            .map(|_| ())
+            .ok_or_else(|| Self::invalid_room(&start.movement.current_room_id))
     }
 
-    fn resolve_room<'s>(
-        &self,
-        bundle: &'s WorldBundle,
-        start: &'s SwipeState,
-    ) -> Result<&'s Room, JobFailure> {
-        start.room(&bundle.map).ok_or_else(|| {
-            // The engine has no error behind this one: the room it stands in is
-            // simply not on the map.
-            GenerationFailure::invalid_room(start.movement.current_room_id.clone()).into()
-        })
+    fn save_input(&self, order: &GenerationOrder, text: &str) -> Result<(), JobFailure> {
+        let start = self.start_state(order)?;
+        self.writer.save_input(text, &start).map(|_| ())
     }
 
-    fn narrate_step(
-        &self,
-        order: &GenerationOrder,
-        bundle: &WorldBundle,
-        start: &SwipeState,
-        input: Option<&str>,
-    ) -> Result<String, JobFailure> {
+    fn narrate(&self, order: &GenerationOrder, input: Option<&str>) -> Result<String, JobFailure> {
         let game = self.game_row()?;
-        let room = self.resolve_room(bundle, start)?;
-        let before = self.place_before(order)?;
-        let history = self.window_before(before, STORY_LIMIT)?;
-        let user_message = self.user_message(order, input, &history)?;
-        let preset_type = match order.kind() {
-            Kind::Impersonate => PresetType::Impersonate,
-            _ => PresetType::System,
-        };
+        let settings = Self::read(Record::Settings, self.storage.get_settings())?;
         let preset = Self::read(
             Record::Preset,
-            self.presets.for_narration(&game, preset_type),
+            self.presets
+                .for_narration(&game, order.generation.preset_type()),
         )?;
-        let settings = Self::read(Record::Settings, self.storage.get_settings())?;
+        let bundle = self.world_bundle()?;
+        let start = self.start_state(order)?;
+        let room = start
+            .room(&bundle.map)
+            .ok_or_else(|| Self::invalid_room(&start.movement.current_room_id))?;
+        let tail = self.tail()?;
+        let history = self.window_before(
+            match order.place {
+                Place::NewMessage => None,
+                Place::NewSwipeOnLast => Some(tail.last.id),
+            },
+            STORY_LIMIT,
+        )?;
         let budget = Self::budget(&settings)?;
 
         let all_npcs: Vec<NpcCard> = bundle.npcs.values().cloned().collect();
-        let context = PromptContext::new(
-            &bundle.world,
-            game.narrative_perspective,
-            game.narrative_tense,
+        let values = NarrationValues {
+            world: &bundle.world,
+            narrative_perspective: game.narrative_perspective,
+            narrative_tense: game.narrative_tense,
             room,
-            NpcContext {
+            npcs: NpcContext {
                 all_npcs: &all_npcs,
                 npcs_in_area: &start.scene.npcs_in_area,
             },
-            &bundle.persona,
-            &user_message,
-            &history,
-        );
-        let context = match &order.generation {
-            Generation::Impersonate { .. } => context.with_impersonate(true),
-            Generation::Narration { guide } => context.with_guide(guide.clone()),
-            Generation::UserRegen | Generation::Event(_) => context,
+            persona: &bundle.persona,
+            history: &history,
+            input,
+            tail: &tail,
         };
 
-        match self.narrator.narrate(
-            order.kind().role(),
-            &context,
+        let narrated = self.narrator.narrate(
+            &order.generation,
+            &values,
             &preset,
             &settings.response_length,
             budget,
-        ) {
-            Ok(narrated) => Ok(narrated.text),
-            Err(failure) => Err(failure.into()),
-        }
+        )?;
+        Ok(narrated.text)
     }
 
-    fn quantify_step(
+    fn save_text(&self, order: &GenerationOrder, text: String) -> Result<SavedText, JobFailure> {
+        let start = self.start_state(order)?;
+        let tail = self.tail()?;
+        self.writer.save_text(order, text, &start, &tail)
+    }
+
+    /// The Quantifier must not see the new text, so its window ends at the Message
+    /// the text save made.
+    fn analyse(
         &self,
-        bundle: &WorldBundle,
-        start: &SwipeState,
+        order: &GenerationOrder,
+        saved: SwipeAt,
         text: &str,
-        history: &[StoryRow],
-        player_text: &str,
+        input: Option<&str>,
     ) -> Result<QuantifierResult, JobFailure> {
-        let world = WorldView {
-            room: start.room(&bundle.map),
-            map: &bundle.map,
-            persona: &bundle.persona,
-            characters: &bundle.npcs,
-            present: &start.scene.npcs_in_area,
-        };
-        let input = HookInput {
+        let settings = self.hook_settings(PresetType::Quantifier)?;
+        let bundle = self.world_bundle()?;
+        let start = self.start_state(order)?;
+        let history = self.window_before(Some(saved.message), STORY_WINDOW)?;
+        let world = bundle.view(&start);
+        let hook_input = HookInput {
             text: Some(text),
-            player_text,
-            story: history,
+            player_text: input.unwrap_or_default(),
+            story: &history,
             world: &world,
         };
-        Ok(self
-            .agent_runner
-            .after_narration(&input, &self.quantifier_settings()?))
+        Ok(self.agent_runner.after_narration(&hook_input, &settings))
     }
 
     /// The rules start from the state of the text save. For an event, that state
     /// already marks the one-shot Trigger fired.
-    fn rules_step(
+    fn update_state(
         &self,
-        kind: Kind,
-        bundle: &WorldBundle,
-        at: SwipeAt,
+        order: &GenerationOrder,
+        saved: SavedText,
         quantified: &QuantifierResult,
-    ) -> Result<game_rules::RulesOutcome, JobFailure> {
-        let state = self.swipe_state_at(at, Record::SavedState)?;
-        game_rules::apply(state, quantified, &bundle.game_world(), kind)
-            .map_err(|error| GenerationFailure::contradiction(error.to_string()).into())
+    ) -> Result<Option<GenerationOrder>, JobFailure> {
+        let at = saved.at();
+        let bundle = self.world_bundle()?;
+        let state = self.swipe_state_of(at, Record::SavedState)?;
+        let outcome = game_rules::apply(state, quantified, &bundle.game_world(), order.kind())
+            .map_err(|error| GenerationFailure::contradiction(error.to_string()))?;
+        self.writer.save_state_update(saved, outcome.state)?;
+        Ok(outcome
+            .fired
+            .map(|record| GenerationOrder::event_after(at, record)))
     }
 
     fn options_step(&self, run: OptionsRun) -> Result<(), JobFailure> {
@@ -316,35 +297,25 @@ impl Job {
         if run == OptionsRun::AfterNarration && !self.options_enabled()? {
             return Ok(());
         }
-        let tail = self.tail()?;
-        let kind = Self::scene_kind(&tail);
-        self.run_step(Step::Options, kind, || {
+        self.run_step(Step::Options, None, || {
+            let settings = self.hook_settings(PresetType::Options)?;
             let bundle = self.world_bundle()?;
-            let start = tail
+            let tail = self.tail()?;
+            let current = tail
                 .current_state()
-                .cloned()
                 .ok_or_else(|| GenerationFailure::missing(Record::CurrentState))?;
             // The run reads the four newest Messages, the Narration it serves among
             // them.
             let story = self.window_before(None, STORY_WINDOW)?;
-            let world = WorldView {
-                room: start.room(&bundle.map),
-                map: &bundle.map,
-                persona: &bundle.persona,
-                characters: &bundle.npcs,
-                present: &start.scene.npcs_in_area,
-            };
-            let input = HookInput {
+            let world = bundle.view(current);
+            let hook_input = HookInput {
                 text: None,
                 player_text: "",
                 story: &story,
                 world: &world,
             };
 
-            let outcome = match self
-                .agent_runner
-                .end_of_job(&input, &self.options_settings()?)
-            {
+            let outcome = match self.agent_runner.end_of_job(&hook_input, &settings) {
                 Ok(Some(offered)) => OptionsResult::Offered(offered),
                 Ok(None) => OptionsResult::Unavailable {
                     reason: "Options agent is not available".to_string(),
@@ -355,77 +326,7 @@ impl Job {
                     raw: error.to_string(),
                 },
             };
-            self.writer
-                .save_options(outcome, run == OptionsRun::AfterNarration)
-        })
-    }
-
-    fn scene_kind(tail: &Tail) -> Kind {
-        match tail.last.kind {
-            MessageKind::EventNarration(_) => Kind::Event,
-            _ => Kind::Narration,
-        }
-    }
-
-    /// The Player's direction for an Impersonate, the Input's own text for a user
-    /// regen, the Trigger's continuation prompt for an event, and otherwise the Input
-    /// the new text follows.
-    fn user_message(
-        &self,
-        order: &GenerationOrder,
-        input: Option<&str>,
-        history: &[StoryRow],
-    ) -> Result<String, JobFailure> {
-        Ok(match &order.generation {
-            Generation::Impersonate { direction } => direction.clone().unwrap_or_default(),
-            Generation::UserRegen => self.tail()?.last.text().to_string(),
-            Generation::Event(record) => {
-                Self::continuation_user_message(history, &record.direction)
-            }
-            Generation::Narration { .. } => match input {
-                Some(text) if !text.is_empty() => text.to_string(),
-                _ => Self::previous_input(history)
-                    .unwrap_or_default()
-                    .to_string(),
-            },
-        })
-    }
-
-    fn continuation_user_message(history: &[StoryRow], direction: &str) -> String {
-        let previous = history
-            .last()
-            .map(|entry| entry.text.as_str())
-            .unwrap_or("");
-        format!(
-            "Previous narration:\n{previous}\n\nTrigger event: {direction}\n\n\
-             Continue the scene naturally, incorporating the trigger event into the narrative. \
-             Do NOT repeat or contradict what was already described. Build naturally on the existing scene."
-        )
-    }
-
-    fn player_text(input: Option<&str>, history: &[StoryRow]) -> String {
-        match input {
-            Some(text) if !text.is_empty() => text.to_string(),
-            _ => history
-                .last()
-                .map(|entry| entry.text.clone())
-                .unwrap_or_default(),
-        }
-    }
-
-    fn previous_input(history: &[StoryRow]) -> Option<&str> {
-        history
-            .last()
-            .filter(|entry| matches!(entry.message_type, MessageType::Input))
-            .map(|entry| entry.text.as_str())
-    }
-
-    /// A new Message follows the whole story; a Retry replaces the last Message, so
-    /// its window ends before it.
-    fn place_before(&self, order: &GenerationOrder) -> Result<Option<u64>, JobFailure> {
-        Ok(match order.place {
-            Place::NewMessage => None,
-            Place::NewSwipeOnLast => Some(self.tail()?.last.id),
+            self.writer.save_options(outcome)
         })
     }
 
@@ -461,6 +362,12 @@ impl Job {
         }
     }
 
+    /// The room the state stands in is not on the map; no engine error lies behind
+    /// the line.
+    fn invalid_room(room_id: &str) -> JobFailure {
+        GenerationFailure::invalid_room(room_id).into()
+    }
+
     /// A read that fails shows the line of its record, with the error in the
     /// disclosure.
     fn read<T>(record: Record, result: Result<T, EngineError>) -> Result<T, JobFailure> {
@@ -494,10 +401,10 @@ impl Job {
     }
 
     fn start_state(&self, order: &GenerationOrder) -> Result<SwipeState, JobFailure> {
-        self.swipe_state_at(order.start, Record::StartState)
+        self.swipe_state_of(order.start, Record::StartState)
     }
 
-    fn swipe_state_at(&self, at: SwipeAt, record: Record) -> Result<SwipeState, JobFailure> {
+    fn swipe_state_of(&self, at: SwipeAt, record: Record) -> Result<SwipeState, JobFailure> {
         Self::present(
             record,
             self.storage.stories().swipe_state(self.writer.game(), at),
@@ -514,14 +421,6 @@ impl Job {
 
     fn options_enabled(&self) -> Result<bool, JobFailure> {
         Ok(self.game_row()?.options_always_on)
-    }
-
-    fn quantifier_settings(&self) -> Result<AgentSettings, JobFailure> {
-        self.hook_settings(PresetType::Quantifier)
-    }
-
-    fn options_settings(&self) -> Result<AgentSettings, JobFailure> {
-        self.hook_settings(PresetType::Options)
     }
 
     fn hook_settings(&self, preset_type: PresetType) -> Result<AgentSettings, JobFailure> {

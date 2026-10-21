@@ -131,7 +131,6 @@ fn record_names() {
         (Record::World, "the world"),
         (Record::Settings, "the settings"),
         (Record::Preset, "the preset"),
-        (Record::Dock, "the options dock"),
     ];
     let error = EngineError::Internal(InternalError::new("the row cannot be read"));
     for (record, name) in rows {

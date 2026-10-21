@@ -103,7 +103,6 @@ pub enum Record {
     World,
     Settings,
     Preset,
-    Dock,
 }
 
 impl Record {
@@ -119,7 +118,6 @@ impl Record {
             Self::World => "the world",
             Self::Settings => "the settings",
             Self::Preset => "the preset",
-            Self::Dock => "the options dock",
         }
     }
 }

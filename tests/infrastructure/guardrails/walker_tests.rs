@@ -452,8 +452,8 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
         files: &[("application/games/catalogue.rs", "pub struct Job {}\n")],
         names: &["matches no file under `application/pipeline/`"],
     },
-    // The case mirrors the rule-7 row: a Job field of a record type is caught, a
-    // field of an id or a text is not.
+    // The case mirrors the rule-7 row: a Job field or a Job method parameter of a
+    // record type is caught, a field or a parameter of an id or a text is not.
     WalkerCase {
         row: TypeCheckRow {
             rule: 7,
@@ -466,7 +466,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
                 "DockRecord",
                 "WorldBundle",
             ],
-            position: TypeCheckPosition::Fields,
+            position: TypeCheckPosition::FieldsAndParameters,
         },
         files: &[
             (
@@ -477,8 +477,16 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
                 "application/pipeline/job.rs",
                 "pub struct Job {\n    writer: JobWriter,\n    game: GameId,\n    tail: Tail,\n}\n",
             ),
+            (
+                "application/pipeline/job.rs",
+                "impl Job {\n    fn save_text(&self, order: &GenerationOrder, text: String, tail: &Tail) {}\n    fn narrate(&self, order: &GenerationOrder, input: Option<&str>) {}\n}\n",
+            ),
         ],
-        names: &["field type `SwipeState`", "field type `Tail`"],
+        names: &[
+            "field type `SwipeState`",
+            "field type `Tail`",
+            "parameter type `Tail`",
+        ],
     },
 ];
 

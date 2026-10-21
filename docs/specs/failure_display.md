@@ -179,7 +179,8 @@ And the story log holds the Narrations of that row
 Examples:
 | Read that fails | Record in the line | Narrations in the story log |
 | the story entries, after the Narration call | the story | the opening and the Narration of the Action |
-| the Swipe state of the saved text, after the Narration call | the saved state | the opening and the Narration of the Action |
+| the Swipe state of the start, after the Narration call | the start state | the opening only |
+| the Swipe state of the saved text, after the analysis call | the saved state | the opening and the Narration of the Action |
 | the World, at the first step | the world | the opening only |
 ```
 

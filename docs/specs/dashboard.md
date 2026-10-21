@@ -114,3 +114,15 @@ Given a storage that rejects the read of the story
 When the client requests GET /debug/state
 Then the response status is "500 Internal Server Error"
 ```
+
+#### Scenario 39.8: A stop that cannot read the dock leaves the Job running
+
+```gherkin
+Given a Game whose Job is held at its narrator call
+And a storage that rejects the read of the dock record
+When the client POST /status/reset-generating
+Then the stop answers "failed"
+And the status poll still answers with the step of the Job
+When the Job's model answer arrives
+Then the Job saves its Narration and the Game is idle
+```

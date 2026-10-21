@@ -697,6 +697,64 @@ fn a_cleared_dock_record_keeps_its_row() {
     );
 }
 
+// CASE notice-keeps-set: the notice-only write replaces the notice and keeps the offered set
+#[test]
+fn the_notice_only_write_keeps_the_offered_set() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let game_id = game_without_messages(&storage, "Docked");
+    let offered = vec!["look around".to_string(), "open the gate".to_string()];
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.put_dock(&DockRecord {
+                offered: offered.clone(),
+                notice: Some(Notice {
+                    reason: "an older reason".to_string(),
+                    raw: "an older raw text".to_string(),
+                }),
+            })
+        })
+        .expect("the dock unit should succeed");
+    let notice = Notice {
+        reason: "Options generation failed".to_string(),
+        raw: "the model wrote no option".to_string(),
+    };
+
+    storage
+        .transaction(game_id, tx_token(), |tx| tx.put_dock_notice(&notice))
+        .expect("the notice unit should succeed");
+
+    let stored = storage
+        .docks()
+        .get(game_id)
+        .expect("the dock read should succeed")
+        .expect("the dock record stays");
+    assert_eq!(stored.offered, offered, "the offered set stays");
+    assert_eq!(stored.notice, Some(notice), "the notice is the new one");
+}
+
+// CASE notice-keeps-set-no-row: the notice-only write on a Game with no dock row leaves an empty offered set
+#[test]
+fn the_notice_only_write_with_no_dock_row_leaves_no_offered_set() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let game_id = game_without_messages(&storage, "Docked");
+    let notice = Notice {
+        reason: "Options generation failed".to_string(),
+        raw: "the model wrote no option".to_string(),
+    };
+
+    storage
+        .transaction(game_id, tx_token(), |tx| tx.put_dock_notice(&notice))
+        .expect("the notice unit should succeed");
+
+    let stored = storage
+        .docks()
+        .get(game_id)
+        .expect("the dock read should succeed")
+        .expect("the notice write makes the row");
+    assert_eq!(stored.offered, Vec::<String>::new());
+    assert_eq!(stored.notice, Some(notice));
+}
+
 // CASE story-active-swipe: the active Swipe of a Message of the Game reads back, and another Game's Message answers none
 #[test]
 fn the_active_swipe_of_a_message_reads_back() {

@@ -69,6 +69,7 @@ flowchart TD
 - The text save shows the text in the story log. The after-narration hook, the game rules and the state update follow it.
 - A user regen ends at the text save. It runs no after-narration hook.
 - A part that fails writes the failure line, which is a save unit, and the Job ends.
+- Each part loads by id the records it uses, makes one call, and returns its result. Between parts only ids, texts and part results move. A save unit reads nothing: the part that calls it loads the values and gives them to it.
 
 ## The Failure Lines
 

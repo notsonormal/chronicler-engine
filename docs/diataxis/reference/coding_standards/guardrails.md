@@ -67,8 +67,8 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | 2 | call site | Rule 2: the active-Game pointer has one reader and one writer. `GameCatalogue` is both — `CurrentGame` reads through it once per request — and `ActiveGame::set` is `pub(super)`, so the compiler holds the write side too. | `tests/infrastructure/guardrails/walker_rows.rs:49` |
 | 3 | call site | Rule 3: only `GameWriter` writes game records. The unit of record writes is opened with a capability token, so `gate.rs` is where a unit starts and no other caller can open one; the storage seam contract gets its token from `test_support`, because its crate cannot call a crate-only constructor. | `tests/infrastructure/guardrails/walker_rows.rs:59` |
 | 13 | call site | Rule 13: one generation path. Only `job.rs` calls the narrator and the hooks of the Agent runner, and its step functions are the one place that does, so no second route to a model call grows beside the Job. The row sees files, not functions, and `job.rs` holds only Job code. A method call is matched through the receiver's name (`narrator`, `agent_runner`), which `JobDeps` keeps. | `tests/infrastructure/guardrails/walker_rows.rs:71` |
-| 7 | type check | Rule 7: between steps, pass ids. A Job holds no record field, so a record a step loads cannot go stale in another step's hands. | `tests/infrastructure/guardrails/walker_rows.rs:93` |
-| 18 | call count | Rule 18: each writer takes the guard once, so a check and its writes are one critical section. Look again when a second lock (for example one guard per Game), an atomic with weak ordering in the write path, or a background Agent save that checks "this Swipe is still active" outside `hold` arrives; then the new primitive earns a `loom` seam contract. | `tests/infrastructure/guardrails/walker_rows.rs:107` |
+| 7 | type check | Rule 7: between steps, pass ids. A Job holds no record field, so a record a step loads cannot go stale in another step's hands; and no function of `job.rs` takes a record parameter, because each step loads the records it uses itself. | `tests/infrastructure/guardrails/walker_rows.rs:95` |
+| 18 | call count | Rule 18: each writer takes the guard once, so a check and its writes are one critical section. Look again when a second lock (for example one guard per Game), an atomic with weak ordering in the write path, or a background Agent save that checks "this Swipe is still active" outside `hold` arrives; then the new primitive earns a `loom` seam contract. | `tests/infrastructure/guardrails/walker_rows.rs:109` |
 
 | Rule | Description | Source |
 |------|-------------|--------|
@@ -97,10 +97,10 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:253` |
 | single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:268` |
 | unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:180` |
-| banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:166` |
-| call site rows | Runs the call-site table: only what a row allows may call its callees. | `tests/infrastructure/guardrails/walkers.rs:393` |
-| type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:425` |
-| call count rows | Runs the call-count table: no function calls a row's callee more than the row allows. | `tests/infrastructure/guardrails/walkers.rs:510` |
+| banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:168` |
+| call site rows | Runs the call-site table: only what a row allows may call its callees. | `tests/infrastructure/guardrails/walkers.rs:395` |
+| type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:427` |
+| call count rows | Runs the call-count table: no function calls a row's callee more than the row allows. | `tests/infrastructure/guardrails/walkers.rs:518` |
 <!-- AUTO-GUARDRAILS: syn END -->
 
 ## 4. Coverage Exclusion Policy

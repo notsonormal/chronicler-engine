@@ -9,13 +9,17 @@ use tower::util::ServiceExt;
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 
 use chronicler_engine::domain::model::agent::Role;
+use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder,
 };
 
 use crate::support::http_assertions::{defined_icons, referenced_icons};
-use crate::support::http_fixtures::seed_offered_set;
-use crate::support::http_requests::{fetch_body, fetch_generating_status, post_action, wait_settled};
+use crate::support::http_fixtures::{seed_offered_set, story_of};
+use crate::support::http_requests::{
+    fetch_body, fetch_generating_status, post_action, post_empty, response_body, wait_for_jobs,
+    wait_settled,
+};
 
 // [docs/specs/dashboard.md] SCENARIO: 39.1
 #[tokio::test]
@@ -257,4 +261,51 @@ async fn test_the_debug_state_answers_500_on_a_storage_failure() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.8
+#[tokio::test]
+async fn stop_dock_read_fails() {
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(Role::Narrator);
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::clone(&model))
+        .storage(Arc::new(storage))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narrator call should reach the model"
+    );
+
+    failures.set(
+        StorageCall::DocksGet,
+        TestOverride::internal("the dock is unreadable"),
+    );
+    let stop = post_empty(&app, "/status/reset-generating").await;
+    failures.clear_all();
+
+    assert_eq!(
+        response_body(stop).await,
+        "failed",
+        "a stop that cannot read the dock answers failed"
+    );
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "narrating",
+        "the Job keeps running: the status still names its step"
+    );
+
+    hold.release();
+    assert!(wait_for_jobs(&state, 2000).await, "the Job should end");
+    assert!(wait_settled(&state, 2000).await, "the Game should end idle");
+    let narrations = story_of(&state)
+        .into_iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 2,
+        "the running Job saved its Narration after the opening"
+    );
 }

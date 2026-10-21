@@ -7,8 +7,10 @@ use std::sync::Arc;
 use chrono::Utc;
 
 use crate::error::{DatabaseContext, EngineError};
+use crate::domain::model::agent::WorldView;
 use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::MapDef;
+use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::utils::game_rules::GameWorld;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
@@ -37,6 +39,17 @@ impl WorldBundle {
             map: &self.map,
             characters: &self.npcs,
             persona_name: &self.persona.sheet.name,
+        }
+    }
+
+    /// What a hook reads of the World, with the Characters present in `state`.
+    pub fn view<'a>(&'a self, state: &'a SwipeState) -> WorldView<'a> {
+        WorldView {
+            room: state.room(&self.map),
+            map: &self.map,
+            persona: &self.persona,
+            characters: &self.npcs,
+            present: &state.scene.npcs_in_area,
         }
     }
 }

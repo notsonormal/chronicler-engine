@@ -54,6 +54,8 @@ pub enum TypeCheckPosition {
     Fields,
     /// Function and method parameters.
     Parameters,
+    /// Both of the above.
+    FieldsAndParameters,
 }
 
 pub struct TypeCheckRow {
@@ -473,14 +475,20 @@ impl BannedTypeVisitor<'_> {
 
 impl<'ast> Visit<'ast> for BannedTypeVisitor<'_> {
     fn visit_field(&mut self, node: &'ast syn::Field) {
-        if matches!(self.row.position, TypeCheckPosition::Fields) {
+        if matches!(
+            self.row.position,
+            TypeCheckPosition::Fields | TypeCheckPosition::FieldsAndParameters
+        ) {
             self.check_type(&node.ty, "field");
         }
         syn::visit::visit_field(self, node);
     }
 
     fn visit_fn_arg(&mut self, node: &'ast syn::FnArg) {
-        if matches!(self.row.position, TypeCheckPosition::Parameters) {
+        if matches!(
+            self.row.position,
+            TypeCheckPosition::Parameters | TypeCheckPosition::FieldsAndParameters
+        ) {
             if let syn::FnArg::Typed(typed) = node {
                 self.check_type(&typed.ty, "parameter");
             }

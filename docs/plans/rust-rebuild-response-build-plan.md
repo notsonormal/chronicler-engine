@@ -325,6 +325,8 @@ Existing tests that must stay green (ticket 20): `options.rs` (the three dock te
 
 **Spec scenarios.** None new: the behaviour that a player sees stays. The stop with a failed dock read is a change only on a storage fault (inferred: no scenario states it today).
 
+**Amendment (R8 review).** The stop with a failed dock read has its own scenario: `dashboard.md` 39.8. `failure_display.md` 38.14 gains a start-state row. The step order of ticket 20 Q11 makes `save_text` load the start state after the model call, so a start-state read fault after the narrator call ends the Job before the Narration is saved. That is the accepted cost.
+
 **Tests.**
 
 | Tier | Id | Asserts |
