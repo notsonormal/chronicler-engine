@@ -80,7 +80,7 @@ impl ScriptedModel {
     #[must_use]
     pub fn turn(self, narration: impl Into<String>) -> Self {
         self.narration(narration)
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
     }
 
     #[must_use]
@@ -94,7 +94,7 @@ impl ScriptedModel {
     }
 
     #[must_use]
-    pub fn analysis(self, text: impl Into<String>) -> Self {
+    pub fn after_narration(self, text: impl Into<String>) -> Self {
         self.reply(Role::Quantifier, text)
     }
 

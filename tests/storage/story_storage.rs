@@ -810,12 +810,12 @@ fn the_stored_inputs_of_a_swipe_read_back() {
         .tail(game_id)
         .unwrap()
         .expect("the story holds a Message");
-    let inputs = tail.last.swipes[0].stored_inputs();
+    let swipe = &tail.last.swipes[0];
 
-    assert!(inputs.impersonated);
-    assert_eq!(inputs.guide_text.as_deref(), Some("make it ominous"));
+    assert!(swipe.impersonated);
+    assert_eq!(swipe.guide_text.as_deref(), Some("make it ominous"));
     assert_eq!(
-        inputs.impersonate_direction.as_deref(),
+        swipe.impersonate_direction.as_deref(),
         Some("as the player")
     );
 }

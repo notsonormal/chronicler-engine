@@ -9,7 +9,6 @@ use crate::domain::model::character::{NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::state::generation_status::Step;
 use crate::domain::model::state::message_types::StoryRow;
-use crate::domain::model::state::trigger_context::EventRecord;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Role {
@@ -90,13 +89,11 @@ pub struct WorldView<'a> {
 
 /// The hook step owns every read and write an Agent needs.
 pub struct HookInput<'a> {
-    pub kind: Kind,
     /// The text the Job saved, for a hook that runs after the narrator call.
     pub text: Option<&'a str>,
     pub player_text: &'a str,
     pub story: &'a [StoryRow],
     pub world: &'a WorldView<'a>,
-    pub event: Option<&'a EventRecord>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

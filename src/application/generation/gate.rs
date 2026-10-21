@@ -6,17 +6,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::adapters::driven::storage::{Storage, Tx, TxToken};
-use crate::domain::model::agent::Kind;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::dock::{DockRecord, Notice};
 use crate::domain::model::game::{GameId, NewGame};
-use crate::domain::model::generation::{GenerationOrder, Place};
-use crate::domain::model::message::{Maker, Message, StoredInputs, Swipe, SwipeAt};
+use crate::domain::model::generation::{
+    GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanRefusal, Place, StoryEnd,
+};
+use crate::domain::model::message::{Maker, Message, Swipe, SwipeAt};
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
-use crate::domain::model::utils::generation_record;
 use crate::error::EngineError;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -43,53 +43,6 @@ pub enum Stopped {
 impl From<EngineError> for Stopped {
     fn from(error: EngineError) -> Self {
         Self::SaveFailed(error)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum JobRequest {
-    /// Free text the player typed. Empty text is a Continue.
-    Action(String),
-    /// `/guide`: a steering direction that shapes the next Narration.
-    Guide(String),
-    /// `/impersonate`: the player dictates their own Persona's Message.
-    Impersonate(Option<String>),
-    /// `/options`: the Options run alone.
-    Options,
-    /// A Retry of the last Message, of the kind the last Message holds.
-    Retry,
-    /// A Retrigger of the Trigger the last Message holds.
-    Retrigger,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OptionsRun {
-    /// The run follows the Job's last Narration, when the toggle is on.
-    AfterNarration,
-    /// The run is the whole Job: `/options`.
-    OnDemand,
-}
-
-/// The order of one request: ids and texts only.
-#[derive(Debug, Clone, PartialEq)]
-pub struct JobPlan {
-    /// The free text to save before the first generation, when the request carries
-    /// any.
-    pub input: Option<String>,
-    /// The first generation. `None` for `/options`.
-    pub first: Option<GenerationOrder>,
-    pub options: OptionsRun,
-}
-
-impl JobPlan {
-    /// The step the status shows from the accept, until the Job names its own: a
-    /// Retry of an event Narration starts in the event step.
-    pub(crate) fn first_step(&self) -> Step {
-        match &self.first {
-            Some(order) if order.kind == Kind::Event => Step::GeneratingEvent,
-            Some(_) => Step::Narrating,
-            None => Step::Options,
-        }
     }
 }
 
@@ -229,9 +182,12 @@ impl GameWriter {
         let job_id = self.next_job_id();
         self.hold(|entries, units| {
             Self::require_idle(entries, game)?;
-            let tail = self.tail_or_refuse(game, units)?;
-            let plan = self.plan_for(game, &request, tail.as_ref(), units)?;
-            self.require_job_data(game, &plan, units)?;
+            let story = self.story_end_or_refuse(game, units)?;
+            let plan = JobPlan::for_request(&request, story).map_err(|refusal| match refusal {
+                PlanRefusal::BadRequest(line) => Refusal::BadRequest(line),
+                PlanRefusal::Missing(name) => self.missing(game, name, units),
+            })?;
+            self.require_records(game, &plan, units)?;
             let step = plan.first_step();
             // The unit lands before the entry: a refused accept makes no entry, so a
             // Game is never busy for a Job that never started.
@@ -418,102 +374,9 @@ impl GameWriter {
         Refusal::Failed(failure)
     }
 
-    fn plan_for(
-        &self,
-        game: GameId,
-        request: &JobRequest,
-        tail: Option<&Tail>,
-        units: &Units,
-    ) -> Result<JobPlan, Refusal> {
-        match request {
-            JobRequest::Options => {
-                if !self.story_has_text(game, units)? {
-                    return Err(Refusal::BadRequest(
-                        "No scene to generate options for yet".to_string(),
-                    ));
-                }
-                Ok(JobPlan {
-                    input: None,
-                    first: None,
-                    options: OptionsRun::OnDemand,
-                })
-            }
-            JobRequest::Retry => {
-                let order = tail
-                    .map(Tail::redo)
-                    .ok_or_else(|| Refusal::BadRequest("No input to retry".to_string()))?;
-                Ok(JobPlan {
-                    input: None,
-                    first: Some(order),
-                    options: OptionsRun::AfterNarration,
-                })
-            }
-            JobRequest::Retrigger => {
-                let order = tail.and_then(Tail::retrigger).ok_or_else(|| {
-                    Refusal::BadRequest("No trigger context available".to_string())
-                })?;
-                Ok(JobPlan {
-                    input: None,
-                    first: Some(order),
-                    options: OptionsRun::AfterNarration,
-                })
-            }
-            JobRequest::Action(text) => {
-                let start = self.require_start(tail, game, units)?;
-                let input = (!text.is_empty()).then(|| text.clone());
-                Ok(self.generation_plan(Kind::Narration, StoredInputs::default(), input, start))
-            }
-            JobRequest::Guide(guide) => {
-                let start = self.require_start(tail, game, units)?;
-                let inputs = StoredInputs {
-                    guide_text: Some(guide.clone()),
-                    ..StoredInputs::default()
-                };
-                Ok(self.generation_plan(Kind::Narration, inputs, None, start))
-            }
-            JobRequest::Impersonate(direction) => {
-                let start = self.require_start(tail, game, units)?;
-                let inputs = StoredInputs {
-                    impersonated: true,
-                    impersonate_direction: direction.clone(),
-                    ..StoredInputs::default()
-                };
-                Ok(self.generation_plan(Kind::Impersonate, inputs, None, start))
-            }
-        }
-    }
-
-    fn generation_plan(
-        &self,
-        kind: Kind,
-        inputs: StoredInputs,
-        input: Option<String>,
-        start: SwipeAt,
-    ) -> JobPlan {
-        JobPlan {
-            input,
-            first: Some(GenerationOrder {
-                kind,
-                place: Place::NewMessage,
-                start,
-                inputs,
-                event: None,
-            }),
-            options: OptionsRun::AfterNarration,
-        }
-    }
-
-    fn require_start(
-        &self,
-        tail: Option<&Tail>,
-        game: GameId,
-        units: &Units,
-    ) -> Result<SwipeAt, Refusal> {
-        tail.map(Tail::current_at)
-            .ok_or_else(|| self.missing(game, "the story", units))
-    }
-
-    fn require_job_data(&self, game: GameId, plan: &JobPlan, units: &Units) -> Result<(), Refusal> {
+    /// The Game row, the Persona and the start state that the plan names: the
+    /// records a Job reads, checked before the Game turns busy.
+    fn require_records(&self, game: GameId, plan: &JobPlan, units: &Units) -> Result<(), Refusal> {
         let row = match self.storage.get_game(game.0) {
             Ok(Some(row)) => row,
             Ok(None) => return Err(self.missing(game, "the game", units)),
@@ -527,14 +390,16 @@ impl GameWriter {
             return Ok(());
         };
         match self.storage.stories().swipe_state(game, order.start) {
-            Ok(Some(_)) => {}
-            Ok(None) => return Err(self.missing(game, "the start state", units)),
-            Err(error) => return Err(self.unreadable(game, "the start state", &error, units)),
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => Err(self.missing(game, "the start state", units)),
+            Err(error) => Err(self.unreadable(game, "the start state", &error, units)),
         }
-        if order.kind == Kind::Impersonate && order.inputs.impersonate_direction.is_none() {
-            return Err(self.missing(game, "the impersonate direction", units));
-        }
-        Ok(())
+    }
+
+    fn story_end_or_refuse(&self, game: GameId, units: &Units) -> Result<StoryEnd, Refusal> {
+        let tail = self.tail_or_refuse(game, units)?;
+        let has_text = self.story_has_text(game, units)?;
+        Ok(StoryEnd { tail, has_text })
     }
 
     /// The end of a request that changes the story under a Game with no running
@@ -646,23 +511,22 @@ impl JobWriter {
         &self,
         order: &GenerationOrder,
         text: String,
-        pre: SwipeState,
+        start: &SwipeState,
     ) -> Result<SavedText, Stopped> {
         self.hold(|_entry, units| {
-            let empties_the_dock = Self::empties_the_dock(order.kind);
+            let empties_the_dock = order.kind().saves_a_narration();
+            let NewSwipe {
+                message_type,
+                kind,
+                swipe,
+            } = order.write(text, start);
             let at = match order.place {
                 Place::NewMessage => {
-                    let swipe = Self::text_swipe(order, text, pre);
-                    let message = Message::new(
-                        generation_record::message_type(order.kind),
-                        Self::message_kind_of(order)?,
-                        swipe.clone(),
-                    );
+                    let message = Message::new(message_type, kind, swipe.clone());
                     self.write_new_message(&message, &swipe, empties_the_dock, units)?
                 }
                 Place::NewSwipeOnLast => {
                     let tail = self.tail_of()?;
-                    let swipe = Self::text_swipe(order, text, pre);
                     self.write_new_swipe(&tail, &swipe, empties_the_dock, units)?
                 }
             };
@@ -788,31 +652,6 @@ impl JobWriter {
             Ok(())
         })?;
         Ok(at)
-    }
-
-    fn text_swipe(order: &GenerationOrder, text: String, pre: SwipeState) -> Swipe {
-        Swipe {
-            event_header: order
-                .event
-                .as_ref()
-                .map(|record| record.header_name.clone()),
-            impersonated: order.inputs.impersonated,
-            guide_text: order.inputs.guide_text.clone(),
-            impersonate_direction: order.inputs.impersonate_direction.clone(),
-            ..Swipe::new(text, generation_record::maker(order.kind), pre)
-        }
-    }
-
-    fn message_kind_of(order: &GenerationOrder) -> Result<MessageKind, Stopped> {
-        generation_record::message_kind(order.kind, order.event.as_ref()).ok_or_else(|| {
-            Stopped::SaveFailed(EngineError::Validation(
-                "the event record is missing".to_string(),
-            ))
-        })
-    }
-
-    fn empties_the_dock(kind: Kind) -> bool {
-        matches!(kind, Kind::Narration | Kind::Event)
     }
 }
 

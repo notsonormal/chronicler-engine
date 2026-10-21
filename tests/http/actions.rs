@@ -132,9 +132,9 @@ async fn test_quantifier_npc_fires_trigger_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The main narration.")
-                .analysis(analysis_report(&["npc_1"], None))
+                .after_narration(analysis_report(&["npc_1"], None))
                 .event_narration("The NPC greets you warmly.")
-                .analysis(analysis_report(&["npc_1"], None)),
+                .after_narration(analysis_report(&["npc_1"], None)),
         ))
         .build_with_state();
 
@@ -176,7 +176,7 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The bartender nods.")
-                .analysis(analysis_report(&["bartender"], None)),
+                .after_narration(analysis_report(&["bartender"], None)),
         ))
         .build_with_state();
 
@@ -225,11 +225,11 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The shopkeeper greets you.")
-                .analysis(analysis_report(&["shopkeeper"], None))
+                .after_narration(analysis_report(&["shopkeeper"], None))
                 .event_narration("The shopkeeper greets you.")
-                .analysis(analysis_report(&["shopkeeper"], None))
+                .after_narration(analysis_report(&["shopkeeper"], None))
                 .narration("The shopkeeper greets you again.")
-                .analysis(analysis_report(&["shopkeeper"], None)),
+                .after_narration(analysis_report(&["shopkeeper"], None)),
         ))
         .build_with_state();
 
@@ -324,9 +324,9 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You step into the shop.")
-                .analysis(analysis_report(&[], None))
+                .after_narration(analysis_report(&[], None))
                 .event_narration("Gabriella emerges from the shadows.")
-                .analysis(analysis_report(&["gabriella"], None)),
+                .after_narration(analysis_report(&["gabriella"], None)),
         ))
         .build_with_state();
 
@@ -432,7 +432,7 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("Main narration preserved.")
-                .analysis(analysis_report(&["npc_1"], None))
+                .after_narration(analysis_report(&["npc_1"], None))
                 .failed(Role::Trigger),
         ))
         .build_with_state();
@@ -514,8 +514,8 @@ async fn test_quantifier_unparseable_answer_completes_action_and_keeps_npcs_http
     assert_quantifier_failure_keeps_npcs(Arc::new(
         ScriptedModel::new()
             .narration("The innkeeper glances your way.")
-            .analysis("There is no room report in this answer.")
-            .analysis("There is no room report in this answer."),
+            .after_narration("There is no room report in this answer.")
+            .after_narration("There is no room report in this answer."),
     ))
     .await;
 }
@@ -596,9 +596,9 @@ async fn test_three_actions_in_sequence_http() {
         ScriptedModel::new()
             .turn("You examine the room.")
             .narration("You look around.")
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration("You check your inventory.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     ));
 
     for command in ["examine room", "look around", "check inventory"] {
@@ -638,9 +638,9 @@ async fn test_sequential_execute_retry_execute_http() {
         ScriptedModel::new()
             .turn("You examine the room.")
             .narration("You examine the room again.")
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration("You look around.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     ));
 
     let _ = post_action(&app, "examine room").await;
@@ -677,9 +677,9 @@ async fn test_async_action_sequence_then_retry_http() {
         ScriptedModel::new()
             .turn("You greet the room.")
             .narration("You examine the room.")
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration("You examine the room again.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     ));
 
     let _ = post_action(&app, "hello").await;
@@ -742,6 +742,38 @@ async fn test_slash_impersonate_produces_input_http() {
         Some("hello"),
         "the impersonate direction must be stored on the swipe"
     );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.18
+#[tokio::test]
+async fn test_bare_slash_impersonate_produces_input_http() {
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().turn("You say hello.")));
+
+    let resp = post_action(&app, "/impersonate").await;
+    assert!(
+        resp.status().is_success(),
+        "a bare /impersonate should accept"
+    );
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the bare impersonate should complete"
+    );
+
+    let messages = story_of(&state);
+    let inputs: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .collect();
+    assert_eq!(inputs.len(), 1, "one Input entry: {messages:?}");
+    let input = inputs[0];
+    assert_eq!(input.text(), "You say hello.");
+    assert!(input.impersonated(), "the impersonate flag is stored");
+    assert_eq!(
+        input.impersonate_direction(),
+        None,
+        "a bare /impersonate stores no direction"
+    );
+    assert_eq!(fetch_generating_status(&app).await, "idle");
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.10
@@ -870,9 +902,9 @@ async fn test_moving_narration_shows_the_room_it_arrives_in_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You walk north into the next room.")
-                .analysis(analysis_report(&[], Some("room2")))
+                .after_narration(analysis_report(&[], Some("room2")))
                 .narration("You look around the new room.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ))
         .build_with_state();
 
@@ -953,7 +985,7 @@ async fn test_narration_that_names_the_current_room_shows_no_room_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You look around.")
-                .analysis(analysis_report(&[], Some("room_1"))),
+                .after_narration(analysis_report(&[], Some("room_1"))),
         ))
         .build_with_state();
 
@@ -980,7 +1012,7 @@ async fn test_two_added_rooms_with_the_same_name_show_one_room_name_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You walk on.")
-                .analysis(analysis_report(&[], Some("Misty Glade"))),
+                .after_narration(analysis_report(&[], Some("Misty Glade"))),
         ))
         .build_with_state();
     let seeded_room = Room {
@@ -1033,7 +1065,7 @@ async fn test_a_move_between_two_map_rooms_with_the_same_name_shows_no_room_http
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You walk north.")
-                .analysis(analysis_report(&[], Some("room2"))),
+                .after_narration(analysis_report(&[], Some("room2"))),
         ))
         .build_with_state();
 

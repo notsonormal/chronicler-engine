@@ -54,22 +54,6 @@ impl SwipeState {
             .or_else(|| self.movement.dynamic_rooms.get(room_id))
     }
 
-    /// The state a Swipe holds from the text save until its analysis updates it:
-    /// the start state, with no trigger context. An event generation marks its own
-    /// one-shot Trigger fired, because the rules read the fired set from there.
-    pub fn pre_analysis(&self, event: Option<&EventRecord>) -> Self {
-        let mut state = self.clone();
-        state.trigger_context = None;
-        if let Some(record) = event {
-            if !record.trigger.trigger_repeat {
-                state
-                    .npc_encounter_log
-                    .mark_trigger_fired(&record.trigger.npc_id, record.trigger.trigger_idx);
-            }
-        }
-        state
-    }
-
     pub fn init_scenario_npcs(
         &mut self,
         scenario: &StartingScenario,

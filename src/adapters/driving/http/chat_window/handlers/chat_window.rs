@@ -12,7 +12,7 @@ use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::render_error;
 use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
 use crate::application::errors::ApplicationError;
-use crate::application::generation::gate::JobRequest;
+use crate::domain::model::generation::JobRequest;
 use crate::application::pipeline::job::Job;
 use crate::domain::model::game::GameId;
 

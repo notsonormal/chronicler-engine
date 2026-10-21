@@ -322,7 +322,7 @@ async fn test_impersonate_keeps_offered_set_http() {
             .options(SET_A)
             .options(SET_B)
             .narration("You say hello.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
     storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))
@@ -368,7 +368,7 @@ async fn test_narration_turn_clears_offered_set_http() {
             .turn("You look around.")
             .options(SET_A)
             .narration("You look around again.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
 
     let resp = post_action(&app, "look").await;
@@ -414,7 +414,7 @@ async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
             .turn("You look around.")
             .options(SET_A)
             .narration("You look around again.")
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .options("no parseable options in this response")
             .options("still no parseable options"),
     );
@@ -504,7 +504,7 @@ async fn test_options_run_follows_a_failed_event_narration_http() {
     let (app, state, storage) = app_with_script(
         ScriptedModel::new()
             .narration("You examine the guard.")
-            .analysis(analysis_report(&["npc_1"], None))
+            .after_narration(analysis_report(&["npc_1"], None))
             .failed(Role::Trigger)
             .options(SET_A),
     );
@@ -704,7 +704,7 @@ async fn test_using_offered_option_submits_as_input_http() {
             .turn("You look around.")
             .options(SET_A)
             .narration("You search the desk.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
 
     let resp = post_action(&app, "look").await;

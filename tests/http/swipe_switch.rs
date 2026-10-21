@@ -163,9 +163,9 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You walk north.")
-                .analysis(analysis_report(&[], Some("room2")))
+                .after_narration(analysis_report(&[], Some("room2")))
                 .narration("You stand still.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ))
         .build_with_state();
 

@@ -16,7 +16,15 @@ These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/opti
 - A Job runs at most two generations: the Narration, and the event Narration of a Trigger that the game rules fired. It then runs at most one Options run.
 - A part that fails ends the Job. Every save unit that landed before the failure stays. When the first generation saved its Narration, the Options run still runs, even when the event generation fails.
 
-A `JobPlan` holds the order of one request, and a `GenerationOrder` the order of one generation.
+## The Plan of a Request
+
+`JobPlan::for_request` in `domain/model/generation.rs` makes the plan of a request. It is a pure function of the request and of the end of the story. A plan holds the free text to save, the first generation and the kind of Options run. A request that has no plan gets one of two refusals: a bad request (`400`) or a missing record (`500`, with the failure line that names the record).
+
+A `GenerationOrder` is the order of one generation. It holds ids and texts only. The kind of the generation carries the data that only that kind has, such as the event record of an event generation.
+
+`GenerationOrder::write` makes the new Swipe of a generation. It is the one place that decides the Message kind, the message type, the maker, the stored inputs, the event header and the Swipe state of the text save.
+
+A Retrigger is allowed when `Tail::retrigger_allowed` says so: the last Message is a Narration that is not an event Narration, or an Impersonate Input, and the current state holds a trigger context. The story log button reads the same rule from the story window.
 
 ## The Job Entry and Busy
 
@@ -28,6 +36,7 @@ No saved record holds the busy mark or the step. A restart loses every job entry
 
 `GameWriter` in `application/generation/gate.rs` is the only code that opens a save unit. It holds every write to a Game's story records, dock record and failure line: accept, stop, edit, delete, swipe switch, create, reset and delete of a Game. A running Job writes through its own `JobWriter`. `GameCatalogue` writes the Game's config columns: its display name, its posture, its mode, its preset selections and its options toggle.
 
+- `accept` reads the end of the story and asks `JobPlan::for_request` for the plan. It then checks that the records the plan names exist: the Game, the Persona and the start state.
 - Each save method of a `JobWriter` checks, in one hold of the registry, that the job entry of the Game still holds the Job's id. When the check fails, the save is refused and the Job ends with no further write.
 - A stop, a reset and a delete of the Game remove the job entry. A late save of their Job lands nowhere.
 - A hold covers one check and its save units. No hold spans an LLM call, so the Jobs of different Games run at the same time.
@@ -119,7 +128,7 @@ The event generation starts from the Swipe state that the state update saved. It
 
 ## Retry Flow
 
-A Retry redoes the generation of the kind that the last Message holds, as a new Swipe on that Message. It starts from the start state of that Message. A Retrigger writes a new event Narration from the event record in the trigger context of the current state.
+A Retry redoes the generation of the kind that the last Message holds, as a new Swipe on that Message. It starts from the start state of that Message. A Retry of a Narration keeps its guide, and a Retry of an Impersonate Input keeps its direction, if it has one. A bare `/impersonate` runs with no direction, and so does a Retry of its Input. A Retrigger writes a new event Narration from the event record in the trigger context of the current state.
 
 ## Movement Branch
 

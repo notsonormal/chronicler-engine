@@ -158,3 +158,13 @@ Then the response renders exactly 50 .log-entry
 And the first .log-entry shows the room "Test Room"
 And no other .log-entry shows a room
 ```
+
+#### Scenario 8.14: The story log offers Retrigger on an Impersonate Input
+
+```gherkin
+Given a Game whose last Message is an Impersonate Input
+And the state of that Input's Swipe holds a trigger context
+When the client GET /fragment/story-log
+Then the last .log-entry carries the `.retrigger-btn` control
+And no other .log-entry carries it
+```

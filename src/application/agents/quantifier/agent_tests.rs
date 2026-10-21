@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::application::agents::quantifier::agent::QuantifierAgent;
 use crate::application::agents::trait_def::AfterNarrationAgent;
 use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, BackendSelector, HookInput, Kind, Role, WorldView,
+    AgentConfig, AgentSettings, BackendSelector, HookInput, Role, WorldView,
 };
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::character::NpcCard;
@@ -85,23 +85,19 @@ impl Turn {
 
     fn input<'a>(&'a self, world: &'a WorldView<'a>) -> HookInput<'a> {
         HookInput {
-            kind: Kind::Narration,
             text: Some(&self.text),
             player_text: "look",
             story: &self.story,
             world,
-            event: None,
         }
     }
 
     fn input_without_text<'a>(&'a self, world: &'a WorldView<'a>) -> HookInput<'a> {
         HookInput {
-            kind: Kind::Narration,
             text: None,
             player_text: "look",
             story: &self.story,
             world,
-            event: None,
         }
     }
 }
@@ -114,7 +110,7 @@ fn settings() -> AgentSettings {
 #[test]
 fn test_the_agent_returns_a_quantifier_result() {
     let turn = Turn::new();
-    let model = Arc::new(ScriptedModel::new().analysis(
+    let model = Arc::new(ScriptedModel::new().after_narration(
         r#"{"npcs_in_room": ["npc_1"], "movement": {"type": "Entering", "destination": "room2"}}"#,
     ));
     let world = turn.world();
@@ -135,7 +131,7 @@ fn test_the_agent_returns_a_quantifier_result() {
 #[test]
 fn test_parsed_report_names_the_characters_present() {
     let turn = Turn::new();
-    let model = Arc::new(ScriptedModel::new().analysis(r#"{"npcs_in_room": ["npc_1"]}"#));
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"npcs_in_room": ["npc_1"]}"#));
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
@@ -148,7 +144,7 @@ fn test_parsed_report_names_the_characters_present() {
 #[test]
 fn test_an_empty_report_replaces_the_scenes_characters() {
     let turn = Turn::new();
-    let model = Arc::new(ScriptedModel::new().analysis(r#"{"npcs_in_room": []}"#));
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"npcs_in_room": []}"#));
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
@@ -164,8 +160,9 @@ fn test_an_empty_report_replaces_the_scenes_characters() {
 #[test]
 fn test_an_unknown_character_id_is_dropped() {
     let turn = Turn::new();
-    let model =
-        Arc::new(ScriptedModel::new().analysis(r#"{"npcs_in_room": ["npc_1", "someone_else"]}"#));
+    let model = Arc::new(
+        ScriptedModel::new().after_narration(r#"{"npcs_in_room": ["npc_1", "someone_else"]}"#),
+    );
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
@@ -178,7 +175,7 @@ fn test_an_unknown_character_id_is_dropped() {
 #[test]
 fn test_parsed_report_names_the_room_the_player_enters() {
     let turn = Turn::new();
-    let model = Arc::new(ScriptedModel::new().analysis(
+    let model = Arc::new(ScriptedModel::new().after_narration(
         r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#,
     ));
     let world = turn.world();
@@ -195,8 +192,8 @@ fn test_an_unparseable_answer_keeps_the_scenes_characters() {
     let turn = Turn::new();
     let model = Arc::new(
         ScriptedModel::new()
-            .analysis("I cannot tell who is here.")
-            .analysis("Still no room report."),
+            .after_narration("I cannot tell who is here.")
+            .after_narration("Still no room report."),
     );
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
@@ -213,8 +210,8 @@ fn test_a_low_confidence_answer_is_read_again() {
     let turn = Turn::new();
     let model = Arc::new(
         ScriptedModel::new()
-            .analysis("no report in this answer")
-            .analysis(
+            .after_narration("no report in this answer")
+            .after_narration(
                 r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#,
             ),
     );
@@ -277,7 +274,7 @@ fn test_a_hook_input_without_a_room_fails() {
 #[test]
 fn test_the_settings_preset_reaches_the_prompt() {
     let turn = Turn::new();
-    let model = Arc::new(ScriptedModel::new().analysis(r#"{"npcs_in_room": []}"#));
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"npcs_in_room": []}"#));
     let settings = AgentSettings {
         preset: Some("Report the Characters for {{user}}.".to_string()),
         max_tokens: None,
@@ -302,7 +299,7 @@ fn test_the_settings_preset_reaches_the_prompt() {
 #[test]
 fn test_a_good_call_is_recorded_with_its_prompts() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
-    let model = Arc::new(ScriptedModel::new().analysis(r#"{"npcs_in_room": []}"#));
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"npcs_in_room": []}"#));
     let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
     let agent = QuantifierAgent::from_config(&config(), recorder).expect("the quantifier builds");
     let turn = Turn::new();

@@ -230,11 +230,11 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `character.rs` — Character sheet data and NPC card definitions
       - `dock.rs` — The dock record: the offered set and the one notice of a Game
       - `game.rs` — Game state and session management
-      - `generation.rs` — The order of one generation: ids and texts only
+      - `generation.rs` — The order of one generation, and the plan rules that turn one request into a plan
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
-      - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
+      - `message.rs` — Message types and conversation history (Message, Swipe)
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
       - `quantifier.rs` — The Quantifier result and the Character transitions the Game rules derive from it
@@ -256,7 +256,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - **utils/**
         - `game_name.rs` — Game name generation with date-based disambiguation.
         - `game_rules.rs` — The game rules: movement, the Characters present and the Triggers, as a pure function of the Swipe state
-        - `generation_record.rs` — What a generation writes as a record: its Message kind, its message type and its maker
         - `mod.rs` — Domain model utility modules.
         - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings/preset services and preset storage.
         - `opening.rs` — The opening Narration of a new Game and the parts only it has.

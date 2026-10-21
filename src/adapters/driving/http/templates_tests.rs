@@ -216,7 +216,7 @@ fn test_story_log_template_renders_the_room_header() {
 }
 
 #[test]
-fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
+fn test_story_log_template_retrigger_button_shown_when_the_window_allows_it() {
     let entries = vec![
         StoryRow {
             id: 1,
@@ -241,31 +241,7 @@ fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
 }
 
 #[test]
-fn test_story_log_template_retrigger_button_hidden_on_event_continuation() {
-    let entries = vec![
-        StoryRow {
-            id: 1,
-            text: "You look around.".to_string(),
-            message_type: MessageType::Narration,
-            timestamp: Utc::now(),
-            ..default_story_row(MessageType::Narration)
-        },
-        StoryRow {
-            id: 2,
-            text: "An NPC appears.".to_string(),
-            message_type: MessageType::Narration,
-            timestamp: Utc::now(),
-            event_header: Some("NPC Event".to_string()),
-            ..default_story_row(MessageType::Narration)
-        },
-    ];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), true);
-    let rendered = template.render().unwrap();
-    assert!(!rendered.contains("retrigger-btn"));
-}
-
-#[test]
-fn test_story_log_template_retrigger_button_hidden_without_last_trigger() {
+fn test_story_log_template_retrigger_button_hidden_when_the_window_refuses_it() {
     let entries = vec![StoryRow {
         id: 1,
         text: "You look around.".to_string(),

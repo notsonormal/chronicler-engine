@@ -50,7 +50,7 @@ async fn test_generating_status_answers_from_live_registry() {
     let model = Arc::new(
         ScriptedModel::new()
             .narration("You look around.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
     let hold = model.hold(Role::Quantifier);
     let (app, state) = TestAppBuilder::default_test()

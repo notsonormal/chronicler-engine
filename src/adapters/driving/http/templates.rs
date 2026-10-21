@@ -30,12 +30,10 @@ pub struct NarrativeLogTemplate {
 }
 
 impl NarrativeLogTemplate {
-    pub fn new(entries: &[StoryWindowEntry], has_last_trigger: bool) -> Self {
+    pub fn new(entries: &[StoryWindowEntry], retrigger_allowed: bool) -> Self {
         let mut views: Vec<StoryRowView> = entries.iter().map(StoryRowView::from).collect();
         if let Some(last) = views.last_mut() {
-            let is_narration = last.log_type == "narration";
-            let is_event_continuation = last.event_header.is_some();
-            last.show_retrigger = has_last_trigger && is_narration && !is_event_continuation;
+            last.show_retrigger = retrigger_allowed;
         }
         Self { entries: views }
     }

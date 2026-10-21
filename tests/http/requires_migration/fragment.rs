@@ -67,7 +67,7 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
             ScriptedModel::new()
                 .turn("First.")
                 .narration("Second.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         );
         app_with_model(model)
     };
@@ -639,7 +639,7 @@ async fn test_switch_swipe_handler_success() {
             ScriptedModel::new()
                 .turn("First.")
                 .narration("Second.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ))
         .build_with_state();
 

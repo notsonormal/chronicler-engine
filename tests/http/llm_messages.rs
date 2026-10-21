@@ -71,7 +71,7 @@ async fn test_failed_attempt_survives_a_later_success_http() {
         ScriptedModel::new()
             .failed(Role::Narrator)
             .narration("You listen.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
 
     let resp = post_action(&app, "look").await;

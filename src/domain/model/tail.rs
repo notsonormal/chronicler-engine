@@ -1,9 +1,7 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! The end of the story, and the rules derived from it
 
-use crate::domain::model::agent::Kind;
-use crate::domain::model::generation::{GenerationOrder, Place};
-use crate::domain::model::message::{Message, StoredInputs, Swipe, SwipeAt};
+use crate::domain::model::message::{Message, SwipeAt};
 use crate::domain::model::state::message_types::MessageKind;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::trigger_context::EventRecord;
@@ -46,63 +44,22 @@ impl Tail {
         }
     }
 
-    /// The order of the last Message again, of the kind the last Message holds.
-    pub fn redo(&self) -> GenerationOrder {
-        let kind = self.redo_kind();
-        let last_swipe = self.last.swipes.get(self.last.active_swipe_index);
-        GenerationOrder {
-            kind,
-            place: Place::NewSwipeOnLast,
-            start: self.start_at(),
-            inputs: match kind {
-                // The opening re-applies nothing the player asked for.
-                Kind::Narration if self.state_before_last.is_none() => StoredInputs::default(),
-                _ => last_swipe.map(Swipe::stored_inputs).unwrap_or_default(),
-            },
-            event: self.event_record(),
-        }
-    }
-
-    /// The event Narration as a new Message at the end of the story, from the
-    /// event record in the trigger context of the current state.
-    pub fn retrigger(&self) -> Option<GenerationOrder> {
-        if !self.retrigger_allowed() {
-            return None;
-        }
-        Some(GenerationOrder {
-            kind: Kind::Event,
-            place: Place::NewMessage,
-            start: self.current_at(),
-            inputs: StoredInputs::default(),
-            event: self.current_state()?.trigger_context.clone(),
-        })
-    }
-
-    fn redo_kind(&self) -> Kind {
-        match self.last.kind {
-            MessageKind::Narration => Kind::Narration,
-            MessageKind::EventNarration(_) => Kind::Event,
-            MessageKind::ImpersonateInput => Kind::Impersonate,
-            MessageKind::TypedInput => Kind::UserRegen,
-        }
-    }
-
-    fn event_record(&self) -> Option<EventRecord> {
-        match &self.last.kind {
-            MessageKind::EventNarration(record) => Some(record.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn retrigger_allowed(&self) -> bool {
+    /// The event record a Retrigger repeats (R-65): a Narration that is not an event
+    /// Narration, or an Impersonate Input, with a trigger context in its current
+    /// state.
+    pub fn retrigger_record(&self) -> Option<&EventRecord> {
         let kind_allows = matches!(
             self.last.kind,
             MessageKind::Narration | MessageKind::ImpersonateInput
         );
-        kind_allows
-            && self
-                .current_state()
-                .is_some_and(|state| state.trigger_context.is_some())
+        if !kind_allows {
+            return None;
+        }
+        self.current_state()?.trigger_context.as_ref()
+    }
+
+    pub fn retrigger_allowed(&self) -> bool {
+        self.retrigger_record().is_some()
     }
 
     /// The story keeps its last Message: a delete needs more than one.

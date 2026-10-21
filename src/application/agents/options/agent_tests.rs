@@ -7,7 +7,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::agents::options::agent::OptionsGeneratorAgent;
 use crate::application::agents::trait_def::EndOfJobAgent;
 use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, BackendSelector, HookInput, Kind, Role, WorldView,
+    AgentConfig, AgentSettings, BackendSelector, HookInput, Role, WorldView,
 };
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
@@ -83,12 +83,10 @@ impl Scene {
 
     fn input<'a>(&'a self, world: &'a WorldView<'a>) -> HookInput<'a> {
         HookInput {
-            kind: Kind::Narration,
             text: Some("You look around the inn."),
             player_text: "look",
             story: &self.story,
             world,
-            event: None,
         }
     }
 }

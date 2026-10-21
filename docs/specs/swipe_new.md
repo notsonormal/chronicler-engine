@@ -348,6 +348,20 @@ When the client switches to its first swipe
 Then the story log shows no room on the guided Narration
 ```
 
+#### Scenario 22.6: Retry of a bare Impersonate Input runs
+
+```gherkin
+Given a game state whose last message is an Input whose active swipe is an impersonation with no impersonate direction
+And a narrator backend that returns "I greet the room." for the impersonation prompt
+When the client sends POST /swipe/new
+And the Game is no longer busy
+Then the story log contains exactly one Input entry (the original message ID unchanged)
+And that Input entry has 2 swipes
+And the active swipe's text is "I greet the room."
+And the active swipe is an impersonation with no impersonate direction
+And the generation status is Idle
+```
+
 ---
 
 ## Properties

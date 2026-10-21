@@ -202,20 +202,21 @@ The Job has the same states one level up. Between two generations, and during th
 
 ### 4.5 Retry, by the kind of the last Message
 
-| Last Message | Generation | Start state | Stored inputs used | Data that must exist (else `500`) |
+| Last Message | Generation | Start state | Data of the generation | Data that must exist (else `500`) |
 |---|---|---|---|---|
-| Opening Narration | Narration | the Swipe state of its first Swipe (the starting state) | none | that Swipe state |
+| Opening Narration | Narration | the Swipe state of its first Swipe (the starting state) | no guide | that Swipe state |
 | Other Narration (after an Input, a continue, a guided Narration) | Narration | the Swipe state of the active Swipe of the Message before | the active Swipe's guide, if any | that Swipe state |
-| Event Narration | event | the same | the Message's event record | that Swipe state; the event record |
-| Impersonate Input | Impersonate | the same | the active Swipe's direction; the Game's impersonate preset as it is now | that Swipe state; the direction |
+| Event Narration | event | the same | the Message's event record, which the kind carries | that Swipe state |
+| Impersonate Input | Impersonate | the same | the active Swipe's direction, or none; the Game's impersonate preset as it is now | that Swipe state |
 | Typed Input | user regen | the same | the text of the active Swipe as it is now | that Swipe state |
 
+- The data of a generation belongs to its kind: an event generation holds its event record, and an Impersonate holds its direction or none. A bare `/impersonate` and a Retry of its Input run with no direction. The `500` check names records only (D-36).
 - The redo reads the story before the last Message, with every edit (R-51).
 - A Retry on an empty story answers `400` (R-44). After a Game starts, its story is never empty (R-76).
 - The new Swipe is made active in its text save (R-41). A failed redo adds no Swipe, and the current state stays as the request found it (R-47, R-49). A redo that was saved stays when a later step fails (R-48).
 - Sources: R-40 to R-61; Opus §5; Marinara: a regenerate is grounded in the state before the Message that it replaces (`resolveRegenerationGameStateAnchor`).
 
-**Retrigger.** The `400` checks of R-65. Start state: the current state. Event record: the current state's trigger context. The event Narration is a new Message at the end of the story (R-62 to R-67).
+**Retrigger.** The `400` checks of R-65: the last Message is a Narration that is not an event Narration, or an Impersonate Input, and the current state holds a trigger context. A typed Input is refused, also when its state holds a trigger context. The story log button reads the same rule. Start state: the current state. Event record: the current state's trigger context. The event Narration is a new Message at the end of the story (R-62 to R-67).
 
 ### 4.6 What each LLM call reads (a free point of the spec)
 
@@ -327,6 +328,7 @@ Ticket 23 compares each row with the code.
 | D-33 | The step loads each Agent's settings and preset when its hook starts, and passes them as values. Agents and the narrator do not read storage. | T24 Q3; T25 Q2 | Agents read the Settings and presets themselves (code) |
 | D-34 | The build makes only the hooks that have an Agent: after narration and the end of the Job. The before-narration hook comes with its first Agent, at the place that D-29 fixes. | T24 Q7; T19 Q7, Q8 | All hooks at once |
 | D-35 | The persistence rule (between steps pass ids; a step loads what it needs when it starts; a save writes only what changed) and the guardrail rules of sketch 25 §6.2, with the changes of sketch 24 §4, are part of the design. The build writes each guardrail before or with the code that it guards, and each guardrail states its reason in a comment. | T25 Q2, Q6, Q8; T24 Q4; T26 R8 (the order check of rule 13 becomes the R-11a outcome test) | A written list of rules for people to follow |
+| D-36 | The kind of a generation carries its own data: a Narration its guide, an Impersonate its direction or none, an event generation its event record. A bare `/impersonate` runs, and so does a Retry of its Input. The plan rules are a pure function of the request and the end of the story, and the writer holds no planning. | Response build T19 Q1, Q2, Q9 (rebuild-build tickets) | A direction that must exist (`500`); a plan made in the writer |
 
 ## 10. The 36 known problems
 

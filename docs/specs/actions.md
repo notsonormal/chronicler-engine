@@ -324,6 +324,18 @@ And no player-input message's text is "/impersonate hello"
 And the generation status is Idle
 ```
 
+#### Scenario 1.18: A bare `/impersonate` writes an Impersonate Input
+
+```gherkin
+Given a Game whose story log holds only its opening Narration
+And a narrator backend that returns a non-empty text for any prompt
+When the client POST /action with command="/impersonate"
+And the Game is no longer busy
+Then the story log gained exactly one player-input message
+And that message is an impersonation with no impersonate direction
+And the generation status is Idle
+```
+
 #### Scenario 1.10: `/guide` dispatches as guided generation and does not persist a player-input message
 
 ```gherkin

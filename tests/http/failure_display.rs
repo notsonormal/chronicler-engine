@@ -419,7 +419,7 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The room waits.")
-                .analysis("{\"npcs_in_room\": [], \"movement\": null}"),
+                .after_narration("{\"npcs_in_room\": [], \"movement\": null}"),
         ))
         .build_with_state();
     corrupt_start_state(&storage, active_game_of(&state), |broken| {

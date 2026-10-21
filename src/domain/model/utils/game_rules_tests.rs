@@ -7,7 +7,9 @@ use proptest::prelude::*;
 
 use crate::domain::model::agent::Kind;
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
+use crate::domain::model::generation::GenerationOrder;
 use crate::domain::model::map::{MapDef, Room};
+use crate::domain::model::message::SwipeAt;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::movement::MovementState;
 use crate::domain::model::state::scene_state::SceneState;
@@ -220,6 +222,21 @@ fn matched(swipe: &mut SwipeState, deps: &RulesDeps, named: &[&str]) -> Option<E
     rule_step(swipe, &quantifier(named, None), deps)
         .expect("the rule step keeps the state consistent")
         .fired
+}
+
+/// The state the text save of an event Narration writes: the Swipe state the rules
+/// read for the generation after it.
+fn event_state_of(start: &SwipeState, record: &EventRecord) -> SwipeState {
+    GenerationOrder::event_after(
+        SwipeAt {
+            message: 1,
+            swipe: 0,
+        },
+        record.clone(),
+    )
+    .write(String::new(), start)
+    .swipe
+    .state
 }
 
 #[test]
@@ -506,7 +523,7 @@ fn test_a_one_shot_trigger_does_not_fire_again_from_the_state_of_its_event() {
 
     let fired = matched(&mut case.swipe, &case.deps, &["gabriella"]).expect("the Trigger fires");
 
-    let mut event_state = case.swipe.pre_analysis(Some(&fired));
+    let mut event_state = event_state_of(&case.swipe, &fired);
     assert!(
         matched(&mut event_state, &case.deps, &["gabriella"]).is_none(),
         "a one-shot Trigger fires once"
@@ -773,7 +790,7 @@ proptest! {
         let case = trigger_case(trigger, fired_before, false, 0);
         let record = event_record_of("gabriella", "Test Event", repeat);
 
-        let mut event_state = case.swipe.pre_analysis(Some(&record));
+        let mut event_state = event_state_of(&case.swipe, &record);
 
         prop_assert_eq!(
             matched(&mut event_state, &case.deps, &["gabriella"]).is_some(),

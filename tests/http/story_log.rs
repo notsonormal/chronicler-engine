@@ -12,6 +12,7 @@ use chronicler_engine::test_support::{
     TestDataBuilder, TestNpc,
 };
 
+use crate::support::app_wiring::app_after_an_impersonate_with_a_failed_event;
 use crate::support::http_assertions::{
     icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
 };
@@ -29,7 +30,7 @@ async fn test_delete_last_between_actions_http() {
             ScriptedModel::new()
                 .turn("You examine the room.")
                 .narration("You look around.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ))
         .build_with_state();
 
@@ -78,9 +79,9 @@ async fn test_delete_mid_sequence_http() {
             ScriptedModel::new()
                 .turn("You examine the room.")
                 .narration("You look around.")
-                .analysis(analysis_report(&[], None))
+                .after_narration(analysis_report(&[], None))
                 .narration("You check the door.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ))
         .build_with_state();
 
@@ -176,7 +177,7 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
             ScriptedModel::new()
                 .turn("You examine the room.")
                 .narration("The room is empty.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ))
         .build_with_state();
 
@@ -368,7 +369,7 @@ async fn test_story_log_icon_buttons_have_accessible_names() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You look around.")
-                .analysis(analysis_report(&["npc_1"], None))
+                .after_narration(analysis_report(&["npc_1"], None))
                 .failed(Role::Trigger),
         ))
         .build_with_state();
@@ -406,7 +407,7 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
     let model = Arc::new(
         ScriptedModel::new()
             .narration("The room waits.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
     let hold = model.hold(Role::Quantifier);
     let (app, state) = TestAppBuilder::default_test()
@@ -457,4 +458,32 @@ async fn test_in_a_long_story_the_oldest_entry_shows_its_room() {
             "entry {id} holds the room the entry before it holds, so it shows none"
         );
     }
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.14
+#[tokio::test]
+async fn test_the_story_log_offers_retrigger_on_an_impersonate_input() {
+    let (app, state) = app_after_an_impersonate_with_a_failed_event().await;
+    let last = story_of(&state).pop().expect("the story is not empty");
+    assert!(
+        last.impersonated(),
+        "the story ends on the Impersonate Input"
+    );
+
+    let body = fetch_body(&app, "/fragment/story-log").await;
+
+    let entries = log_entries(&body);
+    let (_, markup) = entries.last().expect("the last .log-entry");
+    assert!(
+        markup.contains("retrigger-btn"),
+        "the Impersonate Input offers Retrigger: {markup}"
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|(_, markup)| markup.contains("retrigger-btn"))
+            .count(),
+        1,
+        "only the last .log-entry offers Retrigger"
+    );
 }

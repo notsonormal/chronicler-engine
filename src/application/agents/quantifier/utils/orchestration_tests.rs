@@ -222,7 +222,7 @@ fn determine_npcs_with_room(
     player_action: &str,
     recorder: &LlmCallRecorder,
 ) -> QuantifierReading {
-    use crate::domain::model::agent::{HookInput, Kind, WorldView};
+    use crate::domain::model::agent::{HookInput, WorldView};
     use crate::domain::model::state::message_types::StoryRow;
     let map = map_with_room(current_room);
     let persona = TestPersona::standard();
@@ -237,12 +237,10 @@ fn determine_npcs_with_room(
         present: scene_npcs,
     };
     let input = HookInput {
-        kind: Kind::Narration,
         text: Some(player_action),
         player_text: player_action,
         story: &story,
         world: &world,
-        event: None,
     };
     determine_npcs_in_room(
         &input,

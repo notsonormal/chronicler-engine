@@ -192,9 +192,9 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
     let model = Arc::new(
         ScriptedModel::new()
             .narration(STOPPED_NARRATION)
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration(NEXT_NARRATION)
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
     let stopped_hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
@@ -414,9 +414,9 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
     let model = Arc::new(
         ScriptedModel::new()
             .narration(GAME_A_NARRATION)
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration(GAME_B_NARRATION)
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
     let hold_a = model.hold(Role::Narrator);
     let (app, state, storage) = app_with_script(Arc::clone(&model));
@@ -588,9 +588,9 @@ fn trigger_world() -> chronicler_engine::test_support::TestData {
 fn triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
     ScriptedModel::new()
         .narration(narration)
-        .analysis(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["npc_1"], None))
         .event_narration(event_narration)
-        .analysis(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["npc_1"], None))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -745,7 +745,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                 } else {
                     ScriptedModel::new()
                         .narration(SCRIPTED_NARRATION)
-                        .analysis(analysis_report(&[], Some(MOVED_ROOM)))
+                        .after_narration(analysis_report(&[], Some(MOVED_ROOM)))
                 }
                 .options(OFFERED_SET),
             );
@@ -770,7 +770,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             let model = Arc::new(
                 ScriptedModel::new()
                     .narration(SCRIPTED_NARRATION)
-                    .analysis(analysis_report(&[], Some(MOVED_ROOM))),
+                    .after_narration(analysis_report(&[], Some(MOVED_ROOM))),
             );
             let hold = model.hold(row.held);
             let (app, state, storage) = app_with_script(Arc::clone(&model));

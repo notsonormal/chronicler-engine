@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! Message types and conversation history (Message, Swipe, stored generation inputs)
+//! Message types and conversation history (Message, Swipe)
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -10,14 +10,6 @@ use crate::domain::model::state::swipe_state::SwipeState;
 pub struct SwipeAt {
     pub message: u64,
     pub swipe: usize,
-}
-
-/// What the player asked for when the Swipe's text was written.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct StoredInputs {
-    pub impersonated: bool,
-    pub guide_text: Option<String>,
-    pub impersonate_direction: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,14 +46,6 @@ impl Swipe {
             impersonate_direction: None,
             state,
             maker,
-        }
-    }
-
-    pub fn stored_inputs(&self) -> StoredInputs {
-        StoredInputs {
-            impersonated: self.impersonated,
-            guide_text: self.guide_text.clone(),
-            impersonate_direction: self.impersonate_direction.clone(),
         }
     }
 }
