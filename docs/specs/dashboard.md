@@ -74,6 +74,7 @@ Examples:
 | Impersonate | the analysis call | quantifying | the Input of the Job and no Narration |
 | Retry of a typed Input | the narrator call | narrating | the Messages of the story before the Retry |
 | event Narration | the event narrator call | generating-event | the Narration that fired the Trigger, and no event Narration |
+| event Narration | the analysis call | quantifying | the Input of the Job, the Narration that fired the Trigger and the event Narration, with the one-shot Trigger fired in the state of the event Narration |
 
 A stop inside a save unit is not observable: a save unit takes milliseconds, so a stop just before one leaves the records of the model call before it.
 ```
@@ -125,4 +126,30 @@ Then the stop answers "failed"
 And the status poll still answers with the step of the Job
 When the Job's model answer arrives
 Then the Job saves its Narration and the Game is idle
+```
+
+#### Scenario 39.9: A status poll that cannot read the Game answers with a failure line
+
+```gherkin
+Given a Game with no Job
+And a storage that rejects the read of the Game
+When the client requests GET /status/generating
+Then the response body carries the line "The data for this request is missing: the game."
+And the response body is not "idle"
+```
+
+#### Scenario 39.10: With no active Game, the stop answers "failed"
+
+```gherkin
+Given no active Game
+When the client POST /status/reset-generating
+Then the stop answers "failed"
+```
+
+#### Scenario 39.11: With no active Game, the status poll answers "idle"
+
+```gherkin
+Given no active Game
+When the client requests GET /status/generating
+Then the response body is "idle"
 ```

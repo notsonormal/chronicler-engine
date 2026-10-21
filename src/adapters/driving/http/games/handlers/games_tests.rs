@@ -1,4 +1,4 @@
-use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
+use axum::{body::to_bytes, http::StatusCode};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driven::storage::{StorageCall, TestOverride};
@@ -28,13 +28,9 @@ async fn test_switch_game_ok() {
     let _ = state.game_catalogue.create_game("test", "test_player");
     let games = state.game_catalogue.list_games().unwrap();
     if let Some(game) = games.first() {
-        let result =
+        let response =
             switch_game_handler(axum::extract::State(state), axum::extract::Path(game.id)).await;
-        let status = match result {
-            Ok(resp) => resp.status(),
-            Err(e) => e.into_response().status(),
-        };
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
 

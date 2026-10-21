@@ -86,7 +86,6 @@ impl Turn {
     fn input<'a>(&'a self, world: &'a WorldView<'a>) -> HookInput<'a> {
         HookInput {
             text: Some(&self.text),
-            player_text: "look",
             story: &self.story,
             world,
         }
@@ -95,7 +94,6 @@ impl Turn {
     fn input_without_text<'a>(&'a self, world: &'a WorldView<'a>) -> HookInput<'a> {
         HookInput {
             text: None,
-            player_text: "look",
             story: &self.story,
             world,
         }

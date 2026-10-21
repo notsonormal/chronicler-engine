@@ -20,7 +20,8 @@ use crate::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GamesPanelTemplate, PersonaRowView,
 };
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::render_error;
+use crate::adapters::driving::http::utils::fragment::{render_failure_response, render_response};
+use crate::adapters::driving::http::utils::error::{action_error_response, render_error};
 use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
 use crate::adapters::driving::http::view_models::SafeHtml;
@@ -34,7 +35,10 @@ pub async fn list_games_fragment(
     };
 
     let posture_html = match &active_game {
-        Some(game) => posture_controls_html(&state, game),
+        Some(game) => match posture_controls_html(&state, game) {
+            Ok(html) => html,
+            Err(e) => return render_failure_response(&e),
+        },
         None => String::new(),
     };
 
@@ -68,7 +72,7 @@ pub async fn list_games_fragment(
         saved_games_empty: SafeHtml::new(GamesPanelTemplate::saved_games_empty_html()),
     };
 
-    ok(template.render().unwrap_or_default())
+    render_response(&template)
 }
 
 fn current_and_saved_games(
@@ -108,12 +112,11 @@ pub async fn create_game_handler(
     Ok(ok_refresh())
 }
 
-pub async fn switch_game_handler(
-    State(state): State<AppState>,
-    Path(id): Path<u64>,
-) -> Result<Response, ApplicationError> {
-    state.game_catalogue.switch_game(id)?;
-    Ok(ok_refresh())
+pub async fn switch_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
+    match state.game_catalogue.switch_game(id) {
+        Ok(()) => ok_refresh(),
+        Err(e) => action_error_response(e, "Failed to switch game"),
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -219,7 +222,10 @@ pub async fn update_game_presets_handler(
 /// failures stay 500s so htmx leaves the page alone.
 fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError>) -> Response {
     match result {
-        Ok(game) => ok(posture_controls_html(state, &game)),
+        Ok(game) => match posture_controls_html(state, &game) {
+            Ok(html) => ok(html),
+            Err(e) => render_failure_response(&e),
+        },
         Err(e) if e.is_user_displayable() => ok(render_error(&e.to_string())),
         Err(e) => internal_error(render_error(&e.to_string())),
     }
@@ -227,7 +233,7 @@ fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError
 
 /// The posture controls still render on a preset-load failure, because the
 /// auto-saves depend on them.
-fn posture_controls_html(state: &AppState, game: &Game) -> String {
+fn posture_controls_html(state: &AppState, game: &Game) -> askama::Result<String> {
     let (libraries, preset_load_error) = match load_preset_libraries(state) {
         Ok(libraries) => (libraries, None),
         Err(e) => (Default::default(), Some(e.to_string())),
@@ -237,7 +243,7 @@ fn posture_controls_html(state: &AppState, game: &Game) -> String {
     let mut template =
         GamePostureTemplate::from_game(game, &system, &quantifier, &impersonate, &options);
     template.preset_load_error = preset_load_error;
-    template.render().unwrap_or_default()
+    template.render()
 }
 
 /// The preset libraries the posture picker lists, in

@@ -238,7 +238,6 @@ fn determine_npcs_with_room(
     };
     let input = HookInput {
         text: Some(player_action),
-        player_text: player_action,
         story: &story,
         world: &world,
     };

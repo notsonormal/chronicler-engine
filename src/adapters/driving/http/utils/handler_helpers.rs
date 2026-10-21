@@ -1,17 +1,7 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! Handler-level utilities: shared template render + option string + preset helpers.
+//! Handler-level utilities: option string and storage-id helpers.
 
-use axum::response::Html;
 use uuid::Uuid;
-
-pub(crate) fn render_template<T: askama::Template>(template: T) -> Html<String> {
-    match template.render() {
-        Ok(html) => Html(html),
-        Err(e) => Html(crate::adapters::driving::http::utils::error::render_error(
-            &format!("Template error: {e}"),
-        )),
-    }
-}
 
 /// Empty string → `None`; otherwise `Some(value.to_string())`.
 pub(crate) fn opt_string(value: &str) -> Option<String> {

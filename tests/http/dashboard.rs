@@ -309,3 +309,54 @@ async fn stop_dock_read_fails() {
         "the running Job saved its Narration after the opening"
     );
 }
+
+// [docs/specs/dashboard.md] SCENARIO: 39.9
+#[tokio::test]
+async fn status_read_fails() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(storage))
+        .build();
+
+    failures.set(
+        StorageCall::GetGame,
+        TestOverride::internal("the Game is unreadable"),
+    );
+    let status = fetch_generating_status(&app).await;
+
+    assert!(
+        status.contains("The data for this request is missing: the game."),
+        "a status read that fails answers with a failure line, got: {status}"
+    );
+    assert_ne!(status.trim(), "idle");
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.10
+#[tokio::test]
+async fn stop_with_no_active_game() {
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(empty_sqlite_storage()))
+        .skip_seeding(true)
+        .build();
+
+    assert_eq!(
+        response_body(post_empty(&app, "/status/reset-generating").await).await,
+        "failed",
+        "a stop with no active Game answers failed"
+    );
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.11
+#[tokio::test]
+async fn status_with_no_active_game() {
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(empty_sqlite_storage()))
+        .skip_seeding(true)
+        .build();
+
+    assert_eq!(
+        fetch_generating_status(&app).await,
+        "idle",
+        "a status poll with no active Game answers idle"
+    );
+}

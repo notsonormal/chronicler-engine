@@ -116,7 +116,7 @@ fn build_wired_app(
         game_writer.clone(),
         Arc::clone(&active_game),
         initial_game,
-    );
+    )?;
     let game_view_query = GameViewQuery::new(Arc::clone(&storage), game_writer.clone());
     tracing::info!("Narrator: provider={}", recorder.provider_label());
     let job_deps = JobDeps {

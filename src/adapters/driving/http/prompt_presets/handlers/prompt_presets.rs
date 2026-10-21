@@ -17,7 +17,8 @@ use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response,
     error_fragment_response,
 };
-use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, render_template};
+use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
+use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
 
 use crate::adapters::driving::http::prompt_presets::templates::prompt_presets::PromptPresetsTemplate;
 
@@ -105,7 +106,10 @@ pub async fn panel_handler(State(app_state): State<AppState>) -> Response<Body> 
         Err(e) => return error_fragment_response(format!("Load failed: {e}")),
     };
 
-    render_template(presets_template(&app_state, &settings)).into_response()
+    Html(render_or_error_fragment(&presets_template(
+        &app_state, &settings,
+    )))
+    .into_response()
 }
 
 /// Checkbox fields encode the mode flags: a checked box posts
@@ -294,5 +298,8 @@ pub async fn activate_preset_handler(
         Err(e) => return action_failure_response(format!("Save failed: {e}")),
     };
 
-    render_template(presets_template(&app_state, &settings)).into_response()
+    Html(render_or_error_fragment(&presets_template(
+        &app_state, &settings,
+    )))
+    .into_response()
 }

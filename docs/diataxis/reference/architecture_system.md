@@ -37,18 +37,7 @@ The settings row is the read source for the whole engine. Every consumer resolve
 
 ## AppState collaborators
 
-`AppState` is the handler-facing bundle produced by `bootstrap/wiring.rs` (`WiredApp`) and passed to the Axum router. It exposes the named collaborators directly, with no service façade between HTTP handlers and the application layer:
-
-- `game_writer: GameWriter` — the writer rule: every write to a Game's records, and the registry of job entries.
-- `job_deps: JobDeps` — what `Job::start` needs: the narrator, the Agent runner, storage and the watch on Job tasks.
-- `game_catalogue: GameCatalogue` — game lifecycle (create/switch/delete/list/reset/active id). It is the only reader and the only writer of `ActiveGame`.
-- `game_view_query: GameViewQuery` — read-side fragments for the UI and debug state, and the status rule.
-- `world_catalogue: WorldCatalogue` — world CRUD.
-- `persona_catalogue: PersonaCatalogue` — persona CRUD.
-- `settings_service: SettingsService` — settings persistence.
-- `prompt_preset_service: PromptPresetService` — prompt-preset CRUD, the preset of a Game for the Narrator and for each hook, and the rules of a preset edit and a preset delete.
-- `connection_test_service: ConnectionTestService` — one short provider call that records nothing.
-- `text_check_service: Arc<TextCheckService>` — player-command spelling/grammar check.
+`AppState` is the handler-facing bundle that `bootstrap/wiring.rs` (`WiredApp`) builds and the Axum router receives. A handler calls the application layer directly, through the named collaborators of the bundle. The table in "Who Owns What" shows which part owns and writes each record.
 
 ## Who Owns What
 

@@ -53,4 +53,4 @@ Choose a candidate, or a combination, from Q1 to Q4. Write the spec scenarios. W
 ## Out of scope
 
 - The size and the rule of the story window of the story log itself: ticket 23 decides those.
-- The windows of the model calls (`STORY_WINDOW` of the agents, the narrator history cap).
+- The windows of the model calls (`AGENT_HISTORY_WINDOW` of the agents, the narrator history cap).

@@ -2,6 +2,7 @@
 //! Games templates
 
 use askama::Template;
+use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::template_helpers::select_options_html;
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
 use crate::domain::model::game::Game;
@@ -139,7 +140,7 @@ struct SavedGamesEmptyTemplate;
 
 impl GamesPanelTemplate {
     pub fn saved_games_empty_html() -> String {
-        SavedGamesEmptyTemplate.render().unwrap_or_default()
+        render_or_error_fragment(&SavedGamesEmptyTemplate)
     }
 }
 

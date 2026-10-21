@@ -84,7 +84,6 @@ impl Scene {
     fn input<'a>(&'a self, world: &'a WorldView<'a>) -> HookInput<'a> {
         HookInput {
             text: Some("You look around the inn."),
-            player_text: "look",
             story: &self.story,
             world,
         }

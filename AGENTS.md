@@ -136,8 +136,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - **utils/**
           - `current_game.rs` — `CurrentGame` — the request's Game, read once per request.
           - `error.rs` — Error rendering helpers for HTTP fragments.
-          - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
-          - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
+          - `fragment.rs` — Fragment-rendering glue: the try-render wrapper for AppState renderers and the template render helpers.
+          - `handler_helpers.rs` — Handler-level utilities: option string and storage-id helpers.
           - `mod.rs` — HTTP utility modules.
           - `response.rs` — HTTP response helpers
           - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`

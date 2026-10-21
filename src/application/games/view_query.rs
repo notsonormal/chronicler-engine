@@ -201,7 +201,7 @@ impl GameViewQuery {
         Ok(self.storage.docks().get(game_id)?.unwrap_or_default())
     }
 
-    pub fn status(&self, game_id: GameId) -> Result<Status, ApplicationError> {
+    pub fn status(&self, game_id: GameId) -> Result<Status, EngineError> {
         if let Some(step) = self.busy_step(game_id) {
             return Ok(Status::Busy(step));
         }

@@ -36,3 +36,12 @@ And that Job's model answer arrives after the reset
 Then the new Game's story log holds its opening Narration
 And the new Game's story log holds no Input and no Narration of the Job the reset ended
 ```
+
+#### Scenario 7.4: A reset with no active Game answers 400
+
+```gherkin
+Given no active Game
+When the client POST /reset
+Then the response status is "400 BAD_REQUEST"
+And the response body mentions "No active game"
+```

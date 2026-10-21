@@ -117,7 +117,7 @@ The story log derives the room name that a Message shows from the Swipe state of
 
 One save unit creates a Game. It writes the Game record, an empty dock record and the opening Narration. The opening Narration holds one Swipe: the World's opening text, which can be empty, and the starting state. No LLM call writes it. A reset runs the same unit, so a Game always holds its opening Narration.
 
-A Game switch moves the active-Game pointer and touches the Game's `updated_at`. `GameCatalogue` is the only writer of the pointer.
+A Game switch touches the Game's `updated_at` and then moves the active-Game pointer. `GameCatalogue` is the only writer of the pointer.
 
 ## Trigger Evaluation
 

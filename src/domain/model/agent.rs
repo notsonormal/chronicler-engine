@@ -76,7 +76,8 @@ impl Kind {
     }
 }
 
-pub const STORY_WINDOW: usize = 4;
+/// How many of the newest Messages an Agent reads as its history.
+pub const AGENT_HISTORY_WINDOW: usize = 4;
 
 pub struct WorldView<'a> {
     /// `None` when the state names a room the map does not know.
@@ -91,7 +92,6 @@ pub struct WorldView<'a> {
 pub struct HookInput<'a> {
     /// The text the Job saved, for a hook that runs after the narrator call.
     pub text: Option<&'a str>,
-    pub player_text: &'a str,
     pub story: &'a [StoryRow],
     pub world: &'a WorldView<'a>,
 }

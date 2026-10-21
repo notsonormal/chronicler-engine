@@ -236,8 +236,8 @@ impl Storage {
 }
 
 impl Storage {
-    /// The newest Game of a World is picked by `updated_at`, which
-    /// `ActiveGame::set` relies on.
+    /// The `updated_at` of a Game orders the Games of a World that hold no
+    /// Message.
     pub fn touch_game_updated_at(&self, game_id: GameId) -> Result<(), EngineError> {
         self.with_backend_mut(StorageCall::TouchGameUpdatedAt, |backend| match backend {
             Backend::Sqlite { pool } => {

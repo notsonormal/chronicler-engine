@@ -68,6 +68,17 @@ Then Game A's story log holds its own Narration and no Narration of Game B
 And Game B's story log holds its own Narration and no Narration of Game A
 ```
 
+#### Scenario 18.5: A switch that the storage rejects answers 500 and the active Game stays
+
+```gherkin
+Given two created games with ids "id1" and "id2", where "id2" is the active game
+And the storage rejects the write that records a switch to a Game
+When the client POST /games/{id1}/switch
+Then the response status is "500 INTERNAL_SERVER_ERROR"
+And the response body is an error fragment naming the storage failure
+And the active game is still "id2"
+```
+
 ### Delete
 
 #### Scenario 19.1: Deleting a non-active game returns success

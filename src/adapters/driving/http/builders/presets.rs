@@ -4,7 +4,7 @@
 use askama::Template;
 
 use crate::adapters::driving::http::builders::forms::{textarea_field, textarea_field_readonly};
-use crate::adapters::driving::http::utils::handler_helpers::render_template;
+use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::response::html_escape;
 use crate::adapters::driving::http::view_models::SafeHtml;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
@@ -224,7 +224,7 @@ fn truncated_preview(preset: &PromptPreset) -> String {
 }
 
 pub(crate) fn preset_card_html(preset: &PromptPreset, settings: &AppSettings) -> String {
-    render_template(PresetCardTemplate::from_settings(preset, settings)).0
+    render_or_error_fragment(&PresetCardTemplate::from_settings(preset, settings))
 }
 
 pub(crate) fn preset_card_view(preset: &PromptPreset, settings: &AppSettings) -> SafeHtml {

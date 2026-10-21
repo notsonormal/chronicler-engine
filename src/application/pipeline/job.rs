@@ -17,7 +17,7 @@ use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
 use crate::application::prompting::token_budget::TokenBudget;
 use crate::application::prompting::NpcContext;
-use crate::domain::model::agent::{AgentSettings, HookInput, Kind, STORY_WINDOW};
+use crate::domain::model::agent::{AgentSettings, HookInput, Kind, AGENT_HISTORY_WINDOW};
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::game::{Game, GameId};
 use crate::domain::model::generation::{GenerationOrder, JobPlan, JobRequest, OptionsRun, Place};
@@ -157,7 +157,7 @@ impl Job {
         }
 
         let quantified = self.run_step(Step::Quantifying, Some(kind), || {
-            self.analyse(order, at, &text, input)
+            self.analyse(order, at, &text)
         })?;
         self.run_step(Step::Quantifying, Some(kind), || {
             self.update_state(order, saved, &quantified)
@@ -256,16 +256,14 @@ impl Job {
         order: &GenerationOrder,
         saved: SwipeAt,
         text: &str,
-        input: Option<&str>,
     ) -> Result<QuantifierResult, JobFailure> {
         let settings = self.hook_settings(PresetType::Quantifier)?;
         let bundle = self.world_bundle()?;
         let start = self.start_state(order)?;
-        let history = self.window_before(Some(saved.message), STORY_WINDOW)?;
+        let history = self.window_before(Some(saved.message), AGENT_HISTORY_WINDOW)?;
         let world = bundle.view(&start);
         let hook_input = HookInput {
             text: Some(text),
-            player_text: input.unwrap_or_default(),
             story: &history,
             world: &world,
         };
@@ -306,11 +304,10 @@ impl Job {
                 .ok_or_else(|| GenerationFailure::missing(Record::CurrentState))?;
             // The run reads the four newest Messages, the Narration it serves among
             // them.
-            let story = self.window_before(None, STORY_WINDOW)?;
+            let story = self.window_before(None, AGENT_HISTORY_WINDOW)?;
             let world = bundle.view(current);
             let hook_input = HookInput {
                 text: None,
-                player_text: "",
                 story: &story,
                 world: &world,
             };

@@ -4,7 +4,6 @@
 use std::str::FromStr;
 
 use axum::{extract::Path, extract::State, response::Response, Form};
-use askama::Template;
 use serde::Deserialize;
 
 use crate::domain::model::map::MapDef;
@@ -14,6 +13,7 @@ use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
 
 use crate::adapters::driving::http::utils::error::{action_error_response, render_error};
+use crate::adapters::driving::http::utils::fragment::render_response;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok};
 use crate::adapters::driving::http::utils::view_mappers::games_per_world;
 use crate::adapters::driving::http::worlds::templates::worlds::{
@@ -102,10 +102,7 @@ pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axu
     let games = state.game_catalogue.list_games().unwrap_or_default();
     let games_per_world = games_per_world(&games);
 
-    let html = WorldsPanelTemplate::from_worlds(&worlds, &games_per_world)
-        .render()
-        .unwrap_or_default();
-    ok(html)
+    render_response(&WorldsPanelTemplate::from_worlds(&worlds, &games_per_world))
 }
 
 pub async fn create_world_handler(
@@ -122,20 +119,17 @@ pub async fn create_world_handler(
             let worlds = state.world_catalogue.list_worlds();
             let games = state.game_catalogue.list_games().unwrap_or_default();
             let games_per_world = games_per_world(&games);
-            ok(
-                WorldsPanelTemplate::from_worlds(&worlds.unwrap_or_default(), &games_per_world)
-                    .render()
-                    .unwrap_or_default(),
-            )
+            render_response(&WorldsPanelTemplate::from_worlds(
+                &worlds.unwrap_or_default(),
+                &games_per_world,
+            ))
         }
         Err(e) => action_error_response(e, "Failed to create world"),
     }
 }
 
 pub async fn new_world_form_handler(State(_state): State<AppState>) -> Response<axum::body::Body> {
-    ok(WorldFormTemplate::from_world_data(None, None, &[])
-        .render()
-        .unwrap_or_default())
+    render_response(&WorldFormTemplate::from_world_data(None, None, &[]))
 }
 
 pub async fn edit_world_form_handler(
@@ -148,11 +142,11 @@ pub async fn edit_world_form_handler(
         Err(e) => return internal_error(format!("Failed to load world: {e}")),
     };
 
-    let html =
-        WorldFormTemplate::from_world_data(Some(&world_card), Some(&map), &world_card.scenarios)
-            .render()
-            .unwrap_or_default();
-    ok(html)
+    render_response(&WorldFormTemplate::from_world_data(
+        Some(&world_card),
+        Some(&map),
+        &world_card.scenarios,
+    ))
 }
 
 pub async fn update_world_handler(
@@ -203,11 +197,10 @@ pub async fn update_world_handler(
             let worlds = state.world_catalogue.list_worlds();
             let games = state.game_catalogue.list_games().unwrap_or_default();
             let games_per_world = games_per_world(&games);
-            ok(
-                WorldsPanelTemplate::from_worlds(&worlds.unwrap_or_default(), &games_per_world)
-                    .render()
-                    .unwrap_or_default(),
-            )
+            render_response(&WorldsPanelTemplate::from_worlds(
+                &worlds.unwrap_or_default(),
+                &games_per_world,
+            ))
         }
         Err(e) => internal_error(format!("Failed to update world: {e}")),
     }

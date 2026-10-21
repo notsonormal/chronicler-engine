@@ -121,6 +121,14 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
         vec!["look".to_string()],
         "two clicks at the same moment save exactly one input"
     );
+    let narrations = story_of(&state)
+        .into_iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 2,
+        "the opening Narration and one Narration of the accepted Action"
+    );
     assert_eq!(
         llm_call_count(&state, "narrator"),
         1,
@@ -602,8 +610,11 @@ enum JobKind {
     Impersonate,
     /// A retry of a typed Input: a user regen, which ends at its text save.
     TypedInputRetry,
-    /// The event Narration a fired Trigger starts.
+    /// The event Narration a fired Trigger starts, held at its narrator call.
     EventNarration,
+    /// The same event Narration, held at its own analysis call: the second
+    /// analysis call of the Job.
+    EventNarrationAnalysis,
 }
 
 impl JobKind {
@@ -617,7 +628,7 @@ impl JobKind {
             } => "Narration".to_string(),
             Self::Impersonate => "Impersonate".to_string(),
             Self::TypedInputRetry => "Retry of a typed Input".to_string(),
-            Self::EventNarration => "event Narration".to_string(),
+            Self::EventNarration | Self::EventNarrationAnalysis => "event Narration".to_string(),
         }
     }
 
@@ -628,7 +639,7 @@ impl JobKind {
     fn action_input(self) -> Option<&'static str> {
         match self {
             Self::Narration { .. } => Some(ACTION_INPUT),
-            Self::EventNarration => Some(EVENT_ACTION_INPUT),
+            Self::EventNarration | Self::EventNarrationAnalysis => Some(EVENT_ACTION_INPUT),
             Self::Impersonate | Self::TypedInputRetry => None,
         }
     }
@@ -636,6 +647,7 @@ impl JobKind {
 
 const ACTION_INPUT: &str = "look";
 const EVENT_ACTION_INPUT: &str = "enter the shop";
+const EVENT_TEXT: &str = "The event's narration.";
 
 /// What the story log holds after a stop, per the row of the design's
 /// generation table.
@@ -657,6 +669,9 @@ enum StoryLogAfterStop {
     /// The Narration that fired the Trigger stays, and the event Narration
     /// does not join it.
     MainNarrationOnly,
+    /// The event Narration's text save landed, with its pre-analysis state: the
+    /// one-shot Trigger is marked fired in it.
+    EventNarrationWithFiredTrigger,
 }
 
 struct StopRow {
@@ -693,8 +708,7 @@ static STOP_ROWS: &[StopRow] = &[
             fires_trigger: false,
         },
         held: Role::Options,
-        // The design names the status of the generation's own steps only.
-        status: None,
+        status: Some("options"),
         after_stop: StoryLogAfterStop::InRoom { room: MOVED_ROOM },
     },
     StopRow {
@@ -720,6 +734,12 @@ static STOP_ROWS: &[StopRow] = &[
         held: Role::Trigger,
         status: Some("generating-event"),
         after_stop: StoryLogAfterStop::MainNarrationOnly,
+    },
+    StopRow {
+        kind: JobKind::EventNarrationAnalysis,
+        held: Role::Quantifier,
+        status: Some("quantifying"),
+        after_stop: StoryLogAfterStop::EventNarrationWithFiredTrigger,
     },
 ];
 
@@ -819,10 +839,15 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                 story_before,
             }
         }
-        JobKind::EventNarration => {
+        JobKind::EventNarration | JobKind::EventNarrationAnalysis => {
             let data = trigger_world();
-            let model = Arc::new(triggered_script(SCRIPTED_NARRATION, SCRIPTED_NARRATION));
-            let hold = model.hold(row.held);
+            let model = Arc::new(triggered_script(SCRIPTED_NARRATION, EVENT_TEXT));
+            // The Job's first analysis call comes before its event Narration, so
+            // the hold of the event's own analysis call waits behind a hold of
+            // that first one.
+            let first_analysis =
+                (row.kind == JobKind::EventNarrationAnalysis).then(|| model.hold(Role::Quantifier));
+            let hold_at_row_call = first_analysis.is_none().then(|| model.hold(row.held));
             let (app, state) = TestAppBuilder::default_test()
                 .data(data)
                 .model(Arc::clone(&model))
@@ -835,6 +860,19 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                     .status()
                     .is_success()
             );
+            let hold = match (first_analysis, hold_at_row_call) {
+                (Some(first), None) => {
+                    assert!(
+                        first.wait_started(2000),
+                        "the first analysis call should reach the model"
+                    );
+                    let event_analysis = model.hold(Role::Quantifier);
+                    first.release();
+                    event_analysis
+                }
+                (None, Some(hold)) => hold,
+                _ => unreachable!("a row holds exactly one call"),
+            };
             StopJob {
                 app,
                 state,
@@ -1085,6 +1123,37 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                     .iter()
                     .all(|message| message.event_header().is_none()),
                 "{label}: no event Narration is saved after the stop"
+            );
+        }
+        StoryLogAfterStop::EventNarrationWithFiredTrigger => {
+            let input = plan_input.expect("this row's Job saves a plan Input");
+            assert_eq!(
+                texts_of(&start.state, start.game, MessageType::Input),
+                vec![input.to_string()],
+                "{label}: the Input of the Job stays"
+            );
+            assert_eq!(
+                texts_of(&start.state, start.game, MessageType::Narration),
+                before_texts
+                    .iter()
+                    .cloned()
+                    .chain([SCRIPTED_NARRATION.to_string(), EVENT_TEXT.to_string()])
+                    .collect::<Vec<_>>(),
+                "{label}: the Narration that fired the Trigger and the text of the event Narration stay"
+            );
+            let debug = start
+                .state
+                .game_view_query
+                .get_debug_state(start.game)
+                .expect("the debug state reads back");
+            assert_eq!(
+                debug
+                    .npc_encounter_log
+                    .get("npc_1")
+                    .and_then(|encounter| encounter.trigger_fired.get(&0))
+                    .copied(),
+                Some(true),
+                "{label}: the one-shot Trigger is fired in the pre-analysis state the stop keeps"
             );
         }
     }
