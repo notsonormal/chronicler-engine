@@ -169,11 +169,11 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
             ),
             (
                 "application/generation/gate.rs",
-                "fn analyse(hook: Box<dyn AnalysisAgent>) {\n    hook.run();\n}\n",
+                "fn analyse(hook: Box<dyn AfterNarrationAgent>) {\n    hook.run();\n}\n",
             ),
             (
                 "application/generation/gate.rs",
-                "fn offer(hook: &OptionsAgent) {\n    hook.run();\n}\n",
+                "fn offer(hook: &EndOfJobAgent) {\n    hook.run();\n}\n",
             ),
             (
                 "application/generation/gate.rs",
@@ -183,8 +183,8 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
         names: &[
             "type `Narrator`",
             "import `AgentRunner`",
-            "trait bound `AnalysisAgent`",
-            "type `OptionsAgent`",
+            "trait bound `AfterNarrationAgent`",
+            "type `EndOfJobAgent`",
         ],
     },
     // The `NameContains` kind catches a family of names that share one word, and
@@ -206,13 +206,13 @@ pub const BANNED_NAME_CASES: &[WalkerCase<BannedNameRow>] = &[
         row: BannedNameRow {
             rule: FIXTURE_RULE,
             scope: "application/generation/",
-            banned: &[BannedName::NamePrefix("AnalysisAgent")],
+            banned: &[BannedName::NamePrefix("AfterNarrationAgent")],
         },
         files: &[(
             "application/generation/gate.rs",
-            "fn analyse(hook: Box<dyn AnalysisAgent>) {\n    hook.run();\n}\n",
+            "fn analyse(hook: Box<dyn AfterNarrationAgent>) {\n    hook.run();\n}\n",
         )],
-        names: &["trait bound `AnalysisAgent`"],
+        names: &["trait bound `AfterNarrationAgent`"],
     },
 ];
 
@@ -372,8 +372,8 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             scope: "",
             callees: &[
                 "Narrator::narrate",
-                "AgentRunner::analysis",
-                "AgentRunner::options",
+                "AgentRunner::after_narration",
+                "AgentRunner::end_of_job",
             ],
             allowed: &[
                 "application/pipeline/job.rs",
@@ -383,7 +383,7 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
         files: &[
             (
                 "application/pipeline/job.rs",
-                "fn narrate_step(&self) {\n    self.narrator.narrate(role);\n    self.agent_runner.analysis(&input);\n    self.agent_runner.options(&input);\n}\n",
+                "fn narrate_step(&self) {\n    self.narrator.narrate(role);\n    self.agent_runner.after_narration(&input);\n    self.agent_runner.end_of_job(&input);\n}\n",
             ),
             (
                 "application/generation/gate.rs",
@@ -391,13 +391,13 @@ pub const CALL_SITE_CASES: &[WalkerCase<CallSiteRow>] = &[
             ),
             (
                 "application/games/catalogue.rs",
-                "fn rogue(&self) {\n    self.agent_runner.options(&input);\n    AgentRunner::analysis(&runner, &input);\n}\n",
+                "fn rogue(&self) {\n    self.agent_runner.end_of_job(&input);\n    AgentRunner::after_narration(&runner, &input);\n}\n",
             ),
         ],
         names: &[
             "call to `Narrator::narrate`",
-            "call to `AgentRunner::options`",
-            "call to `AgentRunner::analysis`",
+            "call to `AgentRunner::end_of_job`",
+            "call to `AgentRunner::after_narration`",
         ],
     },
 ];
@@ -452,8 +452,8 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
         files: &[("application/games/catalogue.rs", "pub struct Job {}\n")],
         names: &["matches no file under `application/pipeline/`"],
     },
-    // The case mirrors the rule-7 row: a Job field of a record type is caught, a
-    // field of an id or a text is not.
+    // The case mirrors the rule-7 row: a Job field or a Job method parameter of a
+    // record type is caught, a field or a parameter of an id or a text is not.
     WalkerCase {
         row: TypeCheckRow {
             rule: 7,
@@ -466,7 +466,7 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
                 "DockRecord",
                 "WorldBundle",
             ],
-            position: TypeCheckPosition::Fields,
+            position: TypeCheckPosition::FieldsAndParameters,
         },
         files: &[
             (
@@ -477,8 +477,16 @@ pub const TYPE_CHECK_CASES: &[WalkerCase<TypeCheckRow>] = &[
                 "application/pipeline/job.rs",
                 "pub struct Job {\n    writer: JobWriter,\n    game: GameId,\n    tail: Tail,\n}\n",
             ),
+            (
+                "application/pipeline/job.rs",
+                "impl Job {\n    fn save_text(&self, order: &GenerationOrder, text: String, tail: &Tail) {}\n    fn narrate(&self, order: &GenerationOrder, input: Option<&str>) {}\n}\n",
+            ),
         ],
-        names: &["field type `SwipeState`", "field type `Tail`"],
+        names: &[
+            "field type `SwipeState`",
+            "field type `Tail`",
+            "parameter type `Tail`",
+        ],
     },
 ];
 

@@ -3,19 +3,19 @@ use std::collections::HashMap;
 use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::world::WorldCard;
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::adapters::driven::storage::worlds::WorldBundle;
 use crate::test_support::sqlite_storage;
 
 #[test]
-fn test_list_worlds_in_memory_empty() {
+fn test_list_worlds_empty() {
     let storage = Storage::new_in_memory();
     let worlds = storage.list_worlds().unwrap();
     assert!(worlds.is_empty());
 }
 
 #[test]
-fn test_list_worlds_in_memory_seeded() {
+fn test_list_worlds_seeded() {
     let storage = Storage::new_in_memory();
     let (world_card, map) = test_world_data("test_world", "Test World");
     storage.seed_world(&world_card, &map).unwrap();
@@ -27,7 +27,7 @@ fn test_list_worlds_in_memory_seeded() {
 }
 
 #[test]
-fn test_get_world_found_in_memory() {
+fn test_get_world_found() {
     let storage = Storage::new_in_memory();
     let (world_card, map) = test_world_data("world1", "World One");
     storage.seed_world(&world_card, &map).unwrap();
@@ -41,7 +41,7 @@ fn test_get_world_found_in_memory() {
 }
 
 #[test]
-fn test_get_world_not_found_in_memory() {
+fn test_get_world_not_found() {
     let storage = Storage::new_in_memory();
     let result = storage.get_world("nonexistent").unwrap();
     assert!(result.is_none());
@@ -65,7 +65,7 @@ fn test_seed_world_sqlite() {
 }
 
 #[test]
-fn test_seed_world_idempotent_in_memory() {
+fn test_seed_world_idempotent() {
     let storage = Storage::new_in_memory();
     let (world_card, map) = test_world_data("dup_world", "Duplicate World");
 
@@ -82,7 +82,10 @@ fn test_seed_world_idempotent_in_memory() {
 #[test]
 fn test_list_worlds_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("list_worlds", TestOverride::internal("list failed"));
+    handle.set(
+        StorageCall::ListWorlds,
+        TestOverride::internal("list failed"),
+    );
 
     let result = storage.list_worlds();
     assert!(result.is_err());
@@ -91,7 +94,7 @@ fn test_list_worlds_failure() {
 #[test]
 fn test_get_world_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("get_world", TestOverride::config("get failed"));
+    handle.set(StorageCall::GetWorld, TestOverride::config("get failed"));
 
     let result = storage.get_world("world");
     assert!(result.is_err());
@@ -122,7 +125,10 @@ fn require_world_returns_canonical_not_found_when_absent() {
 #[test]
 fn test_seed_world_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("seed_world", TestOverride::internal("seed failed"));
+    handle.set(
+        StorageCall::SeedWorld,
+        TestOverride::internal("seed failed"),
+    );
 
     let (world_card, map) = test_world_data("fail_world", "Fail World");
     let result = storage.seed_world(&world_card, &map);

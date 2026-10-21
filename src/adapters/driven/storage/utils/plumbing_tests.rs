@@ -71,7 +71,7 @@ fn test_fresh_database_has_game_posture_columns() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 30);
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn test_v22_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 30);
 }
 
 #[test]
@@ -465,7 +465,7 @@ fn test_v28_deletes_saved_games_and_drops_the_snapshot_tables() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 30);
 }
 
 #[test]
@@ -503,4 +503,74 @@ fn test_v28_requires_the_kind_the_state_and_the_maker() {
         [],
     );
     assert!(no_maker.is_err(), "a Swipe with no maker must be refused");
+}
+
+#[test]
+fn test_v29_drops_the_room_report_and_keeps_the_swipes() {
+    let conn = Connection::open_in_memory().unwrap();
+    migrate_up_to(&conn, 28).unwrap();
+    conn.execute(
+        "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
+         VALUES ('w', 'w', 'g', 't', 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO messages (game_id, message_type, kind, timestamp) \
+         VALUES (1, '\"Narration\"', '\"Narration\"', 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO message_swipes (message_id, swipe_index, text, room_report, state, maker) \
+         VALUES (1, 0, 'kept text', 'Old Room', '{}', '\"Narrator\"')",
+        [],
+    )
+    .unwrap();
+
+    migrate_up_to(&conn, 29).unwrap();
+
+    assert!(
+        !columns_of(&conn, "message_swipes").contains(&"room_report".to_string()),
+        "the stored room name must be gone"
+    );
+    let text: String = conn
+        .query_row("SELECT text FROM message_swipes", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(text, "kept text", "the Swipe itself survives");
+}
+
+#[test]
+fn test_v30_deletes_the_saved_games() {
+    let conn = Connection::open_in_memory().unwrap();
+    migrate_up_to(&conn, 29).unwrap();
+    conn.execute(
+        "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
+         VALUES ('w', 'w', 'g', 't', 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO messages (game_id, message_type, kind, timestamp) \
+         VALUES (1, '\"Narration\"', '\"Narration\"', 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO message_swipes (message_id, swipe_index, text, state, maker) \
+         VALUES (1, 0, 't', '{\"trigger_context\":{\"npc_id\":\"n\"}}', '\"Narrator\"')",
+        [],
+    )
+    .unwrap();
+    conn.execute("INSERT INTO game_docks (game_id) VALUES (1)", [])
+        .unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    for table in ["games", "messages", "message_swipes", "game_docks"] {
+        let rows: i64 = conn
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 0, "{table} must hold no row of a saved Game");
+    }
 }

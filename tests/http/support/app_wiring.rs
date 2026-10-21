@@ -8,18 +8,21 @@ use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::agents::AgentRunner;
 use chronicler_engine::application::llm_recorder::LlmCallRecorder;
 use chronicler_engine::bootstrap::wiring::build_app_graph;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::character::NpcCard;
 use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::map::MapDef;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
+use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
-    active_game_of, configured_runner, empty_sqlite_storage, make_test_job_deps,
+    active_game_of, analysis_report, configured_runner, empty_sqlite_storage, make_test_job_deps,
     make_test_recorder_with_storage, seed_game_row, test_new_game, ScriptedModel, TestAppBuilder,
-    TestDataBuilder, TestPersona,
+    TestDataBuilder, TestMap, TestNpc, TestPersona,
 };
 
 use crate::support::http_fixtures::{append_narrations, seeded_storage_with_initial_game};
+use crate::support::http_requests::{post_action, wait_settled};
 
 pub fn app_with_model(model: Arc<ScriptedModel>) -> (axum::Router, AppState) {
     app_with_model_and_settings(model, AppSettings::default())
@@ -105,6 +108,32 @@ pub fn app_with_a_triggered_npc(
         .data(data)
         .model(Arc::new(model))
         .build_with_state()
+}
+
+/// A Game whose `/impersonate` fired a Trigger and whose event Narration failed, so
+/// the Impersonate Input holds the trigger context. The model holds the replies of
+/// one Retrigger.
+pub async fn app_after_an_impersonate_with_a_failed_event() -> (axum::Router, AppState) {
+    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    let model = ScriptedModel::new()
+        .narration("I say hello.")
+        .after_narration(analysis_report(&["npc_1"], None))
+        .failed(Role::Trigger)
+        .event_narration("The event fires again.")
+        .after_narration(analysis_report(&["npc_1"], None));
+    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
+
+    assert!(
+        post_action(&app, "/impersonate hello")
+            .await
+            .status()
+            .is_success()
+    );
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the impersonate turn should settle after its failed continuation"
+    );
+    (app, state)
 }
 
 /// A Game whose story holds the opening Narration and 150 padding Narration

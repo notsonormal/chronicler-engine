@@ -70,8 +70,7 @@
       "backend": {
         "type": "use_named",
         "value": "quantifier"
-      },
-      "hook": "analysis"
+      }
     },
     {
       "name": "options",
@@ -80,8 +79,7 @@
       "backend": {
         "type": "use_named",
         "value": "options"
-      },
-      "hook": "options"
+      }
     }
   ],
   "mode_preset_registry": [

@@ -104,7 +104,7 @@ pub(super) fn resolve_boot_game(
         crate::application::generation::gate::GameWriter::new(Arc::clone(storage)),
         Arc::new(ActiveGame::new(Arc::clone(storage))),
         None,
-    );
+    )?;
     let game_id = super::init_game::resolve_game_id(&catalogue, world_key, persona_key)
         .map_err(boot_error)?;
     match storage.get_game(game_id.0) {

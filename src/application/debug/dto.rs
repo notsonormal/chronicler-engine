@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 use crate::domain::model::state::generation_status::{GenerationStatus, Step};
-use crate::domain::model::state::message_types::MessageEntry;
+use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::trigger::NpcEncounterState;
 
 #[derive(Clone, Serialize)]
@@ -17,12 +17,11 @@ pub struct DebugStateView {
     /// The step of the running Job; `None` when no Job runs.
     pub step: Option<Step>,
     pub npc_encounter_log: HashMap<String, NpcEncounterState>,
-    pub narration_history_tail: Vec<MessageEntry>,
+    pub narration_history_tail: Vec<StoryRow>,
     pub narration_history_length: usize,
     pub dynamic_rooms: Vec<String>,
     pub dynamic_room_count: usize,
     pub last_error: Option<String>,
-    pub quantifier_confidence: Option<String>,
     pub backend_name: Option<String>,
     pub model_name: Option<String>,
     pub current_options: Vec<String>,

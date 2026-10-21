@@ -1,5 +1,5 @@
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 
 fn dummy_preset(id: &str, preset_type: PresetType) -> PromptPreset {
     PromptPreset {
@@ -56,7 +56,10 @@ fn test_get_preset_not_found() {
 #[test]
 fn test_list_presets_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("list_presets", TestOverride::internal("list failed"));
+    handle.set(
+        StorageCall::ListPresets,
+        TestOverride::internal("list failed"),
+    );
 
     let result = storage.list_presets(PresetType::System);
     assert!(result.is_err());
@@ -65,7 +68,7 @@ fn test_list_presets_failure() {
 #[test]
 fn test_save_preset_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("save_preset", TestOverride::config("save failed"));
+    handle.set(StorageCall::SavePreset, TestOverride::config("save failed"));
 
     let result = storage.save_preset(&dummy_preset("fail", PresetType::System));
     assert!(result.is_err());
@@ -74,7 +77,7 @@ fn test_save_preset_failure() {
 #[test]
 fn test_get_preset_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("get_preset", TestOverride::internal("get failed"));
+    handle.set(StorageCall::GetPreset, TestOverride::internal("get failed"));
 
     let result = storage.get_preset("any");
     assert!(result.is_err());
@@ -83,7 +86,10 @@ fn test_get_preset_failure() {
 #[test]
 fn test_delete_preset_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("delete_preset", TestOverride::config("delete failed"));
+    handle.set(
+        StorageCall::DeletePreset,
+        TestOverride::config("delete failed"),
+    );
 
     let result = storage.delete_preset("any");
     assert!(result.is_err());

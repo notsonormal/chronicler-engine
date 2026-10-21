@@ -27,7 +27,7 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 ## Storage Direct Access
 
-`Storage` is a concrete adapter with a `Backend` enum (SQLite / InMemory), wrapped by `BackendKind` (Direct / Test). Every game-scoped method takes the Game as its first argument. The active-Game pointer is not storage state. Application code may call `Storage` directly when the call is part of the persistence boundary. Architectural review owns the discipline for which files sit on the boundary.
+`Storage` is a concrete adapter with a `Backend` enum (SQLite), wrapped by `BackendKind` (Direct / Test). Every game-scoped method takes the Game as its first argument. The active-Game pointer is not storage state. Application code may call `Storage` directly when the call is part of the persistence boundary. Architectural review owns the discipline for which files sit on the boundary.
 
 The record writes of a Game's story exist only on `Tx`, and only `GameWriter` opens a unit of them (see *Who Owns What*).
 
@@ -37,18 +37,7 @@ The settings row is the read source for the whole engine. Every consumer resolve
 
 ## AppState collaborators
 
-`AppState` is the handler-facing bundle produced by `bootstrap/wiring.rs` (`WiredApp`) and passed to the Axum router. It exposes the named collaborators directly, with no service façade between HTTP handlers and the application layer:
-
-- `game_writer: GameWriter` — the writer rule: every write to a Game's records, and the registry of job entries.
-- `job_deps: JobDeps` — what `Job::start` needs: the narrator, the Agent runner, storage and the watch on Job tasks.
-- `game_catalogue: GameCatalogue` — game lifecycle (create/switch/delete/list/reset/active id). It is the only reader and the only writer of `ActiveGame`.
-- `game_view_query: GameViewQuery` — read-side fragments for the UI and debug state, and the status rule.
-- `world_catalogue: WorldCatalogue` — world CRUD.
-- `persona_catalogue: PersonaCatalogue` — persona CRUD.
-- `settings_service: SettingsService` — settings persistence.
-- `prompt_preset_service: PromptPresetService` — prompt-preset CRUD.
-- `connection_test_service: ConnectionTestService` — one short provider call that records nothing.
-- `text_check_service: Arc<TextCheckService>` — player-command spelling/grammar check.
+`AppState` is the handler-facing bundle that `bootstrap/wiring.rs` (`WiredApp`) builds and the Axum router receives. A handler calls the application layer directly, through the named collaborators of the bundle. The table in "Who Owns What" shows which part owns and writes each record.
 
 ## Who Owns What
 
@@ -63,9 +52,10 @@ Each part owns one thing and writes only what its row names.
 | `AgentRunner` and the Agents | The hooks and the value each hook returns | Nothing. An Agent returns values. |
 | `GameCatalogue` | The lifecycle of Games, and `ActiveGame` | `ActiveGame`, and the config columns of the Game record. Create, reset and delete go through `GameWriter`. |
 | `GameViewQuery` | The read-side views and the status rule | Nothing |
+| `PromptPresetService` | The preset a Game uses for the Narrator and for each hook, and the rules of a preset edit and a preset delete | Preset rows, through `Storage` |
 | `Storage` | The records on disk, the backend mutex, and the read handles `stories()` and `docks()` | Its own tables. It writes a Game's story records only inside a `Tx`. |
 | `LlmCallRecorder` | The forensics record of each LLM call | `llm_messages` rows, through `SaveLlmMessageFn` |
-| HTTP handlers | Request parsing and response rendering | Nothing. They call `Job::start`, `GameWriter` and the catalogues. |
+| HTTP handlers | Request parsing and response rendering | Nothing. They call `Job::start`, `GameWriter`, the catalogues and `PromptPresetService`. |
 
 A running Job reads the story and the Game, and the job id check guards each of its writes. Between steps, a Job passes ids and loads each record when its step starts.
 

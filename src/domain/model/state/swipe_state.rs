@@ -6,20 +6,21 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::scenario::StartingScenario;
 use crate::domain::model::trigger::NpcEncounterLog;
 use super::movement::MovementState;
 use super::scene_state::SceneState;
-use super::trigger_context::{EventRecord, TriggerRef};
+use super::trigger_context::EventRecord;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SwipeState {
     pub movement: MovementState,
     pub scene: SceneState,
     pub npc_encounter_log: NpcEncounterLog,
-    /// The Trigger that fired for this Swipe.
+    /// The event record of the Trigger that fired for this Swipe.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trigger_context: Option<TriggerRef>,
+    pub trigger_context: Option<EventRecord>,
 }
 
 impl SwipeState {
@@ -43,20 +44,14 @@ impl SwipeState {
         state
     }
 
-    /// The state a Swipe holds from the text save until its analysis updates it:
-    /// the start state, with no trigger context. An event generation marks its own
-    /// one-shot Trigger fired, because the rules read the fired set from there.
-    pub fn pre_analysis(&self, event: Option<&EventRecord>) -> Self {
-        let mut state = self.clone();
-        state.trigger_context = None;
-        if let Some(record) = event {
-            if !record.trigger.trigger_repeat {
-                state
-                    .npc_encounter_log
-                    .mark_trigger_fired(&record.trigger.npc_id, record.trigger.trigger_idx);
-            }
-        }
-        state
+    /// The room the player stands in: a map room, else an added room.
+    pub fn room<'a>(&'a self, map: &'a MapDef) -> Option<&'a Room> {
+        self.room_by_id(map, &self.movement.current_room_id)
+    }
+
+    pub fn room_by_id<'a>(&'a self, map: &'a MapDef, room_id: &str) -> Option<&'a Room> {
+        map.get_room_by_id(room_id)
+            .or_else(|| self.movement.dynamic_rooms.get(room_id))
     }
 
     pub fn init_scenario_npcs(

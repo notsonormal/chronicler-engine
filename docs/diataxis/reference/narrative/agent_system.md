@@ -5,10 +5,10 @@ title: Agent System
 
 ## Overview
 
-An **agent** is any type implementing one of the hook traits: `AnalysisAgent` or
-`OptionsAgent`. Agents are loaded from `AppSettings` at startup and registered in
-`AgentRunner`. The engine works with **zero agents** — all agent execution is
-optional.
+An **agent** is any type implementing one of the hook traits: `AfterNarrationAgent` or
+`EndOfJobAgent`. The Agent type in `AppSettings` gives its hook. Agents are loaded
+from `AppSettings` at startup and registered in `AgentRunner`. The engine works with
+**zero agents** — all agent execution is optional.
 
 Two agents exist. `QuantifierAgent` detects the Characters present in the
 narration and any movement destination. The Options agent
@@ -16,16 +16,17 @@ narration and any movement destination. The Options agent
 
 ## Hooks
 
-A **hook** is a fixed point in a generation where the Job runs the Agents
-registered for it. Each hook has one output type. `Hook` declares which one an
-Agent serves, and each hook has its own dispatch site:
+A **hook** is a fixed point in a Job where the Job runs the Agent registered for
+it, named by its position. Each Agent gives one kind of result, and each kind of
+result has one landing:
 
-- **`Analysis`**: runs after the narration was saved. `AgentRunner::analysis`
-  merges the `AnalysisOutput` of each Agent into the result that the game rules
-  apply. `QuantifierAgent` runs here.
-- **`Options`**: runs once per Job, at the two gated Options sites (after a
-  Narration and on demand). The Options hook holds at most one Agent. The Options agent runs
-  here and answers with an `OfferedSet`.
+- **After narration**: runs after the text save and before the state update.
+  `AgentRunner::after_narration` runs the Agent and returns its `QuantifierResult`:
+  the Characters present and the destination. The game rules apply it.
+  `QuantifierAgent` runs here.
+- **End of the Job**: runs once per Job, at the two gated Options sites (after a
+  Narration and on demand). `AgentRunner::end_of_job` runs the Agent. The hook holds
+  at most one Agent. The Options agent runs here and answers with an `OfferedSet`.
 
 ## What an Agent gets
 
@@ -40,7 +41,7 @@ That binding decides the agent's connection.
 
 ## NPC Events
 
-The engine derives NPC enter/leave events by comparing the previous quantifier result with the current one.
+The game rules derive Character enter and leave events by comparing the Characters present before the generation with the `QuantifierResult`.
 
 ## Document References
 

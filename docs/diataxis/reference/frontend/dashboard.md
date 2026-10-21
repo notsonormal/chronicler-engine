@@ -25,7 +25,7 @@ The page has a header, a failure banner, a tab bar, and the body of the active t
 
 The Game tab has four regions: the story log, the visual sidebar, the options dock, and the action area.
 
-- **Story log** — the Game's Messages in order.
+- **Story log** — the story window of the Game: its newest Messages, in order.
 - **Visual sidebar** — the image of the current room and the portraits of the Characters in it.
 - **Action area** — the command input, the text-check preview, and the status display.
 

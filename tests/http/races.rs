@@ -7,17 +7,17 @@ use tokio::sync::Barrier;
 
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, ModelHold, ModelRole, ScriptedModel, TestAppBuilder,
-    TestDataBuilder,
+    active_game_of, analysis_report, ModelHold, ScriptedModel, TestAppBuilder, TestDataBuilder,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_script};
 use crate::support::http_assertions::{assert_still_thinking, llm_call_count, STILL_THINKING};
-use crate::support::http_fixtures::{story_of, OFFERED_SET};
+use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
 use crate::support::http_requests::{
     fetch_body, post_action, post_empty, post_form, response_body, wait_for_jobs, wait_idle,
     wait_settled,
@@ -25,7 +25,7 @@ use crate::support::http_requests::{
 
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     (model, hold)
 }
 
@@ -121,6 +121,14 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
         vec!["look".to_string()],
         "two clicks at the same moment save exactly one input"
     );
+    let narrations = story_of(&state)
+        .into_iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 2,
+        "the opening Narration and one Narration of the accepted Action"
+    );
     assert_eq!(
         llm_call_count(&state, "narrator"),
         1,
@@ -192,11 +200,11 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
     let model = Arc::new(
         ScriptedModel::new()
             .narration(STOPPED_NARRATION)
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration(NEXT_NARRATION)
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
-    let stopped_hold = model.hold(ModelRole::Narration);
+    let stopped_hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
 
@@ -213,7 +221,7 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
         "a stop of a busy Game answers reset"
     );
 
-    let next_hold = model.hold(ModelRole::Narration);
+    let next_hold = model.hold(Role::Narrator);
     assert!(post_action(&app, "listen").await.status().is_success());
     assert!(
         next_hold.wait_started(1000),
@@ -253,7 +261,7 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
 #[tokio::test]
 async fn test_reset_while_job_runs_keeps_only_the_new_game_opening() {
     let model = Arc::new(ScriptedModel::new().turn("The stopped narration."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let before = active_game_of(&state);
 
@@ -380,7 +388,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
 
     // A continue holds a Job without saving an Input of its own, so the
     // Narration with two Swipes is still the Message that a switch names.
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     assert!(post_action(&app, "").await.status().is_success());
     assert!(
         hold.wait_started(1000),
@@ -414,11 +422,11 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
     let model = Arc::new(
         ScriptedModel::new()
             .narration(GAME_A_NARRATION)
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration(GAME_B_NARRATION)
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
-    let hold_a = model.hold(ModelRole::Narration);
+    let hold_a = model.hold(Role::Narrator);
     let (app, state, storage) = app_with_script(Arc::clone(&model));
     let game_a = active_game_of(&state);
 
@@ -444,7 +452,7 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
     let game_b = active_game_of(&state);
     assert_ne!(game_b, game_a, "the create makes Game B active");
 
-    let hold_b = model.hold(ModelRole::Narration);
+    let hold_b = model.hold(Role::Narrator);
     assert!(post_action(&app, "look on B").await.status().is_success());
     assert!(
         hold_b.wait_started(1000),
@@ -498,7 +506,7 @@ async fn test_the_event_narration_call_uses_the_preset_active_when_it_runs() {
 
     let data = trigger_world();
     let model = Arc::new(triggered_script(MAIN_NARRATION, EVENT_NARRATION));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
@@ -588,9 +596,9 @@ fn trigger_world() -> chronicler_engine::test_support::TestData {
 fn triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
     ScriptedModel::new()
         .narration(narration)
-        .analysis(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["npc_1"], None))
         .event_narration(event_narration)
-        .analysis(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["npc_1"], None))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -602,8 +610,11 @@ enum JobKind {
     Impersonate,
     /// A retry of a typed Input: a user regen, which ends at its text save.
     TypedInputRetry,
-    /// The event Narration a fired Trigger starts.
+    /// The event Narration a fired Trigger starts, held at its narrator call.
     EventNarration,
+    /// The same event Narration, held at its own analysis call: the second
+    /// analysis call of the Job.
+    EventNarrationAnalysis,
 }
 
 impl JobKind {
@@ -617,7 +628,7 @@ impl JobKind {
             } => "Narration".to_string(),
             Self::Impersonate => "Impersonate".to_string(),
             Self::TypedInputRetry => "Retry of a typed Input".to_string(),
-            Self::EventNarration => "event Narration".to_string(),
+            Self::EventNarration | Self::EventNarrationAnalysis => "event Narration".to_string(),
         }
     }
 
@@ -628,7 +639,7 @@ impl JobKind {
     fn action_input(self) -> Option<&'static str> {
         match self {
             Self::Narration { .. } => Some(ACTION_INPUT),
-            Self::EventNarration => Some(EVENT_ACTION_INPUT),
+            Self::EventNarration | Self::EventNarrationAnalysis => Some(EVENT_ACTION_INPUT),
             Self::Impersonate | Self::TypedInputRetry => None,
         }
     }
@@ -636,6 +647,7 @@ impl JobKind {
 
 const ACTION_INPUT: &str = "look";
 const EVENT_ACTION_INPUT: &str = "enter the shop";
+const EVENT_TEXT: &str = "The event's narration.";
 
 /// What the story log holds after a stop, per the row of the design's
 /// generation table.
@@ -657,11 +669,14 @@ enum StoryLogAfterStop {
     /// The Narration that fired the Trigger stays, and the event Narration
     /// does not join it.
     MainNarrationOnly,
+    /// The event Narration's text save landed, with its pre-analysis state: the
+    /// one-shot Trigger is marked fired in it.
+    EventNarrationWithFiredTrigger,
 }
 
 struct StopRow {
     kind: JobKind,
-    held: ModelRole,
+    held: Role,
     /// The step the status poll answers while the call is held, where the
     /// design names the step.
     status: Option<&'static str>,
@@ -676,7 +691,7 @@ static STOP_ROWS: &[StopRow] = &[
         kind: JobKind::Narration {
             fires_trigger: false,
         },
-        held: ModelRole::Narration,
+        held: Role::Narrator,
         status: Some("narrating"),
         after_stop: StoryLogAfterStop::PlanInput,
     },
@@ -684,7 +699,7 @@ static STOP_ROWS: &[StopRow] = &[
         kind: JobKind::Narration {
             fires_trigger: true,
         },
-        held: ModelRole::Analysis,
+        held: Role::Quantifier,
         status: Some("quantifying"),
         after_stop: StoryLogAfterStop::InputAndNarration,
     },
@@ -692,34 +707,39 @@ static STOP_ROWS: &[StopRow] = &[
         kind: JobKind::Narration {
             fires_trigger: false,
         },
-        held: ModelRole::Options,
-        // The design names the status of the generation's own steps only.
-        status: None,
+        held: Role::Options,
+        status: Some("options"),
         after_stop: StoryLogAfterStop::InRoom { room: MOVED_ROOM },
     },
     StopRow {
         kind: JobKind::Impersonate,
-        held: ModelRole::Narration,
+        held: Role::Narrator,
         status: Some("narrating"),
         after_stop: StoryLogAfterStop::NoMessage,
     },
     StopRow {
         kind: JobKind::Impersonate,
-        held: ModelRole::Analysis,
+        held: Role::Quantifier,
         status: Some("quantifying"),
         after_stop: StoryLogAfterStop::ImpersonateInput,
     },
     StopRow {
         kind: JobKind::TypedInputRetry,
-        held: ModelRole::Narration,
+        held: Role::Narrator,
         status: Some("narrating"),
         after_stop: StoryLogAfterStop::NoMessage,
     },
     StopRow {
         kind: JobKind::EventNarration,
-        held: ModelRole::Event,
+        held: Role::Trigger,
         status: Some("generating-event"),
         after_stop: StoryLogAfterStop::MainNarrationOnly,
+    },
+    StopRow {
+        kind: JobKind::EventNarrationAnalysis,
+        held: Role::Quantifier,
+        status: Some("quantifying"),
+        after_stop: StoryLogAfterStop::EventNarrationWithFiredTrigger,
     },
 ];
 
@@ -745,7 +765,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                 } else {
                     ScriptedModel::new()
                         .narration(SCRIPTED_NARRATION)
-                        .analysis(analysis_report(&[], Some(MOVED_ROOM)))
+                        .after_narration(analysis_report(&[], Some(MOVED_ROOM)))
                 }
                 .options(OFFERED_SET),
             );
@@ -770,7 +790,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             let model = Arc::new(
                 ScriptedModel::new()
                     .narration(SCRIPTED_NARRATION)
-                    .analysis(analysis_report(&[], Some(MOVED_ROOM))),
+                    .after_narration(analysis_report(&[], Some(MOVED_ROOM))),
             );
             let hold = model.hold(row.held);
             let (app, state, storage) = app_with_script(Arc::clone(&model));
@@ -819,10 +839,15 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                 story_before,
             }
         }
-        JobKind::EventNarration => {
+        JobKind::EventNarration | JobKind::EventNarrationAnalysis => {
             let data = trigger_world();
-            let model = Arc::new(triggered_script(SCRIPTED_NARRATION, SCRIPTED_NARRATION));
-            let hold = model.hold(row.held);
+            let model = Arc::new(triggered_script(SCRIPTED_NARRATION, EVENT_TEXT));
+            // The Job's first analysis call comes before its event Narration, so
+            // the hold of the event's own analysis call waits behind a hold of
+            // that first one.
+            let first_analysis =
+                (row.kind == JobKind::EventNarrationAnalysis).then(|| model.hold(Role::Quantifier));
+            let hold_at_row_call = first_analysis.is_none().then(|| model.hold(row.held));
             let (app, state) = TestAppBuilder::default_test()
                 .data(data)
                 .model(Arc::clone(&model))
@@ -835,6 +860,19 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                     .status()
                     .is_success()
             );
+            let hold = match (first_analysis, hold_at_row_call) {
+                (Some(first), None) => {
+                    assert!(
+                        first.wait_started(2000),
+                        "the first analysis call should reach the model"
+                    );
+                    let event_analysis = model.hold(Role::Quantifier);
+                    first.release();
+                    event_analysis
+                }
+                (None, Some(hold)) => hold,
+                _ => unreachable!("a row holds exactly one call"),
+            };
             StopJob {
                 app,
                 state,
@@ -893,7 +931,7 @@ async fn test_a_stop_at_each_model_call_keeps_the_records_of_that_step() {
 }
 
 async fn run_stop_row(row: &'static StopRow) {
-    let label = format!("{} at the {} call", row.kind.label(), row.held.label());
+    let label = format!("{} at the {} call", row.kind.label(), row.held.agent_name());
     let start = start_stop_job(row).await;
     assert!(
         start.hold.wait_started(2000),
@@ -988,9 +1026,9 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             );
             let narration = job_narration.expect("the text save wrote the Narration");
             assert_eq!(
-                narration.room_report(),
+                room_header_of(&start.state, narration.id),
                 None,
-                "{label}: the pre-analysis state names no room, so the player has not moved"
+                "{label}: the pre-analysis state is the start state, so the player has not moved"
             );
             assert_eq!(
                 narration.event_header(),
@@ -1016,9 +1054,9 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             let narration = job_narration.expect("the text save wrote the Narration");
             let expected = format!("Room {room}");
             assert_eq!(
-                narration.room_report(),
+                room_header_of(&start.state, narration.id).as_deref(),
                 Some(expected.as_str()),
-                "{label}: the state update landed, so the Narration reports the room it arrived in"
+                "{label}: the state update landed, so the Narration shows the room it arrived in"
             );
             let dock = fetch_body(&start.app, "/fragment/options-dock").await;
             assert!(
@@ -1040,9 +1078,9 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                 .find(|message| message.message_type == MessageType::Input)
                 .expect("the text save wrote the Input");
             assert_eq!(
-                impersonate_input.room_report(),
+                room_header_of(&start.state, impersonate_input.id),
                 None,
-                "{label}: the pre-analysis state reports no room"
+                "{label}: the pre-analysis state is the start state, so the Input shows no room"
             );
             // The refused state update is what keeps the player where it started,
             // so the current state still names the starting room.
@@ -1085,6 +1123,37 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                     .iter()
                     .all(|message| message.event_header().is_none()),
                 "{label}: no event Narration is saved after the stop"
+            );
+        }
+        StoryLogAfterStop::EventNarrationWithFiredTrigger => {
+            let input = plan_input.expect("this row's Job saves a plan Input");
+            assert_eq!(
+                texts_of(&start.state, start.game, MessageType::Input),
+                vec![input.to_string()],
+                "{label}: the Input of the Job stays"
+            );
+            assert_eq!(
+                texts_of(&start.state, start.game, MessageType::Narration),
+                before_texts
+                    .iter()
+                    .cloned()
+                    .chain([SCRIPTED_NARRATION.to_string(), EVENT_TEXT.to_string()])
+                    .collect::<Vec<_>>(),
+                "{label}: the Narration that fired the Trigger and the text of the event Narration stay"
+            );
+            let debug = start
+                .state
+                .game_view_query
+                .get_debug_state(start.game)
+                .expect("the debug state reads back");
+            assert_eq!(
+                debug
+                    .npc_encounter_log
+                    .get("npc_1")
+                    .and_then(|encounter| encounter.trigger_fired.get(&0))
+                    .copied(),
+                Some(true),
+                "{label}: the one-shot Trigger is fired in the pre-analysis state the stop keeps"
             );
         }
     }

@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! Message types and conversation history (Message, Swipe, stored generation inputs)
+//! Message types and conversation history (Message, Swipe)
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -10,14 +10,6 @@ use crate::domain::model::state::swipe_state::SwipeState;
 pub struct SwipeAt {
     pub message: u64,
     pub swipe: usize,
-}
-
-/// What the player asked for when the Swipe's text was written.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct StoredInputs {
-    pub impersonated: bool,
-    pub guide_text: Option<String>,
-    pub impersonate_direction: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,7 +25,6 @@ pub enum Maker {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Swipe {
     pub text: String,
-    pub room_report: Option<String>,
     pub event_header: Option<String>,
     #[serde(default)]
     pub impersonated: bool,
@@ -49,21 +40,12 @@ impl Swipe {
     pub fn new(text: impl Into<String>, maker: Maker, state: SwipeState) -> Self {
         Self {
             text: text.into(),
-            room_report: None,
             event_header: None,
             impersonated: false,
             guide_text: None,
             impersonate_direction: None,
             state,
             maker,
-        }
-    }
-
-    pub fn stored_inputs(&self) -> StoredInputs {
-        StoredInputs {
-            impersonated: self.impersonated,
-            guide_text: self.guide_text.clone(),
-            impersonate_direction: self.impersonate_direction.clone(),
         }
     }
 }
@@ -105,10 +87,6 @@ impl Message {
 
     pub fn text(&self) -> &str {
         self.active_swipe().map(|s| s.text.as_str()).unwrap_or("")
-    }
-
-    pub fn room_report(&self) -> Option<&str> {
-        self.active_swipe().and_then(|s| s.room_report.as_deref())
     }
 
     pub fn event_header(&self) -> Option<&str> {

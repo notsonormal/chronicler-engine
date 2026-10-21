@@ -4,9 +4,9 @@
 use chrono::Utc;
 
 use crate::adapters::driven::storage::models::settings::DbSettings;
-use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::domain::model::settings::AppSettings;
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 
 /// [TRIVIAL_ENUM]
 #[derive(Clone, Copy)]
@@ -26,15 +26,14 @@ impl Storage {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
                 "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at, active_options_prompt_preset_id FROM settings WHERE id = 1",
-            )?;
+            ).db_context("Failed to prepare the settings read")?;
                 let result = stmt.query_row([], DbSettings::from_row);
                 match result {
                     Ok(db_settings) => db_settings.to_settings(),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(AppSettings::default()),
-                    Err(e) => Err(EngineError::Database(e)),
+                    Err(e) => Err(e).db_context("Failed to read the settings"),
                 }
             }
-            Backend::InMemory(data) => Ok(data.settings.clone()),
         }
     }
 
@@ -83,26 +82,19 @@ impl Storage {
                         &now,
                         &settings.active_options_prompt_preset_id,
                     ],
-                )?;
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                if matches!(mode, SettingsWrite::OnlyIfAbsent) && data.settings_seeded {
-                    return Ok(());
-                }
-                data.settings = settings.clone();
-                data.settings_seeded = true;
+                )
+                .db_context("Failed to write the settings")?;
                 Ok(())
             }
         }
     }
 
     pub fn get_settings(&self) -> Result<AppSettings, EngineError> {
-        self.with_backend_mut("get_settings", Self::read_settings)
+        self.with_backend_mut(StorageCall::GetSettings, Self::read_settings)
     }
 
     pub fn save_settings(&self, settings: &AppSettings) -> Result<(), EngineError> {
-        self.with_backend_mut("save_settings", |backend| {
+        self.with_backend_mut(StorageCall::SaveSettings, |backend| {
             Self::write_settings(backend, settings, SettingsWrite::Replace)
         })
     }
@@ -115,7 +107,7 @@ impl Storage {
     where
         F: FnOnce(&mut AppSettings) -> Result<T, EngineError>,
     {
-        self.with_backend_mut("update_settings", |backend| {
+        self.with_backend_mut(StorageCall::UpdateSettings, |backend| {
             let mut settings = Self::read_settings(backend)?;
             let out = f(&mut settings)?;
             Self::write_settings(backend, &settings, SettingsWrite::Replace)?;
@@ -126,7 +118,7 @@ impl Storage {
     /// Insert the settings row only when it is absent — the boot seed, so after
     /// the first run the database outranks `data/settings.json`.
     pub fn seed_settings(&self, settings: &AppSettings) -> Result<(), EngineError> {
-        self.with_backend_mut("seed_settings", |backend| {
+        self.with_backend_mut(StorageCall::SeedSettings, |backend| {
             Self::write_settings(backend, settings, SettingsWrite::OnlyIfAbsent)
         })
     }

@@ -1,7 +1,7 @@
-use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
+use axum::{body::to_bytes, http::StatusCode};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driven::storage::TestOverride;
+use crate::adapters::driven::storage::{StorageCall, TestOverride};
 use crate::adapters::driving::http::games::handlers::{
     list_games_fragment, switch_game_handler, switch_game_mode_handler,
     update_game_posture_handler, update_game_presets_handler, GameModeForm, GamePostureForm,
@@ -28,13 +28,9 @@ async fn test_switch_game_ok() {
     let _ = state.game_catalogue.create_game("test", "test_player");
     let games = state.game_catalogue.list_games().unwrap();
     if let Some(game) = games.first() {
-        let result =
+        let response =
             switch_game_handler(axum::extract::State(state), axum::extract::Path(game.id)).await;
-        let status = match result {
-            Ok(resp) => resp.status(),
-            Err(e) => e.into_response().status(),
-        };
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
 
@@ -217,7 +213,7 @@ async fn test_posture_fragment_renders_preset_load_error_span() {
         .unwrap();
 
     handle.set(
-        "list_presets",
+        StorageCall::ListPresets,
         TestOverride::internal("simulated preset library failure"),
     );
 
@@ -246,5 +242,5 @@ async fn test_posture_fragment_renders_preset_load_error_span() {
         "preset selects must be skipped on load failure: {body}"
     );
 
-    handle.clear("list_presets");
+    handle.clear(StorageCall::ListPresets);
 }

@@ -103,8 +103,6 @@ A Swipe holds all of the game state except the offered set. A swipe switch and a
 
 **Notice.** A short report to the player about work that failed or fell back, when the request itself did not fail. It shows in the dock (R-85).
 
-**Room report.** The name of a room that the story log shows on a Message.
-
 **Restart.** The process stops, on purpose or by a crash, and starts again.
 
 **Stop.** The player's request to end the work of the active Game. The engine drops the step that runs, and keeps what the work saved before (R-81). [OR-30; OR-51]
@@ -178,7 +176,7 @@ Each route below acts on the Game that is active when the request arrives, excep
 
 ### 3.7 The HTTP views
 
-- The story log shows each Message with its active Swipe, its room report, its event header and its Swipe count. Each entry has an Edit control. The Delete, Swipe and Retrigger controls are on the last entry only. The Delete control does not show when the story holds one Message (R-76). The Retrigger control shows only when a Retrigger is allowed (R-62).
+- The story log shows each Message with its active Swipe, the room name that it shows (R-22, R-23), its event header and its Swipe count. Each entry has an Edit control. The Delete, Swipe and Retrigger controls are on the last entry only. The Delete control does not show when the story holds one Message (R-76). The Retrigger control shows only when a Retrigger is allowed (R-62).
 - The dock shows the offered set, or a notice in place of the offered set (R-85). Its controls are off while the Game is busy [Dashboard 39.3].
 - The status line shows the status (R-21).
 - The input box has a send button. While the Game is busy, the send button is a Stop button (R-81).
@@ -213,7 +211,7 @@ Each route below acts on the Game that is active when the request arrives, excep
 
 **R-11.** A Narration generation (free text, continue or guided) and an Impersonate generation are analysed, and the world rules apply the result. So each one can move the player, change the Characters present and the encounter record, and fire a Trigger. [Actions 1.4, 1.6, 1.14; PD-2]
 
-**R-11a.** The story log shows the text of a generation as soon as the narrator call returns. For an analysed generation, the analysis and the world rules then update the game state that its Swipe holds, and its room report. Until that update, the Swipe holds the game state that the generation started from, with no trigger context. (An event Narration also has its one-shot Trigger marked fired, R-16.) When a stop or a restart comes before the update, the Swipe keeps that state. [OR-53]
+**R-11a.** The story log shows the text of a generation as soon as the narrator call returns. For an analysed generation, the analysis and the world rules then update the game state that its Swipe holds. Until that update, the Swipe holds the game state that the generation started from, with no trigger context. (An event Narration also has its one-shot Trigger marked fired, R-16.) When a stop or a restart comes before the update, the Swipe keeps that state. [OR-53]
 
 **R-12.** When the analysis fails or falls back, the generation still ends well: the status is idle, and the Characters present stay as they were. [Actions 2.5]
 
@@ -241,17 +239,11 @@ Each route below acts on the Game that is active when the request arrives, excep
 
 **R-21a.** New work, a swipe switch, a delete and a stop clear a failure that the status shows. An edit, a switch of Game and a restart do not clear it. [OR-32]
 
-### 4.4 Room reports
+### 4.4 The room that a Message shows
 
-**R-22.** A Narration that moves the player reports the room it arrives in. The Input of that Action reports no room. An Impersonate Input whose generation moved the player reports the room it arrives in. A Message whose generation did not move the player reports no room. The opening Narration is an exception (R-25a). [Actions 1.14; PD-14; OR-38]
+**R-22.** The room is one fact: the room of the Swipe state. The story log shows the room name on a Message when the room name of its active Swipe state differs from the room name of the Message before it. The comparison uses the room name, not the room id. An Input holds the state of before the Action, so it shows no room. An Impersonate Input that moved the player shows its room. An event Narration cannot move the player, so it shows no room. A swipe switch shows the room of the new active Swipe. A Narration that names the room the player is in, two added rooms with one name, and a move between two map rooms with one name each show no room. A Retry of the opening shows the room of its Swipe, because no Message is before it. [Actions 1.14 to 1.17; Retry 9.2, 9.8, 10.8, 22.5; Swipe switch 36.4; PD-14; OR-38; OR-39; ticket 25]
 
-**R-23.** Each Swipe reports only the room that its own generation arrived in. A redo that does not move the player reports no room, also when a sibling Swipe reports one. The opening Narration is an exception (R-25a). [Retry 9.2, 9.8, 22.5]
-
-**R-24.** An event Narration reports no room, on each of its Swipes. [Retry 10.8]
-
-**R-25.** After a swipe switch, the Message reports the room of its new active Swipe. [Retry 9.8]
-
-**R-25a.** Each Swipe of the opening Narration reports the room that the player is in after it: the starting room, or the room that a Retry of the opening moved the player to. [OR-39]
+**R-23.** The oldest Message of the story window always shows its room name. The story log reads no Message before the window. [Story Log 8.13; ticket 25]
 
 ### 4.5 Options
 
@@ -409,7 +401,7 @@ A stop and a restart keep the same things: what the work saved before it ended (
 
 **R-85.** A notice shows in the dock, in place of the offered set. It stays until the dock changes next: a new offered set, a new Narration, a swipe switch, a delete, a stop or a reset. It stays after a restart. [OR-49]
 
-**R-86.** R-83 gives the only notice. The player gets no notice when the analysis falls back (R-87 reports a failed analysis call), or when the engine adds a room that the map does not have (the room report shows its name, R-22). [OR-34; OR-35]
+**R-86.** R-83 gives the only notice. The player gets no notice when the analysis falls back (R-87 reports a failed analysis call), or when the engine adds a room that the map does not have (the story log shows its name, R-22). [OR-34; OR-35]
 
 **R-87.** The dashboard header shows one line for each LLM role (the narrator, the analysis, the Options call) whose newest call failed. The line goes away when the next call of that role succeeds. It covers all Games, because the Games share the LLM connections. A Details control shows the model and the raw error of each role. [Failure Display 38.1; OR-50]
 
@@ -457,8 +449,8 @@ Version 1 of this spec left these questions open. The owner answered each one. T
 | OQ-12 | Cut-off work after a restart | R-93. |
 | OQ-13 | How long a failure stays on the status | R-21a. |
 | OQ-14 | How long a trigger context stays stored | R-17a. |
-| OQ-15 | The room report of an Impersonate | R-22: the Impersonate Input. |
-| OQ-16 | The room report of the opening | R-25a. |
+| OQ-15 | The room that an Impersonate shows | R-22: the Impersonate Input. |
+| OQ-16 | The room that the opening shows | R-22 and R-23. |
 | OQ-17 | A swipe switch to the first Swipe of a typed Input | R-39: the state in which the player typed the Input. |
 
 ## 7. Free points

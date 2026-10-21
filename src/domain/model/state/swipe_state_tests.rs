@@ -3,8 +3,9 @@
 use std::collections::HashMap;
 
 use crate::domain::model::character::NpcCard;
+use crate::domain::model::map::Room;
 use crate::domain::model::scenario::StartingScenario;
-use crate::test_support::TestNpc;
+use crate::test_support::{TestMap, TestNpc};
 
 use super::swipe_state::SwipeState;
 
@@ -58,49 +59,22 @@ fn starting_state_without_a_scenario_holds_no_character() {
     assert_eq!(state.npc_encounter_log.get_times_met("npc_1"), 0);
 }
 
-fn event_record(repeat: bool) -> crate::domain::model::state::trigger_context::EventRecord {
-    crate::domain::model::state::trigger_context::EventRecord {
-        trigger: crate::domain::model::state::trigger_context::TriggerRef {
-            npc_id: "npc_1".to_string(),
-            trigger_idx: 0,
-            trigger_name: "The gate opens".to_string(),
-            trigger_repeat: repeat,
-        },
-        header_name: "The gate opens".to_string(),
-        direction: "the gate swings open".to_string(),
-    }
-}
-
 #[test]
-fn pre_analysis_clears_the_trigger_context() {
-    let mut state = SwipeState::starting(Some(&scenario_with(&[])), &characters(&[]), "room1");
-    state.trigger_context = Some(crate::domain::model::state::trigger_context::TriggerRef {
-        npc_id: "npc_1".to_string(),
-        trigger_idx: 0,
-        trigger_name: "The gate opens".to_string(),
-        trigger_repeat: false,
-    });
+fn room_added_room_finds_a_map_room_else_an_added_room_else_none() {
+    let map = TestMap::single_room("room1");
+    let mut state = SwipeState::starting(None, &characters(&[]), "room1");
+    assert_eq!(state.room(&map).map(|room| room.id.as_str()), Some("room1"));
 
-    let pre = state.pre_analysis(None);
+    let added = Room::new_dynamic("Misty Glade", "A glade.");
+    state.movement.current_room_id = added.id.clone();
+    assert!(state.room(&map).is_none(), "an unknown room is none");
 
-    assert!(pre.trigger_context.is_none());
-    assert_eq!(pre.movement.current_room_id, "room1");
-}
-
-#[test]
-fn pre_analysis_of_an_event_marks_a_one_shot_trigger_fired() {
-    let state = SwipeState::starting(Some(&scenario_with(&[])), &characters(&[]), "room1");
-
-    let pre = state.pre_analysis(Some(&event_record(false)));
-
-    assert!(pre.npc_encounter_log.is_trigger_fired("npc_1", 0));
-}
-
-#[test]
-fn pre_analysis_of_a_repeatable_trigger_marks_nothing() {
-    let state = SwipeState::starting(Some(&scenario_with(&[])), &characters(&[]), "room1");
-
-    let pre = state.pre_analysis(Some(&event_record(true)));
-
-    assert!(!pre.npc_encounter_log.is_trigger_fired("npc_1", 0));
+    state
+        .movement
+        .dynamic_rooms
+        .insert(added.id.clone(), added.clone());
+    assert_eq!(
+        state.room(&map).map(|room| room.name.as_str()),
+        Some("Misty Glade")
+    );
 }

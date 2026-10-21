@@ -7,7 +7,8 @@ use crate::domain::model::dock::Notice;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::NarratorMode;
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::state::message_types::MessageType;
+use crate::domain::model::story_window::StoryWindowEntry;
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
@@ -107,13 +108,13 @@ impl fmt::Display for SafeHtml {
 }
 
 #[derive(Debug, Clone)]
-pub struct MessageEntryView {
+pub struct StoryRowView {
     pub id: u64,
     pub timestamp: String,
     pub text: SafeHtml,
     pub raw_text: String,
     pub log_type: String,
-    pub room_report: Option<String>,
+    pub room_header: Option<String>,
     pub event_header: Option<String>,
     pub swipe_count: usize,
     pub active_swipe_index: usize,
@@ -122,8 +123,9 @@ pub struct MessageEntryView {
     pub show_retrigger: bool,
 }
 
-impl From<&MessageEntry> for MessageEntryView {
-    fn from(entry: &MessageEntry) -> Self {
+impl From<&StoryWindowEntry> for StoryRowView {
+    fn from(window_entry: &StoryWindowEntry) -> Self {
+        let entry = &window_entry.row;
         let parsed_text = markdown_to_html(&entry.text);
         let active = entry.active_swipe_index;
         let count = entry.swipe_count;
@@ -137,7 +139,7 @@ impl From<&MessageEntry> for MessageEntryView {
                 MessageType::System => "system".to_string(),
                 MessageType::Input => "input".to_string(),
             },
-            room_report: entry.room_report.clone(),
+            room_header: window_entry.room_header.clone(),
             event_header: entry.event_header.clone(),
             swipe_count: count,
             active_swipe_index: active,

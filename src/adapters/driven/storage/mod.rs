@@ -6,7 +6,6 @@ pub mod core;
 pub mod db;
 pub mod docks;
 pub mod games;
-pub mod in_memory_data;
 pub mod llm_messages;
 pub mod mappers;
 pub mod models;
@@ -19,7 +18,6 @@ pub mod utils;
 pub mod worlds;
 
 pub use core::*;
-pub use in_memory_data::*;
 pub use transaction::{Tx, TxToken, TxWrite};
 
 #[cfg(feature = "testing")]

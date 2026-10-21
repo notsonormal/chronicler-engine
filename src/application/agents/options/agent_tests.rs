@@ -5,16 +5,14 @@ use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::application::agents::options::agent::OptionsGeneratorAgent;
-use crate::application::agents::trait_def::OptionsAgent;
+use crate::application::agents::trait_def::EndOfJobAgent;
 use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, BackendSelector, Hook, HookInput, Kind, StoryEntry, WorldView,
+    AgentConfig, AgentSettings, BackendSelector, HookInput, Role, WorldView,
 };
 use crate::domain::model::character::NpcCard;
-use crate::domain::model::state::message_types::MessageType;
-use crate::test_support::fixtures::{TestMap, TestNpc, TestPersona};
-use crate::test_support::{
-    make_test_recorder, make_test_recorder_with_storage, ModelRole, ScriptedModel,
-};
+use crate::domain::model::state::message_types::{MessageType, StoryRow};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona};
+use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
 
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -25,7 +23,6 @@ fn config() -> AgentConfig {
         agent_type: "options".to_string(),
         enabled: true,
         backend: BackendSelector::UseNamed("options".to_string()),
-        hook: Hook::Options,
     }
 }
 
@@ -39,7 +36,7 @@ struct Scene {
     persona: crate::domain::model::character::PersonaCard,
     characters: HashMap<String, NpcCard>,
     present: Vec<NpcCard>,
-    story: Vec<StoryEntry>,
+    story: Vec<StoryRow>,
 }
 
 impl Scene {
@@ -56,9 +53,10 @@ impl Scene {
             persona,
             characters,
             present: npcs,
-            story: vec![StoryEntry {
+            story: vec![StoryRow {
                 message_type: MessageType::Narration,
                 text: "The innkeeper glances your way.".to_string(),
+                ..default_story_row(MessageType::Narration)
             }],
         }
     }
@@ -85,12 +83,9 @@ impl Scene {
 
     fn input<'a>(&'a self, world: &'a WorldView<'a>) -> HookInput<'a> {
         HookInput {
-            kind: Kind::Narration,
             text: Some("You look around the inn."),
-            player_text: "look",
             story: &self.story,
             world,
-            event: None,
         }
     }
 }
@@ -134,8 +129,8 @@ fn test_a_transport_failure_fails_the_call() {
     let scene = Scene::new();
     let model = Arc::new(
         ScriptedModel::new()
-            .failed(ModelRole::Options)
-            .failed(ModelRole::Options),
+            .failed(Role::Options)
+            .failed(Role::Options),
     );
     let world = scene.world();
     let result =
@@ -235,8 +230,8 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let storage = Arc::new(Storage::new_in_memory());
     let model = Arc::new(
         ScriptedModel::new()
-            .failed(ModelRole::Options)
-            .failed(ModelRole::Options),
+            .failed(Role::Options)
+            .failed(Role::Options),
     );
     let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
     let agent =
@@ -254,4 +249,8 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
         .find(|message| message.error_message.is_some())
         .expect("the failed attempt is recorded");
     assert_eq!(failure.agent_name, "options");
+    assert_eq!(
+        failure.error_message.as_deref(),
+        Some("LLM Error: Narration generation failed at stage 'scripted': configured_failure")
+    );
 }

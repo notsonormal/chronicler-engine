@@ -21,6 +21,7 @@ fn new_catalogue(storage: &Arc<Storage>, initial_game: Option<GameId>) -> GameCa
         Arc::new(ActiveGame::new(Arc::clone(storage))),
         initial_game,
     )
+    .expect("the catalogue should point at its initial Game")
 }
 
 fn seeded_catalogue() -> (GameCatalogue, Arc<Storage>, String, String) {

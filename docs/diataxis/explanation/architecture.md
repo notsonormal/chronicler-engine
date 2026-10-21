@@ -9,7 +9,7 @@ The engine is organised around one rule: **domain and application code never imp
 
 It buys testability. Domain logic runs without an HTTP server, without SQLite, without an LLM endpoint. The persistence seam and the LLM seam are traits the application core owns and the adapters implement; tests substitute fakes at the trait boundary without booting infrastructure.
 
-It buys substitutability. Swapping OpenRouter for Ollama, or SQLite for an in-memory backend, is a wiring change in `bootstrap/`. No application-layer code is edited. The four LLM impls and two storage backends exist because the seam makes them cheap; without the seam, every consumer would carry its own dispatch and the impls would fan out through the codebase.
+It buys substitutability. Swapping OpenRouter for Ollama is a wiring change in `bootstrap/`. No application-layer code is edited. The four LLM impls exist because the seam makes them cheap; without the seam, every consumer would carry its own dispatch and the impls would fan out through the codebase.
 
 It costs a fixed amount of indirection. The application layer reaches LLM, storage, and text-check through port traits; the cost is one trait declaration per seam and one impl per backend. Where only one impl exists and the consumer is not in core (the engine's storage seam, before hexagonal formalised it), the trait is rejected as phantom — the rule says you only pay for indirection where the substitution is the point.
 
@@ -62,7 +62,7 @@ flowchart LR
     bootstrap -. wires .-> app
 ```
 
-Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::wiring`). `Storage` is concrete-by-design — the engine's persistence boundary may call it directly, with `Backend` enum dispatch (SQLite / InMemory / Test) substituting for a port trait at lower cost.
+Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persistence runs through a `SaveLlmMessageFn` closure seam (wired to concrete `Storage` in `bootstrap::wiring`). `Storage` is concrete-by-design — the engine's persistence boundary may call it directly, with the `Backend` enum and the `Test` failure layer substituting for a port trait at lower cost.
 
 ## The single-process deployment contract
 

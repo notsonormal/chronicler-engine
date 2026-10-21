@@ -31,6 +31,30 @@ And the Game is no longer busy
 Then the player still stands in "room2" (a retrigger applies no movement)
 ```
 
+#### Scenario 13.3: Retrigger sends the rendered direction to the model
+
+```gherkin
+Given a Game whose current state holds a trigger context
+And the last Message is a non-event Narration
+And the Trigger's direction names the player with the placeholder {{user}}
+When the client sends POST /retrigger
+And the Game is no longer busy
+Then the event narration call carries the Trigger's direction with the Persona's name in place of {{user}}
+And the call carries no unreplaced {{user}}
+```
+
+#### Scenario 13.4: Retrigger on an Impersonate Input creates a new event narration message
+
+```gherkin
+Given a Game whose last Message is an Impersonate Input
+And the state of that Input's Swipe holds a trigger context
+And a narrator backend that returns a non-empty continuation for the trigger prompt
+When the client sends POST /retrigger
+And the Game is no longer busy
+Then the story log gained one Message, an event Narration
+And the generation status is Idle
+```
+
 ### Retrigger error cases
 
 #### Scenario 14.1: Retrigger with no trigger context returns 400
@@ -42,12 +66,15 @@ Then the response is 400 Bad Request
 And no generation is started
 ```
 
-#### Scenario 14.3: Retrigger when the last message is not a narration returns 400
+#### Scenario 14.3: Retrigger when the last message is a typed Input returns 400
 
 ```gherkin
-Given a Game whose last Message is an Input message (not a Narration)
+Given a Game whose last Message is a typed Input
+And the state of that Input's Swipe holds a trigger context
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
+And no generation is started
+And the story-log fragment offers no `.retrigger-btn` control
 ```
 
 #### Scenario 14.4: Retrigger when the last message is an event continuation returns 400
@@ -56,6 +83,7 @@ Then the response is 400 Bad Request
 Given a Game whose last Message is an event Narration that a Trigger appended
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
+And the story-log fragment offers no `.retrigger-btn` control
 ```
 
 #### Scenario 14.5: Retrigger trigger narration failure sets Error

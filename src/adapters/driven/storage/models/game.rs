@@ -86,9 +86,10 @@ impl DbGame {
         Option<crate::domain::model::state::generation_status::GenerationFailure>,
         EngineError,
     > {
-        crate::adapters::driven::storage::utils::from_optional_json(
-            "game failure",
-            self.failure_json.as_deref(),
-        )
+        Ok(self
+            .failure_json
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()?)
     }
 }

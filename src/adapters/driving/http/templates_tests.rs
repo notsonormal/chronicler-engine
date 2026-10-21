@@ -1,7 +1,9 @@
 use askama::Template;
 use chrono::Utc;
 
-use crate::domain::model::state::message_types::{MessageEntry, MessageType};
+use crate::domain::model::state::message_types::{StoryRow, MessageType};
+use crate::domain::model::story_window::StoryWindowEntry;
+use crate::test_support::fixtures::{default_story_row, window_entries};
 use crate::adapters::driving::http::templates::{
     HeaderTemplate, NarrativeLogTemplate, OptionsDockTemplate, VisualSidebarTemplate,
 };
@@ -57,14 +59,14 @@ fn test_story_log_template_empty() {
 
 #[test]
 fn test_story_log_template_with_entries() {
-    let entries = vec![MessageEntry {
+    let entries = vec![StoryRow {
         id: 1,
         text: "Welcome to the adventure!".to_string(),
         message_type: MessageType::Narration,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Narration)
     }];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Welcome to the adventure!"));
     assert!(rendered.contains("narration"));
@@ -72,14 +74,14 @@ fn test_story_log_template_with_entries() {
 
 #[test]
 fn test_story_log_template_escapes_html() {
-    let entries = vec![MessageEntry {
+    let entries = vec![StoryRow {
         id: 1,
         text: "<script>alert('xss')</script>".to_string(),
         message_type: MessageType::Narration,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Narration)
     }];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(!rendered.contains("<script>"));
 }
@@ -87,22 +89,22 @@ fn test_story_log_template_escapes_html() {
 #[test]
 fn test_story_log_template_has_message_actions() {
     let entries = vec![
-        MessageEntry {
+        StoryRow {
             id: 1,
             text: "Welcome!".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
-            ..Default::default()
+            ..default_story_row(MessageType::Narration)
         },
-        MessageEntry {
+        StoryRow {
             id: 2,
             text: "Hello".to_string(),
             message_type: MessageType::Input,
             timestamp: Utc::now(),
-            ..Default::default()
+            ..default_story_row(MessageType::Input)
         },
     ];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("message-header"));
     assert!(rendered.contains("message-actions"));
@@ -114,14 +116,16 @@ fn test_story_log_template_has_message_actions() {
 
 #[test]
 fn test_story_log_template_edit_path_hooks() {
-    let entries = vec![MessageEntry {
+    let entries = vec![StoryRow {
         id: 1,
         text: "Raw body text".to_string(),
         message_type: MessageType::Narration,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Narration)
     }];
-    let rendered = NarrativeLogTemplate::new(&entries, false).render().unwrap();
+    let rendered = NarrativeLogTemplate::new(&window_entries(&entries), false)
+        .render()
+        .unwrap();
     assert!(rendered.contains(r#"data-id="1""#), "entry: {rendered}");
     assert!(
         rendered.contains(r#"data-raw-text="Raw body text""#),
@@ -133,14 +137,16 @@ fn test_story_log_template_edit_path_hooks() {
     );
     assert!(rendered.contains(r#"showEditForm(1)"#), "entry: {rendered}");
 
-    let quoted = vec![MessageEntry {
+    let quoted = vec![StoryRow {
         id: 2,
         text: "He said \"hi\"".to_string(),
         message_type: MessageType::Narration,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Narration)
     }];
-    let escaped = NarrativeLogTemplate::new(&quoted, false).render().unwrap();
+    let escaped = NarrativeLogTemplate::new(&window_entries(&quoted), false)
+        .render()
+        .unwrap();
     assert!(
         escaped.contains(r#"data-raw-text="He said &#34;hi&#34;""#),
         "actual escaped form: {escaped}"
@@ -150,23 +156,23 @@ fn test_story_log_template_edit_path_hooks() {
 #[test]
 fn test_story_log_template_renders_event_header() {
     let entries = vec![
-        MessageEntry {
+        StoryRow {
             id: 1,
             text: "Gabriella steps forward.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
             event_header: Some("Gabriella Introduction".to_string()),
-            ..Default::default()
+            ..default_story_row(MessageType::Narration)
         },
-        MessageEntry {
+        StoryRow {
             id: 2,
             text: "She smiles.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
-            ..Default::default()
+            ..default_story_row(MessageType::Narration)
         },
     ];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("event-header"));
     assert!(rendered.contains("Gabriella Introduction"));
@@ -177,22 +183,27 @@ fn test_story_log_template_renders_event_header() {
 }
 
 #[test]
-fn test_story_log_template_renders_room_report() {
+fn test_story_log_template_renders_the_room_header() {
     let entries = vec![
-        MessageEntry {
-            id: 1,
-            text: "You walk into the hall.".to_string(),
-            message_type: MessageType::Narration,
-            timestamp: Utc::now(),
-            room_report: Some("Entrance Hall".to_string()),
-            ..Default::default()
+        StoryWindowEntry {
+            row: StoryRow {
+                id: 1,
+                text: "You walk into the hall.".to_string(),
+                message_type: MessageType::Narration,
+                timestamp: Utc::now(),
+                ..default_story_row(MessageType::Narration)
+            },
+            room_header: Some("Entrance Hall".to_string()),
         },
-        MessageEntry {
-            id: 2,
-            text: "The hall is grand.".to_string(),
-            message_type: MessageType::Narration,
-            timestamp: Utc::now(),
-            ..Default::default()
+        StoryWindowEntry {
+            row: StoryRow {
+                id: 2,
+                text: "The hall is grand.".to_string(),
+                message_type: MessageType::Narration,
+                timestamp: Utc::now(),
+                ..default_story_row(MessageType::Narration)
+            },
+            room_header: None,
         },
     ];
     let template = NarrativeLogTemplate::new(&entries, false);
@@ -205,24 +216,24 @@ fn test_story_log_template_renders_room_report() {
 }
 
 #[test]
-fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
+fn test_story_log_template_retrigger_button_shown_when_the_window_allows_it() {
     let entries = vec![
-        MessageEntry {
+        StoryRow {
             id: 1,
             text: "look around".to_string(),
             message_type: MessageType::Input,
             timestamp: Utc::now(),
-            ..Default::default()
+            ..default_story_row(MessageType::Input)
         },
-        MessageEntry {
+        StoryRow {
             id: 2,
             text: "You look around.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
-            ..Default::default()
+            ..default_story_row(MessageType::Narration)
         },
     ];
-    let template = NarrativeLogTemplate::new(&entries, true);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), true);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("retrigger-btn"));
     assert!(rendered.contains("submitRetrigger"));
@@ -230,53 +241,29 @@ fn test_story_log_template_retrigger_button_shown_when_last_trigger_present() {
 }
 
 #[test]
-fn test_story_log_template_retrigger_button_hidden_on_event_continuation() {
-    let entries = vec![
-        MessageEntry {
-            id: 1,
-            text: "You look around.".to_string(),
-            message_type: MessageType::Narration,
-            timestamp: Utc::now(),
-            ..Default::default()
-        },
-        MessageEntry {
-            id: 2,
-            text: "An NPC appears.".to_string(),
-            message_type: MessageType::Narration,
-            timestamp: Utc::now(),
-            event_header: Some("NPC Event".to_string()),
-            ..Default::default()
-        },
-    ];
-    let template = NarrativeLogTemplate::new(&entries, true);
-    let rendered = template.render().unwrap();
-    assert!(!rendered.contains("retrigger-btn"));
-}
-
-#[test]
-fn test_story_log_template_retrigger_button_hidden_without_last_trigger() {
-    let entries = vec![MessageEntry {
+fn test_story_log_template_retrigger_button_hidden_when_the_window_refuses_it() {
+    let entries = vec![StoryRow {
         id: 1,
         text: "You look around.".to_string(),
         message_type: MessageType::Narration,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Narration)
     }];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(!rendered.contains("retrigger-btn"));
 }
 
 #[test]
 fn test_story_log_template_swipe_controls_on_last_narration_with_one_swipe() {
-    let entries = vec![MessageEntry {
+    let entries = vec![StoryRow {
         id: 1,
         text: "You look around.".to_string(),
         message_type: MessageType::Narration,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Narration)
     }];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("swipe-controls"),
@@ -297,14 +284,14 @@ fn test_story_log_template_swipe_controls_on_last_narration_with_one_swipe() {
 
 #[test]
 fn test_story_log_template_swipe_controls_on_last_input_with_one_swipe() {
-    let entries = vec![MessageEntry {
+    let entries = vec![StoryRow {
         id: 1,
         text: "Hello there.".to_string(),
         message_type: MessageType::Input,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Input)
     }];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("swipe-controls"),
@@ -315,14 +302,14 @@ fn test_story_log_template_swipe_controls_on_last_input_with_one_swipe() {
 
 #[test]
 fn test_story_log_template_swipe_controls_on_last_input() {
-    let entries = vec![MessageEntry {
+    let entries = vec![StoryRow {
         id: 1,
         text: "look around".to_string(),
         message_type: MessageType::Input,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Input)
     }];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("swipe-controls"),
@@ -333,14 +320,14 @@ fn test_story_log_template_swipe_controls_on_last_input() {
 
 #[test]
 fn test_story_log_template_no_swipe_controls_on_system() {
-    let entries = vec![MessageEntry {
+    let entries = vec![StoryRow {
         id: 1,
         text: "System message.".to_string(),
         message_type: MessageType::System,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::System)
     }];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(
         !rendered.contains("swipe-controls"),
@@ -351,22 +338,22 @@ fn test_story_log_template_no_swipe_controls_on_system() {
 #[test]
 fn test_story_log_template_no_swipe_controls_on_non_last_narration() {
     let entries = vec![
-        MessageEntry {
+        StoryRow {
             id: 1,
             text: "First narration.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc::now(),
-            ..Default::default()
+            ..default_story_row(MessageType::Narration)
         },
-        MessageEntry {
+        StoryRow {
             id: 2,
             text: "System message.".to_string(),
             message_type: MessageType::System,
             timestamp: Utc::now(),
-            ..Default::default()
+            ..default_story_row(MessageType::System)
         },
     ];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(
         !rendered.contains("swipe-controls"),
@@ -376,17 +363,17 @@ fn test_story_log_template_no_swipe_controls_on_non_last_narration() {
 
 #[test]
 fn test_story_log_template_swipe_navigation_between_existing_swipes() {
-    let mut entry = MessageEntry {
+    let mut entry = StoryRow {
         id: 1,
         text: "First swipe.".to_string(),
         message_type: MessageType::Narration,
         timestamp: Utc::now(),
-        ..Default::default()
+        ..default_story_row(MessageType::Narration)
     };
     entry.swipe_count = 3;
     entry.active_swipe_index = 1;
     let entries = vec![entry];
-    let template = NarrativeLogTemplate::new(&entries, false);
+    let template = NarrativeLogTemplate::new(&window_entries(&entries), false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("swipe-controls"));
     assert!(rendered.contains("2 / 3"));

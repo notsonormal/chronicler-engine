@@ -123,14 +123,9 @@
               }
             },
             "required": ["type"]
-          },
-          "hook": {
-            "type": "string",
-            "enum": ["analysis", "options"],
-            "description": "Fixed point in a generation where the agent runs."
           }
         },
-        "required": ["name", "agent_type", "enabled", "hook"]
+        "required": ["name", "agent_type", "enabled"]
       }
     },
     "mode_preset_registry": {

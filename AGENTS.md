@@ -31,7 +31,6 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `db.rs` — SQLite database connection pool
         - `docks.rs` — The dock record reads: the offered set and the notice of one Game
         - `games.rs` — Game storage operations
-        - `in_memory_data.rs` — In-memory backend data structures and their inherent impls
         - `llm_messages.rs` — LLM message storage
         - `mod.rs` — Storage layer and database access
         - `personas.rs` — Persona storage operations
@@ -60,7 +59,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - **utils/**
           - `mod.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
           - `plumbing.rs` — Storage-layer plumbing utilities (datetime parsing, schema migrations).
-          - `records.rs` — Shared helpers of the story records: the in-memory refusal and the JSON columns
+          - `records.rs` — Shared helper of the story records: the check that a write names a Message of its Game
       - **text_check/**
         - `harper_text_checker.rs` — Harper text check adapter implementing TextChecker port
         - `mod.rs` — Text checking and validation
@@ -137,8 +136,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - **utils/**
           - `current_game.rs` — `CurrentGame` — the request's Game, read once per request.
           - `error.rs` — Error rendering helpers for HTTP fragments.
-          - `fragment.rs` — Fragment-rendering glue: uniform try-render / log-error wrapper for AppState renderers.
-          - `handler_helpers.rs` — Handler-level utilities: shared template render + option string + preset helpers.
+          - `fragment.rs` — Fragment-rendering glue: the try-render wrapper for AppState renderers and the template render helpers.
+          - `handler_helpers.rs` — Handler-level utilities: option string and storage-id helpers.
           - `mod.rs` — HTTP utility modules.
           - `response.rs` — HTTP response helpers
           - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`
@@ -164,7 +163,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **agents/**
       - `mod.rs` — Agent hooks: the hook traits and the AgentRunner
       - `runner.rs` — Agent runner: the Agents of each hook, built from their configuration
-      - `trait_def.rs` — Agent hook traits
+      - `trait_def.rs` — Agent hook traits: one trait per hook, each giving its own kind of result
       - **options/**
         - `agent.rs` — Options agent implementation.
         - `mod.rs` — Options agent system — generates the pickable next-action option set.
@@ -231,16 +230,17 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `character.rs` — Character sheet data and NPC card definitions
       - `dock.rs` — The dock record: the offered set and the one notice of a Game
       - `game.rs` — Game state and session management
-      - `generation.rs` — The order of one generation: ids and texts only
+      - `generation.rs` — The order of one generation, and the plan rules that turn one request into a plan
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM call forensics record DTO
       - `map.rs` — Map and location data structures
-      - `message.rs` — Message types and conversation history (Message, Swipe, stored generation inputs)
+      - `message.rs` — Message types and conversation history (Message, Swipe)
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
-      - `quantifier.rs` — Quantifier types for narrative evaluation
+      - `quantifier.rs` — The Quantifier result and the Character transitions the Game rules derive from it
       - `scenario.rs` — Scenario definitions and world data
       - `settings.rs` — Settings and configuration types
+      - `story_window.rs` — The story window: the newest entries of the story, with the room each one shows, and the end-of-story facts that go with them
       - `tail.rs` — The end of the story, and the rules derived from it
       - `template.rs` — Template placeholder substitution for author-controlled text fields.
       - `trigger.rs` — Trigger conditions and event types
@@ -250,13 +250,12 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state
-        - `scene_state.rs` — Current scene NPCs and quantifier confidence
+        - `scene_state.rs` — Current scene NPCs
         - `swipe_state.rs` — The game state of one Swipe: movement, scene and encounter log
-        - `trigger_context.rs` — The Trigger reference of a Swipe state and the event record of an event Narration
+        - `trigger_context.rs` — The Trigger reference of an event record, and the event record of a fired Trigger
       - **utils/**
         - `game_name.rs` — Game name generation with date-based disambiguation.
         - `game_rules.rs` — The game rules: movement, the Characters present and the Triggers, as a pure function of the Swipe state
-        - `generation_record.rs` — What a generation writes as a record: its Message kind, its message type and its maker
         - `mod.rs` — Domain model utility modules.
         - `name_uniqueness.rs` — Trim-and-compare name uniqueness shared by the settings/preset services and preset storage.
         - `opening.rs` — The opening Narration of a new Game and the parts only it has.

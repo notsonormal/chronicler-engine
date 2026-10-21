@@ -103,7 +103,7 @@ Then at most one Narration message carries an event header (the trigger fires at
 And the generation status is Idle
 ```
 
-#### Scenario 1.14: A Narration that moves the player reports the room it arrives in
+#### Scenario 1.14: A Narration that moves the player shows the room it arrives in
 
 ```gherkin
 Given a game state whose player stands in "room_1"
@@ -112,12 +112,50 @@ And a quantifier backend that moves the player to "room2" for the first Action a
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="walk north"
 And the Game is no longer busy
-Then the Action's Narration message reports the room "Room room2"
-And the player-input message reports no room
+Then the story log shows the room "Room room2" on the Action's Narration message
+And the story log shows no room on the player-input message
 When the client POST /action with command="look"
 And the Game is no longer busy
-Then the second Action's Narration message reports no room
-And that Action's player-input message reports no room
+Then the story log shows no room on the second Action's Narration message
+And the story log shows no room on that Action's player-input message
+```
+
+#### Scenario 1.15: A Narration that names the room the player is in shows no room
+
+```gherkin
+Given a game state whose player stands in "room_1"
+And a map whose rooms are "room_1" and "room2"
+And a quantifier backend that names the destination "room_1" for the Action
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action with command="look around"
+And the Game is no longer busy
+Then the player still stands in "room_1"
+And the story log shows no room on the Action's Narration message
+```
+
+#### Scenario 1.16: Two added rooms with the same name show one room name
+
+```gherkin
+Given a game state whose player stands in an added room named "Misty Glade"
+And a quantifier backend that names the destination "Misty Glade" for the Action
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action with command="walk on"
+And the Game is no longer busy
+Then the player stands in a second added room named "Misty Glade"
+And the story log shows no room on the Action's Narration message
+```
+
+#### Scenario 1.17: A move between two map rooms with the same name shows no room
+
+```gherkin
+Given a game state whose player stands in "room_1"
+And a map whose rooms "room_1" and "room2" have the same name
+And a quantifier backend that moves the player to "room2" for the Action
+And a narrator backend that returns a non-empty narration for any prompt
+When the client POST /action with command="walk north"
+And the Game is no longer busy
+Then the player stands in "room2"
+And the story log shows no room on the Action's Narration message
 ```
 
 ### Error recovery
@@ -283,6 +321,18 @@ When the client POST /action with command="/impersonate hello"
 And the Game is no longer busy
 Then the story log gained exactly one player-input message
 And no player-input message's text is "/impersonate hello"
+And the generation status is Idle
+```
+
+#### Scenario 1.18: A bare `/impersonate` writes an Impersonate Input
+
+```gherkin
+Given a Game whose story log holds only its opening Narration
+And a narrator backend that returns a non-empty text for any prompt
+When the client POST /action with command="/impersonate"
+And the Game is no longer busy
+Then the story log gained exactly one player-input message
+And that message is an impersonation with no impersonate direction
 And the generation status is Idle
 ```
 

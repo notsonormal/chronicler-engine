@@ -77,14 +77,13 @@ which sends SIGTERM through `terminate_pid`.
 
 ## Pattern 3 — Storage-direct round-trip
 
-**Purpose.** Exercise a `Storage` method against a real SQLite (or in-memory)
-backend, with no `Job` and no application collaborators.
+**Purpose.** Exercise a `Storage` method against a real SQLite backend, with no
+`Job` and no application collaborators.
 
 **The standard.** `create_test_storage(game_id)` in `tests/helpers/fixtures.rs`
 opens `:memory:` SQLite and pre-seeds the games row so FK-bearing tables accept
 inserts. A case that needs no seeded row builds
-`test_support::empty_sqlite_storage()` instead. A case that pins the same clause
-on the in-memory fake as well builds `Storage::new_in_memory()` next to it.
+`test_support::empty_sqlite_storage()` instead.
 
 **Exemplar.** `tests/storage/*.rs`.
 
@@ -106,10 +105,11 @@ building with `.storage(Arc::new(...))`.
 **Purpose.** Test that a storage failure propagates correctly through the layer
 above it. The failure is the system under test.
 
-**The standard.** `Storage::with_failure(method, TestOverride::internal(...))`
+**The standard.** `Storage::with_failure(StorageCall::..., TestOverride::internal(...))`
 fails one method inline. `Storage::with_test_failures()` returns
-`(Storage, TestFailureHandle)`; the handle's `.set(method, override)` /
-`.clear(method)` toggle a failure mid-test. `TestOverride::internal` models
+`(Storage, TestFailureHandle)`; the handle's `.set(call, override)` /
+`.clear(call)` toggle a failure mid-test. `StorageCall` names one `Storage`
+method, so a wrong name does not compile. `TestOverride::internal` models
 unexpected runtime errors and `TestOverride::config` models input-validation
 failures; the two map to different `EngineError` arms downstream.
 
@@ -218,8 +218,7 @@ The decision rule:
   Job? → the wired `TestAppBuilder` app.
 - Service method on a pre-seeded state (read or write)? → `TestAppBuilder`.
 - `Storage` method under test (no service at all)? → `create_test_storage(...)`,
-  `empty_sqlite_storage()` when the case needs no seeded row, or
-  `Storage::new_in_memory()` for a clause the fake pins too (Pattern 3).
+  or `empty_sqlite_storage()` when the case needs no seeded row (Pattern 3).
 - Router-only HTTP assertion? → `default_app()` / `.build()` (Pattern 4).
 
 ### Cross-cutting 7 — The scripted model and the Agents a tier-1 app runs
@@ -231,8 +230,8 @@ Entries are keyed by role (`ModelRole`), so a test declares `.narration("…")`,
 `.event_narration("…")`, `.analysis(analysis_report(&[], Some("room2")))`,
 `.options(set_a)` and the shorthand `.turn("…")` (a narration and the analysis
 of it) without depending on the order the roles interleave. The analysis entry
-is a parsed room report (`analysis_report`), which is what makes a generation's
-analysis confident.
+is a parsed Quantifier answer (`analysis_report`), which is what makes a
+generation's analysis confident.
 
 Hand the model to the app with `app_with_script` /
 `app_with_model_and_storage` (`tests/http/support/app_wiring.rs`), or with

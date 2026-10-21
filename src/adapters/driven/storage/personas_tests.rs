@@ -1,16 +1,16 @@
 use crate::domain::model::character::{CharacterSheet, PersonaCard};
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::sqlite_storage;
 
 #[test]
-fn test_list_personas_in_memory_empty() {
+fn test_list_personas_empty() {
     let storage = Storage::new_in_memory();
     let personas = storage.list_personas().unwrap();
     assert!(personas.is_empty());
 }
 
 #[test]
-fn test_list_personas_in_memory_seeded() {
+fn test_list_personas_seeded() {
     let storage = Storage::new_in_memory();
     let card = test_persona_card("test_persona", "Test Persona");
     storage.seed_persona("test_key", &card).unwrap();
@@ -21,7 +21,7 @@ fn test_list_personas_in_memory_seeded() {
 }
 
 #[test]
-fn test_get_persona_found_in_memory() {
+fn test_get_persona_found() {
     let storage = Storage::new_in_memory();
     let card = test_persona_card("persona1", "Persona One");
     storage.seed_persona("key1", &card).unwrap();
@@ -33,7 +33,7 @@ fn test_get_persona_found_in_memory() {
 }
 
 #[test]
-fn test_get_persona_not_found_in_memory() {
+fn test_get_persona_not_found() {
     let storage = Storage::new_in_memory();
     let result = storage.get_persona("nonexistent").unwrap();
     assert!(result.is_none());
@@ -55,7 +55,7 @@ fn test_seed_persona_sqlite() {
 }
 
 #[test]
-fn test_seed_persona_idempotent_in_memory() {
+fn test_seed_persona_idempotent() {
     let storage = Storage::new_in_memory();
     let card = test_persona_card("dup_persona", "Duplicate Persona");
 
@@ -70,7 +70,10 @@ fn test_seed_persona_idempotent_in_memory() {
 #[test]
 fn test_list_personas_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("list_personas", TestOverride::internal("list failed"));
+    handle.set(
+        StorageCall::ListPersonas,
+        TestOverride::internal("list failed"),
+    );
 
     let result = storage.list_personas();
     assert!(result.is_err());
@@ -79,7 +82,7 @@ fn test_list_personas_failure() {
 #[test]
 fn test_get_persona_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("get_persona", TestOverride::config("get failed"));
+    handle.set(StorageCall::GetPersona, TestOverride::config("get failed"));
 
     let result = storage.get_persona("persona");
     assert!(result.is_err());
@@ -109,7 +112,10 @@ fn require_persona_returns_canonical_not_found_when_absent() {
 #[test]
 fn test_seed_persona_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("seed_persona", TestOverride::internal("seed failed"));
+    handle.set(
+        StorageCall::SeedPersona,
+        TestOverride::internal("seed failed"),
+    );
 
     let card = test_persona_card("fail_persona", "Fail Persona");
     let result = storage.seed_persona("fail_key", &card);

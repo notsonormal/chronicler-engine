@@ -97,15 +97,12 @@ impl AppState {
     }
 
     pub fn render_story_log(&self, game_id: GameId) -> Result<String> {
-        const MAX_LOG_DISPLAY: usize = 50;
-
-        let (entries, has_last_trigger) = self
+        let window = self
             .game_view_query
-            .get_story_log_entries(game_id)
+            .story_window(game_id)
             .map_err(|e| EngineError::Config(Self::render_error_context("story log", e)))?;
 
-        let entries: Vec<_> = entries.into_iter().take(MAX_LOG_DISPLAY).collect();
-        let template = NarrativeLogTemplate::new(&entries, has_last_trigger);
+        let template = NarrativeLogTemplate::new(&window.entries, window.retrigger_allowed);
         template
             .render()
             .map_err(|e| EngineError::Template(Self::render_error_context("story log", e)))

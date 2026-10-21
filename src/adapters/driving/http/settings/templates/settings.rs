@@ -14,6 +14,7 @@ use crate::adapters::driving::http::utils::error::{
     error_disclosure, raw_error_detail,
     refusal_message_without_layer_prefix_for_validation_and_config,
 };
+use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::template_helpers::select_options_html;
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
 use crate::error::EngineError;
@@ -116,11 +117,9 @@ impl SettingsTemplate {
                     &raw_error_detail(&error.to_string()),
                 ))
             }),
-            text_check_card: SafeHtml::new(
-                TextCheckCardTemplate::from_settings(settings, "")
-                    .render()
-                    .unwrap_or_default(),
-            ),
+            text_check_card: SafeHtml::new(render_or_error_fragment(
+                &TextCheckCardTemplate::from_settings(settings, ""),
+            )),
         }
     }
 

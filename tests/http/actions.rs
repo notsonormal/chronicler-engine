@@ -4,20 +4,25 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
+use chronicler_engine::adapters::driving::http::AppState;
 
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, TextCheckSettings};
+use chronicler_engine::domain::model::map::Room;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, ModelRole, ScriptedModel, TestAppBuilder, TestDataBuilder,
-    TestMap, empty_sqlite_storage,
+    active_game_of, analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
+    empty_sqlite_storage,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_model_and_settings};
 use crate::support::http_assertions::{
     assert_story_log_ends_with_message, llm_call_count, status_error_message,
 };
-use crate::support::http_fixtures::{break_start_room, story_of, OFFERED_SET};
+use crate::support::http_fixtures::{
+    break_start_room, corrupt_start_state, room_header_of, story_of, OFFERED_SET,
+};
 use crate::support::http_requests::{
     fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
     response_body, wait_settled,
@@ -127,9 +132,9 @@ async fn test_quantifier_npc_fires_trigger_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The main narration.")
-                .analysis(analysis_report(&["npc_1"], None))
+                .after_narration(analysis_report(&["npc_1"], None))
                 .event_narration("The NPC greets you warmly.")
-                .analysis(analysis_report(&["npc_1"], None)),
+                .after_narration(analysis_report(&["npc_1"], None)),
         ))
         .build_with_state();
 
@@ -171,7 +176,7 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The bartender nods.")
-                .analysis(analysis_report(&["bartender"], None)),
+                .after_narration(analysis_report(&["bartender"], None)),
         ))
         .build_with_state();
 
@@ -220,11 +225,11 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The shopkeeper greets you.")
-                .analysis(analysis_report(&["shopkeeper"], None))
+                .after_narration(analysis_report(&["shopkeeper"], None))
                 .event_narration("The shopkeeper greets you.")
-                .analysis(analysis_report(&["shopkeeper"], None))
+                .after_narration(analysis_report(&["shopkeeper"], None))
                 .narration("The shopkeeper greets you again.")
-                .analysis(analysis_report(&["shopkeeper"], None)),
+                .after_narration(analysis_report(&["shopkeeper"], None)),
         ))
         .build_with_state();
 
@@ -319,9 +324,9 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You step into the shop.")
-                .analysis(analysis_report(&[], None))
+                .after_narration(analysis_report(&[], None))
                 .event_narration("Gabriella emerges from the shadows.")
-                .analysis(analysis_report(&["gabriella"], None)),
+                .after_narration(analysis_report(&["gabriella"], None)),
         ))
         .build_with_state();
 
@@ -383,7 +388,7 @@ async fn test_nonexistent_room_sets_error_status_http() {
 // [docs/specs/actions.md] SCENARIO: 2.2
 #[tokio::test]
 async fn test_failing_narrator_sets_error_status_http() {
-    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().failed(ModelRole::Narration)));
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().failed(Role::Narrator)));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
@@ -427,8 +432,8 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("Main narration preserved.")
-                .analysis(analysis_report(&["npc_1"], None))
-                .failed(ModelRole::Event),
+                .after_narration(analysis_report(&["npc_1"], None))
+                .failed(Role::Trigger),
         ))
         .build_with_state();
 
@@ -496,8 +501,8 @@ async fn test_quantifier_transport_failure_completes_action_and_keeps_npcs_http(
     assert_quantifier_failure_keeps_npcs(Arc::new(
         ScriptedModel::new()
             .narration("The innkeeper glances your way.")
-            .failed(ModelRole::Analysis)
-            .failed(ModelRole::Analysis),
+            .failed(Role::Quantifier)
+            .failed(Role::Quantifier),
     ))
     .await;
 }
@@ -509,8 +514,8 @@ async fn test_quantifier_unparseable_answer_completes_action_and_keeps_npcs_http
     assert_quantifier_failure_keeps_npcs(Arc::new(
         ScriptedModel::new()
             .narration("The innkeeper glances your way.")
-            .analysis("There is no room report in this answer.")
-            .analysis("There is no room report in this answer."),
+            .after_narration("There is no room report in this answer.")
+            .after_narration("There is no room report in this answer."),
     ))
     .await;
 }
@@ -560,7 +565,7 @@ async fn assert_quantifier_failure_keeps_npcs(model: Arc<ScriptedModel>) {
 #[tokio::test]
 async fn test_delayed_llm_completes_without_deadlock_http() {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = app_with_model(Arc::clone(&model));
 
     let resp = post_action(&app, "look around").await;
@@ -591,9 +596,9 @@ async fn test_three_actions_in_sequence_http() {
         ScriptedModel::new()
             .turn("You examine the room.")
             .narration("You look around.")
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration("You check your inventory.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     ));
 
     for command in ["examine room", "look around", "check inventory"] {
@@ -633,9 +638,9 @@ async fn test_sequential_execute_retry_execute_http() {
         ScriptedModel::new()
             .turn("You examine the room.")
             .narration("You examine the room again.")
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration("You look around.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     ));
 
     let _ = post_action(&app, "examine room").await;
@@ -672,9 +677,9 @@ async fn test_async_action_sequence_then_retry_http() {
         ScriptedModel::new()
             .turn("You greet the room.")
             .narration("You examine the room.")
-            .analysis(analysis_report(&[], None))
+            .after_narration(analysis_report(&[], None))
             .narration("You examine the room again.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     ));
 
     let _ = post_action(&app, "hello").await;
@@ -737,6 +742,38 @@ async fn test_slash_impersonate_produces_input_http() {
         Some("hello"),
         "the impersonate direction must be stored on the swipe"
     );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.18
+#[tokio::test]
+async fn test_bare_slash_impersonate_produces_input_http() {
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().turn("You say hello.")));
+
+    let resp = post_action(&app, "/impersonate").await;
+    assert!(
+        resp.status().is_success(),
+        "a bare /impersonate should accept"
+    );
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the bare impersonate should complete"
+    );
+
+    let messages = story_of(&state);
+    let inputs: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .collect();
+    assert_eq!(inputs.len(), 1, "one Input entry: {messages:?}");
+    let input = inputs[0];
+    assert_eq!(input.text(), "You say hello.");
+    assert!(input.impersonated(), "the impersonate flag is stored");
+    assert_eq!(
+        input.impersonate_direction(),
+        None,
+        "a bare /impersonate stores no direction"
+    );
+    assert_eq!(fetch_generating_status(&app).await, "idle");
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.10
@@ -854,7 +891,7 @@ async fn test_slash_command_bypasses_text_check_http() {
 
 // [docs/specs/actions.md] SCENARIO: 1.14
 #[tokio::test]
-async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
+async fn test_moving_narration_shows_the_room_it_arrives_in_http() {
     let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
@@ -865,9 +902,9 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You walk north into the next room.")
-                .analysis(analysis_report(&[], Some("room2")))
+                .after_narration(analysis_report(&[], Some("room2")))
                 .narration("You look around the new room.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ))
         .build_with_state();
 
@@ -883,18 +920,18 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         .rfind(|m| m.message_type == MessageType::Narration)
         .expect("the Action appends a Narration");
     assert_eq!(
-        narration.room_report(),
+        room_header_of(&state, narration.id).as_deref(),
         Some("Room room2"),
-        "the Narration that moved the player must report the room it arrived in"
+        "the Narration that moved the player shows the room it arrived in"
     );
     let input = messages
         .iter()
         .find(|m| m.message_type == MessageType::Input)
         .expect("the Action appends a player input");
     assert_eq!(
-        input.room_report(),
+        room_header_of(&state, input.id),
         None,
-        "the player input that leaves a room must not carry the old room's name"
+        "the player input that leaves a room shows no room"
     );
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -914,10 +951,135 @@ async fn test_moving_narration_reports_the_room_it_arrives_in_http() {
         2,
         "the second Action adds a player input and a Narration"
     );
+    let later_headers: Vec<_> = later.iter().map(|m| room_header_of(&state, m.id)).collect();
     assert!(
-        later.iter().all(|m| m.room_report().is_none()),
-        "the room name must not leak onto the Action after the movement: {:?}",
-        later.iter().map(|m| m.room_report()).collect::<Vec<_>>()
+        later_headers.iter().all(Option::is_none),
+        "the room name must not repeat on the Action after the movement: {later_headers:?}"
+    );
+}
+
+fn last_narration_id(state: &AppState) -> u64 {
+    story_of(state)
+        .iter()
+        .rfind(|m| m.message_type == MessageType::Narration)
+        .expect("the Action appends a Narration")
+        .id
+}
+
+fn current_room_id(state: &AppState) -> String {
+    state
+        .game_view_query
+        .get_debug_state(active_game_of(state))
+        .expect("get_debug_state should succeed")
+        .current_room_id
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.15
+#[tokio::test]
+async fn test_narration_that_names_the_current_room_shows_no_room_http() {
+    let data = TestDataBuilder::default_test()
+        .map(TestMap::two_rooms("room_1", "room2"))
+        .build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You look around.")
+                .after_narration(analysis_report(&[], Some("room_1"))),
+        ))
+        .build_with_state();
+
+    assert!(post_action(&app, "look around").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should complete"
+    );
+
+    assert_eq!(current_room_id(&state), "room_1", "the player did not move");
+    assert_eq!(
+        room_header_of(&state, last_narration_id(&state)),
+        None,
+        "naming the room the player is in changes no room name"
+    );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.16
+#[tokio::test]
+async fn test_two_added_rooms_with_the_same_name_show_one_room_name_http() {
+    let storage = Arc::new(empty_sqlite_storage());
+    let (app, state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You walk on.")
+                .after_narration(analysis_report(&[], Some("Misty Glade"))),
+        ))
+        .build_with_state();
+    let seeded_room = Room {
+        id: "dynamic_seeded".to_string(),
+        ..Room::new_dynamic("Misty Glade", "A glade the player already stands in.")
+    };
+    corrupt_start_state(&storage, active_game_of(&state), |start| {
+        start
+            .movement
+            .dynamic_rooms
+            .insert(seeded_room.id.clone(), seeded_room.clone());
+        start.movement.current_room_id = seeded_room.id.clone();
+    });
+
+    assert!(post_action(&app, "walk on").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should complete"
+    );
+
+    let room_id = current_room_id(&state);
+    assert!(
+        room_id.starts_with("dynamic_") && room_id != seeded_room.id,
+        "the move added a second room: {room_id}"
+    );
+    let (room_name, _image) = state
+        .game_view_query
+        .get_current_room_view(active_game_of(&state))
+        .expect("the current room reads back");
+    assert_eq!(
+        room_name, "Misty Glade",
+        "the second room carries the same name"
+    );
+    assert_eq!(
+        room_header_of(&state, last_narration_id(&state)),
+        None,
+        "two added rooms with one name show one room name"
+    );
+}
+
+// [docs/specs/actions.md] SCENARIO: 1.17
+#[tokio::test]
+async fn test_a_move_between_two_map_rooms_with_the_same_name_shows_no_room_http() {
+    let mut map = TestMap::two_rooms("room_1", "room2");
+    let shared_name = map.overworld.regions[0].rooms[0].name.clone();
+    map.overworld.regions[0].rooms[1].name = shared_name;
+    let data = TestDataBuilder::default_test().map(map).build();
+    let (app, state) = TestAppBuilder::default_test()
+        .data(data)
+        .model(Arc::new(
+            ScriptedModel::new()
+                .narration("You walk north.")
+                .after_narration(analysis_report(&[], Some("room2"))),
+        ))
+        .build_with_state();
+
+    assert!(post_action(&app, "walk north").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Action should complete"
+    );
+
+    assert_eq!(current_room_id(&state), "room2", "the player moved");
+    assert_eq!(
+        room_header_of(&state, last_narration_id(&state)),
+        None,
+        "the two rooms share a name, so the move shows no room"
     );
 }
 
@@ -950,8 +1112,9 @@ async fn test_confirm_retargets_status_display() {
 async fn test_missing_persona_answers_500_with_the_missing_data_line_http() {
     let raw = "the persona record cannot be read";
     let line = "The data for this request is missing: the persona.";
-    let storage =
-        Arc::new(empty_sqlite_storage().with_failure("get_persona", TestOverride::internal(raw)));
+    let storage = Arc::new(
+        empty_sqlite_storage().with_failure(StorageCall::GetPersona, TestOverride::internal(raw)),
+    );
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .model(Arc::new(ScriptedModel::new().turn("You look around.")))

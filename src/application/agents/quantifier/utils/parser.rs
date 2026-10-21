@@ -3,7 +3,10 @@
 
 use serde::Deserialize;
 
-use crate::domain::model::quantifier::{MovementType, QuantifierConfidence, QuantifierParseResult};
+use crate::application::agents::quantifier::types::{
+    MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
+    QuantifierReading,
+};
 
 #[derive(Deserialize, Debug)]
 struct QuantifierJsonResponse {
@@ -136,12 +139,7 @@ pub(crate) fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]
     found
 }
 
-pub(crate) fn parse_with_movement(
-    response: &str,
-    known_npc_ids: &[String],
-) -> crate::domain::model::quantifier::QuantifierResult {
-    use crate::domain::model::quantifier::{MovementParseResult, QuantifierResult};
-
+pub(crate) fn parse_with_movement(response: &str, known_npc_ids: &[String]) -> QuantifierReading {
     let trimmed = response.trim();
 
     tracing::debug!(
@@ -173,10 +171,9 @@ pub(crate) fn parse_with_movement(
                     _ => None,
                 }),
             destination: m.destination,
-            confidence: QuantifierConfidence::High,
         });
 
-        return QuantifierResult {
+        return QuantifierReading {
             npcs: QuantifierParseResult {
                 npc_ids: valid_ids,
                 confidence: QuantifierConfidence::High,
@@ -184,7 +181,6 @@ pub(crate) fn parse_with_movement(
             movement: movement.unwrap_or(MovementParseResult {
                 movement_type: None,
                 destination: None,
-                confidence: QuantifierConfidence::High,
             }),
         };
     }
@@ -199,7 +195,6 @@ pub(crate) fn parse_with_movement(
     let movement = MovementParseResult {
         movement_type: None,
         destination: None,
-        confidence: QuantifierConfidence::Low,
     };
-    QuantifierResult { npcs, movement }
+    QuantifierReading { npcs, movement }
 }

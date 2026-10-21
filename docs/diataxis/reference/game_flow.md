@@ -13,10 +13,19 @@ These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/opti
 
 - A Job runs on the Game that its request named. Every write of the Job names that Game, so a Game switch does not change a running Job.
 - A Game has at most one Job. A second request for a busy Game is refused.
-- A Job runs at most two generations: the Narration, and the event Narration of a Trigger that the analysis found. It then runs at most one Options run.
-- A part that fails ends the Job. Every save unit that landed before the failure stays. When the first generation saved its Narration, the Options run still runs, even when the event generation fails.
+- A Job runs at most two generations: the Narration, and the event Narration of a Trigger that the game rules fired. It then runs at most one Options run.
+- A part that fails ends the Job. Every save unit that landed before the failure stays.
+- When the Job saved a Narration or an event Narration, the Options run follows a failure of any later part: the state update, the event generation or the save of the event text. A Job whose entry moved on runs no Options run. The status shows the first failure. A failure of that Options run goes to the log.
 
-A `JobPlan` holds the order of one request, and a `GenerationOrder` the order of one generation.
+## The Plan of a Request
+
+`JobPlan::for_request` in `domain/model/generation.rs` makes the plan of a request. It is a pure function of the request and of the end of the story. A plan holds the free text to save, the first generation and the kind of Options run. A request that has no plan gets one of two refusals: a bad request (`400`) or a missing record (`500`, with the failure line that names the record).
+
+A `GenerationOrder` is the order of one generation. It holds ids and texts only. The kind of the generation carries the data that only that kind has, such as the event record of an event generation.
+
+`GenerationOrder::write` makes the new Swipe of a generation. It is the one place that decides the Message kind, the message type, the maker, the stored inputs, the event header and the Swipe state of the text save.
+
+A Retrigger is allowed when `Tail::retrigger_allowed` says so: the last Message is a Narration that is not an event Narration, or an Impersonate Input, and the current state holds a trigger context. The story log button reads the same rule from the story window.
 
 ## The Job Entry and Busy
 
@@ -28,6 +37,7 @@ No saved record holds the busy mark or the step. A restart loses every job entry
 
 `GameWriter` in `application/generation/gate.rs` is the only code that opens a save unit. It holds every write to a Game's story records, dock record and failure line: accept, stop, edit, delete, swipe switch, create, reset and delete of a Game. A running Job writes through its own `JobWriter`. `GameCatalogue` writes the Game's config columns: its display name, its posture, its mode, its preset selections and its options toggle.
 
+- `accept` reads the end of the story and asks `JobPlan::for_request` for the plan. It then checks that the records the plan names exist: the Game, the Persona and the start state.
 - Each save method of a `JobWriter` checks, in one hold of the registry, that the job entry of the Game still holds the Job's id. When the check fails, the save is refused and the Job ends with no further write.
 - A stop, a reset and a delete of the Game remove the job entry. A late save of their Job lands nowhere.
 - A hold covers one check and its save units. No hold spans an LLM call, so the Jobs of different Games run at the same time.
@@ -47,8 +57,8 @@ flowchart TD
     Room --> Input[Input save: free text only]
     Input --> Narrate[narrator call]
     Narrate --> TextSave[text save]
-    TextSave --> Analysis[analysis hook]
-    Analysis --> Rules[game rules]
+    TextSave --> AfterNarration[after-narration hook]
+    AfterNarration --> Rules[game rules]
     Rules --> Update[state update]
     Update -->|Trigger found| Event[event generation: the same parts]
     Update -->|No Trigger| Options[Options run]
@@ -56,9 +66,20 @@ flowchart TD
     Options --> End([Job ends])
 ```
 
-- The text save shows the text in the story log. The analysis and the state update follow it.
-- A user regen ends at the text save. It has no analysis.
+- The text save shows the text in the story log. The after-narration hook, the game rules and the state update follow it.
+- A user regen ends at the text save. It runs no after-narration hook.
 - A part that fails writes the failure line, which is a save unit, and the Job ends.
+- Each part loads by id the records it uses, makes one call, and returns its result. Between parts only ids, texts and part results move. A save unit reads nothing: the part that calls it loads the values and gives them to it.
+
+## The Failure Lines
+
+One rule picks the failure line of a part. `accept` and the Job use the same rule.
+
+- A read that fails, or finds no row, gives the missing-data line: "The data for this request is missing: <record>." `Record` names each record. The raw error is in the disclosure. A missing preset of the Narrator or of a hook gives this line, with the record `Preset`.
+- A write that fails gives "The new text could not be saved."
+- A failed state update gives the contradiction line. A state that the game rules refuse gives the same line.
+- A failed model call or prompt assembly gives the line of its error class.
+- A failed event generation gives "The event narration failed." The line of the failure under it is in the raw text.
 
 ## Status
 
@@ -82,44 +103,51 @@ Each Swipe holds one **Swipe state**: the room, the added rooms, the Characters 
 - A stop or a restart between the two writes leaves the Swipe with its pre-analysis state.
 - An edit changes the text of a Swipe only. A swipe switch and a delete change which Swipe state is current. They write no Swipe state.
 
-A Swipe also holds the room report that its Message shows. An event Narration's Message holds its **event record**, the Trigger that started it.
+An event Narration's Message holds its **event record**, the Trigger that started it.
+
+The room is one fact: the room of the Swipe state. `SwipeState::room` finds it: a map room, else an added room.
+
+## The Story Window
+
+The story log shows the **story window**: the newest Messages of the Game, oldest first. `GameViewQuery::story_window` reads the entries and the end-of-story facts in one storage read, so a Job cannot save a Message between them. The facts include whether a Retrigger is allowed. The last entry of the window is the last Message of the story, and the last-entry controls act on it.
+
+The story log derives the room name that a Message shows from the Swipe state of its active Swipe. A Message shows its room name when that name differs from the room name of the Message before it. The oldest Message of the window always shows its room name. Two rooms with one name count as one room name.
 
 ## Create and Reset
 
-One save unit creates a Game. It writes the Game record, an empty dock record and the opening Narration. The opening Narration holds one Swipe: the World's opening text, which can be empty, the starting state, and the starting room as its room report. No LLM call writes it. A reset runs the same unit, so a Game always holds its opening Narration.
+One save unit creates a Game. It writes the Game record, an empty dock record and the opening Narration. The opening Narration holds one Swipe: the World's opening text, which can be empty, and the starting state. No LLM call writes it. A reset runs the same unit, so a Game always holds its opening Narration.
 
-A Game switch moves the active-Game pointer and touches the Game's `updated_at`. `GameCatalogue` is the only writer of the pointer.
+A Game switch touches the Game's `updated_at` and then moves the active-Game pointer. `GameCatalogue` is the only writer of the pointer.
 
 ## Trigger Evaluation
 
-Trigger evaluation runs inside the game rules, after the analysis hook. The first matching Trigger starts one event generation. The event record keeps the Trigger name, and the name becomes the event header of the event Narration's Message.
+Trigger evaluation runs inside the game rules, after the after-narration hook. The first matching Trigger fires. The game rules return the event record of the fired Trigger, with its direction rendered. The record becomes the trigger context of the Swipe state, and it starts one event generation. The Trigger name becomes the event header of the event Narration's Message.
 
 ### Mutation Order
 
-The game rules apply the analysis in this order:
+The game rules apply the Quantifier result in this order:
 
 1. Movement resolves.
-2. The Characters present are set from the analysis.
+2. The Characters present are set from the Quantifier result.
 3. Trigger requirements read the encounter records, before the next part of the generation changes them.
 4. Character enter and leave events update `currently_meeting` and `times_met`.
 
-The event generation starts from the Swipe state that the state update saved. Its analysis runs with the movement taken out, and a Trigger that its rules report is ignored. A one-shot Trigger counts as fired from the pre-analysis state of its event Narration onward.
+The event generation starts from the Swipe state that the state update saved. Its game rules run with no movement and no Trigger check, and its Swipe state holds no trigger context. A one-shot Trigger counts as fired from the pre-analysis state of its event Narration onward.
 
 ## Game Rules
 
-`apply_game_rules` in `domain/model/utils/game_rules.rs` holds the game rules. It changes a `SwipeState` and returns an outcome. The Job turns the outcome into the state update.
+`game_rules::apply` in `domain/model/utils/game_rules.rs` holds the game rules. The Job calls it once per generation. It returns the new Swipe state and the event record of a fired Trigger. The storage adapter builds the `GameWorld`.
 
 ## Retry Flow
 
-A Retry redoes the generation of the kind that the last Message holds, as a new Swipe on that Message. It starts from the start state of that Message. A Retrigger writes a new event Narration from the current state and its trigger context.
+A Retry redoes the generation of the kind that the last Message holds, as a new Swipe on that Message. It starts from the start state of that Message. A Retry of a Narration keeps its guide, and a Retry of an Impersonate Input keeps its direction, if it has one. A bare `/impersonate` runs with no direction, and so does a Retry of its Input. A Retrigger writes a new event Narration from the event record in the trigger context of the current state.
 
 ## Movement Branch
 
-Movement is a branch of the analysis hook:
+Movement is a branch of the game rules:
 
 - Movement occurs when the Quantifier derives a destination from the narrator's latest outcome.
 - A static match updates `movement.current_room_id`. An unmatched destination creates a dynamic pseudo-room, stores it in `movement.dynamic_rooms`, and makes it current.
-- The room a movement lands in is the room report of the Swipe whose generation moved the player.
 - Movement detection runs for a Narration and an Impersonate. An event generation moves nobody and updates the Characters present.
 
 Dynamic rooms travel with the Swipe state.

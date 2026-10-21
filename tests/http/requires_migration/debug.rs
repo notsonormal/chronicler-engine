@@ -84,7 +84,6 @@ async fn test_debug_state_endpoint_includes_all_documented_fields() {
         "dynamic_rooms",
         "dynamic_room_count",
         "last_error",
-        "quantifier_confidence",
         "backend_name",
         "model_name",
         "current_options",

@@ -6,8 +6,7 @@ use axum::body::Body;
 use axum::http::{self, Request, StatusCode};
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::Storage;
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::prompt_preset_service::PromptPresetService;
 use chronicler_engine::test_support::body_text;
@@ -18,6 +17,7 @@ use chronicler_engine::test_support::empty_sqlite_storage;
 use crate::test_utils::preset_card_html_slice;
 use crate::test_utils::panel_section_html_slice;
 
+use crate::support::app_wiring::two_game_app;
 use crate::support::http_requests::post_form;
 use crate::SettingsTestGuard;
 
@@ -37,23 +37,23 @@ fn empty_post_request(uri: &str) -> Request<Body> {
         .unwrap()
 }
 
-/// The id of the single preset with `name`, read from storage rather than
-/// scraped from rendered HTML — the panel is a text blob and a name match
-/// against it can hit a truncated or escaped form.
-fn preset_id_by_name(storage: &Storage, name: &str) -> String {
+/// The id of the single preset with `name`, read through the preset module
+/// rather than scraped from rendered HTML — the panel is a text blob and a name
+/// match against it can hit a truncated or escaped form.
+fn preset_id_by_name(presets: &PromptPresetService, name: &str) -> String {
     use chronicler_engine::domain::model::prompt_preset::PresetType;
     for preset_type in [
         PresetType::System,
         PresetType::Quantifier,
         PresetType::Impersonate,
     ] {
-        for preset in storage.list_presets(preset_type).unwrap() {
+        for preset in presets.list_presets(preset_type).unwrap() {
             if preset.name == name {
                 return preset.id;
             }
         }
     }
-    panic!("no preset named {name:?} in storage");
+    panic!("no preset named {name:?} in the preset library");
 }
 
 fn extract_first_preset_id(body: &str) -> String {
@@ -396,10 +396,11 @@ async fn test_create_preset_missing_type_returns_422() {
 async fn test_create_preset_reports_save_failure() {
     let _guard = SettingsTestGuard::new();
     let mut app_state = TestAppBuilder::default_test().build_service();
-    app_state.prompt_preset_service = PromptPresetService::new(Arc::new(
-        empty_sqlite_storage()
-            .with_failure("save_preset", TestOverride::internal("preset save failure")),
-    ));
+    app_state.prompt_preset_service =
+        PromptPresetService::new(Arc::new(empty_sqlite_storage().with_failure(
+            StorageCall::SavePreset,
+            TestOverride::internal("preset save failure"),
+        )));
     let app = build_router(app_state);
 
     let response = post_form(
@@ -614,7 +615,11 @@ async fn test_delete_refuses_a_preset_referenced_as_a_mode_default() {
         "the refusal must name the mode default: {body}"
     );
     assert!(
-        storage.get_preset("custom_ref").unwrap().is_some(),
+        app_state
+            .prompt_preset_service
+            .get_preset("custom_ref")
+            .unwrap()
+            .is_some(),
         "a referenced preset must not be deleted"
     );
 }
@@ -655,8 +660,118 @@ async fn test_delete_refuses_the_active_options_default() {
         "the refusal must name the Options default: {body}"
     );
     assert!(
-        storage.get_preset("options_custom").unwrap().is_some(),
+        app_state
+            .prompt_preset_service
+            .get_preset("options_custom")
+            .unwrap()
+            .is_some(),
         "the active Options preset must not be deleted"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.41
+#[tokio::test]
+async fn test_delete_preset_storage_failure_answers_non_2xx_and_keeps_the_preset() {
+    let _guard = SettingsTestGuard::new();
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    storage
+        .save_preset(&TestPromptPreset::system("doomed_ref", "Doomed"))
+        .expect("seed a system preset");
+    let app_state = TestAppBuilder::default_test()
+        .storage(Arc::new(storage))
+        .build_service();
+    let app = build_router(app_state);
+
+    failures.set(
+        StorageCall::DeletePreset,
+        TestOverride::internal("preset delete failure"),
+    );
+
+    let response = app
+        .clone()
+        .oneshot(empty_post_request("/prompt-presets/doomed_ref/delete"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = body_text(response).await;
+    assert!(
+        body.contains(r#"<div class="error-message">Delete failed:"#),
+        "the failure must reach the client for its inline slot: {body}"
+    );
+
+    failures.clear(StorageCall::DeletePreset);
+
+    let panel = app
+        .oneshot(get_request("/fragment/prompt-presets"))
+        .await
+        .unwrap();
+    assert_eq!(panel.status(), StatusCode::OK);
+    let panel_body = body_text(panel).await;
+    assert!(
+        panel_body.contains("Doomed"),
+        "the preset must stay stored: {panel_body}"
+    );
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.40
+#[tokio::test]
+async fn test_delete_refuses_a_preset_that_a_game_uses_and_names_the_count() {
+    use chronicler_engine::domain::model::game::{Game, PresetSelection};
+
+    let _guard = SettingsTestGuard::new();
+    let (app, state, _storage, other_id) = two_game_app();
+    state
+        .prompt_preset_service
+        .save_preset(&TestPromptPreset::system("game_ref", "Game Ref"))
+        .expect("seed a system preset");
+    let use_preset = |game: &Game| {
+        state
+            .game_catalogue
+            .set_preset_selection(
+                game.id,
+                PresetSelection {
+                    system_id: "game_ref".to_string(),
+                    quantifier_id: game.active_quantifier_prompt_preset_id.clone(),
+                    impersonate_id: game.active_impersonate_prompt_preset_id.clone(),
+                    options_id: game.active_options_prompt_preset_id.clone(),
+                },
+            )
+            .expect("the Game takes the preset");
+    };
+    let games = state.game_catalogue.list_games().expect("list the Games");
+    let other = games.iter().find(|game| game.id == other_id).unwrap();
+    use_preset(other);
+
+    let response = app
+        .clone()
+        .oneshot(empty_post_request("/prompt-presets/game_ref/delete"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body_text(response).await,
+        "<div class=\"error-message\">Cannot delete preset used by 1 game</div>"
+    );
+
+    let active = games.iter().find(|game| game.id != other_id).unwrap();
+    use_preset(active);
+
+    let response = app
+        .oneshot(empty_post_request("/prompt-presets/game_ref/delete"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body_text(response).await,
+        "<div class=\"error-message\">Cannot delete preset used by 2 games</div>"
+    );
+    assert!(
+        state
+            .prompt_preset_service
+            .get_preset("game_ref")
+            .unwrap()
+            .is_some(),
+        "a preset that a Game uses must not be deleted"
     );
 }
 
@@ -935,7 +1050,7 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
         .await
         .unwrap();
     assert_eq!(duplicated.status(), StatusCode::OK);
-    let copy_id = preset_id_by_name(&storage, "Chain (Copy)");
+    let copy_id = preset_id_by_name(&app_state.prompt_preset_service, "Chain (Copy)");
     assert_ne!(copy_id, preset_id, "the duplicate must be a new preset");
 
     let edit_form = app
@@ -1187,7 +1302,7 @@ async fn test_update_preset_onto_sibling_name_is_refused() {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    let beta_id = preset_id_by_name(&storage, "Beta");
+    let beta_id = preset_id_by_name(&app_state.prompt_preset_service, "Beta");
     let response = post_form(
         &app,
         &format!("/prompt-presets/{beta_id}"),
@@ -1303,7 +1418,10 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
         .build_service();
     let app = build_router(app);
 
-    failures.set("save_preset", TestOverride::internal("preset save failure"));
+    failures.set(
+        StorageCall::SavePreset,
+        TestOverride::internal("preset save failure"),
+    );
 
     let response = post_form(
         &app,
@@ -1326,7 +1444,7 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
         "a failed update must not swap the card into the response: {body}"
     );
 
-    failures.clear("save_preset");
+    failures.clear(StorageCall::SavePreset);
 
     let panel = app
         .oneshot(get_request("/fragment/prompt-presets"))

@@ -1,6 +1,7 @@
 //! HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders.
 
-use chronicler_engine::test_support::{analysis_report, ModelRole, ScriptedModel};
+use chronicler_engine::domain::model::agent::Role;
+use chronicler_engine::test_support::{analysis_report, ScriptedModel};
 
 use crate::support::app_wiring::app_with_script;
 use crate::support::http_requests::{fetch_body, post_action, wait_settled};
@@ -8,7 +9,7 @@ use crate::support::http_requests::{fetch_body, post_action, wait_settled};
 // [docs/specs/llm_messages.md] SCENARIO: 33.1
 #[tokio::test]
 async fn test_failed_narration_attempt_records_and_renders_failure_http() {
-    let (app, state, _storage) = app_with_script(ScriptedModel::new().failed(ModelRole::Narration));
+    let (app, state, _storage) = app_with_script(ScriptedModel::new().failed(Role::Narrator));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
@@ -68,9 +69,9 @@ async fn test_failed_narration_attempt_records_and_renders_failure_http() {
 async fn test_failed_attempt_survives_a_later_success_http() {
     let (app, state, _storage) = app_with_script(
         ScriptedModel::new()
-            .failed(ModelRole::Narration)
+            .failed(Role::Narrator)
             .narration("You listen.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
 
     let resp = post_action(&app, "look").await;

@@ -3,20 +3,31 @@
 
 use crate::adapters::driven::storage::models::message::DbMessage;
 use crate::adapters::driven::storage::models::swipe::DbSwipe;
-use crate::adapters::driven::storage::utils::{
-    from_json, no_in_memory, parse_datetime, require_message_of_game,
-};
-use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::utils::{parse_datetime, require_message_of_game};
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::domain::model::game::GameId;
 use crate::domain::model::message::{Message, SwipeAt};
 use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError, InternalError};
 
 /// The biggest story read there is: the callers that take the whole story pass it,
 /// and the assembler drops the oldest Messages to fit the connection's budget.
 pub const STORY_LIMIT: usize = i32::MAX as usize;
+
+const ENTRY_COLUMNS: &str = "m.id, m.message_type, m.kind, m.timestamp, COALESCE(s.text, ''), s.event_header, \
+     (SELECT COUNT(*) FROM message_swipes WHERE message_id = m.id), m.active_swipe_index";
+// The index of the column after `ENTRY_COLUMNS`: keep it equal to the columns that `story_row` reads.
+const ENTRY_COLUMN_COUNT: usize = 8;
+const ENTRY_FROM: &str = "FROM messages m \
+     LEFT JOIN message_swipes s ON s.message_id = m.id AND s.swipe_index = m.active_swipe_index";
+
+/// The window read: its entries oldest first, each with its active Swipe state.
+pub struct StoryWindowRead {
+    pub entries: Vec<(StoryRow, SwipeState)>,
+    pub retrigger_allowed: bool,
+}
 
 pub struct StoryReads<'a> {
     storage: &'a Storage,
@@ -32,38 +43,57 @@ impl StoryReads<'_> {
     /// No other Message and no other Swipe state is read than the two it names.
     pub fn tail(&self, game: GameId) -> Result<Option<Tail>, EngineError> {
         self.storage
-            .with_backend_mut("stories_tail", |backend| match backend {
+            .with_backend_mut(StorageCall::StoriesTail, |backend| match backend {
+                Backend::Sqlite { pool } => Self::read_tail(&pool.conn(), game),
+            })
+    }
+
+    /// The newest `limit` entries, oldest first, each with its active Swipe state, and
+    /// whether the end of the story allows a Retrigger. One connection holds every
+    /// read, so no write lands between them.
+    pub fn window(&self, game: GameId, limit: usize) -> Result<StoryWindowRead, EngineError> {
+        self.storage
+            .with_backend_mut(StorageCall::StoriesWindow, |backend| match backend {
                 Backend::Sqlite { pool } => {
                     let conn = pool.conn();
-                    let count = Self::message_count(&conn, game)?;
-                    if count == 0 {
-                        return Ok(None);
-                    }
-                    let ids = Self::last_message_ids(&conn, game, 2)?;
-                    let Some(last_id) = ids.last().copied() else {
-                        return Ok(None);
-                    };
-
-                    let last = Self::load_message(&conn, last_id)?;
-                    let state_before_last = match ids.iter().rev().nth(1) {
-                        Some(before_id) => {
-                            let at = SwipeAt {
-                                message: *before_id as u64,
-                                swipe: Self::active_swipe_index(&conn, *before_id)?,
-                            };
-                            Self::load_swipe_state(&conn, at)?.map(|state| (at, state))
-                        }
-                        None => None,
-                    };
-
-                    Ok(Some(Tail {
-                        last,
-                        state_before_last,
-                        count,
-                    }))
+                    let entries = Self::window_entries_of(&conn, game, limit)?;
+                    let retrigger_allowed =
+                        Self::read_tail(&conn, game)?.is_some_and(|tail| tail.retrigger_allowed());
+                    Ok(StoryWindowRead {
+                        entries,
+                        retrigger_allowed,
+                    })
                 }
-                Backend::InMemory(_) => Err(no_in_memory("stories_tail")),
             })
+    }
+
+    fn read_tail(conn: &rusqlite::Connection, game: GameId) -> Result<Option<Tail>, EngineError> {
+        let count = Self::message_count(conn, game)?;
+        if count == 0 {
+            return Ok(None);
+        }
+        let ids = Self::last_message_ids(conn, game, 2)?;
+        let Some(last_id) = ids.last().copied() else {
+            return Ok(None);
+        };
+
+        let last = Self::load_message(conn, last_id)?;
+        let state_before_last = match ids.iter().rev().nth(1) {
+            Some(before_id) => {
+                let at = SwipeAt {
+                    message: *before_id as u64,
+                    swipe: Self::active_swipe_index(conn, *before_id)?,
+                };
+                Self::load_swipe_state(conn, at)?.map(|state| (at, state))
+            }
+            None => None,
+        };
+
+        Ok(Some(Tail {
+            last,
+            state_before_last,
+            count,
+        }))
     }
 
     pub fn swipe_state(
@@ -72,13 +102,12 @@ impl StoryReads<'_> {
         at: SwipeAt,
     ) -> Result<Option<SwipeState>, EngineError> {
         self.storage
-            .with_backend_mut("stories_swipe_state", |backend| match backend {
+            .with_backend_mut(StorageCall::StoriesSwipeState, |backend| match backend {
                 Backend::Sqlite { pool } => {
                     let conn = pool.conn();
                     require_message_of_game(&conn, at.message, game)?;
                     Self::load_swipe_state(&conn, at)
                 }
-                Backend::InMemory(_) => Err(no_in_memory("stories_swipe_state")),
             })
     }
 
@@ -87,7 +116,7 @@ impl StoryReads<'_> {
     /// calls it, for tests.
     pub fn messages(&self, game: GameId) -> Result<Vec<Message>, EngineError> {
         self.storage
-            .with_backend_mut("stories_messages", |backend| match backend {
+            .with_backend_mut(StorageCall::StoriesMessages, |backend| match backend {
                 Backend::Sqlite { pool } => {
                     let conn = pool.conn();
                     let ids = Self::last_message_ids(&conn, game, STORY_LIMIT)?;
@@ -95,7 +124,6 @@ impl StoryReads<'_> {
                         .map(|id| Self::load_message(&conn, id))
                         .collect()
                 }
-                Backend::InMemory(_) => Err(no_in_memory("stories_messages")),
             })
     }
 
@@ -103,7 +131,7 @@ impl StoryReads<'_> {
     /// such Message.
     pub fn active_swipe(&self, game: GameId, message: u64) -> Result<Option<SwipeAt>, EngineError> {
         self.storage
-            .with_backend_mut("stories_active_swipe", |backend| match backend {
+            .with_backend_mut(StorageCall::StoriesActiveSwipe, |backend| match backend {
                 Backend::Sqlite { pool } => {
                     let conn = pool.conn();
                     match conn.query_row(
@@ -116,12 +144,9 @@ impl StoryReads<'_> {
                             swipe: swipe as usize,
                         })),
                         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                        Err(e) => Err(EngineError::Config(format!(
-                            "Failed to read the active swipe: {e}"
-                        ))),
+                        Err(e) => Err(e).db_context("Failed to read the active swipe"),
                     }
                 }
-                Backend::InMemory(_) => Err(no_in_memory("stories_active_swipe")),
             })
     }
 
@@ -129,7 +154,7 @@ impl StoryReads<'_> {
     /// work from. One `EXISTS` query, and no Swipe state.
     pub fn has_text(&self, game: GameId) -> Result<bool, EngineError> {
         self.storage
-            .with_backend_mut("stories_has_text", |backend| match backend {
+            .with_backend_mut(StorageCall::StoriesHasText, |backend| match backend {
                 Backend::Sqlite { pool } => {
                     let conn = pool.conn();
                     let found: i64 = conn
@@ -140,12 +165,9 @@ impl StoryReads<'_> {
                             rusqlite::params![game.0 as i64],
                             |row| row.get(0),
                         )
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to read the story text: {e}"))
-                        })?;
+                        .db_context("Failed to read the story text")?;
                     Ok(found != 0)
                 }
-                Backend::InMemory(_) => Err(no_in_memory("stories_has_text")),
             })
     }
 
@@ -158,64 +180,95 @@ impl StoryReads<'_> {
         limit: usize,
     ) -> Result<Vec<StoryRow>, EngineError> {
         self.storage
-            .with_backend_mut("stories_entries", |backend| match backend {
-                Backend::Sqlite { pool } => {
-                    let conn = pool.conn();
-                    let before = before.map(|id| id as i64).unwrap_or(i64::MAX);
-                    let mut stmt = conn
-                        .prepare(
-                            "SELECT m.id, m.message_type, m.kind, m.timestamp, COALESCE(s.text, ''), s.room_report, s.event_header, \
-                                    (SELECT COUNT(*) FROM message_swipes WHERE message_id = m.id), m.active_swipe_index
-                             FROM messages m
-                             LEFT JOIN message_swipes s ON s.message_id = m.id AND s.swipe_index = m.active_swipe_index
-                             WHERE m.game_id = ?1 AND m.id < ?2
-                             ORDER BY m.id DESC
-                             LIMIT ?3",
-                        )
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to prepare the story entries: {e}"))
-                        })?;
-                    let rows = stmt
-                        .query_map(
-                            rusqlite::params![game.0 as i64, before, limit as i64],
-                            |row| {
-                                Ok(StoryRow {
-                                    id: row.get::<_, i64>(0)? as u64,
-                                    message_type: row.get(1)?,
-                                    kind: row.get(2)?,
-                                    timestamp: parse_datetime(
-                                        &row.get::<_, String>(3)?,
-                                        "message timestamp",
-                                    )
-                                    .map_err(|e| {
-                                        rusqlite::Error::FromSqlConversionFailure(
-                                            3,
-                                            rusqlite::types::Type::Text,
-                                            Box::new(e),
-                                        )
-                                    })?,
-                                    text: row.get(4)?,
-                                    room_report: row.get(5)?,
-                                    event_header: row.get(6)?,
-                                    swipe_count: row.get::<_, i64>(7)? as usize,
-                                    active_swipe_index: row.get::<_, i64>(8)? as usize,
-                                })
-                            },
-                        )
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to read the story entries: {e}"))
-                        })?;
-
-                    let mut entries: Vec<StoryRow> = rows
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(|e| {
-                            EngineError::Config(format!("Failed to read a story entry: {e}"))
-                        })?;
-                    entries.reverse();
-                    Ok(entries)
-                }
-                Backend::InMemory(_) => Err(no_in_memory("stories_entries")),
+            .with_backend_mut(StorageCall::StoriesEntries, |backend| match backend {
+                Backend::Sqlite { pool } => Self::entries_of(&pool.conn(), game, before, limit),
             })
+    }
+
+    fn entries_of(
+        conn: &rusqlite::Connection,
+        game: GameId,
+        before: Option<u64>,
+        limit: usize,
+    ) -> Result<Vec<StoryRow>, EngineError> {
+        let mut stmt = conn
+            .prepare(&format!(
+                "SELECT {ENTRY_COLUMNS} {ENTRY_FROM} WHERE m.game_id = ?1 AND m.id < ?2 \
+                 ORDER BY m.id DESC LIMIT ?3"
+            ))
+            .db_context("Failed to prepare the story entries")?;
+        let rows = stmt
+            .query_map(
+                rusqlite::params![game.0 as i64, Self::before_bound(before), limit as i64],
+                Self::story_row,
+            )
+            .db_context("Failed to read the story entries")?;
+
+        let mut entries: Vec<StoryRow> = rows
+            .collect::<Result<Vec<_>, _>>()
+            .db_context("Failed to read a story entry")?;
+        entries.reverse();
+        Ok(entries)
+    }
+
+    fn window_entries_of(
+        conn: &rusqlite::Connection,
+        game: GameId,
+        limit: usize,
+    ) -> Result<Vec<(StoryRow, SwipeState)>, EngineError> {
+        let mut stmt = conn
+            .prepare(&format!(
+                "SELECT {ENTRY_COLUMNS}, s.state {ENTRY_FROM} WHERE m.game_id = ?1 \
+                 ORDER BY m.id DESC LIMIT ?2"
+            ))
+            .db_context("Failed to prepare the story window")?;
+        let rows = stmt
+            .query_map(rusqlite::params![game.0 as i64, limit as i64], |row| {
+                Ok((
+                    Self::story_row(row)?,
+                    row.get::<_, Option<String>>(ENTRY_COLUMN_COUNT)?,
+                ))
+            })
+            .db_context("Failed to read the story window")?;
+
+        let mut entries = Vec::new();
+        for row in rows {
+            let (entry, state_json) = row.db_context("Failed to read a story window entry")?;
+            let state_json = state_json.ok_or_else(|| {
+                EngineError::Internal(InternalError::new(format!(
+                    "message {} has no swipe",
+                    entry.id
+                )))
+            })?;
+            entries.push((entry, serde_json::from_str(&state_json)?));
+        }
+        entries.reverse();
+        Ok(entries)
+    }
+
+    fn before_bound(before: Option<u64>) -> i64 {
+        before.map(|id| id as i64).unwrap_or(i64::MAX)
+    }
+
+    fn story_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoryRow> {
+        Ok(StoryRow {
+            id: row.get::<_, i64>(0)? as u64,
+            message_type: row.get(1)?,
+            kind: row.get(2)?,
+            timestamp: parse_datetime(&row.get::<_, String>(3)?, "message timestamp").map_err(
+                |e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        3,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                },
+            )?,
+            text: row.get(4)?,
+            event_header: row.get(5)?,
+            swipe_count: row.get::<_, i64>(6)? as usize,
+            active_swipe_index: row.get::<_, i64>(7)? as usize,
+        })
     }
 
     fn message_count(conn: &rusqlite::Connection, game: GameId) -> Result<usize, EngineError> {
@@ -225,7 +278,7 @@ impl StoryReads<'_> {
                 rusqlite::params![game.0 as i64],
                 |row| row.get(0),
             )
-            .map_err(|e| EngineError::Config(format!("Failed to count the story: {e}")))?;
+            .db_context("Failed to count the story")?;
         Ok(count as usize)
     }
 
@@ -238,14 +291,14 @@ impl StoryReads<'_> {
             .prepare(
                 "SELECT id FROM (SELECT id FROM messages WHERE game_id = ?1 ORDER BY id DESC LIMIT ?2) ORDER BY id ASC",
             )
-            .map_err(|e| EngineError::Config(format!("Failed to prepare the story ids: {e}")))?;
+            .db_context("Failed to prepare the story ids")?;
         let rows = stmt
             .query_map(rusqlite::params![game.0 as i64, limit as i64], |row| {
                 row.get::<_, i64>(0)
             })
-            .map_err(|e| EngineError::Config(format!("Failed to read the story ids: {e}")))?;
+            .db_context("Failed to read the story ids")?;
         rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| EngineError::Config(format!("Failed to read a story id: {e}")))
+            .db_context("Failed to read a story id")
     }
 
     fn load_message(conn: &rusqlite::Connection, id: i64) -> Result<Message, EngineError> {
@@ -255,7 +308,7 @@ impl StoryReads<'_> {
                 rusqlite::params![id],
                 DbMessage::from_row,
             )
-            .map_err(|e| EngineError::Config(format!("Failed to read the last message: {e}")))?;
+            .db_context("Failed to read the message")?;
         let swipes = Self::load_swipe_rows(conn, id)?;
         Message::try_from((&db_message, &swipes[..]))
     }
@@ -266,15 +319,15 @@ impl StoryReads<'_> {
     ) -> Result<Vec<DbSwipe>, EngineError> {
         let mut stmt = conn
             .prepare(
-                "SELECT id, message_id, swipe_index, text, room_report, event_header, impersonated, guide_text, impersonate_direction, state, maker
+                "SELECT id, message_id, swipe_index, text, event_header, impersonated, guide_text, impersonate_direction, state, maker
                  FROM message_swipes WHERE message_id = ?1 ORDER BY swipe_index ASC",
             )
-            .map_err(|e| EngineError::Config(format!("Failed to prepare the swipe rows: {e}")))?;
+            .db_context("Failed to prepare the swipe rows")?;
         let rows = stmt
             .query_map(rusqlite::params![message], DbSwipe::from_row)
-            .map_err(|e| EngineError::Config(format!("Failed to read the swipe rows: {e}")))?;
+            .db_context("Failed to read the swipe rows")?;
         rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| EngineError::Config(format!("Failed to read a swipe row: {e}")))
+            .db_context("Failed to read a swipe row")
     }
 
     fn load_swipe_state(
@@ -289,12 +342,10 @@ impl StoryReads<'_> {
             Ok(json) => json,
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
             Err(other) => {
-                return Err(EngineError::Config(format!(
-                    "Failed to read the swipe state: {other}"
-                )));
+                return Err(other).db_context("Failed to read the swipe state");
             }
         };
-        from_json("swipe state", &state_json).map(Some)
+        Ok(Some(serde_json::from_str(&state_json)?))
     }
 
     fn active_swipe_index(conn: &rusqlite::Connection, message: i64) -> Result<usize, EngineError> {
@@ -304,7 +355,7 @@ impl StoryReads<'_> {
                 rusqlite::params![message],
                 |row| row.get(0),
             )
-            .map_err(|e| EngineError::Config(format!("Failed to read the active swipe: {e}")))?;
+            .db_context("Failed to read the active swipe index")?;
         Ok(index as usize)
     }
 }

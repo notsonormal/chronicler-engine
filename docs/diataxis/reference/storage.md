@@ -9,17 +9,15 @@ title: Storage
 
 ## Backend and BackendKind
 
-- **`Backend`** identifies the real storage implementations: `Sqlite` and `InMemory`.
+- **`Backend`** identifies the real storage implementation: `Sqlite`. `Storage::new_in_memory()` opens a SQLite `:memory:` database.
 - **`BackendKind`** selects `Direct` access or `Test` failure injection around one `Backend`.
 - **Decorator invariant.** `Test` wraps a single `Backend`, never another `BackendKind`. The storage seam therefore permits at most one `Test` layer at a time.
-
-The records of a Game's story (the Message and Swipe rows, the dock record and the failure line) run on SQLite. The `InMemory` backend holds none of them.
 
 ## Game Scoping
 
 Every game-scoped read and write takes its Game as the first argument, typed
 `GameId` (`domain/model/game.rs`). The storage adapter unwraps the newtype where
-it meets a row, an SQL parameter or the in-memory maps, so no caller converts.
+it meets a row or an SQL parameter, so no caller converts.
 `Storage` holds no active-Game pointer. The one active Game of the server
 process lives in `ActiveGame` (`application/games/active.rs`).
 `GameCatalogue` is the only reader and the only writer of `ActiveGame`.
@@ -31,7 +29,7 @@ process lives in `ActiveGame` (`application/games/active.rs`).
 |---|---|---|
 | Game | The World, the Persona, the prompt presets, the always-on toggle, the names, and the **failure line** | `games` |
 | Message | The place in the story, its kind (typed Input, Impersonate Input, Narration or event Narration) and the active Swipe. An event Narration also holds its event record. | `messages` |
-| Swipe | The text, the stored inputs of its generation, the maker, the room report and the **Swipe state** | `message_swipes` |
+| Swipe | The text, the stored inputs of its generation, the maker and the **Swipe state** | `message_swipes` |
 | Dock record | The offered set and at most one notice. A Game has one. | `game_docks` |
 
 The job entry in memory holds the busy mark and the step name.
@@ -40,7 +38,7 @@ The job entry in memory holds the busy mark and the step name.
 
 `Storage::stories()` and `Storage::docks()` return read handles. Each read names its Game.
 
-- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, and the entries of a window. It reads no more of the story than its answer needs.
+- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, the entries before a Message, and the story window: the newest entries, each with its Swipe state, and the end-of-story facts, in one read. It reads no more of the story than its answer needs.
 - **`DockReads`** (`docks.rs`) reads the dock record of a Game.
 
 ## Transactions
@@ -49,6 +47,7 @@ The job entry in memory holds the busy mark and the step name.
 
 - **`Tx`** holds the record writes of one unit, and every record write exists only on `Tx`. It exists on SQLite only. A `Tx` serves one Game, so no write reaches another Game.
 - **`TxToken`** is the capability that opens a unit. Its constructor is crate-private, and guardrail Rule 3 (call site) limits its callers to `GameWriter`'s registry and `test_support/`.
+- **`StorageCall`** is the typed key of one `Storage` method. The test layer fails a method by its `StorageCall`, so a test can fail one `Storage` method.
 - **`TxWrite`** is the typed key of one record write. A write checks its key before it writes, so a test can fail one write in the middle of a unit.
 - **`Storage::transaction_new_game`** opens a unit that creates a Game: it writes the Game row first, so the writes that follow it in the same unit know the new Game.
 
@@ -72,6 +71,10 @@ Settings occupy a singleton row in the `settings` table — the engine's only se
 - **`get_*`** returns an optional result when absence is a valid runtime state.
 - **`require_*`** returns a required result and turns absence into a typed error.
 
+## Errors
+
+A statement that SQLite refuses gives `EngineError::Database`. Its `context` names the storage operation that failed, and its `source` holds the rusqlite error. A rusqlite error becomes `EngineError` only through `db_context`, so every storage site names its context. A Message row with no Swipe row is a load error.
+
 ## Tables
 
 The schema has 11 tables, organized into three logical clusters:
@@ -84,7 +87,7 @@ The schema has 11 tables, organized into three logical clusters:
 
 - **`games`** — top-level game session record. It holds the failure line of the Game.
 - **`messages`** — the story of a Game in order. Each row is one Message, written by a save unit. There is exactly one story per game.
-- **`message_swipes`** — the Swipes of a Message. A Swipe holds the text, the stored inputs of its generation (so a Retry of that Swipe re-applies the same steering), the maker, the room report and its Swipe state.
+- **`message_swipes`** — the Swipes of a Message. A Swipe holds the text, the stored inputs of its generation (so a Retry of that Swipe re-applies the same steering), the maker and its Swipe state.
 - **`game_docks`** — the dock record of a Game: the offered set and the notice.
 
 ### World catalogue cluster
@@ -97,7 +100,7 @@ The schema has 11 tables, organized into three logical clusters:
 ### Standalone tables
 
 - **`llm_messages`** — forensics log of LLM API calls, for debugging and prompt engineering. Pruned automatically to a fixed row cap.
-- **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is a text key.
+- **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is a text key. Storage reads, writes and deletes the rows and counts the Games that hold a preset in their preset slots. `PromptPresetService` in the application layer chooses the preset of a Game and decides whether an edit or a delete is allowed.
 
 ## Relationships
 

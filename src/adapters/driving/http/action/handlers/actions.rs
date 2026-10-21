@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::application::generation::gate::JobRequest;
+use crate::domain::model::generation::JobRequest;
 use crate::application::pipeline::job::Job;
 use crate::domain::model::action::Action;
 use crate::domain::model::game::GameId;

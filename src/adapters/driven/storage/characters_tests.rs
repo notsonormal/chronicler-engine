@@ -1,35 +1,35 @@
 use crate::domain::model::character::{CharacterSheet, NpcCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
-use crate::adapters::driven::storage::{Storage, TestOverride};
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::sqlite_storage;
 
 #[test]
-fn test_list_characters_in_memory_empty() {
+fn test_list_characters_empty() {
     let storage = Storage::new_in_memory();
     let characters = storage.list_characters(1).unwrap();
     assert!(characters.is_empty());
 }
 
 #[test]
-fn test_list_characters_in_memory_seeded() {
-    let storage = Storage::new_in_memory();
+fn test_list_characters_seeded() {
+    let (storage, world_id) = storage_with_world();
     let card = test_character_card("test_char", "Test Character");
-    storage.seed_character(1, &card).unwrap();
+    storage.seed_character(world_id, &card).unwrap();
 
-    let characters = storage.list_characters(1).unwrap();
+    let characters = storage.list_characters(world_id).unwrap();
     assert_eq!(characters.len(), 1);
     assert_eq!(characters[0].id, "test_char");
     assert_eq!(characters[0].sheet.name, "Test Character");
 }
 
 #[test]
-fn test_get_character_found_in_memory() {
-    let storage = Storage::new_in_memory();
+fn test_get_character_found() {
+    let (storage, world_id) = storage_with_world();
     let card = test_character_card("char1", "Character One");
-    storage.seed_character(1, &card).unwrap();
+    storage.seed_character(world_id, &card).unwrap();
 
-    let result = storage.get_character(1, "char1").unwrap();
+    let result = storage.get_character(world_id, "char1").unwrap();
     assert!(result.is_some());
     let retrieved = result.unwrap();
     assert_eq!(retrieved.id, "char1");
@@ -37,7 +37,7 @@ fn test_get_character_found_in_memory() {
 }
 
 #[test]
-fn test_get_character_not_found_in_memory() {
+fn test_get_character_not_found() {
     let storage = Storage::new_in_memory();
     let result = storage.get_character(1, "nonexistent").unwrap();
     assert!(result.is_none());
@@ -64,14 +64,14 @@ fn test_seed_character_sqlite() {
 }
 
 #[test]
-fn test_seed_character_idempotent_in_memory() {
-    let storage = Storage::new_in_memory();
+fn test_seed_character_idempotent() {
+    let (storage, world_id) = storage_with_world();
     let card = test_character_card("dup_char", "Duplicate Character");
 
-    storage.seed_character(1, &card).unwrap();
-    storage.seed_character(1, &card).unwrap();
+    storage.seed_character(world_id, &card).unwrap();
+    storage.seed_character(world_id, &card).unwrap();
 
-    let characters = storage.list_characters(1).unwrap();
+    let characters = storage.list_characters(world_id).unwrap();
     assert_eq!(characters.len(), 1);
     assert_eq!(characters[0].id, "dup_char");
 }
@@ -79,7 +79,10 @@ fn test_seed_character_idempotent_in_memory() {
 #[test]
 fn test_list_characters_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("list_characters", TestOverride::internal("list failed"));
+    handle.set(
+        StorageCall::ListCharacters,
+        TestOverride::internal("list failed"),
+    );
 
     let result = storage.list_characters(1);
     assert!(result.is_err());
@@ -88,7 +91,10 @@ fn test_list_characters_failure() {
 #[test]
 fn test_get_character_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("get_character", TestOverride::config("get failed"));
+    handle.set(
+        StorageCall::GetCharacter,
+        TestOverride::config("get failed"),
+    );
 
     let result = storage.get_character(1, "char");
     assert!(result.is_err());
@@ -97,11 +103,22 @@ fn test_get_character_failure() {
 #[test]
 fn test_seed_character_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("seed_character", TestOverride::internal("seed failed"));
+    handle.set(
+        StorageCall::SeedCharacter,
+        TestOverride::internal("seed failed"),
+    );
 
     let card = test_character_card("fail_char", "Fail Character");
     let result = storage.seed_character(1, &card);
     assert!(result.is_err());
+}
+
+/// A `Storage` holding one World, the parent row a Character's foreign key needs.
+fn storage_with_world() -> (Storage, i64) {
+    let storage = Storage::new_in_memory();
+    let (world_card, map) = test_world_data();
+    let world_id = storage.seed_world(&world_card, &map).unwrap();
+    (storage, world_id)
 }
 
 fn test_character_card(id: &str, name: &str) -> NpcCard {

@@ -16,6 +16,7 @@ pub mod quantifier;
 pub mod scenario;
 pub mod settings;
 pub mod state;
+pub mod story_window;
 pub mod tail;
 pub mod template;
 pub mod trigger;
@@ -31,6 +32,8 @@ mod character_tests;
 #[cfg(test)]
 mod game_tests;
 #[cfg(test)]
+mod generation_tests;
+#[cfg(test)]
 mod llm_backend_tests;
 #[cfg(test)]
 mod map_tests;
@@ -39,9 +42,13 @@ mod message_tests;
 #[cfg(test)]
 mod prompt_preset_tests;
 #[cfg(test)]
+mod quantifier_tests;
+#[cfg(test)]
 mod scenario_tests;
 #[cfg(test)]
 mod settings_tests;
+#[cfg(test)]
+mod story_window_tests;
 #[cfg(test)]
 mod tail_tests;
 #[cfg(test)]

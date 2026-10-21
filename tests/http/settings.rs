@@ -6,7 +6,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
@@ -181,7 +181,7 @@ async fn test_text_check_disabled_clears_check_before_sending() {
 async fn test_failed_text_check_save_answers_non_2xx_and_swaps_no_card() {
     let _guard = SettingsTestGuard::new();
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        "update_settings",
+        StorageCall::UpdateSettings,
         TestOverride::internal("text check save failure"),
     ));
     let app = TestAppBuilder::default_test().storage(storage).build();
@@ -214,7 +214,7 @@ async fn test_failed_settings_panel_load_reports_inside_the_panel() {
         .storage(Arc::clone(&storage))
         .build();
     storage.add_failure(
-        "get_settings",
+        StorageCall::GetSettings,
         TestOverride::internal("settings read failure"),
     );
 

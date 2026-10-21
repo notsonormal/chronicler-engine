@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use crate::application::errors::ApplicationError;
+use crate::error::EngineError;
 use crate::application::games::active::ActiveGame;
 use crate::adapters::driven::storage::worlds::WorldWithMap;
 use crate::domain::model::character::PersonaCard;
@@ -26,15 +27,15 @@ impl GameCatalogue {
         game_writer: GameWriter,
         active_game: Arc<ActiveGame>,
         initial_game: Option<GameId>,
-    ) -> Self {
+    ) -> Result<Self, EngineError> {
         if let Some(initial_game) = initial_game {
-            active_game.set(initial_game);
+            active_game.set(initial_game)?;
         }
-        Self {
+        Ok(Self {
             storage,
             game_writer,
             active_game,
-        }
+        })
     }
 
     pub fn create_game(&self, world_key: &str, persona_key: &str) -> Result<u64, ApplicationError> {
@@ -58,7 +59,7 @@ impl GameCatalogue {
         let new_id = self.game_writer.create(&request)?;
         // The pointer moves only once the unit landed, so a failed create leaves the
         // previous Game active.
-        self.active_game.set(new_id);
+        self.active_game.set_new(new_id);
 
         Ok(new_id.0)
     }
@@ -68,7 +69,7 @@ impl GameCatalogue {
             return Err(ApplicationError::validation("Game not found"));
         }
 
-        self.active_game.set(GameId(id));
+        self.active_game.set(GameId(id))?;
         Ok(())
     }
 
@@ -238,7 +239,7 @@ impl GameCatalogue {
         // one hold of the writer's guard, so a refused create leaves the old Game
         // and the pointer as they were.
         let new_id = self.game_writer.replace(current_id, &request)?;
-        self.active_game.set(new_id);
+        self.active_game.set_new(new_id);
         Ok(())
     }
 

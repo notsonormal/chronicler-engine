@@ -1,97 +1,12 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Quantifier types for narrative evaluation
+//! The Quantifier result and the Character transitions the Game rules derive from it
 
-use crate::domain::model::agent::Confidence;
-
-/// Confidence level of a quantifier or event detection result.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub enum QuantifierConfidence {
-    /// JSON parsed successfully and all NPC IDs are valid.
-    High,
-    /// Text fallback was used; some valid NPC IDs were found.
-    Medium,
-    /// No valid NPC IDs could be extracted; fallback data should be used.
-    #[default]
-    Low,
-}
-
-impl QuantifierConfidence {
-    pub fn is_high(&self) -> bool {
-        matches!(self, Self::High)
-    }
-
-    pub fn is_medium(&self) -> bool {
-        matches!(self, Self::Medium)
-    }
-
-    pub fn is_low(&self) -> bool {
-        matches!(self, Self::Low)
-    }
-}
-
-impl From<Confidence> for QuantifierConfidence {
-    fn from(c: Confidence) -> Self {
-        match c {
-            Confidence::High => Self::High,
-            Confidence::Medium => Self::Medium,
-            Confidence::Low => Self::Low,
-        }
-    }
-}
-
-impl From<QuantifierConfidence> for Confidence {
-    fn from(c: QuantifierConfidence) -> Self {
-        match c {
-            QuantifierConfidence::High => Self::High,
-            QuantifierConfidence::Medium => Self::Medium,
-            QuantifierConfidence::Low => Self::Low,
-        }
-    }
-}
-
-/// NPC IDs detected as present in the current room.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct QuantifierParseResult {
-    pub npc_ids: Vec<String>,
-    /// How confident the quantifier is in this result.
-    pub confidence: QuantifierConfidence,
-}
-
-impl QuantifierParseResult {
-    pub fn is_high(&self) -> bool {
-        matches!(self.confidence, QuantifierConfidence::High)
-    }
-}
-
-/// Type of movement detected by the quantifier.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MovementType {
-    /// Player is entering a new room.
-    Entering,
-    /// Player is already in a room.
-    In,
-    /// Player is leaving the current room.
-    Leaving,
-}
-
-/// Movement intent detected by the quantifier, if any.
-#[derive(Debug, Clone, Default)]
-pub struct MovementParseResult {
-    /// Type of movement detected, if any.
-    pub movement_type: Option<MovementType>,
-    /// Destination room ID or name, if detected.
-    pub destination: Option<String>,
-    /// Confidence level of the movement detection.
-    pub confidence: QuantifierConfidence,
-}
-
-/// Combined result of scene quantification: NPC presence + movement.
-#[derive(Debug, Clone, Default)]
+/// What the Quantifier found in a generation's new text. The Game rules apply it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct QuantifierResult {
-    /// NPCs detected as present in the room.
-    pub npcs: QuantifierParseResult,
-    /// Movement intent detected, if any.
-    pub movement: MovementParseResult,
+    pub present: Vec<String>,
+    /// The room the player walks to, by id or name.
+    pub destination: Option<String>,
 }
 
 /// Transition type for NPC area changes.
@@ -116,14 +31,12 @@ pub struct NpcEvent {
     pub event_type: NpcTransitionType,
 }
 
-/// Collection of NPC transition events with aggregate confidence.
+/// The Character transitions between two sets of Character ids.
 #[derive(Debug, Clone, Default)]
 pub struct NpcEventList {
-    /// Detected movement events.
     pub events: Vec<NpcEvent>,
-    /// Confidence in the event detection.
-    pub confidence: QuantifierConfidence,
 }
+
 impl NpcEventList {
     pub fn from_diff(previous_npc_ids: &[String], current_npc_ids: &[String]) -> Self {
         let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
@@ -148,12 +61,6 @@ impl NpcEventList {
             }
         }
 
-        let confidence = if !events.is_empty() {
-            QuantifierConfidence::Medium
-        } else {
-            QuantifierConfidence::Low
-        };
-
-        Self { events, confidence }
+        Self { events }
     }
 }

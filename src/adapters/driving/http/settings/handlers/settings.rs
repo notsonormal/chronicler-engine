@@ -13,9 +13,8 @@ use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response, error_disclosure,
     raw_error_detail, render_error,
 };
-use crate::adapters::driving::http::utils::handler_helpers::{
-    generate_storage_id, opt_string, render_template,
-};
+use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
+use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, opt_string};
 use crate::application::connection_test_service::ConnectionTestResult;
 use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
@@ -30,7 +29,9 @@ pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
 fn render_settings_panel(app_state: &AppState, error: Option<&EngineError>) -> Html<String> {
     match app_state.settings() {
         Ok(settings) => match app_state.game_view_query.role_health() {
-            Ok(roles) => render_template(SettingsTemplate::from_settings(&settings, &roles, error)),
+            Ok(roles) => Html(render_or_error_fragment(&SettingsTemplate::from_settings(
+                &settings, &roles, error,
+            ))),
             Err(e) => Html(render_error(&e.to_string())),
         },
         Err(e) => Html(render_error(&e.to_string())),
@@ -143,15 +144,16 @@ pub async fn save_text_check_handler(
     });
 
     match outcome {
-        Ok(updated) => {
-            render_template(TextCheckCardTemplate::from_settings(&updated, "Saved")).into_response()
-        }
+        Ok(updated) => Html(render_or_error_fragment(
+            &TextCheckCardTemplate::from_settings(&updated, "Saved"),
+        ))
+        .into_response(),
         Err(e) => action_failure_response(format!("Save failed: {e}")),
     }
 }
 
 pub async fn new_connection_form(State(_app_state): State<AppState>) -> Html<String> {
-    render_template(ConnectionFormTemplate::new(None))
+    Html(render_or_error_fragment(&ConnectionFormTemplate::new(None)))
 }
 
 pub async fn edit_connection_form(
@@ -164,7 +166,9 @@ pub async fn edit_connection_form(
     };
 
     match settings.find_connection(&id) {
-        Some(conn) => render_template(ConnectionFormTemplate::new(Some(conn))),
+        Some(conn) => Html(render_or_error_fragment(&ConnectionFormTemplate::new(
+            Some(conn),
+        ))),
         None => Html(render_error("Connection not found")),
     }
 }
@@ -250,11 +254,11 @@ fn connection_test_error(message: &str, surface: ConnectionTestSurface<'_>) -> H
 }
 
 fn connection_test_success(result: &ConnectionTestResult) -> Html<String> {
-    render_template(ConnectionTestResultTemplate {
+    Html(render_or_error_fragment(&ConnectionTestResultTemplate {
         backend_name: result.backend_name.clone(),
         model_name: result.model_name.clone(),
         elapsed_ms: result.elapsed_ms,
-    })
+    }))
 }
 
 /// The provider's `complete` is sync (`reqwest::blocking`), so the test runs on

@@ -1,11 +1,10 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! The dock record reads: the offered set and the notice of one Game
 
-use crate::adapters::driven::storage::utils::{from_optional_json, no_in_memory};
-use crate::adapters::driven::storage::{Backend, Storage};
-use crate::domain::model::dock::{DockRecord, Notice};
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
+use crate::domain::model::dock::DockRecord;
 use crate::domain::model::game::GameId;
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 
 pub struct DockReads<'a> {
     storage: &'a Storage,
@@ -20,7 +19,7 @@ impl Storage {
 impl DockReads<'_> {
     pub fn get(&self, game: GameId) -> Result<Option<DockRecord>, EngineError> {
         self.storage
-            .with_backend_mut("docks_get", |backend| match backend {
+            .with_backend_mut(StorageCall::DocksGet, |backend| match backend {
                 Backend::Sqlite { pool } => {
                     let conn = pool.conn();
                     let row = match conn.query_row(
@@ -31,20 +30,15 @@ impl DockReads<'_> {
                         Ok(row) => row,
                         Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
                         Err(other) => {
-                            return Err(EngineError::Config(format!(
-                                "Failed to read the dock record: {other}"
-                            )));
+                            return Err(other).db_context("Failed to read the dock record");
                         }
                     };
 
-                    let offered: Vec<String> = serde_json::from_str(&row.0).map_err(|e| {
-                        EngineError::Config(format!("Failed to parse the offered set: {e}"))
-                    })?;
-                    let notice: Option<Notice> =
-                        from_optional_json("dock notice", row.1.as_deref())?;
-                    Ok(Some(DockRecord { offered, notice }))
+                    Ok(Some(DockRecord {
+                        offered: serde_json::from_str(&row.0)?,
+                        notice: row.1.as_deref().map(serde_json::from_str).transpose()?,
+                    }))
                 }
-                Backend::InMemory(_) => Err(no_in_memory("docks_get")),
             })
     }
 }

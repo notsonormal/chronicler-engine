@@ -2,20 +2,22 @@
 
 use std::sync::Arc;
 
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::test_support::active_game_of;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
-use chronicler_engine::adapters::driven::storage::{TestOverride, TxWrite};
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride, TxWrite};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
 use chronicler_engine::domain::model::state::generation_status::{
-    GenerationFailure, GenerationFailureKind,
+    GenerationFailure, GenerationFailureKind, Record,
 };
+use chronicler_engine::error::EngineError;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::fixtures::llm_message;
-use chronicler_engine::test_support::{configured_runner, ModelRole, ScriptedModel, TestAppBuilder};
+use chronicler_engine::test_support::{configured_runner, ScriptedModel, TestAppBuilder};
 use chronicler_engine::test_support::empty_sqlite_storage;
 
 use crate::SettingsTestGuard;
@@ -269,19 +271,19 @@ async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
 
 // [docs/specs/failure_display.md] SCENARIO: 38.5
 #[tokio::test]
-async fn test_missing_preset_failure_clamps_with_the_preset_line() {
+async fn test_missing_preset_failure_clamps_with_the_missing_data_line() {
     let state = TestAppBuilder::default_test()
-        .failure(GenerationFailure::new(
-            GenerationFailureKind::PresetMissing,
-            "Prompt preset not found: system_default",
+        .failure(GenerationFailure::unreadable(
+            Record::Preset,
+            &EngineError::PresetNotFound("system_default".to_string()),
         ))
         .build_service();
     let app = build_router(state);
 
     let body = fetch_body(&app, "/status/generating").await;
     assert!(
-        body.contains("The active prompt preset is missing."),
-        "a missing preset must keep its own line, not the general one: {body}"
+        body.contains("The data for this request is missing: the preset."),
+        "a missing preset keeps its own line, not the general one: {body}"
     );
     assert!(
         !body.contains("The engine failed with an internal error."),
@@ -339,7 +341,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 #[tokio::test]
 async fn test_failed_user_action_is_not_a_failed_poll() {
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        "update_game_config",
+        StorageCall::UpdateGameConfig,
         TestOverride::internal("update_game_config failure"),
     ));
     let (app, state) = TestAppBuilder::default_test()
@@ -375,7 +377,7 @@ async fn test_failed_user_action_is_not_a_failed_poll() {
 // [docs/specs/failure_display.md] SCENARIO: 38.9
 #[tokio::test]
 async fn test_empty_answer_keeps_its_own_line_clamps() {
-    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().empty(ModelRole::Narration)));
+    let (app, state) = app_with_model(Arc::new(ScriptedModel::new().empty(Role::Narrator)));
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
@@ -418,7 +420,7 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The room waits.")
-                .analysis("{\"npcs_in_room\": [], \"movement\": null}"),
+                .after_narration("{\"npcs_in_room\": [], \"movement\": null}"),
         ))
         .build_with_state();
     corrupt_start_state(&storage, active_game_of(&state), |broken| {
@@ -471,21 +473,29 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
 // [docs/specs/failure_display.md] SCENARIO: 38.11
 #[tokio::test]
 async fn test_save_failure_clamps_with_the_save_line_and_saves_no_narration() {
+    let _guard = SettingsTestGuard::new();
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_model_and_storage(
         Arc::new(storage),
-        Arc::new(ScriptedModel::new().turn("You look around.")),
+        Arc::clone(&model),
         AppSettings::default(),
         configured_runner,
     );
-    // The Input's save unit writes no dock, so the Narration's text save is the
-    // first write this override refuses.
-    failures.set_write(
-        TxWrite::PutDock,
-        TestOverride::internal("the dock write failed"),
-    );
 
     assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narration call should reach the model"
+    );
+    // The Input is saved before the call, so the refused write is the Swipe of
+    // the Narration.
+    failures.set_write(
+        TxWrite::InsertSwipe,
+        TestOverride::internal("the swipe write failed"),
+    );
+    hold.release();
     assert!(
         wait_settled(&state, 2000).await,
         "the failing Job should end"
@@ -506,7 +516,7 @@ async fn test_save_failure_clamps_with_the_save_line_and_saves_no_narration() {
         "the line appears once: {body}"
     );
     assert!(
-        status_error_message(&body).contains("the dock write failed"),
+        status_error_message(&body).contains("the swipe write failed"),
         "the storage error behind the line is reachable in the disclosure: {body}"
     );
 
@@ -584,4 +594,357 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
         narrations, 1,
         "the model was never asked, so the opening is the only Narration"
     );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.13
+#[tokio::test]
+async fn preset_game_read_fails() {
+    let _guard = SettingsTestGuard::new();
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(Role::Narrator);
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::clone(&model),
+        AppSettings::default(),
+        configured_runner,
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narration call should reach the model"
+    );
+    // Every read the Job made before the Quantifier preset is behind it, so the
+    // refused read is the one that chooses that preset.
+    failures.set(
+        StorageCall::GetGame,
+        TestOverride::internal("the game row is unreadable"),
+    );
+    hold.release();
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    // The status reads the Game row, so the read works again before it asks.
+    failures.clear(StorageCall::GetGame);
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The data for this request is missing: the game."),
+        "an unreadable Game row is a failure line that names the Game, not a registry preset: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("the game row is unreadable"),
+        "the storage error behind the line is reachable in the disclosure: {body}"
+    );
+    assert!(
+        model
+            .calls()
+            .iter()
+            .all(|call| call.role != Role::Quantifier),
+        "the Quantifier is never asked with a preset the Job could not choose"
+    );
+    let narrations = story_of(&state)
+        .iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    assert_eq!(
+        narrations, 2,
+        "the Narration saved before the failure stays beside the opening"
+    );
+}
+
+/// A Job whose call of `held` is held while `call` starts to fail: the Job reads
+/// again after the call, so the refused read is one of the steps behind it.
+async fn status_after_a_read_fails_behind_a_call(call: StorageCall, held: Role) -> (String, usize) {
+    let _guard = SettingsTestGuard::new();
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(held);
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::clone(&model),
+        AppSettings::default(),
+        configured_runner,
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held call should reach the model"
+    );
+    failures.set(call, TestOverride::internal("the read is refused"));
+    hold.release();
+    assert!(wait_settled(&state, 2000).await, "the Job should end");
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    // The status reads the Game row, so every read works again before it asks.
+    failures.clear_all();
+    let body = fetch_body(&app, "/status/generating").await;
+    let narrations = story_of(&state)
+        .iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .count();
+    (body, narrations)
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.14
+#[tokio::test]
+async fn job_read_names_record_story_and_saved_state() {
+    let rows = [
+        (StorageCall::StoriesEntries, Role::Narrator, "the story", 2),
+        (
+            StorageCall::StoriesSwipeState,
+            Role::Narrator,
+            "the start state",
+            1,
+        ),
+        (
+            StorageCall::StoriesSwipeState,
+            Role::Quantifier,
+            "the saved state",
+            2,
+        ),
+    ];
+    for (call, held, record, expected_narrations) in rows {
+        let (body, narrations) = status_after_a_read_fails_behind_a_call(call, held).await;
+        let line = format!("The data for this request is missing: {record}.");
+        assert!(
+            body.contains(&line),
+            "{call:?}: the line names {record}, not the save line: {body}"
+        );
+        assert!(
+            !body.contains("The new text could not be saved."),
+            "{call:?}: a failed read is not a failed write: {body}"
+        );
+        assert!(
+            status_error_message(&body).contains("the read is refused"),
+            "{call:?}: the storage error is reachable in the disclosure: {body}"
+        );
+        assert_eq!(
+            narrations, expected_narrations,
+            "{call:?} behind the {held:?} call: the Narrations in the story log"
+        );
+    }
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.14
+#[tokio::test]
+async fn job_read_names_record_world() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::new(ScriptedModel::new().turn("You look around.")),
+        AppSettings::default(),
+        configured_runner,
+    );
+    // The accept reads the Game, the Persona and the start state; only the Job
+    // reads the World.
+    failures.set(
+        StorageCall::GetWorld,
+        TestOverride::internal("the world is unreadable"),
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job should end");
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    failures.clear_all();
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The data for this request is missing: the world."),
+        "the line names the World: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("the world is unreadable"),
+        "the storage error is reachable in the disclosure: {body}"
+    );
+    let inputs = story_of(&state)
+        .iter()
+        .filter(|message| message.message_type == MessageType::Input)
+        .count();
+    assert_eq!(
+        inputs, 0,
+        "the room check is the first step, so no Input is saved"
+    );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.15
+#[tokio::test]
+async fn job_read_names_record_accept_start_state() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::new(ScriptedModel::new().turn("You look around.")),
+        AppSettings::default(),
+        configured_runner,
+    );
+    failures.set(
+        StorageCall::StoriesSwipeState,
+        TestOverride::internal("the start state is unreadable"),
+    );
+    let before = story_of(&state).len();
+
+    let response = post_action(&app, "look").await;
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let answer = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    let answer = String::from_utf8_lossy(&answer);
+    let line = "The data for this request is missing: the start state.";
+    assert!(
+        answer.contains(line),
+        "the answer names the start state: {answer}"
+    );
+    assert!(
+        !answer.contains("the start state is unreadable"),
+        "the storage error stays out of the answer: {answer}"
+    );
+
+    failures.clear_all();
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains(line),
+        "the status carries the line of the answer: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("the start state is unreadable"),
+        "the storage error is reachable in the disclosure: {body}"
+    );
+    assert_eq!(
+        story_of(&state).len(),
+        before,
+        "a request that cannot run saves nothing"
+    );
+}
+
+/// The Game picks a preset that the library does not hold. A delete through the
+/// service is refused while a Game uses the preset, so the row is written directly.
+fn game_picks_a_missing_preset(
+    storage: &chronicler_engine::adapters::driven::storage::Storage,
+    state: &chronicler_engine::adapters::driving::http::AppState,
+    preset_type: chronicler_engine::domain::model::prompt_preset::PresetType,
+) {
+    let mut game = storage
+        .get_game(active_game_of(state).0)
+        .expect("the Game row reads back")
+        .expect("the Game exists");
+    game.set_active_preset_id(preset_type, "preset_that_is_gone".to_string());
+    storage
+        .update_game_config(&game)
+        .expect("the Game row takes the preset id");
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.16
+#[tokio::test]
+async fn job_read_names_record_preset() {
+    use chronicler_engine::domain::model::prompt_preset::PresetType;
+
+    // The narrator preset is needed at the first model call; the Quantifier preset
+    // behind the Narration.
+    for (preset_type, narrations, quantifier_asked) in [
+        (PresetType::System, 1, false),
+        (PresetType::Quantifier, 2, false),
+    ] {
+        let storage = Arc::new(empty_sqlite_storage());
+        let model = Arc::new(ScriptedModel::new().turn("You look around."));
+        let (app, state, storage) = app_with_model_and_storage(
+            storage,
+            Arc::clone(&model),
+            AppSettings::default(),
+            configured_runner,
+        );
+        game_picks_a_missing_preset(&storage, &state, preset_type);
+
+        assert!(post_action(&app, "look").await.status().is_success());
+        assert!(wait_settled(&state, 2000).await, "the Job should end");
+        assert!(
+            wait_for_jobs(&state, 2000).await,
+            "the Job should end before the status reads"
+        );
+
+        let body = fetch_body(&app, "/status/generating").await;
+        assert!(
+            body.contains("The data for this request is missing: the preset."),
+            "{preset_type:?}: the line names the preset: {body}"
+        );
+        assert!(
+            status_error_message(&body).contains("preset_that_is_gone"),
+            "{preset_type:?}: the missing preset id is reachable in the disclosure: {body}"
+        );
+        let saved = story_of(&state)
+            .iter()
+            .filter(|message| message.message_type == MessageType::Narration)
+            .count();
+        assert_eq!(
+            saved, narrations,
+            "{preset_type:?}: the Narrations of the story"
+        );
+        assert_eq!(
+            model
+                .calls()
+                .iter()
+                .any(|call| call.role == Role::Quantifier),
+            quantifier_asked,
+            "{preset_type:?}: the Quantifier is never asked with a preset the Job could not choose"
+        );
+    }
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.17
+#[tokio::test]
+async fn state_update_refused() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::new(ScriptedModel::new().turn("You look around.")),
+        AppSettings::default(),
+        configured_runner,
+    );
+    failures.set_write(
+        TxWrite::SetSwipeState,
+        TestOverride::internal("the state write failed"),
+    );
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job should end");
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "the Job should end before the status reads"
+    );
+
+    let body = fetch_body(&app, "/status/generating").await;
+    assert!(
+        body.contains("The text was saved, but the game state could not be updated."),
+        "a refused state update shows the contradiction line: {body}"
+    );
+    assert!(
+        !body.contains("The new text could not be saved."),
+        "the text is saved, so the save line would be wrong: {body}"
+    );
+    assert!(
+        status_error_message(&body).contains("the state write failed"),
+        "the storage error is reachable in the disclosure: {body}"
+    );
+    let narrations: Vec<_> = story_of(&state)
+        .into_iter()
+        .filter(|message| message.message_type == MessageType::Narration)
+        .collect();
+    assert_eq!(
+        narrations.last().map(|message| message.text().to_string()),
+        Some("You look around.".to_string()),
+        "the Narration stays beside the opening"
+    );
+    assert_eq!(narrations.len(), 2);
 }

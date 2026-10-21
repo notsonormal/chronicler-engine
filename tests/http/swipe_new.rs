@@ -6,16 +6,17 @@ use axum::http::StatusCode;
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, configured_runner, empty_sqlite_storage, ModelRole,
-    ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
+    active_game_of, analysis_report, configured_runner, empty_sqlite_storage, ScriptedModel,
+    TestAppBuilder, TestDataBuilder, TestMap,
 };
 
 use crate::support::app_wiring::{app_with_a_triggered_npc, app_with_model, app_with_model_and_storage};
 use crate::support::http_assertions::{assert_still_thinking, status_error_message};
-use crate::support::http_fixtures::{break_start_room, story_of};
+use crate::support::http_fixtures::{break_start_room, room_header_of, story_of};
 use crate::support::http_requests::{
     fetch_generating_status, post_action, post_empty, post_form, wait_settled,
 };
@@ -55,11 +56,11 @@ async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u6
     let model = Arc::new(
         ScriptedModel::new()
             .narration("You walk into the next room.")
-            .analysis(analysis_report(&[], Some("room2")))
+            .after_narration(analysis_report(&[], Some("room2")))
             .event_narration("Gabriella is here.")
-            .analysis(analysis_report(&["gabriella"], None))
+            .after_narration(analysis_report(&["gabriella"], None))
             .event_narration("Gabriella is here again.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     );
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
@@ -100,7 +101,7 @@ async fn test_retry_replaces_narration_with_new_swipe_http() {
         ScriptedModel::new()
             .turn("First.")
             .narration("Second.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     ));
 
     let resp = post_action(&app, "look").await;
@@ -141,7 +142,7 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
     let model = ScriptedModel::new()
         .turn("You walk around.")
         .narration("You enter room2.")
-        .analysis(analysis_report(&[], Some("room2")));
+        .after_narration(analysis_report(&[], Some("room2")));
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -175,13 +176,17 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
         .rfind(|m| m.message_type == MessageType::Narration)
         .expect("the generation appends a Narration");
     assert_eq!(
-        narration.room_report(),
+        room_header_of(&state, narration.id).as_deref(),
         Some("Room room2"),
-        "the redo's Swipe reports the room it moved the player into"
+        "the redo's Swipe shows the room it moved the player into"
     );
+
+    let resp = post_empty(&app, &format!("/message/{}/swipe/0", narration.id)).await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        narration.swipes[0].room_report, None,
-        "the first Swipe's own generation did not move, so it reports no room"
+        room_header_of(&state, narration.id),
+        None,
+        "after a switch to the first Swipe, whose generation did not move, the Narration shows no room"
     );
 }
 
@@ -192,7 +197,7 @@ async fn test_retry_preserves_input_message_http() {
         ScriptedModel::new()
             .turn("You walk around.")
             .narration("You walk around again.")
-            .analysis(analysis_report(&[], None)),
+            .after_narration(analysis_report(&[], None)),
     ));
 
     let resp = post_action(&app, "walk around").await;
@@ -278,9 +283,9 @@ async fn test_retry_reevaluates_triggers_http() {
     let model = ScriptedModel::new()
         .turn("You walk around.")
         .narration("You enter room2.")
-        .analysis(analysis_report(&[], Some("room2")))
+        .after_narration(analysis_report(&[], Some("room2")))
         .event_narration("The shopkeeper greets you.")
-        .analysis(analysis_report(&[], None));
+        .after_narration(analysis_report(&[], None));
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -339,15 +344,15 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 9.8
 #[tokio::test]
-async fn test_retry_swipe_without_movement_reports_no_room_http() {
+async fn test_retry_swipe_without_movement_shows_no_room_http() {
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
     let model = ScriptedModel::new()
         .narration("You walk north.")
-        .analysis(analysis_report(&[], Some("room2")))
+        .after_narration(analysis_report(&[], Some("room2")))
         .narration("You stand still.")
-        .analysis(analysis_report(&[], None));
+        .after_narration(analysis_report(&[], None));
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -357,6 +362,17 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
     assert!(
         wait_settled(&state, 2000).await,
         "the moving Action should complete"
+    );
+
+    let moved = story_of(&state)
+        .iter()
+        .rfind(|m| m.message_type == MessageType::Narration)
+        .expect("the Action appends a Narration")
+        .id;
+    assert_eq!(
+        room_header_of(&state, moved).as_deref(),
+        Some("Room room2"),
+        "the first Swipe arrived in room2"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
@@ -374,14 +390,17 @@ async fn test_retry_swipe_without_movement_reports_no_room_http() {
         "the redo appends one Swipe to the Narration"
     );
     assert_eq!(
-        narration.room_report(),
+        room_header_of(&state, narration.id),
         None,
         "a redo that stays put must not keep the room its sibling arrived in"
     );
+
+    let resp = post_empty(&app, &format!("/message/{}/swipe/0", narration.id)).await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        narration.swipes[0].room_report.as_deref(),
+        room_header_of(&state, narration.id).as_deref(),
         Some("Room room2"),
-        "the first Swipe keeps the room its own generation arrived in"
+        "after a switch to the first Swipe, the Narration shows the room its own generation arrived in"
     );
 }
 
@@ -402,11 +421,11 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
     );
     let model = ScriptedModel::new()
         .narration("You walk into the next room.")
-        .analysis(analysis_report(&[], Some("room2")))
+        .after_narration(analysis_report(&[], Some("room2")))
         .event_narration("Gabriella is here.")
-        .analysis(analysis_report(&["gabriella"], None))
+        .after_narration(analysis_report(&["gabriella"], None))
         .event_narration("The event happens again.")
-        .analysis(analysis_report(&[], None));
+        .after_narration(analysis_report(&[], None));
     let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
@@ -475,11 +494,11 @@ async fn test_event_retry_does_not_move_the_player_http() {
     );
     let model = ScriptedModel::new()
         .narration("You walk into the next room.")
-        .analysis(analysis_report(&[], Some("room2")))
+        .after_narration(analysis_report(&[], Some("room2")))
         .event_narration("Gabriella is here.")
-        .analysis(analysis_report(&["gabriella"], None))
+        .after_narration(analysis_report(&["gabriella"], None))
         .event_narration("The event happens again.")
-        .analysis(analysis_report(&[], Some("room_1")));
+        .after_narration(analysis_report(&[], Some("room_1")));
     let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
@@ -524,12 +543,12 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
     let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
     let model = ScriptedModel::new()
         .narration("You look around.")
-        .analysis(analysis_report(&["npc_1"], None))
-        .failed(ModelRole::Event)
+        .after_narration(analysis_report(&["npc_1"], None))
+        .failed(Role::Trigger)
         .event_narration("The event fires again.")
-        .analysis(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["npc_1"], None))
         .event_narration("The event fires once more.")
-        .analysis(analysis_report(&["npc_1"], None));
+        .after_narration(analysis_report(&["npc_1"], None));
     let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -649,15 +668,15 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
         .build();
     let model = ScriptedModel::new()
         .narration("You look around.")
-        .analysis(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["npc_1"], None))
         .event_narration("The NPC steps out.")
-        .analysis(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["npc_1"], None))
         .narration("You step into the next room.")
-        .analysis(analysis_report(&["gabriella"], Some("room2")))
+        .after_narration(analysis_report(&["gabriella"], Some("room2")))
         .event_narration("Gabriella steps out.")
-        .analysis(analysis_report(&["gabriella"], None))
+        .after_narration(analysis_report(&["gabriella"], None))
         .event_narration("The NPC steps out again.")
-        .analysis(analysis_report(&["npc_1"], None));
+        .after_narration(analysis_report(&["npc_1"], None));
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -769,18 +788,18 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
         .find(|m| m.id == event_id)
         .expect("the event Message exists");
     assert_eq!(
-        event_narration.room_report(),
+        room_header_of(&state, event_narration.id),
         None,
-        "the event continuation must not carry the room the main Narration arrived in"
+        "the event continuation must not repeat the room the main Narration arrived in"
     );
     let main_narration = messages
         .iter()
         .rfind(|m| m.message_type == MessageType::Narration && m.event_header().is_none())
         .expect("the Action's main Narration exists");
     assert_eq!(
-        main_narration.room_report(),
+        room_header_of(&state, main_narration.id).as_deref(),
         Some("Room room2"),
-        "the movement into \"room2\" must report that room's display name"
+        "the movement into \"room2\" must show that room's display name"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
@@ -801,13 +820,17 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
         "event retry appends exactly one swipe"
     );
     assert_eq!(
-        event_narration.room_report(),
+        room_header_of(&state, event_narration.id),
         None,
         "the redo's Swipe must not invent a room its siblings do not carry"
     );
+
+    let resp = post_empty(&app, &format!("/message/{event_id}/swipe/0")).await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        event_narration.swipes[0].room_report, None,
-        "switching between the event's Swipes must not add or remove a room name"
+        room_header_of(&state, event_id),
+        None,
+        "after a switch to the first Swipe, the event Narration still shows no room"
     );
 }
 
@@ -841,7 +864,7 @@ async fn test_retry_llm_failure_sets_error_http() {
     let (app, state) = app_with_model(Arc::new(
         ScriptedModel::new()
             .turn("Original narration.")
-            .failed(ModelRole::Narration),
+            .failed(Role::Narrator),
     ));
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -875,7 +898,7 @@ async fn test_retry_empty_narration_sets_error_http() {
     let (app, state) = app_with_model(Arc::new(
         ScriptedModel::new()
             .turn("Original narration.")
-            .empty(ModelRole::Narration),
+            .empty(Role::Narrator),
     ));
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -959,10 +982,10 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
     let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
     let model = ScriptedModel::new()
         .narration("The main narration.")
-        .analysis(analysis_report(&["npc_1"], Some("room2")))
+        .after_narration(analysis_report(&["npc_1"], Some("room2")))
         .event_narration("The NPC greets you.")
-        .analysis(analysis_report(&["npc_1"], None))
-        .failed(ModelRole::Event);
+        .after_narration(analysis_report(&["npc_1"], None))
+        .failed(Role::Trigger);
     let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
@@ -1028,8 +1051,8 @@ async fn test_failed_retry_does_not_roll_the_movement_back_http() {
         .build();
     let model = ScriptedModel::new()
         .narration("You walk north.")
-        .analysis(analysis_report(&[], Some("room2")))
-        .failed(ModelRole::Narration);
+        .after_narration(analysis_report(&[], Some("room2")))
+        .failed(Role::Narrator);
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -1087,10 +1110,10 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
     );
     let model = ScriptedModel::new()
         .narration("You look around.")
-        .analysis(analysis_report(&[], None))
+        .after_narration(analysis_report(&[], None))
         .narration("You enter room2.")
-        .analysis(analysis_report(&[], Some("room2")))
-        .failed(ModelRole::Event);
+        .after_narration(analysis_report(&[], Some("room2")))
+        .failed(Role::Trigger);
     let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
@@ -1125,7 +1148,7 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
 #[tokio::test]
 async fn test_retry_concurrent_generation_returns_still_thinking_http() {
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = app_with_model(Arc::clone(&model));
 
     let resp = post_action(&app, "look").await;
@@ -1178,9 +1201,9 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
         .build();
     let model = ScriptedModel::new()
         .narration("I look around.")
-        .analysis(analysis_report(&[], None))
+        .after_narration(analysis_report(&[], None))
         .narration("I look around cautiously.")
-        .analysis(analysis_report(&[], Some("room2")));
+        .after_narration(analysis_report(&[], Some("room2")));
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -1239,6 +1262,47 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
     );
 }
 
+// [docs/specs/swipe_new.md] SCENARIO: 22.6
+#[tokio::test]
+async fn test_retry_of_a_bare_impersonate_runs_http() {
+    let model = ScriptedModel::new()
+        .turn("I say hello.")
+        .turn("I greet the room.");
+    let (app, state) = app_with_model(Arc::new(model));
+
+    assert!(
+        post_action(&app, "/impersonate")
+            .await
+            .status()
+            .is_success()
+    );
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the bare impersonate turn should complete"
+    );
+
+    let resp = post_empty(&app, "/swipe/new").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(wait_settled(&state, 2000).await, "retry should complete");
+
+    assert_eq!(fetch_generating_status(&app).await, "idle");
+    let messages = story_of(&state);
+    let inputs: Vec<_> = messages
+        .iter()
+        .filter(|m| m.message_type == MessageType::Input)
+        .collect();
+    assert_eq!(inputs.len(), 1, "exactly one Input message");
+    let input = inputs[0];
+    assert_eq!(input.swipes.len(), 2, "retry appended a swipe to the Input");
+    assert_eq!(input.text(), "I greet the room.");
+    assert!(input.impersonated(), "the new swipe stays an impersonation");
+    assert_eq!(
+        input.impersonate_direction(),
+        None,
+        "the new swipe still holds no direction"
+    );
+}
+
 // [docs/specs/swipe_new.md] SCENARIO: 22.2
 #[tokio::test]
 async fn test_retry_user_regen_generates_input_swipe_http() {
@@ -1247,7 +1311,7 @@ async fn test_retry_user_regen_generates_input_swipe_http() {
     let data = TestDataBuilder::default_test().build();
     let model = ScriptedModel::new()
         .narration("You walk forward.")
-        .analysis(analysis_report(&[], None))
+        .after_narration(analysis_report(&[], None))
         .narration("I sprint forward.");
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
@@ -1318,9 +1382,9 @@ async fn test_retry_re_impersonate_preserves_record_http() {
     let data = TestDataBuilder::default_test().build();
     let model = ScriptedModel::new()
         .narration("I sneak past.")
-        .analysis(analysis_report(&[], None))
+        .after_narration(analysis_report(&[], None))
         .narration("I sneak past the guard.")
-        .analysis(analysis_report(&[], None));
+        .after_narration(analysis_report(&[], None));
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -1369,9 +1433,9 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
         Arc::new(
             ScriptedModel::new()
                 .narration("I look around.")
-                .analysis(analysis_report(&[], None))
+                .after_narration(analysis_report(&[], None))
                 .narration("I look around cautiously.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ),
         AppSettings::default(),
         configured_runner,
@@ -1446,18 +1510,18 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 22.5
 #[tokio::test]
-async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
+async fn test_guided_retry_shows_the_room_its_redo_arrives_in_http() {
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
     // Consumed in call order: the moving Action, the guided generation, then the redo.
     let model = ScriptedModel::new()
         .narration("You walk north.")
-        .analysis(analysis_report(&[], Some("room2")))
+        .after_narration(analysis_report(&[], Some("room2")))
         .narration("You look for the key.")
-        .analysis(analysis_report(&[], None))
+        .after_narration(analysis_report(&[], None))
         .narration("You look for the key again.")
-        .analysis(analysis_report(&[], Some("room_1")));
+        .after_narration(analysis_report(&[], Some("room_1")));
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -1485,9 +1549,9 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
         .find(|m| m.is_guided())
         .expect("the guided generation appends a guided Narration");
     assert_eq!(
-        guided.room_report(),
+        room_header_of(&state, guided.id),
         None,
-        "a guided Narration that stayed put must not take the previous Action's room"
+        "a guided Narration that stayed put must not repeat the previous Action's room"
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
@@ -1508,12 +1572,16 @@ async fn test_guided_retry_reports_the_room_its_redo_arrives_in_http() {
         "the redo appends one Swipe to the guided Narration"
     );
     assert_eq!(
-        guided.room_report(),
+        room_header_of(&state, guided.id).as_deref(),
         Some("Room room_1"),
-        "the redo's Swipe reports the room its own generation arrived in"
+        "the redo's Swipe shows the room its own generation arrived in"
     );
+
+    let resp = post_empty(&app, &format!("/message/{}/swipe/0", guided.id)).await;
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        guided.swipes[0].room_report, None,
-        "the first Swipe keeps its own, room-less generation"
+        room_header_of(&state, guided.id),
+        None,
+        "after a switch to the first Swipe, the guided Narration shows no room"
     );
 }

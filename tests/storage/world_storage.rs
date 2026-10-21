@@ -296,14 +296,17 @@ fn test_update_world() {
 }
 
 #[test]
-fn test_update_world_nonexistent_noop() {
+fn test_update_world_nonexistent_is_refused() {
     let storage = Storage::new_in_memory();
 
     let world_card = make_test_world("dummy", "Dummy");
     let map = make_test_map("dummy_map", "Dummy Map");
 
     let result = storage.update_world(999, &world_card, &map);
-    assert!(result.is_ok(), "In-memory update should succeed (no-op)");
+    assert!(
+        result.is_err(),
+        "updating a World that does not exist writes no map for it"
+    );
 }
 
 #[test]
@@ -421,34 +424,6 @@ fn test_create_world_after_delete_does_not_reuse_id() {
     assert!(
         third_id > second_id,
         "a new world must not reuse a deleted world's id (second={second_id}, third={third_id})"
-    );
-}
-
-#[test]
-fn test_seed_world_replaces_existing_key_in_memory() {
-    let storage = Storage::new_in_memory();
-
-    storage
-        .seed_world(
-            &make_tagged_world("reseed", "first", false),
-            &make_test_map("first_map", "First Map"),
-        )
-        .unwrap();
-    storage
-        .seed_world(
-            &make_tagged_world("reseed", "second", true),
-            &make_test_map("second_map", "Second Map"),
-        )
-        .unwrap();
-
-    let worlds = storage.list_worlds().unwrap();
-    assert_eq!(worlds.len(), 1, "re-seeding must keep one world");
-    assert_tagged_card(&worlds[0], "reseed", "second", true);
-    let stored = storage.get_world("reseed").unwrap().unwrap();
-    assert_tagged_card(&stored.world_card, "reseed", "second", true);
-    assert_eq!(
-        stored.map.overworld.id, "second_map",
-        "re-seeding must replace the existing map"
     );
 }
 

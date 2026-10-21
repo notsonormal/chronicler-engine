@@ -55,6 +55,7 @@ pub(crate) fn refusal_message_without_layer_prefix_for_validation_and_config(
 ) -> String {
     match error {
         EngineError::Validation(message) | EngineError::Config(message) => message.clone(),
+        EngineError::Database { context, source } => format!("{context}: {source}"),
         other => other.to_string(),
     }
 }

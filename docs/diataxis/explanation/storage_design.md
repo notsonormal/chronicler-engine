@@ -9,9 +9,9 @@ The persistence + bootstrap subsystem has five moving parts that fit together as
 
 ## The storage struct and its backend decorator
 
-The persistence layer is a single concrete struct. `Storage` holds the backend behind a mutex, and every public method dispatches through one wrapper method that resolves the backend and runs the body. Callers always see one `Storage` type. The engine uses one concrete impl: the `Backend` enum names exactly two real backends (`Sqlite` for production, `InMemory` for development and unit tests), and that closed set is what the storage layer dispatches over.
+The persistence layer is a single concrete struct. `Storage` holds the backend behind a mutex, and every public method dispatches through one wrapper method that resolves the backend and runs the body. Callers always see one `Storage` type. The engine uses one concrete impl: the `Backend` enum names one real backend, `Sqlite`. Production opens it on a file, and tests open it on a `:memory:` database.
 
-The backend shape is two enums layered by decorator. The inner enum names the real backends. The outer enum is a decorator: one variant for plain use and another that wraps a real backend with failure injection. The decorator is a peer of the plain-use variant — it is always a wrapper around one of the real backends, never names a third backend of its own. The wrapper holds a single boxed real backend, so at most one decorator layer can wrap a backend at a time. A misconfigured test that tries to wrap a wrapper is a compile error; the replace-not-nest invariant is structural.
+The backend shape is two enums layered by decorator. The inner enum names the real backend, `Sqlite`. The outer enum is a decorator: one variant for plain use and another that wraps a real backend with failure injection. The decorator is a peer of the plain-use variant — it is always a wrapper around the real backend, and never names a backend of its own. The wrapper holds a single boxed real backend, so at most one decorator layer can wrap a backend at a time. A misconfigured test that tries to wrap a wrapper is a compile error; the replace-not-nest invariant is structural.
 
 The dispatch seam sits on every method. The wrapper method acquires the mutex, unwraps any decorator wrapper, hands the underlying real backend to the method body, and routes through the real backend's implementation. Whether a failure-injection override is active or not, the production code path is the one that runs; the override short-circuits only the specific methods named by the test handle. Tests get deterministic failure injection without per-trait mock structs.
 
@@ -53,7 +53,7 @@ The dock record is a table of its own, because the config routes write the Game 
 
 A unit holds the backend mutex for its whole run, so a `Storage` call inside the closure of a unit would wait on the mutex that the unit itself holds.
 
-The new records run on SQLite only. Tier-1 tests run on a SQLite `:memory:` database for this reason: a rollback and a failure in the middle of a unit are properties of the real backend, and an in-memory fake would only mimic them. Legacy unit tests in `src/` keep the in-memory backend for the tables it still holds.
+Every test that uses `Storage` runs on SQLite. Tier-1 tests and unit tests open a SQLite `:memory:` database because a rollback and a failure in the middle of a unit are properties of the real backend, and a fake would only mimic them.
 
 The seed flow sits outside this rule. It runs at startup, not on user request, and its non-atomicity is bounded by the absence of concurrent readers.
 

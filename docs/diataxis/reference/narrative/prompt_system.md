@@ -22,6 +22,8 @@ The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manage
 | 6 | User Input | User Message | User (data) | `<PlayerInput>` sanitized current player input |
 | 7 | Guide | — | User (data) | Transient guide text on a Guided Generation; omitted otherwise |
 
+The narrator makes Layer 6 from the kind of the generation (see Narration System).
+
 ## Section Definitions
 
 | Section | Source | XML Tag | System / User |
@@ -50,8 +52,9 @@ The quantifier and options agents build their own prompts, separate from the lay
 
 ## Prompt Presets
 
-The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type, and every call reads the referenced preset fresh from storage.
+The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type. `PromptPresetService` gives the preset of a Game to the Narrator and to each hook, and every call reads the referenced preset fresh from storage.
 
 ## Document References
 
 - [`../../explanation/prompt_system_design.md`](../../explanation/prompt_system_design.md) — why the prompt system is shaped this way: system/user separation and two-tier NPC cards.
+- [`narration_system.md`](narration_system.md) — the prompt rules of each kind of generation.

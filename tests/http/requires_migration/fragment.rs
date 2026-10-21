@@ -8,13 +8,14 @@ use axum::{
 };
 use tower::util::ServiceExt;
 
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, empty_sqlite_storage, ModelRole, ScriptedModel,
+    active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel,
 };
 use chronicler_engine::TestAppBuilder;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::adapters::driven::storage::TestOverride;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::support::app_wiring::app_with_model;
@@ -66,7 +67,7 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
             ScriptedModel::new()
                 .turn("First.")
                 .narration("Second.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         );
         app_with_model(model)
     };
@@ -447,10 +448,10 @@ async fn test_list_games_fragment_escapes_html() {
 
 #[tokio::test]
 async fn test_list_games_fragment_storage_error() {
-    let storage = Arc::new(
-        empty_sqlite_storage()
-            .with_failure("list_games", TestOverride::config("list_games failed")),
-    );
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        StorageCall::ListGames,
+        TestOverride::config("list_games failed"),
+    ));
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 
@@ -638,7 +639,7 @@ async fn test_switch_swipe_handler_success() {
             ScriptedModel::new()
                 .turn("First.")
                 .narration("Second.")
-                .analysis(analysis_report(&[], None)),
+                .after_narration(analysis_report(&[], None)),
         ))
         .build_with_state();
 
@@ -654,20 +655,28 @@ async fn test_switch_swipe_handler_success() {
     );
 
     let game = active_game_of(&state);
-    let (entries, _) = state
+    let entries: Vec<_> = state
         .game_view_query
-        .get_story_log_entries(game)
-        .expect("the story reads back");
+        .story_window(game)
+        .expect("the story reads back")
+        .entries
+        .into_iter()
+        .map(|entry| entry.row)
+        .collect();
     let last = entries.last().expect("the Retry's Narration is the last");
     assert_eq!(last.swipe_count, 2, "the Retry appended a Swipe");
 
     let response = post_empty(&app, &format!("/message/{}/swipe/0", last.id)).await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    let (entries, _) = state
+    let entries: Vec<_> = state
         .game_view_query
-        .get_story_log_entries(game)
-        .expect("the story reads back");
+        .story_window(game)
+        .expect("the story reads back")
+        .entries
+        .into_iter()
+        .map(|entry| entry.row)
+        .collect();
     assert_eq!(
         entries
             .last()
@@ -711,10 +720,14 @@ async fn test_switch_swipe_handler_not_last() {
     );
 
     let game = active_game_of(&state);
-    let (entries, _) = state
+    let entries: Vec<_> = state
         .game_view_query
-        .get_story_log_entries(game)
-        .expect("the story reads back");
+        .story_window(game)
+        .expect("the story reads back")
+        .entries
+        .into_iter()
+        .map(|entry| entry.row)
+        .collect();
     let input = entries
         .iter()
         .rev()
@@ -737,7 +750,7 @@ async fn test_switch_swipe_handler_not_last() {
 async fn test_switch_swipe_handler_concurrent() {
     // The held narrator call is the busy state a swipe switch meets.
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let hold = model.hold(ModelRole::Narration);
+    let hold = model.hold(Role::Narrator);
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::clone(&model))
         .build_with_state();

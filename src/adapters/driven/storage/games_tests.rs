@@ -1,6 +1,4 @@
-use crate::domain::model::game::GameId;
-use crate::adapters::driven::storage::{Storage, TestOverride};
-use crate::domain::model::settings::AppSettings;
+use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::sqlite_storage;
 
 /// The Game row these reads need, written whole into either backend.
@@ -56,7 +54,7 @@ fn test_game_timestamps_created_at() {
 #[test]
 fn test_get_game_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
-    handle.set("get_game", TestOverride::config("get failed"));
+    handle.set(StorageCall::GetGame, TestOverride::config("get failed"));
 
     let result = storage.get_game(1);
     assert!(result.is_err());
@@ -84,37 +82,6 @@ fn require_game_returns_canonical_not_found_when_absent() {
 }
 
 #[test]
-fn active_options_preset_id_prefers_game_row() {
-    let storage = Storage::new_in_memory();
-    let id = seed_game(&storage, "w", "w", "Game A");
-
-    let mut game = storage.require_game(id).unwrap();
-    game.active_options_prompt_preset_id = "game_specific_options".to_string();
-    storage.update_game_config(&game).unwrap();
-
-    let settings = AppSettings::default();
-    assert_eq!(
-        storage.active_options_preset_id(GameId(id), &settings),
-        "game_specific_options",
-        "the per-game preset id must win over the settings fallback"
-    );
-}
-
-#[test]
-fn active_options_preset_id_falls_back_to_settings_without_game_row() {
-    let storage = Storage::new_in_memory();
-    let settings = AppSettings {
-        active_options_prompt_preset_id: "settings_options_fallback".to_string(),
-        ..AppSettings::default()
-    };
-
-    assert_eq!(
-        storage.active_options_preset_id(GameId(7), &settings),
-        "settings_options_fallback"
-    );
-}
-
-#[test]
 fn test_game_row_reports_the_derived_display_name() {
     let storage = sqlite_storage().unwrap();
     let id = seed_game(
@@ -129,7 +96,7 @@ fn test_game_row_reports_the_derived_display_name() {
 }
 
 #[test]
-fn test_update_game_display_name_persists_in_memory() {
+fn test_update_game_display_name_persists() {
     let storage = Storage::new_in_memory();
     let id = seed_game(&storage, "w", "w", "Game A");
 
@@ -166,7 +133,7 @@ fn test_update_game_display_name_missing_returns_not_found() {
 fn test_update_game_display_name_failure() {
     let (storage, handle) = Storage::new_in_memory().with_test_failures();
     handle.set(
-        "update_game_display_name",
+        StorageCall::UpdateGameDisplayName,
         TestOverride::config("rename failed"),
     );
 

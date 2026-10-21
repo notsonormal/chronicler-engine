@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::model::agent::Kind;
 use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -31,8 +32,7 @@ impl GenerationFailureKind {
             }
             Self::EmptyText => "The language model gave an empty answer.".to_string(),
             Self::SaveFailed => "The new text could not be saved.".to_string(),
-            Self::SceneMissing => format!("The room {named} is not on the map."),
-            Self::PresetMissing => "The active prompt preset is missing.".to_string(),
+            Self::InvalidRoom => format!("The room {named} is not on the map."),
             Self::MissingData => {
                 format!("The data for this request is missing: {named}.")
             }
@@ -45,8 +45,21 @@ impl GenerationFailureKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GenerationFailureKind {
+/// The one definition of the kinds, so `GenerationFailureKind::ALL` cannot lag the enum.
+macro_rules! failure_kinds {
+    ($($(#[$doc:meta])* $variant:ident),+ $(,)?) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        pub enum GenerationFailureKind {
+            $($(#[$doc])* $variant),+
+        }
+
+        impl GenerationFailureKind {
+            pub const ALL: &'static [Self] = &[$(Self::$variant),+];
+        }
+    };
+}
+
+failure_kinds! {
     /// No answer arrived: a timeout, a transport failure, or a non-2xx response.
     Unreachable,
     /// The assembled prompt exceeded the active connection's context budget.
@@ -59,20 +72,54 @@ pub enum GenerationFailureKind {
     /// The new text could not be saved.
     SaveFailed,
     /// The room the request ran in is gone from the map.
-    SceneMissing,
-    /// The game's active preset is not in the library it names.
-    PresetMissing,
+    InvalidRoom,
     /// A request needed a record the engine cannot read.
     MissingData,
     /// The model answered, and the answer was empty or only whitespace.
     EmptyText,
-    /// The text was saved, and the game rules could not update the state.
+    /// The text was saved, and the game state could not be updated: the game rules
+    /// refused it, or the write of the update failed.
     Contradiction,
     /// The event Narration of a Trigger failed; the raw text holds the failure
     /// under it.
     EventNarrationFailed,
     /// Anything the other kinds do not name.
     Other,
+}
+
+/// The records a request reads. The name of a record is what the missing-data
+/// line names.
+///
+/// [TRIVIAL_ENUM]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Record {
+    Game,
+    Persona,
+    Story,
+    Message,
+    StartState,
+    SavedState,
+    CurrentState,
+    World,
+    Settings,
+    Preset,
+}
+
+impl Record {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Game => "the game",
+            Self::Persona => "the persona",
+            Self::Story => "the story",
+            Self::Message => "the message",
+            Self::StartState => "the start state",
+            Self::SavedState => "the saved state",
+            Self::CurrentState => "the current state",
+            Self::World => "the world",
+            Self::Settings => "the settings",
+            Self::Preset => "the preset",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,24 +145,51 @@ impl GenerationFailure {
     }
 
     /// A room the map does not hold: the line names it, and the disclosure holds
-    /// the error behind it when the engine has one to show.
-    pub fn missing_room(room: impl Into<String>, raw: Option<String>) -> Self {
+    /// the room too.
+    pub fn invalid_room(room: impl Into<String>) -> Self {
         let room = room.into();
         Self {
-            kind: GenerationFailureKind::SceneMissing,
-            raw: raw.unwrap_or_else(|| room.clone()),
+            kind: GenerationFailureKind::InvalidRoom,
+            raw: room.clone(),
             named: room,
         }
     }
 
-    /// A record the request needs: the line names it, and the disclosure holds the
-    /// error behind it when the engine has one to show.
-    pub fn missing_record(name: impl Into<String>, raw: Option<String>) -> Self {
-        let name = name.into();
+    /// A record the request reads and the engine holds no row for: the line names
+    /// it.
+    pub fn missing(record: Record) -> Self {
         Self {
             kind: GenerationFailureKind::MissingData,
-            raw: raw.unwrap_or_else(|| name.clone()),
-            named: name,
+            named: record.name().to_string(),
+            raw: record.name().to_string(),
+        }
+    }
+
+    /// A read of a record failed: the line is the one of a missing record, and the
+    /// disclosure holds the error behind it.
+    pub fn unreadable(record: Record, error: &EngineError) -> Self {
+        Self {
+            raw: error.to_string(),
+            ..Self::missing(record)
+        }
+    }
+
+    /// A write failed; the disclosure holds the error.
+    pub fn save_failed(error: &EngineError) -> Self {
+        Self::new(GenerationFailureKind::SaveFailed, error.to_string())
+    }
+
+    /// The text is saved, and the game state could not be updated.
+    pub fn contradiction(raw: impl Into<String>) -> Self {
+        Self::new(GenerationFailureKind::Contradiction, raw)
+    }
+
+    /// A failed event generation reports the event line, with the line of the
+    /// failure under it in the raw text. The other kinds keep their line.
+    pub fn of_generation(self, kind: Kind) -> Self {
+        match kind {
+            Kind::Event => Self::new(GenerationFailureKind::EventNarrationFailed, self.line()),
+            _ => self,
         }
     }
 
@@ -125,7 +199,8 @@ impl GenerationFailure {
         self.kind.line(&self.named)
     }
 
-    /// Classifies a typed engine error so no call site matches on message text.
+    /// Classifies the errors of a model call and of prompt assembly. A read or a
+    /// write names its own line where it fails.
     pub fn from_engine_error(error: &EngineError) -> Self {
         let kind = match error {
             EngineError::Llm(
@@ -142,13 +217,6 @@ impl GenerationFailure {
             EngineError::Llm(LlmFailure::TokenBudgetSpent { .. }) => {
                 GenerationFailureKind::TokenBudgetSpent
             }
-            EngineError::Database(_) | EngineError::Io(_) => GenerationFailureKind::SaveFailed,
-            // The line the kind renders names the room, so the room and the error
-            // behind it are the failure's two parts.
-            EngineError::RoomNotFound(room) => {
-                return Self::missing_room(room.clone(), Some(error.to_string()));
-            }
-            EngineError::PresetNotFound(_) => GenerationFailureKind::PresetMissing,
             _ => GenerationFailureKind::Other,
         };
         Self::new(kind, error.to_string())

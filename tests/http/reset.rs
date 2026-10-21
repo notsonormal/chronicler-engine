@@ -2,12 +2,14 @@
 
 use std::sync::Arc;
 
+use axum::http::StatusCode;
+
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::ScriptedModel;
+use chronicler_engine::test_support::{empty_sqlite_storage, ScriptedModel};
 use chronicler_engine::TestAppBuilder;
 
 use crate::support::http_fixtures::story_of;
-use crate::support::http_requests::{post_action, post_empty, wait_settled};
+use crate::support::http_requests::{post_action, post_empty, response_body, wait_settled};
 
 // [docs/specs/reset.md] SCENARIO: 7.1
 #[tokio::test]
@@ -81,4 +83,22 @@ async fn test_reset_then_execute_works_http() {
         "only the second action's input should exist"
     );
     assert_eq!(inputs[0].text(), "look around");
+}
+
+// [docs/specs/reset.md] SCENARIO: 7.4
+#[tokio::test]
+async fn test_reset_with_no_active_game_answers_400_http() {
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(empty_sqlite_storage()))
+        .skip_seeding(true)
+        .build();
+
+    let response = post_empty(&app, "/reset").await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = response_body(response).await;
+    assert!(
+        body.contains("No active game"),
+        "the refusal names the missing Game, got: {body}"
+    );
 }

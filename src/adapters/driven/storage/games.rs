@@ -1,15 +1,14 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! Game storage operations
 
-use crate::error::EngineError;
+use crate::error::{DatabaseContext, EngineError};
 use crate::domain::model::game::{Game, GameId};
-use crate::domain::model::settings::{AppSettings, NarratorMode};
-use crate::adapters::driven::storage::{Backend, Storage};
+use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::game::DbGame;
 
 impl Storage {
     pub fn list_games(&self) -> Result<Vec<Game>, EngineError> {
-        self.with_backend_mut("list_games", |backend| match backend {
+        self.with_backend_mut(StorageCall::ListGames, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -18,60 +17,44 @@ impl Storage {
                          FROM games
                          ORDER BY updated_at DESC",
                     )
-                    .map_err(|e| {
-                        EngineError::Config(format!("Failed to prepare list games: {e}"))
-                    })?;
+                    .db_context("Failed to prepare list games")?;
 
                 let db_games: Vec<DbGame> = stmt
                     .query_map([], DbGame::from_row)
-                    .map_err(|e| EngineError::Config(format!("Failed to list games: {e}")))?
+                    .db_context("Failed to list games")?
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| EngineError::Config(format!("Failed to read game row: {e}")))?;
+                    .db_context("Failed to read game row")?;
 
                 db_games.iter().map(DbGame::to_game).collect()
-            }
-            Backend::InMemory(data) => {
-                let mut games = data.games.clone();
-                games.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-                Ok(games)
             }
         })
     }
 
     /// The uniqueness scan keys on `name`, so a rename must not touch it.
     pub fn update_game_display_name(&self, id: u64, display_name: &str) -> Result<(), EngineError> {
-        self.with_backend_mut("update_game_display_name", |backend| match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                let now = chrono::Utc::now().to_rfc3339();
-                let affected = conn
-                    .execute(
-                        "UPDATE games SET display_name=?, updated_at=? WHERE id=?",
-                        rusqlite::params![display_name, &now, id as i64],
-                    )
-                    .map_err(|e| {
-                        EngineError::Config(format!("Failed to update game display name: {e}"))
-                    })?;
-                if affected == 0 {
-                    return Err(EngineError::GameNotFound(id));
+        self.with_backend_mut(
+            StorageCall::UpdateGameDisplayName,
+            |backend| match backend {
+                Backend::Sqlite { pool } => {
+                    let conn = pool.conn();
+                    let now = chrono::Utc::now().to_rfc3339();
+                    let affected = conn
+                        .execute(
+                            "UPDATE games SET display_name=?, updated_at=? WHERE id=?",
+                            rusqlite::params![display_name, &now, id as i64],
+                        )
+                        .db_context("Failed to update game display name")?;
+                    if affected == 0 {
+                        return Err(EngineError::GameNotFound(id));
+                    }
+                    Ok(())
                 }
-                Ok(())
-            }
-            Backend::InMemory(data) => {
-                let stored = data
-                    .games
-                    .iter_mut()
-                    .find(|g| g.id == id)
-                    .ok_or(EngineError::GameNotFound(id))?;
-                stored.display_name = display_name.to_string();
-                stored.updated_at = chrono::Utc::now();
-                Ok(())
-            }
-        })
+            },
+        )
     }
 
     pub fn get_game(&self, id: u64) -> Result<Option<Game>, EngineError> {
-        self.with_backend_mut("get_game", |backend| match backend {
+        self.with_backend_mut(StorageCall::GetGame, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -81,17 +64,16 @@ impl Storage {
                          WHERE id = ?1
                          LIMIT 1",
                     )
-                    .map_err(|e| EngineError::Config(format!("Failed to prepare get game: {e}")))?;
+                    .db_context("Failed to prepare get game")?;
 
                 let db_result = stmt.query_row(rusqlite::params![id as i64], DbGame::from_row);
 
                 match db_result {
                     Ok(db) => Ok(Some(db.to_game()?)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(e) => Err(EngineError::Config(format!("Failed to get game: {e}"))),
+                    Err(e) => Err(e).db_context("Failed to get game"),
                 }
             }
-            Backend::InMemory(data) => Ok(data.games.iter().find(|g| g.id == id).cloned()),
         })
     }
 
@@ -103,9 +85,9 @@ impl Storage {
     /// The newest Game of a World: the one boot picks up. The order is the
     /// newest Message of the Game, else the Game's `updated_at`, which
     /// `ActiveGame::set` touches. The higher Game id breaks a tie in either
-    /// key, so both backends answer the same Game.
+    /// key.
     pub fn newest_game_of_world(&self, world_key: &str) -> Result<Option<GameId>, EngineError> {
-        self.with_backend_mut("newest_game_of_world", |backend| match backend {
+        self.with_backend_mut(StorageCall::NewestGameOfWorld, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn
@@ -121,34 +103,21 @@ impl Storage {
                          ORDER BY COALESCE(m.last_message, g.updated_at) DESC, g.id DESC
                          LIMIT 1",
                     )
-                    .map_err(|e| {
-                        EngineError::Config(format!("Failed to prepare newest game: {e}"))
-                    })?;
+                    .db_context("Failed to prepare newest game")?;
                 let result = stmt.query_row(rusqlite::params![world_key], |row| {
                     Ok(GameId(row.get::<_, i64>(0)? as u64))
                 });
                 match result {
                     Ok(game_id) => Ok(Some(game_id)),
                     Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(e) => Err(EngineError::Config(format!(
-                        "Failed to read the newest game of {world_key}: {e}"
-                    ))),
+                    Err(e) => Err(e).db_context("Failed to read the newest game of the world"),
                 }
-            }
-            Backend::InMemory(data) => {
-                // The in-memory backend holds no Message, so only `updated_at` orders.
-                let newest = data
-                    .games
-                    .iter()
-                    .filter(|game| game.world_key == world_key)
-                    .max_by(|a, b| a.updated_at.cmp(&b.updated_at).then(a.id.cmp(&b.id)));
-                Ok(newest.map(|game| GameId(game.id)))
             }
         })
     }
 
     pub fn update_game_config(&self, game: &Game) -> Result<(), EngineError> {
-        self.with_backend_mut("update_game_config", |backend| match backend {
+        self.with_backend_mut(StorageCall::UpdateGameConfig, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let now = chrono::Utc::now().to_rfc3339();
@@ -168,75 +137,36 @@ impl Storage {
                             game.id as i64,
                         ],
                     )
-                    .map_err(|e| {
-                        EngineError::Config(format!("Failed to update game config: {e}"))
-                    })?;
+                    .db_context("Failed to update game config")?;
                 if affected == 0 {
                     return Err(EngineError::GameNotFound(game.id));
                 }
                 Ok(())
             }
-            Backend::InMemory(data) => {
-                let stored = data
-                    .games
-                    .iter_mut()
-                    .find(|g| g.id == game.id)
-                    .ok_or(EngineError::GameNotFound(game.id))?;
-                stored.narrator_mode = game.narrator_mode;
-                stored.narrative_perspective = game.narrative_perspective;
-                stored.narrative_tense = game.narrative_tense;
-                stored.active_system_prompt_preset_id =
-                    game.active_system_prompt_preset_id.clone();
-                stored.active_quantifier_prompt_preset_id =
-                    game.active_quantifier_prompt_preset_id.clone();
-                stored.active_impersonate_prompt_preset_id =
-                    game.active_impersonate_prompt_preset_id.clone();
-                stored.active_options_prompt_preset_id =
-                    game.active_options_prompt_preset_id.clone();
-                stored.options_always_on = game.options_always_on;
-                stored.updated_at = chrono::Utc::now();
-                Ok(())
-            }
         })
     }
 
-    pub fn active_quantifier_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.preset_id_or(
-            game_id,
-            || {
-                tracing::warn!("game {game_id} missing; falling back to registry novel preset");
-                settings
-                    .mode_preset_registry
-                    .bundle_for(NarratorMode::Novel)
-                    .quantifier_prompt_preset_id
+    /// How many Games hold the preset in any of its preset slots.
+    pub fn count_games_using_preset(&self, preset_id: &str) -> Result<usize, EngineError> {
+        self.with_backend_mut(
+            StorageCall::CountGamesUsingPreset,
+            |backend| match backend {
+                Backend::Sqlite { pool } => {
+                    let conn = pool.conn();
+                    let count: i64 = conn
+                        .query_row(
+                            "SELECT COUNT(*) FROM games
+                         WHERE active_system_prompt_preset_id = ?1
+                            OR active_quantifier_prompt_preset_id = ?1
+                            OR active_impersonate_prompt_preset_id = ?1
+                            OR active_options_prompt_preset_id = ?1",
+                            [preset_id],
+                            |row| row.get(0),
+                        )
+                        .db_context("Failed to count the games that use the preset")?;
+                    Ok(count as usize)
+                }
             },
-            |game| &game.active_quantifier_prompt_preset_id,
         )
-    }
-
-    /// Options presets are mode-agnostic and sit outside the per-mode registry, so
-    /// the fallback is the settings column, not a mode bundle.
-    pub fn active_options_preset_id(&self, game_id: GameId, settings: &AppSettings) -> String {
-        self.preset_id_or(
-            game_id,
-            || {
-                tracing::warn!("game {game_id} missing; falling back to settings options preset");
-                settings.active_options_prompt_preset_id.clone()
-            },
-            |game| &game.active_options_prompt_preset_id,
-        )
-    }
-
-    /// The Game's preset slot, or `fallback` when the Game row is gone.
-    fn preset_id_or(
-        &self,
-        game_id: GameId,
-        fallback: impl FnOnce() -> String,
-        game_slot: impl FnOnce(&Game) -> &str,
-    ) -> String {
-        match self.get_game(game_id.0).ok().flatten() {
-            Some(game) => game_slot(&game).to_string(),
-            None => fallback(),
-        }
     }
 }

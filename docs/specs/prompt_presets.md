@@ -243,6 +243,17 @@ And a following GET /fragment/prompt-presets still renders the preset named "Ori
 
 ### POST /prompt-presets/{id}/delete — delete
 
+#### Scenario 21.41: A failed preset delete answers non-2xx and carries the failure
+
+```gherkin
+Given an app state whose preset storage fails on delete
+And a seeded non-default system preset
+When the client POST /prompt-presets/{id}/delete
+Then the response is a 500
+And the body carries the delete failure text
+And a following GET /fragment/prompt-presets still renders the preset
+```
+
 #### Scenario 21.18: Delete a preset → empty body
 
 ```gherkin
@@ -287,6 +298,21 @@ Given a fresh app state with a non-default Options preset set as the settings-le
 When the client POST /prompt-presets/{id}/delete
 Then the response is a 400
 And the response body contains "Preset is the default Options preset; change the default before deleting"
+And the preset is not deleted
+```
+
+#### Scenario 21.40: Delete a preset that a Game uses is refused with the count of Games
+
+```gherkin
+Given a fresh app state with a non-default system preset
+And one Game whose system preset is that preset
+When the client POST /prompt-presets/{id}/delete
+Then the response is a 400
+And the response body is `<div class="error-message">Cannot delete preset used by 1 game</div>`
+When a second Game takes that preset as its system preset
+And the client POST /prompt-presets/{id}/delete
+Then the response is a 400
+And the response body is `<div class="error-message">Cannot delete preset used by 2 games</div>`
 And the preset is not deleted
 ```
 

@@ -17,8 +17,8 @@ pub const BANNED_NAME_ROWS: &[BannedNameRow] = &[
         banned: &[StaticItem, NamePrefix("Atomic")],
     },
     // Rule 6: the guard never spans a model call. `gate.rs` holds the guard for one
-    // check and its writes, so the narrator or an Agent (an analysis Agent, an
-    // Options Agent, their runner) named in that file would let a call run under it.
+    // check and its writes, so the narrator or an Agent (an after-narration Agent, an
+    // end-of-Job Agent, their runner) named in that file would let a call run under it.
     BannedNameRow {
         rule: 6,
         scope: "application/generation/gate.rs",
@@ -30,8 +30,8 @@ pub const BANNED_NAME_ROWS: &[BannedNameRow] = &[
 // list is one named const the row points at.
 pub const GENERATION_CALLEES: &[&str] = &[
     "Narrator::narrate",
-    "AgentRunner::analysis",
-    "AgentRunner::options",
+    "AgentRunner::after_narration",
+    "AgentRunner::end_of_job",
 ];
 
 // What may make those calls: the Job, and the `Narrator` seam contract, which calls
@@ -76,7 +76,7 @@ pub const CALL_SITE_ROWS: &[CallSiteRow] = &[
     },
 ];
 
-// The records rule 7 bans from a Job field: the six names fit no single row field
+// The records rule 7 bans from a Job field and a Job parameter: the six names fit no single row field
 // line, so the list is one named const the row points at.
 pub const JOB_RECORD_TYPES: &[&str] = &[
     "Game",
@@ -89,12 +89,14 @@ pub const JOB_RECORD_TYPES: &[&str] = &[
 
 pub const TYPE_CHECK_ROWS: &[TypeCheckRow] = &[
     // Rule 7: between steps, pass ids. A Job holds no record field, so a record a
-    // step loads cannot go stale in another step's hands.
+    // step loads cannot go stale in another step's hands; and no function of
+    // `job.rs` takes a record parameter, because each step loads the records it
+    // uses itself.
     TypeCheckRow {
         rule: 7,
         scope: "application/pipeline/job.rs",
         banned_types: JOB_RECORD_TYPES,
-        position: TypeCheckPosition::Fields,
+        position: TypeCheckPosition::FieldsAndParameters,
     },
 ];
 

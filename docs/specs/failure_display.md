@@ -87,7 +87,7 @@ And the raw transport message is reachable only inside the response's disclosure
 ```gherkin
 Given a Game whose last generation failed because its active prompt preset is missing
 When the client GET /status/generating
-Then the response carries the missing-preset line, not the line for an unnamed failure
+Then the response carries the missing-data line that names the preset, not the line for an unnamed failure
 And the raw text naming the missing preset is reachable only inside the response's disclosure
 ```
 
@@ -128,10 +128,9 @@ And the raw internal message appears once, inside that response's disclosure
 #### Scenario 38.11: A refused save keeps its own line and saves no Narrations
 
 ```gherkin
-Given a Game whose storage refuses the write of a Narration's text
-And a narrator backend that answers the narration prompt
-When the client POST /action with command="look"
-And the Job ends
+Given a running Job whose Narration call is held
+And the storage refuses the write of a Narration's text while the call is held
+When the call is released and the Job ends
 And the client GET /status/generating
 Then the status response carries the save-failed line, not the line for an unnamed failure
 And the raw storage error is reachable only inside the response's disclosure
@@ -149,4 +148,83 @@ And the client GET /status/generating
 Then the status response carries the prompt-too-long line, not the line for an unnamed failure
 And the raw context-overflow message is reachable only inside the response's disclosure
 And the story log holds no Narration of that Action
+```
+
+#### Scenario 38.13: An unreadable Game while the Job chooses a hook preset ends the Job with a failure line
+
+```gherkin
+Given a running Job whose Narration call is held
+And the Game's record becomes unreadable while the call is held
+When the call is released and the Job ends
+And the client GET /status/generating
+Then the status response carries the missing-data line that names the Game
+And the raw storage message is in the response's disclosure
+And the Quantifier is not asked
+And the story log holds the Narration of that Action beside the opening
+```
+
+#### Scenario 38.14: A read that fails in a Job shows the missing-data line with the name of its record
+
+```gherkin
+Given a Game whose Job reads the record of one row of the Examples table below
+And the read fails
+When the client POST /action with command="look"
+And the Job ends
+And the client GET /status/generating
+Then the status response carries the missing-data line that names the record of that row
+And the status response does not carry the save-failed line
+And the raw storage error is reachable only inside the response's disclosure
+And the story log holds the Narrations of that row
+
+Examples:
+| Read that fails | Record in the line | Narrations in the story log |
+| the story entries, after the Narration call | the story | the opening and the Narration of the Action |
+| the Swipe state of the start, after the Narration call | the start state | the opening only |
+| the Swipe state of the saved text, after the analysis call | the saved state | the opening and the Narration of the Action |
+| the World, at the first step | the world | the opening only |
+```
+
+#### Scenario 38.15: A start state that cannot be read refuses the request with the missing-data line
+
+```gherkin
+Given a Game whose start state cannot be read
+When the client POST /action with command="look"
+Then the response is 500
+And the response carries the missing-data line that names the start state
+And the response does not carry the raw storage error
+When the client GET /status/generating
+Then the status response carries the same line
+And the raw storage error is reachable only inside the response's disclosure
+And the story log is unchanged
+```
+
+#### Scenario 38.16: A missing preset of the Narrator or of a hook shows the missing-data line that names the preset
+
+```gherkin
+Given a Game whose preset for the kind of one row of the Examples table below is not in the library
+When the client POST /action with command="look"
+And the Job ends
+And the client GET /status/generating
+Then the status response carries the missing-data line that names the preset
+And the raw text naming the missing preset is reachable only inside the response's disclosure
+And the story log holds the Narrations of that row
+And the Quantifier is not asked
+
+Examples:
+| Missing preset | Narrations in the story log |
+| the Narrator's | the opening only |
+| the Quantifier's | the opening and the Narration of the Action |
+```
+
+#### Scenario 38.17: A refused state update shows the contradiction line and keeps the text
+
+```gherkin
+Given a Game whose storage refuses the write of a state update
+And a narrator backend that answers the narration prompt
+When the client POST /action with command="look"
+And the Job ends
+And the client GET /status/generating
+Then the status response carries the contradiction line, not the save-failed line
+And the raw storage error is reachable only inside the response's disclosure
+And the story log holds that Action's Narration text
 ```

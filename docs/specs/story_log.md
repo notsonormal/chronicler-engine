@@ -123,3 +123,48 @@ When the client POST /history/delete
 Then the response is 400 Bad Request carrying "The story keeps its last message"
 And the story log still holds the opening Narration
 ```
+
+#### Scenario 8.11: The story log of a long story ends at the last Message
+
+```gherkin
+Given a Game whose story holds 53 Messages
+When the client GET /fragment/story-log
+Then the response renders exactly 50 .log-entry
+And the last .log-entry is the last stored Message
+And the first .log-entry is the fourth stored Message
+And the Delete and Retry controls sit on the last .log-entry
+```
+
+#### Scenario 8.12: Delete-last in a long story removes the entry the player sees
+
+```gherkin
+Given a Game whose story holds 53 Messages
+And the client GET /fragment/story-log
+When the client POST /history/delete
+Then the response status is "200 OK"
+And the client GET /fragment/story-log renders exactly 50 .log-entry
+And the last .log-entry is the stored Message before the deleted one
+And no .log-entry holds the deleted Message
+And the first .log-entry is the third stored Message
+```
+
+#### Scenario 8.13: In a long story the oldest entry of the story log shows its room
+
+```gherkin
+Given a Game whose story holds 53 Messages
+And every Message holds the state of the same room "Test Room"
+When the client GET /fragment/story-log
+Then the response renders exactly 50 .log-entry
+And the first .log-entry shows the room "Test Room"
+And no other .log-entry shows a room
+```
+
+#### Scenario 8.14: The story log offers Retrigger on an Impersonate Input
+
+```gherkin
+Given a Game whose last Message is an Impersonate Input
+And the state of that Input's Swipe holds a trigger context
+When the client GET /fragment/story-log
+Then the last .log-entry carries the `.retrigger-btn` control
+And no other .log-entry carries it
+```

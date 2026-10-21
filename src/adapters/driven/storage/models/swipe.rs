@@ -6,7 +6,6 @@ pub struct DbSwipe {
     pub message_id: i64,
     pub swipe_index: i64,
     pub text: String,
-    pub room_report: Option<String>,
     pub event_header: Option<String>,
     pub impersonated: i64,
     pub guide_text: Option<String>,
@@ -22,13 +21,12 @@ impl DbSwipe {
             message_id: row.get(1)?,
             swipe_index: row.get(2)?,
             text: row.get(3)?,
-            room_report: row.get(4)?,
-            event_header: row.get(5)?,
-            impersonated: row.get(6)?,
-            guide_text: row.get(7)?,
-            impersonate_direction: row.get(8)?,
-            state_json: row.get(9)?,
-            maker_json: row.get(10)?,
+            event_header: row.get(4)?,
+            impersonated: row.get(5)?,
+            guide_text: row.get(6)?,
+            impersonate_direction: row.get(7)?,
+            state_json: row.get(8)?,
+            maker_json: row.get(9)?,
         })
     }
 }

@@ -3,7 +3,7 @@
 
 pub mod narrator;
 
-pub use narrator::{Narrated, Narrator};
+pub use narrator::{NarrationValues, Narrated, Narrator};
 
 #[cfg(test)]
 mod narrator_tests;

@@ -7,7 +7,6 @@ pub mod types;
 pub(crate) mod utils;
 
 pub use agent::QuantifierAgent;
-pub use utils::orchestration::determine_npcs_in_room;
 
 #[cfg(test)]
 mod agent_tests;

@@ -9,10 +9,9 @@ use axum::{
 
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::render_error;
+use crate::adapters::driving::http::utils::error::{action_error_response, render_error};
 use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
-use crate::application::errors::ApplicationError;
-use crate::application::generation::gate::JobRequest;
+use crate::domain::model::generation::JobRequest;
 use crate::application::pipeline::job::Job;
 use crate::domain::model::game::GameId;
 
@@ -20,12 +19,10 @@ pub async fn index_handler() -> Html<String> {
     Html(include_str!("../../../../../../assets/index.html").to_string())
 }
 
-pub async fn reset_handler(
-    State(state): State<AppState>,
-) -> Result<axum::response::Response<Body>, ApplicationError> {
+pub async fn reset_handler(State(state): State<AppState>) -> Response<Body> {
     match state.game_catalogue.reset() {
-        Ok(()) => Ok(ok_refresh()),
-        Err(e) => Ok(internal_error(e.to_string())),
+        Ok(()) => ok_refresh(),
+        Err(e) => action_error_response(e, "Failed to reset"),
     }
 }
 

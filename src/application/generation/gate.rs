@@ -6,18 +6,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::adapters::driven::storage::{Storage, Tx, TxToken};
-use crate::domain::model::agent::Kind;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::dock::{DockRecord, Notice};
 use crate::domain::model::game::{GameId, NewGame};
-use crate::domain::model::generation::{GenerationOrder, Place};
-use crate::domain::model::message::{Maker, Message, StoredInputs, Swipe, SwipeAt};
-use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Step};
+use crate::domain::model::agent::Kind;
+use crate::domain::model::generation::{
+    GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanRefusal, Place, StoryEnd,
+};
+use crate::domain::model::message::{Maker, Message, Swipe, SwipeAt};
+use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::{EventRecord, TriggerRef};
 use crate::domain::model::tail::Tail;
-use crate::domain::model::utils::generation_record;
 use crate::error::EngineError;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,64 +32,29 @@ pub enum Refusal {
     Failed(GenerationFailure),
 }
 
+/// Why a step or a save unit of a Job did not finish.
 #[derive(Debug)]
-pub enum Stopped {
+pub enum JobFailure {
     /// The Game's job entry no longer holds this Job's id: a stop or a reset
     /// ended the Job, so its late writes land nowhere.
     EntryMoved,
-    /// The unit failed in storage: the Job writes the failure line and ends.
-    SaveFailed(EngineError),
+    /// The Job writes this line and ends.
+    Line(GenerationFailure),
 }
 
-impl From<EngineError> for Stopped {
-    fn from(error: EngineError) -> Self {
-        Self::SaveFailed(error)
+impl From<GenerationFailure> for JobFailure {
+    fn from(failure: GenerationFailure) -> Self {
+        Self::Line(failure)
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum JobRequest {
-    /// Free text the player typed. Empty text is a Continue.
-    Action(String),
-    /// `/guide`: a steering direction that shapes the next Narration.
-    Guide(String),
-    /// `/impersonate`: the player dictates their own Persona's Message.
-    Impersonate(Option<String>),
-    /// `/options`: the Options run alone.
-    Options,
-    /// A Retry of the last Message, of the kind the last Message holds.
-    Retry,
-    /// A Retrigger of the Trigger the last Message holds.
-    Retrigger,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OptionsRun {
-    /// The run follows the Job's last Narration, when the toggle is on.
-    AfterNarration,
-    /// The run is the whole Job: `/options`.
-    OnDemand,
-}
-
-/// The order of one request: ids and texts only.
-#[derive(Debug, Clone, PartialEq)]
-pub struct JobPlan {
-    /// The free text to save before the first generation, when the request carries
-    /// any.
-    pub input: Option<String>,
-    /// The first generation. `None` for `/options`.
-    pub first: Option<GenerationOrder>,
-    pub options: OptionsRun,
-}
-
-impl JobPlan {
-    /// The step the status shows from the accept, until the Job names its own: a
-    /// Retry of an event Narration starts in the event step.
-    pub(crate) fn first_step(&self) -> Step {
-        match &self.first {
-            Some(order) if order.kind == Kind::Event => Step::GeneratingEvent,
-            Some(_) => Step::Narrating,
-            None => Step::Options,
+impl JobFailure {
+    /// The failure of the generation of `kind`: an event generation reports the
+    /// event line, wherever it failed.
+    pub fn of_generation(self, kind: Kind) -> Self {
+        match self {
+            Self::Line(line) => Self::Line(line.of_generation(kind)),
+            Self::EntryMoved => Self::EntryMoved,
         }
     }
 }
@@ -230,9 +195,12 @@ impl GameWriter {
         let job_id = self.next_job_id();
         self.hold(|entries, units| {
             Self::require_idle(entries, game)?;
-            let tail = self.tail_or_refuse(game, units)?;
-            let mut plan = self.plan_for(game, &request, tail.as_ref(), units)?;
-            self.require_job_data(game, &mut plan, tail.as_ref(), units)?;
+            let story = self.story_end_or_refuse(game, units)?;
+            let plan = JobPlan::for_request(&request, story).map_err(|refusal| match refusal {
+                PlanRefusal::BadRequest(line) => Refusal::BadRequest(line),
+                PlanRefusal::Missing(record) => self.missing(game, record, units),
+            })?;
+            self.require_records(game, &plan, units)?;
             let step = plan.first_step();
             // The unit lands before the entry: a refused accept makes no entry, so a
             // Game is never busy for a Job that never started.
@@ -255,15 +223,14 @@ impl GameWriter {
 
     pub fn stop(&self, game: GameId) -> Result<(), EngineError> {
         self.hold(|entries, units| {
-            entries.remove(&game);
+            // The read goes first: a failed read leaves the Job running, and the stop
+            // answers that it failed.
             let record = DockRecord {
                 offered: self.dock_of(game)?.offered,
                 notice: None,
             };
-            units.open(game, |tx| {
-                tx.set_game_failure(None)?;
-                tx.put_dock(&record)
-            })
+            entries.remove(&game);
+            units.open(game, |tx| Self::clear_failure_and_put_dock(tx, &record))
         })
     }
 
@@ -288,8 +255,7 @@ impl GameWriter {
             units
                 .open(game, |tx| {
                     tx.set_active_swipe(at)?;
-                    tx.put_dock(&DockRecord::default())?;
-                    tx.set_game_failure(None)
+                    Self::clear_failure_and_put_dock(tx, &DockRecord::default())
                 })
                 .map_err(|error| self.save_failed(game, &error, units))
         })
@@ -301,7 +267,7 @@ impl GameWriter {
             let at = match self.storage.stories().active_swipe(game, message) {
                 Ok(Some(at)) => at,
                 Ok(None) => return Err(Refusal::BadRequest("Message not found".to_string())),
-                Err(error) => return Err(self.unreadable(game, "the message", &error, units)),
+                Err(error) => return Err(self.unreadable(game, Record::Message, &error, units)),
             };
             units
                 .open(game, |tx| tx.set_swipe_text(at, text))
@@ -323,8 +289,7 @@ impl GameWriter {
             units
                 .open(game, |tx| {
                     tx.delete_message(last.last.id)?;
-                    tx.put_dock(&DockRecord::default())?;
-                    tx.set_game_failure(None)
+                    Self::clear_failure_and_put_dock(tx, &DockRecord::default())
                 })
                 .map_err(|error| self.save_failed(game, &error, units))
         })
@@ -386,33 +351,31 @@ impl GameWriter {
         self.storage
             .stories()
             .tail(game)
-            .map_err(|error| self.unreadable(game, "the story", &error, units))
+            .map_err(|error| self.unreadable(game, Record::Story, &error, units))
     }
 
     /// A record the request needs that the engine has no row for: the failure line
     /// names it.
-    fn missing(&self, game: GameId, name: &str, units: &Units) -> Refusal {
-        self.refuse(game, GenerationFailure::missing_record(name, None), units)
+    fn missing(&self, game: GameId, record: Record, units: &Units) -> Refusal {
+        self.refuse(game, GenerationFailure::missing(record), units)
     }
 
     /// A record the request needs that the engine cannot read: the line names it,
     /// and the disclosure holds the error behind it.
-    fn unreadable(&self, game: GameId, name: &str, error: &EngineError, units: &Units) -> Refusal {
-        self.refuse(
-            game,
-            GenerationFailure::missing_record(name, Some(error.to_string())),
-            units,
-        )
+    fn unreadable(
+        &self,
+        game: GameId,
+        record: Record,
+        error: &EngineError,
+        units: &Units,
+    ) -> Refusal {
+        self.refuse(game, GenerationFailure::unreadable(record, error), units)
     }
 
     /// The write the request asked for failed: the line is the design's save line,
     /// and the disclosure holds the error behind it.
     fn save_failed(&self, game: GameId, error: &EngineError, units: &Units) -> Refusal {
-        self.refuse(
-            game,
-            GenerationFailure::new(GenerationFailureKind::SaveFailed, error.to_string()),
-            units,
-        )
+        self.refuse(game, GenerationFailure::save_failed(error), units)
     }
 
     /// The one refusal path of a request that cannot run: the Game's failure line
@@ -424,168 +387,39 @@ impl GameWriter {
         Refusal::Failed(failure)
     }
 
-    fn plan_for(
-        &self,
-        game: GameId,
-        request: &JobRequest,
-        tail: Option<&Tail>,
-        units: &Units,
-    ) -> Result<JobPlan, Refusal> {
-        match request {
-            JobRequest::Options => {
-                if !self.story_has_text(game, units)? {
-                    return Err(Refusal::BadRequest(
-                        "No scene to generate options for yet".to_string(),
-                    ));
-                }
-                Ok(JobPlan {
-                    input: None,
-                    first: None,
-                    options: OptionsRun::OnDemand,
-                })
-            }
-            JobRequest::Retry => {
-                let order = tail
-                    .map(Tail::redo)
-                    .ok_or_else(|| Refusal::BadRequest("No input to retry".to_string()))?;
-                Ok(JobPlan {
-                    input: None,
-                    first: Some(order),
-                    options: OptionsRun::AfterNarration,
-                })
-            }
-            JobRequest::Retrigger => {
-                let order = tail.and_then(Tail::retrigger).ok_or_else(|| {
-                    Refusal::BadRequest("No trigger context available".to_string())
-                })?;
-                Ok(JobPlan {
-                    input: None,
-                    first: Some(order),
-                    options: OptionsRun::AfterNarration,
-                })
-            }
-            JobRequest::Action(text) => {
-                let start = self.require_start(tail, game, units)?;
-                let input = (!text.is_empty()).then(|| text.clone());
-                Ok(self.generation_plan(Kind::Narration, StoredInputs::default(), input, start))
-            }
-            JobRequest::Guide(guide) => {
-                let start = self.require_start(tail, game, units)?;
-                let inputs = StoredInputs {
-                    guide_text: Some(guide.clone()),
-                    ..StoredInputs::default()
-                };
-                Ok(self.generation_plan(Kind::Narration, inputs, None, start))
-            }
-            JobRequest::Impersonate(direction) => {
-                let start = self.require_start(tail, game, units)?;
-                let inputs = StoredInputs {
-                    impersonated: true,
-                    impersonate_direction: direction.clone(),
-                    ..StoredInputs::default()
-                };
-                Ok(self.generation_plan(Kind::Impersonate, inputs, None, start))
-            }
-        }
-    }
-
-    fn generation_plan(
-        &self,
-        kind: Kind,
-        inputs: StoredInputs,
-        input: Option<String>,
-        start: SwipeAt,
-    ) -> JobPlan {
-        JobPlan {
-            input,
-            first: Some(GenerationOrder {
-                kind,
-                place: Place::NewMessage,
-                start,
-                inputs,
-                event: None,
-            }),
-            options: OptionsRun::AfterNarration,
-        }
-    }
-
-    fn require_start(
-        &self,
-        tail: Option<&Tail>,
-        game: GameId,
-        units: &Units,
-    ) -> Result<SwipeAt, Refusal> {
-        tail.map(Tail::current_at)
-            .ok_or_else(|| self.missing(game, "the story", units))
-    }
-
-    fn require_job_data(
-        &self,
-        game: GameId,
-        plan: &mut JobPlan,
-        tail: Option<&Tail>,
-        units: &Units,
-    ) -> Result<(), Refusal> {
+    /// The Game row, the Persona and the start state that the plan names: the
+    /// records a Job reads, checked before the Game turns busy.
+    fn require_records(&self, game: GameId, plan: &JobPlan, units: &Units) -> Result<(), Refusal> {
         let row = match self.storage.get_game(game.0) {
             Ok(Some(row)) => row,
-            Ok(None) => return Err(self.missing(game, "the game", units)),
-            Err(error) => return Err(self.unreadable(game, "the game", &error, units)),
+            Ok(None) => return Err(self.missing(game, Record::Game, units)),
+            Err(error) => return Err(self.unreadable(game, Record::Game, &error, units)),
         };
         if let Err(error) = self.storage.require_persona(&row.persona_key) {
-            return Err(self.unreadable(game, "the persona", &error, units));
+            return Err(self.unreadable(game, Record::Persona, &error, units));
         }
 
-        let Some(order) = &mut plan.first else {
+        let Some(order) = &plan.first else {
             return Ok(());
         };
         match self.storage.stories().swipe_state(game, order.start) {
-            Ok(Some(_)) => {}
-            Ok(None) => return Err(self.missing(game, "the start state", units)),
-            Err(error) => return Err(self.unreadable(game, "the start state", &error, units)),
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => Err(self.missing(game, Record::StartState, units)),
+            Err(error) => Err(self.unreadable(game, Record::StartState, &error, units)),
         }
-        if order.kind == Kind::Impersonate && order.inputs.impersonate_direction.is_none() {
-            return Err(self.missing(game, "the impersonate direction", units));
-        }
-        if order.kind == Kind::Event && order.event.is_none() {
-            order.event = Some(self.event_record(game, tail, units)?);
-        }
-        Ok(())
     }
 
-    fn event_record(
-        &self,
-        game: GameId,
-        tail: Option<&Tail>,
-        units: &Units,
-    ) -> Result<EventRecord, Refusal> {
-        let trigger = tail
-            .and_then(Tail::current_state)
-            .and_then(|state| state.trigger_context.clone())
-            .ok_or_else(|| self.missing(game, "the trigger context", units))?;
-        let direction = self.trigger_direction(game, &trigger, units)?;
-        Ok(EventRecord {
-            header_name: trigger.trigger_name.clone(),
-            trigger,
-            direction,
-        })
+    fn story_end_or_refuse(&self, game: GameId, units: &Units) -> Result<StoryEnd, Refusal> {
+        let tail = self.tail_or_refuse(game, units)?;
+        let has_text = self.story_has_text(game, units)?;
+        Ok(StoryEnd { tail, has_text })
     }
 
-    fn trigger_direction(
-        &self,
-        game: GameId,
-        trigger: &TriggerRef,
-        units: &Units,
-    ) -> Result<String, Refusal> {
-        let bundle = self
-            .storage
-            .world_bundle_for(game.0)
-            .map_err(|error| self.unreadable(game, "the World", &error, units))?;
-        bundle
-            .npcs
-            .get(&trigger.npc_id)
-            .and_then(|npc| npc.triggers.get(trigger.trigger_idx))
-            .map(|trigger| trigger.narration.narration_prompt.clone())
-            .ok_or_else(|| self.missing(game, "the trigger", units))
+    /// The end of a request that changes the story under a Game with no running
+    /// Job: the failure line goes, and the dock holds `record`.
+    fn clear_failure_and_put_dock(tx: &mut Tx<'_>, record: &DockRecord) -> Result<(), EngineError> {
+        tx.set_game_failure(None)?;
+        tx.put_dock(record)
     }
 
     fn accept_unit(&self, game: GameId, units: &Units) -> Result<(), Refusal> {
@@ -600,7 +434,7 @@ impl GameWriter {
         self.storage
             .stories()
             .has_text(game)
-            .map_err(|error| self.unreadable(game, "the story", &error, units))
+            .map_err(|error| self.unreadable(game, Record::Story, &error, units))
     }
 
     /// The World and the Persona are read before the unit opens, because the unit
@@ -622,7 +456,6 @@ impl GameWriter {
         );
         Ok(crate::domain::model::utils::opening::opening_message(
             world,
-            &world_with_map.map,
             &persona.sheet.name,
             state,
         ))
@@ -651,13 +484,13 @@ impl JobWriter {
     /// the units of `f` open under the same lock.
     fn hold<T>(
         &self,
-        f: impl FnOnce(&mut JobEntry, &Units) -> Result<T, Stopped>,
-    ) -> Result<T, Stopped> {
+        f: impl FnOnce(&mut JobEntry, &Units) -> Result<T, JobFailure>,
+    ) -> Result<T, JobFailure> {
         let (game, id) = (self.game, self.id);
         self.writer
             .hold(|entries, units| match entries.get_mut(&game) {
                 Some(entry) if entry.id == id => f(entry, units),
-                _ => Err(Stopped::EntryMoved),
+                _ => Err(JobFailure::EntryMoved),
             })
     }
 
@@ -665,14 +498,15 @@ impl JobWriter {
         units: &Units,
         game: GameId,
         f: impl FnOnce(&mut Tx<'_>) -> Result<T, EngineError>,
-    ) -> Result<T, Stopped> {
-        units.open(game, f).map_err(Stopped::from)
+    ) -> Result<T, JobFailure> {
+        units
+            .open(game, f)
+            .map_err(|error| GenerationFailure::save_failed(&error).into())
     }
 
-    pub fn save_input(&self, text: &str, start: SwipeAt) -> Result<SwipeAt, Stopped> {
+    pub fn save_input(&self, text: &str, start: &SwipeState) -> Result<SwipeAt, JobFailure> {
         self.hold(|_entry, units| {
-            let state = self.state_at(start)?;
-            let swipe = Swipe::new(text, Maker::Player, state);
+            let swipe = Swipe::new(text, Maker::Player, start.clone());
             let message = Message::new(MessageType::Input, MessageKind::TypedInput, swipe.clone());
 
             Self::unit(units, self.game, |tx| {
@@ -691,28 +525,23 @@ impl JobWriter {
         &self,
         order: &GenerationOrder,
         text: String,
-        pre: SwipeState,
-    ) -> Result<SavedText, Stopped> {
+        start: &SwipeState,
+        tail: &Tail,
+    ) -> Result<SavedText, JobFailure> {
         self.hold(|_entry, units| {
-            let empties_the_dock = Self::empties_the_dock(order.kind);
+            let empties_the_dock = order.kind().saves_a_narration();
+            let NewSwipe {
+                message_type,
+                kind,
+                swipe,
+            } = order.write(text, start);
             let at = match order.place {
                 Place::NewMessage => {
-                    let swipe = Self::text_swipe(order, text, pre, None);
-                    let message = Message::new(
-                        generation_record::message_type(order.kind),
-                        Self::message_kind_of(order)?,
-                        swipe.clone(),
-                    );
+                    let message = Message::new(message_type, kind, swipe.clone());
                     self.write_new_message(&message, &swipe, empties_the_dock, units)?
                 }
                 Place::NewSwipeOnLast => {
-                    let tail = self.tail_of()?;
-                    let room_report = match tail.count {
-                        1 => self.opening_room_report(&pre.movement.current_room_id),
-                        _ => None,
-                    };
-                    let swipe = Self::text_swipe(order, text, pre, room_report);
-                    self.write_new_swipe(&tail, &swipe, empties_the_dock, units)?
+                    self.write_new_swipe(tail, &swipe, empties_the_dock, units)?
                 }
             };
             Ok(SavedText { at })
@@ -720,105 +549,42 @@ impl JobWriter {
     }
 
     /// Takes `saved` by value, so one Swipe's state is written at most twice.
-    pub fn save_state_update(
-        &self,
-        saved: SavedText,
-        state: SwipeState,
-        room_report: Option<String>,
-    ) -> Result<(), Stopped> {
+    pub fn save_state_update(&self, saved: SavedText, state: SwipeState) -> Result<(), JobFailure> {
         self.hold(|_entry, units| {
-            Self::unit(units, self.game, |tx| {
-                tx.set_swipe_state(saved.at, &state, room_report.as_deref())
-            })
+            units
+                .open(self.game, |tx| tx.set_swipe_state(saved.at, &state))
+                .map_err(|error| GenerationFailure::contradiction(error.to_string()).into())
         })
     }
 
-    pub fn save_failure(&self, failure: GenerationFailure) -> Result<(), Stopped> {
+    pub fn save_failure(&self, failure: GenerationFailure) -> Result<(), JobFailure> {
         self.hold(|_entry, units| {
             Self::unit(units, self.game, |tx| tx.set_game_failure(Some(&failure)))
         })
     }
 
-    /// `after_narration`: the Narration's text save already emptied the offered set,
-    /// so the notice stands alone; an on-demand run keeps the set it found.
-    pub fn save_options(
-        &self,
-        result: OptionsResult,
-        after_narration: bool,
-    ) -> Result<(), Stopped> {
-        self.hold(|_entry, units| {
-            let record = match (result, after_narration) {
-                (OptionsResult::Offered(offered), _) => DockRecord {
+    /// A failed run writes the notice only: the set the dock holds stays, and after a
+    /// Narration the text save already emptied it.
+    pub fn save_options(&self, result: OptionsResult) -> Result<(), JobFailure> {
+        self.hold(|_entry, units| match result {
+            OptionsResult::Offered(offered) => Self::unit(units, self.game, |tx| {
+                tx.put_dock(&DockRecord {
                     offered,
                     notice: None,
-                },
-                (OptionsResult::Unavailable { reason, raw }, true) => DockRecord {
-                    offered: Vec::new(),
-                    notice: Some(Notice { reason, raw }),
-                },
-                (OptionsResult::Unavailable { reason, raw }, false) => DockRecord {
-                    offered: self.dock()?.offered,
-                    notice: Some(Notice { reason, raw }),
-                },
-            };
-            Self::unit(units, self.game, |tx| tx.put_dock(&record))
+                })
+            }),
+            OptionsResult::Unavailable { reason, raw } => Self::unit(units, self.game, |tx| {
+                tx.put_dock_notice(&Notice { reason, raw })
+            }),
         })
     }
 
     /// The step name of the status line: memory only, and its only writer.
-    pub fn step(&self, step: Step) -> Result<(), Stopped> {
+    pub fn step(&self, step: Step) -> Result<(), JobFailure> {
         self.hold(|entry, _units| {
             entry.step = step;
             Ok(())
         })
-    }
-
-    fn dock(&self) -> Result<DockRecord, Stopped> {
-        Ok(self
-            .writer
-            .storage
-            .docks()
-            .get(self.game)
-            .map_err(Stopped::from)?
-            .unwrap_or_default())
-    }
-
-    fn state_at(&self, at: SwipeAt) -> Result<SwipeState, Stopped> {
-        match self.writer.storage.stories().swipe_state(self.game, at) {
-            Ok(Some(state)) => Ok(state),
-            Ok(None) => Err(Stopped::SaveFailed(EngineError::Validation(
-                "the start state is missing".to_string(),
-            ))),
-            Err(error) => Err(Stopped::SaveFailed(error)),
-        }
-    }
-
-    fn tail_of(&self) -> Result<Tail, Stopped> {
-        match self.writer.storage.stories().tail(self.game) {
-            Ok(Some(tail)) => Ok(tail),
-            Ok(None) => Err(Stopped::SaveFailed(EngineError::Validation(
-                "the story is empty".to_string(),
-            ))),
-            Err(error) => Err(Stopped::SaveFailed(error)),
-        }
-    }
-
-    fn opening_room_report(&self, room_id: &str) -> Option<String> {
-        let world_key = self
-            .writer
-            .storage
-            .get_game(self.game.0)
-            .ok()
-            .flatten()?
-            .world_key;
-        let world = self.writer.storage.require_world(&world_key).ok()?;
-        Some(
-            world
-                .map
-                .get_room_by_id(room_id)
-                .map(|room| room.name.clone())
-                .unwrap_or_else(|| room_id.to_string()),
-        )
     }
 
     fn write_new_message(
@@ -827,7 +593,7 @@ impl JobWriter {
         swipe: &Swipe,
         empties_the_dock: bool,
         units: &Units,
-    ) -> Result<SwipeAt, Stopped> {
+    ) -> Result<SwipeAt, JobFailure> {
         Self::unit(units, self.game, |tx| {
             let message_id = tx.insert_message(message)?;
             let at = SwipeAt {
@@ -848,7 +614,7 @@ impl JobWriter {
         swipe: &Swipe,
         empties_the_dock: bool,
         units: &Units,
-    ) -> Result<SwipeAt, Stopped> {
+    ) -> Result<SwipeAt, JobFailure> {
         let at = SwipeAt {
             message: tail.last.id,
             swipe: tail.last.swipes.len(),
@@ -862,37 +628,6 @@ impl JobWriter {
             Ok(())
         })?;
         Ok(at)
-    }
-
-    fn text_swipe(
-        order: &GenerationOrder,
-        text: String,
-        pre: SwipeState,
-        room_report: Option<String>,
-    ) -> Swipe {
-        Swipe {
-            room_report,
-            event_header: order
-                .event
-                .as_ref()
-                .map(|record| record.header_name.clone()),
-            impersonated: order.inputs.impersonated,
-            guide_text: order.inputs.guide_text.clone(),
-            impersonate_direction: order.inputs.impersonate_direction.clone(),
-            ..Swipe::new(text, generation_record::maker(order.kind), pre)
-        }
-    }
-
-    fn message_kind_of(order: &GenerationOrder) -> Result<MessageKind, Stopped> {
-        generation_record::message_kind(order.kind, order.event.as_ref()).ok_or_else(|| {
-            Stopped::SaveFailed(EngineError::Validation(
-                "the event record is missing".to_string(),
-            ))
-        })
-    }
-
-    fn empties_the_dock(kind: Kind) -> bool {
-        matches!(kind, Kind::Narration | Kind::Event)
     }
 }
 

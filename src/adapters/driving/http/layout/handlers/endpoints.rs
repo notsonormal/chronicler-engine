@@ -8,6 +8,8 @@ use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
 use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::AppState;
+use crate::application::games::view_query::Status;
+use crate::domain::model::state::generation_status::{GenerationFailure, Record};
 
 pub async fn header_fragment(
     State(state): State<AppState>,
@@ -72,22 +74,25 @@ pub async fn generating_status_handler(
         return Html("idle".to_string());
     };
     match state.game_view_query.status(game_id) {
-        Ok(crate::application::games::view_query::Status::Busy(step)) => {
-            Html(step.as_endpoint_str().to_string())
-        }
-        Ok(crate::application::games::view_query::Status::Failed(failure)) => {
-            Html(error_disclosure(
-                "status-error-popover",
-                &failure.line(),
-                &raw_error_detail(&failure.raw),
-            ))
-        }
-        Ok(crate::application::games::view_query::Status::Idle) => Html("idle".to_string()),
+        Ok(Status::Busy(step)) => Html(step.as_endpoint_str().to_string()),
+        Ok(Status::Failed(failure)) => Html(failure_disclosure(&failure)),
+        Ok(Status::Idle) => Html("idle".to_string()),
         Err(e) => {
             tracing::error!("generating_status_handler: {e}");
-            Html("idle".to_string())
+            Html(failure_disclosure(&GenerationFailure::unreadable(
+                Record::Game,
+                &e,
+            )))
         }
     }
+}
+
+fn failure_disclosure(failure: &GenerationFailure) -> String {
+    error_disclosure(
+        "status-error-popover",
+        &failure.line(),
+        &raw_error_detail(&failure.raw),
+    )
 }
 
 pub async fn reset_generating_handler(

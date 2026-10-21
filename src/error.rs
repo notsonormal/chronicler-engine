@@ -165,10 +165,7 @@ pub enum EngineError {
     WorldAlreadyExists(String),
 
     /// World cannot be deleted because games still reference it; `game_count` is the blocker count.
-    #[error(
-        "Cannot delete world with {game_count} {}",
-        if *game_count == 1 { "game" } else { "games" }
-    )]
+    #[error("Cannot delete world with {}", EngineError::count_of_games(*game_count))]
     WorldHasGames { game_count: usize },
 
     /// Settings/config value missing or invalid; message names the field and constraint.
@@ -198,9 +195,25 @@ pub enum EngineError {
     #[error("Context overflow: requested {requested} tokens exceeds max {max}")]
     ContextOverflow { requested: usize, max: usize },
 
-    /// SQLite returned an error; source carries the rusqlite kind.
-    #[error("Database error: {0}")]
-    Database(#[from] rusqlite::Error),
+    /// SQLite refused a statement; `context` names the storage operation that failed and
+    /// `source` carries the rusqlite kind.
+    #[error("Database error: {context}: {source}")]
+    Database {
+        context: &'static str,
+        source: rusqlite::Error,
+    },
+}
+
+/// Names the storage operation behind a rusqlite failure. `EngineError` has no
+/// `From<rusqlite::Error>`, so every `?` on a rusqlite result passes through here.
+pub trait DatabaseContext<T> {
+    fn db_context(self, context: &'static str) -> Result<T>;
+}
+
+impl<T> DatabaseContext<T> for std::result::Result<T, rusqlite::Error> {
+    fn db_context(self, context: &'static str) -> Result<T> {
+        self.map_err(|source| EngineError::Database { context, source })
+    }
 }
 
 impl From<std::io::Error> for EngineError {
@@ -210,6 +223,11 @@ impl From<std::io::Error> for EngineError {
 }
 
 impl EngineError {
+    /// "1 game" or "2 games": the count with its noun, as the refusals of a delete show it.
+    pub fn count_of_games(count: usize) -> String {
+        format!("{count} {}", if count == 1 { "game" } else { "games" })
+    }
+
     pub fn raw_response_body(&self) -> Option<&str> {
         match self {
             EngineError::Llm(failure) => failure.raw_response_body(),

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::application::agents::runner::AgentRunner;
-use crate::domain::model::agent::{AgentConfig, BackendSelector, Hook};
+use crate::domain::model::agent::{AgentConfig, BackendSelector};
 use crate::test_support::make_test_recorder;
 
 fn mock_recorder() -> Arc<crate::application::llm_recorder::LlmCallRecorder> {
@@ -15,7 +15,6 @@ fn config(agent_type: &str, enabled: bool) -> AgentConfig {
         agent_type: agent_type.to_string(),
         enabled,
         backend: BackendSelector::UseMain,
-        hook: Hook::Analysis,
     }
 }
 
@@ -39,4 +38,12 @@ fn test_runner_from_configs_disabled_skipped() {
     let runner = AgentRunner::from_configs(&configs, mock_recorder(), mock_recorder())
         .expect("a disabled Agent still builds a runner");
     assert!(runner.is_empty());
+}
+
+#[test]
+fn test_runner_from_configs_keeps_one_agent_per_hook() {
+    let configs = vec![config("quantifier", true), config("quantifier", true)];
+    let runner = AgentRunner::from_configs(&configs, mock_recorder(), mock_recorder())
+        .expect("a second config of one hook replaces the first");
+    assert!(!runner.is_empty());
 }

@@ -3,11 +3,11 @@ diataxis: explanation
 title: Rust Idioms
 ---
 
-## Concrete services and backend enum dispatch
+## Concrete services and the backend enum
 
-`Job`, `GameWriter` and the catalogue collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum — `Sqlite` or `InMemory` — plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the `AgentRunner`'s `Box<dyn AnalysisAgent>` for heterogeneous agent dispatch).
+`Job`, `GameWriter` and the catalogue collaborators are concrete structs. So is `Storage`. `Storage` is backed by a `Backend` enum with one variant, `Sqlite`, plus a `BackendKind` decorator (`Direct` or `Test`). The application and storage layers consist of concrete types composed into the construction chain; trait objects are reserved for places where the polymorphism they enable is the point (the `AgentRunner`'s `Box<dyn AfterNarrationAgent>` for heterogeneous agent dispatch).
 
-Backend switching travels through enum-variant dispatch. Tests construct an in-memory backend by selecting the enum variant; production constructs the SQLite backend the same way; the surrounding code is the same struct. Each call site reads the same concrete type; the polymorphism lives at the switch sites that consume the enum, which avoids threading a type parameter through the application to make storage polymorphic.
+Tests and production construct the same SQLite backend. Tests open it on a `:memory:` database, and production opens it on a file. The surrounding code is the same struct. Each call site reads the same concrete type, which avoids threading a type parameter through the application to make storage polymorphic.
 
 The convention fits the constraint that Rust 2024 edition makes async-trait dispatch awkward to compose with synchronous backend code. Pushing async I/O to the HTTP layer via `spawn_blocking` (next section) keeps the application code synchronous and lets backend types stay concrete, which avoids the trait boilerplate and per-test custom mocks that a trait repository would carry.
 
