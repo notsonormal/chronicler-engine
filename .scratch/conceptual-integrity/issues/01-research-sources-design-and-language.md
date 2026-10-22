@@ -1,7 +1,7 @@
 # Research: what the sources say about design and language
 
 Type: research
-Status: open
+Status: resolved
 
 ## Question
 
@@ -37,3 +37,13 @@ Record what the sources say. Do not apply them to this repo, and do not rule on 
 ## Done when
 
 Every listed source is read, from the source itself where it is available and from labelled second-hand texts where it is not. The asset has the shape above, and every claim has a location.
+
+## Answer
+
+Resolved 2026-10-22. Asset: [research 01, design and language](../assets/research-01-design-and-language.md). The researcher read Brooks, Jackson, Evans, Naur and Alexander, mostly from primary texts. The asset lists what was read second-hand or not read (Jackson's book, Brooks ch. 16–19, Evans ch. 14, Alexander's *Notes on the Synthesis of Form*).
+
+- Each source gives a different test for what gets a name: what the user sees (Brooks), what has a purpose (Jackson), what the model needs (Evans), a real conflict of forces (Alexander). Naur gives no test.
+- The sharpest disagreement: can the shared understanding be written down? Naur says no. Brooks, Evans and Alexander say yes, in part.
+- A second disagreement: one unit for one purpose (Jackson), or one model for code, design and talk (Evans).
+- All sources except Jackson assume writers who remember and can talk. No source describes writers with no memory (inferred).
+- Ended open: no source says, with a location, what a vocabulary does for a writer who reads it fresh each time and has no one to ask. No source states who checks a choice at a gap before the next writer copies it.

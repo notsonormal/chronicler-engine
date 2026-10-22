@@ -80,7 +80,6 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
-    - `autoplay.rs` — HTTP E2E tests for Autoplay (autoplay.md 41.*): the run of Jobs, its three ends, the view-only Game, the progress status, and the config writes a run refuses.
     - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite, the generating-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
     - `failure_display.rs` — HTTP E2E tests for the failure display, tagged against `docs/specs/failure_display.md`.
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
@@ -103,6 +102,10 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
     - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.
     - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure.
+    - **autoplay/**
+      - `fragments.rs` — HTTP E2E tests for the view-only Game of Autoplay (autoplay.md 41.18-41.20, 41.22): the controls the story log, the dock and the Games panel render while a run holds the Game.
+      - `mod.rs` — HTTP E2E tests for Autoplay (autoplay.md 41.*), shared helpers: `run` holds the run of Jobs, its ends, the progress status and the refused writes; `fragments` holds the view-only Game's rendering.
+      - `run.rs` — HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.

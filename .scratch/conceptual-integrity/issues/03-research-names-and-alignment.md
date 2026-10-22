@@ -1,7 +1,7 @@
 # Research: does a `CONTEXT.md` entry make writers align?
 
 Type: research
-Status: open
+Status: resolved
 
 ## Question
 
@@ -28,3 +28,14 @@ Write `assets/research-03-names-and-alignment.md`:
 ## Done when
 
 At least eight terms, or every term with a usable count if there are fewer, have counts before and after, with the commits used. The asset states the limits of the method.
+
+## Answer
+
+Resolved 2026-10-22. Asset: [research 03, names and alignment](../assets/research-03-names-and-alignment.md). The researcher counted 15 groups of terms with a usable count, and 8 groups with near-zero counts. The history of `CONTEXT.md` has 22 commits, because it starts on 2026-06-29 under `chronicler_engine/CONTEXT.md`. The ticket said 16.
+
+- For 5 terms, an avoided word fell to about zero in code: Action Pipeline, Engine commit, Narrator Action, Replay blob and Snapshot. Each fall came in a code commit, not in the commit that changed `CONTEXT.md`. Four falls came 1 to 7 days after the entry. The Snapshot fall came 2 commits before its entry.
+- For 6 terms, the avoided word stayed or grew after the entry: NPC, Transaction, Turn, Steering, Session and Retry. Two entries changed to match usage (Retry reversed; Steering got a carve-out).
+- The order is not one-way. Job was an entry before its code; Swipe state, Save unit and Narrator Action became entries after their code.
+- Inferred: names and code change together in a planned rebuild. The counts do not show that an entry made a writer align. A word count cannot show that a writer read the entry, and there is no control group.
+- Inferred: one git identity wrote 782 of 787 commits; most code commits after July came from agent sessions. Git cannot separate the two.
+- Ended open: does the entry cause the alignment, or does it record a plan that causes it? Which other ways (plan, review, test, guardrail) give the same falls without an entry? [Research: how this repo makes writers align today](04-research-ways-to-align.md) can test part of this.

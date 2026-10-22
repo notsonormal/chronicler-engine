@@ -1,7 +1,7 @@
 # Research: how this repo makes writers align today
 
 Type: research
-Status: open
+Status: resolved
 
 ## Question
 
@@ -38,3 +38,13 @@ Write `assets/research-04-ways-to-align.md`:
 ## Done when
 
 Every way in the minimum list has a row with evidence, and the asset names the ways that it added.
+
+## Answer
+
+Resolved 2026-10-22. Asset: [research 04, ways to align](../assets/research-04-ways-to-align.md). The researcher found 20 ways: the 9 of the minimum list and 11 more (plans and tickets, the pre-commit hook, the `build.py` gate, feature specs, `tests/STRATEGY.md`, Diátaxis docs and DOC anchors, the compiler and clippy, the permission config, the delegate roles, `.pi/APPEND_SYSTEM.md`, retro and incident rules). The retro and incident row is partly guessed.
+
+- Only 3 ways always reach an agent session: `AGENTS.md` with its generated Structure block, `.pi/APPEND_SYSTEM.md`, and the compiler.
+- Structure and behaviour have many ways that fail a build (arch-lint, walker rows, `CASE` and `SCENARIO` tags, DOC anchors, clippy). Names have one written source, `CONTEXT.md`, and no way that fails a build. `CODING_STANDARDS.md:7` points symbol names at `docs/`, not at `CONTEXT.md`.
+- Ways fail in four recorded forms: stale text, a writer who bypasses the way, a way that sees less than its rule needs, and a rule left to review only.
+- On the open question of [Research: does a `CONTEXT.md` entry make writers align?](03-research-names-and-alignment.md): the falls of Snapshot, Action Pipeline and Engine commit follow the deletion of code that a plan ordered (`docs/plans/rust-rebuild-build-plan.md:299`, commit `36a1e1c7`). The `CONTEXT.md` change was itself a plan step (`:381`). Six names with no entry fell in the same commit. Review is the only way found that edits an avoided word as a word, with small effect.
+- Ended open: git shows no read, so no evidence says which writer met which way. The repo has no control with a glossary but no plan.

@@ -1,7 +1,7 @@
 # Research: what the sources say about coordination and vocabulary control
 
 Type: research
-Status: open
+Status: resolved
 
 ## Question
 
@@ -36,3 +36,13 @@ Record what the sources say. Do not apply them to this repo, and do not rule on 
 ## Done when
 
 Every listed source is read, from the source itself where it is available and from labelled second-hand texts where it is not. The asset has the shape above, and every claim has a location.
+
+## Answer
+
+Resolved 2026-10-22. Asset: [research 02, coordination and vocabulary control](../assets/research-02-coordination-and-vocabulary-control.md). The researcher read Schelling ch. 3, US Supreme Court texts on precedent, the 1966 House of Lords Practice Statement, the ALI texts on the Restatements, Z39.19, Nygard, Parnas and Clements, and the repo's `domain-modeling/SKILL.md` and `ADR-FORMAT.md` as source texts. The body of ISO 25964-1 is paywalled; its clauses rest on labelled second-hand texts. No Restatement text was read.
+
+- Each source gives a different test for what gets an entry: one form per distinct concept, chosen by warrant (Z39.19); only the question before the court, and only important splits (Rule 10); only significant decisions (Nygard, the repo skill); every rejected alternative (Parnas and Clements).
+- At a gap, a named body decides in every source, and the new item first gets a probation status (candidate, proposed, draft). In common law, the lower courts act first and the top court waits ("percolation").
+- To choose the opposite: only a named body may overrule; anyone may distinguish. ALI: depart "explicitly and explain why". Schelling: without talk, a choice that is not focal is "not really 'available'".
+- Six disagreements: follow usage or lead it; settled or right; prominence or prescription; reasons inside or beside the entry; what of the past stays visible; what earns a record.
+- All sources assume writers who can read the record. Only Nygard and Parnas and Clements write for a reader who cannot ask the author. Ended open: no source speaks to a writer that shares a prior but has no memory.

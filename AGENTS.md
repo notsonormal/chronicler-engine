@@ -188,8 +188,10 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `orchestration.rs` — Quantifier orchestration — LLM call + result processing + entry point.
           - `parser.rs` — Quantifier response parsing helpers.
     - **autoplay/**
-      - `driver.rs` — The Autoplay driver: one blocking task that runs the Jobs of one run, one after the other.
-      - `mod.rs` — Autoplay: the run of ordinary Jobs that plays the Persona under a run hold.
+      - `budget.rs` — The Budget of an Autoplay run: the number of cycles it plays
+      - `driver.rs` — The Autoplay loop: one blocking task that runs the Jobs of one run, one after the other.
+      - `mod.rs` — Autoplay: the loop of ordinary Jobs that plays the Persona while it holds the Game.
+      - `pause.rs` — The test pause point of the Autoplay loop: a hold that stops the loop before an accept
     - **debug/**
       - `dto.rs` — DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
       - `mod.rs` — Debug DTOs for the HTTP `/debug/state` endpoint.
@@ -199,9 +201,9 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Game lifecycle orchestration and read-side queries.
       - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
     - **generation/**
-      - `gate.rs` — GameWriter and JobWriter — the writer rule and the guard: the one registry of job entries and run holds, and the save units a Job writes through.
+      - `gate.rs` — GameWriter and JobWriter — the writer rule and the guard: the one registry of the busy state, and the save units a Job writes through.
       - `job_tasks.rs` — The watch on the tasks a Job spawns, so a tier-1 test waits for a Job to end
-      - `mod.rs` — The writer rule and the guard: the one registry of job entries and run holds.
+      - `mod.rs` — The writer rule and the guard: the one registry of the busy state: one holder per busy Game.
     - **narration/**
       - `mod.rs` — Narration: the generation a Job's narration call makes
       - `narrator.rs` — The narrator: the assembly and the model call a Job's narration needs

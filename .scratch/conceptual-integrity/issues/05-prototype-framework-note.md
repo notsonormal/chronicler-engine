@@ -1,7 +1,7 @@
 # Prototype: draft the framework note
 
 Type: prototype
-Status: open
+Status: claimed
 Blocked by: 01, 02, 03, 04
 
 ## Question
@@ -11,6 +11,8 @@ What does a first draft of the framework note look like? The note is for the own
 Evidence from this repo: [Research: does a `CONTEXT.md` entry make writers align?](03-research-names-and-alignment.md) and [Research: how this repo makes writers align today](04-research-ways-to-align.md). The charting conversation: [charting notes](../assets/charting-notes.md).
 
 The note is not a rule list and not a checklist. The charting notes record how a checklist closed the owner's main tension too early. Make one or two rough forms of the draft, and work through them with the owner (`/prototype`, then `/grilling`). The draft may end with sharper questions. Only the owner closes a question.
+
+Source added by the owner (2026-10-22): Fowler, "Semantic Diffusion" (bliki, 2006, with the later "Semantic Inversion" note), https://martinfowler.com/bliki/SemanticDiffusion.html. The research tickets did not read it. Fold it into the draft.
 
 ## Done when
 
