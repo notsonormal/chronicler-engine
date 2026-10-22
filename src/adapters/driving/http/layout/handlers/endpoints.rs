@@ -9,6 +9,7 @@ use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_d
 use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
+use crate::application::generation::gate::Busy;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record};
 
 pub async fn header_fragment(
@@ -74,7 +75,7 @@ pub async fn generating_status_handler(
         return Html("idle".to_string());
     };
     match state.game_view_query.status(game_id) {
-        Ok(Status::Busy(step)) => Html(step.as_endpoint_str().to_string()),
+        Ok(Status::Busy(busy)) => Html(busy_answer(&busy)),
         Ok(Status::Failed(failure)) => Html(failure_disclosure(&failure)),
         Ok(Status::Idle) => Html("idle".to_string()),
         Err(e) => {
@@ -83,6 +84,20 @@ pub async fn generating_status_handler(
                 Record::Game,
                 &e,
             )))
+        }
+    }
+}
+
+fn busy_answer(busy: &Busy) -> String {
+    match busy {
+        Busy::Job(step) => step.as_endpoint_str().to_string(),
+        Busy::Autoplay { progress, step } => {
+            let mut answer = format!("autoplay {}/{}", progress.cycle(), progress.budget);
+            if let Some(step) = step {
+                answer.push(' ');
+                answer.push_str(step.as_endpoint_str());
+            }
+            answer
         }
     }
 }

@@ -3,9 +3,17 @@
 // The DOM carries every action-area state except an in-flight check.
 let checkInFlight = false;
 
-function statusIsGenerating() {
+function statusShows(selector) {
   const statusDisplay = document.getElementById("status-display");
-  return !!(statusDisplay && statusDisplay.querySelector(".status.thinking"));
+  return !!(statusDisplay && statusDisplay.querySelector(selector));
+}
+
+function statusIsGenerating() {
+  return statusShows(".status.thinking");
+}
+
+function statusIsAutoplay() {
+  return statusShows(".status.autoplay");
 }
 
 function previewIsOpen() {
@@ -15,12 +23,25 @@ function previewIsOpen() {
 
 function deriveActionState() {
   if (checkInFlight) return "checking";
+  if (statusIsAutoplay()) return "autoplay";
   if (statusIsGenerating()) return "generating";
   if (previewIsOpen()) return "preview";
   return "idle";
 }
 
+// The CSS swaps the command form for Stop off `data-state`.
+function applyAutoplayControls(state) {
+  const area = document.getElementById("action-area");
+  if (area) area.dataset.state = state;
+  const startable = state === "idle";
+  ["autoplay-btn", "autoplay-cycles"].forEach((id) => {
+    const control = document.getElementById(id);
+    if (control) control.disabled = !startable;
+  });
+}
+
 function applyActionState(state) {
+  applyAutoplayControls(state);
   const btn = document.getElementById("submit-btn");
   const input = document.querySelector('#command-form input[name="command"]');
   if (btn) {
@@ -49,8 +70,24 @@ function focusCommandInput() {
 
 let previewWasOpen = false;
 
+// The server renders the run mark and the disabled controls, so a run's start or
+// end refetches those regions. `null` is the unread baseline.
+let runWasHeld = null;
+
+function refreshRunRegionsOnRunChange() {
+  const held = statusIsAutoplay();
+  const changed = runWasHeld !== null && held !== runWasHeld;
+  runWasHeld = held;
+  if (!changed) return;
+  ["#games-tab > .games-panel", "#story-log"].forEach((selector) => {
+    const region = document.querySelector(selector);
+    if (region) htmx.trigger(region, "refresh");
+  });
+}
+
 function syncActionState() {
   applyActionState(deriveActionState());
+  refreshRunRegionsOnRunChange();
   const open = previewIsOpen();
   if (open && !previewWasOpen) {
     focusCorrectedTextarea();
@@ -198,20 +235,41 @@ function updateToThinking() {
   applyStatusDisplay();
 }
 
-// /status/generating returns a bare phase name or "idle" as plain text,
-// or an error fragment, which stays in place for applyStatusDisplay.
+const PHASE_LABELS = {
+  narrating: "Generating narration...",
+  quantifying: "Quantifying scene...",
+  "generating-event": "Generating event...",
+  options: "Generating options...",
+};
+
+const AUTOPLAY_ANSWER = /^autoplay (\d+)\/(\d+)(?: (\S+))?$/;
+
+function autoplayLabel(match) {
+  const progress = "Autoplay: cycle " + match[1] + "/" + match[2];
+  const step = PHASE_LABELS[match[3]];
+  return step ? progress + " " + step : progress;
+}
+
+function pollStatusNow() {
+  htmx.trigger("#status-display", "statuspoll");
+}
+
+function onAutoplayAfterRequest(event) {
+  if (requestSucceeded(event)) pollStatusNow();
+}
+
+// /status/generating returns a bare phase name, an autoplay progress answer or
+// "idle" as plain text, or an error fragment, which stays in place for
+// applyStatusDisplay.
 function onStatusPoll(el) {
   const text = el.textContent.trim();
-  const phaseMap = {
-    narrating: "Generating narration...",
-    quantifying: "Quantifying scene...",
-    "generating-event": "Generating event...",
-    options: "Generating options...",
-  };
+  const run = AUTOPLAY_ANSWER.exec(text);
   if (text === "idle") {
     setStatus("Ready", "ready");
-  } else if (phaseMap[text]) {
-    setStatus(phaseMap[text], "thinking");
+  } else if (run) {
+    setStatus(autoplayLabel(run), "thinking autoplay");
+  } else if (PHASE_LABELS[text]) {
+    setStatus(PHASE_LABELS[text], "thinking");
   }
   applyStatusDisplay();
 }

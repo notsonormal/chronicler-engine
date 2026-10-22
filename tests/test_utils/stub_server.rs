@@ -16,7 +16,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use chrono::{TimeZone, Utc};
 
-use chronicler_engine::adapters::driving::http::action::handlers::BUSY_STATUS;
+use chronicler_engine::adapters::driving::http::utils::response::BUSY_STATUS;
 use chronicler_engine::adapters::driving::http::builders::headers::{
     add_status_swap_headers, header_fragment_html,
 };
@@ -71,7 +71,7 @@ fn story_log_html(entries: &[StoryRow]) -> String {
     if let Some(opening) = window.iter_mut().find(|entry| entry.row.id == 1) {
         opening.room_header = Some("Test Tavern".to_string());
     }
-    NarrativeLogTemplate::new(&window, true)
+    NarrativeLogTemplate::new(&window, true, false)
         .render()
         .expect("render story log")
 }
@@ -229,6 +229,7 @@ struct StubState {
     newest_narration: std::sync::Mutex<Option<String>>,
     extra_oldest: std::sync::atomic::AtomicBool,
     save_succeeds: std::sync::atomic::AtomicBool,
+    story_writes_refused_as_busy: std::sync::atomic::AtomicBool,
     delete_succeeds: std::sync::atomic::AtomicBool,
     deleted: std::sync::atomic::AtomicBool,
     header_degraded: std::sync::atomic::AtomicBool,
@@ -267,6 +268,7 @@ impl StubServer {
             newest_narration: std::sync::Mutex::new(None),
             extra_oldest: std::sync::atomic::AtomicBool::new(false),
             save_succeeds: std::sync::atomic::AtomicBool::new(false),
+            story_writes_refused_as_busy: std::sync::atomic::AtomicBool::new(false),
             delete_succeeds: std::sync::atomic::AtomicBool::new(false),
             deleted: std::sync::atomic::AtomicBool::new(false),
             header_degraded: std::sync::atomic::AtomicBool::new(false),
@@ -438,6 +440,12 @@ impl StubSaveHandle {
         self.state
             .save_succeeds
             .store(succeeds, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn set_story_writes_refused_as_busy(&self, refused: bool) {
+        self.state
+            .story_writes_refused_as_busy
+            .store(refused, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn set_delete_succeeds(&self, succeeds: bool) {
@@ -805,6 +813,9 @@ fn restored_swipe_entries() -> Vec<StoryRow> {
 /// Mirrors the engine's settled-restore outcome: the restored log, no dock options.
 async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
+    if state.story_writes_refused_as_busy.load(SeqCst) {
+        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+    }
     if state.switch_fails.load(SeqCst) {
         return client_failure("Stub swipe switch failure");
     }
@@ -994,6 +1005,12 @@ async fn delete_world(State(state): State<Arc<StubState>>) -> Response<Body> {
 
 async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
     if state
+        .story_writes_refused_as_busy
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+    }
+    if state
         .save_succeeds
         .load(std::sync::atomic::Ordering::SeqCst)
     {
@@ -1005,6 +1022,9 @@ async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
 
 async fn delete_message(State(state): State<Arc<StubState>>) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
+    if state.story_writes_refused_as_busy.load(SeqCst) {
+        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+    }
     if !state.delete_succeeds.load(SeqCst) {
         return client_failure("Stub delete failure");
     }

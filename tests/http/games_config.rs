@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 
-use chronicler_engine::adapters::driven::storage::{Storage, StorageCall, TestOverride};
+use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrite};
 use chronicler_engine::test_support::{
     active_game_of, TestAppBuilder, TestPromptPreset, empty_sqlite_storage,
 };
@@ -13,10 +13,12 @@ use crate::support::http_assertions::assert_option_selected;
 use crate::support::http_requests::post_form;
 
 fn failing_storage() -> Arc<Storage> {
-    Arc::new(empty_sqlite_storage().with_failure(
-        StorageCall::UpdateGameConfig,
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    failures.set_write(
+        TxWrite::SetGameConfig,
         TestOverride::internal("update_game_config failure"),
-    ))
+    );
+    Arc::new(storage)
 }
 
 // [docs/specs/games.md] SCENARIO: 20.4

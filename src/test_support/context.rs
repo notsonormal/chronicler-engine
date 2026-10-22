@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
 use crate::application::agents::AgentRunner;
+use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narration::Narrator;
@@ -139,5 +140,6 @@ pub fn make_test_job_deps(
         agent_runner: Arc::new(agent_runner),
         storage,
         tasks: Arc::new(JobTasks::default()),
+        pause: Arc::new(AutoplayPause::default()),
     }
 }

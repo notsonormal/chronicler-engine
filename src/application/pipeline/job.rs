@@ -11,8 +11,9 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
 use crate::application::generation::gate::{
-    GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, SavedText,
+    AcceptedJob, GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, SavedText,
 };
+use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
 use crate::application::prompting::token_budget::TokenBudget;
@@ -38,6 +39,17 @@ pub struct JobDeps {
     pub agent_runner: Arc<AgentRunner>,
     pub storage: Arc<Storage>,
     pub tasks: Arc<JobTasks>,
+    pub pause: Arc<AutoplayPause>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JobEnd {
+    /// Every part ran, and the Job wrote no failure line.
+    Done,
+    /// A part failed; the Job tried to write its failure line.
+    Failed,
+    /// A stop, a reset or a delete ended the Job: its writes landed nowhere.
+    EntryMoved,
 }
 
 pub struct Job {
@@ -64,40 +76,63 @@ impl Job {
         game: GameId,
         request: JobRequest,
     ) -> Result<(), Refusal> {
-        let (job_writer, plan) = writer.accept(game, request)?;
+        let AcceptedJob {
+            writer: job_writer,
+            plan,
+        } = writer.accept(game, request)?;
+        Self::record_on_span(&job_writer, &plan);
         let span = tracing::Span::current();
-        span.record("job", job_writer.job_id());
+        let job = Self::new(job_writer, &deps);
+        let handle = tokio::task::spawn_blocking(move || {
+            let _entered = span.enter();
+            job.run(plan);
+        });
+        deps.tasks.watch(handle);
+        Ok(())
+    }
+
+    /// Runs on the calling thread, so the run's loop starts no second Job before
+    /// this one ends.
+    #[instrument(
+        skip(accepted, deps),
+        fields(
+            game = %accepted.writer.game(),
+            job = tracing::field::Empty,
+            kind = tracing::field::Empty,
+            step = tracing::field::Empty
+        )
+    )]
+    pub fn run_accepted(accepted: AcceptedJob, deps: &JobDeps) -> JobEnd {
+        Self::record_on_span(&accepted.writer, &accepted.plan);
+        let job = Self::new(accepted.writer, deps);
+        job.run(accepted.plan)
+    }
+
+    fn new(writer: JobWriter, deps: &JobDeps) -> Self {
+        Self {
+            writer,
+            narrator: Arc::clone(&deps.narrator),
+            agent_runner: Arc::clone(&deps.agent_runner),
+            presets: PromptPresetService::new(Arc::clone(&deps.storage)),
+            storage: Arc::clone(&deps.storage),
+        }
+    }
+
+    /// Fills the fields of the current span that only the accepted Job knows.
+    fn record_on_span(writer: &JobWriter, plan: &JobPlan) {
+        let span = tracing::Span::current();
+        span.record("job", writer.job_id());
         span.record(
             "kind",
             tracing::field::debug(plan.first.as_ref().map(GenerationOrder::kind)),
         );
         span.record("step", tracing::field::debug(plan.first_step()));
-
-        let JobDeps {
-            narrator,
-            agent_runner,
-            storage,
-            tasks,
-        } = deps;
-        let job = Self {
-            writer: job_writer,
-            narrator,
-            agent_runner,
-            presets: PromptPresetService::new(Arc::clone(&storage)),
-            storage,
-        };
-        let handle = tokio::task::spawn_blocking(move || {
-            let _entered = span.enter();
-            job.run(plan);
-        });
-        tasks.watch(handle);
-        Ok(())
     }
 
     /// A step that fails ends the Job, and every save unit that landed before it
     /// stays. The Options run follows a Narration that was saved, whatever failed
     /// after it except a moved entry.
-    fn run(&self, plan: JobPlan) {
+    fn run(&self, plan: JobPlan) -> JobEnd {
         let JobPlan {
             mut input,
             first,
@@ -124,7 +159,7 @@ impl Job {
                 }
             }
         }
-        self.end(failure);
+        self.end(failure)
     }
 
     /// The request's Input save runs after the room check, so an invalid room saves
@@ -340,22 +375,36 @@ impl Job {
         )
     }
 
-    fn end(&self, failure: Option<JobFailure>) {
+    fn end(&self, failure: Option<JobFailure>) -> JobEnd {
         match failure {
-            None => {}
+            None => JobEnd::Done,
             Some(JobFailure::Line(line)) => {
                 tracing::warn!("job {}: {line:?}", self.writer.job_id());
-                if let Err(refused) = self.writer.save_failure(line) {
-                    tracing::warn!(
-                        "job {}: the failure line was refused: {refused:?}",
-                        self.writer.job_id()
-                    );
+                match self.writer.save_failure(line) {
+                    Ok(()) => JobEnd::Failed,
+                    Err(JobFailure::EntryMoved) => {
+                        tracing::warn!(
+                            "job {}: the failure line was refused: the entry moved on",
+                            self.writer.job_id()
+                        );
+                        JobEnd::EntryMoved
+                    }
+                    Err(refused) => {
+                        tracing::warn!(
+                            "job {}: the failure line was refused: {refused:?}",
+                            self.writer.job_id()
+                        );
+                        JobEnd::Failed
+                    }
                 }
             }
-            Some(JobFailure::EntryMoved) => tracing::warn!(
-                "job {}: the entry moved on; the Job ends",
-                self.writer.job_id()
-            ),
+            Some(JobFailure::EntryMoved) => {
+                tracing::warn!(
+                    "job {}: the entry moved on; the Job ends",
+                    self.writer.job_id()
+                );
+                JobEnd::EntryMoved
+            }
         }
     }
 

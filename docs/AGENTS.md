@@ -42,7 +42,7 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-10-17 15:11 UTC*
+*Index last generated: 2026-10-22 20:53 UTC*
 
 ### `docs/diataxis/explanation/`
 
@@ -53,7 +53,6 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 - [Prompt System Design](./diataxis/explanation/prompt_system_design.md)
 - [Rust Idioms](./diataxis/explanation/rust_idioms.md)
 - [Storage Design](./diataxis/explanation/storage_design.md)
-- [Two State Channels](./diataxis/explanation/two-state-channels.md)
 
 ### `docs/diataxis/reference/`
 
@@ -111,7 +110,7 @@ Every doc in `docs/diataxis/` is in exactly one of four Diátaxis modes. The mod
 | **Tutorial** | Learn from zero | Learning-oriented (study) | None exist yet — see "Tutorials" below |
 | **How-to** | Achieve a goal | Goal-oriented (work) | None exist yet — see "How-to" below |
 | **Reference** | Look up a fact | Information-oriented (work) | `diataxis/reference/storage.md`, `diataxis/reference/game_flow.md` |
-| **Explanation** | Understand why | Understanding-oriented (study) | `diataxis/explanation/two-state-channels.md`, `diataxis/explanation/architecture.md` |
+| **Explanation** | Understand why | Understanding-oriented (study) | `diataxis/explanation/architecture.md`, `diataxis/explanation/storage_design.md` |
 
 **Compass test** (apply when classifying): "What problem does this solve for the reader?"
 
@@ -177,7 +176,7 @@ Where aggregate structure isn't obvious from reading the source sequentially, a 
 
 Austere, neutral, authoritative — like a map. Describes *what is*, not *how to use it* and not *why it's that way*. The last two belong in How-to and Explanation respectively. Canonical Diátaxis imperative: **describe and only describe; when tempted to explain, link to an Explanation doc** (per diataxis.fr/reference/). Do not absorb rationale into Reference prose.
 
-If a Reference doc's content starts answering "why", split the why into an Explanation doc and cross-reference (the `game_flow.md` ↔ `two-state-channels.md`, `agent_system.md` ↔ `agent_system_design.md`, and `storage.md` ↔ `storage_design.md` splits are the canonical patterns in this tree).
+If a Reference doc's content starts answering "why", split the why into an Explanation doc and cross-reference (the `agent_system.md` ↔ `agent_system_design.md` and `storage.md` ↔ `storage_design.md` splits are the canonical patterns in this tree).
 
 #### Explanation
 

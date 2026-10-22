@@ -4,8 +4,8 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use super::action::handlers::BUSY_STATUS;
 use super::utils::error::render_error;
+use super::utils::response::BUSY_STATUS;
 
 use crate::application::errors::ApplicationError;
 use crate::application::generation::gate::Refusal;
@@ -13,6 +13,7 @@ use crate::application::generation::gate::Refusal;
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
+            ApplicationError::Refused(refusal) => return refusal.clone().into_response(),
             ApplicationError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             ApplicationError::Engine(_) if self.is_user_displayable() => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())

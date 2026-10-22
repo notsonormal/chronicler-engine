@@ -8,10 +8,10 @@ use crate::error::{EngineError, LlmFailure, NarrativeFailure};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationStatus {
-    /// No Job holds the Game.
+    /// No Job holds the Game, and no run.
     #[default]
     Idle,
-    /// A Job holds the Game; its `Step` names the sub-stage.
+    /// A Job or an Autoplay run holds the Game; the Job's `Step` names the sub-stage.
     Generating,
     /// Generation failed; the payload classifies the failure.
     Error(GenerationFailure),

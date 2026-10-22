@@ -6,7 +6,7 @@ use std::str::FromStr;
 use askama::Template;
 use axum::{
     extract::{Form, Path, State},
-    response::Response,
+    response::{IntoResponse, Response},
 };
 
 use crate::adapters::driving::http::AppState;
@@ -42,8 +42,12 @@ pub async fn list_games_fragment(
         None => String::new(),
     };
 
-    let active_game = active_game.map(game_to_view);
-    let saved_games: Vec<_> = saved_games.into_iter().map(game_to_view).collect();
+    let view_of = |game: Game| {
+        let run_held = state.game_view_query.autoplay_holds(GameId(game.id));
+        game_to_view(game, run_held)
+    };
+    let active_game = active_game.map(view_of);
+    let saved_games: Vec<_> = saved_games.into_iter().map(view_of).collect();
 
     let Ok(worlds) = state.world_catalogue.list_worlds() else {
         return internal_error("Failed to list worlds");
@@ -226,6 +230,7 @@ fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError
             Ok(html) => ok(html),
             Err(e) => render_failure_response(&e),
         },
+        Err(ApplicationError::Refused(refusal)) => refusal.into_response(),
         Err(e) if e.is_user_displayable() => ok(render_error(&e.to_string())),
         Err(e) => internal_error(render_error(&e.to_string())),
     }
@@ -240,8 +245,15 @@ fn posture_controls_html(state: &AppState, game: &Game) -> askama::Result<String
     };
     let [system, quantifier, impersonate, options] = libraries;
 
-    let mut template =
-        GamePostureTemplate::from_game(game, &system, &quantifier, &impersonate, &options);
+    let view_only = state.game_view_query.autoplay_holds(GameId(game.id));
+    let mut template = GamePostureTemplate::from_game(
+        game,
+        &system,
+        &quantifier,
+        &impersonate,
+        &options,
+        view_only,
+    );
     template.preset_load_error = preset_load_error;
     template.render()
 }

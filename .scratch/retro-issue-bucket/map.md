@@ -110,3 +110,5 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 - [79 — `ScriptedModel` does not fail on a scripted reply that no call uses](./issues/79-scripted-model-unused-replies.md)
 - [81 — The plan review checks each test row and Done-when against its Content item](./issues/81-plan-review-checks-rows-against-content.md)
 - [82 — Lint the mechanical part of the recurring `docs/diataxis/` review findings](./issues/82-lint-recurring-diataxis-doc-findings.md)
+- [83 — Give the mutation check a script that restores by hash and runs on the final tree](./issues/83-mutation-check-script.md)
+- [84 — The strong-implementer re-ran narrow builds and the gate many times in one task](./issues/84-implementer-repeats-builds.md)

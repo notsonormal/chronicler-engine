@@ -17,7 +17,9 @@ use chronicler_engine::test_support::{
 
 use crate::support::app_wiring::{app_with_model, app_with_script};
 use crate::support::http_assertions::{assert_still_thinking, llm_call_count, STILL_THINKING};
-use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
+use crate::support::http_fixtures::{
+    create_game_from, room_header_of, story_of, story_of_game, OFFERED_SET,
+};
 use crate::support::http_requests::{
     fetch_body, post_action, post_empty, post_form, response_body, wait_for_jobs, wait_idle,
     wait_settled,
@@ -174,15 +176,8 @@ async fn test_options_while_job_runs_is_refused_http() {
     );
 }
 
-fn messages_of(state: &AppState, game: GameId) -> Vec<Message> {
-    state
-        .game_view_query
-        .story_messages(game)
-        .expect("the story log reads back")
-}
-
 fn texts_of(state: &AppState, game: GameId, kind: MessageType) -> Vec<String> {
-    messages_of(state, game)
+    story_of_game(state, game)
         .into_iter()
         .filter(|message| message.message_type == kind)
         .map(|message| message.text().to_string())
@@ -324,7 +319,7 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
         hold.wait_started(1000),
         "the Job should reach its narrator call"
     );
-    let before = messages_of(&state, game);
+    let before = story_of_game(&state, game);
     let target = before.last().expect("the Job saved its Input").id;
 
     let edit = post_form(&app, &format!("/history/{target}"), "text=An+edited+text").await;
@@ -337,7 +332,7 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
     let delete_body = response_body(delete).await;
     assert_still_thinking(&delete_body);
 
-    let after = messages_of(&state, game);
+    let after = story_of_game(&state, game);
     assert_eq!(
         after.len(),
         before.len(),
@@ -373,7 +368,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
     assert!(post_empty(&app, "/swipe/new").await.status().is_success());
     assert!(wait_settled(&state, 1000).await, "the retry settles");
 
-    let narration = messages_of(&state, game)
+    let narration = story_of_game(&state, game)
         .into_iter()
         .rev()
         .find(|message| {
@@ -400,7 +395,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
     let body = response_body(resp).await;
     assert_still_thinking(&body);
 
-    let after = messages_of(&state, game)
+    let after = story_of_game(&state, game)
         .into_iter()
         .find(|message| message.id == narration.id)
         .expect("the Narration stays");
@@ -438,19 +433,7 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
 
     // The client moves to Game B, created from Game A's World, and sends an
     // Action there, so both Games are busy at the same moment.
-    let persona_key = storage
-        .require_game(game_a.0)
-        .expect("Game A reads back")
-        .persona_key;
-    let created = post_form(
-        &app,
-        "/games",
-        &format!("world_key=test&persona_key={persona_key}"),
-    )
-    .await;
-    assert!(created.status().is_success(), "Game B should be created");
-    let game_b = active_game_of(&state);
-    assert_ne!(game_b, game_a, "the create makes Game B active");
+    let game_b = create_game_from(&app, &state, &storage, game_a, "test").await;
 
     let hold_b = model.hold(Role::Narrator);
     assert!(post_action(&app, "look on B").await.status().is_success());
@@ -773,7 +756,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             let (app, state, storage) = app_with_script(Arc::clone(&model));
             let game =
                 active_game_on_an_always_on_world(&app, &state, &storage, fires_trigger).await;
-            let story_before = messages_of(&state, game);
+            let story_before = story_of_game(&state, game);
             assert!(post_action(&app, ACTION_INPUT).await.status().is_success());
             StopJob {
                 app,
@@ -795,7 +778,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             let hold = model.hold(row.held);
             let (app, state, storage) = app_with_script(Arc::clone(&model));
             let game = active_game_on_an_always_on_world(&app, &state, &storage, false).await;
-            let story_before = messages_of(&state, game);
+            let story_before = story_of_game(&state, game);
             assert!(
                 post_action(&app, "/impersonate hello")
                     .await
@@ -828,7 +811,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                     .status()
                     .is_success()
             );
-            let story_before = messages_of(&state, game);
+            let story_before = story_of_game(&state, game);
             let hold = model.hold(row.held);
             assert!(post_empty(&app, "/swipe/new").await.status().is_success());
             StopJob {
@@ -853,7 +836,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                 .model(Arc::clone(&model))
                 .build_with_state();
             let game = active_game_of(&state);
-            let story_before = messages_of(&state, game);
+            let story_before = story_of_game(&state, game);
             assert!(
                 post_action(&app, EVENT_ACTION_INPUT)
                     .await
@@ -976,7 +959,7 @@ async fn run_stop_row(row: &'static StopRow) {
 }
 
 async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob) {
-    let after = messages_of(&start.state, start.game);
+    let after = story_of_game(&start.state, start.game);
     let after_texts: Vec<String> = after
         .iter()
         .map(|message| message.text().to_string())
@@ -1196,19 +1179,5 @@ async fn active_game_on_an_always_on_world(
             .seed_character(world_id, &triggered_npc())
             .expect("the Character of the Trigger seeds");
     }
-    let persona_key = storage
-        .require_game(active_game_of(state).0)
-        .expect("the Game reads back")
-        .persona_key;
-    let created = post_form(
-        app,
-        "/games",
-        &format!("world_key={}&persona_key={persona_key}", world.key),
-    )
-    .await;
-    assert!(
-        created.status().is_success(),
-        "the always-on Game should be created"
-    );
-    active_game_of(state)
+    create_game_from(app, state, storage, active_game_of(state), &world.key).await
 }

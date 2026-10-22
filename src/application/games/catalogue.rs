@@ -8,7 +8,7 @@ use crate::error::EngineError;
 use crate::application::games::active::ActiveGame;
 use crate::adapters::driven::storage::worlds::WorldWithMap;
 use crate::domain::model::character::PersonaCard;
-use crate::domain::model::game::{Game, GameId, NewGame, PresetSelection};
+use crate::domain::model::game::{ConfigChange, Game, GameId, NewGame, PresetSelection};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::generate_game_name;
 use crate::adapters::driven::storage::Storage;
@@ -127,17 +127,14 @@ impl GameCatalogue {
         perspective: NarrativePerspective,
         tense: NarrativeTense,
     ) -> Result<Game, ApplicationError> {
-        let mut game = self.require_game(id)?;
-        game.narrative_perspective = perspective;
-        game.narrative_tense = tense;
-        self.storage.update_game_config(&game)?;
-        Ok(game)
+        let game = self.require_game(id)?;
+        self.save_config(game, ConfigChange::Posture { perspective, tense })
     }
 
     /// A deliberately-set perspective survives the switch; only the other mode's
     /// default is nudged.
     pub fn switch_mode(&self, id: u64, mode: NarratorMode) -> Result<Game, ApplicationError> {
-        let mut game = self.require_game(id)?;
+        let game = self.require_game(id)?;
         if game.narrator_mode == mode {
             return Ok(game);
         }
@@ -146,22 +143,28 @@ impl GameCatalogue {
             let settings = self.storage.get_settings()?;
             settings.mode_preset_registry.bundle_for(mode)
         };
-        game.narrator_mode = mode;
-        game.active_system_prompt_preset_id = bundle.system_prompt_preset_id;
-        game.active_quantifier_prompt_preset_id = bundle.quantifier_prompt_preset_id;
-        game.active_impersonate_prompt_preset_id = bundle.impersonate_prompt_preset_id;
 
         let other_default = match mode {
             NarratorMode::Novel => NarratorMode::InteractiveFiction,
             NarratorMode::InteractiveFiction => NarratorMode::Novel,
         }
         .default_perspective();
-        if game.narrative_perspective == other_default {
-            game.narrative_perspective = mode.default_perspective();
-        }
+        let perspective = if game.narrative_perspective == other_default {
+            mode.default_perspective()
+        } else {
+            game.narrative_perspective
+        };
 
-        self.storage.update_game_config(&game)?;
-        Ok(game)
+        self.save_config(
+            game,
+            ConfigChange::Mode {
+                mode,
+                system_id: bundle.system_prompt_preset_id,
+                quantifier_id: bundle.quantifier_prompt_preset_id,
+                impersonate_id: bundle.impersonate_prompt_preset_id,
+                perspective,
+            },
+        )
     }
 
     /// A mode-tagged preset that disallows the game's mode is accepted only when
@@ -171,7 +174,7 @@ impl GameCatalogue {
         id: u64,
         selection: PresetSelection,
     ) -> Result<Game, ApplicationError> {
-        let mut game = self.require_game(id)?;
+        let game = self.require_game(id)?;
         for (preset_type, new_id) in selection.slots() {
             // An unchanged stored id skips validation, so saving the form never
             // fails on a stale or deleted selection.
@@ -190,10 +193,16 @@ impl GameCatalogue {
                 )));
             }
         }
-        for (preset_type, new_id) in selection.slots() {
-            game.set_active_preset_id(preset_type, new_id.to_string());
-        }
-        self.storage.update_game_config(&game)?;
+        self.save_config(game, ConfigChange::Presets(selection))
+    }
+
+    /// The config rules ran outside the writer's lock; the write goes through the
+    /// writer, which refuses it while an Autoplay run holds the Game. The write
+    /// holds only the columns of `change`, and the returned Game is `game` with
+    /// the same change applied.
+    fn save_config(&self, mut game: Game, change: ConfigChange) -> Result<Game, ApplicationError> {
+        self.game_writer.save_config(GameId(game.id), &change)?;
+        change.apply_to(&mut game);
         Ok(game)
     }
 
@@ -203,12 +212,8 @@ impl GameCatalogue {
             .ok_or_else(|| ApplicationError::validation("Game not found"))
     }
 
-    pub fn reset(&self) -> Result<(), ApplicationError> {
+    pub fn reset(&self, current_id: GameId) -> Result<(), ApplicationError> {
         let storage = &self.storage;
-        let current_id = self
-            .active_game
-            .get()
-            .ok_or_else(|| ApplicationError::validation("No active game"))?;
         let game = storage
             .get_game(current_id.0)?
             .ok_or_else(|| ApplicationError::validation("Game not found"))?;

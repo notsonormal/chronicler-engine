@@ -49,14 +49,16 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `mod.rs` — Bootstrap smoke test binary: startup branches in `bootstrap::run()`.
     - `run_branches.rs` — Smoke tests covering uncovered startup branches in `bootstrap::run()`.
 - **browser/**
+    - `autoplay.rs` — Browser Autoplay tests: the Autoplay control's full-stack hop, and the view-only Game while a run holds it. A run that must hold its Game narrates through a `SilentModel`. Tagged against `docs/specs/browser_autoplay.md`.
     - `dashboard.rs` — Browser dashboard-chrome tests: static command form, status display. Tagged against `docs/specs/browser_dashboard.md`.
     - `games.rs` — Browser games-panel tests: per-game posture auto-save wiring guard. Tagged against `docs/specs/browser_games.md`.
-    - `mod.rs` — Browser test binary root (Playwright-driven): per-surface behaviour modules mirroring the `docs/specs/browser_<feature>.md` specs (`dashboard`, `games`, `options`, `prompt_presets`, `worlds`) plus `stub/` (stub-browser tests against a fake engine, incl. `layout` — CSS and layout checks, declared exemption, no spec, test code is the definition).
+    - `mod.rs` — Browser test binary root (Playwright-driven): per-surface behaviour modules mirroring the `docs/specs/browser_<feature>.md` specs (`autoplay`, `dashboard`, `games`, `options`, `prompt_presets`, `worlds`) plus `stub/` (stub-browser tests against a fake engine, incl. `layout` — CSS and layout checks, declared exemption, no spec, test code is the definition).
     - `options.rs` — Browser options-dock tests: reload persistence and the Use-click wiring guard. Tagged against `docs/specs/browser_options.md`.
     - `prompt_presets.rs` — Browser prompt-presets tests: the duplicate → edit → save click chain wiring guard. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
     - **stub/**
       - `announcements.rs` — Stub-browser tests for the live-region announcements: each change is announced exactly once. Tagged against `docs/specs/browser_dashboard.md`.
+      - `autoplay.rs` — Stub-browser tests for the Autoplay control: the progress status and the action area while a run holds the Game. Tagged against `docs/specs/browser_autoplay.md`.
       - `dashboard.rs` — Stub-browser tests for dashboard chrome: the action-area state machine, the tab bar, the landmarks and the status display. Tagged against `docs/specs/browser_dashboard.md`.
       - `failure_display.rs` — Stub-browser tests for the failure display: the banner, the in-place slots and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
       - `form_failures.rs` — Stub-browser tests for refused form actions: the form keeps its place and reports the failure inline. Tagged against `docs/specs/browser_dashboard.md`.
@@ -100,6 +102,10 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
     - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.
     - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure.
+    - **autoplay/**
+      - `fragments.rs` — HTTP E2E tests for the view-only Game of Autoplay (autoplay.md 41.18-41.20, 41.22): the controls the story log, the dock and the Games panel render while a run holds the Game.
+      - `mod.rs` — HTTP E2E tests for Autoplay (autoplay.md 41.*), shared helpers: `run` holds the run of Jobs, its ends, the progress status and the refused writes; `fragments` holds the view-only Game's rendering.
+      - `run.rs` — HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.

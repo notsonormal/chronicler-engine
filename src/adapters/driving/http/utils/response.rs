@@ -3,6 +3,12 @@
 
 use axum::{body::Body, http::StatusCode, response::Response};
 
+/// `dashboard-action-area.js` keys the wait state on the `.status.wait` class in this
+/// markup; the stub server answers a refused Action with it.
+pub const BUSY_STATUS: &str = "<span class=\"status wait\">Still thinking...</span>";
+
+pub const THINKING_STATUS: &str = "<span class=\"status thinking\">Thinking...</span>";
+
 #[allow(clippy::expect_used)]
 fn status_response(status: StatusCode, body: impl Into<String>) -> Response<Body> {
     Response::builder()

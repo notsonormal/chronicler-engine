@@ -2,7 +2,7 @@
 //! The end of the story, and the rules derived from it
 
 use crate::domain::model::message::{Message, SwipeAt};
-use crate::domain::model::state::message_types::MessageKind;
+use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::trigger_context::EventRecord;
 
@@ -60,6 +60,10 @@ impl Tail {
 
     pub fn retrigger_allowed(&self) -> bool {
         self.retrigger_record().is_some()
+    }
+
+    pub fn awaits_narration(&self) -> bool {
+        self.last.message_type == MessageType::Input
     }
 
     /// The story keeps its last Message: a delete needs more than one.

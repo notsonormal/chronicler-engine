@@ -19,11 +19,7 @@ use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::render_error;
-use crate::adapters::driving::http::utils::response::{internal_error, ok};
-
-/// `dashboard-action-area.js` keys the wait state on the `.status.wait` class in this
-/// markup; the stub server answers a refused Action with it.
-pub const BUSY_STATUS: &str = "<span class=\"status wait\">Still thinking...</span>";
+use crate::adapters::driving::http::utils::response::{internal_error, ok, THINKING_STATUS};
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
@@ -38,7 +34,7 @@ fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Respon
         Action::Options => JobRequest::Options,
     };
     match Job::start(&state.game_writer, state.job_deps.clone(), game_id, request) {
-        Ok(()) => ok("<span class=\"status thinking\">Thinking...</span>"),
+        Ok(()) => ok(THINKING_STATUS),
         Err(refusal) => refusal.into_response(),
     }
 }

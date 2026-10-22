@@ -23,6 +23,14 @@ impl JobTasks {
             .is_ok()
     }
 
+    pub fn running(&self) -> usize {
+        let handles = self.handles.lock().unwrap_or_else(|e| e.into_inner());
+        handles
+            .iter()
+            .filter(|handle| !handle.is_finished())
+            .count()
+    }
+
     async fn wait_for_each(&self) {
         loop {
             let pending: Vec<tokio::task::JoinHandle<()>> = {

@@ -116,36 +116,6 @@ impl Storage {
         })
     }
 
-    pub fn update_game_config(&self, game: &Game) -> Result<(), EngineError> {
-        self.with_backend_mut(StorageCall::UpdateGameConfig, |backend| match backend {
-            Backend::Sqlite { pool } => {
-                let conn = pool.conn();
-                let now = chrono::Utc::now().to_rfc3339();
-                let affected = conn
-                    .execute(
-                        "UPDATE games SET narrator_mode=?, narrative_perspective=?, narrative_tense=?, active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, active_options_prompt_preset_id=?, options_always_on=?, updated_at=? WHERE id=?",
-                        rusqlite::params![
-                            game.narrator_mode.as_str(),
-                            game.narrative_perspective.as_str(),
-                            game.narrative_tense.as_str(),
-                            game.active_system_prompt_preset_id,
-                            game.active_quantifier_prompt_preset_id,
-                            game.active_impersonate_prompt_preset_id,
-                            game.active_options_prompt_preset_id,
-                            game.options_always_on as i64,
-                            &now,
-                            game.id as i64,
-                        ],
-                    )
-                    .db_context("Failed to update game config")?;
-                if affected == 0 {
-                    return Err(EngineError::GameNotFound(game.id));
-                }
-                Ok(())
-            }
-        })
-    }
-
     /// How many Games hold the preset in any of its preset slots.
     pub fn count_games_using_preset(&self, preset_id: &str) -> Result<usize, EngineError> {
         self.with_backend_mut(

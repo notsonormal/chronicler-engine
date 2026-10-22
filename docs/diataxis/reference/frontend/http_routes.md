@@ -28,6 +28,12 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/action/check` | `action_check_handler` |
 | POST | `/action/confirm` | `action_confirm_handler` |
 
+## Autoplay
+
+| Method | Path | Handler |
+|--------|------|---------|
+| POST | `/autoplay` | `start_autoplay_handler` |
+
 ## History
 
 | Method | Path | Handler |

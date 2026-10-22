@@ -1,11 +1,15 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! ApplicationError — the error envelope of the application services.
 
+use crate::application::generation::gate::Refusal;
 use crate::error::EngineError;
 
 pub enum ApplicationError {
     /// Input failed domain validation; payload is the user-facing reason.
     Validation(String),
+    /// A refusal of the writer rule, kept as it is so the HTTP layer answers it as
+    /// it answers any refusal.
+    Refused(Refusal),
     /// Engine-layer failure surfaced through the application service.
     Engine(EngineError),
 }
@@ -39,6 +43,7 @@ impl std::fmt::Display for ApplicationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Validation(msg) => write!(f, "{msg}"),
+            Self::Refused(refusal) => write!(f, "{}", refusal.line()),
             Self::Engine(e) => write!(f, "{e}"),
         }
     }

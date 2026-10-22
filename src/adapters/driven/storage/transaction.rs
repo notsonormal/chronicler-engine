@@ -5,7 +5,7 @@ use crate::adapters::driven::storage::core::WriteOverrides;
 use crate::adapters::driven::storage::utils::require_message_of_game;
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::domain::model::dock::{DockRecord, Notice};
-use crate::domain::model::game::{GameId, NewGame};
+use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::message::{Message, Swipe, SwipeAt};
 use crate::domain::model::state::generation_status::GenerationFailure;
 use crate::domain::model::state::swipe_state::SwipeState;
@@ -24,6 +24,7 @@ pub enum TxWrite {
     SetSwipeText,
     SetSwipeState,
     SetGameFailure,
+    SetGameConfig,
     PutDock,
     PutDockNotice,
     ClearDock,
@@ -216,6 +217,54 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to set the failure line")?;
+        Ok(())
+    }
+
+    /// Writes the columns `change` names on the Game row the `Tx` holds, and
+    /// `updated_at`. Every other column stays as it is.
+    pub fn set_game_config(&mut self, change: &ConfigChange) -> Result<(), EngineError> {
+        self.writes.fail_if_injected(TxWrite::SetGameConfig)?;
+        let now = chrono::Utc::now().to_rfc3339();
+        let game = self.game.0 as i64;
+        let affected = match change {
+            ConfigChange::Posture { perspective, tense } => self.conn.execute(
+                "UPDATE games SET narrative_perspective=?, narrative_tense=?, updated_at=? WHERE id=?",
+                rusqlite::params![perspective.as_str(), tense.as_str(), &now, game],
+            ),
+            ConfigChange::Mode {
+                mode,
+                system_id,
+                quantifier_id,
+                impersonate_id,
+                perspective,
+            } => self.conn.execute(
+                "UPDATE games SET narrator_mode=?, narrative_perspective=?, active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, updated_at=? WHERE id=?",
+                rusqlite::params![
+                    mode.as_str(),
+                    perspective.as_str(),
+                    system_id,
+                    quantifier_id,
+                    impersonate_id,
+                    &now,
+                    game,
+                ],
+            ),
+            ConfigChange::Presets(selection) => self.conn.execute(
+                "UPDATE games SET active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, active_options_prompt_preset_id=?, updated_at=? WHERE id=?",
+                rusqlite::params![
+                    selection.system_id,
+                    selection.quantifier_id,
+                    selection.impersonate_id,
+                    selection.options_id,
+                    &now,
+                    game,
+                ],
+            ),
+        }
+        .db_context("Failed to update game config")?;
+        if affected == 0 {
+            return Err(EngineError::GameNotFound(self.game.0));
+        }
         Ok(())
     }
 

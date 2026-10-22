@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrite};
-use chronicler_engine::domain::model::game::{GameId, NewGame};
+use chronicler_engine::domain::model::game::{ConfigChange, GameId, NewGame, PresetSelection};
 use chronicler_engine::domain::model::message::SwipeAt;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::test_support::tx_token;
@@ -172,6 +172,107 @@ fn tx_delete_game_removes_the_game_and_its_records() {
     assert!(
         storage.list_games().unwrap().is_empty(),
         "the Game's records cascade with it"
+    );
+}
+
+// CASE storage-tx-config-posture: a Posture change writes the perspective and the tense, and leaves the mode and the presets as they were
+#[test]
+fn tx_config_posture_leaves_the_mode_and_the_presets() {
+    let storage = sqlite();
+    let game_id = create_game(&storage, "Posture");
+    let before = storage.require_game(game_id.0).unwrap();
+
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.set_game_config(&ConfigChange::Posture {
+                perspective: NarrativePerspective::Second,
+                tense: NarrativeTense::Present,
+            })
+        })
+        .expect("the unit should succeed");
+
+    let after = storage.require_game(game_id.0).unwrap();
+    assert_eq!(after.narrative_perspective, NarrativePerspective::Second);
+    assert_eq!(after.narrative_tense, NarrativeTense::Present);
+    assert_eq!(after.narrator_mode, before.narrator_mode);
+    assert_eq!(
+        after.active_system_prompt_preset_id,
+        before.active_system_prompt_preset_id
+    );
+    assert_eq!(
+        after.active_quantifier_prompt_preset_id,
+        before.active_quantifier_prompt_preset_id
+    );
+    assert_eq!(
+        after.active_impersonate_prompt_preset_id,
+        before.active_impersonate_prompt_preset_id
+    );
+    assert_eq!(
+        after.active_options_prompt_preset_id,
+        before.active_options_prompt_preset_id
+    );
+}
+
+// CASE storage-tx-config-presets: a Presets change writes the four preset slots, and leaves the mode and the posture as they were
+#[test]
+fn tx_config_presets_leaves_the_mode_and_the_posture() {
+    let storage = sqlite();
+    let game_id = create_game(&storage, "Presets");
+    let before = storage.require_game(game_id.0).unwrap();
+
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.set_game_config(&ConfigChange::Presets(PresetSelection::new(
+                "system_next",
+                "quantifier_next",
+                "impersonate_next",
+                "options_next",
+            )))
+        })
+        .expect("the unit should succeed");
+
+    let after = storage.require_game(game_id.0).unwrap();
+    assert_eq!(after.active_system_prompt_preset_id, "system_next");
+    assert_eq!(after.active_quantifier_prompt_preset_id, "quantifier_next");
+    assert_eq!(
+        after.active_impersonate_prompt_preset_id,
+        "impersonate_next"
+    );
+    assert_eq!(after.active_options_prompt_preset_id, "options_next");
+    assert_eq!(after.narrator_mode, before.narrator_mode);
+    assert_eq!(after.narrative_perspective, before.narrative_perspective);
+    assert_eq!(after.narrative_tense, before.narrative_tense);
+}
+
+// CASE storage-tx-config-mode: a Mode change writes the mode, three presets and the perspective, and leaves the tense and the options preset as they were
+#[test]
+fn tx_config_mode_leaves_the_tense_and_the_options_preset() {
+    let storage = sqlite();
+    let game_id = create_game(&storage, "Mode");
+    let before = storage.require_game(game_id.0).unwrap();
+
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.set_game_config(&ConfigChange::Mode {
+                mode: NarratorMode::InteractiveFiction,
+                system_id: "system_if".to_string(),
+                quantifier_id: "quantifier_if".to_string(),
+                impersonate_id: "impersonate_if".to_string(),
+                perspective: NarrativePerspective::Second,
+            })
+        })
+        .expect("the unit should succeed");
+
+    let after = storage.require_game(game_id.0).unwrap();
+    assert_eq!(after.narrator_mode, NarratorMode::InteractiveFiction);
+    assert_eq!(after.narrative_perspective, NarrativePerspective::Second);
+    assert_eq!(after.active_system_prompt_preset_id, "system_if");
+    assert_eq!(after.active_quantifier_prompt_preset_id, "quantifier_if");
+    assert_eq!(after.active_impersonate_prompt_preset_id, "impersonate_if");
+    assert_eq!(after.narrative_tense, before.narrative_tense);
+    assert_eq!(
+        after.active_options_prompt_preset_id,
+        before.active_options_prompt_preset_id
     );
 }
 

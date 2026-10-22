@@ -151,12 +151,28 @@ function cancelEdit() {
   if (editBtn) editBtn.focus();
 }
 
+// A 200 can still refuse a story write: a Job or an Autoplay run holds the Game.
+function answeredWaitStatus(body) {
+  return body.includes('class="status wait"');
+}
+
+const GAME_BUSY_DETAIL = "Still thinking...";
+
+// True when the body is the busy answer; the story-log error then says what the
+// refused action was.
+function reportedBusy(body, message) {
+  if (!answeredWaitStatus(body)) return false;
+  showStoryLogError(message, GAME_BUSY_DETAIL);
+  return true;
+}
+
 function submitEdit() {
   if (editState === null) return;
   clearInlineError(storyLogErrorSlot());
   const newText = document.getElementById("edit-textarea").value;
   const formData = new URLSearchParams();
   formData.append("text", newText);
+  let editKeptOpen = false;
   // Kept set until the outcome is known, so a failed save can restore the entry.
   fetch(`/history/${editState.id}`, {
     method: "POST",
@@ -165,6 +181,13 @@ function submitEdit() {
   })
     .then((response) => {
       if (!response.ok) return throwServerDetail(response);
+      return response.text();
+    })
+    .then((body) => {
+      if (reportedBusy(body, "The Game is busy, so the edit was not saved.")) {
+        editKeptOpen = true;
+        return;
+      }
       // The lock stays until the resumed poll replaces the entry's
       // controls, so a second editor cannot open on a stale textarea.
       clearEditState();
@@ -175,7 +198,7 @@ function submitEdit() {
       showStoryLogError("Failed to save the message.", err.message);
     })
     .finally(() => {
-      resumePolling();
+      if (!editKeptOpen) resumePolling();
     });
 }
 
@@ -223,6 +246,9 @@ function switchSwipe(messageId, index) {
       return response.text();
     })
     .then((html) => {
+      if (reportedBusy(html, "The Game is busy, so the swipe was not switched.")) {
+        return;
+      }
       document.getElementById("story-log").innerHTML = html;
       // The restore is settled: drop any stale generating label without waiting for the 5s poll.
       resetStatusToReady();
@@ -252,12 +278,17 @@ function deleteMessage() {
   fetch("/history/delete", { method: "POST" })
     .then((response) => {
       if (!response.ok) return throwServerDetail(response);
-      return htmx
-        .ajax("GET", "/fragment/story-log", {
-          target: "#story-log",
-          swap: "innerHTML",
-        })
-        .then(() => focusAfterLogDelete());
+      return response.text().then((body) => {
+        if (reportedBusy(body, "The Game is busy, so the message was not deleted.")) {
+          return;
+        }
+        return htmx
+          .ajax("GET", "/fragment/story-log", {
+            target: "#story-log",
+            swap: "innerHTML",
+          })
+          .then(() => focusAfterLogDelete());
+      });
     })
     .catch((err) => {
       console.error("Delete failed:", err);

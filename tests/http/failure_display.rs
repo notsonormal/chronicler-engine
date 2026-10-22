@@ -18,7 +18,7 @@ use chronicler_engine::error::EngineError;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::test_support::{configured_runner, ScriptedModel, TestAppBuilder};
-use chronicler_engine::test_support::empty_sqlite_storage;
+use chronicler_engine::test_support::{empty_sqlite_storage, set_game_config_row};
 
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
@@ -340,10 +340,12 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 // [docs/specs/failure_display.md] SCENARIO: 38.4
 #[tokio::test]
 async fn test_failed_user_action_is_not_a_failed_poll() {
-    let storage = Arc::new(empty_sqlite_storage().with_failure(
-        StorageCall::UpdateGameConfig,
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    failures.set_write(
+        TxWrite::SetGameConfig,
         TestOverride::internal("update_game_config failure"),
-    ));
+    );
+    let storage = Arc::new(storage);
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
         .build_with_state();
@@ -841,9 +843,7 @@ fn game_picks_a_missing_preset(
         .expect("the Game row reads back")
         .expect("the Game exists");
     game.set_active_preset_id(preset_type, "preset_that_is_gone".to_string());
-    storage
-        .update_game_config(&game)
-        .expect("the Game row takes the preset id");
+    set_game_config_row(storage, &game);
 }
 
 // [docs/specs/failure_display.md] SCENARIO: 38.16

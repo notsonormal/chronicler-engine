@@ -33,7 +33,7 @@ pub async fn debug_is_generating_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
 ) -> String {
-    // The job entry is the live truth: a Game is busy while its Job runs.
+    // The holder is the live truth: a Game is busy while a Job or an Autoplay run holds it.
     state.game_view_query.is_busy(game_id).to_string()
 }
 

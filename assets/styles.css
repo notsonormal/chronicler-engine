@@ -507,7 +507,8 @@ body {
     align-items: center;
 }
 
-#command-form input {
+#command-form input,
+#autoplay-form input {
     flex: 1;
     min-width: var(--input-min-width);
     background: var(--color-bg-primary);
@@ -522,12 +523,14 @@ body {
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-#command-form input:focus {
+#command-form input:focus,
+#autoplay-form input:focus {
     border-color: var(--color-accent-ok);
     box-shadow: var(--shadow-focus-ring);
 }
 
-#command-form input::placeholder {
+#command-form input::placeholder,
+#autoplay-form input::placeholder {
     color: var(--color-text-placeholder);
 }
 
@@ -572,7 +575,9 @@ body {
 
 /* The submit control only: the form's inline-error slot injects a Details
    toggle that must stay a small inline button, not a second Send button. */
-#command-form #submit-btn {
+#command-form #submit-btn,
+#autoplay-btn,
+#stop-btn {
     background: linear-gradient(180deg, var(--color-button-send-start) 0%, var(--color-button-send-end) 100%);
     border: 1px solid var(--color-accent-ok);
     border-radius: 4px;
@@ -592,24 +597,82 @@ body {
     gap: 6px;
 }
 
-#command-form #submit-btn .icon {
+#command-form #submit-btn .icon,
+#autoplay-btn .icon,
+#stop-btn .icon {
     width: 16px;
     height: 16px;
 }
 
-#command-form #submit-btn:hover:not(:disabled) {
+#command-form #submit-btn:hover:not(:disabled),
+#autoplay-btn:hover:not(:disabled),
+#stop-btn:hover:not(:disabled) {
     background: var(--color-button-send-start);
     filter: brightness(1.15);
 }
 
-#command-form #submit-btn:active:not(:disabled) {
+#command-form #submit-btn:active:not(:disabled),
+#autoplay-btn:active:not(:disabled),
+#stop-btn:active:not(:disabled) {
     background: var(--color-button-send-end);
     filter: none;
 }
 
-#command-form #submit-btn:disabled {
+#command-form #submit-btn:disabled,
+#autoplay-btn:disabled,
+#stop-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+#autoplay-form {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+#autoplay-form input {
+    flex: none;
+    width: 72px;
+    min-width: 0;
+}
+
+#autoplay-form input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#autoplay-btn {
+    width: auto;
+    white-space: nowrap;
+}
+
+#autoplay-form .inline-error-slot,
+#autoplay-form .inline-error-slot .error-disclosure-message {
+    font-size: var(--font-size-small);
+}
+
+#stop-btn {
+    display: none;
+    background: var(--color-tint-red);
+    border-color: var(--color-accent-red);
+    color: var(--color-accent-red);
+}
+
+#stop-btn:hover:not(:disabled),
+#stop-btn:active:not(:disabled) {
+    background: var(--color-tint-red);
+}
+
+.action-area[data-state="autoplay"] #command-form,
+.action-area[data-state="autoplay"] #autoplay-form {
+    display: none;
+}
+
+.action-area[data-state="autoplay"] #stop-btn {
+    display: flex;
 }
 
 .status {
@@ -1633,6 +1696,11 @@ input[type="checkbox"]:focus {
     #command-form #submit-btn {
         width: 100%;
         min-width: unset;
+    }
+
+    #autoplay-form,
+    #stop-btn {
+        width: 100%;
     }
 
     .status {
