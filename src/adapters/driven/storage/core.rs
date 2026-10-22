@@ -64,7 +64,6 @@ pub enum StorageCall {
     StoriesWindow,
     TouchGameUpdatedAt,
     Transaction,
-    UpdateGameConfig,
     UpdateGameDisplayName,
     UpdateSettings,
     UpdateWorld,

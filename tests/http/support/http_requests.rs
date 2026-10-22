@@ -97,7 +97,7 @@ pub async fn post_form_with_hx(
     app.clone().oneshot(req).await.unwrap()
 }
 
-/// Waits for the Game's job entry to go. It observes nothing but the wait itself,
+/// Waits for the Game's holder to go. It observes nothing but the wait itself,
 /// so a test that also reads the turn's outcome calls `wait_settled`.
 pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
     let game_id = active_game_of(state);
@@ -105,7 +105,7 @@ pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
         std::time::Duration::from_millis(timeout_ms),
         std::time::Duration::from_millis(15),
         || async {
-            // The job entry is the one busy truth: no Job holds the Game.
+            // The holder is the one busy truth: nothing holds the Game.
             !state.game_view_query.is_busy(game_id)
         },
     )
@@ -159,9 +159,10 @@ pub async fn wait_for_jobs_running_at_most(
     limit: usize,
     timeout_ms: u64,
 ) -> bool {
-    state
-        .job_deps
-        .tasks
-        .wait_until_running_at_most(limit, std::time::Duration::from_millis(timeout_ms))
-        .await
+    wait_for_condition_async(
+        std::time::Duration::from_millis(timeout_ms),
+        std::time::Duration::from_millis(10),
+        || async { state.job_deps.tasks.running() <= limit },
+    )
+    .await
 }

@@ -472,6 +472,40 @@ pub fn seed_game_row(storage: &Storage, request: &crate::domain::model::game::Ne
         .expect("test setup: the Game row must land")
 }
 
+/// Test setup only: a running engine writes the config through `GameWriter::save_config`.
+/// Writes the posture, the mode with its presets, and the four presets of `config`;
+/// `options_always_on` is not a config route's column.
+pub fn set_game_config_row(storage: &Storage, config: &crate::domain::model::game::Game) {
+    use crate::domain::model::game::{ConfigChange, PresetSelection};
+    let changes = [
+        ConfigChange::Mode {
+            mode: config.narrator_mode,
+            system_id: config.active_system_prompt_preset_id.clone(),
+            quantifier_id: config.active_quantifier_prompt_preset_id.clone(),
+            impersonate_id: config.active_impersonate_prompt_preset_id.clone(),
+            perspective: config.narrative_perspective,
+        },
+        ConfigChange::Posture {
+            perspective: config.narrative_perspective,
+            tense: config.narrative_tense,
+        },
+        ConfigChange::Presets(PresetSelection::new(
+            config.active_system_prompt_preset_id.clone(),
+            config.active_quantifier_prompt_preset_id.clone(),
+            config.active_impersonate_prompt_preset_id.clone(),
+            config.active_options_prompt_preset_id.clone(),
+        )),
+    ];
+    storage
+        .transaction(GameId(config.id), TxToken::new(), |tx| {
+            changes
+                .iter()
+                .try_for_each(|change| tx.set_game_config(change))
+        })
+        // arch-lint: allow(no-unwrap-expect) reason="test fixture panics when the seed write fails"
+        .expect("test setup: the Game config must land");
+}
+
 pub fn empty_sqlite_storage() -> Storage {
     let pool = DbPool::new(":memory:")
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on a storage failure"

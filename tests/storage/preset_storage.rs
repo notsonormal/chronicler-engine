@@ -677,7 +677,7 @@ fn test_concurrent_save_preset_admits_exactly_one_name() {
 
 #[test]
 fn test_count_games_using_preset_counts_each_game_once() {
-    use chronicler_engine::test_support::{seed_game_row, test_new_game};
+    use chronicler_engine::test_support::{seed_game_row, set_game_config_row, test_new_game};
 
     let storage = create_storage();
     let seed = |name: &str| seed_game_row(&storage, &test_new_game("w", "w", "p", "P", name)).0;
@@ -687,11 +687,11 @@ fn test_count_games_using_preset_counts_each_game_once() {
 
     let mut game = storage.require_game(first).unwrap();
     game.active_options_prompt_preset_id = "shared".to_string();
-    storage.update_game_config(&game).unwrap();
+    set_game_config_row(&storage, &game);
     let mut game = storage.require_game(second).unwrap();
     game.active_system_prompt_preset_id = "shared".to_string();
     game.active_quantifier_prompt_preset_id = "shared".to_string();
-    storage.update_game_config(&game).unwrap();
+    set_game_config_row(&storage, &game);
 
     assert_eq!(storage.count_games_using_preset("shared").unwrap(), 2);
     assert_eq!(

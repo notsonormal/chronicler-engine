@@ -1,27 +1,25 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! GameWriter and JobWriter — the writer rule and the guard: the one registry of job entries and run holds, and the save units a Job writes through.
+//! GameWriter and JobWriter — the writer rule and the guard: the one registry of the busy state, and the save units a Job writes through.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::adapters::driven::storage::{Storage, Tx, TxToken};
+use crate::application::errors::ApplicationError;
 use crate::domain::model::character::NpcCard;
 use crate::domain::model::dock::{DockRecord, Notice};
-use crate::domain::model::game::{GameId, NewGame};
+use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::agent::Kind;
 use crate::domain::model::generation::{
     GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanRefusal, Place, StoryEnd,
 };
 use crate::domain::model::message::{Maker, Message, Swipe, SwipeAt};
-use crate::domain::model::state::generation_status::{GenerationFailure, Record, RunProgress, Step};
+use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
 use crate::error::EngineError;
-
-/// The largest budget a run may have, so no start is close to unlimited.
-pub const MAX_RUN_BUDGET: u32 = 100;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Refusal {
@@ -35,10 +33,22 @@ pub enum Refusal {
     Failed(GenerationFailure),
 }
 
+impl Refusal {
+    /// The line the user reads for the refusal, also when it surfaces as an error
+    /// outside the HTTP answer.
+    pub fn line(&self) -> String {
+        match self {
+            Self::StillThinking => "Still thinking...".to_string(),
+            Self::BadRequest(line) => line.clone(),
+            Self::Failed(failure) => failure.line(),
+        }
+    }
+}
+
 /// Why a step or a save unit of a Job did not finish.
 #[derive(Debug)]
 pub enum JobFailure {
-    /// The Game's job entry no longer holds this Job's id: a stop or a reset
+    /// The Game's Job entry no longer holds this Job's id: a stop or a reset
     /// ended the Job, so its late writes land nowhere.
     EntryMoved,
     /// The Job writes this line and ends.
@@ -85,7 +95,7 @@ impl SavedText {
     }
 }
 
-/// The busy record in memory: the Job's own methods are its only writers.
+/// The record of a Job that runs: the Job's own methods are its only writers.
 struct JobEntry {
     /// The Job that owns the entry; a save unit whose id differs is refused.
     id: u64,
@@ -93,71 +103,87 @@ struct JobEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RunId(u64);
+pub struct AutoplayRunId(u64);
 
-/// Lasts from the start of the run to its end, also between two Jobs. Memory
-/// only, like the job entry.
-struct RunHold {
-    id: RunId,
-    /// The cycles of the run that ended.
-    done: u32,
-    budget: u32,
+/// Only the Autoplay loop writes it; the gate stores it with the holder and
+/// applies no rule to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AutoplayProgress {
+    pub done: u32,
+    pub budget: u32,
 }
 
-impl RunHold {
-    fn progress(&self) -> RunProgress {
-        RunProgress {
-            cycle: self.done + 1,
-            budget: self.budget,
+impl AutoplayProgress {
+    pub fn cycle(&self) -> u32 {
+        self.done + 1
+    }
+}
+
+/// What holds a busy Game. Memory only, like the Job entry.
+enum Holder {
+    /// A plain Job runs.
+    Job(JobEntry),
+    /// An Autoplay run holds the Game from its start to its end, also between two
+    /// of its Jobs. `job` is the Job entry of the run's running Job.
+    Autoplay {
+        run: AutoplayRunId,
+        progress: AutoplayProgress,
+        job: Option<JobEntry>,
+    },
+}
+
+impl Holder {
+    fn job(&self) -> Option<&JobEntry> {
+        match self {
+            Self::Job(entry) => Some(entry),
+            Self::Autoplay { job, .. } => job.as_ref(),
         }
     }
-}
 
-struct Holds {
-    jobs: HashMap<GameId, JobEntry>,
-    runs: HashMap<GameId, RunHold>,
-}
+    fn job_mut(&mut self) -> Option<&mut JobEntry> {
+        match self {
+            Self::Job(entry) => Some(entry),
+            Self::Autoplay { job, .. } => job.as_mut(),
+        }
+    }
 
-impl Holds {
-    fn forget(&mut self, game: GameId) {
-        self.jobs.remove(&game);
-        self.runs.remove(&game);
+    fn is_autoplay_run(&self, id: AutoplayRunId) -> bool {
+        matches!(self, Self::Autoplay { run, .. } if *run == id)
     }
 }
 
-/// The one registry of job entries and run holds: a private `Mutex` behind a type
-/// whose only method is `hold`, so no caller takes the lock without a unit opener
-/// in hand.
-struct JobRegistry {
-    holds: Mutex<Holds>,
+/// Absent means idle.
+type Holders = HashMap<GameId, Holder>;
+
+/// The one registry of holders: a private `Mutex` behind a type whose only method is
+/// `hold`, so no caller takes the lock without a unit opener in hand.
+struct BusyRegistry {
+    busy: Mutex<Holders>,
 }
 
-impl JobRegistry {
+impl BusyRegistry {
     fn new() -> Self {
         Self {
-            holds: Mutex::new(Holds {
-                jobs: HashMap::new(),
-                runs: HashMap::new(),
-            }),
+            busy: Mutex::new(HashMap::new()),
         }
     }
 
     /// A writer's check and its units happen in one critical section, and the lock
     /// order stays the guard, then the backend mutex, then the connection mutex.
-    fn hold<T>(&self, storage: &Arc<Storage>, f: impl FnOnce(&mut Holds, &Units) -> T) -> T {
+    fn hold<T>(&self, storage: &Arc<Storage>, f: impl FnOnce(&mut Holders, &Units) -> T) -> T {
         let units = Units {
             storage: Arc::clone(storage),
             token: TxToken::new(),
         };
-        let mut holds = self
-            .holds
+        let mut busy = self
+            .busy
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        f(&mut holds, &units)
+        f(&mut busy, &units)
     }
 }
 
-/// The unit opener of one hold. Only `JobRegistry::hold` makes one, so every unit
+/// The unit opener of one hold. Only `BusyRegistry::hold` makes one, so every unit
 /// of record writes opens inside a hold; a reset opens two in the same hold.
 struct Units {
     storage: Arc<Storage>,
@@ -187,12 +213,12 @@ impl Units {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Busy {
-    /// A Job runs, and no run holds the Game.
+    /// A plain Job runs.
     Job(Step),
-    /// A run holds the Game. `step` is the step of the run's Job, and `None`
-    /// between two Jobs of the run.
-    Run {
-        progress: RunProgress,
+    /// An Autoplay run holds the Game. `step` is the step of the run's Job, and
+    /// `None` between two Jobs of the run.
+    Autoplay {
+        progress: AutoplayProgress,
         step: Option<Step>,
     },
 }
@@ -201,60 +227,55 @@ impl Busy {
     pub fn step(&self) -> Option<&Step> {
         match self {
             Self::Job(step) => Some(step),
-            Self::Run { step, .. } => step.as_ref(),
+            Self::Autoplay { step, .. } => step.as_ref(),
         }
     }
 }
 
-#[derive(Debug)]
-pub enum RunRefusal {
-    /// The run hold of the Game is gone or holds another run's id: a stop, a reset
-    /// or a delete ended the run. Nothing is written.
-    Ended,
-    /// The accept, or the end of a cycle, refused, and wrote the Game's failure line
-    /// if the refusal has one.
-    Refused(Refusal),
+#[derive(Debug, Clone, PartialEq)]
+pub enum Decision {
+    /// The Autoplay run goes on: the gate stores the progress and accepts this request.
+    Next(AutoplayProgress, JobRequest),
+    /// The Autoplay run is over: the gate removes the holder.
+    Finish(AutoplayProgress),
 }
 
-#[derive(Debug)]
-pub struct RunHeld;
+pub enum AutoplayAccept {
+    /// The Job is accepted, and the progress is stored with the holder.
+    Accepted(AcceptedJob, AutoplayProgress),
+    /// The loop decided to finish: the holder is gone.
+    Finished(AutoplayProgress),
+    /// The holder of the Game is gone or holds another run's id: a stop, a reset or
+    /// a delete ended the run. Nothing is written.
+    Ended,
+    /// The accept refused and wrote the Game's failure line if the refusal has one.
+    /// A refusal of the plan or of the story read removed the holder; the run's own
+    /// Job in flight (unreachable) leaves it for `end_autoplay`.
+    Refused(Refusal),
+}
 
 pub struct AcceptedJob {
     pub writer: JobWriter,
     pub plan: JobPlan,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CycleEnd {
-    /// The number of the cycle that ended, counted from 1.
-    pub cycle: u32,
-    pub budget: u32,
-}
-
-impl CycleEnd {
-    pub fn budget_reached(&self) -> bool {
-        self.cycle >= self.budget
-    }
-}
-
-/// The only code that opens a unit of record writes, and the owner of the job
-/// entries and the run holds. One registry serves all Games, and a Job keeps the
-/// Game it started on.
+/// The only code that opens a unit of record writes, and the owner of the busy
+/// state. One registry serves all Games, and a Job keeps the Game it started on.
 #[derive(Clone)]
 pub struct GameWriter {
     storage: Arc<Storage>,
-    holds: Arc<JobRegistry>,
+    busy: Arc<BusyRegistry>,
     next_job_id: Arc<AtomicU64>,
-    next_run_id: Arc<AtomicU64>,
+    next_autoplay_run_id: Arc<AtomicU64>,
 }
 
 impl GameWriter {
     pub fn new(storage: Arc<Storage>) -> Self {
         Self {
             storage,
-            holds: Arc::new(JobRegistry::new()),
+            busy: Arc::new(BusyRegistry::new()),
             next_job_id: Arc::new(AtomicU64::new(0)),
-            next_run_id: Arc::new(AtomicU64::new(0)),
+            next_autoplay_run_id: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -264,191 +285,207 @@ impl GameWriter {
             .wrapping_add(1)
     }
 
-    fn hold<T>(&self, f: impl FnOnce(&mut Holds, &Units) -> T) -> T {
-        self.holds.hold(&self.storage, f)
+    fn hold<T>(&self, f: impl FnOnce(&mut Holders, &Units) -> T) -> T {
+        self.busy.hold(&self.storage, f)
     }
 
-    fn next_run_id(&self) -> RunId {
-        RunId(
-            self.next_run_id
+    fn next_autoplay_run_id(&self) -> AutoplayRunId {
+        AutoplayRunId(
+            self.next_autoplay_run_id
                 .fetch_add(1, Ordering::SeqCst)
                 .wrapping_add(1),
         )
     }
 
-    /// The busy rule: a Game with a job entry or a run hold answers "Still
-    /// thinking..." before any other check.
-    fn require_idle(holds: &Holds, game: GameId) -> Result<(), Refusal> {
-        if holds.jobs.contains_key(&game) || holds.runs.contains_key(&game) {
+    /// The busy rule: a Game with a holder answers "Still thinking..." before any
+    /// other check.
+    fn require_idle(holders: &Holders, game: GameId) -> Result<(), Refusal> {
+        if holders.contains_key(&game) {
             return Err(Refusal::StillThinking);
         }
         Ok(())
     }
 
     pub fn accept(&self, game: GameId, request: JobRequest) -> Result<AcceptedJob, Refusal> {
-        self.hold(|holds, units| {
-            Self::require_idle(holds, game)?;
-            self.accept_in_hold(holds, units, game, |_story| request)
+        self.hold(|holders, units| {
+            Self::require_idle(holders, game)?;
+            let job_id = self.next_job_id();
+            let story = self.story_end_or_refuse(game, units)?;
+            let (plan, step) = self.plan_and_start(units, game, story, &request)?;
+            holders.insert(game, Holder::Job(JobEntry { id: job_id, step }));
+            Ok(self.accepted(game, job_id, plan))
         })
     }
 
-    /// The accept of one Job of a run: the run's own id passes the run hold, and the
-    /// run's rule picks the request from the end of the story it reads under the
-    /// same registry hold.
-    pub fn accept_for_run(&self, game: GameId, run: RunId) -> Result<AcceptedJob, RunRefusal> {
-        self.hold(|holds, units| {
-            if !holds.runs.get(&game).is_some_and(|hold| hold.id == run) {
-                return Err(RunRefusal::Ended);
-            }
-            if holds.jobs.contains_key(&game) {
-                return Err(RunRefusal::Refused(Refusal::StillThinking));
-            }
-            self.accept_in_hold(holds, units, game, |story| {
-                JobRequest::next_in_run(story.tail.as_ref())
-            })
-            .map_err(RunRefusal::Refused)
-        })
-    }
-
-    fn accept_in_hold(
+    /// The Autoplay run's own id passes the holder, and only between two of its Jobs.
+    /// `decide` runs under the registry hold, on
+    /// the end of the story that the accept reads, and calls no `GameWriter`.
+    pub fn accept_for_autoplay(
         &self,
-        holds: &mut Holds,
+        game: GameId,
+        run: AutoplayRunId,
+        decide: impl FnOnce(&StoryEnd) -> Decision,
+    ) -> AutoplayAccept {
+        self.hold(|holders, units| {
+            let between_jobs = holders
+                .get(&game)
+                .filter(|holder| holder.is_autoplay_run(run))
+                .map(|holder| holder.job().is_none());
+            match between_jobs {
+                None => return AutoplayAccept::Ended,
+                // The loop accepts one Job at a time, so its own Job in flight is
+                // unreachable; the Game is busy, and nothing is written.
+                Some(false) => return AutoplayAccept::Refused(Refusal::StillThinking),
+                Some(true) => {}
+            }
+            let accepted = self.accept_in_autoplay_hold(holders, units, game, run, decide);
+            if matches!(accepted, AutoplayAccept::Refused(_)) {
+                holders.remove(&game);
+            }
+            accepted
+        })
+    }
+
+    fn accept_in_autoplay_hold(
+        &self,
+        holders: &mut Holders,
         units: &Units,
         game: GameId,
-        pick: impl FnOnce(&StoryEnd) -> JobRequest,
-    ) -> Result<AcceptedJob, Refusal> {
+        run: AutoplayRunId,
+        decide: impl FnOnce(&StoryEnd) -> Decision,
+    ) -> AutoplayAccept {
         let job_id = self.next_job_id();
-        let story = self.story_end_or_refuse(game, units)?;
-        let request = pick(&story);
-        let plan = JobPlan::for_request(&request, story).map_err(|refusal| match refusal {
+        let story = match self.story_end_or_refuse(game, units) {
+            Ok(story) => story,
+            Err(refusal) => return AutoplayAccept::Refused(refusal),
+        };
+        let (progress, request) = match decide(&story) {
+            Decision::Finish(progress) => {
+                holders.remove(&game);
+                return AutoplayAccept::Finished(progress);
+            }
+            Decision::Next(progress, request) => (progress, request),
+        };
+        let (plan, step) = match self.plan_and_start(units, game, story, &request) {
+            Ok(started) => started,
+            Err(refusal) => return AutoplayAccept::Refused(refusal),
+        };
+        holders.insert(
+            game,
+            Holder::Autoplay {
+                run,
+                progress,
+                job: Some(JobEntry { id: job_id, step }),
+            },
+        );
+        AutoplayAccept::Accepted(self.accepted(game, job_id, plan), progress)
+    }
+
+    /// The plan of the request, and the units that make it a started Job. The unit
+    /// lands before the caller makes the entry: a refused accept makes no entry, so
+    /// a Game is never busy for a Job that never started.
+    fn plan_and_start(
+        &self,
+        units: &Units,
+        game: GameId,
+        story: StoryEnd,
+        request: &JobRequest,
+    ) -> Result<(JobPlan, Step), Refusal> {
+        let plan = JobPlan::for_request(request, story).map_err(|refusal| match refusal {
             PlanRefusal::BadRequest(line) => Refusal::BadRequest(line),
             PlanRefusal::Missing(record) => self.missing(game, record, units),
         })?;
         self.require_records(game, &plan, units)?;
         let step = plan.first_step();
-        // The unit lands before the entry: a refused accept makes no entry, so a
-        // Game is never busy for a Job that never started.
         self.accept_unit(game, units)?;
-        holds.jobs.insert(game, JobEntry { id: job_id, step });
-        Ok(AcceptedJob {
+        Ok((plan, step))
+    }
+
+    fn accepted(&self, game: GameId, job_id: u64, plan: JobPlan) -> AcceptedJob {
+        AcceptedJob {
             writer: JobWriter {
                 writer: self.clone(),
                 game,
                 id: job_id,
             },
             plan,
-        })
+        }
     }
 
-    pub fn start_run(&self, game: GameId, budget: u32) -> Result<RunId, Refusal> {
-        let run = self.next_run_id();
-        self.hold(|holds, _units| {
-            Self::require_idle(holds, game)?;
-            if budget == 0 || budget > MAX_RUN_BUDGET {
-                return Err(Refusal::BadRequest(format!(
-                    "An autoplay run needs a budget of 1 to {MAX_RUN_BUDGET} cycles"
-                )));
-            }
-            holds.runs.insert(
+    /// The budget rule is the loop's own, so the gate stores the budget as it comes.
+    pub fn reserve_for_autoplay(
+        &self,
+        game: GameId,
+        progress: AutoplayProgress,
+    ) -> Result<AutoplayRunId, Refusal> {
+        let run = self.next_autoplay_run_id();
+        self.hold(|holders, _units| {
+            Self::require_idle(holders, game)?;
+            holders.insert(
                 game,
-                RunHold {
-                    id: run,
-                    done: 0,
-                    budget,
+                Holder::Autoplay {
+                    run,
+                    progress,
+                    job: None,
                 },
             );
             Ok(run)
         })
     }
 
-    /// `None` when the story ends on an Input: no answer yet, so nothing is counted.
-    /// The budget's last cycle removes the run hold in the same registry hold. An
-    /// unreadable story ends the run with its failure line.
-    pub fn finish_cycle(&self, game: GameId, run: RunId) -> Result<Option<CycleEnd>, RunRefusal> {
-        self.hold(|holds, units| {
-            let tail = self.storage.stories().tail(game);
-            let hold = holds
-                .runs
-                .get_mut(&game)
-                .filter(|hold| hold.id == run)
-                .ok_or(RunRefusal::Ended)?;
-            let tail = match tail {
-                Ok(tail) => tail,
-                Err(error) => {
-                    let refusal = self.unreadable(game, Record::Story, &error, units);
-                    holds.runs.remove(&game);
-                    return Err(RunRefusal::Refused(refusal));
-                }
-            };
-            let answered = tail
-                .as_ref()
-                .is_some_and(|tail| tail.last.message_type != MessageType::Input);
-            if !answered {
-                return Ok(None);
-            }
-            hold.done += 1;
-            let end = CycleEnd {
-                cycle: hold.done,
-                budget: hold.budget,
-            };
-            if end.budget_reached() {
-                holds.runs.remove(&game);
-            }
-            Ok(Some(end))
-        })
-    }
-
-    /// The driver's own end of its run. A run hold of another run, or none, stays
-    /// as it is.
-    pub fn end_run(&self, game: GameId, run: RunId) {
-        self.hold(|holds, _units| {
-            if holds.runs.get(&game).is_some_and(|hold| hold.id == run) {
-                holds.runs.remove(&game);
+    /// A holder of another run, or none, stays as it is.
+    pub fn end_autoplay(&self, game: GameId, run: AutoplayRunId) {
+        self.hold(|holders, _units| {
+            if holders
+                .get(&game)
+                .is_some_and(|holder| holder.is_autoplay_run(run))
+            {
+                holders.remove(&game);
             }
         });
     }
 
-    /// A config write of the Game's own columns, refused while a run holds the
-    /// Game. The check and `write` run in one registry hold, so a run cannot start
-    /// between them. `write` must not call `GameWriter`: the lock is not reentrant.
-    pub fn config_write<T>(&self, game: GameId, write: impl FnOnce() -> T) -> Result<T, RunHeld> {
-        self.hold(|holds, _units| {
-            if holds.runs.contains_key(&game) {
-                return Err(RunHeld);
+    /// The write of the config columns `change` names, refused while an Autoplay run
+    /// holds the Game. The check and the unit run in one registry hold, so a run
+    /// cannot start between them. The caller read and validated `change` before.
+    pub fn save_config(&self, game: GameId, change: &ConfigChange) -> Result<(), ApplicationError> {
+        self.hold(|holders, units| {
+            if matches!(holders.get(&game), Some(Holder::Autoplay { .. })) {
+                return Err(ApplicationError::Refused(Refusal::StillThinking));
             }
-            Ok(write())
+            units.open(game, |tx| tx.set_game_config(change))?;
+            Ok(())
         })
     }
 
     pub fn busy(&self, game: GameId) -> Option<Busy> {
-        self.hold(|holds, _units| {
-            let step = holds.jobs.get(&game).map(|entry| entry.step.clone());
-            match holds.runs.get(&game) {
-                Some(run) => Some(Busy::Run {
-                    progress: run.progress(),
-                    step,
-                }),
-                None => step.map(Busy::Job),
-            }
+        self.hold(|holders, _units| {
+            holders.get(&game).map(|holder| match holder {
+                Holder::Job(entry) => Busy::Job(entry.step.clone()),
+                Holder::Autoplay { progress, job, .. } => Busy::Autoplay {
+                    progress: *progress,
+                    step: job.as_ref().map(|entry| entry.step.clone()),
+                },
+            })
         })
     }
 
     pub fn stop(&self, game: GameId) -> Result<(), EngineError> {
-        self.hold(|holds, units| {
+        self.hold(|holders, units| {
             // The read goes first: a failed read leaves the Job running, and the stop
             // answers that it failed.
             let record = DockRecord {
                 offered: self.dock_of(game)?.offered,
                 notice: None,
             };
-            holds.forget(game);
+            holders.remove(&game);
             units.open(game, |tx| Self::clear_failure_and_put_dock(tx, &record))
         })
     }
 
     pub fn switch_swipe(&self, game: GameId, message: u64, index: usize) -> Result<(), Refusal> {
-        self.hold(|holds, units| {
-            Self::require_idle(holds, game)?;
+        self.hold(|holders, units| {
+            Self::require_idle(holders, game)?;
             let tail = self.tail_or_refuse(game, units)?;
             let last =
                 tail.ok_or_else(|| Refusal::BadRequest("No message to switch".to_string()))?;
@@ -474,8 +511,8 @@ impl GameWriter {
     }
 
     pub fn edit(&self, game: GameId, message: u64, text: &str) -> Result<(), Refusal> {
-        self.hold(|holds, units| {
-            Self::require_idle(holds, game)?;
+        self.hold(|holders, units| {
+            Self::require_idle(holders, game)?;
             let at = match self.storage.stories().active_swipe(game, message) {
                 Ok(Some(at)) => at,
                 Ok(None) => return Err(Refusal::BadRequest("Message not found".to_string())),
@@ -488,8 +525,8 @@ impl GameWriter {
     }
 
     pub fn delete_last(&self, game: GameId) -> Result<(), Refusal> {
-        self.hold(|holds, units| {
-            Self::require_idle(holds, game)?;
+        self.hold(|holders, units| {
+            Self::require_idle(holders, game)?;
             let tail = self.tail_or_refuse(game, units)?;
             let last =
                 tail.ok_or_else(|| Refusal::BadRequest("No message to delete".to_string()))?;
@@ -509,29 +546,28 @@ impl GameWriter {
 
     pub fn create(&self, new: &NewGame) -> Result<GameId, EngineError> {
         let opening = self.opening_message(new)?;
-        self.hold(|_holds, units| self.create_unit(new, &opening, units))
+        self.hold(|_holders, units| self.create_unit(new, &opening, units))
     }
 
-    /// Both units run in one hold, and the old Game's Job entry and run hold end
-    /// under the same guard, so its next save unit or step is refused by the id
+    /// Both units run in one hold, and the old Game's holder ends under the same
+    /// guard, so its next save unit or step is refused by the id
     /// check; a running model call ends on its own. The create unit runs first: a
     /// failure there leaves the old Game, its entry and the pointer as they were.
     pub fn replace(&self, old: GameId, new: &NewGame) -> Result<GameId, EngineError> {
         let opening = self.opening_message(new)?;
-        self.hold(|holds, units| {
+        self.hold(|holders, units| {
             let new_id = self.create_unit(new, &opening, units)?;
-            holds.forget(old);
+            holders.remove(&old);
             units.open(old, |tx| tx.delete_game())?;
             Ok(new_id)
         })
     }
 
-    /// One hold: the Game's job entry and run hold end under the same guard as its
-    /// rows, so the Job's next save unit or step is refused by the id check before
-    /// its records go.
+    /// One hold: the Game's holder ends under the same guard as its rows, so the
+    /// Job's next save unit or step is refused by the id check before its records go.
     pub fn delete(&self, game: GameId) -> Result<(), EngineError> {
-        self.hold(|holds, units| {
-            holds.forget(game);
+        self.hold(|holders, units| {
+            holders.remove(&game);
             units.open(game, |tx| tx.delete_game())
         })
     }
@@ -675,7 +711,7 @@ impl GameWriter {
     }
 }
 
-/// The only write handle of a running Job: only `accept` makes one, and every
+/// The only write handle of a running Job: only an accept makes one, and every
 /// method checks the job id under the guard, so a late save of an ended Job lands
 /// nowhere.
 pub struct JobWriter {
@@ -693,18 +729,19 @@ impl JobWriter {
         self.id
     }
 
-    /// One hold for this Job: the Game's entry must still hold this Job's id, and
-    /// the units of `f` open under the same lock.
+    /// One hold for this Job: the Job entry of the Game's holder must still hold
+    /// this Job's id, and the units of `f` open under the same lock.
     fn hold<T>(
         &self,
         f: impl FnOnce(&mut JobEntry, &Units) -> Result<T, JobFailure>,
     ) -> Result<T, JobFailure> {
         let (game, id) = (self.game, self.id);
-        self.writer
-            .hold(|holds, units| match holds.jobs.get_mut(&game) {
+        self.writer.hold(
+            |holders, units| match holders.get_mut(&game).and_then(Holder::job_mut) {
                 Some(entry) if entry.id == id => f(entry, units),
                 _ => Err(JobFailure::EntryMoved),
-            })
+            },
+        )
     }
 
     fn unit<T>(
@@ -846,12 +883,23 @@ impl JobWriter {
 
 impl Drop for JobWriter {
     /// The entry goes only while it still holds this Job's id: a stop or a reset
-    /// already freed it.
+    /// already freed it. A plain Job's holder goes with its entry; an Autoplay
+    /// run's holder stays, without a Job.
     fn drop(&mut self) {
         let (game, id) = (self.game, self.id);
-        self.writer.hold(|holds, _units| {
-            if holds.jobs.get(&game).is_some_and(|entry| entry.id == id) {
-                holds.jobs.remove(&game);
+        self.writer.hold(|holders, _units| {
+            let ours = holders
+                .get(&game)
+                .and_then(Holder::job)
+                .is_some_and(|entry| entry.id == id);
+            if !ours {
+                return;
+            }
+            match holders.get_mut(&game) {
+                Some(Holder::Autoplay { job, .. }) => *job = None,
+                _ => {
+                    holders.remove(&game);
+                }
             }
         });
     }

@@ -123,6 +123,7 @@ pub(super) fn resolve_boot_game(
 fn boot_error(error: ApplicationError) -> EngineError {
     match error {
         ApplicationError::Validation(message) => EngineError::Validation(message),
+        refused @ ApplicationError::Refused(_) => EngineError::Validation(refused.to_string()),
         ApplicationError::Engine(error) => error,
     }
 }

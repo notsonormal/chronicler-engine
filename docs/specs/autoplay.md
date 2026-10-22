@@ -9,7 +9,7 @@ An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one aft
 
 The next Job of a run is a Continue when the last Message is an Input, and an Impersonate in every other case. This rule also picks the first Job.
 
-A run stops for one of three reasons: a stop, the budget, or a Job that ends with a failure line. A failed Options run and a fallback of the Quantifier do not stop it.
+A run ends for one of these reasons: a stop, a reset or a delete of the Game, the budget, a Job that ends with a failure line, or an accept that cannot read a record of the Game. A failed Options run and a fallback of the Quantifier do not stop it.
 
 The status poll of a Game that a run holds answers `autoplay <cycle>/<budget> <step>` while a Job runs, and `autoplay <cycle>/<budget>` between two Jobs. The cycle is the number of the cycle that is in progress. The step names are the ones of Scenario 39.1.
 
@@ -90,12 +90,13 @@ And the client can start a Job on the Game
 #### Scenario 41.7: A stop between two Jobs of a run ends the run
 
 ```gherkin
-Given a Game that a run holds, with no Job running
+Given a run between its first Job and its second Job
 When the client POST /status/reset-generating
 Then the stop answers "reset"
 And the status poll answers "idle"
-And the story log is as it was
-And no model call is made
+When the run comes to its next Job
+Then the story log holds the Impersonate Input of the first Job and nothing after it
+And no further Job of the run starts
 And the client can start a Job on the Game
 ```
 
@@ -133,6 +134,11 @@ And the Game is idle
 
 When the client POST /autoplay with cycles=100
 Then the status poll answers "autoplay 1/100 narrating" while the first Job is at its narrator call
+
+Given a Game whose Job is held at its narrator call
+When the client POST /autoplay with cycles=0
+Then the response status is 400
+And that Job goes on
 ```
 
 #### Scenario 41.10: A start with no `cycles` field runs with a budget of 10
@@ -147,7 +153,7 @@ Then the status poll answers "autoplay 1/10 narrating" while the first Job is at
 
 ```gherkin
 Given a Game whose last Message is a Narration with two Swipes
-And a run that holds the Game with no Job running
+And a run between its first Job and its second Job
 When the client POST /action with command="look"
 And the client POST /swipe/new
 And the client switches to the other Swipe of the last Message
@@ -155,21 +161,22 @@ And the client POST /history/:id with a new text
 And the client POST /history/delete
 Then each response status is 200
 And each response body carries "Still thinking..."
-And the story log is as it was
+And the story log is as it was when the pause began
 ```
 
 #### Scenario 41.12: While a run holds the Game, the config writes are refused and the config stays
 
 ```gherkin
 Given a Game with a Narrator Mode, a posture and four preset selections
-And a run that holds the Game with no Job running
+And a run between its first Job and its second Job
 When the client POST /games/:id/mode with the other mode
 And the client POST /games/:id/posture with another perspective and tense
 And the client POST /games/:id/presets with another system preset
 Then each response status is 200
 And each response body carries "Still thinking..."
 And the Game's config is as it was
-When the run ends
+When the client POST /status/reset-generating
+And the run comes to its next Job
 And the client POST /games/:id/posture with another perspective and tense
 Then the Game's posture is the new one
 ```
@@ -185,10 +192,11 @@ Then the status poll answers "autoplay 1/2 narrating"
 When the Impersonate Job of the second cycle is at its narrator call
 Then the status poll answers "autoplay 2/2 narrating"
 
-Given a Game that a run holds, with no Job running
-When the client requests GET /status/generating and GET /debug/is_generating
+Given a run between its first Job and its second Job
+When the client requests GET /status/generating, GET /debug/is_generating and GET /debug/state
 Then the status poll answers "autoplay 1/2"
 And the debug response body is "true"
+And the debug state reports the Game as generating, with no step
 ```
 
 #### Scenario 41.14: A run goes on when the client switches the active Game
@@ -242,6 +250,8 @@ And the Game is idle
 
 #### Scenario 41.18: While a run holds the Game, the story log and the options dock render their story-changing controls disabled
 
+While a plain Job runs, the story log and the config controls render enabled (the server still refuses a story write as busy), and the options dock renders disabled. While an Autoplay run holds the Game, the story log, the dock and the config controls render disabled. The reason (owner, Q4): a plain Job is short and the player stays in control of it; an Autoplay run is long and writes the story by itself, so the Game is view-only. This rule covers Scenarios 41.18 to 41.22.
+
 ```gherkin
 Given a Game whose last Message is a Narration with two Swipes, the second one active
 And an offered set of options in the dock
@@ -249,7 +259,7 @@ When the client GET /fragment/story-log and GET /fragment/options-dock
 Then no Edit, Delete, Previous swipe or Retry control carries the `disabled` attribute
 And no option button carries the `disabled` attribute
 
-Given a run that holds the Game with no Job running
+Given a run that holds the Game before its first Job
 When the client GET /fragment/story-log and GET /fragment/options-dock
 Then every Edit, Delete, Previous swipe and Retry control carries the `disabled` attribute
 And every option button carries the `disabled` attribute
@@ -264,12 +274,12 @@ Then none of those controls carries the `disabled` attribute
 
 ```gherkin
 Given two Games, with the second one active
-And a run that holds the first Game with no Job running
+And a run that holds the Game before its first Job on the first Game
 When the client GET /fragment/games
 Then the item of the first Game carries a `.run-badge`
 And the item of the active Game carries no `.run-badge`
 
-Given a run that holds the active Game with no Job running
+Given a run that holds the Game before its first Job on the active Game
 When the client GET /fragment/games
 Then the item of the active Game carries a `.run-badge`
 ```
@@ -277,7 +287,7 @@ Then the item of the active Game carries a `.run-badge`
 #### Scenario 41.20: While a run holds the Game, its config controls render disabled
 
 ```gherkin
-Given a run that holds the active Game with no Job running
+Given a run that holds the Game before its first Job on the active Game
 When the client GET /fragment/games
 Then the Narrator Mode, Perspective, Tense and four preset selects of the active Game carry the `disabled` attribute
 
@@ -302,16 +312,48 @@ And the Game is idle
 
 ```gherkin
 Given a Game whose last Message is an Impersonate Input whose event Narration failed
-And a run that holds the Game with no Job running
+And a run that holds the Game before its first Job
 When the client GET /fragment/story-log
 Then the Retrigger control carries the `disabled` attribute
 
+When the client POST /status/reset-generating
+And the client GET /fragment/story-log
+Then the Retrigger control does not carry the `disabled` attribute
+
 Given a Game whose last Message is a Narration with two Swipes, the first one active
-And a run that holds the Game with no Job running
+And a run that holds the Game before its first Job
 When the client GET /fragment/story-log
 Then the Next swipe control carries the `disabled` attribute
 
 When the client POST /status/reset-generating
 And the client GET /fragment/story-log
 Then the Next swipe control does not carry the `disabled` attribute
+```
+
+#### Scenario 41.23: A run whose accept cannot read a record ends with the failure line of that record
+
+```gherkin
+Given a Game whose story the engine cannot read
+When the client POST /autoplay with cycles=2
+And the run ends
+Then the status poll answers with the failure line of the unreadable story
+And the Game is not busy
+And no model call is made
+
+Given a Game whose start state the engine cannot read
+When the client POST /autoplay with cycles=2
+And the run ends
+Then the status poll answers with the failure line that names the start state
+And the Game is not busy
+And no model call is made
+```
+
+#### Scenario 41.24: A run whose Quantifier fails plays its whole budget
+
+```gherkin
+Given a Game whose Quantifier call fails at each attempt
+When the client POST /autoplay with cycles=2
+And the run ends
+Then the story log holds, after the opening Narration, an Impersonate Input, a Narration, an Impersonate Input and a Narration, in this order
+And the Game is idle
 ```

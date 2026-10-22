@@ -11,9 +11,9 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
 use crate::application::generation::gate::{
-    AcceptedJob, GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, RunId, RunRefusal,
-    SavedText,
+    AcceptedJob, GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, SavedText,
 };
+use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
 use crate::application::prompting::token_budget::TokenBudget;
@@ -39,6 +39,7 @@ pub struct JobDeps {
     pub agent_runner: Arc<AgentRunner>,
     pub storage: Arc<Storage>,
     pub tasks: Arc<JobTasks>,
+    pub pause: Arc<AutoplayPause>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,29 +91,21 @@ impl Job {
         Ok(())
     }
 
-    /// One Job of a run, accepted under the run hold and run to its end on the
-    /// calling thread, so the run's driver starts no second Job before this one
-    /// ends.
+    /// Runs on the calling thread, so the run's loop starts no second Job before
+    /// this one ends.
     #[instrument(
-        skip(writer, deps),
+        skip(accepted, deps),
         fields(
-            game = %game,
-            run = ?run,
+            game = %accepted.writer.game(),
             job = tracing::field::Empty,
             kind = tracing::field::Empty,
             step = tracing::field::Empty
         )
     )]
-    pub fn run_for_run(
-        writer: &GameWriter,
-        deps: &JobDeps,
-        game: GameId,
-        run: RunId,
-    ) -> Result<JobEnd, RunRefusal> {
-        let accepted = writer.accept_for_run(game, run)?;
+    pub fn run_accepted(accepted: AcceptedJob, deps: &JobDeps) -> JobEnd {
         Self::record_on_span(&accepted.writer, &accepted.plan);
         let job = Self::new(accepted.writer, deps);
-        Ok(job.run(accepted.plan))
+        job.run(accepted.plan)
     }
 
     fn new(writer: JobWriter, deps: &JobDeps) -> Self {

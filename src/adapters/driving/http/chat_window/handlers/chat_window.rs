@@ -19,8 +19,11 @@ pub async fn index_handler() -> Html<String> {
     Html(include_str!("../../../../../../assets/index.html").to_string())
 }
 
-pub async fn reset_handler(State(state): State<AppState>) -> Response<Body> {
-    match state.game_catalogue.reset() {
+pub async fn reset_handler(
+    State(state): State<AppState>,
+    CurrentGame(game_id): CurrentGame,
+) -> Response<Body> {
+    match state.game_catalogue.reset(game_id) {
         Ok(()) => ok_refresh(),
         Err(e) => action_error_response(e, "Failed to reset"),
     }

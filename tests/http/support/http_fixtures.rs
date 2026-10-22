@@ -16,12 +16,41 @@ use chronicler_engine::test_support::{
     active_game_of, empty_sqlite_storage, tx_token, TestMap, TestPersona, TestWorld,
 };
 
-/// The whole story of the active Game, read through the view seam.
-pub fn story_of(state: &AppState) -> Vec<Message> {
+use crate::support::http_requests::post_form;
+
+pub fn story_of_game(state: &AppState, game: GameId) -> Vec<Message> {
     state
         .game_view_query
-        .story_messages(active_game_of(state))
+        .story_messages(game)
         .expect("the story log reads back")
+}
+
+pub fn story_of(state: &AppState) -> Vec<Message> {
+    story_of_game(state, active_game_of(state))
+}
+
+/// The create makes the new Game the active Game.
+pub async fn create_game_from(
+    app: &axum::Router,
+    state: &AppState,
+    storage: &Storage,
+    first: GameId,
+    world_key: &str,
+) -> GameId {
+    let persona_key = storage
+        .require_game(first.0)
+        .expect("the first Game reads back")
+        .persona_key;
+    let created = post_form(
+        app,
+        "/games",
+        &format!("world_key={world_key}&persona_key={persona_key}"),
+    )
+    .await;
+    assert!(created.status().is_success(), "the Game should be created");
+    let created_game = active_game_of(state);
+    assert_ne!(created_game, first, "the create makes the new Game active");
+    created_game
 }
 
 /// The room name the story log shows on a Message, read through the story window.

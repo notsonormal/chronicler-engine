@@ -656,20 +656,20 @@ fn tail_ending_in(message_type: MessageType, kind: MessageKind) -> Tail {
 }
 
 #[test]
-fn next_in_run_continues_an_unanswered_input() {
+fn next_in_autoplay_continues_an_unanswered_input() {
     let rows = [
         ("a typed Input", MessageKind::TypedInput),
         ("an Impersonate Input", MessageKind::ImpersonateInput),
     ];
     for (label, kind) in rows {
         let tail = tail_ending_in(MessageType::Input, kind);
-        let next = JobRequest::next_in_run(Some(&tail));
+        let next = JobRequest::next_in_autoplay(Some(&tail));
         assert_eq!(next, JobRequest::Action(String::new()), "{label}");
     }
 }
 
 #[test]
-fn next_in_run_impersonates_after_any_other_end_of_the_story() {
+fn next_in_autoplay_impersonates_after_any_other_end_of_the_story() {
     let rows = [
         (
             "a Narration",
@@ -688,7 +688,50 @@ fn next_in_run_impersonates_after_any_other_end_of_the_story() {
         ("an empty story", None),
     ];
     for (label, tail) in rows {
-        let next = JobRequest::next_in_run(tail.as_ref());
+        let next = JobRequest::next_in_autoplay(tail.as_ref());
         assert_eq!(next, JobRequest::Impersonate(None), "{label}");
+    }
+}
+
+#[test]
+fn a_cycle_ends_where_no_input_waits_for_its_narration() {
+    let rows = [
+        (
+            "a typed Input",
+            Some(tail_ending_in(MessageType::Input, MessageKind::TypedInput)),
+            false,
+        ),
+        (
+            "an Impersonate Input",
+            Some(tail_ending_in(
+                MessageType::Input,
+                MessageKind::ImpersonateInput,
+            )),
+            false,
+        ),
+        (
+            "a Narration",
+            Some(tail_ending_in(
+                MessageType::Narration,
+                MessageKind::Narration,
+            )),
+            true,
+        ),
+        (
+            "an event Narration",
+            Some(tail_ending_in(
+                MessageType::Narration,
+                MessageKind::EventNarration(event_record()),
+            )),
+            true,
+        ),
+        ("an empty story", None, false),
+    ];
+    for (label, tail, ends) in rows {
+        let story = StoryEnd {
+            tail,
+            has_text: false,
+        };
+        assert_eq!(story.ends_a_cycle(), ends, "{label}");
     }
 }

@@ -14,6 +14,7 @@ use crate::application::games::active::ActiveGame;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GameWriter;
+use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::application::llm_recorder::{LlmCallRecorder, ProviderResolver};
@@ -124,6 +125,7 @@ fn build_wired_app(
         agent_runner: Arc::new(agent_runner),
         storage: Arc::clone(&storage),
         tasks: Arc::new(JobTasks::default()),
+        pause: Arc::new(AutoplayPause::default()),
     };
     Ok(WiredApp {
         settings_service,

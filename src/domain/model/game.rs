@@ -98,6 +98,59 @@ impl PresetSelection {
     }
 }
 
+/// One config write of a Game: it names the columns it changes, and a save writes
+/// only those, so two writes of different kinds cannot lose each other's update.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfigChange {
+    /// Perspective and tense; the mode and the presets stay.
+    Posture {
+        perspective: NarrativePerspective,
+        tense: NarrativeTense,
+    },
+    /// A mode switch: the mode, the three mode-tagged presets of its bundle, and the
+    /// perspective, which the switch may nudge. The options preset and the tense stay.
+    Mode {
+        mode: NarratorMode,
+        system_id: String,
+        quantifier_id: String,
+        impersonate_id: String,
+        perspective: NarrativePerspective,
+    },
+    /// The four preset slots; the mode and the posture stay.
+    Presets(PresetSelection),
+}
+
+impl ConfigChange {
+    /// Sets on `game` the fields this change writes, so the Game a caller renders
+    /// is the Game the save leaves.
+    pub fn apply_to(&self, game: &mut Game) {
+        match self {
+            Self::Posture { perspective, tense } => {
+                game.narrative_perspective = *perspective;
+                game.narrative_tense = *tense;
+            }
+            Self::Mode {
+                mode,
+                system_id,
+                quantifier_id,
+                impersonate_id,
+                perspective,
+            } => {
+                game.narrator_mode = *mode;
+                game.active_system_prompt_preset_id = system_id.clone();
+                game.active_quantifier_prompt_preset_id = quantifier_id.clone();
+                game.active_impersonate_prompt_preset_id = impersonate_id.clone();
+                game.narrative_perspective = *perspective;
+            }
+            Self::Presets(selection) => {
+                for (preset_type, id) in selection.slots() {
+                    game.set_active_preset_id(preset_type, id.to_string());
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct NewGame {
     pub world_name: String,

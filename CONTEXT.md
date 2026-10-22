@@ -6,7 +6,7 @@ An interactive fiction engine that runs a player's narrative through an LLM-driv
 
 **Game**:
 A concrete playthrough session bound to one World and one Persona, holding its story (Messages with their Swipes), its dock record and its failure line. It carries a stable generated name and a renameable display name.
-_Avoid_: Session, run, match, playthrough (use Game)
+_Avoid_: Session, match, playthrough (use Game); "run" alone outside an Autoplay context (use Autoplay run)
 
 **Display name**:
 The player-facing name of a Game, distinct from its stable generated name. Free text, and changeable by the player.
@@ -36,9 +36,29 @@ _Avoid_: Command, input, verb
 The background work that one accepted Action, Retry, Retrigger or Options request starts. It can hold a Narration and its event Narration; while it runs, its Game is busy.
 _Avoid_: Work, turn
 
+**Busy state**:
+The state of a Game that has a Holder, kept in memory. A Game has at most one Holder, and a Game with none is idle.
+_Avoid_: Busy flag, lock, generating state
+
+**Holder**:
+What makes a Game busy: a plain Job (a Job outside an Autoplay run), or an Autoplay run.
+_Avoid_: Owner, lock holder
+
 **Job entry**:
-The record in memory that says a Game is busy. It holds the id of the Job and the step that runs.
-_Avoid_: Busy flag, lock, slot
+The record in memory of a Job that runs: the id of the Job and the Step that runs. A plain Job is the Holder through its Job entry, and an Autoplay run holds the Job entry of the Job it runs.
+_Avoid_: Slot
+
+**Autoplay run**:
+A series of Jobs that the engine starts one after the other, so that the Persona plays by itself. It holds its Game from its start to its end, also between two Jobs.
+_Avoid_: Run (alone), auto mode, bot, simulation
+
+**Cycle**:
+The unit of progress of an Autoplay run: one Input and the Narration that answers it. An event Narration that answers the Input counts as that Narration.
+_Avoid_: Round, iteration, turn
+
+**Budget**:
+The number of Cycles an Autoplay run plays. The player sets it at the start, within a minimum and a maximum, and it has a default.
+_Avoid_: Limit, quota, count
 
 **Step**:
 One named part of a Job's work that the status shows while the Job runs: narrating, quantifying, generating an event, or the Options run.

@@ -30,7 +30,7 @@ pub struct RoleHealth {
 
 /// The status rule: busy first, then the Game's failure line, then idle.
 pub enum Status {
-    /// A Job runs or a run holds the Game.
+    /// A Job runs or an Autoplay run holds the Game.
     Busy(Busy),
     /// The Game holds a failure line.
     Failed(GenerationFailure),
@@ -187,8 +187,8 @@ impl GameViewQuery {
 
     /// Every Message of the story with all its Swipes, oldest first.
     ///
-    /// Only tests call it: they check the stored inputs of a Swipe that is not
-    /// active, which no production read returns.
+    /// Includes the stored inputs of Swipes that are not active, which no production
+    /// read returns.
     pub fn story_messages(&self, game_id: GameId) -> Result<Vec<Message>, ApplicationError> {
         self.storage.stories().messages(game_id).map_err(Into::into)
     }
@@ -221,9 +221,9 @@ impl GameViewQuery {
         self.writer.busy(game_id).is_some()
     }
 
-    /// A run holds the Game, also between two Jobs of the run. A plain Job does not.
-    pub fn run_holds(&self, game_id: GameId) -> bool {
-        matches!(self.writer.busy(game_id), Some(Busy::Run { .. }))
+    /// True between two Jobs of the run too; a plain Job never holds.
+    pub fn autoplay_holds(&self, game_id: GameId) -> bool {
+        matches!(self.writer.busy(game_id), Some(Busy::Autoplay { .. }))
     }
 
     pub fn game_display_name(&self, game_id: GameId) -> Result<String, ApplicationError> {

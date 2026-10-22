@@ -63,12 +63,26 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
     }
 }
 
-// [docs/specs/browser_autoplay.md] SCENARIO: 42.6
+async fn wait_for_busy_line_in_the_story_log_slot(page: &playwright_rs::Page) -> (String, String) {
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(50),
+            || async { read_error_disclosure(page, "#story-log-error").await.0 }
+        )
+        .await,
+        "the refused write reports in the story log's error slot"
+    );
+    let (_, line, detail) = read_error_disclosure(page, "#story-log-error").await;
+    (line, detail)
+}
+
+// [docs/specs/browser_autoplay.md] SCENARIO: 42.5
 async fn check_a_save_refused_for_a_held_game_keeps_the_editor_open(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
-    stub.save_handle().set_save_refused_as_busy(true);
+    stub.save_handle().set_story_writes_refused_as_busy(true);
     page.locator(".log-entry.narration .edit-btn")
         .await
         .click(None)
@@ -123,6 +137,93 @@ async fn check_a_save_refused_for_a_held_game_keeps_the_editor_open(
     );
 }
 
+// [docs/specs/browser_autoplay.md] SCENARIO: 42.5
+async fn check_a_swipe_switch_refused_for_a_held_game_shows_the_busy_message(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    stub.swipe_handle().set_two_swipes();
+    poll_now(&page, "#story-log").await;
+    let counter = "#story-log .swipe-counter";
+    wait_until_visible(&page, counter, Duration::from_millis(2000)).await;
+    assert_eq!(
+        page.locator(counter)
+            .await
+            .text_content()
+            .await
+            .unwrap()
+            .unwrap_or_default()
+            .trim(),
+        "2 / 2",
+        "the two-swipe log starts on its second Swipe"
+    );
+    stub.save_handle().set_story_writes_refused_as_busy(true);
+
+    page.locator("#story-log .swipe-btn[aria-label=\"Previous swipe\"]")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    let (line, detail) = wait_for_busy_line_in_the_story_log_slot(&page).await;
+    assert!(
+        line.contains("busy"),
+        "the line names the busy Game, got {line:?}"
+    );
+    assert!(
+        detail.contains("Still thinking..."),
+        "the details carry the engine's answer, got {detail:?}"
+    );
+    assert_eq!(
+        page.locator(counter)
+            .await
+            .text_content()
+            .await
+            .unwrap()
+            .unwrap_or_default()
+            .trim(),
+        "2 / 2",
+        "the refused switch leaves the story log on its Swipe"
+    );
+}
+
+// [docs/specs/browser_autoplay.md] SCENARIO: 42.5
+async fn check_a_delete_refused_for_a_held_game_shows_the_busy_message(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    page.on_dialog(|dialog| async move { dialog.accept(None).await })
+        .await
+        .unwrap();
+    stub.save_handle().set_story_writes_refused_as_busy(true);
+    let entries_before = count_log_entries(&page).await;
+    assert!(
+        entries_before > 1,
+        "the fixture must show an entry that carries a delete control"
+    );
+
+    page.locator("#story-log .log-entry:last-child .delete-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    let (line, detail) = wait_for_busy_line_in_the_story_log_slot(&page).await;
+    assert!(
+        line.contains("busy"),
+        "the line names the busy Game, got {line:?}"
+    );
+    assert!(
+        detail.contains("Still thinking..."),
+        "the details carry the engine's answer, got {detail:?}"
+    );
+    assert_eq!(
+        count_log_entries(&page).await,
+        entries_before,
+        "the refused delete leaves the log as it was"
+    );
+}
+
 #[tokio::test]
 async fn run_autoplay_checks() {
     let mut runner = StubRunner::launch().await;
@@ -136,6 +237,18 @@ async fn run_autoplay_checks() {
         .run(
             StubActionOutcome::Pending,
             check_a_save_refused_for_a_held_game_keeps_the_editor_open,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_swipe_switch_refused_for_a_held_game_shows_the_busy_message,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_delete_refused_for_a_held_game_shows_the_busy_message,
         )
         .await;
     runner.finish().await;

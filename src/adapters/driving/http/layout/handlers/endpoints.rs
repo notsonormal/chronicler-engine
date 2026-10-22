@@ -91,8 +91,8 @@ pub async fn generating_status_handler(
 fn busy_answer(busy: &Busy) -> String {
     match busy {
         Busy::Job(step) => step.as_endpoint_str().to_string(),
-        Busy::Run { progress, step } => {
-            let mut answer = format!("autoplay {}/{}", progress.cycle, progress.budget);
+        Busy::Autoplay { progress, step } => {
+            let mut answer = format!("autoplay {}/{}", progress.cycle(), progress.budget);
             if let Some(step) = step {
                 answer.push(' ');
                 answer.push_str(step.as_endpoint_str());

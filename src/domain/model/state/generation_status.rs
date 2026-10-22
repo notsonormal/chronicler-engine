@@ -245,11 +245,3 @@ impl Step {
         }
     }
 }
-
-/// Where an Autoplay run stands: `cycle` is the number of the cycle in progress,
-/// counted from 1, and `budget` is the number of cycles the run was given.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RunProgress {
-    pub cycle: u32,
-    pub budget: u32,
-}

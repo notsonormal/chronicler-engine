@@ -102,9 +102,8 @@ impl AppState {
             .story_window(game_id)
             .map_err(|e| EngineError::Config(Self::render_error_context("story log", e)))?;
 
-        let mut template = NarrativeLogTemplate::new(&window.entries, window.retrigger_allowed);
-        template.view_only = self.game_view_query.run_holds(game_id);
-        template
+        let view_only = self.game_view_query.autoplay_holds(game_id);
+        NarrativeLogTemplate::new(&window.entries, window.retrigger_allowed, view_only)
             .render()
             .map_err(|e| EngineError::Template(Self::render_error_context("story log", e)))
     }

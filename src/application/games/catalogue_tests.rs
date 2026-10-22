@@ -335,7 +335,9 @@ fn test_reset_replaces_current_game() {
         .expect("the created game should be persisted")
         .name;
 
-    catalogue.reset().expect("reset should succeed");
+    catalogue
+        .reset(GameId(pre_reset_current))
+        .expect("reset should succeed");
 
     let post_reset_current = catalogue
         .active_game_id()
@@ -380,7 +382,10 @@ fn test_reset_propagates_persist_failure() {
         TestOverride::internal("simulated opening message failure"),
     );
 
-    let result = catalogue.reset();
+    let active = catalogue
+        .active_game_id()
+        .expect("test setup: the created Game is active");
+    let result = catalogue.reset(active);
 
     assert!(
         result.is_err(),

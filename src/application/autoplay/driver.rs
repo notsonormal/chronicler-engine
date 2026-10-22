@@ -1,13 +1,15 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! The Autoplay driver: one blocking task that runs the Jobs of one run, one after the other.
+//! The Autoplay loop: one blocking task that runs the Jobs of one run, one after the other.
 
 use std::sync::Arc;
 
-use crate::application::generation::gate::{GameWriter, Refusal, RunId, RunRefusal};
+use crate::application::autoplay::budget::Budget;
+use crate::application::generation::gate::{
+    AutoplayAccept, AutoplayProgress, AutoplayRunId, Decision, GameWriter, Refusal,
+};
 use crate::application::pipeline::job::{Job, JobDeps, JobEnd};
 use crate::domain::model::game::GameId;
-
-pub const DEFAULT_BUDGET: u32 = 10;
+use crate::domain::model::generation::{JobRequest, StoryEnd};
 
 /// Why a run ended. The story holds no run marker, so the log line of the end is
 /// the only record of it.
@@ -17,39 +19,47 @@ enum RunEnd {
     BudgetReached,
     /// A Job ended with a failure line, and no later accept clears it.
     JobFailed,
-    /// The accept of a Job refused its request, or the end of a cycle could not read
-    /// the story. A refusal that has a failure line wrote it.
+    /// The accept of a Job refused its request, or could not read the story. A
+    /// refusal that has a failure line wrote it.
     Refused,
-    /// A stop, a reset or a delete removed the run hold.
+    /// A stop, a reset or a delete removed the holder.
     Stopped,
 }
 
-/// The driver of one run. It runs Jobs and counts their cycles in the run hold;
-/// each Job writes its own records and failure line.
+/// Owns the budget, the cycles and the cycle rule; the gate stores the progress
+/// with the holder, and each Job writes its own records and failure line.
 pub struct AutoplayRun {
     writer: GameWriter,
     deps: JobDeps,
     game: GameId,
-    run: RunId,
+    run: AutoplayRunId,
+    budget: Budget,
 }
 
 impl AutoplayRun {
-    /// The driver's task joins the watch of `JobTasks`, so one wait covers the
-    /// whole run.
+    /// The loop's task joins the watch of `JobTasks`, so one wait covers the whole
+    /// run.
     pub fn start(
         writer: &GameWriter,
         deps: JobDeps,
         game: GameId,
-        budget: u32,
+        budget: Budget,
     ) -> Result<(), Refusal> {
-        let run = writer.start_run(game, budget)?;
-        tracing::info!(game = %game, run = ?run, budget, "autoplay run started");
+        let run = writer.reserve_for_autoplay(
+            game,
+            AutoplayProgress {
+                done: 0,
+                budget: budget.cycles(),
+            },
+        )?;
+        tracing::info!(game = %game, run = ?run, budget = budget.cycles(), "autoplay run started");
         let tasks = Arc::clone(&deps.tasks);
         let driver = Self {
             writer: writer.clone(),
             deps,
             game,
             run,
+            budget,
         };
         tasks.watch(tokio::task::spawn_blocking(move || driver.drive()));
         Ok(())
@@ -61,48 +71,71 @@ impl AutoplayRun {
     }
 
     fn run_jobs(&self) -> RunEnd {
+        let mut done = 0;
+        let mut after_job = false;
         loop {
-            let end = match Job::run_for_run(&self.writer, &self.deps, self.game, self.run) {
-                Ok(end) => end,
-                Err(RunRefusal::Ended) => return RunEnd::Stopped,
-                Err(RunRefusal::Refused(refusal)) => {
+            self.deps.pause.point(self.game);
+            let budget = self.budget;
+            let accepted = self
+                .writer
+                .accept_for_autoplay(self.game, self.run, |story| {
+                    Self::decide(story, done, after_job, budget)
+                });
+            let accepted_job = match accepted {
+                AutoplayAccept::Ended => return RunEnd::Stopped,
+                AutoplayAccept::Refused(refusal) => {
                     tracing::warn!(game = %self.game, run = ?self.run, "the run's Job was refused: {refusal:?}");
                     return RunEnd::Refused;
                 }
+                AutoplayAccept::Finished(progress) => {
+                    self.log_cycles(done, progress);
+                    return RunEnd::BudgetReached;
+                }
+                AutoplayAccept::Accepted(accepted, progress) => {
+                    self.log_cycles(done, progress);
+                    done = progress.done;
+                    accepted
+                }
             };
-            match end {
-                JobEnd::Done => {}
+            match Job::run_accepted(accepted_job, &self.deps) {
+                JobEnd::Done => after_job = true,
                 JobEnd::Failed => return RunEnd::JobFailed,
                 JobEnd::EntryMoved => return RunEnd::Stopped,
             }
-            match self.writer.finish_cycle(self.game, self.run) {
-                Err(RunRefusal::Ended) => return RunEnd::Stopped,
-                Err(RunRefusal::Refused(refusal)) => {
-                    tracing::warn!(game = %self.game, run = ?self.run, "the end of a cycle was refused: {refusal:?}");
-                    return RunEnd::Refused;
-                }
-                Ok(None) => {}
-                Ok(Some(cycle)) => {
-                    tracing::info!(
-                        game = %self.game,
-                        run = ?self.run,
-                        cycle = cycle.cycle,
-                        budget = cycle.budget,
-                        "autoplay cycle ended"
-                    );
-                    if cycle.budget_reached() {
-                        return RunEnd::BudgetReached;
-                    }
-                }
-            }
+        }
+    }
+
+    /// The gate runs it under its lock, so it takes no `self`: it reads only the end
+    /// of the story and the loop's own copies.
+    fn decide(story: &StoryEnd, done: u32, after_job: bool, budget: Budget) -> Decision {
+        let done = done + u32::from(after_job && story.ends_a_cycle());
+        let progress = AutoplayProgress {
+            done,
+            budget: budget.cycles(),
+        };
+        if done >= progress.budget {
+            Decision::Finish(progress)
+        } else {
+            Decision::Next(progress, JobRequest::next_in_autoplay(story.tail.as_ref()))
+        }
+    }
+
+    fn log_cycles(&self, before: u32, progress: AutoplayProgress) {
+        if progress.done > before {
+            tracing::info!(
+                game = %self.game,
+                run = ?self.run,
+                cycle = progress.done,
+                budget = progress.budget,
+                "autoplay cycle ended"
+            );
         }
     }
 }
 
-/// A panic in a Job must not leave the Game held by a run that has no driver.
-/// `end_run` leaves a run hold of another run, or none, as it is.
+/// A panic in a Job must not leave the Game held by a run that has no loop.
 impl Drop for AutoplayRun {
     fn drop(&mut self) {
-        self.writer.end_run(self.game, self.run);
+        self.writer.end_autoplay(self.game, self.run);
     }
 }

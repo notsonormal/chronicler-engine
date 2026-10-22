@@ -9,7 +9,7 @@ A request that generates text starts a **Job**. The engine answers the request a
 
 ## The Job
 
-These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/options`, Retry and Retrigger. `Job::start` accepts the request and spawns the Job. An Autoplay run accepts and runs its Jobs one after the other through `Job::run_for_run`.
+These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/options`, Retry and Retrigger. `Job::start` accepts the request and spawns the Job. An Autoplay run accepts each of its Jobs through `GameWriter::accept_for_autoplay` and runs it through `Job::run_accepted`.
 
 - A Job runs on the Game that its request named. Every write of the Job names that Game, so a Game switch does not change a running Job.
 - A Game has at most one Job. A second request for a busy Game is refused.
@@ -27,31 +27,36 @@ A `GenerationOrder` is the order of one generation. It holds ids and texts only.
 
 A Retrigger is allowed when `Tail::retrigger_allowed` says so: the last Message is a Narration that is not an event Narration, or an Impersonate Input, and the current state holds a trigger context. The story log button reads the same rule from the story window.
 
-## The Job Entry and Busy
+## The Busy State and Its Holder
 
-`GameWriter` owns one registry of **job entries**, one for each Game that runs a Job. A job entry holds the Job's id and the current `Step`.
+`GameWriter` owns the busy-state registry. The registry maps each busy Game to its **holder**. A Game with no holder is idle, and a Game has at most one holder. The holder is one of two things:
 
-An Autoplay run makes a **run hold** in the same registry as the job entries. A run hold names its run and its budget. A run hold lasts from the start of the run to its end, also between two Jobs of the run. A Game is busy when its job entry or its run hold exists.
+- A plain Job. Its **job entry** holds the Job's id and the current `Step`.
+- An Autoplay run. It lasts from the start of the run to its end, also between two Jobs of the run. It names its run and holds the progress of the run. While a Job of the run runs, it also holds the job entry of that Job.
 
-- While a run hold exists, the busy rule refuses every story write as busy. Only an accept that names the run's own id passes.
-- A stop, a reset and a delete remove the run hold with the job entry.
-- While a run hold exists, a write of the Game's config columns (the Narrator Mode, the posture and the preset selections) is refused as busy.
+- While a holder exists, the busy rule refuses every story write as busy. For an Autoplay run, only the accept of the run's own loop passes.
+- A stop, a reset and a delete of the Game remove the holder.
+- While an Autoplay run holds the Game, a write of the Game's config columns (the Narrator Mode, the posture and the preset selections) is refused as busy. A config write passes while a plain Job runs.
 
-No saved record holds the busy mark, the step or the run hold. A restart loses every job entry and every run hold, so every Game is idle after a start.
+No saved record holds the holder, the step or the progress. A restart loses every holder, so every Game is idle after a start.
+
+## The Autoplay Loop
+
+`AutoplayRun` in `application/autoplay/` is a loop on top of Jobs. It starts ordinary Jobs one after the other, and it owns the budget, the cycles and the cycle rule. The loop makes one accept for each Job. In one hold of the registry, the accept reads the end of the story, counts the cycle that the last Job ended, and either finishes the run or accepts the next Job.
 
 ## The Writer Rule
 
-`GameWriter` in `application/generation/gate.rs` is the only code that opens a save unit. It holds every write to a Game's story records, dock record and failure line: accept, stop, edit, delete, swipe switch, create, reset and delete of a Game. A running Job writes through its own `JobWriter`. `GameCatalogue` writes the Game's config columns: its display name, its posture, its mode, its preset selections and its options toggle.
+`GameWriter` in `application/generation/gate.rs` is the only code that opens a save unit. It holds every write to a Game's story records, dock record and failure line: accept, stop, edit, delete, swipe switch, config save, create, reset and delete of a Game. A running Job writes through its own `JobWriter`. `GameCatalogue` owns the config rules: the posture, the mode and the preset selections. It writes the config columns of the Game through `GameWriter`.
 
 - `accept` reads the end of the story and asks `JobPlan::for_request` for the plan. It then checks that the records the plan names exist: the Game, the Persona and the start state.
-- Each save method of a `JobWriter` checks, in one hold of the registry, that the job entry of the Game still holds the Job's id. When the check fails, the save is refused and the Job ends with no further write.
-- A stop, a reset and a delete of the Game remove the job entry. A late save of their Job lands nowhere.
+- Each save method of a `JobWriter` checks, in one hold of the registry, that the job entry of the Game's holder still holds the Job's id. When the check fails, the save is refused and the Job ends with no further write.
+- A stop, a reset and a delete of the Game remove the holder. A late save of their Job lands nowhere.
 - One hold of the registry covers one check and its save units. No hold of the registry spans an LLM call, so the Jobs of different Games run at the same time.
 - An edit, a delete and a swipe switch are refused while the Game is busy. The refusal comes before every other check.
 
 ## Steps
 
-`Step` names the part of the work that the status shows: `Narrating`, `Quantifying`, `GeneratingEvent` and `Options`. Each step sets its name in the job entry before it runs.
+`Step` names the part of the work that the status shows: `Narrating`, `Quantifying`, `GeneratingEvent` and `Options`. Each step sets its name in the job entry of the Job before it runs.
 
 ## The Parts of a Generation
 
@@ -89,15 +94,15 @@ One rule picks the failure line of a part. `accept` and the Job use the same rul
 
 ## Status
 
-The status of a Game has one rule. A Game with a job entry shows its step. A Game with a run hold also shows the progress of the run: the number of the cycle in progress and the budget. A Game that is not busy and holds a failure line shows that line. Any other Game is idle. The accept unit clears the failure line, and a stop, a swipe switch and a delete clear it too.
+The status of a Game has one rule. A Game with a job entry shows its step. A Game that an Autoplay run holds also shows the progress of the run: the number of the cycle in progress and the budget. A Game that is not busy and holds a failure line shows that line. Any other Game is idle. The accept unit clears the failure line, and a stop, a swipe switch and a delete clear it too. A failure line has no process to end it, so it stays until the player acts. The accept clears it in storage, because a restart during the new Job would otherwise show the old failure again.
 
 `GameViewQuery` holds the rule. The reason for its two sources is in the Explanation doc listed below.
 
 ## Stop and Reset
 
-A **stop** removes the job entry, clears the failure line and clears the notice of the dock record. The Game is idle at once. The Job starts no further step, and the id check refuses any later save of the stopped Job. Every save unit that landed before the stop stays. A model call that runs when the stop comes runs to its end, and the id check refuses its answer.
+A **stop** removes the holder, clears the failure line and clears the notice of the dock record. The Game is idle at once. The Job starts no further step, and the id check refuses any later save of the stopped Job. Every save unit that landed before the stop stays. A model call that runs when the stop comes runs to its end, and the id check refuses its answer.
 
-A **reset** creates a new Game and removes the active Game with its job entry. Both writes land in one hold of the registry. A Job that ran on the removed Game writes nothing more.
+A **reset** creates a new Game and removes the active Game with its holder. Both writes land in one hold of the registry. A Job that ran on the removed Game writes nothing more.
 
 ## The State of a Game
 
@@ -168,5 +173,4 @@ Only player command text enters the checker.
 
 ## Document References
 
-- [`../explanation/two-state-channels.md`](../explanation/two-state-channels.md) — why the status has two sources.
 - [`./storage.md`](./storage.md) — the records and save units that the Job writes.

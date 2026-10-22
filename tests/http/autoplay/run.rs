@@ -1,122 +1,36 @@
-//! HTTP E2E tests for Autoplay (autoplay.md 41.*): the run of Jobs, its three ends, the view-only Game, the progress status, and the config writes a run refuses.
+//! HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
 
 use std::sync::Arc;
 
 use axum::http::StatusCode;
 
-use chronicler_engine::adapters::driven::storage::Storage;
-use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
+use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::agent::Role;
-use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, ScriptedModel, TestMap, TestNpc, TestPromptPreset,
+    active_game_of, analysis_report, configured_runner, empty_sqlite_storage, ScriptedModel,
+    TestMap, TestNpc, TestPromptPreset,
 };
 
+use super::{
+    assert_status, end_paused_run, narrator_calls, pause_between_two_jobs, start_autoplay, stop,
+    story_after_opening, wait_for_run, FIRST_INPUT, FIRST_NARRATION, LATE_ANSWER, SECOND_INPUT,
+    SECOND_NARRATION,
+};
 use crate::support::app_wiring::{
-    app_after_an_impersonate_with_a_failed_event, app_with_a_triggered_npc, app_with_script,
+    app_with_a_triggered_npc, app_with_model_and_storage, app_with_script,
 };
 use crate::support::http_assertions::assert_still_thinking;
-use crate::support::http_fixtures::seed_offered_set;
+use crate::support::http_fixtures::{create_game_from, story_of_game};
 use crate::support::http_requests::{
-    assert_no_unscripted_model_call, fetch_body, fetch_generating_status, post_action, post_empty,
-    post_form, response_body, wait_for_jobs, wait_for_jobs_running_at_most, wait_settled,
+    fetch_body, fetch_generating_status, post_action, post_empty, post_form, response_body,
+    wait_for_jobs, wait_for_jobs_running_at_most, wait_settled,
 };
-
-const FIRST_INPUT: &str = "I try the door.";
-const FIRST_NARRATION: &str = "The door creaks open.";
-const SECOND_INPUT: &str = "I step inside.";
-const SECOND_NARRATION: &str = "A cold hall waits.";
-const LATE_ANSWER: &str = "The late answer.";
-
-async fn start_autoplay(app: &axum::Router, body: &str) -> axum::response::Response {
-    post_form(app, "/autoplay", body).await
-}
-
-/// Waits for the task of the whole run, so a read after it sees every write the run
-/// made.
-async fn wait_for_run(state: &AppState, game: GameId) {
-    assert!(wait_for_jobs(state, 5000).await, "the run should end");
-    assert!(
-        !state.game_view_query.is_busy(game),
-        "an ended run leaves its Game idle"
-    );
-    assert_no_unscripted_model_call(state);
-}
-
-fn messages_of(state: &AppState, game: GameId) -> Vec<Message> {
-    state
-        .game_view_query
-        .story_messages(game)
-        .expect("the story log reads back")
-}
-
-fn story_after_opening(state: &AppState, game: GameId) -> Vec<(MessageType, String)> {
-    messages_of(state, game)
-        .into_iter()
-        .skip(1)
-        .map(|message| {
-            let text = message.text().to_string();
-            (message.message_type, text)
-        })
-        .collect()
-}
-
-fn narrator_calls(model: &ScriptedModel) -> Vec<chronicler_engine::test_support::ModelCall> {
-    model
-        .calls()
-        .into_iter()
-        .filter(|call| call.role == Role::Narrator)
-        .collect()
-}
-
-/// Creates a second Game from the World and Persona of `first`. The create makes
-/// it the active Game.
-async fn create_game_from(
-    app: &axum::Router,
-    state: &AppState,
-    storage: &Storage,
-    first: GameId,
-) -> GameId {
-    let persona_key = storage
-        .require_game(first.0)
-        .expect("the first Game reads back")
-        .persona_key;
-    let created = post_form(
-        app,
-        "/games",
-        &format!("world_key=test&persona_key={persona_key}"),
-    )
-    .await;
-    assert!(
-        created.status().is_success(),
-        "the second Game should be created"
-    );
-    let second = active_game_of(state);
-    assert_ne!(second, first, "the create makes the second Game active");
-    second
-}
-
-async fn assert_status(app: &axum::Router, expected: &str, label: &str) {
-    assert_eq!(
-        fetch_generating_status(app).await.trim(),
-        expected,
-        "{label}"
-    );
-}
-
-async fn stop(app: &axum::Router) {
-    let answered = post_empty(app, "/status/reset-generating").await;
-    assert_eq!(
-        response_body(answered).await,
-        "reset",
-        "a stop of a held Game answers reset"
-    );
-}
 
 // [docs/specs/autoplay.md] SCENARIO: 41.1
 #[tokio::test]
@@ -227,7 +141,7 @@ async fn test_a_trigger_in_a_continue_job_adds_its_event_narration_to_the_cycle(
     assert!(started.status().is_success(), "the start should accept");
     wait_for_run(&state, game).await;
 
-    let story = messages_of(&state, game);
+    let story = story_of_game(&state, game);
     let texts: Vec<&str> = story.iter().skip(1).map(Message::text).collect();
     assert_eq!(
         texts,
@@ -386,7 +300,7 @@ async fn test_a_stop_during_a_job_of_a_run_ends_the_run() {
     let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
-    let before = messages_of(&state, game);
+    let before = story_of_game(&state, game);
 
     assert!(start_autoplay(&app, "cycles=2").await.status().is_success());
     assert!(
@@ -402,7 +316,7 @@ async fn test_a_stop_during_a_job_of_a_run_ends_the_run() {
     wait_for_run(&state, game).await;
 
     assert_eq!(
-        messages_of(&state, game),
+        story_of_game(&state, game),
         before,
         "the late answer of the stopped Job changes nothing"
     );
@@ -430,18 +344,11 @@ async fn test_a_stop_during_a_job_of_a_run_ends_the_run() {
 // [docs/specs/autoplay.md] SCENARIO: 41.7
 #[tokio::test]
 async fn test_a_stop_between_two_jobs_of_a_run_ends_the_run() {
-    let model = Arc::new(ScriptedModel::new().turn(FIRST_NARRATION));
+    let model = Arc::new(ScriptedModel::new().turn(FIRST_INPUT).turn(FIRST_NARRATION));
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
-    let before = messages_of(&state, game);
 
-    // No model call lies between two Jobs of a run, so `ScriptedModel::hold` cannot
-    // stop a live driver there. A run hold with no driver is that state: no job
-    // entry, and the run hold stays.
-    state
-        .game_writer
-        .start_run(game, 2)
-        .expect("a run starts on an idle Game");
+    let pause = pause_between_two_jobs(&app, &state, game).await;
     assert_status(
         &app,
         "autoplay 1/2",
@@ -450,11 +357,21 @@ async fn test_a_stop_between_two_jobs_of_a_run_ends_the_run() {
     .await;
 
     stop(&app).await;
-
     assert_status(&app, "idle", "a stopped run leaves the Game idle").await;
     assert!(!state.game_view_query.is_busy(game), "the Game is not busy");
-    assert_eq!(messages_of(&state, game), before, "the story is as it was");
-    assert!(model.calls().is_empty(), "no model call is made");
+
+    pause.release();
+    wait_for_run(&state, game).await;
+    assert_eq!(
+        story_after_opening(&state, game),
+        vec![(MessageType::Input, FIRST_INPUT.to_string())],
+        "the story holds the Input of the first Job and nothing after it"
+    );
+    assert_eq!(
+        narrator_calls(&model).len(),
+        1,
+        "no further Job of the run started"
+    );
 
     assert!(
         post_action(&app, "look").await.status().is_success(),
@@ -549,6 +466,43 @@ async fn test_a_budget_that_is_zero_above_the_maximum_or_not_a_whole_number_answ
 
 // [docs/specs/autoplay.md] SCENARIO: 41.9
 #[tokio::test]
+async fn test_a_bad_budget_answers_400_also_on_a_busy_game() {
+    let model = Arc::new(ScriptedModel::new().turn(FIRST_NARRATION));
+    let hold = model.hold(Role::Narrator);
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
+    let game = active_game_of(&state);
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the Job should reach its narrator call"
+    );
+
+    let refused = start_autoplay(&app, "cycles=0").await;
+    assert_eq!(
+        refused.status(),
+        StatusCode::BAD_REQUEST,
+        "the budget is read before the busy check"
+    );
+
+    hold.release();
+    assert!(wait_settled(&state, 2000).await, "the held Job settles");
+    assert!(
+        wait_for_jobs(&state, 2000).await,
+        "every task of the Game should have ended"
+    );
+    assert_eq!(
+        story_after_opening(&state, game),
+        vec![
+            (MessageType::Input, "look".to_string()),
+            (MessageType::Narration, FIRST_NARRATION.to_string()),
+        ],
+        "the held Job went on"
+    );
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.9
+#[tokio::test]
 async fn test_a_budget_of_the_maximum_starts_a_run() {
     let model = Arc::new(ScriptedModel::new().turn(LATE_ANSWER));
     let hold = model.hold(Role::Narrator);
@@ -603,7 +557,8 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
     let model = Arc::new(
         ScriptedModel::new()
             .turn("You look around.")
-            .turn("You look around again."),
+            .turn("You look around again.")
+            .turn(FIRST_INPUT),
     );
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
@@ -612,20 +567,19 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
     assert!(wait_settled(&state, 2000).await, "the first Job settles");
     assert!(post_empty(&app, "/swipe/new").await.status().is_success());
     assert!(wait_settled(&state, 2000).await, "the Retry settles");
-    let story = messages_of(&state, game);
-    let narration = story
+    let swiped = story_of_game(&state, game);
+    let narration = swiped
         .iter()
         .find(|message| {
             message.message_type == MessageType::Narration && message.swipe_count() == 2
         })
-        .expect("the Retry leaves two Swipes on the Narration");
+        .expect("the Retry leaves two Swipes on the Narration")
+        .clone();
     let other_swipe = 1 - narration.active_swipe_index;
-    let calls_before = model.calls().len();
 
-    state
-        .game_writer
-        .start_run(game, 2)
-        .expect("a run starts on an idle Game");
+    let pause = pause_between_two_jobs(&app, &state, game).await;
+    let story = story_of_game(&state, game);
+    let calls_before = model.calls().len();
 
     let writes = [
         post_action(&app, "look").await,
@@ -648,18 +602,23 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
         assert_still_thinking(&response_body(response).await);
     }
 
-    assert_eq!(messages_of(&state, game), story, "the story is as it was");
+    assert_eq!(
+        story_of_game(&state, game),
+        story,
+        "the story is as it was when the pause began"
+    );
     assert_eq!(
         model.calls().len(),
         calls_before,
         "no refused write made a call"
     );
+    end_paused_run(&app, &state, game, &pause).await;
 }
 
 // [docs/specs/autoplay.md] SCENARIO: 41.12
 #[tokio::test]
 async fn test_while_a_run_holds_the_game_the_config_writes_are_refused_and_the_config_stays() {
-    let model = Arc::new(ScriptedModel::new());
+    let model = Arc::new(ScriptedModel::new().turn(FIRST_INPUT));
     let (app, state, storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
     storage
@@ -691,10 +650,7 @@ async fn test_while_a_run_holds_the_game_the_config_writes_are_refused_and_the_c
         other_tense.as_str()
     );
 
-    state
-        .game_writer
-        .start_run(game, 2)
-        .expect("a run starts on an idle Game");
+    let pause = pause_between_two_jobs(&app, &state, game).await;
 
     let refused = [
         post_form(
@@ -730,7 +686,7 @@ async fn test_while_a_run_holds_the_game_the_config_writes_are_refused_and_the_c
         "the refused writes leave the Game's config as it was"
     );
 
-    stop(&app).await;
+    end_paused_run(&app, &state, game, &pause).await;
     let accepted = post_form(&app, &format!("/games/{}/posture", game.0), &posture_body).await;
     assert!(accepted.status().is_success());
     let after = state
@@ -803,20 +759,29 @@ async fn test_the_status_poll_answers_with_the_progress_while_a_run_holds_the_ga
 // [docs/specs/autoplay.md] SCENARIO: 41.13
 #[tokio::test]
 async fn test_the_status_poll_names_no_step_between_two_jobs_of_a_run() {
-    let (app, state, _storage) = app_with_script(ScriptedModel::new());
+    let model = Arc::new(ScriptedModel::new().turn(FIRST_INPUT));
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
 
-    state
-        .game_writer
-        .start_run(game, 2)
-        .expect("a run starts on an idle Game");
+    let pause = pause_between_two_jobs(&app, &state, game).await;
 
     assert_status(&app, "autoplay 1/2", "a run between two Jobs names no step").await;
     assert_eq!(
         fetch_body(&app, "/debug/is_generating").await.trim(),
         "true",
-        "the debug answer reads the run hold as busy"
+        "the debug answer reads the holder as busy"
     );
+    let debug: serde_json::Value = serde_json::from_str(&fetch_body(&app, "/debug/state").await)
+        .expect("/debug/state answers JSON");
+    assert_eq!(
+        debug["generation_status"], "Generating",
+        "the debug state reads the holder as busy"
+    );
+    assert!(
+        debug["step"].is_null(),
+        "no Job of the run runs, so the debug state names no step"
+    );
+    end_paused_run(&app, &state, game, &pause).await;
 }
 
 // [docs/specs/autoplay.md] SCENARIO: 41.14
@@ -833,7 +798,7 @@ async fn test_a_run_goes_on_when_the_client_switches_the_active_game() {
         "the run's Job should reach its narrator call"
     );
 
-    let game_b = create_game_from(&app, &state, &storage, game_a).await;
+    let game_b = create_game_from(&app, &state, &storage, game_a, "test").await;
 
     hold.release();
     wait_for_run(&state, game_a).await;
@@ -900,7 +865,7 @@ async fn test_a_delete_of_the_game_ends_its_run() {
         "the run's Job should reach its narrator call"
     );
 
-    create_game_from(&app, &state, &storage, game_a).await;
+    create_game_from(&app, &state, &storage, game_a, "test").await;
 
     let deleted = post_empty(&app, &format!("/games/{}/delete", game_a.0)).await;
     assert!(deleted.status().is_success(), "the delete should accept");
@@ -986,260 +951,96 @@ async fn test_the_end_of_a_stopped_run_does_not_release_the_run_that_started_aft
     );
 }
 
-fn button_tags_with_class(html: &str, class: &str) -> Vec<String> {
-    html.split("<button")
-        .skip(1)
-        .filter_map(|rest| rest.split('>').next())
-        .filter(|tag| tag.contains(class))
-        .map(|tag| tag.to_string())
-        .collect()
-}
-
-fn story_changing_controls(story_log: &str) -> Vec<String> {
-    let mut controls = button_tags_with_class(story_log, "edit-btn");
-    controls.extend(button_tags_with_class(story_log, "delete-btn"));
-    controls.extend(
-        button_tags_with_class(story_log, "swipe-btn")
-            .into_iter()
-            .filter(|tag| {
-                tag.contains("aria-label=\"Retry\"")
-                    || tag.contains("aria-label=\"Previous swipe\"")
-            }),
-    );
-    controls
-}
-
-fn assert_controls(controls: &[String], disabled: bool, label: &str) {
-    assert!(
-        controls.len() >= 4,
-        "{label}: expected Edit, Delete, Previous swipe and Retry controls, got {controls:?}"
-    );
-    for control in controls {
-        assert_eq!(
-            control.contains(" disabled"),
-            disabled,
-            "{label}: {control}"
-        );
-    }
-}
-
-fn assert_dock_controls(dock: &str, disabled: bool, label: &str) {
-    let buttons = button_tags_with_class(dock, "option-btn");
-    assert!(
-        !buttons.is_empty(),
-        "{label}: the dock offers options: {dock}"
-    );
-    for button in buttons {
-        assert_eq!(button.contains(" disabled"), disabled, "{label}: {button}");
-    }
-}
-
-// [docs/specs/autoplay.md] SCENARIO: 41.18
+// [docs/specs/autoplay.md] SCENARIO: 41.23
 #[tokio::test]
-async fn test_while_a_run_holds_the_game_the_story_log_renders_its_controls_disabled() {
-    let model = Arc::new(
-        ScriptedModel::new()
-            .turn(FIRST_NARRATION)
-            .narration(SECOND_NARRATION)
-            .after_narration(analysis_report(&[], None)),
+async fn test_a_run_whose_story_cannot_be_read_ends_with_the_failure_line_of_the_story() {
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        StorageCall::StoriesTail,
+        TestOverride::internal("the story read failed"),
+    ));
+    let model = Arc::new(ScriptedModel::new());
+    let (app, state, _storage) = app_with_model_and_storage(
+        storage,
+        Arc::clone(&model),
+        AppSettings::default(),
+        configured_runner,
     );
-    let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
-    assert!(post_action(&app, "look").await.status().is_success());
-    assert!(wait_settled(&state, 2000).await, "the Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
-    assert!(wait_settled(&state, 2000).await, "the Retry settles");
-    seed_offered_set(&state, &["Ask the bartender"]);
 
-    let before = fetch_body(&app, "/fragment/story-log").await;
-    assert_controls(&story_changing_controls(&before), false, "no run");
-    assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
-        false,
-        "no run",
-    );
+    let started = start_autoplay(&app, "cycles=2").await;
+    assert!(started.status().is_success(), "the start should accept");
+    wait_for_run(&state, game).await;
 
-    state
-        .game_writer
-        .start_run(game, 2)
-        .expect("a run starts on an idle Game");
-    let during = fetch_body(&app, "/fragment/story-log").await;
-    assert_controls(
-        &story_changing_controls(&during),
-        true,
-        "a run holds the Game",
-    );
-    assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
-        true,
-        "a run holds the Game",
-    );
+    let status = fetch_generating_status(&app).await;
     assert!(
-        during.contains(SECOND_NARRATION) && during.contains("look"),
-        "the entries and their text are as before"
+        status.contains("status-error-popover") && status.contains("the story read failed"),
+        "the status poll shows the failure line of the unreadable story, got: {status}"
     );
-
-    stop(&app).await;
-    let after = fetch_body(&app, "/fragment/story-log").await;
-    assert_controls(&story_changing_controls(&after), false, "after the stop");
-    assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
-        false,
-        "after the stop",
-    );
+    assert!(model.calls().is_empty(), "no model call is made");
 }
 
-fn swipe_button(story_log: &str, label: &str) -> String {
-    button_tags_with_class(story_log, "swipe-btn")
-        .into_iter()
-        .find(|tag| tag.contains(&format!("aria-label=\"{label}\"")))
-        .unwrap_or_else(|| panic!("the story log offers {label}: {story_log}"))
-}
-
-// [docs/specs/autoplay.md] SCENARIO: 41.22
+// [docs/specs/autoplay.md] SCENARIO: 41.24
 #[tokio::test]
-async fn test_while_a_run_holds_the_game_retrigger_and_next_swipe_render_disabled() {
-    let (app, state) = app_after_an_impersonate_with_a_failed_event().await;
+async fn test_a_run_whose_quantifier_fails_at_each_attempt_plays_its_whole_budget() {
+    // Each analysis makes two attempts, and four Jobs of two cycles analyse.
+    let mut script = ScriptedModel::new()
+        .narration(FIRST_INPUT)
+        .narration(FIRST_NARRATION)
+        .narration(SECOND_INPUT)
+        .narration(SECOND_NARRATION);
+    for _ in 0..8 {
+        script = script.failed(Role::Quantifier);
+    }
+    let (app, state, _storage) = app_with_script(Arc::new(script));
     let game = active_game_of(&state);
-    state
-        .game_writer
-        .start_run(game, 2)
-        .expect("a run starts on an idle Game");
-    let retrigger = button_tags_with_class(
-        &fetch_body(&app, "/fragment/story-log").await,
-        "retrigger-btn",
-    );
+
+    let started = start_autoplay(&app, "cycles=2").await;
+    assert!(started.status().is_success(), "the start should accept");
+    wait_for_run(&state, game).await;
+
     assert_eq!(
-        retrigger.len(),
-        1,
-        "the story log offers Retrigger: {retrigger:?}"
+        story_after_opening(&state, game),
+        vec![
+            (MessageType::Input, FIRST_INPUT.to_string()),
+            (MessageType::Narration, FIRST_NARRATION.to_string()),
+            (MessageType::Input, SECOND_INPUT.to_string()),
+            (MessageType::Narration, SECOND_NARRATION.to_string()),
+        ],
+        "a fallback of the Quantifier does not stop the run: both cycles are in the story"
     );
-    assert!(
-        retrigger[0].contains(" disabled"),
-        "Retrigger: {}",
-        retrigger[0]
-    );
-
-    let model = Arc::new(
-        ScriptedModel::new()
-            .turn(FIRST_NARRATION)
-            .narration(SECOND_NARRATION)
-            .after_narration(analysis_report(&[], None)),
-    );
-    let (app, state, _storage) = app_with_script(Arc::clone(&model));
-    let game = active_game_of(&state);
-    assert!(post_action(&app, "look").await.status().is_success());
-    assert!(wait_settled(&state, 2000).await, "the Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
-    assert!(wait_settled(&state, 2000).await, "the Retry settles");
-    let narration = messages_of(&state, game)
-        .pop()
-        .expect("the story ends on the Narration");
-    assert!(
-        post_empty(&app, &format!("/message/{}/swipe/0", narration.id))
-            .await
-            .status()
-            .is_success()
-    );
-
-    state
-        .game_writer
-        .start_run(game, 2)
-        .expect("a run starts on an idle Game");
-    let during = swipe_button(&fetch_body(&app, "/fragment/story-log").await, "Next swipe");
-    assert!(
-        during.contains(" disabled"),
-        "a run holds the Game: {during}"
-    );
-
-    stop(&app).await;
-    let after = swipe_button(&fetch_body(&app, "/fragment/story-log").await, "Next swipe");
-    assert!(!after.contains(" disabled"), "after the stop: {after}");
+    assert_status(&app, "idle", "the Game is idle after the run").await;
 }
 
-fn item_of_game<'a>(games_panel: &'a str, game_name: &str) -> &'a str {
-    let name = format!("<span class=\"game-name\">{game_name}</span>");
-    let start = games_panel
-        .find(&name)
-        .unwrap_or_else(|| panic!("the Games panel lists {game_name}"));
-    let end = games_panel[start..]
-        .find("<div class=\"game-actions\">")
-        .map(|offset| start + offset)
-        .expect("the item has its actions");
-    &games_panel[start..end]
-}
-
-// [docs/specs/autoplay.md] SCENARIO: 41.19
+// [docs/specs/autoplay.md] SCENARIO: 41.23
 #[tokio::test]
-async fn test_the_games_fragment_marks_a_game_that_a_run_holds() {
+async fn test_a_run_whose_start_state_cannot_be_read_ends_with_the_failure_line_of_that_record() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
     let model = Arc::new(ScriptedModel::new());
-    let (app, state, storage) = app_with_script(Arc::clone(&model));
-    let game_a = active_game_of(&state);
-    let name_a = state
-        .game_view_query
-        .game_display_name(game_a)
-        .expect("Game A reads back");
-    let game_b = create_game_from(&app, &state, &storage, game_a).await;
-    let name_b = state
-        .game_view_query
-        .game_display_name(game_b)
-        .expect("Game B reads back");
-    assert_ne!(name_a, name_b, "the two Games have distinct names");
-
-    state
-        .game_writer
-        .start_run(game_a, 2)
-        .expect("a run starts on idle Game A");
-    let panel = fetch_body(&app, "/fragment/games").await;
-    assert!(
-        item_of_game(&panel, &name_a).contains("run-badge"),
-        "the saved Game that a run holds carries the badge"
+    let (app, state, _storage) = app_with_model_and_storage(
+        Arc::new(storage),
+        Arc::clone(&model),
+        AppSettings::default(),
+        configured_runner,
     );
-    assert!(
-        !item_of_game(&panel, &name_b).contains("run-badge"),
-        "the active Game that no run holds carries no badge"
-    );
-
-    state
-        .game_writer
-        .start_run(game_b, 2)
-        .expect("a run starts on idle Game B");
-    let panel = fetch_body(&app, "/fragment/games").await;
-    assert!(
-        item_of_game(&panel, &name_b).contains("run-badge"),
-        "the active Game that a run holds carries the badge"
-    );
-}
-
-fn assert_config_selects(games_panel: &str, disabled: bool, label: &str) {
-    for id in crate::test_utils::GAME_CONFIG_SELECT_IDS {
-        let marker = format!("id=\"{id}\"");
-        let start = games_panel
-            .find(&marker)
-            .unwrap_or_else(|| panic!("{label}: the panel renders #{id}"));
-        let tag = games_panel[start..]
-            .split('>')
-            .next()
-            .expect("the select tag ends");
-        assert_eq!(tag.contains(" disabled"), disabled, "{label}: #{id}");
-    }
-}
-
-// [docs/specs/autoplay.md] SCENARIO: 41.20
-#[tokio::test]
-async fn test_while_a_run_holds_the_game_its_config_controls_render_disabled() {
-    let model = Arc::new(ScriptedModel::new());
-    let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
+    failures.set(
+        StorageCall::StoriesSwipeState,
+        TestOverride::internal("the start state is unreadable"),
+    );
 
-    state
-        .game_writer
-        .start_run(game, 2)
-        .expect("a run starts on an idle Game");
-    let during = fetch_body(&app, "/fragment/games").await;
-    assert_config_selects(&during, true, "a run holds the Game");
+    let started = start_autoplay(&app, "cycles=2").await;
+    assert!(started.status().is_success(), "the start should accept");
+    wait_for_run(&state, game).await;
 
-    stop(&app).await;
-    let after = fetch_body(&app, "/fragment/games").await;
-    assert_config_selects(&after, false, "after the stop");
+    failures.clear_all();
+    let status = fetch_generating_status(&app).await;
+    assert!(
+        status.contains("status-error-popover") && status.contains("the start state"),
+        "the status poll names the start state, got: {status}"
+    );
+    assert!(
+        status.contains("the start state is unreadable"),
+        "the storage error is reachable in the disclosure, got: {status}"
+    );
+    assert!(model.calls().is_empty(), "no model call is made");
 }

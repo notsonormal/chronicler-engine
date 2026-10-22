@@ -93,18 +93,18 @@ AutoplayRun (application/autoplay/driver.rs)
 - `BUSY_STATUS` and `THINKING_STATUS` move from `action/handlers/actions.rs` to `adapters/driving/http/utils/response.rs`. The autoplay handler and `error.rs` import them from there.
 - A config write under Autoplay returns `Refusal::StillThinking`. `RunHeld` and `ApplicationError::still_thinking` go, so one busy type remains. The posture handler answers it through the existing `Refusal` mapping in `error.rs` (`200` with `BUSY_STATUS`).
 - `deleteMessage` in `assets/dashboard-story-log.js` uses the existing `answeredWaitStatus`, as `submitEdit` and `switchSwipe` do (Q6).
-- Kept as it is (owner): `answeredWaitStatus` matches the `BUSY_STATUS` markup. Scenario 42.6 guards it: the stub server sends the real constant, so a markup change fails the gate. No new response header, and no posture re-render on a refused config write.
+- Kept as it is (owner): `answeredWaitStatus` matches the `BUSY_STATUS` markup. Scenario 42.5 guards it: the stub server sends the real constant, so a markup change fails the gate. No new response header, and no posture re-render on a refused config write.
 
 ### 2.5 Config write without a closure under the lock
 
-`config_write(game, closure)` goes. `GameCatalogue` reads and validates outside the lock, then calls `GameWriter::save_config(game, &Game) -> Result<(), Refusal>`. That unit checks the holder and writes the config columns through a new `Tx` method (`Tx::set_game_config`, next to `Tx::set_game_failure`, with its own `TxWrite` variant for failure injection) in the same hold. `Storage::update_game_config` goes if it has no other caller. `GameCatalogue` stays the owner of the config rules.
+`config_write(game, closure)` goes. `GameCatalogue` reads and validates outside the lock, then calls `GameWriter::save_config(game, &ConfigChange) -> Result<(), Refusal>`. That unit checks the holder and writes the config columns through a new `Tx` method (`Tx::set_game_config(&ConfigChange)`, next to `Tx::set_game_failure`, with its own `TxWrite` variant for failure injection) in the same hold. `Storage::update_game_config` goes if it has no other caller. `GameCatalogue` stays the owner of the config rules. A config save writes only the columns of its change (`ConfigChange::{Posture, Mode, Presets}`; owner S3), which closes the lost-update race between config writes of different kinds.
 
 ### 2.6 Rendering
 
 - `NarrativeLogTemplate::new(entries, retrigger_allowed, view_only)` and `GamePostureTemplate::from_game(…, view_only)`: no `false` placeholder.
 - An Askama macro writes the `disabled` attribute; one macro writes the `run-badge`.
 - The story log and the posture read `GameViewQuery::autoplay_holds(game)`. The dock keeps `is_busy`. Spec 41.18 states why (Q4: a plain Job is short and the player keeps control of it; an Autoplay run makes the Game view-only).
-- `.games-panel` swaps with `morph:innerHTML`, so the 5 s poll during a run keeps an open rename form and the new-Game form.
+- ~~`.games-panel` swaps with `morph:innerHTML`~~ Dropped: a stub-browser check showed that a morph still closes an open rename `<details>` and resets its input. Ticket `.scratch/autoplay-follow-ups/issues/04-rename-form-survives-the-games-panel-poll.md`.
 
 ### 2.7 Names (Q3)
 
@@ -132,27 +132,28 @@ Do this before any engine edit, so the engine step edits small files.
 ### Step 2: the engine (WP B, D, E, H, Q7)
 
 1. `gate.rs`: §2.1, §2.5. `generation_status.rs`: remove `RunProgress`. `Busy` (in `gate.rs`) becomes `Busy::{Job(step), Autoplay { progress, step }}` with `AutoplayProgress { done, budget }` defined next to `Holder` as plain data (the gate must not import `application/autoplay/`, which imports the gate; the rules on the data live in `application/autoplay/`). `Decision::{Next, Finish}` is defined next to it. **Check:** `gate.rs` has 858 lines; if the change passes the file-length guardrail, move the busy-state types to `generation/busy.rs`.
-2. `domain/model/generation.rs` (or `tail.rs`): `next_in_autoplay`, the one "awaits a Narration" rule; unit tests in `generation_tests.rs`, including the empty story.
+2. `domain/model/generation.rs`: `next_in_autoplay`; `domain/model/tail.rs`: `Tail::awaits_narration`, the one rule both use; unit tests in `generation_tests.rs` (and a `tail_tests.rs` if the guardrails ask), including the empty story.
 3. `application/autoplay/`: `Budget`, the loop of §2.2, `AutoplayPause` (§2.3). Tracing: one line per cycle, one per end, as now.
 4. `pipeline/job.rs`: `run_accepted(AcceptedJob, &JobDeps) -> JobEnd` (the loop accepts, the Job only runs); `run_for_run` goes; `JobDeps` gains the pause.
 5. `games/catalogue.rs`: config writes through `save_config`; `reset(game: GameId)` and its handler in `chat_window.rs` passes `CurrentGame`.
 6. `games/view_query.rs`: `status`, `is_busy`, `autoplay_holds` read the one holder.
 7. HTTP: `autoplay` handler uses `Budget::parse` before the start; the status `busy_answer` reads `Busy::Autoplay`.
-8. Spec `docs/specs/autoplay.md`, then tests in `tests/http/autoplay.rs`:
+8. Spec `docs/specs/autoplay.md`, then tests in `tests/http/autoplay/` (split in step 1):
    - 41.9: a bad budget answers `400` also on a busy Game.
-   - The between-Jobs scenarios (41.7, 41.11, 41.12, 41.13 second half, 41.18–41.20, 41.22) use "a run paused between two of its Jobs" and the real loop. A stop at the pause ends the run, and no next Job starts (`assert_no_unscripted_model_call`).
+   - The between-Jobs scenarios (41.7, 41.11, 41.12, 41.13 second half, 41.18 second test, 41.20) use "a run paused between two of its Jobs" and the real loop. A stop at the pause ends the run, and no next Job starts (`assert_no_unscripted_model_call`).
    - New: a run whose story cannot be read ends with the story's failure line, the Game is idle, and no model call is made (`Storage::with_failure(StorageCall::StoriesTail, TestOverride::internal(..))`, exemplar `tests/http/games_config.rs`).
    - New: a run whose Quantifier fails each attempt plays its whole budget (Q16).
+   - Fragment tests (`tests/http/autoplay/fragments.rs`): a run paused **between two Jobs** renders the story log and the dock in 41.18 (second test) and the config selects in 41.20, so a fragment is read after `JobWriter::drop` set `job = None`. A run paused **before its first Job** renders 41.18 (first test), 41.19 (two Games) and the two 41.22 tests (Retrigger, Next swipe): their controls exist only on the story that ends on the Narration or the failed event, and one Impersonate Job changes that tail. The between-Jobs story ends on an Impersonate Input with one Swipe, so its Previous swipe control is disabled in any case and the test leaves it out.
    - 41.17 (a stale run end) keeps its point with `AutoplayRunId`.
    - Scenario 6.4 and `tests/http/races.rs` stay unchanged.
 
 ### Step 3: HTTP rendering and the dashboard (WP A, C, F, J)
 
 1. §2.4: the move of the two constants, `Refusal::StillThinking` for the config write, `deleteMessage` on `answeredWaitStatus`.
-2. §2.6: constructor arguments, the two macros, `morph:innerHTML` on `.games-panel`.
+2. §2.6: constructor arguments, the two macros (the `morph:innerHTML` change was dropped, see §2.6).
 3. Specs and tests:
-   - `docs/specs/autoplay.md` 41.18 intro: the Q4 reason. 41.12 is unchanged.
-   - `docs/specs/browser_autoplay.md`: 42.6 extends to the swipe switch and the Delete (a refused Delete shows the busy message). 42.3 and 42.4 merge into one scenario ("disabled during the run, enabled after Stop"). 42.1 checks "Ready" first and proves the at-once poll (a `wait_for` under 5 s, or a check that `/status/generating` is requested at once). New stub scenario: an open rename form survives one Games-panel poll.
+   - `docs/specs/autoplay.md` 41.18 intro: the Q4 reason. 41.12 runs between two Jobs (step 2.8), so its text changes with the pause point.
+   - `docs/specs/browser_autoplay.md`: the busy-refusal scenario (42.6, renumbered 42.5) extends to the swipe switch and the Delete (a refused Delete shows the busy message). 42.3 and 42.4 merge into one scenario ("disabled during the run, enabled after Stop"). 42.1 checks "Ready" first and proves the at-once poll (a `wait_for` under 5 s, or a check that `/status/generating` is requested at once).
    - Test fixes: one assertion per control kind in the HTTP and browser control checks (no `>= 4` / `>= 3`); 41.22 splits into two tests, and the Retrigger test checks the enabled state after the stop.
 
 ### Step 4: the remaining test fixes, docs, glossary, tickets and the UI pass (WP G, I, K)
@@ -191,7 +192,6 @@ Do this before any engine edit, so the engine step edits small files.
 - `Units::open` and the `Tx` methods (`gate.rs`, `storage/transaction.rs`): the config unit.
 - `Storage::with_failure`, `StorageCall::StoriesTail`, `TestOverride::internal` (`storage/core.rs`, `storage/test_support.rs`), exemplar `tests/http/games_config.rs`.
 - `wait_for_condition_async` (`tests/test_utils/wait.rs`).
-- `hx-swap="morph:innerHTML"` as on `#story-log` (`assets/index.html`).
 - `app_after_an_impersonate_with_a_failed_event` (`tests/http/support/app_wiring.rs`).
 
 ## 6. Verification
@@ -230,4 +230,4 @@ Do this before any engine edit, so the engine step edits small files.
 
 - Per-tab Games: the request carries its Game (route or header), `CurrentGame` reads it from the request, the client polls carry the Game id. Ticket.
 - The Narrator's role health after a Stop (the stopped call's answer still counts). Ticket.
-- An `autoplay_runs` history table for the evaluation of Autoplay output (reverses Q13/Q18 of the Autoplay plan). Ticket.
+- An `autoplay_runs` history table for the evaluation of Autoplay output (reverses Q4/Q18 of the Autoplay plan). Ticket.

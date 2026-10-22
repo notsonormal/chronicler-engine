@@ -25,6 +25,7 @@ pub struct PersonaRowView {
 #[derive(Template)]
 #[template(
     source = r##"
+{% macro run_badge(held) %}{% if held %}<span class="run-badge" title="An Autoplay run holds this game"><svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"/></svg> Autoplay</span>{% endif %}{% endmacro %}
 <div class="games-panel">
     <div class="games-section">
         <h2>Active Game</h2>
@@ -34,7 +35,7 @@ pub struct PersonaRowView {
             <div class="active-game-info">
                 <span class="game-name">{{ game.display_name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
-                <span class="persona-badge">{{ game.persona_name }}</span>{% if game.run_held %}<span class="run-badge" title="An Autoplay run holds this game"><svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"/></svg> Autoplay</span>{% endif %}
+                <span class="persona-badge">{{ game.persona_name }}</span>{{ run_badge(game.run_held) }}
             </div>
             <div class="game-actions">
                 <details class="game-rename">
@@ -97,7 +98,7 @@ pub struct PersonaRowView {
             <div class="game-item" data-id="{{ game.id }}">
                 <span class="game-name">{{ game.display_name }}</span>
                 <span class="world-badge">{{ game.world_name }}</span>
-                <span class="persona-badge">{{ game.persona_name }}</span>{% if game.run_held %}<span class="run-badge" title="An Autoplay run holds this game"><svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"/></svg> Autoplay</span>{% endif %}
+                <span class="persona-badge">{{ game.persona_name }}</span>{{ run_badge(game.run_held) }}
                 <div class="game-actions">
                     <details class="game-rename">
                         <summary>Rename</summary>
@@ -148,21 +149,22 @@ impl GamesPanelTemplate {
 #[derive(Template)]
 #[template(
     source = r##"
+{% macro disabled(on) %}{% if on %} disabled{% endif %}{% endmacro %}
 <div class="posture-override" id="game-posture-controls">
     <div class="posture-row">
         <label>Mode
-            <select name="narrator_mode" id="game-narrator-mode" hx-post="/games/{{ game_id }}/mode" hx-trigger="change" hx-target="#game-posture-controls" hx-swap="outerHTML"{% if view_only %} disabled{% endif %}>
+            <select name="narrator_mode" id="game-narrator-mode" hx-post="/games/{{ game_id }}/mode" hx-trigger="change" hx-target="#game-posture-controls" hx-swap="outerHTML"{{ disabled(view_only) }}>
                 {{ mode_options }}
             </select>
         </label>
         <label>Perspective
-            <select name="narrative_perspective" id="game-narrative-perspective" hx-post="/games/{{ game_id }}/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{% if view_only %} disabled{% endif %}>
+            <select name="narrative_perspective" id="game-narrative-perspective" hx-post="/games/{{ game_id }}/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{{ disabled(view_only) }}>
                 <option value="second"{% if perspective == "second" %} selected{% endif %}>Second person</option>
                 <option value="third"{% if perspective == "third" %} selected{% endif %}>Third person</option>
             </select>
         </label>
         <label>Tense
-            <select name="narrative_tense" id="game-narrative-tense" hx-post="/games/{{ game_id }}/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{% if view_only %} disabled{% endif %}>
+            <select name="narrative_tense" id="game-narrative-tense" hx-post="/games/{{ game_id }}/posture" hx-trigger="change" hx-include="closest .posture-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{{ disabled(view_only) }}>
                 <option value="past"{% if tense == "past" %} selected{% endif %}>Past</option>
                 <option value="present"{% if tense == "present" %} selected{% endif %}>Present</option>
             </select>
@@ -174,22 +176,22 @@ impl GamesPanelTemplate {
         <div class="error-message">Presets unavailable: {{ err }}</div>
         {% when None %}
         <label>System
-            <select name="system_preset_id" id="game-system-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{% if view_only %} disabled{% endif %}>
+            <select name="system_preset_id" id="game-system-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{{ disabled(view_only) }}>
                 {% for opt in system_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
             </select>
         </label>
         <label>Quantifier
-            <select name="quantifier_preset_id" id="game-quantifier-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{% if view_only %} disabled{% endif %}>
+            <select name="quantifier_preset_id" id="game-quantifier-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{{ disabled(view_only) }}>
                 {% for opt in quantifier_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
             </select>
         </label>
         <label>Impersonate
-            <select name="impersonate_preset_id" id="game-impersonate-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{% if view_only %} disabled{% endif %}>
+            <select name="impersonate_preset_id" id="game-impersonate-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{{ disabled(view_only) }}>
                 {% for opt in impersonate_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
             </select>
         </label>
         <label>Options
-            <select name="options_preset_id" id="game-options-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{% if view_only %} disabled{% endif %}>
+            <select name="options_preset_id" id="game-options-preset" hx-post="/games/{{ game_id }}/presets" hx-trigger="change" hx-include="closest .preset-picker-row" hx-target="#game-posture-controls" hx-swap="outerHTML"{{ disabled(view_only) }}>
                 {% for opt in options_options %}<option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>{% endfor %}
             </select>
         </label>
@@ -219,6 +221,7 @@ impl GamePostureTemplate {
         quantifier_presets: &[PromptPreset],
         impersonate_presets: &[PromptPreset],
         options_presets: &[PromptPreset],
+        view_only: bool,
     ) -> Self {
         Self {
             game_id: game.id,
@@ -245,7 +248,7 @@ impl GamePostureTemplate {
                 &game.active_options_prompt_preset_id,
             ),
             preset_load_error: None,
-            view_only: false,
+            view_only,
         }
     }
 }

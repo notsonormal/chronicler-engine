@@ -23,22 +23,7 @@ impl JobTasks {
             .is_ok()
     }
 
-    /// Waits until at most `limit` watched tasks still run, so a test can wait for
-    /// one task to end while another stays held.
-    pub async fn wait_until_running_at_most(
-        &self,
-        limit: usize,
-        timeout: std::time::Duration,
-    ) -> bool {
-        let wait = async {
-            while self.running() > limit {
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
-        };
-        tokio::time::timeout(timeout, wait).await.is_ok()
-    }
-
-    fn running(&self) -> usize {
+    pub fn running(&self) -> usize {
         let handles = self.handles.lock().unwrap_or_else(|e| e.into_inner());
         handles
             .iter()

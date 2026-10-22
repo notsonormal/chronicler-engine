@@ -10,25 +10,26 @@ async fn wait_for<Fut>(description: &str, condition: impl Fn() -> Fut)
 where
     Fut: std::future::Future<Output = bool>,
 {
+    wait_for_within(Duration::from_secs(10), description, condition).await;
+}
+
+async fn wait_for_within<Fut>(timeout: Duration, description: &str, condition: impl Fn() -> Fut)
+where
+    Fut: std::future::Future<Output = bool>,
+{
     assert!(
-        wait_for_condition_async(
-            Duration::from_secs(10),
-            Duration::from_millis(100),
-            condition
-        )
-        .await,
+        wait_for_condition_async(timeout, Duration::from_millis(100), condition).await,
         "timed out waiting for: {description}"
     );
 }
 
-/// Needs the Edit, Delete and Retry controls to exist, so an empty log cannot pass.
+/// An empty log fails, so the check cannot pass vacuously.
 async fn story_controls_all(page: &playwright_rs::Page, disabled: bool) -> bool {
     page.evaluate::<bool, bool>(
-        r#"(disabled) => {
-            const controls = Array.from(document.querySelectorAll(
-                '#story-log .edit-btn, #story-log .delete-btn, #story-log .swipe-btn[aria-label="Retry"]'));
-            return controls.length >= 3 && controls.every((control) => control.disabled === disabled);
-        }"#,
+        r#"(disabled) => ['.edit-btn', '.delete-btn', '.swipe-btn[aria-label="Retry"]'].every((selector) => {
+            const controls = Array.from(document.querySelectorAll('#story-log ' + selector));
+            return controls.length > 0 && controls.every((control) => control.disabled === disabled);
+        })"#,
         Some(&disabled),
     )
     .await
@@ -103,13 +104,22 @@ async fn test_the_autoplay_control_starts_a_run_with_the_default_budget() {
                 .await
                 .unwrap();
             assert_eq!(budget, "10", "the budget field defaults to 10");
+            wait_for_status_ready(&page).await;
+            assert_eq!(
+                status_display_text(&page).await,
+                "Ready",
+                "a fresh Game starts from Ready"
+            );
 
             let _silent_model = inject_silent_narrator(port).await;
             click_and_settle(&page, "#autoplay-btn", "#status-display")
                 .await
                 .expect_settled("start the run");
 
-            wait_for(
+            // The status poll runs every 5 seconds, so a run that shows within 3
+            // seconds shows because the start polls at once.
+            wait_for_within(
+                Duration::from_secs(3),
                 "the status display shows the run with its budget",
                 || async {
                     status_display_text(&page).await
@@ -124,7 +134,7 @@ async fn test_the_autoplay_control_starts_a_run_with_the_default_budget() {
 
 // [docs/specs/browser_autoplay.md] SCENARIO: 42.3
 #[tokio::test]
-async fn test_while_a_run_holds_the_game_the_story_changing_controls_are_disabled() {
+async fn test_while_a_run_holds_the_game_the_story_changing_controls_are_disabled_until_stop() {
     with_test_page(
         CONFIG_PATH,
         TEST_WORLD,
@@ -140,24 +150,6 @@ async fn test_while_a_run_holds_the_game_the_story_changing_controls_are_disable
                 "the Games panel renders its config controls disabled",
                 || async { config_selects_all(&page, true).await },
             )
-            .await;
-        },
-    )
-    .await;
-}
-
-// [docs/specs/browser_autoplay.md] SCENARIO: 42.4
-#[tokio::test]
-async fn test_stop_ends_the_run_and_gives_the_game_back() {
-    with_test_page(
-        CONFIG_PATH,
-        TEST_WORLD,
-        TEST_PERSONA,
-        |page, port| async move {
-            let _silent_model = start_a_held_run(&page, port).await;
-            wait_for("the story log renders its controls disabled", || async {
-                story_controls_all(&page, true).await
-            })
             .await;
 
             click_and_settle(&page, "#stop-btn", "#status-display")
@@ -181,7 +173,7 @@ async fn test_stop_ends_the_run_and_gives_the_game_back() {
     .await;
 }
 
-// [docs/specs/browser_autoplay.md] SCENARIO: 42.5
+// [docs/specs/browser_autoplay.md] SCENARIO: 42.4
 #[tokio::test]
 async fn test_the_games_list_marks_a_game_that_a_run_holds() {
     with_test_page(

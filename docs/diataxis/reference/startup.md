@@ -40,7 +40,7 @@ Bootstrap picks the newest Game of the selected World through `GameCatalogue`.
 A World with no Game gets one through
 `GameCatalogue::create_game`, the path the Games page uses. That path writes the Game, its dock record and its opening Narration in one save unit.
 
-Every Game is idle after a start. The job entries and the run holds live in memory.
+Every Game is idle after a start. The holders of the busy state live in memory.
 
 The loader calls `default_scenario()` for the active world and reads that scenario's `starting_room_id` for the initial room. When no scenarios exist, the initial room id falls back to `"start"`.
 
