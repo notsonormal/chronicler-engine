@@ -41,11 +41,6 @@ impl NarrativeLogTemplate {
             view_only: false,
         }
     }
-
-    pub fn view_only(mut self, view_only: bool) -> Self {
-        self.view_only = view_only;
-        self
-    }
 }
 
 #[derive(Template)]

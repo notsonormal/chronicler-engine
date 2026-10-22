@@ -381,3 +381,13 @@ pub async fn capture_failure_state(page: &playwright_rs::Page, test_name: &str) 
         }
     }
 }
+
+pub async fn status_display_text(page: &playwright_rs::Page) -> String {
+    page.locator("#status-display")
+        .await
+        .inner_text()
+        .await
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}

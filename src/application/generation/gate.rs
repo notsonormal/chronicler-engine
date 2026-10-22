@@ -99,7 +99,7 @@ pub struct RunId(u64);
 /// only, like the job entry.
 struct RunHold {
     id: RunId,
-    /// The Continue Jobs of the run that ended without a failure line.
+    /// The cycles of the run that ended.
     done: u32,
     budget: u32,
 }
@@ -185,7 +185,6 @@ impl Units {
     }
 }
 
-/// How a Game is busy: a Job runs on it, or an Autoplay run holds it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Busy {
     /// A Job runs, and no run holds the Game.
@@ -207,7 +206,6 @@ impl Busy {
     }
 }
 
-/// Why the Job of a run was not accepted.
 #[derive(Debug)]
 pub enum RunRefusal {
     /// The run hold of the Game is gone or holds another run's id: a stop, a reset
@@ -287,15 +285,10 @@ impl GameWriter {
         Ok(())
     }
 
-    pub fn accept(
-        &self,
-        game: GameId,
-        request: JobRequest,
-    ) -> Result<(JobWriter, JobPlan), Refusal> {
+    pub fn accept(&self, game: GameId, request: JobRequest) -> Result<AcceptedJob, Refusal> {
         self.hold(|holds, units| {
             Self::require_idle(holds, game)?;
-            let accepted = self.accept_in_hold(holds, units, game, |_story| request)?;
-            Ok((accepted.writer, accepted.plan))
+            self.accept_in_hold(holds, units, game, |_story| request)
         })
     }
 

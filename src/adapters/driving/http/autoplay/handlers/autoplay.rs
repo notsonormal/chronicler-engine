@@ -15,8 +15,6 @@ use crate::application::generation::gate::Refusal;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct AutoplayForm {
-    /// The budget in cycles; an absent or blank field starts a run of the default
-    /// budget.
     #[serde(default)]
     pub cycles: String,
 }

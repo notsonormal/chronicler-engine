@@ -6,26 +6,6 @@ use super::*;
 
 const RUN_STATUS: &str = "Autoplay: cycle 1/10";
 
-const CONFIG_SELECT_IDS: [&str; 7] = [
-    "game-narrator-mode",
-    "game-narrative-perspective",
-    "game-narrative-tense",
-    "game-system-preset",
-    "game-quantifier-preset",
-    "game-impersonate-preset",
-    "game-options-preset",
-];
-
-async fn status_text(page: &playwright_rs::Page) -> String {
-    page.locator("#status-display")
-        .await
-        .inner_text()
-        .await
-        .unwrap_or_default()
-        .trim()
-        .to_string()
-}
-
 async fn wait_for<Fut>(description: &str, condition: impl Fn() -> Fut)
 where
     Fut: std::future::Future<Output = bool>,
@@ -56,7 +36,10 @@ async fn story_controls_all(page: &playwright_rs::Page, disabled: bool) -> bool 
 }
 
 async fn config_selects_all(page: &playwright_rs::Page, disabled: bool) -> bool {
-    let ids: Vec<String> = CONFIG_SELECT_IDS.iter().map(|id| id.to_string()).collect();
+    let ids: Vec<String> = GAME_CONFIG_SELECT_IDS
+        .iter()
+        .map(|id| id.to_string())
+        .collect();
     page.evaluate::<Vec<String>, bool>(
         &format!(
             r#"(ids) => ids.every((id) => {{
@@ -84,7 +67,6 @@ async fn control_is_usable(page: &playwright_rs::Page, selector: &str) -> bool {
     locator.is_visible().await.unwrap() && locator.is_enabled().await.unwrap()
 }
 
-/// The story gets an Input and a Narration first, so the story log has controls to check.
 async fn start_a_held_run(page: &playwright_rs::Page, port: u16) -> SilentModel {
     send_action(page, "look").await;
     wait_for_status_ready(page).await;
@@ -99,7 +81,7 @@ async fn start_a_held_run(page: &playwright_rs::Page, port: u16) -> SilentModel 
         .await
         .expect_settled("start the run");
     wait_for("the status display shows the run", || async {
-        status_text(page).await.starts_with(RUN_STATUS)
+        status_display_text(page).await.starts_with(RUN_STATUS)
     })
     .await;
     silent_model
@@ -130,7 +112,8 @@ async fn test_the_autoplay_control_starts_a_run_with_the_default_budget() {
             wait_for(
                 "the status display shows the run with its budget",
                 || async {
-                    status_text(&page).await == "Autoplay: cycle 1/10 Generating narration..."
+                    status_display_text(&page).await
+                        == "Autoplay: cycle 1/10 Generating narration..."
                 },
             )
             .await;

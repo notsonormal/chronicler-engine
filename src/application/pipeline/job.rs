@@ -11,7 +11,8 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
 use crate::application::generation::gate::{
-    GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, RunId, RunRefusal, SavedText,
+    AcceptedJob, GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, RunId, RunRefusal,
+    SavedText,
 };
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
@@ -40,7 +41,6 @@ pub struct JobDeps {
     pub tasks: Arc<JobTasks>,
 }
 
-/// How a Job ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobEnd {
     /// Every part ran, and the Job wrote no failure line.
@@ -75,8 +75,12 @@ impl Job {
         game: GameId,
         request: JobRequest,
     ) -> Result<(), Refusal> {
-        let (job_writer, plan) = writer.accept(game, request)?;
-        let span = Self::span_of(&job_writer, &plan);
+        let AcceptedJob {
+            writer: job_writer,
+            plan,
+        } = writer.accept(game, request)?;
+        Self::record_on_span(&job_writer, &plan);
+        let span = tracing::Span::current();
         let job = Self::new(job_writer, &deps);
         let handle = tokio::task::spawn_blocking(move || {
             let _entered = span.enter();
@@ -106,7 +110,7 @@ impl Job {
         run: RunId,
     ) -> Result<JobEnd, RunRefusal> {
         let accepted = writer.accept_for_run(game, run)?;
-        Self::span_of(&accepted.writer, &accepted.plan);
+        Self::record_on_span(&accepted.writer, &accepted.plan);
         let job = Self::new(accepted.writer, deps);
         Ok(job.run(accepted.plan))
     }
@@ -121,8 +125,8 @@ impl Job {
         }
     }
 
-    /// Fills the span fields that only the accepted Job knows, and returns the span.
-    fn span_of(writer: &JobWriter, plan: &JobPlan) -> tracing::Span {
+    /// Fills the fields of the current span that only the accepted Job knows.
+    fn record_on_span(writer: &JobWriter, plan: &JobPlan) {
         let span = tracing::Span::current();
         span.record("job", writer.job_id());
         span.record(
@@ -130,7 +134,6 @@ impl Job {
             tracing::field::debug(plan.first.as_ref().map(GenerationOrder::kind)),
         );
         span.record("step", tracing::field::debug(plan.first_step()));
-        span
     }
 
     /// A step that fails ends the Job, and every save unit that landed before it

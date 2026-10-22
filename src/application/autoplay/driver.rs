@@ -7,7 +7,6 @@ use crate::application::generation::gate::{GameWriter, Refusal, RunId, RunRefusa
 use crate::application::pipeline::job::{Job, JobDeps, JobEnd};
 use crate::domain::model::game::GameId;
 
-/// The budget of a start that names none.
 pub const DEFAULT_BUDGET: u32 = 10;
 
 /// Why a run ended. The story holds no run marker, so the log line of the end is
@@ -35,9 +34,8 @@ pub struct AutoplayRun {
 }
 
 impl AutoplayRun {
-    /// Makes the run hold and spawns the driver, then returns at once, as a Job
-    /// start does. The driver's task joins the watch of `JobTasks`, so one wait
-    /// covers the whole run.
+    /// The driver's task joins the watch of `JobTasks`, so one wait covers the
+    /// whole run.
     pub fn start(
         writer: &GameWriter,
         deps: JobDeps,
@@ -62,8 +60,6 @@ impl AutoplayRun {
         tracing::info!(game = %self.game, run = ?self.run, end = ?end, "autoplay run ended");
     }
 
-    /// Each pass runs the Job the run's rule picks from the end of the story, and
-    /// starts no Job before the one before it ended.
     fn run_jobs(&self) -> RunEnd {
         loop {
             let end = match Job::run_for_run(&self.writer, &self.deps, self.game, self.run) {

@@ -9,7 +9,7 @@ A request that generates text starts a **Job**. The engine answers the request a
 
 ## The Job
 
-These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/options`, Retry and Retrigger. `Job::start` accepts the request and spawns the Job.
+These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/options`, Retry and Retrigger. `Job::start` accepts the request and spawns the Job. An Autoplay run accepts and runs its Jobs one after the other through `Job::run_for_run`.
 
 - A Job runs on the Game that its request named. Every write of the Job names that Game, so a Game switch does not change a running Job.
 - A Game has at most one Job. A second request for a busy Game is refused.
@@ -29,13 +29,13 @@ A Retrigger is allowed when `Tail::retrigger_allowed` says so: the last Message 
 
 ## The Job Entry and Busy
 
-`GameWriter` owns one registry of **job entries**, one for each busy Game. A job entry holds the Job's id and the current `Step`. A Game is busy when its job entry exists.
+`GameWriter` owns one registry of **job entries**, one for each Game that runs a Job. A job entry holds the Job's id and the current `Step`.
 
-An Autoplay run makes a **run hold** in the same registry as the job entries. A run hold names the run, the count of ended cycles, and the budget. A cycle ends when a Job of the run ends without a failure line and leaves the story on a Narration. A run hold lasts from the start of the run to its end, also between two Jobs of the run. A Game is busy when its job entry or its run hold exists.
+An Autoplay run makes a **run hold** in the same registry as the job entries. A run hold names its run and its budget. A run hold lasts from the start of the run to its end, also between two Jobs of the run. A Game is busy when its job entry or its run hold exists.
 
-- While a run hold exists, the busy rule refuses every story write with "Still thinking...". Only an accept that names the run's own id passes.
-- A run ends when its budget is spent, when a Job ends with a failure line, or when its run hold is gone. A stop, a reset and a delete remove the run hold with the job entry.
-- A write of the Game's config columns (the Narrator Mode, the posture and the preset selections) is refused with "Still thinking..." while a run hold exists.
+- While a run hold exists, the busy rule refuses every story write as busy. Only an accept that names the run's own id passes.
+- A stop, a reset and a delete remove the run hold with the job entry.
+- While a run hold exists, a write of the Game's config columns (the Narrator Mode, the posture and the preset selections) is refused as busy.
 
 No saved record holds the busy mark, the step or the run hold. A restart loses every job entry and every run hold, so every Game is idle after a start.
 
@@ -89,7 +89,7 @@ One rule picks the failure line of a part. `accept` and the Job use the same rul
 
 ## Status
 
-The status of a Game has one rule. A busy Game shows the step of its job entry. A Game with a run hold also shows the progress of the run: the number of the cycle in progress and the budget. A Game that is not busy and holds a failure line shows that line. Any other Game is idle. The accept unit clears the failure line, and a stop, a swipe switch and a delete clear it too.
+The status of a Game has one rule. A Game with a job entry shows its step. A Game with a run hold also shows the progress of the run: the number of the cycle in progress and the budget. A Game that is not busy and holds a failure line shows that line. Any other Game is idle. The accept unit clears the failure line, and a stop, a swipe switch and a delete clear it too.
 
 `GameViewQuery` holds the rule. The reason for its two sources is in the Explanation doc listed below.
 

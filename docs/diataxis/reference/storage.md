@@ -32,7 +32,7 @@ process lives in `ActiveGame` (`application/games/active.rs`).
 | Swipe | The text, the stored inputs of its generation, the maker and the **Swipe state** | `message_swipes` |
 | Dock record | The offered set and at most one notice. A Game has one. | `game_docks` |
 
-The job entry in memory holds the busy mark and the step name.
+The job entry and the run hold in memory hold the busy mark. The job entry also holds the step name.
 
 ## Reads of the Story
 

@@ -11,16 +11,6 @@ async fn poll_answer(page: &playwright_rs::Page, stub: &StubServer, answer: &str
     poll_now(page, "#status-display").await;
 }
 
-async fn status_text(page: &playwright_rs::Page) -> String {
-    page.locator("#status-display")
-        .await
-        .inner_text()
-        .await
-        .unwrap_or_default()
-        .trim()
-        .to_string()
-}
-
 async fn is_visible(page: &playwright_rs::Page, selector: &str) -> bool {
     page.locator(selector).await.is_visible().await.unwrap()
 }
@@ -38,7 +28,7 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
 ) {
     poll_answer(&page, &stub, "autoplay 2/10 narrating").await;
     assert_eq!(
-        status_text(&page).await,
+        status_display_text(&page).await,
         "Autoplay: cycle 2/10 Generating narration..."
     );
     assert!(
@@ -53,14 +43,14 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
     }
 
     poll_answer(&page, &stub, "autoplay 2/10").await;
-    assert_eq!(status_text(&page).await, "Autoplay: cycle 2/10");
+    assert_eq!(status_display_text(&page).await, "Autoplay: cycle 2/10");
     assert!(
         is_visible(&page, "#stop-btn").await,
         "Stop shows between two Jobs of the run"
     );
 
     poll_answer(&page, &stub, "idle").await;
-    assert_eq!(status_text(&page).await, "Ready");
+    assert_eq!(status_display_text(&page).await, "Ready");
     assert!(
         !is_visible(&page, "#stop-btn").await,
         "Stop is gone once the run ends"

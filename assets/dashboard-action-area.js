@@ -3,14 +3,17 @@
 // The DOM carries every action-area state except an in-flight check.
 let checkInFlight = false;
 
-function statusIsGenerating() {
+function statusShows(selector) {
   const statusDisplay = document.getElementById("status-display");
-  return !!(statusDisplay && statusDisplay.querySelector(".status.thinking"));
+  return !!(statusDisplay && statusDisplay.querySelector(selector));
+}
+
+function statusIsGenerating() {
+  return statusShows(".status.thinking");
 }
 
 function statusIsAutoplay() {
-  const statusDisplay = document.getElementById("status-display");
-  return !!(statusDisplay && statusDisplay.querySelector(".status.autoplay"));
+  return statusShows(".status.autoplay");
 }
 
 function previewIsOpen() {
@@ -67,9 +70,8 @@ function focusCommandInput() {
 
 let previewWasOpen = false;
 
-// The server renders the run mark, the disabled story controls and the disabled
-// config controls, so a run's start or end fetches those regions again. The first
-// reading is only the baseline.
+// The server renders the run mark and the disabled controls, so a run's start or
+// end refetches those regions. `null` is the unread baseline.
 let runWasHeld = null;
 
 function refreshRunRegionsOnRunChange() {
@@ -240,7 +242,6 @@ const PHASE_LABELS = {
   options: "Generating options...",
 };
 
-// "autoplay <cycle>/<budget>", followed by the step while a Job of the run runs.
 const AUTOPLAY_ANSWER = /^autoplay (\d+)\/(\d+)(?: (\S+))?$/;
 
 function autoplayLabel(match) {
@@ -253,8 +254,6 @@ function pollStatusNow() {
   htmx.trigger("#status-display", "statuspoll");
 }
 
-// A started run shows its Stop control from the first poll, so the poll runs now
-// instead of at its next timer.
 function onAutoplayAfterRequest(event) {
   if (requestSucceeded(event)) pollStatusNow();
 }

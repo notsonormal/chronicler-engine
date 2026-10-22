@@ -151,3 +151,17 @@ pub async fn wait_for_jobs(state: &AppState, timeout_ms: u64) -> bool {
         .wait(std::time::Duration::from_millis(timeout_ms))
         .await
 }
+
+/// Waits until at most `limit` tasks of the app still run: the Job or run that a
+/// test holds stays, and every other one has ended.
+pub async fn wait_for_jobs_running_at_most(
+    state: &AppState,
+    limit: usize,
+    timeout_ms: u64,
+) -> bool {
+    state
+        .job_deps
+        .tasks
+        .wait_until_running_at_most(limit, std::time::Duration::from_millis(timeout_ms))
+        .await
+}

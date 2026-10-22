@@ -297,3 +297,21 @@ And the event Narration ends the first cycle, so the run ends after two cycles
 And the run made three Jobs: two Impersonate Jobs and one Continue Job
 And the Game is idle
 ```
+
+#### Scenario 41.22: While a run holds the Game, the Retrigger and Next swipe controls render disabled
+
+```gherkin
+Given a Game whose last Message is an Impersonate Input whose event Narration failed
+And a run that holds the Game with no Job running
+When the client GET /fragment/story-log
+Then the Retrigger control carries the `disabled` attribute
+
+Given a Game whose last Message is a Narration with two Swipes, the first one active
+And a run that holds the Game with no Job running
+When the client GET /fragment/story-log
+Then the Next swipe control carries the `disabled` attribute
+
+When the client POST /status/reset-generating
+And the client GET /fragment/story-log
+Then the Next swipe control does not carry the `disabled` attribute
+```

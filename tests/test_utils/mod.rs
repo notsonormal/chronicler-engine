@@ -28,3 +28,14 @@ pub use chronicler_engine::test_support::{make_test_recorder, make_test_recorder
 pub const TEST_WORLD: &str = "test";
 pub const TEST_PERSONA: &str = "test_player";
 pub const CONFIG_PATH: &str = "tests/test_config.json";
+
+/// The selects of the Game's config controls in the Games panel.
+pub const GAME_CONFIG_SELECT_IDS: [&str; 7] = [
+    "game-narrator-mode",
+    "game-narrative-perspective",
+    "game-narrative-tense",
+    "game-system-preset",
+    "game-quantifier-preset",
+    "game-impersonate-preset",
+    "game-options-preset",
+];

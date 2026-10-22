@@ -164,8 +164,8 @@ function submitEdit() {
   const newText = document.getElementById("edit-textarea").value;
   const formData = new URLSearchParams();
   formData.append("text", newText);
-  // Kept set until the outcome is known, so a failed save can restore the entry.
   let editKeptOpen = false;
+  // Kept set until the outcome is known, so a failed save can restore the entry.
   fetch(`/history/${editState.id}`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -177,8 +177,6 @@ function submitEdit() {
     })
     .then((body) => {
       if (answeredWaitStatus(body)) {
-        // The editor keeps the player's text and the poll stays paused, so
-        // the player can save again once the Game is free.
         editKeptOpen = true;
         showStoryLogError(
           "The Game is busy, so the edit was not saved.",

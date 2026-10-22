@@ -9,9 +9,9 @@ The status of a Game comes from two places. One answers "is a Job running for th
 
 ## Channel A — the job entry
 
-The job entry lives in memory, in the registry that `GameWriter` owns. A Game is busy when its job entry exists.
+The job entry lives in memory, in the registry that `GameWriter` owns. A Game is busy when its job entry or its run hold exists.
 
-Busy is true only while a process runs a Job. A restart ends every Job, so a saved busy mark would be wrong after it. Memory holds the mark, so a restart leaves every Game idle with no start-up repair. The engine's deployment contract is one process against one database, which is what makes a memory-only mark sufficient.
+Busy is true only while a process runs a Job or holds an Autoplay run. A restart ends every Job, so a saved busy mark would be wrong after it. Memory holds the mark, so a restart leaves every Game idle with no start-up repair. The engine's deployment contract is one process against one database, which is what makes a memory-only mark sufficient.
 
 ## Channel B — the failure line
 

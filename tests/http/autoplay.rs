@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 
+use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::game::GameId;
@@ -16,12 +17,14 @@ use chronicler_engine::test_support::{
     active_game_of, analysis_report, ScriptedModel, TestMap, TestNpc, TestPromptPreset,
 };
 
-use crate::support::app_wiring::{app_with_a_triggered_npc, app_with_script};
+use crate::support::app_wiring::{
+    app_after_an_impersonate_with_a_failed_event, app_with_a_triggered_npc, app_with_script,
+};
 use crate::support::http_assertions::assert_still_thinking;
 use crate::support::http_fixtures::seed_offered_set;
 use crate::support::http_requests::{
-    fetch_body, fetch_generating_status, post_action, post_empty, post_form, response_body,
-    wait_for_jobs, wait_settled,
+    assert_no_unscripted_model_call, fetch_body, fetch_generating_status, post_action, post_empty,
+    post_form, response_body, wait_for_jobs, wait_for_jobs_running_at_most, wait_settled,
 };
 
 const FIRST_INPUT: &str = "I try the door.";
@@ -35,14 +38,14 @@ async fn start_autoplay(app: &axum::Router, body: &str) -> axum::response::Respo
 }
 
 /// Waits for the task of the whole run, so a read after it sees every write the run
-/// made, then checks that the run released its Game and made no unscripted call.
+/// made.
 async fn wait_for_run(state: &AppState, game: GameId) {
     assert!(wait_for_jobs(state, 5000).await, "the run should end");
     assert!(
         !state.game_view_query.is_busy(game),
         "an ended run leaves its Game idle"
     );
-    crate::support::http_requests::assert_no_unscripted_model_call(state);
+    assert_no_unscripted_model_call(state);
 }
 
 fn messages_of(state: &AppState, game: GameId) -> Vec<Message> {
@@ -69,6 +72,33 @@ fn narrator_calls(model: &ScriptedModel) -> Vec<chronicler_engine::test_support:
         .into_iter()
         .filter(|call| call.role == Role::Narrator)
         .collect()
+}
+
+/// Creates a second Game from the World and Persona of `first`. The create makes
+/// it the active Game.
+async fn create_game_from(
+    app: &axum::Router,
+    state: &AppState,
+    storage: &Storage,
+    first: GameId,
+) -> GameId {
+    let persona_key = storage
+        .require_game(first.0)
+        .expect("the first Game reads back")
+        .persona_key;
+    let created = post_form(
+        app,
+        "/games",
+        &format!("world_key=test&persona_key={persona_key}"),
+    )
+    .await;
+    assert!(
+        created.status().is_success(),
+        "the second Game should be created"
+    );
+    let second = active_game_of(state);
+    assert_ne!(second, first, "the create makes the second Game active");
+    second
 }
 
 async fn assert_status(app: &axum::Router, expected: &str, label: &str) {
@@ -405,11 +435,9 @@ async fn test_a_stop_between_two_jobs_of_a_run_ends_the_run() {
     let game = active_game_of(&state);
     let before = messages_of(&state, game);
 
-    // A run hold with no driver is the state between two Jobs of a run: no Job
+    // No model call lies between two Jobs of a run, so `ScriptedModel::hold` cannot
+    // stop a live driver there. A run hold with no driver is that state: no job
     // entry, and the run hold stays.
-    // The branch of the driver that meets a run hold gone between two Jobs (it ends
-    // without a write) is out of reach here: no model call, so no hold of
-    // `ScriptedModel`, lies between two Jobs.
     state
         .game_writer
         .start_run(game, 2)
@@ -805,19 +833,7 @@ async fn test_a_run_goes_on_when_the_client_switches_the_active_game() {
         "the run's Job should reach its narrator call"
     );
 
-    let persona_key = storage
-        .require_game(game_a.0)
-        .expect("Game A reads back")
-        .persona_key;
-    let created = post_form(
-        &app,
-        "/games",
-        &format!("world_key=test&persona_key={persona_key}"),
-    )
-    .await;
-    assert!(created.status().is_success(), "Game B should be created");
-    let game_b = active_game_of(&state);
-    assert_ne!(game_b, game_a, "the create makes Game B active");
+    let game_b = create_game_from(&app, &state, &storage, game_a).await;
 
     hold.release();
     wait_for_run(&state, game_a).await;
@@ -884,17 +900,7 @@ async fn test_a_delete_of_the_game_ends_its_run() {
         "the run's Job should reach its narrator call"
     );
 
-    let persona_key = storage
-        .require_game(game_a.0)
-        .expect("Game A reads back")
-        .persona_key;
-    let created = post_form(
-        &app,
-        "/games",
-        &format!("world_key=test&persona_key={persona_key}"),
-    )
-    .await;
-    assert!(created.status().is_success(), "Game B should be created");
+    create_game_from(&app, &state, &storage, game_a).await;
 
     let deleted = post_empty(&app, &format!("/games/{}/delete", game_a.0)).await;
     assert!(deleted.status().is_success(), "the delete should accept");
@@ -952,11 +958,11 @@ async fn test_the_end_of_a_stopped_run_does_not_release_the_run_that_started_aft
 
     hold_a.release();
     assert!(hold_a.wait_taken(1000), "run A's call takes its answer");
-    // Run A's Job ends on its moved entry, then its driver ends. The wait cannot
-    // use the Job watch, which also waits for run B: a pause is the only signal
-    // that run A's end has come, and a pause too short passes the test with no
-    // check.
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    // Run B's task stays held, so run A's task is the only one that can end.
+    assert!(
+        wait_for_jobs_running_at_most(&state, 1, 2000).await,
+        "run A's driver should end while run B stays held"
+    );
 
     assert_status(
         &app,
@@ -1083,6 +1089,74 @@ async fn test_while_a_run_holds_the_game_the_story_log_renders_its_controls_disa
     );
 }
 
+fn swipe_button(story_log: &str, label: &str) -> String {
+    button_tags_with_class(story_log, "swipe-btn")
+        .into_iter()
+        .find(|tag| tag.contains(&format!("aria-label=\"{label}\"")))
+        .unwrap_or_else(|| panic!("the story log offers {label}: {story_log}"))
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.22
+#[tokio::test]
+async fn test_while_a_run_holds_the_game_retrigger_and_next_swipe_render_disabled() {
+    let (app, state) = app_after_an_impersonate_with_a_failed_event().await;
+    let game = active_game_of(&state);
+    state
+        .game_writer
+        .start_run(game, 2)
+        .expect("a run starts on an idle Game");
+    let retrigger = button_tags_with_class(
+        &fetch_body(&app, "/fragment/story-log").await,
+        "retrigger-btn",
+    );
+    assert_eq!(
+        retrigger.len(),
+        1,
+        "the story log offers Retrigger: {retrigger:?}"
+    );
+    assert!(
+        retrigger[0].contains(" disabled"),
+        "Retrigger: {}",
+        retrigger[0]
+    );
+
+    let model = Arc::new(
+        ScriptedModel::new()
+            .turn(FIRST_NARRATION)
+            .narration(SECOND_NARRATION)
+            .after_narration(analysis_report(&[], None)),
+    );
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
+    let game = active_game_of(&state);
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job settles");
+    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Retry settles");
+    let narration = messages_of(&state, game)
+        .pop()
+        .expect("the story ends on the Narration");
+    assert!(
+        post_empty(&app, &format!("/message/{}/swipe/0", narration.id))
+            .await
+            .status()
+            .is_success()
+    );
+
+    state
+        .game_writer
+        .start_run(game, 2)
+        .expect("a run starts on an idle Game");
+    let during = swipe_button(&fetch_body(&app, "/fragment/story-log").await, "Next swipe");
+    assert!(
+        during.contains(" disabled"),
+        "a run holds the Game: {during}"
+    );
+
+    stop(&app).await;
+    let after = swipe_button(&fetch_body(&app, "/fragment/story-log").await, "Next swipe");
+    assert!(!after.contains(" disabled"), "after the stop: {after}");
+}
+
 fn item_of_game<'a>(games_panel: &'a str, game_name: &str) -> &'a str {
     let name = format!("<span class=\"game-name\">{game_name}</span>");
     let start = games_panel
@@ -1105,21 +1179,7 @@ async fn test_the_games_fragment_marks_a_game_that_a_run_holds() {
         .game_view_query
         .game_display_name(game_a)
         .expect("Game A reads back");
-    let persona_key = storage
-        .require_game(game_a.0)
-        .expect("Game A reads back")
-        .persona_key;
-    assert!(
-        post_form(
-            &app,
-            "/games",
-            &format!("world_key=test&persona_key={persona_key}"),
-        )
-        .await
-        .status()
-        .is_success()
-    );
-    let game_b = active_game_of(&state);
+    let game_b = create_game_from(&app, &state, &storage, game_a).await;
     let name_b = state
         .game_view_query
         .game_display_name(game_b)
@@ -1151,18 +1211,8 @@ async fn test_the_games_fragment_marks_a_game_that_a_run_holds() {
     );
 }
 
-const CONFIG_SELECT_IDS: [&str; 7] = [
-    "game-narrator-mode",
-    "game-narrative-perspective",
-    "game-narrative-tense",
-    "game-system-preset",
-    "game-quantifier-preset",
-    "game-impersonate-preset",
-    "game-options-preset",
-];
-
 fn assert_config_selects(games_panel: &str, disabled: bool, label: &str) {
-    for id in CONFIG_SELECT_IDS {
+    for id in crate::test_utils::GAME_CONFIG_SELECT_IDS {
         let marker = format!("id=\"{id}\"");
         let start = games_panel
             .find(&marker)
