@@ -8,31 +8,21 @@ use crate::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate, TextCheckCardTemplate,
 };
 use crate::error::EngineError;
+use crate::test_support::test_connection;
 
 fn two_connection_settings() -> AppSettings {
     AppSettings {
         connections: vec![
             LlmProviderConfig {
-                id: "conn-1".into(),
                 name: "Test Narrator".into(),
-                provider: LlmBackendType::OpenRouter,
-                model: "openai/gpt-4o-mini".into(),
                 api_key: Some("sk-test".into()),
-                base_url: None,
-                single_user_message: false,
-                max_tokens: None,
-                max_context_tokens: None,
+                ..test_connection("conn-1", LlmBackendType::OpenRouter)
             },
             LlmProviderConfig {
-                id: "conn-2".into(),
                 name: "Test Quantifier".into(),
-                provider: LlmBackendType::Ollama,
                 model: "llama3".into(),
-                api_key: None,
                 base_url: Some("http://localhost:11434".into()),
-                single_user_message: false,
-                max_tokens: None,
-                max_context_tokens: None,
+                ..test_connection("conn-2", LlmBackendType::Ollama)
             },
         ],
         narration_connection_id: "conn-1".into(),

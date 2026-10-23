@@ -244,6 +244,49 @@ Then the response is 400
 And the connection list still holds the connections it held before
 ```
 
+#### Scenario 20.29: The reasoning effort field stores the chosen effort
+
+```gherkin
+Given a fresh app state with a Connection that has no reasoning effort
+When the client edits that Connection with the reasoning effort field set to "high"
+Then the response is 200
+And the stored Connection holds the reasoning effort "high"
+And a following GET /fragment/connections/{id}/edit renders "high" as the selected reasoning effort option
+```
+
+#### Scenario 20.30: An empty reasoning effort field stores no effort
+
+```gherkin
+Given a fresh app state with a Connection whose reasoning effort is "high"
+When the client edits that Connection with an empty reasoning effort field
+Then the response is 200
+And the stored Connection holds no reasoning effort
+And a following GET /fragment/connections/{id}/edit renders "Provider default" as the selected reasoning effort option
+```
+
+#### Scenario 20.31: An unknown reasoning effort is refused
+
+```gherkin
+Given a fresh app state with a Connection whose reasoning effort is "high"
+When the client edits that Connection with the reasoning effort field set to "turbo"
+Then the response is 400
+And the body says the reasoning effort must be one of the listed values, or empty for the provider default
+And the stored Connection still holds the reasoning effort "high"
+When the client adds a Connection with the reasoning effort field set to "turbo"
+Then the response is 400
+And the body says the reasoning effort must be one of the listed values, or empty for the provider default
+And the connection list still holds the connections it held before
+```
+
+#### Scenario 20.32: Adding a connection stores the chosen reasoning effort
+
+```gherkin
+Given a fresh app state
+When the client adds a Connection with the reasoning effort field set to "low"
+Then the response is 200
+And the stored new Connection holds the reasoning effort "low"
+```
+
 ### POST /connections/{id}/test — connection test
 
 The test sends one short fixed prompt to a connection and reports the result
@@ -280,5 +323,15 @@ Given a saved mock connection
 When the client tests the Add/Edit form with a different mock model typed in
 Then the response is 200
 And the body reports a successful reply naming the typed model
+And the saved connections are unchanged
+```
+
+#### Scenario 20.33: The form test hands the typed reasoning effort to the provider
+
+```gherkin
+Given a saved mock connection
+When the client tests the Add/Edit form with the reasoning effort field set to "low"
+Then the response is 200
+And the provider that runs the test is built from a connection that holds the reasoning effort "low"
 And the saved connections are unchanged
 ```

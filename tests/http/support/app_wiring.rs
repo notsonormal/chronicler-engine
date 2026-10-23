@@ -17,8 +17,8 @@ use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig}
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, configured_runner, empty_sqlite_storage, make_test_job_deps,
-    make_test_recorder_with_storage, seed_game_row, test_new_game, ScriptedModel, TestAppBuilder,
-    TestDataBuilder, TestMap, TestNpc, TestPersona,
+    test_connection, make_test_recorder_with_storage, seed_game_row, test_new_game, ScriptedModel,
+    TestAppBuilder, TestDataBuilder, TestMap, TestNpc, TestPersona,
 };
 
 use crate::support::http_fixtures::{append_narrations, seeded_storage_with_initial_game};
@@ -147,7 +147,7 @@ pub fn long_story_app(window: Option<u32>) -> (axum::Router, AppState, Arc<Stora
     let connection = LlmProviderConfig {
         model: "mock-model".into(),
         max_context_tokens: window,
-        ..LlmProviderConfig::new("narration-conn", "narration-conn", LlmBackendType::Mock)
+        ..test_connection("narration-conn", LlmBackendType::Mock)
     };
     let settings = AppSettings {
         connections: vec![connection],

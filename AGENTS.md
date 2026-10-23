@@ -274,6 +274,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `world_defaults.rs` — Serde default-fn-pointers for WorldManifest fields.
         - `xml.rs` — XML string formatting utilities.
   - **test_support/**
+    - `chat_completions_mock.rs` — A one-request chat-completions endpoint on a free local port, for provider tests.
     - `context.rs` — Builds `WiredApp` instances for integration tests.
     - `env_guard.rs` — `ApiKeyEnvGuard` — serializes tests that mutate API-key environment variables.
     - `fixtures.rs` — Test fixtures shared between unit and integration tests.

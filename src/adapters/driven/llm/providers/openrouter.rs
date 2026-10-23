@@ -2,26 +2,30 @@
 //! OpenRouter LLM provider
 
 use crate::error::EngineError;
-use crate::domain::model::settings::LlmProviderConfig;
-use crate::adapters::driven::llm::transport::call_openrouter_with_model;
+use crate::domain::model::settings::{LlmProviderConfig, ReasoningEffort};
+use crate::adapters::driven::llm::transport::{call_chat_completions, ChatCompletionRequest};
 
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::application::prompting::prompt_merge::merge_single_user_message;
 
 #[derive(Clone, Default)]
 pub struct OpenRouterBackend {
+    base_url: String,
     api_key: String,
     model: String,
     single_user_message: bool,
+    reasoning_effort: Option<ReasoningEffort>,
 }
 
 impl OpenRouterBackend {
     pub fn from_config(connection: &LlmProviderConfig) -> Self {
         let api_key = connection.resolve_api_key().unwrap_or_default();
         Self {
+            base_url: connection.resolve_base_url(),
             api_key,
             model: connection.model.clone(),
             single_user_message: connection.single_user_message,
+            reasoning_effort: connection.reasoning_effort,
         }
     }
 
@@ -36,7 +40,18 @@ impl OpenRouterBackend {
         } else {
             (system_prompt, user_text.to_string())
         };
-        call_openrouter_with_model(&self.api_key, system, &user, &self.model, max_tokens)
+        call_chat_completions(
+            &self.base_url,
+            Some(&self.api_key),
+            Some("Chronicler Engine"),
+            &ChatCompletionRequest {
+                model: &self.model,
+                system_prompt: system,
+                user_text: &user,
+                max_tokens,
+                reasoning_effort: self.reasoning_effort,
+            },
+        )
     }
 }
 

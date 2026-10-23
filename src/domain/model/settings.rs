@@ -81,6 +81,64 @@ impl FromStr for NarratorMode {
     }
 }
 
+/// How much a model may reason before it answers, in the OpenRouter effort values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningEffort {
+    /// The model does not reason. Serialized as `none`.
+    #[serde(rename = "none")]
+    Off,
+    /// The least reasoning the model accepts.
+    Minimal,
+    /// Light reasoning.
+    Low,
+    /// Moderate reasoning.
+    Medium,
+    /// Heavy reasoning.
+    High,
+    /// Heavier reasoning than `High`.
+    XHigh,
+    /// The most reasoning the model accepts.
+    Max,
+}
+
+impl ReasoningEffort {
+    /// Every effort, in the order the connection form offers them.
+    pub const ALL: [Self; 7] = [
+        Self::Off,
+        Self::Minimal,
+        Self::Low,
+        Self::Medium,
+        Self::High,
+        Self::XHigh,
+        Self::Max,
+    ];
+
+    /// The value the provider receives in `reasoning.effort`.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Off => "none",
+            Self::Minimal => "minimal",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::XHigh => "xhigh",
+            Self::Max => "max",
+        }
+    }
+}
+
+impl FromStr for ReasoningEffort {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|effort| effort.as_str() == s)
+            .ok_or_else(|| format!("Unknown reasoning effort: {s}"))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ModePresetBundle {
     #[serde(default = "settings_defaults::default_narrator_mode")]
@@ -294,6 +352,8 @@ pub struct LlmProviderConfig {
     pub max_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_context_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<ReasoningEffort>,
 }
 
 impl LlmProviderConfig {
@@ -308,6 +368,7 @@ impl LlmProviderConfig {
             single_user_message: false,
             max_tokens: None,
             max_context_tokens: None,
+            reasoning_effort: None,
         }
     }
 
@@ -403,38 +464,27 @@ pub struct AppSettings {
 
 impl Default for AppSettings {
     fn default() -> Self {
-        let gpt4o = LlmProviderConfig {
-            id: "openrouter-gpt-4o-mini".into(),
-            name: "openrouter-gpt-4o-mini".into(),
-            provider: LlmBackendType::OpenRouter,
-            model: "openai/gpt-4o-mini".into(),
-            api_key: None,
-            base_url: None,
-            single_user_message: false,
-            max_tokens: None,
-            max_context_tokens: None,
-        };
+        let gpt4o = LlmProviderConfig::new(
+            "openrouter-gpt-4o-mini",
+            "openrouter-gpt-4o-mini",
+            LlmBackendType::OpenRouter,
+        );
         let euryale = LlmProviderConfig {
-            id: "openrouter-euryale".into(),
-            name: "openrouter-euryale".into(),
-            provider: LlmBackendType::OpenRouter,
             model: "sao10k/l3.3-euryale-70b".into(),
-            api_key: None,
-            base_url: None,
-            single_user_message: false,
-            max_tokens: None,
-            max_context_tokens: None,
+            ..LlmProviderConfig::new(
+                "openrouter-euryale",
+                "openrouter-euryale",
+                LlmBackendType::OpenRouter,
+            )
         };
         let gemma = LlmProviderConfig {
-            id: "ollama-gemma-4-26B".into(),
-            name: "ollama-gemma-4-26B".into(),
-            provider: LlmBackendType::Ollama,
             model: "hf.co/mradermacher/gemma-4-26B-A4B-it-abliterated-i1-GGUF:latest".into(),
-            api_key: None,
             base_url: Some("http://localhost:11434/v1".into()),
-            single_user_message: false,
-            max_tokens: None,
-            max_context_tokens: None,
+            ..LlmProviderConfig::new(
+                "ollama-gemma-4-26B",
+                "ollama-gemma-4-26B",
+                LlmBackendType::Ollama,
+            )
         };
         Self {
             connections: vec![gpt4o, euryale, gemma],

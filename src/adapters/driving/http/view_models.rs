@@ -6,7 +6,7 @@ use std::fmt;
 use crate::domain::model::dock::Notice;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PromptPreset;
-use crate::domain::model::settings::NarratorMode;
+use crate::domain::model::settings::{NarratorMode, ReasoningEffort};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::story_window::StoryWindowEntry;
 use crate::application::ports::text_checker::CheckResult;
@@ -58,6 +58,34 @@ impl SelectOptionView {
             selected: value == selected,
         })
         .collect()
+    }
+
+    /// "Provider default" (the empty value) first, then every effort in order.
+    pub fn reasoning_efforts(selected: Option<ReasoningEffort>) -> Vec<Self> {
+        std::iter::once(Self {
+            value: String::new(),
+            label: "Provider default".to_string(),
+            selected: selected.is_none(),
+        })
+        .chain(ReasoningEffort::ALL.into_iter().map(|effort| Self {
+            value: effort.as_str().to_string(),
+            label: Self::reasoning_effort_label(effort).to_string(),
+            selected: selected == Some(effort),
+        }))
+        .collect()
+    }
+
+    /// The label of one effort's option on the connection form.
+    fn reasoning_effort_label(effort: ReasoningEffort) -> &'static str {
+        match effort {
+            ReasoningEffort::Off => "None (reasoning off)",
+            ReasoningEffort::Minimal => "Minimal",
+            ReasoningEffort::Low => "Low",
+            ReasoningEffort::Medium => "Medium",
+            ReasoningEffort::High => "High",
+            ReasoningEffort::XHigh => "Extra high",
+            ReasoningEffort::Max => "Max",
+        }
     }
 
     /// Picker options for one preset slot. A stored selection comes back even when

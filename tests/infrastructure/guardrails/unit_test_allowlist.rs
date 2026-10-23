@@ -7,9 +7,6 @@ use crate::{SourceFile, Violation};
 pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
     "adapters/driven/llm/providers/deepseek_tests.rs",
     "adapters/driven/llm/providers/mock_tests.rs",
-    "adapters/driven/llm/providers/ollama_tests.rs",
-    "adapters/driven/llm/providers/openrouter_tests.rs",
-    "adapters/driven/llm/transport/utils/request_tests.rs",
     "adapters/driven/llm/transport/utils/response_tests.rs",
     "adapters/driven/storage/characters_tests.rs",
     "adapters/driven/storage/core_tests.rs",
@@ -89,6 +86,10 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
 // fails a `_tests.rs` file that carries `CASE` tags without being listed. Each
 // Agent is a box behind the LLM port, so its test file declares its cases.
 pub const SEAM_CONTRACT_FILES: &[&str] = &[
+    // The LLM providers and the transport are boxes behind the LLM port.
+    "adapters/driven/llm/providers/ollama_tests.rs",
+    "adapters/driven/llm/providers/openrouter_tests.rs",
+    "adapters/driven/llm/transport/utils/request_tests.rs",
     // Each Agent is a box behind the LLM port, so its test file declares its cases.
     "application/agents/options/agent_tests.rs",
     "application/agents/quantifier/agent_tests.rs",

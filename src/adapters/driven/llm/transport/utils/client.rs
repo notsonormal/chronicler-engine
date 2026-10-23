@@ -1,23 +1,26 @@
 //! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! LLM client implementation
 
+use super::request::ChatCompletionRequest;
 use crate::error::{EngineError, LlmFailure};
 
 pub fn call_chat_completions(
     base_url: &str,
     api_key: Option<&str>,
-    model: &str,
-    system_prompt: &str,
-    user_text: &str,
     title: Option<&str>,
-    max_tokens: Option<u32>,
+    request: &ChatCompletionRequest<'_>,
 ) -> crate::error::Result<super::request::ChatCompletionResult> {
-    use super::request::{
-        build_request_payload, configure_request, next_request_id, DEFAULT_MAX_TOKENS,
-    };
+    use super::request::{build_request_payload, configure_request, next_request_id};
     use super::response::handle_response;
 
-    let max_tokens = max_tokens.unwrap_or(DEFAULT_MAX_TOKENS);
+    let ChatCompletionRequest {
+        model,
+        system_prompt,
+        user_text,
+        reasoning_effort,
+        ..
+    } = *request;
+    let max_tokens = request.resolved_max_tokens();
     let req_id = next_request_id();
     let start_time = std::time::Instant::now();
 
@@ -41,15 +44,18 @@ pub fn call_chat_completions(
         user_text.len()
     );
     tracing::debug!("[LLM][req:{req_id}] Max tokens: {max_tokens}");
+    tracing::debug!(
+        "[LLM][req:{req_id}] Reasoning effort: {}",
+        reasoning_effort.map_or("provider default", |effort| effort.as_str())
+    );
 
     // Build request payload (pure function)
-    let (payload, raw_request_json) =
-        build_request_payload(model, system_prompt, user_text, max_tokens);
+    let (payload, raw_request_json) = build_request_payload(request);
     // Configure HTTP request (pure function)
     let url = format!("{base_url}/chat/completions");
-    let request = configure_request(&client, &url, &payload, api_key, title);
+    let http_request = configure_request(&client, &url, &payload, api_key, title);
     tracing::info!("[LLM][req:{req_id}] Sending request to {url}");
-    let res = request.send();
+    let res = http_request.send();
     // Handle response (delegates to extracted function)
     match res {
         Ok(response) => handle_response(
@@ -73,40 +79,4 @@ pub fn call_chat_completions(
             }))
         }
     }
-}
-
-pub fn call_openrouter_with_model(
-    api_key: &str,
-    system_prompt: &str,
-    user_text: &str,
-    model: &str,
-    max_tokens: Option<u32>,
-) -> crate::error::Result<super::request::ChatCompletionResult> {
-    call_chat_completions(
-        "https://openrouter.ai/api/v1",
-        Some(api_key),
-        model,
-        system_prompt,
-        user_text,
-        Some("Chronicler Engine"),
-        max_tokens,
-    )
-}
-
-pub fn call_ollama(
-    base_url: &str,
-    model: &str,
-    system_prompt: &str,
-    user_text: &str,
-    max_tokens: Option<u32>,
-) -> crate::error::Result<super::request::ChatCompletionResult> {
-    call_chat_completions(
-        base_url,
-        None,
-        model,
-        system_prompt,
-        user_text,
-        None,
-        max_tokens,
-    )
 }

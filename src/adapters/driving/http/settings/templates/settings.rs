@@ -186,6 +186,12 @@ impl SettingsTemplate {
             <input type="number" id="conn_max_context_tokens" name="conn_max_context_tokens" value="{{ max_context_tokens }}" min="1" placeholder="Empty uses the provider default" />
         </div>
         <div class="form-group">
+            <label for="conn_reasoning_effort">Reasoning effort</label>
+            <select name="conn_reasoning_effort" id="conn_reasoning_effort">
+                {{ reasoning_effort_options }}
+            </select>
+        </div>
+        <div class="form-group">
             <label for="conn_api_key">API Key</label>
             <input type="password" id="conn_api_key" name="conn_api_key" value="{{ api_key }}" placeholder="(optional)" />
         </div>
@@ -217,6 +223,7 @@ pub struct ConnectionFormTemplate {
     pub provider_options: SafeHtml,
     pub model: String,
     pub max_context_tokens: String,
+    pub reasoning_effort_options: SafeHtml,
     pub api_key: String,
     pub base_url: String,
     pub single_user_message: bool,
@@ -244,6 +251,9 @@ impl ConnectionFormTemplate {
                 .and_then(|conn| conn.max_context_tokens)
                 .map(|tokens| tokens.to_string())
                 .unwrap_or_default(),
+            reasoning_effort_options: select_options_html(SelectOptionView::reasoning_efforts(
+                connection.and_then(|conn| conn.reasoning_effort),
+            )),
             api_key: connection
                 .and_then(|conn| conn.api_key.clone())
                 .unwrap_or_default(),

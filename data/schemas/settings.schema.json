@@ -49,6 +49,11 @@
             "type": "integer",
             "minimum": 1,
             "description": "Optional maximum context window size in tokens."
+          },
+          "reasoning_effort": {
+            "type": "string",
+            "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+            "description": "Optional reasoning effort sent to OpenRouter and Ollama as reasoning.effort. When absent, no reasoning field is sent and the model default applies."
           }
         },
         "required": ["id", "name", "provider", "model"]

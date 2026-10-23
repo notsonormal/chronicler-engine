@@ -7,6 +7,7 @@ use crate::bootstrap::wiring::{WiredApp, build_app_graph};
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
 use crate::test_support::env_guard::ApiKeyEnvGuard;
+use crate::test_support::test_connection;
 
 fn settings_with(connection: LlmProviderConfig) -> AppSettings {
     let mut settings = AppSettings::default();
@@ -27,15 +28,8 @@ fn wired_app(connection: LlmProviderConfig, storage: Arc<Storage>) -> WiredApp {
 
 fn mock_connection() -> LlmProviderConfig {
     LlmProviderConfig {
-        id: "test-mock".to_string(),
-        name: "Test Mock".to_string(),
-        provider: LlmBackendType::Mock,
         model: "mock-model".to_string(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("test-mock", LlmBackendType::Mock)
     }
 }
 
@@ -80,15 +74,11 @@ fn mock_backend_recorder_persists_forensics_to_storage() {
 #[test]
 fn deepseek_path_returns_recorder() {
     let connection = LlmProviderConfig {
-        id: "test-deepseek".to_string(),
         name: "Test DeepSeek".to_string(),
-        provider: LlmBackendType::DeepSeek,
         model: "deepseek-chat".to_string(),
         api_key: Some("fake-key".to_string()),
         base_url: Some("https://api.deepseek.com".to_string()),
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("test-deepseek", LlmBackendType::DeepSeek)
     };
     let storage = Arc::new(Storage::new_in_memory());
 
@@ -101,15 +91,11 @@ fn deepseek_path_returns_recorder() {
 #[test]
 fn openrouter_path_returns_recorder() {
     let connection = LlmProviderConfig {
-        id: "test-openrouter".to_string(),
         name: "Test OpenRouter".to_string(),
-        provider: LlmBackendType::OpenRouter,
         model: "openrouter-model".to_string(),
         api_key: Some("fake-key".to_string()),
         base_url: Some("https://openrouter.ai/api/v1".to_string()),
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("test-openrouter", LlmBackendType::OpenRouter)
     };
     let storage = Arc::new(Storage::new_in_memory());
 
@@ -122,15 +108,10 @@ fn openrouter_path_returns_recorder() {
 #[test]
 fn ollama_path_returns_recorder() {
     let connection = LlmProviderConfig {
-        id: "test-ollama".to_string(),
         name: "Test Ollama".to_string(),
-        provider: LlmBackendType::Ollama,
         model: "llama3".to_string(),
-        api_key: None,
         base_url: Some("http://localhost:11434".to_string()),
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("test-ollama", LlmBackendType::Ollama)
     };
     let storage = Arc::new(Storage::new_in_memory());
 
@@ -147,15 +128,9 @@ fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
     // documents that the public composition entry point preserves the
     // same deferred-error contract.
     let connection = LlmProviderConfig {
-        id: "test-deepseek-missing".to_string(),
         name: "Test DeepSeek Missing".to_string(),
-        provider: LlmBackendType::DeepSeek,
         model: "deepseek-chat".to_string(),
-        api_key: None,  // Missing
-        base_url: None, // Missing
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("test-deepseek-missing", LlmBackendType::DeepSeek)
     };
     let storage = Arc::new(Storage::new_in_memory());
 
@@ -182,15 +157,9 @@ fn openrouter_connection_without_key_reports_missing_api_key() {
         std::env::remove_var("OPENROUTER_API_KEY");
     }
     let connection = LlmProviderConfig {
-        id: "test-openrouter-keyless".to_string(),
         name: "Keyless OpenRouter".to_string(),
-        provider: LlmBackendType::OpenRouter,
         model: "openrouter-model".to_string(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("test-openrouter-keyless", LlmBackendType::OpenRouter)
     };
     let storage = Arc::new(Storage::new_in_memory());
 

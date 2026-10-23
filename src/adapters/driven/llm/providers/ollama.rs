@@ -2,8 +2,8 @@
 //! Ollama LLM provider
 
 use crate::error::EngineError;
-use crate::domain::model::settings::LlmProviderConfig;
-use crate::adapters::driven::llm::transport::call_ollama;
+use crate::domain::model::settings::{LlmProviderConfig, ReasoningEffort};
+use crate::adapters::driven::llm::transport::{call_chat_completions, ChatCompletionRequest};
 
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::application::prompting::prompt_merge::merge_single_user_message;
@@ -13,6 +13,7 @@ pub struct OllamaBackend {
     base_url: String,
     model: String,
     single_user_message: bool,
+    reasoning_effort: Option<ReasoningEffort>,
 }
 
 impl OllamaBackend {
@@ -21,6 +22,7 @@ impl OllamaBackend {
             base_url: connection.resolve_base_url(),
             model: connection.model.clone(),
             single_user_message: connection.single_user_message,
+            reasoning_effort: connection.reasoning_effort,
         }
     }
 
@@ -36,12 +38,17 @@ impl OllamaBackend {
             user_text.to_string()
         };
         let user = self.preprocess_user_text(&user);
-        call_ollama(
+        call_chat_completions(
             &self.base_url,
-            &self.model,
-            system_prompt,
-            &user,
-            max_tokens,
+            None,
+            None,
+            &ChatCompletionRequest {
+                model: &self.model,
+                system_prompt,
+                user_text: &user,
+                max_tokens,
+                reasoning_effort: self.reasoning_effort,
+            },
         )
     }
 

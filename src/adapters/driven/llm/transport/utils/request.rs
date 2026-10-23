@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::json;
 
+use crate::domain::model::settings::ReasoningEffort;
+
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn next_request_id() -> u64 {
@@ -22,31 +24,48 @@ pub struct ChatCompletionResult {
     pub raw_response_json: String,
 }
 
-pub fn build_request_payload(
-    model: &str,
-    system_prompt: &str,
-    user_text: &str,
-    max_tokens: u32,
-) -> (serde_json::Value, String) {
+/// What one chat-completions call asks of the model. The endpoint (URL, key,
+/// title) is not part of it.
+#[derive(Debug, Clone, Copy)]
+pub struct ChatCompletionRequest<'a> {
+    pub model: &'a str,
+    pub system_prompt: &'a str,
+    pub user_text: &'a str,
+    /// `None` sends `DEFAULT_MAX_TOKENS`.
+    pub max_tokens: Option<u32>,
+    /// `None` sends no `reasoning` field, so the model default applies.
+    pub reasoning_effort: Option<ReasoningEffort>,
+}
+
+impl ChatCompletionRequest<'_> {
+    pub fn resolved_max_tokens(&self) -> u32 {
+        self.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)
+    }
+}
+
+pub fn build_request_payload(request: &ChatCompletionRequest<'_>) -> (serde_json::Value, String) {
     let mut messages = vec![];
-    if !system_prompt.is_empty() {
+    if !request.system_prompt.is_empty() {
         messages.push(json!({
             "role": "system",
-            "content": system_prompt
+            "content": request.system_prompt
         }));
     }
     messages.push(json!({
         "role": "user",
-        "content": user_text
+        "content": request.user_text
     }));
-    let payload = json!({
-        "model": model,
+    let mut payload = json!({
+        "model": request.model,
         "messages": messages,
         "stream": false,
-        "max_tokens": max_tokens
+        "max_tokens": request.resolved_max_tokens()
     });
-    let raw_request_json =
-        serde_json::to_string(&payload).unwrap_or_else(|_| format!("{{\"model\":\"{model}\"}}"));
+    if let Some(effort) = request.reasoning_effort {
+        payload["reasoning"] = json!({ "effort": effort });
+    }
+    let raw_request_json = serde_json::to_string(&payload)
+        .unwrap_or_else(|_| format!("{{\"model\":\"{}\"}}", request.model));
     (payload, raw_request_json)
 }
 

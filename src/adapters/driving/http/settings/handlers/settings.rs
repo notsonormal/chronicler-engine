@@ -18,7 +18,7 @@ use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id
 use crate::application::connection_test_service::ConnectionTestResult;
 use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
+use crate::domain::model::settings::{AppSettings, LlmProviderConfig, ReasoningEffort, TextCheckMode};
 use crate::error::EngineError;
 
 pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
@@ -71,6 +71,8 @@ pub struct ConnectionForm {
     #[serde(default)]
     pub conn_max_context_tokens: String,
     #[serde(default)]
+    pub conn_reasoning_effort: String,
+    #[serde(default)]
     pub single_user_message: bool,
 }
 
@@ -92,13 +94,34 @@ impl ConnectionForm {
         }
     }
 
-    /// `id` is the stored connection id, or empty for testing unsaved form values.
-    fn into_config(
-        self,
-        id: String,
-        provider: LlmBackendType,
-    ) -> Result<LlmProviderConfig, String> {
+    /// A blank field sends no reasoning field, so the model default applies.
+    /// Anything but a listed effort is refused.
+    fn resolved_reasoning_effort(&self) -> Result<Option<ReasoningEffort>, String> {
+        let typed = self.conn_reasoning_effort.trim();
+        if typed.is_empty() {
+            return Ok(None);
+        }
+        typed.parse::<ReasoningEffort>().map(Some).map_err(|_| {
+            "Reasoning effort must be one of the listed values, or empty for the provider \
+             default"
+                .to_string()
+        })
+    }
+
+    fn resolved_provider(&self) -> Result<LlmBackendType, String> {
+        self.conn_provider
+            .as_str()
+            .parse::<LlmBackendType>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// The one mapping from the form to a connection, shared by add, edit and the
+    /// form test. `id` is the stored connection id, or empty for testing unsaved
+    /// form values. The form does not own `max_tokens`, so it comes back `None`.
+    fn into_config(self, id: String) -> Result<LlmProviderConfig, String> {
+        let provider = self.resolved_provider()?;
         let max_context_tokens = self.resolved_max_context_tokens()?;
+        let reasoning_effort = self.resolved_reasoning_effort()?;
         Ok(LlmProviderConfig {
             id,
             name: self.conn_name,
@@ -109,6 +132,7 @@ impl ConnectionForm {
             single_user_message: self.single_user_message,
             max_tokens: None,
             max_context_tokens,
+            reasoning_effort,
         })
     }
 }
@@ -177,12 +201,7 @@ pub async fn add_connection_handler(
     State(app_state): State<AppState>,
     Form(form): Form<ConnectionForm>,
 ) -> Response<Body> {
-    let provider = match form.conn_provider.as_str().parse::<LlmBackendType>() {
-        Ok(p) => p,
-        Err(e) => return action_refusal_response(e.to_string()),
-    };
-
-    let connection = match form.into_config(generate_storage_id("conn"), provider) {
+    let connection = match form.into_config(generate_storage_id("conn")) {
         Ok(connection) => connection,
         Err(message) => return action_refusal_response(message),
     };
@@ -198,27 +217,18 @@ pub async fn edit_connection_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<ConnectionForm>,
 ) -> Response<Body> {
-    let provider = match form.conn_provider.as_str().parse::<LlmBackendType>() {
-        Ok(p) => p,
-        Err(e) => return action_refusal_response(e.to_string()),
-    };
-
-    let api_key = opt_string(&form.conn_api_key);
-    let base_url = opt_string(&form.conn_base_url);
-    let max_context_tokens = match form.resolved_max_context_tokens() {
-        Ok(tokens) => tokens,
+    let replacement = match form.into_config(id.clone()) {
+        Ok(connection) => connection,
         Err(message) => return action_refusal_response(message),
     };
     let outcome = app_state
         .settings_service
         .update_connection(&id, move |connection| {
-            connection.name = form.conn_name;
-            connection.provider = provider;
-            connection.model = form.conn_model;
-            connection.api_key = api_key;
-            connection.base_url = base_url;
-            connection.max_context_tokens = max_context_tokens;
-            connection.single_user_message = form.single_user_message;
+            let max_tokens = connection.max_tokens;
+            *connection = LlmProviderConfig {
+                max_tokens,
+                ..replacement
+            };
         });
 
     match outcome {
@@ -293,12 +303,7 @@ pub async fn test_form_connection_handler(
     State(app_state): State<AppState>,
     Form(form): Form<ConnectionForm>,
 ) -> Html<String> {
-    let provider = match form.conn_provider.as_str().parse::<LlmBackendType>() {
-        Ok(p) => p,
-        Err(e) => return connection_test_error(&e.to_string(), ConnectionTestSurface::Form),
-    };
-
-    let connection = match form.into_config(String::new(), provider) {
+    let connection = match form.into_config(String::new()) {
         Ok(connection) => connection,
         Err(message) => return connection_test_error(&message, ConnectionTestSurface::Form),
     };

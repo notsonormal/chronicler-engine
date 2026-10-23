@@ -7,18 +7,13 @@ use crate::application::errors::ApplicationError;
 use crate::application::settings_service::SettingsService;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::test_support::test_connection;
 
 fn mock_connection(id: &str, name: &str) -> LlmProviderConfig {
     LlmProviderConfig {
-        id: id.to_string(),
         name: name.to_string(),
-        provider: LlmBackendType::Mock,
         model: "mock-model".to_string(),
-        api_key: None,
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection(id, LlmBackendType::Mock)
     }
 }
 
