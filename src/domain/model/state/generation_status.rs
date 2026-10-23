@@ -28,7 +28,7 @@ impl GenerationFailureKind {
             Self::PromptTooLong => "The story was too long for the language model.".to_string(),
             Self::UnreadableAnswer => "The language model's answer could not be read.".to_string(),
             Self::TokenBudgetSpent => {
-                "The model used its budget on reasoning. Try another model.".to_string()
+                "Reasoning used the budget. Lower the reasoning effort.".to_string()
             }
             Self::EmptyText => "The language model gave an empty answer.".to_string(),
             Self::SaveFailed => "The new text could not be saved.".to_string(),

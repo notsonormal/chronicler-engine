@@ -10,13 +10,25 @@ use chronicler_engine::domain::model::message::{Maker, Message, Swipe, SwipeAt};
 use chronicler_engine::domain::model::state::message_types::{MessageKind, MessageType};
 use chronicler_engine::domain::model::state::swipe_state::SwipeState;
 use chronicler_engine::domain::model::map::MapDef;
-use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
+use chronicler_engine::domain::model::llm_backend::LlmBackendType;
+use chronicler_engine::domain::model::settings::{
+    LlmProviderConfig, NarrativePerspective, NarrativeTense, NarratorMode,
+};
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    active_game_of, empty_sqlite_storage, tx_token, TestMap, TestPersona, TestWorld,
+    active_game_of, empty_sqlite_storage, test_connection, tx_token, TestMap, TestPersona,
+    TestWorld,
 };
 
 use crate::support::http_requests::post_form;
+
+/// A Mock connection whose id doubles as its name.
+pub fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
+    LlmProviderConfig {
+        model: model.into(),
+        ..test_connection(id, LlmBackendType::Mock)
+    }
+}
 
 pub fn story_of_game(state: &AppState, game: GameId) -> Vec<Message> {
     state

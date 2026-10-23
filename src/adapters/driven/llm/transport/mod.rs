@@ -3,6 +3,6 @@
 
 mod utils;
 
-pub use utils::client::{call_openrouter_with_model, call_ollama};
+pub use utils::client::call_chat_completions;
 
-pub use utils::request::ChatCompletionResult;
+pub use utils::request::{ChatCompletionRequest, ChatCompletionResult};

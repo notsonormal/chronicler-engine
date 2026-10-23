@@ -4,6 +4,7 @@
 // state, and a failed write surfaces in the test's own assertions.
 #![allow(clippy::let_underscore_must_use)]
 
+pub mod chat_completions_mock;
 pub mod context;
 pub mod env_guard;
 pub mod fixtures;

@@ -23,6 +23,7 @@ mod races;
 mod reset;
 mod retrigger;
 mod settings;
+mod settings_connection_form;
 mod story_log;
 mod support;
 mod swipe_new;

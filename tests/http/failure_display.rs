@@ -17,7 +17,9 @@ use chronicler_engine::domain::model::state::generation_status::{
 use chronicler_engine::error::EngineError;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::fixtures::llm_message;
-use chronicler_engine::test_support::{configured_runner, ScriptedModel, TestAppBuilder};
+use chronicler_engine::test_support::{
+    configured_runner, test_connection, ScriptedModel, TestAppBuilder,
+};
 use chronicler_engine::test_support::{empty_sqlite_storage, set_game_config_row};
 
 use crate::SettingsTestGuard;
@@ -311,7 +313,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 
     let body = fetch_body(&app, "/status/generating").await;
     assert!(
-        body.contains("The model used its budget on reasoning. Try another model."),
+        body.contains("Reasoning used the budget. Lower the reasoning effort."),
         "a spent token budget must keep its own line: {body}"
     );
     assert!(
@@ -549,7 +551,7 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
     // window, so the prompt can never fit beside the system prompt.
     let connection = LlmProviderConfig {
         max_context_tokens: Some(512),
-        ..LlmProviderConfig::new("narration-conn", "narration-conn", LlmBackendType::Mock)
+        ..test_connection("narration-conn", LlmBackendType::Mock)
     };
     let settings = AppSettings {
         connections: vec![connection],

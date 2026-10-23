@@ -33,7 +33,8 @@
       "name": "deepseek-v4-flash",
       "provider": "OpenRouter",
       "model": "deepseek/deepseek-v4-flash",
-      "single_user_message": false
+      "single_user_message": false,
+      "reasoning_effort": "none"
     },
     {
       "id": "ollama-gemma-4-26B",

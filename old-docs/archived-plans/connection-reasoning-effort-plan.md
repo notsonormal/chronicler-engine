@@ -1,7 +1,7 @@
 # Reasoning effort per connection
 
 **Date:** 2026-10-22
-**Status:** Ready to implement. The owner decided all design questions in the grilling session of 2026-10-22, and the review questions R1 and R2 of the `improve-ai-plan` review.
+**Status:** Implemented on branch `reasoning-effort` (2026-10-23). The owner decided the design in the grilling session of 2026-10-22, the plan review questions R1 and R2, the browser-check question R3, and the post-implementation review questions (see "Post-implementation review").
 **Source:** the owner's report: `deepseek/deepseek-v4-flash` sometimes spends its whole token budget on reasoning. The research is in `tmp/research/reasoning_params.md` (git-ignored).
 
 ## Summary
@@ -41,7 +41,7 @@ Each fact is known from the provider docs or the live OpenRouter API, unless it 
 | D6 | The select offers "Provider default" (empty value) plus all seven OpenRouter values. The engine does not check whether the model accepts the value. |
 | D7 | The connection test sends the effort of the connection. A value that the model refuses then fails in the test, not during play. |
 | D8 | Effort only. There is no `reasoning.max_tokens` budget field. |
-| D9 | The spent-budget failure line becomes "Reasoning used the whole budget. Lower the reasoning effort." (59 characters). The owner first chose a longer text; review question R1 shortened it to fit the two-line clamp of the status column. |
+| D9 | The spent-budget failure line becomes "Reasoning used the budget. Lower the reasoning effort." (54 characters). The owner first chose a longer text. Review question R1 shortened it, and R3 shortened it again after a browser measurement: the text area of the status column is 183 px wide, and the R1 text needed three lines. |
 | D10 | The seed connection `deepseek-v4-flash` in `data/settings.json` gets `"reasoning_effort": "none"`. |
 
 No ADR: the change is easy to reverse.
@@ -154,7 +154,18 @@ Work test first (`tdd` skill). Write each spec scenario before its test.
 - A reasoning token budget (`reasoning.max_tokens`).
 - A `max_tokens` input on the connection form.
 
+## Post-implementation review (2026-10-23)
+
+Four reviewers (thermo-nuclear, `code-review`, `antipattern-checker`, `test-police`) reviewed the change. The merged findings are in `tmp/review/findings/consolidated.md` (git-ignored). The owner decided:
+
+- **Fix on the branch:** M1 (the edit handler uses `into_config`), M2 (a request struct replaces the 8-argument transport call), M3 (Scenarios 20.32 and 20.33 pin the add path and the form test), M4 (the connection-form scenarios move to their own test file), and L1 to L7.
+- **M5, behaviour change accepted:** `OpenRouterBackend` reads its URL from `resolve_base_url()`. A stored `base_url` on an OpenRouter connection is now used. The OpenRouter wiring gets the same stub tests as Ollama.
+- **M6, done on the branch:** `ollama_tests.rs`, `openrouter_tests.rs` and `request_tests.rs` became seam contracts with one `CASE` per test and left the legacy list. `request_tests.rs` is the request-side transport contract through `call_chat_completions`.
+- **M7, done on the branch:** the `test_connection` fixture replaces the hand-written `LlmProviderConfig` literals in the tests. The storage round-trip tests and `into_config` keep full literals on purpose.
+- **Rejected:** deleting the payload tests of `request_tests.rs` (thermo F8).
+
 ## Review questions
 
 - **R1.** Decided: Option A, the shorter D9 text.
 - **R2.** Decided: Option A, keep step 3 (the Ollama stub test).
+- **R3.** Decided after the step 7 browser check: Option A, drop "whole" from the R1 text, so the line fits two lines.

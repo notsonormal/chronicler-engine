@@ -2,10 +2,13 @@ use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::domain::model::{
     agent::{AgentConfig, BackendSelector},
-    settings::{AppSettings, LlmProviderConfig, NarratorMode, TextCheckMode, TextCheckSettings},
+    settings::{
+        AppSettings, LlmProviderConfig, NarratorMode, ReasoningEffort, TextCheckMode,
+        TextCheckSettings,
+    },
 };
 use crate::error::EngineError;
-use crate::test_support::sqlite_storage;
+use crate::test_support::{sqlite_storage, test_connection};
 
 #[test]
 fn test_get_settings_defaults_when_empty() {
@@ -383,15 +386,18 @@ fn test_save_settings_updates_existing_sqlite() {
 fn test_save_then_get_settings_preserves_connection_fields() {
     let storage = Storage::new_in_memory();
     let conn = LlmProviderConfig {
-        id: "conn-1".into(),
         name: "Conn 1".into(),
-        provider: crate::domain::model::llm_backend::LlmBackendType::Ollama,
         model: "llama3".into(),
         api_key: Some("secret-key".into()),
         base_url: Some("http://custom:11434".into()),
         single_user_message: true,
         max_tokens: Some(2048),
         max_context_tokens: Some(8192),
+        reasoning_effort: Some(ReasoningEffort::High),
+        ..test_connection(
+            "conn-1",
+            crate::domain::model::llm_backend::LlmBackendType::Ollama,
+        )
     };
 
     let settings = AppSettings {
@@ -416,21 +422,25 @@ fn test_save_then_get_settings_preserves_connection_fields() {
     assert!(loaded_conn.single_user_message);
     assert_eq!(loaded_conn.max_tokens, Some(2048));
     assert_eq!(loaded_conn.max_context_tokens, Some(8192));
+    assert_eq!(loaded_conn.reasoning_effort, Some(ReasoningEffort::High));
 }
 
 #[test]
 fn test_save_then_get_settings_preserves_connection_fields_sqlite() {
     let storage = sqlite_storage().unwrap();
     let conn = LlmProviderConfig {
-        id: "conn-1".into(),
         name: "Conn 1".into(),
-        provider: crate::domain::model::llm_backend::LlmBackendType::Ollama,
         model: "llama3".into(),
         api_key: Some("secret-key".into()),
         base_url: Some("http://custom:11434".into()),
         single_user_message: true,
         max_tokens: Some(2048),
         max_context_tokens: Some(8192),
+        reasoning_effort: Some(ReasoningEffort::High),
+        ..test_connection(
+            "conn-1",
+            crate::domain::model::llm_backend::LlmBackendType::Ollama,
+        )
     };
 
     let settings = AppSettings {
@@ -455,6 +465,7 @@ fn test_save_then_get_settings_preserves_connection_fields_sqlite() {
     assert!(loaded_conn.single_user_message);
     assert_eq!(loaded_conn.max_tokens, Some(2048));
     assert_eq!(loaded_conn.max_context_tokens, Some(8192));
+    assert_eq!(loaded_conn.reasoning_effort, Some(ReasoningEffort::High));
 }
 
 #[test]

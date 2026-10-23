@@ -3,9 +3,10 @@
 use std::str::FromStr;
 
 use crate::domain::model::llm_backend::LlmBackendType;
+use crate::test_support::test_connection;
 use crate::domain::model::settings::{
     AppSettings, LlmProviderConfig, ModePresetRegistry, NarrativePerspective, NarrativeTense,
-    NarratorMode, TextCheckMode, TextCheckSettings,
+    NarratorMode, ReasoningEffort, TextCheckMode, TextCheckSettings,
 };
 
 #[test]
@@ -435,15 +436,10 @@ fn set_active_preset_adds_a_bundle_for_an_absent_mode() {
 #[test]
 fn connection_resolve_api_key() {
     let conn = LlmProviderConfig {
-        id: "test".into(),
         name: "Test".into(),
-        provider: LlmBackendType::OpenRouter,
         model: "model".into(),
         api_key: Some("direct-key".into()),
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("test", LlmBackendType::OpenRouter)
     };
     assert_eq!(
         conn.resolve_api_key_with(|_| None),
@@ -466,15 +462,10 @@ fn connection_resolve_api_key() {
 #[test]
 fn resolve_api_key_blank_counts_as_absent() {
     let base = LlmProviderConfig {
-        id: "blank".into(),
         name: "Blank".into(),
-        provider: LlmBackendType::OpenRouter,
         model: "model".into(),
         api_key: Some(String::new()),
-        base_url: None,
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("blank", LlmBackendType::OpenRouter)
     };
     let env = |_: &str| Some("env-key".to_string());
     for blank in ["", "   ", "\t"] {
@@ -545,15 +536,10 @@ fn check_api_key_available() {
 #[test]
 fn connection_resolve_base_url() {
     let conn = LlmProviderConfig {
-        id: "test".into(),
         name: "Test".into(),
-        provider: LlmBackendType::Ollama,
         model: "model".into(),
-        api_key: None,
         base_url: Some("http://custom:11434".into()),
-        single_user_message: false,
-        max_tokens: None,
-        max_context_tokens: None,
+        ..test_connection("test", LlmBackendType::Ollama)
     };
     assert_eq!(conn.resolve_base_url(), "http://custom:11434");
 
@@ -592,4 +578,100 @@ fn connection_resolve_max_context_tokens_override() {
 
     conn.max_context_tokens = Some(2048);
     assert_eq!(conn.resolve_max_context_tokens(), 2048);
+}
+
+#[test]
+fn reasoning_effort_serializes_as_the_provider_value() {
+    let expected = [
+        (ReasoningEffort::Off, "none"),
+        (ReasoningEffort::Minimal, "minimal"),
+        (ReasoningEffort::Low, "low"),
+        (ReasoningEffort::Medium, "medium"),
+        (ReasoningEffort::High, "high"),
+        (ReasoningEffort::XHigh, "xhigh"),
+        (ReasoningEffort::Max, "max"),
+    ];
+    assert_eq!(expected.len(), ReasoningEffort::ALL.len());
+    for (effort, value) in expected {
+        let json = serde_json::to_string(&effort).unwrap();
+        assert_eq!(json, format!("\"{value}\""));
+        assert_eq!(
+            serde_json::from_str::<ReasoningEffort>(&json).unwrap(),
+            effort
+        );
+        assert_eq!(effort.as_str(), value);
+        assert_eq!(ReasoningEffort::from_str(value).unwrap(), effort);
+    }
+}
+
+#[test]
+fn reasoning_effort_from_str_unknown_errors() {
+    assert!(ReasoningEffort::from_str("turbo").is_err());
+    assert!(ReasoningEffort::from_str("").is_err());
+}
+
+#[test]
+fn connection_json_without_reasoning_effort_reads_as_none() {
+    let json = r#"{"id":"c","name":"c","provider":"OpenRouter","model":"m"}"#;
+    let connection: LlmProviderConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(connection.reasoning_effort, None);
+}
+
+#[test]
+fn connection_json_with_reasoning_effort_reads_the_value() {
+    let json =
+        r#"{"id":"c","name":"c","provider":"OpenRouter","model":"m","reasoning_effort":"none"}"#;
+    let connection: LlmProviderConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(connection.reasoning_effort, Some(ReasoningEffort::Off));
+}
+
+#[test]
+fn connection_json_with_unknown_reasoning_effort_fails() {
+    let json =
+        r#"{"id":"c","name":"c","provider":"OpenRouter","model":"m","reasoning_effort":"turbo"}"#;
+    assert!(serde_json::from_str::<LlmProviderConfig>(json).is_err());
+}
+
+#[test]
+fn connection_without_reasoning_effort_does_not_serialize_the_field() {
+    let connection = LlmProviderConfig::new("c", "c", LlmBackendType::OpenRouter);
+    let json = serde_json::to_string(&connection).unwrap();
+    assert!(!json.contains("reasoning_effort"), "{json}");
+}
+
+#[test]
+fn settings_schema_reasoning_effort_enum_lists_every_effort() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/data/schemas/settings.schema.json"
+    );
+    let schema: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let listed = schema
+        .pointer("/properties/connections/items/properties/reasoning_effort/enum")
+        .expect("the schema lists the reasoning_effort enum");
+    let every_effort: Vec<serde_json::Value> = ReasoningEffort::ALL
+        .iter()
+        .map(|effort| serde_json::to_value(effort).unwrap())
+        .collect();
+    assert_eq!(listed, &serde_json::Value::Array(every_effort));
+}
+
+#[test]
+fn seed_settings_turn_reasoning_off_for_deepseek_v4_flash() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/data/settings.json");
+    let settings: AppSettings =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let flash: Vec<_> = settings
+        .connections
+        .iter()
+        .filter(|connection| connection.name == "deepseek-v4-flash")
+        .collect();
+    assert!(
+        !flash.is_empty(),
+        "the seed lists a deepseek-v4-flash connection"
+    );
+    for connection in flash {
+        assert_eq!(connection.reasoning_effort, Some(ReasoningEffort::Off));
+    }
 }

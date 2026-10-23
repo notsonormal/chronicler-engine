@@ -10,7 +10,10 @@ use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::game::GameId;
 use crate::domain::model::message::{Maker, Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
+use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::settings::{
+    LlmProviderConfig, NarrativePerspective, NarrativeTense, NarratorMode,
+};
 use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
@@ -26,6 +29,14 @@ use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::LlmProvider;
+
+/// A connection with every optional field unset and its name equal to its id.
+/// A test sets the fields it cares about with struct-update syntax:
+/// `LlmProviderConfig { model: "m".into(), ..test_connection("c", LlmBackendType::Mock) }`.
+/// A new connection field needs no edit in a test that does not use it.
+pub fn test_connection(id: &str, provider: LlmBackendType) -> LlmProviderConfig {
+    LlmProviderConfig::new(id, id, provider)
+}
 
 pub struct TestWorld;
 
