@@ -34,8 +34,9 @@ def parse_args():
     parser.add_argument(
         "--ignore-regex",
         type=str,
-        default=r"main\.rs|server[/\\]mod\.rs|server[/\\]fragments\.rs|openrouter_client\.rs",
-        help="Regex pattern for files to exclude from coverage check",
+        default="",
+        help="Regex pattern for files to exclude from coverage check "
+        "(build.py excludes its files when it writes the report)",
     )
     return parser.parse_args()
 

@@ -46,7 +46,7 @@ _Nothing yet._
 
 ## Out of scope
 
-- **A re-sweep to confirm the frictions stopped.** Ruled out by Q1=A. A later `/reflect` run is a fresh effort.
+- **A re-sweep to confirm the frictions stopped.** Ruled out by Q1=A. A later `/retro` run is a fresh effort.
 - **The synthesizer's 9 rejected findings.** Listed in [findings.md § Rejected](assets/findings.md#rejected-by-the-synthesizer). They come back only through a ticket that brings new evidence.
 - **Rewording skill-body advice in the hope it binds.** Ruled out by Q7. Such findings are dropped unless they become a habit or a mechanism.
 - **New skills for agent config or worktree lifecycle.** Rejected as `existing-skill-first`. Their mechanism parts were routed to F09, F10 and F13; F09 and F10 were later dropped in [Decide which mechanisms to build](issues/02-decide-mechanisms-to-build.md), and F13 became [Prune worktrees safely](issues/05-safe-worktree-prune.md).

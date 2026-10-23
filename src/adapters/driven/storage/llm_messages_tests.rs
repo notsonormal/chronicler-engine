@@ -73,6 +73,7 @@ async fn test_list_latest_llm_messages_ordered_by_created_at() {
     storage
         .save_llm_message(&dummy_llm_message("first"))
         .unwrap();
+    // Give the second message a later `created_at`, so the asserted order is defined.
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     storage
         .save_llm_message(&dummy_llm_message("second"))

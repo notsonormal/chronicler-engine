@@ -11,14 +11,17 @@ Usage:
 
 Exit codes:
     0  all checks ran
-    1  a check failed (jscpd missing, parse error, etc.)
+    1  a check failed (npx missing, parse error, etc.)
+
+Dependencies:
+    Node.js (for `npx`). The first run downloads the jscpd version that
+    `JSCPD_VERSION` pins into the npx cache; later runs reuse that copy.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -29,6 +32,8 @@ from pathlib import Path
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REPORT = WORKSPACE_ROOT / "report" / "jscpd-report.json"
+# Pinned, so every machine runs the same jscpd version.
+JSCPD_VERSION = "5.4.2"
 
 
 @dataclass
@@ -50,28 +55,11 @@ def register(name: str):
     return deco
 
 
-def is_executable(path: str) -> bool:
-    """Check if a file is executable on the current platform."""
-    if sys.platform == "win32":
-        return path.lower().endswith((".exe", ".cmd", ".bat"))
-    try:
-        return os.access(path, os.X_OK)
-    except OSError:
-        return False
-
-
 def find_jscpd() -> tuple[str, list[str]] | None:
-    """Discover jscpd binary or npx. Returns (binary, extra_args) or None."""
-    found = shutil.which("jscpd")
-    if found and is_executable(found):
-        return (found, [])
-    candidate = Path.home() / ".pi-lens" / "tools" / "node_modules" / ".bin" / "jscpd"
-    if candidate.exists() and is_executable(str(candidate)):
-        return (str(candidate), [])
-    # Fallback: npx will fetch and run jscpd on demand
+    """The npx command that runs the pinned jscpd, or None when npx is missing."""
     npx = shutil.which("npx")
     if npx:
-        return (npx, ["jscpd"])
+        return (npx, ["--yes", f"jscpd@{JSCPD_VERSION}"])
     return None
 
 
@@ -80,8 +68,8 @@ def run_jscpd(report_path: Path, min_lines: int = 3, min_tokens: int = 30) -> tu
     result = find_jscpd()
     if not result:
         return False, (
-            "jscpd not found. Install with `npm install -g jscpd`, or "
-            "ensure pi-lens tools are installed at ~/.pi-lens/tools/"
+            f"npx not found. Install Node.js; the first run then downloads "
+            f"jscpd {JSCPD_VERSION}."
         )
     binary, extra_args = result
 

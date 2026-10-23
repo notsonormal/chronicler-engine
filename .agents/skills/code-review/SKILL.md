@@ -12,10 +12,6 @@ Both axes run as **parallel sub-agents** so they don't pollute each other's cont
 
 The issue tracker should have been provided to you. If `docs/agents/issue-tracker.md` is missing, ask the user where issues live.
 
-## Do not build or run tests
-
-Ensure that the application is working is part of the implementation, assume the build is working. If is the build happening to be failing, that is not the responsibility of this skill and would be a distraction.
-
 ## Process
 
 ### 1. Pin the fixed point
@@ -96,6 +92,5 @@ Reporting them separately stops one axis from masking the other.
 
 Load in the following skills to verify the review, to ensure that the suggestions are a rank improvement.
 
-- `/code-simplification` (`.agents/skills/code-simplification/SKILL.md`)
 - `/antipattern-checker` (`.agents/skills/antipattern-checker/SKILL.md`)
 - `/chronicler-docs-hygiene` (`.agents/skills/chronicler-docs-hygiene/SKILL.md`)

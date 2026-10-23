@@ -96,6 +96,8 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:173` |
 | separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:253` |
 | single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:268` |
+| no ignored tests | Rejects every `#[ignore]`d fn, also through `cfg_attr`; the caller exempts `tests/llm/`. | `tests/infrastructure/guardrails/test_hygiene.rs:12` |
+| sleep has reason | Rejects a `sleep(..)` call in a test that has no `//` comment on the line above it. | `tests/infrastructure/guardrails/test_hygiene.rs:37` |
 | unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:181` |
 | banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:168` |
 | call site rows | Runs the call-site table: only what a row allows may call its callees. | `tests/infrastructure/guardrails/walkers.rs:395` |
@@ -105,7 +107,7 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 
 ## 4. Coverage Exclusion Policy
 
-Coverage is measured via `cargo-llvm-cov` with file-level exclusions configured through the `--ignore-filename-regex` flag in `build.py`. The flag is used in preference to `#[coverage(off)]` attributes because the latter requires nightly Rust (feature `coverage_attribute`) and stable Rust compatibility is required. The exclusion regex targets wiring/lifecycle files (server infrastructure, `test_support`, bootstrap CLI entry, LLM backend clients), which are covered by integration tests rather than unit coverage.
+Coverage is measured via `cargo-llvm-cov` with file-level exclusions configured through the `--ignore-filename-regex` flag in `build.py`. The flag is used in preference to `#[coverage(off)]` attributes because the latter requires nightly Rust (feature `coverage_attribute`) and stable Rust compatibility is required. The excluded files and the reason for each are in `_generate_coverage_report` in `build.py`.
 
 ## Document References
 

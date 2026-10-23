@@ -14,10 +14,6 @@ Above all, this skill should push the reviewer to be **ambitious** about code st
 
 Always read `CODING_STANDARDS.md` before reviewing.
 
-## Do not build or run tests
-
-Ensure that the application is working is part of the implementation, assume the build is working. If is the build happening to be failing, that is not the responsibility of this skill and would be a distraction.
-
 ## Core Prompt
 
 Start from this baseline:
@@ -140,15 +136,15 @@ When you identify a code-quality problem, prefer suggestions like:
 Do not be satisfied with "maybe rename this" feedback when the real issue is structural.
 Do not be satisfied with a merely cleaner version of the same messy idea if there is a plausible path to a much simpler idea.
 
+Before you propose a simplification, check that it keeps the behaviour, keeps a helper whose name carries a concept, keeps a seam that tests use, and does not merge unrelated logic.
+
 ## Extra lens
 
 Load in the following skills to add additional lens to your review. At times this review have introduced antipatterns or suggested bad architecture. So use these to ensure that the suggested improvements are productive and forward thinking.
 
-- `/code-simplification` (`.agents/skills/code-simplification/SKILL.md`)
 - `/antipattern-checker` (`.agents/skills/antipattern-checker/SKILL.md`)
 - `/chronicler-docs-hygiene` (`.agents/skills/chronicler-docs-hygiene/SKILL.md`)
 - `/improve-codebase-architecture` (`.agents/skills/improve-codebase-architecture/SKILL.md`)
-- `/doubt-driven-development` (`.agents/skills/doubt-driven-development/SKILL.md`)
 
 ## Review Tone
 

@@ -1541,8 +1541,12 @@ def _generate_coverage_report(args, cargo_env):
     cargo_target_dir, _ = _target_paths(args)
     json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
     json_path.parent.mkdir(parents=True, exist_ok=True)
-    # Exclude: server infra (integration tests), test_support, bootstrap CLI, LLM backends (mock servers)
-    ignore_regex = r"server[\\/](router|server_impl|handlers)\.rs|test_support[\\/].*\.rs|bootstrap[\\/]init_game\.rs|narrative[\\/]llm[\\/](openrouter|ollama|deepseek|backend)\.rs"
+    # Excluded: code that no test reaches (the process entry, the logging setup, the
+    # real-HTTP LLM client), and test support.
+    ignore_regex = (
+        r"src[\\/]main\.rs|bootstrap[\\/]logging\.rs"
+        r"|llm[\\/]transport[\\/]utils[\\/]client\.rs|test_support[\\/].*\.rs"
+    )
     run(
         f'cargo llvm-cov report --json --output-path "{json_path}" --ignore-filename-regex "{ignore_regex}"',
         check=False,

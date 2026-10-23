@@ -6,7 +6,7 @@
 
 ## Summary
 
-Make a parallel run of tickets a repeatable process. Implementers work in their own worktrees. The coordinator merges each worktree into the main checkout, where the changes stay uncommitted. Commits happen only through `/commit-and-push`, after the owner reviews the merged tree.
+Make a parallel run of tickets a repeatable process. Implementers work in their own worktrees. The coordinator merges each worktree into the main checkout, where the changes stay uncommitted. Commits happen only after the owner reviews the merged tree and approves the commit.
 
 The candidate changes are a merge script, a rewritten orchestration skill, a duplicate scenario check, a worktree cleanup path and an empty-diff exit for the review bundle. Several of them depend on open questions. Each change names the questions it depends on.
 
@@ -23,7 +23,7 @@ In the phase-2 run, the coordinator improvised the process. These problems came 
 ## Decided in conversation
 
 - The integration-branch and draft-PR flow of `implement-spec` is rejected.
-- The merged changes sit uncommitted in the main checkout until the owner reviews them. Commits go through `/commit-and-push`.
+- The merged changes sit uncommitted in the main checkout until the owner reviews them. A commit needs the owner's approval.
 
 Everything else in this plan is a proposal.
 
@@ -181,7 +181,7 @@ Proposed steps, with Q1 option A (rewrite `implement-spec`):
 6. File each reported follow-up in the map's follow-up ticket, with its source ticket.
 7. When all tickets are merged, run `/simple-after-plan` (full mode) over the merged tree. Fixes per Q7.
 8. Set `Status: resolved` and write the map's Decisions-so-far lines.
-9. Report to the owner. Commit through `/commit-and-push` after approval (Q3). Remove the worktrees (item 5).
+9. Report to the owner. Commit after approval (Q3). Remove the worktrees (item 5).
 
 Remove from the skill: the integration branch, the merger subagent, the draft PR, the "merge the integration tip before reporting" step, `/tdd` as a hard rule (the ticket's own test rules apply), and the references to `/to-spec`, `/to-tickets` and `/setup-matt-pocock-skills`. Rewrite the `description` per `.agents/skills/writing-for-agents/SKILL.md`, and keep `disable-model-invocation: true`.
 

@@ -52,7 +52,7 @@ Outside the repo (known): the owner's live instructions in a session. They have 
 | A8 | Permission config (`.pi/extensions/pi-permission-system/config.json`) | Which tool calls a session may make (deny `*.env`, `timeout`, repo-root `grep`, edits of the config) | Agent sessions of pi; not people | At each tool call | Default is `"*": "allow"`. Git use is limited by text, not by the config (`AGENTS.md:396`). Each deny carries a reason that names a past hang | `.pi/extensions/pi-permission-system/config.json`; `AGENTS.md:392-396` | known |
 | A9 | Delegate roles and the brief (`.pi/agents/*.md`, `AGENTS.md:398-408`) | What a subagent reads first and what it must return | Delegated agent sessions | Brief: the `files` list becomes "Files to read first" | Role files hold a header only (7 files, 76 to 190 bytes). `AGENTS.md` records a case where an `implementer` run "came back wrong on points its brief had already decided" | `.pi/agents/implementer.md`; `.pi/extensions/delegate/lib.ts:134`; `AGENTS.md:398-408` | known |
 | A10 | Pi system-prompt addendum (`.pi/APPEND_SYSTEM.md`) | Prose style (ASD-STE100), and "Ground language strictly in ... `CONTEXT.md`" | Agent sessions of pi (all of them) | Loaded | It names `CONTEXT.md` with no word on what to do at a gap. First seen in `8a972120` (2026-08-09) | `.pi/APPEND_SYSTEM.md:14`; `git log -S'Ground language strictly'` | known |
-| A11 | Retro and incident rules (skills `retro`, `reflect`; commits that add a check after a failure) | The other ways: it adds a gate step, a row or a pointer | Writers of the next change | Gate or pointer, after the fact | Each case follows a failure: `428f676b` (bypass), `04c9180d` (stale root docs), `977ba3f7` (rows "land with the code they guard") | commits `428f676b`, `04c9180d`, `48553d10`; `walker_rows.rs:9` | known (commits), guessed (skill role: I did not read the skills) |
+| A11 | Retro and incident rules (skill `retro`; commits that add a check after a failure) | The other ways: it adds a gate step, a row or a pointer | Writers of the next change | Gate or pointer, after the fact | Each case follows a failure: `428f676b` (bypass), `04c9180d` (stale root docs), `977ba3f7` (rows "land with the code they guard") | commits `428f676b`, `04c9180d`, `48553d10`; `walker_rows.rs:9` | known (commits), guessed (skill role: I did not read the skills) |
 
 ## Per-way notes
 
@@ -165,7 +165,7 @@ Inferred: a plan that orders a deletion produces the fall of a name with no entr
 
 ## What I did not do
 
-- I did not read the bodies of the skills `retro`, `reflect`, `wayfinder` or the docs-hygiene scout brief. A11 is partly guessed for this reason.
+- I did not read the bodies of the skills `retro`, `wayfinder` or the docs-hygiene scout brief. A11 is partly guessed for this reason.
 - I did not run the gate, any test or the hook. The count of 191 guardrail tests and the gate order come from `logs/build_history.txt` and `build.py`.
 - I did not check whether a session opened a file. Git and the repo do not record it.
 - I did not open `charting-notes.md`, `research-01-*` or `research-02-*`.

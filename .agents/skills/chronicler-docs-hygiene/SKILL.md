@@ -40,7 +40,7 @@ Completion: every in-scope file audited against each anchor; each finding carrie
 
 Flag: rubric tests (mentioned with no assertion); past-tense deletion history ("was removed on DATE", "deleted in Phase X", "never wired"); external forum links (Reddit / StackOverflow / HN); PR-style validation metrics ("Reduced tokens from N to ~M"); implementation summaries (sections that could be deleted without losing contract info); bulk field/symbol bullets (`**foo**: desc. **bar**: desc. **baz**: desc. ...`).
 
-Past-tense deletion history often co-occurs with Phase 1's no-negative-explaining or justification-tail findings — flag the prose once, citing both phases.
+Past-tense deletion history often co-occurs with Phase 2's no-negative-explaining or justification-tail findings — flag the prose once, citing both phases.
 
 Completion: every prose line in every in-scope file covered; each finding cites `FILE:LINE` and Sediment subtype.
 

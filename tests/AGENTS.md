@@ -6,7 +6,7 @@ Read [`STRATEGY.md`](STRATEGY.md) before placing a test or writing a spec scenar
 
 ## Failure handling
 
-When tests fail, you MUST:
+When tests fail, you must:
 
 1. **Show the actual test output** — quote the failure message verbatim.
 2. **Read the test code** — understand what the test is actually checking before explaining why it failed.
@@ -142,6 +142,8 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `structure_tests.rs` — Tests for `structure.rs` guardrail.
       - `style.rs` — Style guardrail tests: import ordering, single-letter variable usage, separator comments, long comment runs, and per-file `cfg(test)` tracking.
       - `style_tests.rs` — Tests for `style.rs` guardrail.
+      - `test_hygiene.rs` — Test hygiene guardrails: no `#[ignore]`d test outside `tests/llm/`, and no bare sleep in a test without a comment that gives its reason.
+      - `test_hygiene_tests.rs` — Tests for the `test_hygiene.rs` guardrails.
       - `unit_test_allowlist.rs` — The legacy unit-test list and its allowlist guardrail: a unit test lives in a seam contract, a `domain/model/` file, or a listed legacy file.
       - `unit_test_allowlist_tests.rs` — Detection tests for the legacy and seam-contract allowlist guardrail: a unit test lives in a listed seam contract, a `domain/model/` file, or a listed legacy file.
       - `walker_rows.rs` — The four design-rule walker row tables: one table per kind, and each row's reason on the comments above it.

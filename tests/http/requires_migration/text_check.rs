@@ -26,6 +26,7 @@ async fn story_log_contains(app: &axum::Router, needle: &str) -> bool {
         if body_str.contains(needle) {
             return true;
         }
+        // Poll interval: the story log changes only after the background work ends.
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     false

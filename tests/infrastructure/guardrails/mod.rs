@@ -8,6 +8,7 @@ pub mod location;
 pub mod nesting;
 pub mod structure;
 pub mod style;
+pub mod test_hygiene;
 pub mod unit_test_allowlist;
 pub mod walker_rows;
 pub mod walkers;
@@ -19,6 +20,7 @@ pub use layers::*;
 pub use nesting::*;
 pub use structure::*;
 pub use style::*;
+pub use test_hygiene::*;
 pub use location::*;
 pub use unit_test_allowlist::*;
 pub use walker_rows::*;
@@ -32,6 +34,9 @@ mod free_fn_tests;
 
 #[cfg(test)]
 mod location_tests;
+
+#[cfg(test)]
+mod test_hygiene_tests;
 
 #[cfg(test)]
 mod structure_tests;
@@ -325,6 +330,41 @@ fn guardrails_test_file_location() {
         errors.extend(check_test_file_location(&rel, &content));
     }
     assert_violations(&errors, "test file location (src)");
+}
+
+#[test]
+fn guardrails_no_ignored_tests_src() {
+    check_src_files("no ignored tests (src)", check_no_ignored_tests);
+}
+
+#[test]
+fn guardrails_no_ignored_tests_tests() {
+    check_tests_files("no ignored tests (tests)", |path, content| {
+        if path.starts_with("llm/") {
+            return Vec::new();
+        }
+        check_no_ignored_tests(path, content)
+    });
+}
+
+#[test]
+fn guardrails_sleep_has_reason_src() {
+    check_src_files("sleep has a reason (src)", |path, content| {
+        if !path.ends_with("_tests.rs") {
+            return Vec::new();
+        }
+        check_sleep_has_reason(path, content)
+    });
+}
+
+#[test]
+fn guardrails_sleep_has_reason_tests() {
+    check_tests_files("sleep has a reason (tests)", |path, content| {
+        if path.starts_with("llm/") || path.starts_with("test_utils/") {
+            return Vec::new();
+        }
+        check_sleep_has_reason(path, content)
+    });
 }
 
 #[test]

@@ -3,13 +3,13 @@ name: diataxis-doc-review
 description: Break the LLM's status-quo bias when reviewing chronicler_engine docs. Judge whether each diataxis doc earns its place or is merely inherited from what's already there.
 ---
 
-When LLM writes documentation, it tend to write what it knows. Either from it's own knowledgebase or by reading the code. The problem is that this kind of documentation is useless, because it obvious stuff that it already knows and because reading code is a far better way to understand the code.
+When an LLM writes documentation, it tends to write what it knows, either from its own knowledge base or by reading the code. The problem is that this kind of documentation is useless, because it states obvious stuff that it already knows and because reading code is a far better way to understand the code.
 
 Getting an LLM to write good documentation is a struggle against the initial instincts of every LLM.
 
-Another issue the LLM will look at nearby documentation to see what documentation should look like. This works for code because code at least has to compile for it's usually in a decent state. However, documentation easily rots so the entire suite of documentation can easily be trash. The problem is causes is that LLM will constantly justify the existance of bad documentation because it matches the existing document which is also bad. This can make it insanely difficult to get an LLM to fix documentation without stating exactly what the problems are in super specific detail. 
+Another issue: the LLM will look at nearby documentation to see what documentation should look like. This works for code because code at least has to compile, so it's usually in a decent state. However, documentation easily rots, so the entire suite of documentation can easily be trash. The problem this causes is that the LLM will constantly justify the existence of bad documentation because it matches the existing documentation, which is also bad. This can make it insanely difficult to get an LLM to fix documentation without stating exactly what the problems are in super specific detail. 
 
-In general, it can be a struggle to get LLM to think about documentation in a systematic and holistic way. Like, I often ask it to fix something and it says "oh that makes sense and goes and fixes half of it" and then I have to constantly follow up to get it to keep fixing, repeating the exact same principles I started with. 
+In general, it can be a struggle to get an LLM to think about documentation in a systematic and holistic way. Like, I often ask it to fix something, and it says "oh, that makes sense", goes and fixes half of it, and then I have to constantly follow up to get it to keep fixing, repeating the exact same principles I started with. 
 
 # Diátaxis
 

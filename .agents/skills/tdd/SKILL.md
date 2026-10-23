@@ -42,7 +42,6 @@ When the shape of that interface is itself in question — how deep the module i
 - Integration tests go in `tests/`, one file per area (`tests/http/`, `tests/browser/`, `tests/storage/`, …). A `*_tests.rs` must be declared in a sibling `mod.rs` or the parent `<stem>.rs`, and an inline `mod tests` is rejected — `scripts/check_test_structure.py` runs in the gate, so this structure is enforced, not advisory.
 - Read [tests/STRATEGY.md](../../../tests/STRATEGY.md) before choosing a seam. It says which tier a test belongs in and why.
 - When a test fails, [tests/AGENTS.md](../../../tests/AGENTS.md) carries the failure-handling protocol — never rationalise a failure away.
-- For repo-specific conventions — the test inventory, wait helpers, what belongs in the browser tier — see the `test-police` skill.
 
 ## A note on tests that cannot fail
 
