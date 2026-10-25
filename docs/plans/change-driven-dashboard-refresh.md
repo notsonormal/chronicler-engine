@@ -1,7 +1,7 @@
 # Plan: Change-driven dashboard refresh
 
 **Date:** 2026-10-25
-**Status:** In progress. The design was decided with the owner, reviewed against the code, and the two decisions from the review are made (D1, D2). Stages 1 and 2a are built and committed on `wf/change-driven-dashboard-refresh`; stages 2b–4 are not started.
+**Status:** In progress. The design was decided with the owner, reviewed against the code, and the two decisions from the review are made (D1, D2). Stages 1–3 are built and committed on `wf/change-driven-dashboard-refresh`; stage 4 is in progress.
 **Goal:** One architecture for how the dashboard shows server data. Data flows one way: an action saves data, and the regions that show the data load it. A region loads only when its data changed, keeps what the load does not change, and waits while the player edits in it. One table, one load path and one test cover every region. A missed load or a destroyed form fails a test. It does not depend on timing.
 
 This plan replaces `docs/plans/games-panel-rename-form-survives-the-poll.md`, which was never committed. It closes `.scratch/autoplay-follow-ups/issues/04-rename-form-survives-the-games-panel-poll.md` at the end of stage 3.

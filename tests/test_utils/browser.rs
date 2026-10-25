@@ -11,7 +11,7 @@ use super::server::{buffer_text, get_config_port, registered_server_logs, tail_l
 use super::stub_server::StubServer;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_element_children;
-use super::wait::wait_until_visible;
+use super::wait::{wait_for_condition_async, wait_until_visible};
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
 use super::wait::wait_for_action_acknowledged;
@@ -179,7 +179,7 @@ pub async fn open_prompt_presets_tab(page: &playwright_rs::Page) {
 pub async fn open_world_edit(page: &playwright_rs::Page) {
     open_worlds_tab(page).await;
     let edit_selector = r#".world-item:has(strong:text-is("Test Realm")) button:has-text('Edit')"#;
-    click_and_settle(page, edit_selector, ".worlds-panel").await;
+    click_and_settle(page, edit_selector, "#world-editor").await;
     // Wait on the posture selects, not #world-posture-status: an empty
     // (zero-sized) span never becomes visible.
     wait_until_visible(
@@ -196,6 +196,60 @@ pub async fn open_preset_editor(page: &playwright_rs::Page, card_selector: &str)
     let edit_selector = format!("{card_selector} button:has-text('Edit')");
     click_and_settle(page, &edit_selector, ".preset-card").await;
     wait_until_visible(page, ".preset-card.edit-form", Duration::from_millis(5000)).await;
+}
+
+/// Choose `value` in an auto-save select whose answer swaps nothing, and wait for
+/// the browser to flag the save: it sets `data-saved` on `#flag_id` once the
+/// request ended well. An empty answer fires no htmx settle, so the flag is the
+/// observable end of the save.
+pub async fn select_option_and_await_saved(
+    page: &playwright_rs::Page,
+    selector: &str,
+    value: &str,
+    flag_id: &str,
+) {
+    page.locator(selector)
+        .await
+        .select_option(value, None)
+        .await
+        .unwrap_or_else(|e| panic!("select_option('{selector}' -> '{value}') failed: {e}"));
+    let script = format!("() => document.getElementById('{flag_id}').hasAttribute('data-saved')");
+    let saved = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            page.evaluate::<(), bool>(&script, None)
+                .await
+                .unwrap_or(false)
+        },
+    )
+    .await;
+    assert!(
+        saved,
+        "select_option('{selector}' -> '{value}'): the save was never flagged on #{flag_id}"
+    );
+}
+
+/// Click a control that closes an editor in the browser, and wait until the
+/// editor slot is empty. Closing sends no request, so no htmx settle follows.
+pub async fn click_and_close_editor(page: &playwright_rs::Page, selector: &str, slot: &str) {
+    page.locator(selector)
+        .await
+        .click(None)
+        .await
+        .unwrap_or_else(|e| panic!("click('{selector}') failed: {e}"));
+    let script = format!("() => document.querySelector('{slot}').children.length === 0");
+    let closed = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            page.evaluate::<(), bool>(&script, None)
+                .await
+                .unwrap_or(false)
+        },
+    )
+    .await;
+    assert!(closed, "click('{selector}') never emptied {slot}");
 }
 
 pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
@@ -222,13 +276,26 @@ pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
         status.is_success(),
         "seed_system_preset('{name}') returned {status}: {body}"
     );
+    // A saved preset answers nothing; the panel shows it.
     assert!(
-        preset_card_rendered(&body, name),
-        "seed_system_preset('{name}') found no card for the new preset in the panel: {body}"
+        body.is_empty(),
+        "seed_system_preset('{name}') must answer nothing: {body}"
+    );
+    let panel = client
+        .get(format!("http://127.0.0.1:{port}/fragment/prompt-presets"))
+        .send()
+        .await
+        .unwrap_or_else(|e| panic!("load the preset panel after seeding '{name}': {e}"))
+        .text()
+        .await
+        .unwrap_or_default();
+    assert!(
+        preset_card_rendered(&panel, name),
+        "seed_system_preset('{name}') found no card for the new preset in the panel: {panel}"
     );
 }
 
-/// Cards carry no `data-id`, so the duplicate button is the stable anchor.
+/// The duplicate button is the anchor of a card's slice.
 fn preset_card_rendered(body: &str, name: &str) -> bool {
     let title_anchor = format!(r#"<span class="card-title">{name}</span>"#);
     preset_card_html_slice(body, &title_anchor).is_some_and(|card| {

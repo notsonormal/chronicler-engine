@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use axum::Form;
 use axum::extract::Path;
+use axum::http::StatusCode;
 
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmConnection, TextCheckMode};
@@ -44,9 +45,16 @@ async fn test_settings_panel_returns_html() {
     let app_state = make_test_app_state();
     let response = settings_panel(axum::extract::State(app_state)).await;
 
-    assert!(response.0.contains("<div class=\"settings-panel\">"));
+    assert!(
+        !response.0.contains("settings-panel"),
+        "the shell's .settings-panel is the region, so the fragment repeats no root"
+    );
     assert!(response.0.contains("Connections"));
     assert!(response.0.contains("Text Check"));
+    assert!(
+        response.0.contains(r#"id="connection-editor""#),
+        "the panel renders its editor slot, empty"
+    );
 }
 
 #[tokio::test]
@@ -60,12 +68,11 @@ async fn test_save_text_check_handler_spell_mode() {
     let response =
         save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
-    let body = body_text(response).await;
-    assert!(body.contains(r#"id="text-check-card"#));
-    assert!(body.contains("Saved"));
-    assert!(
-        body.contains(r#"data-error-slot="text-check-card""#),
-        "the card must carry the slot a failed save reports into: {body}"
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "a saved change answers nothing"
     );
 
     let settings = app_state.settings().expect("settings read should succeed");
@@ -128,21 +135,12 @@ async fn test_save_text_check_handler_disabled_clears_and_disables_checkbox() {
         enable_auto_check: true,
     };
 
-    let response =
+    let _response =
         save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Disabled);
     assert!(!settings.text_check.enable_auto_check);
-    let body = body_text(response).await;
-    assert!(
-        !body.contains(r#"name="enable_auto_check" value="true" checked"#),
-        "the disabled card must render the check box unchecked: {body}"
-    );
-    assert!(
-        body.contains("disabled"),
-        "the disabled card must render the check box disabled: {body}"
-    );
 }
 
 #[tokio::test]
@@ -152,7 +150,12 @@ async fn test_new_connection_form_returns_the_add_form() {
 
     assert!(response.0.contains(r#"<h2>Add Connection</h2>"#));
     assert!(response.0.contains(r#"id="conn_name""#));
-    assert!(response.0.contains("</svg> Connections</button>"));
+    assert!(response.0.contains("data-close-editor"));
+    assert!(
+        response.0.contains("data-work"),
+        "the editor holds its region until the edit ends: {}",
+        response.0
+    );
     assert!(
         response.0.contains(r#"hx-post="/connections/test""#)
             && response.0.contains(r#"hx-include="closest form""#),
@@ -171,13 +174,10 @@ async fn test_edit_connection_form_returns_form() {
 
     let response =
         edit_connection_form(axum::extract::State(app_state), Path("test-conn".into())).await;
+    let body = body_text(response).await;
 
-    assert!(response.0.contains(r#"<h2>Edit Test</h2>"#));
-    assert!(
-        response
-            .0
-            .contains(r#"hx-post="/connections/test-conn/edit""#)
-    );
+    assert!(body.contains(r#"<h2>Edit Test</h2>"#));
+    assert!(body.contains(r#"hx-post="/connections/test-conn/edit""#));
 }
 
 #[tokio::test]
@@ -187,7 +187,8 @@ async fn test_edit_connection_form_not_found() {
     let response =
         edit_connection_form(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(response).await.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -206,9 +207,12 @@ async fn test_add_connection_handler_adds_connection() {
 
     let response =
         add_connection_handler(axum::extract::State(app_state.clone()), Form(form)).await;
-    let body = body_text(response).await;
-
-    assert!(body.contains("<div class=\"settings-panel\">"));
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "a saved connection answers nothing"
+    );
 
     let settings = app_state.settings().expect("settings read should succeed");
     let new_conn = settings.connections.last().unwrap();
@@ -288,10 +292,17 @@ async fn test_edit_connection_handler_updates_connection() {
         Form(form),
     )
     .await;
-    let body = body_text(response).await;
-
-    assert!(body.contains("New Name"));
-    assert!(body.contains(r#"<div class="connection-row">"#));
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "a saved connection answers nothing"
+    );
+    let settings = app_state.settings().expect("settings read should succeed");
+    assert!(
+        settings.connections.iter().any(|c| c.name == "New Name"),
+        "the edit must be stored"
+    );
 }
 
 #[tokio::test]
@@ -314,9 +325,8 @@ async fn test_edit_connection_handler_not_found() {
         Form(form),
     )
     .await;
-    let body = body_text(response).await;
-
-    assert!(body.contains("Connection not found"));
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(body_text(response).await.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -338,7 +348,8 @@ async fn test_delete_connection_handler_removes_connection() {
     )
     .await;
 
-    assert!(response.0.contains(r#"<div class="settings-panel">"#));
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(body_text(response).await, "", "a delete answers nothing");
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.connections.len(), 1);
@@ -364,15 +375,15 @@ async fn test_delete_connection_handler_refuses_while_a_role_uses_it() {
     )
     .await;
 
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = body_text(response).await;
     assert!(
-        response.0.contains("Narrator uses this connection"),
-        "the refusal must name the role: {}",
-        response.0
+        body.contains("Narrator uses this connection"),
+        "the refusal must name the role: {body}"
     );
     assert!(
-        response.0.contains("role above"),
-        "the refusal must point at the role rows: {}",
-        response.0
+        body.contains("role above"),
+        "the refusal must point at the role rows: {body}"
     );
 
     let settings = app_state.settings().expect("settings read should succeed");
@@ -399,12 +410,10 @@ async fn test_delete_connection_handler_refuses_while_quantifier_uses_it() {
     )
     .await;
 
+    let body = body_text(response).await;
     assert!(
-        response
-            .0
-            .contains("Narrator and Quantifier use this connection"),
-        "the refusal must name both roles: {}",
-        response.0
+        body.contains("Narrator and Quantifier use this connection"),
+        "the refusal must name both roles: {body}"
     );
 
     let settings = app_state.settings().expect("settings read should succeed");
@@ -418,7 +427,8 @@ async fn test_delete_connection_handler_not_found() {
     let response =
         delete_connection_handler(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(response).await.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -434,7 +444,12 @@ async fn test_delete_connection_handler_cannot_delete_last() {
     let response =
         delete_connection_handler(axum::extract::State(app_state), Path("only-conn".into())).await;
 
-    assert!(response.0.contains("Cannot delete the last connection"));
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        body_text(response)
+            .await
+            .contains("Cannot delete the last connection")
+    );
 }
 
 #[tokio::test]
@@ -458,7 +473,12 @@ async fn test_set_narrator_handler_updates_id() {
     )
     .await;
 
-    assert!(response.0.contains("<div class=\"settings-panel\">"));
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "a role change answers nothing"
+    );
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.narration_connection_id, "conn-1");
@@ -476,7 +496,8 @@ async fn test_set_narrator_handler_not_found() {
     )
     .await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(response).await.contains("Connection not found"));
 }
 
 #[tokio::test]
@@ -500,7 +521,12 @@ async fn test_set_quantifier_handler_updates_id() {
     )
     .await;
 
-    assert!(response.0.contains("<div class=\"settings-panel\">"));
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "a role change answers nothing"
+    );
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.quantifier_connection_id, "conn-1");
@@ -518,5 +544,6 @@ async fn test_set_quantifier_handler_not_found() {
     )
     .await;
 
-    assert!(response.0.contains("Connection not found"));
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(response).await.contains("Connection not found"));
 }

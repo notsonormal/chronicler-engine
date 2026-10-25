@@ -19,8 +19,16 @@ Endpoints:
 ### Settings panel
 
 The panel splits into two client-side sub-tabs: **Connections** (default) and
-**Text Check**. The panel loads once, so the selected sub-tab stays until a
-page reload.
+**Text Check**. The selected sub-tab is view state: it lives in `aria-selected`
+on the sub-tab buttons and in `hidden` on the sub-tab panels, and each lists
+its attribute in `data-keep`, so a load of the panel keeps the selected
+sub-tab. The panel is a live region of the settings and LLM-message kinds: its
+fragment carries no root element of its own, and it carries an empty editor
+slot for the connection editor.
+
+A save answers nothing on success: an empty 200. A refusal answers a 400 error
+fragment, and a failure a 500 error fragment. The control that saved reports the
+error in its own slot. The change reaches the screen when the panel loads.
 
 #### Scenario 20.1: Settings panel renders the Connections and Text Check sub-tabs
 
@@ -28,8 +36,10 @@ page reload.
 Given a fresh app state with the default connections
 When the client GET /fragment/settings
 Then the response is 200
-And the body contains a settings panel with a Connections sub-tab and a Text Check sub-tab
-And the Connections sub-tab is the selected one
+And the body holds a Connections sub-tab and a Text Check sub-tab, and no root element of its own
+And the body holds an empty connection editor slot
+And the Connections sub-tab is the selected one, and the sub-tab attributes are listed in data-keep
+And the connection rows and the role rows carry stable ids
 And the Connections panel holds a role row for Narrator and a role row for Quantifier, each with a connection select
 And the Connections panel holds one connection row per connection with its name, provider and model, role tags, Edit, Test and Delete
 And the Connections panel offers an Add Connection control
@@ -73,7 +83,7 @@ so the two controls cannot contradict each other.
 ```gherkin
 Given a fresh app state
 When the client POST /settings/text-check with check_mode="spell" and the check-before-sending box checked
-Then the response is a 200 carrying the re-rendered Text Check card with its own save feedback
+Then the response is a 200 with an empty body
 And a following GET /fragment/settings renders "spell" selected and the check box checked
 ```
 
@@ -105,7 +115,8 @@ And the body carries no Text Check card
 Given an app state whose Narrator role uses the mock connection with model mock-model-a
 And a second mock connection with model mock-model-b
 When the client sets the Narrator role to the second connection
-Then the response is 200 and its Narrator role row renders the second connection selected
+Then the response is a 200 with an empty body
+And a following GET /fragment/settings renders the second connection selected in the Narrator role row
 And a following GET /debug/backend reports mock-model-b (settings resolve per request, so the switch needs no restart)
 ```
 
@@ -115,7 +126,8 @@ And a following GET /debug/backend reports mock-model-b (settings resolve per re
 Given an app state whose Quantifier role uses the mock connection with model mock-model-a
 And a second mock connection with model mock-model-b
 When the client sets the Quantifier role to the second connection
-Then the response is 200 and its Quantifier role row renders the second connection selected
+Then the response is a 200 with an empty body
+And a following GET /fragment/settings renders the second connection selected in the Quantifier role row
 And the Quantifier role now uses the second connection
 ```
 
@@ -127,13 +139,14 @@ And the Quantifier role now uses the second connection
 Given an app state whose Narrator role uses a connection and whose Quantifier role uses another
 And a third connection that no role uses
 When the client deletes the Narrator's connection
-Then the response is 200
+Then the response is a 400
 And the body names Narrator and points at the role rows above
 And the connection list still holds the Narrator's connection
 When the client deletes the Quantifier's connection
-Then the body names Quantifier
+Then the response is a 400 and the body names Quantifier
 When the client deletes the connection no role uses
-Then the connection list no longer holds it
+Then the response is a 200 with an empty body
+And the connection list no longer holds it
 ```
 
 ### POST /connections/add — create
@@ -164,17 +177,21 @@ Given a fresh app state with the default connections
 When the client POST /connections/add with conn_provider="bogus_provider", a name and a model
 Then the response is a 400
 And the body carries the unknown-backend failure text naming "bogus_provider"
-And a following GET /fragment/settings still lists the Connections panel and its connection rows
+And a following GET /fragment/settings still lists the connection rows
 ```
 
 ### GET /fragment/connections/{id}/edit — edit form
 
-#### Scenario 20.24: The connection Edit form reports an unknown connection inside the panel
+The connection editor opens into the editor slot of the panel. The editor
+root holds the panel (`data-work`) until the edit ends. Cancel empties the slot
+in the browser and sends no request.
+
+#### Scenario 20.24: The connection Edit form refuses an unknown connection and leaves the editor slot empty
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/connections/does-not-exist/edit
-Then the response is a 200
+Then the response is a 400
 And the body says the connection was not found
 And the body carries no connection form
 ```
@@ -186,8 +203,8 @@ And the body carries no connection form
 ```gherkin
 Given a fresh app state with a Connection named "Alpha"
 When the client edits that Connection with the same name "Alpha" and a changed model
-Then the response is 200
-And the body contains a Connection row named "Alpha" and the changed model
+Then the response is a 200 with an empty body
+And a following GET /fragment/settings contains a Connection row named "Alpha" and the changed model
 ```
 
 #### Scenario 20.18: A failed connection edit answers non-2xx and carries the failure

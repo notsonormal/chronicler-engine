@@ -18,7 +18,7 @@ use crate::test_utils::preset_card_html_slice;
 use crate::test_utils::panel_section_html_slice;
 
 use crate::support::app_wiring::two_game_app;
-use crate::support::http_requests::post_form;
+use crate::support::http_requests::{fetch_body, post_form};
 use crate::SettingsTestGuard;
 
 fn get_request(uri: &str) -> Request<Body> {
@@ -54,6 +54,18 @@ fn preset_id_by_name(presets: &PromptPresetService, name: &str) -> String {
         }
     }
     panic!("no preset named {name:?} in the preset library");
+}
+
+/// A saved change answers nothing, and the panel shows it: this asserts the
+/// empty 200 and reads the panel that the next load renders.
+async fn panel_after(app: &axum::Router, response: axum::response::Response) -> String {
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "a saved change answers nothing: the panel load shows it"
+    );
+    fetch_body(app, "/fragment/prompt-presets").await
 }
 
 fn extract_first_preset_id(body: &str) -> String {
@@ -92,7 +104,10 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
 
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    assert!(
+        !body.contains("prompt-presets-panel"),
+        "the shell's .prompt-presets-panel is the region: the fragment repeats no root: {body}"
+    );
     assert!(body.contains("<h2>System Prompts</h2>"));
     assert!(body.contains("<h2>Quantifier Prompts</h2>"));
     assert!(body.contains("preset-add-toggle"));
@@ -101,6 +116,10 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     // Default test fixture seeds one default system preset; the spec assumes a
     // default quantifier preset is also present, but the fixture does not seed one.
     assert!(body.contains("preset-card"));
+    assert!(
+        body.contains(r#"id="preset-card-system_default""#),
+        "a card carries a stable id, so a load keeps it: {body}"
+    );
     assert!(body.contains("Default"));
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="system" />"#));
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="quantifier" />"#));
@@ -147,12 +166,13 @@ async fn test_prompt_presets_add_forms_collapsed_by_default() {
     let body = body_text(response).await;
 
     assert_eq!(
-        body.matches(r#"<details class="preset-add">"#).count(),
+        body.matches(r#"<details class="preset-add" data-keep="open" data-close-on-save>"#)
+            .count(),
         4,
-        "each category's add form must be a closed disclosure"
+        "each category's add form must be a closed disclosure that a load keeps open"
     );
     assert!(
-        !body.contains(r#"<details class="preset-add" open>"#),
+        !body.contains(" open>"),
         "the add forms must be closed by default"
     );
     assert!(body.contains("Add System Prompt Preset"));
@@ -174,7 +194,7 @@ async fn test_prompt_preset_single_card_renders() {
     )
     .await;
     assert_eq!(create_response.status(), StatusCode::OK);
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -186,6 +206,7 @@ async fn test_prompt_preset_single_card_renders() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(body.contains(r#"<div class="preset-card""#));
+    assert!(body.contains(&format!(r#"id="preset-card-{preset_id}""#)));
     assert!(body.contains("My System Prompt"));
     assert!(body.contains("Set Active"));
     assert!(body.contains("Edit"));
@@ -220,7 +241,7 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
         "name=Editable&instructions=Edit+me.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -231,7 +252,12 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="preset-card edit-form">"#));
+    assert!(
+        body.contains(&format!(
+            r#"<div class="preset-card edit-form" id="preset-card-{preset_id}" data-work>"#
+        )),
+        "the editor keeps the card's id and holds the panel: {body}"
+    );
     assert!(body.contains(&format!(r#"hx-post="/prompt-presets/{preset_id}""#)));
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="system" />"#));
     assert!(body.contains(r#"value="Editable""#));
@@ -292,7 +318,12 @@ async fn test_prompt_preset_view_form_renders_for_default() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="preset-card view-form">"#));
+    assert!(
+        body.contains(
+            r#"<div class="preset-card view-form" id="preset-card-system_default" data-work>"#
+        ),
+        "the view keeps the card's id and holds the panel: {body}"
+    );
     assert!(body.contains("Default Test System"));
     assert!(body.contains("Role"));
     assert!(body.contains("Instructions"));
@@ -328,9 +359,7 @@ async fn test_create_system_preset_renders_panel() {
         "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    let body = panel_after(&app, response).await;
     assert!(body.contains("My System Prompt"));
     assert!(body.contains("You are a test narrator."));
     assert!(body.contains("Set Active"));
@@ -349,9 +378,7 @@ async fn test_create_quantifier_preset_renders_panel() {
         "name=My+Quantifier+Prompt&instructions=Quantify+this+scene.&preset_type=quantifier",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    let body = panel_after(&app, response).await;
     assert!(body.contains("My Quantifier Prompt"));
     assert!(body.contains("Quantify this scene."));
 }
@@ -426,7 +453,7 @@ async fn test_update_preset_renders_card_with_new_name() {
         "name=Before&instructions=Original.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = post_form(
@@ -436,7 +463,12 @@ async fn test_update_preset_renders_card_with_new_name() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "a saved change answers nothing"
+    );
+    let body = fetch_body(&app, &format!("/fragment/prompt-presets/{preset_id}")).await;
     assert!(body.contains(r#"<div class="preset-card""#));
     assert!(body.contains("After"));
     assert!(!body.contains("Before"));
@@ -472,7 +504,7 @@ async fn test_update_preset_ignores_form_preset_type() {
         "name=Update+Type&instructions=Test.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = post_form(
@@ -482,12 +514,11 @@ async fn test_update_preset_ignores_form_preset_type() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(
-        !body.contains("error-message"),
-        "update must succeed: {body}"
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "update must succeed and answer nothing"
     );
-    assert!(body.contains("preset-card"));
 
     let stored = app_state
         .prompt_preset_service
@@ -530,10 +561,11 @@ async fn test_delete_non_default_preset_returns_empty_body() {
         "name=Delete+Me&instructions=Delete.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
+        .clone()
         .oneshot(empty_post_request(&format!(
             "/prompt-presets/{preset_id}/delete"
         )))
@@ -542,6 +574,11 @@ async fn test_delete_non_default_preset_returns_empty_body() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(body.is_empty());
+    let listed = fetch_body(&app, "/fragment/prompt-presets").await;
+    assert!(
+        !listed.contains(&format!(r#"id="preset-card-{preset_id}""#)),
+        "the panel no longer lists the deleted preset: {listed}"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.19
@@ -787,18 +824,17 @@ async fn test_duplicate_preset_renders_panel_with_copy() {
         "name=Original&instructions=Original.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
+        .clone()
         .oneshot(empty_post_request(&format!(
             "/prompt-presets/{preset_id}/duplicate"
         )))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    let body = panel_after(&app, response).await;
     assert!(body.contains("Original (Copy)"));
 }
 
@@ -831,18 +867,17 @@ async fn test_activate_system_preset_renders_active_badge() {
         "name=Activate+Me&instructions=Activate.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
+        .clone()
         .oneshot(empty_post_request(&format!(
             "/prompt-presets/{preset_id}/activate"
         )))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    let body = panel_after(&app, response).await;
     // Scope both assertions to the activated preset's card: the panel holds
     // several presets, and a panel-wide check can pass or fail on an
     // unrelated preset's badge or buttons.
@@ -952,8 +987,7 @@ async fn test_activate_if_only_preset_via_if_mode_populates_if_bundle() {
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = panel_after(&app, response).await;
     assert!(
         body.contains("Active · Interactive Fiction"),
         "IF activation must badge the preset Active · Interactive Fiction"
@@ -1083,7 +1117,8 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
     )
     .await;
     assert_eq!(saved.status(), StatusCode::OK);
-    let card = body_text(saved).await;
+    assert_eq!(body_text(saved).await, "", "a saved change answers nothing");
+    let card = fetch_body(&app, &format!("/fragment/prompt-presets/{copy_id}")).await;
     assert!(
         card.contains("Set Active (Interactive Fiction)"),
         "the saved card must offer Set Active (Interactive Fiction): {card}"
@@ -1187,8 +1222,7 @@ async fn test_create_preset_same_name_in_another_category_is_allowed() {
         "name=Alpha&instructions=Second.&preset_type=quantifier",
     )
     .await;
-    assert_eq!(second.status(), StatusCode::OK);
-    let body = body_text(second).await;
+    let body = panel_after(&app, second).await;
     let quantifier_section = panel_section_html_slice(&body, "Quantifier Prompts")
         .expect("the panel must render a Quantifier section");
     assert!(
@@ -1209,7 +1243,7 @@ async fn test_update_preset_keeps_its_own_name() {
         "name=Alpha&instructions=First.&preset_type=system",
     )
     .await;
-    let panel = body_text(created).await;
+    let panel = panel_after(&app, created).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = post_form(
@@ -1219,7 +1253,12 @@ async fn test_update_preset_keeps_its_own_name() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    assert_eq!(
+        body_text(response).await,
+        "",
+        "a saved change answers nothing"
+    );
+    let body = fetch_body(&app, &format!("/fragment/prompt-presets/{preset_id}")).await;
     let card = preset_card_html_slice(&body, "Alpha").expect("the updated card must render");
     assert!(
         card.contains("<span class=\"card-title\">Alpha</span>"),
@@ -1247,7 +1286,7 @@ async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
         "name=Original&instructions=Original.&preset_type=system",
     )
     .await;
-    let panel = body_text(created).await;
+    let panel = panel_after(&app, created).await;
     let source_id = extract_first_preset_id(&panel);
 
     let first = app
@@ -1257,21 +1296,20 @@ async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
         )))
         .await
         .unwrap();
-    assert_eq!(first.status(), StatusCode::OK);
-    let first_panel = body_text(first).await;
+    let first_panel = panel_after(&app, first).await;
     assert!(
         first_panel.contains("Original (Copy)"),
         "first copy: {first_panel}"
     );
 
     let second = app
+        .clone()
         .oneshot(empty_post_request(&format!(
             "/prompt-presets/{source_id}/duplicate"
         )))
         .await
         .unwrap();
-    assert_eq!(second.status(), StatusCode::OK);
-    let second_panel = body_text(second).await;
+    let second_panel = panel_after(&app, second).await;
     assert!(
         second_panel.contains("Original (Copy 2)"),
         "second copy must get the next free number: {second_panel}"
@@ -1382,13 +1420,13 @@ async fn test_activate_options_preset_sets_the_settings_default() {
     let app = build_router(app_state.clone());
 
     let response = app
+        .clone()
         .oneshot(empty_post_request(
             "/prompt-presets/options_custom/activate",
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = panel_after(&app, response).await;
 
     let card = preset_card_slice(&body, "options_custom");
     assert!(

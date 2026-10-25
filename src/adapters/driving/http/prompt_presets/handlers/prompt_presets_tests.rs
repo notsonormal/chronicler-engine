@@ -105,13 +105,22 @@ async fn test_duplicate_preset_handler() {
     };
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = duplicate_preset_handler(
-        axum::extract::State(app_state),
+        axum::extract::State(app_state.clone()),
         axum::extract::Path("orig".to_string()),
     )
     .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Original (Copy)"));
-    assert!(body.contains("System Prompts"));
+    assert_eq!(body_text(response).await, "", "a duplicate answers nothing");
+    let names: Vec<String> = app_state
+        .prompt_preset_service
+        .list_presets(PresetType::System)
+        .expect("presets list")
+        .into_iter()
+        .map(|preset| preset.name)
+        .collect();
+    assert!(
+        names.contains(&"Original (Copy)".to_string()),
+        "the copy is stored: {names:?}"
+    );
 }
 
 #[tokio::test]

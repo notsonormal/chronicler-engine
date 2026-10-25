@@ -6,8 +6,8 @@
     <title>Chronicler Engine</title>
     <script src="/assets/htmx.min.js?v=1"></script>
     <script src="/assets/idiomorph-ext.min.js?v=1"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=10" />
-    <link rel="stylesheet" href="/assets/worlds.css?v=6" />
+    <link rel="stylesheet" href="/assets/styles.css?v=11" />
+    <link rel="stylesheet" href="/assets/worlds.css?v=7" />
     <link rel="stylesheet" href="/assets/games.css?v=4" />
   </head>
   <body hx-ext="morph">
@@ -76,14 +76,21 @@
       <div
         class="header"
         id="header"
-        data-live="games settings llm"
+        data-live="games"
         hx-get="/fragment/header"
         hx-trigger="refresh"
         hx-swap="morph:innerHTML"
       ></div>
     </div>
     <div id="failure-banner" class="failure-banner" role="status" hidden>
-      <div id="failure-banner-degraded" class="failure-banner-degraded"></div>
+      <div
+        id="failure-banner-degraded"
+        class="failure-banner-degraded"
+        data-live="settings llm"
+        hx-get="/fragment/failure-banner"
+        hx-trigger="refresh"
+        hx-swap="morph:innerHTML"
+      ></div>
       <div id="failure-banner-unreachable" class="failure-banner-unreachable"></div>
     </div>
     <div class="tab-bar" role="tablist" aria-label="Dashboard sections">
@@ -237,22 +244,28 @@
     <div class="tab-content" id="settings-tab" role="tabpanel" aria-labelledby="tab-settings">
       <div
         class="settings-panel"
+        data-live="settings llm"
         hx-get="/fragment/settings"
-        hx-trigger="load"
+        hx-trigger="refresh"
+        hx-swap="morph:innerHTML"
       ></div>
     </div>
     <div class="tab-content" id="prompt-presets-tab" role="tabpanel" aria-labelledby="tab-prompt-presets">
       <div
         class="prompt-presets-panel"
+        data-live="presets settings games"
         hx-get="/fragment/prompt-presets"
-        hx-trigger="load"
+        hx-trigger="refresh"
+        hx-swap="morph:innerHTML"
       ></div>
     </div>
     <div class="tab-content" id="worlds-tab" role="tabpanel" aria-labelledby="tab-worlds">
       <div
         class="worlds-panel"
+        data-live="worlds games"
         hx-get="/fragment/worlds"
-        hx-trigger="load"
+        hx-trigger="refresh"
+        hx-swap="morph:innerHTML"
       ></div>
     </div>
     <div class="tab-content" id="games-tab" role="tabpanel" aria-labelledby="tab-games">
@@ -276,11 +289,11 @@
     </main>
 
 
-    <script src="/assets/dashboard-errors.js?v=3"></script>
-    <script src="/assets/dashboard-live.js?v=4"></script>
+    <script src="/assets/dashboard-errors.js?v=4"></script>
+    <script src="/assets/dashboard-live.js?v=5"></script>
     <script src="/assets/dashboard-action-area.js?v=6"></script>
     <script src="/assets/dashboard-story-log.js?v=5"></script>
     <script src="/assets/dashboard-slash-menu.js?v=1"></script>
-    <script src="/assets/dashboard-panels.js?v=2"></script>
+    <script src="/assets/dashboard-panels.js?v=3"></script>
   </body>
 </html>

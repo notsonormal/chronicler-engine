@@ -63,7 +63,7 @@ async fn check_failed_connection_add_keeps_the_form_and_renders_inline(
 ) {
     open_settings_panel(&page).await;
 
-    click_and_settle(&page, ".connection-add button", ".settings-panel").await;
+    click_and_settle(&page, ".connection-add button", "#connection-editor").await;
     wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
     assert!(
         stash_connection_form_node(&page).await,
@@ -107,7 +107,7 @@ async fn check_failed_connection_edit_keeps_the_form_and_renders_inline(
     click_and_settle(
         &page,
         ".connection-list .connection-row:first-child button:has-text('Edit')",
-        ".settings-panel",
+        "#connection-editor",
     )
     .await;
     wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;

@@ -190,6 +190,7 @@ async fn test_a_read_moves_no_number() {
     for uri in [
         "/changes",
         "/fragment/header",
+        "/fragment/failure-banner",
         "/fragment/story-log",
         "/fragment/visual-sidebar",
         "/fragment/options-dock",

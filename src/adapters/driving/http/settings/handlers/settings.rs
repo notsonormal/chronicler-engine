@@ -7,12 +7,13 @@ use axum::{Form, extract::State, response::Html, response::IntoResponse, respons
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::headers::role_label;
 use crate::adapters::driving::http::settings::templates::settings::{
-    ConnectionFormTemplate, ConnectionTestResultTemplate, SettingsTemplate, TextCheckCardTemplate,
+    ConnectionFormTemplate, ConnectionTestResultTemplate, SettingsTemplate,
 };
 use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response, error_disclosure,
-    raw_error_detail, render_error,
+    raw_error_detail, refusal_message_without_layer_prefix_for_validation_and_config, render_error,
 };
+use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, opt_string};
 use crate::application::connection_test_service::ConnectionTestResult;
@@ -22,19 +23,27 @@ use crate::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort
 use crate::error::EngineError;
 
 pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
-    render_settings_panel(&app_state, None)
-}
-
-/// A refusal keeps the Connections sub-tab in place, so its message rides inside the panel rather than replacing it.
-fn render_settings_panel(app_state: &AppState, error: Option<&EngineError>) -> Html<String> {
     match app_state.settings() {
         Ok(settings) => match app_state.game_view_query.role_health() {
             Ok(roles) => Html(render_or_error_fragment(&SettingsTemplate::from_settings(
-                &settings, &roles, error,
+                &settings, &roles,
             ))),
             Err(e) => Html(render_error(&e.to_string())),
         },
         Err(e) => Html(render_error(&e.to_string())),
+    }
+}
+
+/// A save the settings refuse answers a non-2xx error fragment, which the control
+/// reports in its own slot. A refusal is a 400 and a storage failure a 500.
+fn settings_save_failure(error: EngineError) -> Response<Body> {
+    match error {
+        EngineError::Validation(_) | EngineError::Config(_) => action_refusal_response(
+            refusal_message_without_layer_prefix_for_validation_and_config(&error),
+        ),
+        other => action_failure_response(
+            refusal_message_without_layer_prefix_for_validation_and_config(&other),
+        ),
     }
 }
 
@@ -168,10 +177,7 @@ pub async fn save_text_check_handler(
     });
 
     match outcome {
-        Ok(updated) => Html(render_or_error_fragment(
-            &TextCheckCardTemplate::from_settings(&updated, "Saved"),
-        ))
-        .into_response(),
+        Ok(_) => ok(""),
         Err(e) => action_failure_response(format!("Save failed: {e}")),
     }
 }
@@ -180,20 +186,23 @@ pub async fn new_connection_form(State(_app_state): State<AppState>) -> Html<Str
     Html(render_or_error_fragment(&ConnectionFormTemplate::new(None)))
 }
 
+/// A non-2xx keeps the editor slot empty: the connection list stays on screen and
+/// the Edit control reports the failure in its own slot.
 pub async fn edit_connection_form(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => return Html(render_error(&e.to_string())),
+        Err(e) => return action_failure_response(e.to_string()),
     };
 
     match settings.find_connection(&id) {
         Some(conn) => Html(render_or_error_fragment(&ConnectionFormTemplate::new(
             Some(conn),
-        ))),
-        None => Html(render_error("Connection not found")),
+        )))
+        .into_response(),
+        None => action_refusal_response("Connection not found"),
     }
 }
 
@@ -207,7 +216,7 @@ pub async fn add_connection_handler(
     };
 
     match app_state.settings_service.add_connection(connection) {
-        Ok(_) => render_settings_panel(&app_state, None).into_response(),
+        Ok(_) => ok(""),
         Err(e) => action_error_response(e, "Error"),
     }
 }
@@ -232,7 +241,7 @@ pub async fn edit_connection_handler(
         });
 
     match outcome {
-        Ok(_) => render_settings_panel(&app_state, None).into_response(),
+        Ok(_) => ok(""),
         Err(e) => action_error_response(e, "Error"),
     }
 }
@@ -318,7 +327,7 @@ pub async fn test_form_connection_handler(
 pub async fn delete_connection_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         let Some(idx) = settings.connections.iter().position(|c| c.id == id) else {
             return Err(EngineError::Config("Connection not found".to_string()));
@@ -340,8 +349,8 @@ pub async fn delete_connection_handler(
     });
 
     match outcome {
-        Ok(()) => render_settings_panel(&app_state, None),
-        Err(e) => render_settings_panel(&app_state, Some(&e)),
+        Ok(()) => ok(""),
+        Err(e) => settings_save_failure(e),
     }
 }
 
@@ -349,7 +358,7 @@ async fn set_role(
     app_state: &AppState,
     connection_id: &str,
     assign: impl FnOnce(&mut AppSettings, &str),
-) -> Html<String> {
+) -> Response<Body> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         if settings.find_connection(connection_id).is_none() {
             return Err(EngineError::Config("Connection not found".to_string()));
@@ -359,15 +368,15 @@ async fn set_role(
     });
 
     match outcome {
-        Ok(()) => render_settings_panel(app_state, None),
-        Err(e) => render_settings_panel(app_state, Some(&e)),
+        Ok(()) => ok(""),
+        Err(e) => settings_save_failure(e),
     }
 }
 
 pub async fn set_narrator_handler(
     State(app_state): State<AppState>,
     Form(form): Form<RoleForm>,
-) -> Html<String> {
+) -> Response<Body> {
     set_role(&app_state, &form.connection_id, |settings, id| {
         settings.narration_connection_id = id.to_string();
     })
@@ -377,7 +386,7 @@ pub async fn set_narrator_handler(
 pub async fn set_quantifier_handler(
     State(app_state): State<AppState>,
     Form(form): Form<RoleForm>,
-) -> Html<String> {
+) -> Response<Body> {
     set_role(&app_state, &form.connection_id, |settings, id| {
         settings.quantifier_connection_id = id.to_string();
     })

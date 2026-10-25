@@ -19,6 +19,7 @@ use crate::adapters::driving::http::utils::error::{
 };
 use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
+use crate::adapters::driving::http::utils::response::ok;
 
 use crate::adapters::driving::http::prompt_presets::templates::prompt_presets::PromptPresetsTemplate;
 
@@ -187,7 +188,7 @@ pub async fn save_preset_handler(
         return action_error_response(e, "Save failed");
     }
 
-    panel_handler(State(app_state)).await.into_response()
+    ok("")
 }
 
 pub async fn edit_preset_form_handler(
@@ -222,16 +223,10 @@ pub async fn update_preset_handler(
         allowed_modes,
     };
 
-    let preset = match app_state.prompt_preset_service.edit_preset(&id, edit) {
-        Ok(preset) => preset,
-        Err(e) => return action_error_response(e, "Update failed"),
-    };
-
-    let settings = match app_state.settings() {
-        Ok(s) => s,
-        Err(e) => return action_failure_response(format!("Load failed: {e}")),
-    };
-    card_response(&preset, &settings)
+    match app_state.prompt_preset_service.edit_preset(&id, edit) {
+        Ok(_) => ok(""),
+        Err(e) => action_error_response(e, "Update failed"),
+    }
 }
 
 pub async fn delete_preset_handler(
@@ -242,7 +237,7 @@ pub async fn delete_preset_handler(
         return action_error_response(e, "Delete failed");
     }
 
-    Html(String::new()).into_response()
+    ok("")
 }
 
 pub async fn duplicate_preset_handler(
@@ -263,7 +258,7 @@ pub async fn duplicate_preset_handler(
         return action_error_response(e, "Duplicate failed");
     }
 
-    panel_handler(State(app_state)).await.into_response()
+    ok("")
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -293,13 +288,8 @@ pub async fn activate_preset_handler(
         Ok(settings.clone())
     });
 
-    let settings = match outcome {
-        Ok(s) => s,
-        Err(e) => return action_failure_response(format!("Save failed: {e}")),
-    };
-
-    Html(render_or_error_fragment(&presets_template(
-        &app_state, &settings,
-    )))
-    .into_response()
+    match outcome {
+        Ok(_) => ok(""),
+        Err(e) => action_failure_response(format!("Save failed: {e}")),
+    }
 }

@@ -91,7 +91,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `server.rs` — Server implementation
         - **builders/**
           - `forms.rs` — Form field HTML builders.
-          - `headers.rs` — Header fragment and Settings role-health cell builders.
+          - `headers.rs` — Header and failure-banner fragment builders, and the Settings role-health cell builders.
           - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
           - `presets.rs` — Prompt-preset card + form HTML builders.
           - `router.rs` — HTTP router composition.

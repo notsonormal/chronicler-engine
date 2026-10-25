@@ -9,13 +9,13 @@ const LIVE_KINDS: [&str; 8] = [
     "story", "options", "busy", "games", "worlds", "settings", "presets", "llm",
 ];
 
-/// Checks the dashboard shell, `assets/index.html`. Each element with a `data-live`
+/// Checks the dashboard shell, `assets/index.html`. Every element with `hx-get` is a
+/// live region: it has a `data-live` attribute. Each element with a `data-live`
 /// attribute must have exactly `hx-trigger="refresh"` and `hx-swap="morph:innerHTML"`,
 /// no `every` trigger, and only known kinds. An element with a timer loads on its own
 /// schedule instead of on a change, and a swap other than morph destroys the state
 /// the load should keep. The shell must hold at least one live region, so a rename
-/// of the attribute cannot leave the rule guarding nothing. Stage 3 of the refresh
-/// plan extends the rule to every element with `hx-get`.
+/// of the attribute cannot leave the rule guarding nothing.
 pub fn check_live_regions_in_shell(path: &str, content: &str) -> Vec<Violation> {
     let start_tag = Regex::new(r"<[A-Za-z][A-Za-z0-9-]*\b([^>]*)>").expect("start tag pattern");
     let attribute = Regex::new(r#"([A-Za-z_:][A-Za-z0-9_:.-]*)(?:\s*=\s*"([^"]*)")?"#)
@@ -43,11 +43,18 @@ pub fn check_live_regions_in_shell(path: &str, content: &str) -> Vec<Violation> 
                 .find(|(attr_name, _)| attr_name == name)
                 .map(|(_, value)| value.as_str())
         };
+        let line = content[..whole.start()].matches('\n').count() + 1;
         let Some(live) = value_of("data-live") else {
+            if value_of("hx-get").is_some() {
+                violations.push(Violation::error(
+                    path,
+                    line,
+                    "an element with `hx-get` has no `data-live`. Every element that loads a fragment is a live region: it lists the kinds of data it shows.",
+                ));
+            }
             continue;
         };
         regions += 1;
-        let line = content[..whole.start()].matches('\n').count() + 1;
         let trigger = value_of("hx-trigger").unwrap_or("");
         if trigger
             .split(',')
@@ -102,21 +109,13 @@ pub fn check_live_regions_in_shell(path: &str, content: &str) -> Vec<Violation> 
     violations
 }
 
-/// Regions that the shell does not mark yet. The failure banner's degraded part
-/// becomes a region when the header answer stops writing it out of band.
-const UNMARKED_REGIONS: [&str; 1] = ["failure-banner-degraded"];
-
 /// The names of the region elements of the shell: the `id` (else the first class)
-/// of each element with `data-live` or `hx-get`, so the panels count before they
-/// list their kinds.
+/// of each element with `data-live` or `hx-get`.
 pub fn region_names(index_html: &str) -> Vec<String> {
     let start_tag = Regex::new(r"<[A-Za-z][A-Za-z0-9-]*\b([^>]*)>").expect("start tag pattern");
     let attribute = Regex::new(r#"([A-Za-z_:][A-Za-z0-9_:.-]*)(?:\s*=\s*"([^"]*)")?"#)
         .expect("attribute pattern");
-    let mut names: Vec<String> = UNMARKED_REGIONS
-        .iter()
-        .map(|name| name.to_string())
-        .collect();
+    let mut names: Vec<String> = Vec::new();
     for tag in start_tag.captures_iter(index_html) {
         let attributes: Vec<(String, String)> = attribute
             .captures_iter(&tag[1])
@@ -281,4 +280,89 @@ pub fn check_handler_headers(path: &str, source: &str, regions: &[String]) -> Ve
         )
     }));
     violations
+}
+
+/// Checks one template source: a file of the HTTP adapter that renders markup, or
+/// the shell. An action changes only the element it acts on, so:
+/// - no `hx-target` names a region element (`#story-log`, `.games-panel`, …);
+/// - no `outerHTML` swap replaces a region element: an element that swaps
+///   `outerHTML` and names a region as its target, or has no target and is itself a
+///   region.
+///
+/// The check reads each start tag, including the ones in a Rust string with escaped
+/// quotes.
+pub fn check_template_targets(path: &str, content: &str, regions: &[String]) -> Vec<Violation> {
+    let start_tag = Regex::new(r"<[A-Za-z][A-Za-z0-9-]*\b([^>]*)>").expect("start tag pattern");
+    let attribute = Regex::new(r#"([A-Za-z_:][A-Za-z0-9_:.-]*)(?:\s*=\s*\\?"([^"\\]*)\\?")?"#)
+        .expect("attribute pattern");
+    let mut violations = Vec::new();
+
+    for tag in start_tag.captures_iter(content) {
+        let whole = tag.get(0).expect("whole match");
+        let attributes: Vec<(String, String)> = attribute
+            .captures_iter(&tag[1])
+            .map(|attr| {
+                (
+                    attr[1].to_string(),
+                    attr.get(2)
+                        .map(|value| value.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                )
+            })
+            .collect();
+        let value_of = |name: &str| {
+            attributes
+                .iter()
+                .find(|(attr_name, _)| attr_name == name)
+                .map(|(_, value)| value.as_str())
+        };
+        let line = line_of(content, whole.start());
+        let target = value_of("hx-target");
+        let target_is_region =
+            target.is_some_and(|value| names_a_region(&format!("\"{value}\""), regions));
+        if target_is_region {
+            violations.push(Violation::error(
+                path,
+                line,
+                format!(
+                    "`hx-target=\"{}\"` names a region element. An action changes only the element it acts on, or its own editor slot: the region loads the data.",
+                    target.unwrap_or("")
+                ),
+            ));
+        }
+        let swaps_outer = value_of("hx-swap").is_some_and(|swap| swap.contains("outerHTML"));
+        if swaps_outer && target.is_none() {
+            let own_name = value_of("id").filter(|id| !id.is_empty()).or_else(|| {
+                value_of("class").and_then(|classes| classes.split_whitespace().next())
+            });
+            if own_name.is_some_and(|name| regions.iter().any(|region| region == name)) {
+                violations.push(Violation::error(
+                    path,
+                    line,
+                    "a region element swaps `outerHTML` of itself. A region is never replaced: it loads with `morph:innerHTML`.",
+                ));
+            }
+        }
+    }
+    violations
+}
+
+/// Checks one template source for out-of-band swaps. An element that shows data
+/// belongs to one region and loads with it, so no answer carries a second element
+/// to swap somewhere else: no `hx-swap-oob`.
+pub fn check_no_out_of_band_swaps(path: &str, content: &str) -> Vec<Violation> {
+    content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim_start().starts_with("//"))
+        .filter(|(_, line)| line.contains("hx-swap-oob"))
+        .map(|(index, _)| {
+            Violation::error(
+                path,
+                index + 1,
+                "a template has `hx-swap-oob`. No answer writes a second element out of band: each element that shows data belongs to one region and loads with it.",
+            )
+        })
+        .collect()
 }

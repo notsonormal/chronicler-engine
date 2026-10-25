@@ -46,6 +46,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | Method | Path | Handler |
 |--------|------|---------|
 | GET | `/fragment/header` | `header_fragment` |
+| GET | `/fragment/failure-banner` | `failure_banner_fragment` |
 | GET | `/fragment/story-log` | `story_log_fragment` |
 | GET | `/fragment/visual-sidebar` | `visual_sidebar_fragment` |
 | GET | `/fragment/options-dock` | `options_dock_fragment` |

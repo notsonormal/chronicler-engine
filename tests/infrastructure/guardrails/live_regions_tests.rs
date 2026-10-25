@@ -1,8 +1,9 @@
 //! Tests for the live-region guardrail.
 
 use crate::live_regions::{
-    check_handler_headers, check_live_regions_in_shell, check_scripts_use_action_fetch,
-    check_scripts_write_no_region, region_names,
+    check_handler_headers, check_live_regions_in_shell, check_no_out_of_band_swaps,
+    check_scripts_use_action_fetch, check_scripts_write_no_region, check_template_targets,
+    region_names,
 };
 
 const GOOD_REGION: &str = r#"<div id="story-log" data-live="story busy worlds" hx-get="/fragment/story-log" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>"#;
@@ -85,9 +86,19 @@ fn test_check_live_regions_in_shell_rejects_an_empty_kind_list() {
 }
 
 #[test]
-fn test_check_live_regions_in_shell_ignores_an_element_without_data_live() {
+fn test_check_live_regions_in_shell_rejects_an_hx_get_element_without_data_live() {
     let content = format!(
-        "{GOOD_REGION}<div class=\"games-panel\" hx-get=\"/fragment/games\" hx-trigger=\"load, every 5s\"></div>"
+        "{GOOD_REGION}<div class=\"games-panel\" hx-get=\"/fragment/games\" hx-trigger=\"load\"></div>"
+    );
+    let violations = check_live_regions_in_shell("assets/index.html", &content);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("no `data-live`"));
+}
+
+#[test]
+fn test_check_live_regions_in_shell_ignores_an_element_that_loads_nothing() {
+    let content = format!(
+        "{GOOD_REGION}<form id=\"command-form\" hx-post=\"/action/check\" hx-target=\"#action-preview\"></form>"
     );
     assert!(check_live_regions_in_shell("assets/index.html", &content).is_empty());
 }
@@ -102,7 +113,8 @@ fn test_check_live_regions_in_shell_fails_a_shell_with_no_live_region() {
 const SHELL: &str = r#"
 <div class="header" id="header" data-live="games" hx-get="/fragment/header" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>
 <div class="visual-sidebar" data-live="story worlds" hx-get="/fragment/visual-sidebar" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>
-<div class="games-panel" hx-get="/fragment/games" hx-trigger="load"></div>
+<div class="games-panel" data-live="games worlds presets" hx-get="/fragment/games" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>
+<div id="failure-banner-degraded" data-live="settings llm" hx-get="/fragment/failure-banner" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>
 <div id="action-preview" class="action-preview"></div>
 "#;
 
@@ -217,4 +229,71 @@ fn test_handler_headers_rejects_a_refresh_header() {
 fn test_handler_headers_accepts_a_comment_free_handler_without_refresh() {
     let source = r#"ok("")"#;
     assert!(check_handler_headers("src/x.rs", source, &regions()).is_empty());
+}
+
+#[test]
+fn test_templates_target_no_region_rejects_an_hx_target_that_names_a_region() {
+    for target in [
+        "#header",
+        ".games-panel",
+        "closest .games-panel",
+        "#failure-banner-degraded",
+    ] {
+        let source = format!(
+            r##"<button hx-post="/x" hx-target="{target}" hx-swap="innerHTML">Go</button>"##
+        );
+        let violations = check_template_targets("src/x.rs", &source, &regions());
+        assert_eq!(violations.len(), 1, "{target}");
+        assert!(violations[0].message.contains("names a region element"));
+    }
+}
+
+#[test]
+fn test_templates_target_no_region_reads_a_target_in_an_escaped_rust_string() {
+    let source =
+        r##"format!("<select hx-post=\"/x\" hx-target=\"#header\" hx-swap=\"innerHTML\">")"##;
+    assert_eq!(
+        check_template_targets("src/x.rs", source, &regions()).len(),
+        1
+    );
+}
+
+#[test]
+fn test_templates_target_no_region_rejects_an_outer_html_swap_of_a_region() {
+    let own = r#"<div class="games-panel" hx-get="/fragment/games" hx-swap="outerHTML"></div>"#;
+    let violations = check_template_targets("src/x.rs", own, &regions());
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("outerHTML"));
+
+    let by_target = r##"<button hx-post="/x" hx-target="#header" hx-swap="outerHTML">Go</button>"##;
+    assert_eq!(
+        check_template_targets("src/x.rs", by_target, &regions()).len(),
+        1,
+        "one violation: the target names a region"
+    );
+}
+
+#[test]
+fn test_templates_target_no_region_accepts_targets_that_are_no_region() {
+    let source = r##"<button hx-get="/a" hx-target="#world-editor" hx-swap="innerHTML">A</button>
+<button hx-get="/b" hx-target="closest .preset-card" hx-swap="outerHTML">B</button>
+<button hx-post="/c" hx-target="next .connection-test-slot" hx-swap="innerHTML">C</button>
+<form hx-post="/d" hx-swap="none"></form>
+<div class="header-bar"></div>
+<div id="preset-card-x" hx-swap="outerHTML"></div>"##;
+    assert!(check_template_targets("src/x.rs", source, &regions()).is_empty());
+}
+
+#[test]
+fn test_templates_have_no_out_of_band_swaps_rejects_the_attribute() {
+    let source = "let a = 1;\nformat!(\"<span id=\\\"x\\\" hx-swap-oob=\\\"true\\\">\")\n";
+    let violations = check_no_out_of_band_swaps("src/x.rs", source);
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].line, 2);
+}
+
+#[test]
+fn test_templates_have_no_out_of_band_swaps_accepts_a_comment_and_clean_markup() {
+    let source = "// The header no longer answers hx-swap-oob swaps.\n<div hx-swap=\"none\"></div>";
+    assert!(check_no_out_of_band_swaps("src/x.rs", source).is_empty());
 }

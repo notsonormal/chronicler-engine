@@ -2,7 +2,10 @@
 
 use std::time::Duration;
 
-use super::support::{StubRunner, accept_delete_confirmation, wait_for_count, wait_until_focused};
+use super::support::{
+    StubRunner, accept_delete_confirmation, active_element_is, wait_for_count,
+    wait_until_focus_within, wait_until_focused,
+};
 use super::*;
 
 // [docs/specs/browser_worlds.md] SCENARIO: 29.4
@@ -54,84 +57,64 @@ async fn check_deleting_a_world_keeps_keyboard_focus_in_the_panel(
         "the last delete must remove the final world"
     );
     assert!(
-        wait_until_focused(&page, ".worlds-panel :focus", Duration::from_secs(5)).await,
+        wait_until_focus_within(&page, ".worlds-panel", Duration::from_secs(5)).await,
         "deleting the last world must leave focus inside the Worlds panel"
     );
 }
 
-/// The refused delete waits out `swap:0.3s`, so a poll can settle in that gap:
-/// htmx fires the poll's own `beforeSwap` and `afterSettle`, and this dispatches
-/// both as the row swap lands, before the row's own settle. The delete's landing
-/// spot has to survive them.
-async fn settle_a_poll_during_the_refused_delete(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>(
-        r#"() => {
-            const once = (evt) => {
-                const target = evt.detail && evt.detail.target;
-                if (!target || !target.classList || !target.classList.contains('world-item')) {
-                    return;
-                }
-                document.body.removeEventListener('htmx:afterSwap', once);
-                const display = document.getElementById('status-display');
-                const detail = { elt: display, target: display };
-                display.dispatchEvent(new CustomEvent('htmx:beforeSwap', {
-                    bubbles: true,
-                    detail: Object.assign({}, detail, {
-                        shouldSwap: true,
-                        serverResponse: 'idle',
-                    }),
-                }));
-                display.dispatchEvent(new CustomEvent('htmx:afterSettle', {
-                    bubbles: true,
-                    detail,
-                }));
-            };
-            document.body.addEventListener('htmx:afterSwap', once);
-        }"#,
-        None,
-    )
-    .await
-    .unwrap();
-}
-
-// A refused delete (the world still has games) answers a 200 whose body stands
-// in for the row, so the refusal's own message is where focus belongs.
+// A refused delete (the world still has games) answers a 400 error fragment,
+// which the world's own row reports in its inline slot. The row stays, with its
+// controls, and focus stays on the Delete control.
 // [docs/specs/browser_worlds.md] SCENARIO: 29.5
-async fn check_a_refused_world_delete_lands_focus_on_its_message(
+async fn check_a_refused_world_delete_reports_in_its_row_and_keeps_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     stub.row_delete_handle().set_world_delete_refused(true);
     accept_delete_confirmation(&page).await;
     open_worlds_tab(&page).await;
-    settle_a_poll_during_the_refused_delete(&page).await;
 
     let rows = ".worlds-list .world-item";
-    let refusal = ".worlds-list .world-item:first-child .error-message";
-    let first_delete = ".worlds-list .world-item:first-child .btn-danger";
+    let slot = r#"#world-redmist_estate [data-error-slot="world-redmist_estate"]"#;
+    let first_delete = "#world-redmist_estate .btn-danger";
+    let row_before = page
+        .evaluate::<(), bool>(
+            "() => { window.__worldRow = document.getElementById('world-redmist_estate'); return !!window.__worldRow; }",
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(row_before, "the first world's row must carry its stable id");
     page.locator(first_delete).await.focus().await.unwrap();
     page.locator(first_delete).await.click(None).await.unwrap();
 
-    wait_until_visible(&page, refusal, Duration::from_secs(5)).await;
+    wait_until_visible(&page, slot, Duration::from_secs(5)).await;
+    let (visible, message, raw) = read_error_disclosure(&page, slot).await;
+    assert!(visible, "the refusal shows in the world's own slot");
+    assert!(
+        message.contains("action failed") && raw.contains("World still has games"),
+        "the slot must carry the refusal, got {message:?} / {raw:?}"
+    );
     assert_eq!(
         page.query_selector_all(rows)
             .await
             .unwrap_or_default()
             .len(),
         2,
-        "the refusal must replace the world's row rather than remove it"
-    );
-    assert_eq!(
-        page.query_selector_all(".worlds-list .world-item .btn-cyan")
-            .await
-            .unwrap_or_default()
-            .len(),
-        1,
-        "only the refused row takes the message: the surviving world keeps its controls"
+        "the refusal must leave both rows in place"
     );
     assert!(
-        wait_until_focused(&page, refusal, Duration::from_secs(5)).await,
-        "a refused delete must land focus on the refusal message, not on the neighbouring row"
+        page.evaluate::<(), bool>(
+            "() => document.getElementById('world-redmist_estate') === window.__worldRow",
+            None,
+        )
+        .await
+        .unwrap(),
+        "the refused row must be the same element"
+    );
+    assert!(
+        active_element_is(&page, first_delete).await,
+        "a refused delete must leave focus on its Delete control"
     );
 }
 
@@ -147,7 +130,7 @@ async fn run_world_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_refused_world_delete_lands_focus_on_its_message,
+            check_a_refused_world_delete_reports_in_its_row_and_keeps_focus,
         )
         .await;
     runner.finish().await;

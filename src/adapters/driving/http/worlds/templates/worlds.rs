@@ -20,26 +20,26 @@ pub struct WorldRowView {
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="worlds-panel">
-    <button class="btn-primary btn-new-world" hx-get="/fragment/worlds/new" hx-target=".worlds-panel" hx-swap="outerHTML">Create New World</button>
+<div class="editor-slot" id="world-editor"></div>
+<button class="btn-primary btn-new-world" hx-get="/fragment/worlds/new" hx-target="#world-editor" hx-swap="innerHTML" data-opens-editor>Create New World</button>
 
     {% if worlds.is_empty() %}
     <p>No worlds defined. Create your first world to get started.</p>
     {% else %}
     <ul class="worlds-list">
         {% for world in worlds %}
-        <li class="world-item">
+        <li class="world-item" id="world-{{ world.key }}">
             <div class="world-item-head">
                 <strong>{{ world.name }}</strong> <em>({{ world.game_count }} {% if world.game_count == 1 %}game{% else %}games{% endif %})</em>
-                <button class="btn-cyan" hx-get="/worlds/{{ world.key }}/edit" hx-target=".worlds-panel" hx-swap="outerHTML">Edit</button>
-                <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+                <button class="btn-cyan" hx-get="/worlds/{{ world.key }}/edit" hx-target="#world-editor" hx-swap="innerHTML" data-opens-editor>Edit</button>
+                <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-swap="none" class="btn-danger">Delete</button>
             </div>
             {{ world.description }}
+            <div class="inline-error-slot" data-error-slot="world-{{ world.key }}" hidden></div>
         </li>
         {% endfor %}
     </ul>
     {% endif %}
-</div>
 "##,
     ext = "html"
 )]
@@ -71,11 +71,10 @@ impl WorldsPanelTemplate {
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="worlds-panel">
-<div class="world-form-container">
+<div class="world-form-container" id="world-form-container" data-work>
     <h2>{% if is_edit %}Edit World{% else %}Create New World{% endif %}</h2>
 
-    <form hx-post="{{ form_action }}" hx-target=".worlds-panel" hx-swap="outerHTML" enctype="application/x-www-form-urlencoded"{% if is_edit %} hx-on::before-request="clearPostureStatus()"{% endif %}>
+    <form hx-post="{{ form_action }}" hx-swap="none" enctype="application/x-www-form-urlencoded"{% if is_edit %} hx-on::before-request="clearPostureStatus()"{% endif %}>
         <label>Key: <input type="text" name="key" value="{{ key }}" {% if is_readonly %}readonly{% endif %} required /></label>
 
         <label>Name: <input type="text" name="name" value="{{ name }}" required /></label>
@@ -107,7 +106,7 @@ impl WorldsPanelTemplate {
 
         <div class="form-actions">
             <button type="submit" class="btn-primary">{{ submit_text }}</button>
-            <button type="button" class="btn-cyan" hx-get="/fragment/worlds" hx-target=".worlds-panel" hx-swap="outerHTML">Cancel</button>
+            <button type="button" class="btn-cyan" data-close-editor>Cancel</button>
         </div>
         <div class="inline-error-slot" data-error-slot="world-form" hidden></div>
         {% if is_edit %}
@@ -119,10 +118,10 @@ impl WorldsPanelTemplate {
     <fieldset class="posture-group" id="world-posture-group">
         <legend>Posture — saves automatically</legend>
         {{ posture_selects }}
-        <span id="world-posture-status"></span>
+        <span id="world-posture-status" class="posture-status saved-flag" data-keep="data-saved"></span>
+        <div class="inline-error-slot" data-error-slot="world-posture" hidden></div>
     </fieldset>
     {% endif %}
-</div>
 </div>
 "##,
     ext = "html"
@@ -219,7 +218,7 @@ impl WorldFormTemplate {
         let hx = auto_save_key
             .map(|key| {
                 format!(
-                    r##" hx-post="/worlds/{}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML""##,
+                    r##" hx-post="/worlds/{}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-swap="none" data-saved-flag="world-posture-status""##,
                     html_escape(key)
                 )
             })

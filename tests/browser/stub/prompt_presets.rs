@@ -91,11 +91,11 @@ async fn check_deleting_a_preset_card_keeps_keyboard_focus_on_a_card(
     assert!(
         wait_until_focused(
             &page,
-            r#"button[hx-get="/fragment/prompt-presets/custom_two/edit"]"#,
+            "#preset-card-custom_two :focus",
             Duration::from_secs(5),
         )
         .await,
-        "deleting a preset card must move focus to the next card's control"
+        "deleting a preset card must move focus to a control of the next card"
     );
 
     let last_delete = r#"button[hx-post="/prompt-presets/custom_two/delete"]"#;

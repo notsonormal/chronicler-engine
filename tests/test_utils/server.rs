@@ -334,7 +334,15 @@ async fn add_connection(
         "adding the {name} connection returned {}",
         resp.status()
     );
-    let body = resp.text().await.expect("add connection body");
+    // A saved connection answers nothing; the panel shows it.
+    let body = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/fragment/settings"))
+        .send()
+        .await
+        .unwrap_or_else(|e| panic!("load the settings panel for the {name} connection: {e}"))
+        .text()
+        .await
+        .expect("settings panel body");
     extract_connection_id(&body, name).unwrap_or_else(|| {
         panic!("could not find the {name} connection in the rendered settings panel")
     })

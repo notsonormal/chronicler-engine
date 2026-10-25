@@ -11,6 +11,19 @@ Endpoints:
 - `POST /prompt-presets/{id}/delete`
 - `POST /prompt-presets/{id}/duplicate`
 
+The Prompt Presets panel is a live region of the prompt presets, settings and
+games kinds. Its fragment carries no root element of its own, and each preset
+card carries a stable id (`preset-card-{id}`), so a load keeps the cards it does
+not change. An editor or a read-only view of a card (`edit-form`, `view-form`)
+carries the same id as the card and holds the panel (`data-work`) until the edit
+ends. Each Add form lives in a disclosure that a load keeps open (`data-keep`),
+and that closes when its save goes through.
+
+A create, an update, a delete, a duplicate and an activate answer nothing on
+success: an empty 200. A refusal answers a 400 error fragment, and a failure a
+500 error fragment. The control that saved reports the error in its own slot.
+The change reaches the screen when the panel loads.
+
 ## Scenarios
 
 ### Panel
@@ -21,10 +34,10 @@ Endpoints:
 Given a fresh app state seeded with at least one default system preset and one default quantifier preset
 When the client GET /fragment/prompt-presets
 Then the response is 200
-And the response body contains "<div class=\"prompt-presets-panel\">"
+And the response body repeats no `prompt-presets-panel` root of its own
 And the body contains an "System Prompts" heading
 And the body contains an "Quantifier Prompts" heading
-And the body contains one preset-card per seeded system preset (with name and "Default" badge)
+And the body contains one preset-card per seeded system preset (with a stable id, name and "Default" badge)
 And the body contains one preset-card per seeded quantifier preset (with name and "Default" badge)
 And the body contains an "Add System Prompt Preset" toggle
 And the body contains an "Add Quantifier Prompt Preset" toggle
@@ -45,6 +58,7 @@ Given a fresh app state
 When the client GET /fragment/prompt-presets
 Then the response is 200
 And each category's Add form is collapsed until the user opens it
+And each Add form's disclosure lists its open state in data-keep, and closes when its save goes through
 ```
 
 ### GET /fragment/prompt-presets/{id} — single card
@@ -81,7 +95,7 @@ And the response body is `<div class="error-message">Preset not found</div>`
 Given a fresh app state with a seeded non-default system preset named "Editable"
 When the client GET /fragment/prompt-presets/{id}/edit for that preset's id
 Then the response is 200
-And the response body contains "<div class=\"preset-card edit-form\">"
+And the response body contains a `preset-card edit-form` root with the card's stable id, which holds the panel (data-work)
 And the body contains a form posting to /prompt-presets/{id}
 And the body contains a hidden input named preset_type with value "system"
 And the body contains a name input whose value is "Editable"
@@ -116,7 +130,7 @@ And the response body is `<div class="error-message">Cannot edit default presets
 Given a fresh app state with a seeded default system preset named "Viewer"
 When the client GET /fragment/prompt-presets/{id}/view for that preset's id
 Then the response is 200
-And the response body contains "<div class=\"preset-card view-form\">"
+And the response body contains a `preset-card view-form` root with the card's stable id, which holds the panel (data-work)
 And the body contains the preset name "Viewer"
 And the body contains read-only fields for Role, Instructions, Writing Style, Output Format
 And the body contains a "Close" button
@@ -133,27 +147,25 @@ And the response body is `<div class="error-message">Preset not found</div>`
 
 ### POST /prompt-presets — create
 
-#### Scenario 21.9: Create a system preset → panel re-renders with the new preset
+#### Scenario 21.9: Create a system preset → the panel shows the new preset
 
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets with name="My System Prompt" and instructions="You are a test narrator." and preset_type="system"
-Then the response is 200
-And the response body contains "<div class=\"prompt-presets-panel\">"
-And the body contains the preset name "My System Prompt"
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets contains the preset name "My System Prompt"
 And the body contains the preview text "You are a test narrator."
 And the body contains a "Set Active" button for the new preset (it is not active)
 And the body contains an "Edit" button for the new preset (it is not default)
 ```
 
-#### Scenario 21.10: Create a quantifier preset → panel re-renders with the new preset
+#### Scenario 21.10: Create a quantifier preset → the panel shows the new preset
 
 ```gherkin
 Given a fresh app state
 When the client POST /prompt-presets with name="My Quantifier Prompt" and instructions="Quantify this scene." and preset_type="quantifier"
-Then the response is 200
-And the response body contains "<div class=\"prompt-presets-panel\">"
-And the body contains the preset name "My Quantifier Prompt"
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets contains the preset name "My Quantifier Prompt"
 And the body contains the preview text "Quantify this scene."
 ```
 
@@ -190,16 +202,15 @@ enumerated as separate scenarios; this one covers the shape.
 
 ### POST /prompt-presets/{id} — update
 
-#### Scenario 21.14: Update a preset → card re-renders with the new name
+#### Scenario 21.14: Update a preset → the card shows the new name
 
 ```gherkin
 Given a fresh app state with a seeded non-default system preset named "Before"
 When the client POST /prompt-presets/{id} with name="After" and instructions="Updated text." and preset_type="system"
-Then the response is 200
-And the response body contains "<div class=\"preset-card"
-And the body contains the new name "After"
-And the body does not contain the old name "Before"
-And the body preserves the stored allowed modes (the form omitted them)
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets/{id} contains the new name "After"
+And it does not contain the old name "Before"
+And it preserves the stored allowed modes (the form omitted them)
 ```
 
 #### Scenario 21.15: Update a nonexistent preset returns an error fragment
@@ -216,8 +227,7 @@ And the response body is `<div class="error-message">Preset not found</div>`
 ```gherkin
 Given a fresh app state with a seeded non-default system preset
 When the client POST /prompt-presets/{id} with name="Updated" and instructions="Updated." and preset_type="quantifier"
-Then the response is 200
-And the response body contains "preset-card" and no error fragment
+Then the response is a 200 with an empty body
 And the stored preset still has preset_type "system" and name "Updated"
 ```
 
@@ -254,13 +264,14 @@ And the body carries the delete failure text
 And a following GET /fragment/prompt-presets still renders the preset
 ```
 
-#### Scenario 21.18: Delete a preset → empty body
+#### Scenario 21.18: Delete a preset → empty body, and the panel no longer lists it
 
 ```gherkin
 Given a fresh app state with a seeded non-default system preset
 When the client POST /prompt-presets/{id}/delete
 Then the response is 200
 And the response body is empty
+And a following GET /fragment/prompt-presets does not list the preset
 ```
 
 #### Scenario 21.19: Delete a nonexistent preset returns an error fragment
@@ -318,14 +329,13 @@ And the preset is not deleted
 
 ### POST /prompt-presets/{id}/duplicate — duplicate
 
-#### Scenario 21.21: Duplicate a preset → panel re-renders with the copy
+#### Scenario 21.21: Duplicate a preset → the panel shows the copy
 
 ```gherkin
 Given a fresh app state with a seeded non-default system preset named "Original"
 When the client POST /prompt-presets/{id}/duplicate
-Then the response is 200
-And the response body contains "<div class=\"prompt-presets-panel\">"
-And the body contains the copy name "Original (Copy)"
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets contains the copy name "Original (Copy)"
 ```
 
 #### Scenario 21.22: Duplicate a nonexistent preset returns an error fragment
@@ -339,14 +349,13 @@ And the response body is `<div class="error-message">Preset not found</div>`
 
 ### POST /prompt-presets/{id}/activate — activate
 
-#### Scenario 21.23: Activate a system preset → panel re-renders with an Active badge
+#### Scenario 21.23: Activate a system preset → the panel shows an Active badge
 
 ```gherkin
 Given a fresh app state with a seeded non-default system preset that is not the active system preset
 When the client POST /prompt-presets/{id}/activate?mode=novel
-Then the response is 200
-And the response body contains "<div class=\"prompt-presets-panel\">"
-And the body contains an "Active · Novel" badge in the system preset's card-badges
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets contains an "Active · Novel" badge in the system preset's card-badges
 And that preset's card does not contain a "Set Active (Novel)" button (it is now active for the Novel bundle)
 ```
 
@@ -365,8 +374,8 @@ preset already leads.
 ```gherkin
 Given a fresh app state with a seeded system preset whose allowed_modes is ["interactive_fiction"]
 When the client POST /prompt-presets/{id}/activate?mode=interactive_fiction
-Then the response is 200
-And the response body contains an "Active · Interactive Fiction" badge in that preset's card-badges
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets contains an "Active · Interactive Fiction" badge in that preset's card-badges
 And the Interactive Fiction bundle's system slot holds that preset's id
 And activating the same preset without the mode parameter answers a 400 with `<div class="error-message">Preset not allowed for novel mode</div>`
 ```
@@ -397,9 +406,9 @@ When the client POST /prompt-presets/{id}/duplicate (the copy carries the source
 And the client GET /fragment/prompt-presets/{copy_id}/edit
 Then the edit form renders the allowed_mode_novel and allowed_mode_if checkboxes checked
 When the client POST /prompt-presets/{copy_id} with allowed_mode_novel and allowed_mode_if both set
-Then the response is 200
-And the returned card contains a "Set Active (Interactive Fiction)" button
-And the returned card contains a "Set Active (Novel)" button
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets/{copy_id} contains a "Set Active (Interactive Fiction)" button
+And it contains a "Set Active (Novel)" button
 And storage reports the copy's allowed_modes as ["novel", "interactive_fiction"]
 ```
 
@@ -428,8 +437,8 @@ And the body says a system preset with that name already exists
 ```gherkin
 Given a fresh app state with a System preset named "Alpha"
 When the client POST /prompt-presets with name "Alpha" and preset_type "quantifier"
-Then the response is 200
-And the body contains a Quantifier preset named "Alpha"
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets contains a Quantifier preset named "Alpha"
 ```
 
 #### Scenario 21.32: Editing a preset keeps its own name
@@ -437,8 +446,8 @@ And the body contains a Quantifier preset named "Alpha"
 ```gherkin
 Given a fresh app state with a System preset named "Alpha"
 When the client POST /prompt-presets/{id} for that preset with the same name "Alpha" and changed instructions
-Then the response is 200
-And the body contains a preset card named "Alpha" and no error
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets/{id} contains a preset card named "Alpha" and no error
 ```
 
 #### Scenario 21.33: Duplicating the same preset twice yields two distinct copies
@@ -446,12 +455,12 @@ And the body contains a preset card named "Alpha" and no error
 ```gherkin
 Given a fresh app state with a System preset named "Original"
 When the client POST /prompt-presets/{id}/duplicate for that preset
-Then the response is 200
-And the body contains the copy name "Original (Copy)"
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets contains the copy name "Original (Copy)"
 When the client POST /prompt-presets/{id}/duplicate for the same preset again
-Then the response is 200
-And the body contains the copy name "Original (Copy 2)"
-And the body still contains the first copy name "Original (Copy)"
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets contains the copy name "Original (Copy 2)"
+And it still contains the first copy name "Original (Copy)"
 ```
 
 #### Scenario 21.34: Renaming a preset onto a same-category sibling's name is refused
@@ -490,7 +499,7 @@ And that card offers a single "Set Active" button and no mode-specific activatio
 ```gherkin
 Given a fresh app state with a seeded Options preset that is not the settings-level Options default
 When the client POST /prompt-presets/{id}/activate
-Then the response is 200
-And the re-rendered Options card carries the "Active" badge and hides its "Set Active" button
+Then the response is a 200 with an empty body
+And a following GET /fragment/prompt-presets renders the Options card with the "Active" badge and hides its "Set Active" button
 And the stored settings-level Options default is that preset's id
 ```

@@ -34,7 +34,7 @@ async fn test_basic_fragments_return_html() {
     // a seeded entry.
     let app = TestAppBuilder::default_test().build();
     let fragments = [
-        ("/fragment/header", "class=\"header\""),
+        ("/fragment/header", "class=\"game-title\""),
         ("/fragment/story-log", "class=\"log-entry"),
         ("/fragment/visual-sidebar", "id=\"visual-sidebar\""),
     ];

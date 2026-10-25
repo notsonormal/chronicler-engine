@@ -10,14 +10,9 @@ use crate::adapters::driving::http::builders::headers::{
     connections_degraded, connections_degraded_marker, role_health_cell, role_health_cell_id,
     role_label,
 };
-use crate::adapters::driving::http::utils::error::{
-    error_disclosure, raw_error_detail,
-    refusal_message_without_layer_prefix_for_validation_and_config,
-};
 use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::template_helpers::select_options_html;
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
-use crate::error::EngineError;
 
 pub struct RoleRowView {
     pub role: String,
@@ -31,57 +26,53 @@ pub struct RoleRowView {
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="settings-panel">
-    <div class="settings-subtabs" role="tablist" aria-label="Settings sections">
-        <button class="settings-subtab active" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true">Connections<span class="subtab-marker-slot" id="subtab-connections-marker">{{ degraded_marker }}</span></button>
-        <button class="settings-subtab" role="tab" id="subtab-text-check" aria-controls="settings-text-check" aria-selected="false">Text Check</button>
+<div class="editor-slot" id="connection-editor"></div>
+<div class="settings-subtabs" role="tablist" aria-label="Settings sections">
+    <button class="settings-subtab" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-keep="aria-selected">Connections<span class="subtab-marker-slot" id="subtab-connections-marker">{{ degraded_marker }}</span></button>
+    <button class="settings-subtab" role="tab" id="subtab-text-check" aria-controls="settings-text-check" aria-selected="false" data-keep="aria-selected">Text Check</button>
+</div>
+<div class="settings-subtab-panel" id="settings-connections" role="tabpanel" aria-labelledby="subtab-connections" data-keep="hidden">
+    <h3 class="section-heading">Roles</h3>
+    <div class="role-rows">
+        {% for role in roles %}
+        <div class="role-row" id="role-row-{{ role.role }}" data-role="{{ role.role }}">
+            <label class="role-name" for="role-select-{{ role.role }}">{{ role.label }}</label>
+            <select id="role-select-{{ role.role }}" name="connection_id" class="role-connection-select" hx-post="{{ role.set_route }}" hx-trigger="change" hx-swap="none">
+                {% for option in role.options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+            </select>
+            <span class="role-health-slot" id="{{ role.health_cell_id }}">{{ role.health_html }}</span>
+            <div class="inline-error-slot" data-error-slot="role-{{ role.role }}" hidden></div>
+        </div>
+        {% endfor %}
     </div>
-    <div class="settings-subtab-panel active" id="settings-connections" role="tabpanel" aria-labelledby="subtab-connections">
-        {% match error %}
-        {% when Some with (disclosure) %}
-        {{ disclosure }}
-        {% when None %}
-        {% endmatch %}
-        <h3 class="section-heading">Roles</h3>
-        <div class="role-rows">
-            {% for role in roles %}
-            <div class="role-row" data-role="{{ role.role }}">
-                <label class="role-name" for="role-select-{{ role.role }}">{{ role.label }}</label>
-                <select id="role-select-{{ role.role }}" name="connection_id" class="role-connection-select" hx-post="{{ role.set_route }}" hx-trigger="change" hx-target=".settings-panel" hx-swap="innerHTML">
-                    {% for option in role.options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
-                </select>
-                <span class="role-health-slot" id="{{ role.health_cell_id }}">{{ role.health_html }}</span>
+    <h3 class="section-heading">Connections</h3>
+    <div class="connection-list">
+        {% for conn in connections %}
+        <div class="connection-row" id="connection-{{ conn.id }}">
+            <div class="connection-meta">
+                <span class="connection-name">{{ conn.name }}</span>
+                <span class="connection-provider">{{ conn.provider|fmt("{:?}") }} - {{ conn.model }}</span>
             </div>
-            {% endfor %}
-        </div>
-        <h3 class="section-heading">Connections</h3>
-        <div class="connection-list">
-            {% for conn in connections %}
-            <div class="connection-row">
-                <div class="connection-meta">
-                    <span class="connection-name">{{ conn.name }}</span>
-                    <span class="connection-provider">{{ conn.provider|fmt("{:?}") }} - {{ conn.model }}</span>
-                </div>
-                <div class="connection-roles">
-                    {% if conn.id == narration_connection_id %}<span class="badge">Narrator</span>{% endif %}
-                    {% if conn.id == quantifier_connection_id %}<span class="badge quantifier">Quantifier</span>{% endif %}
-                </div>
-                <div class="connection-actions">
-                    <button type="button" hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-cyan">Edit</button>
-                    <button type="button" hx-post="/connections/{{ conn.id }}/test" hx-target="next .connection-test-slot" hx-swap="innerHTML" class="btn-cyan">Test</button>
-                    <button type="button" hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-danger">Delete</button>
-                </div>
-                <div class="inline-error-slot connection-test-slot"></div>
+            <div class="connection-roles">
+                {% if conn.id == narration_connection_id %}<span class="badge">Narrator</span>{% endif %}
+                {% if conn.id == quantifier_connection_id %}<span class="badge quantifier">Quantifier</span>{% endif %}
             </div>
-            {% endfor %}
+            <div class="connection-actions">
+                <button type="button" hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="#connection-editor" hx-swap="innerHTML" data-opens-editor class="btn-cyan">Edit</button>
+                <button type="button" hx-post="/connections/{{ conn.id }}/test" hx-target="next .connection-test-slot" hx-swap="innerHTML" class="btn-cyan">Test</button>
+                <button type="button" hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-swap="none" class="btn-danger">Delete</button>
+            </div>
+            <div class="inline-error-slot connection-test-slot"></div>
+            <div class="inline-error-slot" data-error-slot="connection-{{ conn.id }}" hidden></div>
         </div>
-        <div class="connection-add">
-            <button type="button" hx-get="/fragment/connections/new" hx-target=".settings-panel" hx-swap="innerHTML" class="btn-primary">Add Connection</button>
-        </div>
+        {% endfor %}
     </div>
-    <div class="settings-subtab-panel" id="settings-text-check" role="tabpanel" aria-labelledby="subtab-text-check">
-        {{ text_check_card }}
+    <div class="connection-add">
+        <button type="button" hx-get="/fragment/connections/new" hx-target="#connection-editor" hx-swap="innerHTML" data-opens-editor class="btn-primary">Add Connection</button>
     </div>
+</div>
+<div class="settings-subtab-panel" id="settings-text-check" role="tabpanel" aria-labelledby="subtab-text-check" hidden data-keep="hidden">
+    {{ text_check_card }}
 </div>
 "##,
     ext = "html"
@@ -92,16 +83,11 @@ pub struct SettingsTemplate {
     pub connections: Vec<LlmConnection>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
-    pub error: Option<SafeHtml>,
     pub text_check_card: SafeHtml,
 }
 
 impl SettingsTemplate {
-    pub fn from_settings(
-        settings: &AppSettings,
-        roles: &[RoleHealth],
-        error: Option<&EngineError>,
-    ) -> Self {
+    pub fn from_settings(settings: &AppSettings, roles: &[RoleHealth]) -> Self {
         Self {
             roles: Self::role_rows(settings, roles),
             degraded_marker: SafeHtml::new(connections_degraded_marker(connections_degraded(
@@ -110,15 +96,8 @@ impl SettingsTemplate {
             connections: settings.connections.clone(),
             narration_connection_id: settings.narration_connection_id.clone(),
             quantifier_connection_id: settings.quantifier_connection_id.clone(),
-            error: error.map(|error| {
-                SafeHtml::new(error_disclosure(
-                    "settings-panel-error",
-                    &refusal_message_without_layer_prefix_for_validation_and_config(error),
-                    &raw_error_detail(&error.to_string()),
-                ))
-            }),
             text_check_card: SafeHtml::new(render_or_error_fragment(
-                &TextCheckCardTemplate::from_settings(settings, ""),
+                &TextCheckCardTemplate::from_settings(settings),
             )),
         }
     }
@@ -163,10 +142,10 @@ impl SettingsTemplate {
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="settings-panel connection-form-page">
-    <button type="button" class="back-link" hx-get="/fragment/settings" hx-target=".settings-panel" hx-swap="innerHTML"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg> Connections</button>
+<div class="connection-form-page" id="connection-form-page" data-work>
+    <button type="button" class="back-link" data-close-editor><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg> Connections</button>
     <h2>{% if editing %}Edit {{ name }}{% else %}Add Connection{% endif %}</h2>
-    <form hx-post="{{ form_action }}" hx-target=".settings-panel" hx-swap="innerHTML">
+    <form hx-post="{{ form_action }}" hx-swap="none">
         <div class="form-group">
             <label for="conn_name">Name</label>
             <input type="text" id="conn_name" name="conn_name" value="{{ name }}" placeholder="My OpenRouter" />
@@ -209,7 +188,7 @@ impl SettingsTemplate {
         <div class="form-actions">
             <button type="submit" class="btn-primary">Save</button>
             <button type="button" class="btn-cyan" hx-post="/connections/test" hx-include="closest form" hx-target="next .connection-test-slot" hx-swap="innerHTML">Test</button>
-            <button type="button" class="btn-cyan" hx-get="/fragment/settings" hx-target=".settings-panel" hx-swap="innerHTML">Cancel</button>
+            <button type="button" class="btn-cyan" data-close-editor>Cancel</button>
         </div>
         <div class="inline-error-slot connection-test-slot"></div>
     </form>
@@ -285,12 +264,12 @@ pub struct ConnectionTestResultTemplate {
 <div class="connection-card" id="text-check-card">
     <div class="card-header">
         <span class="card-title">Spell &amp; Grammar Check</span>
-        <span class="text-check-status">{{ status }}</span>
+        <span class="text-check-status" id="text-check-status" data-keep="data-saved"></span>
     </div>
     <div class="card-details">
         Check player input for spelling and grammar issues before sending to the LLM.
     </div>
-    <form class="text-check-form" hx-post="/settings/text-check" hx-trigger="change" hx-target="#text-check-card" hx-swap="outerHTML">
+    <form class="text-check-form" hx-post="/settings/text-check" hx-trigger="change" hx-swap="none" data-autosave data-saved-flag="text-check-status">
         <div class="form-group">
             <label for="check_mode">Check Mode</label>
             <select name="check_mode" id="check_mode">
@@ -316,11 +295,10 @@ pub struct TextCheckCardTemplate {
     pub text_check_mode: String,
     pub enable_auto_check: bool,
     pub text_check_disabled: bool,
-    pub status: String,
 }
 
 impl TextCheckCardTemplate {
-    pub(crate) fn from_settings(settings: &AppSettings, status: &str) -> Self {
+    pub(crate) fn from_settings(settings: &AppSettings) -> Self {
         let text_check_disabled = matches!(settings.text_check.mode, TextCheckMode::Disabled);
         Self {
             text_check_mode: match settings.text_check.mode {
@@ -332,7 +310,6 @@ impl TextCheckCardTemplate {
             .to_string(),
             enable_auto_check: settings.text_check.effective_enable_auto_check(),
             text_check_disabled,
-            status: status.to_string(),
         }
     }
 }

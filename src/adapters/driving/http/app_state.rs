@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use askama::Template;
 
-use crate::adapters::driving::http::builders::headers::header_fragment_html;
+use crate::adapters::driving::http::builders::headers::{failure_banner_html, header_fragment_html};
 use crate::adapters::driving::http::templates::{
     CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrationLogTemplate, OptionsDockTemplate,
     VisualSidebarTemplate,
@@ -89,11 +89,15 @@ impl AppState {
                 tracing::warn!("header: the game name could not be read: {error}");
                 "Unknown".to_string()
             });
+        header_fragment_html(game_name)
+    }
+
+    pub fn render_failure_banner(&self) -> Result<String> {
         let roles = self
             .game_view_query
             .role_health()
-            .map_err(|e| EngineError::Config(Self::render_error_context("header", e)))?;
-        header_fragment_html(game_name, &roles)
+            .map_err(|e| EngineError::Config(Self::render_error_context("failure banner", e)))?;
+        Ok(failure_banner_html(&roles))
     }
 
     pub fn render_story_log(&self, game_id: GameId) -> Result<String> {

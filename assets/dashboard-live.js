@@ -126,16 +126,37 @@ function restoreRenderedValue(field) {
 }
 
 // The one rule that ends an edit after a save went through. `element` is the
-// form or the control that saved, or a field inside an editor. Each field of it
-// takes its current value as its rendered value, the editor root that holds the
-// region (`data-work`) lets go, and the disclosure that holds only this form
-// closes: it marks itself with `data-close-on-save`.
+// form or the control that saved. Each field of it takes its current value as
+// its rendered value, so it is no longer changed. A form that creates something
+// (`data-reset-on-save`) goes back to the empty form that the server rendered.
+//
+// Only a form ends the edit of its editor: the editor root that holds the region
+// (`data-work`) lets go, and the disclosure that holds only this form closes (it
+// marks itself with `data-close-on-save`). A control that saves on change, such
+// as the World posture, leaves the editor open: the player is still editing.
 function endEdit(element) {
-  editFieldsOf(element).forEach(settleField);
+  if (element.matches("form[data-reset-on-save]")) {
+    element.reset();
+  } else {
+    editFieldsOf(element).forEach(settleField);
+  }
+  if (element.tagName !== "FORM") return;
   const root = element.closest("[data-work]");
   if (root) root.removeAttribute("data-work");
   const disclosure = element.closest("details[data-close-on-save]");
   if (disclosure) disclosure.open = false;
+}
+
+// The "Saved" line of an auto-save control is view state: the browser shows it
+// after a save that went through, through an attribute that a load keeps
+// (`data-saved` in the `data-keep` of the status element), and removes it after a
+// save that did not.
+function flagSaved(element, saved) {
+  const id = element.getAttribute("data-saved-flag");
+  const flag = id ? document.getElementById(id) : null;
+  if (!flag) return;
+  if (saved) flag.setAttribute("data-saved", "");
+  else flag.removeAttribute("data-saved");
 }
 
 function isSavingControl(element) {
@@ -152,11 +173,22 @@ function settleSave(evt) {
   if (!element || !element.closest || !element.closest("[data-live]")) return;
   if (!isSavingControl(element)) return;
   const refused = answeredBusy(evt);
-  if (evt.detail.successful && !refused) {
+  const saved = evt.detail.successful && !refused;
+  flagSaved(element, saved);
+  if (saved) {
     endEdit(element);
     return;
   }
-  if (element.tagName === "FORM") return;
+  if (element.tagName === "FORM") {
+    // A form that saves on change (`data-autosave`) is a control: its fields go
+    // back to the rendered values. Any other form keeps the player's edit.
+    if (element.hasAttribute("data-autosave")) editFieldsOf(element).forEach(restoreRenderedValue);
+    if (refused) {
+      const what = element.getAttribute("data-refusal-what") || "the change was not saved";
+      reportBusyRefusal(inlineErrorSlotFor(element, true), what);
+    }
+    return;
+  }
   restoreRenderedValue(element);
   if (refused) {
     reportBusyRefusal(inlineErrorSlotFor(element, true), "the change was not saved");
@@ -456,11 +488,12 @@ function focusFirstControlIn(row) {
   return false;
 }
 
-// A load that removes the focused node moves focus to the nearest row that
-// survives, the one after it first, or else to the region.
+// A load that removes the focused node moves focus to its own row when the row
+// survives, else to the nearest row that does, the one after it first, or else to
+// the region.
 function applyFocusPlan(region, plan) {
   if (!plan || plan.focused.isConnected) return;
-  for (let distance = 1; distance < plan.rows.length; distance += 1) {
+  for (let distance = 0; distance < plan.rows.length; distance += 1) {
     for (const index of [plan.index + distance, plan.index - distance]) {
       const row = plan.rows[index];
       if (row && row.isConnected && region.contains(row)) {
@@ -471,3 +504,29 @@ function applyFocusPlan(region, plan) {
   if (!region.hasAttribute("tabindex")) region.setAttribute("tabindex", "-1");
   region.focus();
 }
+
+// An editor slot (`.editor-slot`) holds the editor that a view change loaded into
+// it. Cancel closes the editor in the browser and sends no request: the slot is
+// empty, as every load renders it, and the region that the editor held may load.
+let editorOpener = null;
+
+document.addEventListener("click", function (evt) {
+  const target = evt.target;
+  if (!(target instanceof Element)) return;
+  const opener = target.closest("[data-opens-editor]");
+  if (opener) editorOpener = opener;
+  const cancel = target.closest("[data-close-editor]");
+  if (!cancel) return;
+  const slot = cancel.closest(".editor-slot");
+  if (!slot) return;
+  const region = slot.closest("[data-live]");
+  slot.replaceChildren();
+  if (region && editorOpener && editorOpener.isConnected && region.contains(editorOpener)) {
+    editorOpener.focus();
+  } else if (region) {
+    if (!region.hasAttribute("tabindex")) region.setAttribute("tabindex", "-1");
+    region.focus();
+  }
+  editorOpener = null;
+  liveWorkEnded();
+});

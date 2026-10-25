@@ -7,7 +7,6 @@ use crate::domain::model::settings::{AppSettings, LlmConnection, TextCheckMode, 
 use crate::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate, TextCheckCardTemplate,
 };
-use crate::error::EngineError;
 use crate::test_support::test_connection;
 
 fn two_connection_settings() -> AppSettings {
@@ -43,7 +42,7 @@ fn health(role: Role, backend: Option<&str>, error: Option<&str>) -> RoleHealth 
 #[test]
 fn test_settings_template_renders_the_sub_tabs_and_role_rows() {
     let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[], None)
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
@@ -57,7 +56,7 @@ fn test_settings_template_renders_the_sub_tabs_and_role_rows() {
     assert!(html.contains(r#"<option value="conn-1" selected>"#));
     assert!(html.contains(r#"<option value="conn-2" selected>"#));
     assert!(html.contains("Add Connection"));
-    assert!(html.contains(r#"<div class="connection-row">"#));
+    assert!(html.contains(r#"<div class="connection-row" id="connection-conn-1">"#));
     assert!(!html.contains("Set as Narrator"));
     assert!(!html.contains("Set as Quantifier"));
 }
@@ -65,7 +64,7 @@ fn test_settings_template_renders_the_sub_tabs_and_role_rows() {
 #[test]
 fn test_narrator_badge_renders() {
     let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[], None)
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
@@ -75,7 +74,7 @@ fn test_narrator_badge_renders() {
 #[test]
 fn test_quantifier_badge_renders() {
     let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[], None)
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
@@ -85,7 +84,7 @@ fn test_quantifier_badge_renders() {
 #[test]
 fn test_no_calls_yet_health_renders_for_each_role() {
     let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[], None)
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
@@ -105,7 +104,7 @@ fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
         Some("Mock mock"),
         Some("connection refused"),
     )];
-    let html = SettingsTemplate::from_settings(&settings, &roles, None)
+    let html = SettingsTemplate::from_settings(&settings, &roles)
         .render()
         .unwrap();
 
@@ -133,7 +132,7 @@ fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
 fn test_healthy_role_renders_healthy() {
     let settings = two_connection_settings();
     let roles = vec![health(Role::Quantifier, Some("Mock mock"), None)];
-    let html = SettingsTemplate::from_settings(&settings, &roles, None)
+    let html = SettingsTemplate::from_settings(&settings, &roles)
         .render()
         .unwrap();
 
@@ -142,41 +141,81 @@ fn test_healthy_role_renders_healthy() {
 }
 
 #[test]
-fn test_refusal_message_rides_inside_the_connections_panel() {
+fn test_the_panel_keeps_the_sub_tab_in_attributes_the_server_never_changes() {
     let settings = two_connection_settings();
-    let refusal = EngineError::Validation("Narrator uses this connection".to_string());
-    let roles = vec![health(
-        Role::Narrator,
-        Some("Mock mock"),
-        Some("connection refused"),
-    )];
-    let html = SettingsTemplate::from_settings(&settings, &roles, Some(&refusal))
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
     assert!(
-        html.contains(
-            r#"<span class="error-disclosure-message"><span class="error-disclosure-text">Narrator uses this connection</span></span>"#
-        ),
-        "the refusal's short message must be the disclosure's visible text: {html}"
+        !html.contains("settings-panel"),
+        "the shell's .settings-panel is the region, so the fragment repeats no root: {html}"
     );
     assert!(
-        html.contains(r#"class="error-details-toggle""#),
-        "the refusal must carry the Details toggle: {html}"
+        html.contains(r#"id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-keep="aria-selected""#),
+        "the sub-tab button lists its selected state in data-keep: {html}"
     );
     assert!(
-        html.contains(
-            r#"<pre class="error-detail-raw">Validation error: Narrator uses this connection</pre>"#
-        ),
-        "the popover must carry the raw failure text: {html}"
+        html.contains(r#"id="settings-text-check" role="tabpanel" aria-labelledby="subtab-text-check" hidden data-keep="hidden""#),
+        "the sub-tab panel lists its hidden state in data-keep: {html}"
     );
-    for popover_id in ["settings-panel-error", "role-health-narrator-popover"] {
-        assert_eq!(
-            html.matches(&format!(r#"id="{popover_id}""#)).count(),
-            1,
-            "the panel refusal and a role-health disclosure must not share a popover id: {html}"
+    assert!(
+        !html.contains("settings-subtab active") && !html.contains("settings-subtab-panel active"),
+        "the active sub-tab is no class: {html}"
+    );
+    assert!(
+        html.contains(r#"<div class="editor-slot" id="connection-editor"></div>"#),
+        "the editor slot renders empty: {html}"
+    );
+}
+
+#[test]
+fn test_role_rows_and_connection_rows_carry_stable_ids_and_their_own_error_slots() {
+    let settings = two_connection_settings();
+    let html = SettingsTemplate::from_settings(&settings, &[])
+        .render()
+        .unwrap();
+
+    for id in [
+        "role-row-narrator",
+        "role-row-quantifier",
+        "connection-conn-1",
+        "connection-conn-2",
+    ] {
+        assert!(
+            html.contains(&format!(r#"id="{id}""#)),
+            "row id {id}: {html}"
         );
     }
+    for slot in [
+        "role-narrator",
+        "role-quantifier",
+        "connection-conn-1",
+        "connection-conn-2",
+    ] {
+        assert!(
+            html.contains(&format!(r#"data-error-slot="{slot}""#)),
+            "error slot {slot}: {html}"
+        );
+    }
+}
+
+#[test]
+fn test_panel_actions_answer_nothing_and_target_no_region() {
+    let settings = two_connection_settings();
+    let html = SettingsTemplate::from_settings(&settings, &[])
+        .render()
+        .unwrap();
+
+    assert!(!html.contains(r#"hx-target=".settings-panel""#), "{html}");
+    assert!(
+        html.contains(r#"hx-trigger="change" hx-swap="none""#),
+        "the role select saves and swaps nothing: {html}"
+    );
+    assert!(
+        html.contains(r##"hx-get="/fragment/connections/new" hx-target="#connection-editor""##),
+        "Add Connection fills the editor slot: {html}"
+    );
 }
 
 #[test]
@@ -185,7 +224,15 @@ fn test_connection_form_template_add_and_edit() {
     let add = ConnectionFormTemplate::new(None).render().unwrap();
     assert!(add.contains(r#"<h2>Add Connection</h2>"#));
     assert!(add.contains(r#"hx-post="/connections/add""#));
-    assert!(add.contains("</svg> Connections</button>"));
+    assert!(add.contains("data-close-editor"));
+    assert!(
+        add.contains(r#"<div class="connection-form-page" id="connection-form-page" data-work>"#),
+        "the editor holds its region until the edit ends: {add}"
+    );
+    assert!(
+        add.contains(r#"hx-swap="none""#),
+        "a save swaps nothing: {add}"
+    );
     assert!(add.contains(r#"name="conn_name" value=""#));
 
     let edit = ConnectionFormTemplate::new(Some(&settings.connections[0]))
@@ -247,7 +294,7 @@ fn test_text_check_card_disabled_mode_renders_the_checkbox_unchecked() {
         ..AppSettings::default()
     };
 
-    let html = TextCheckCardTemplate::from_settings(&settings, "")
+    let html = TextCheckCardTemplate::from_settings(&settings)
         .render()
         .unwrap();
 

@@ -115,15 +115,7 @@ pub async fn create_world_handler(
     };
 
     match state.world_catalogue.create_world(world_card, map) {
-        Ok(_) => {
-            let worlds = state.world_catalogue.list_worlds();
-            let games = state.game_catalogue.list_games().unwrap_or_default();
-            let games_per_world = games_per_world(&games);
-            render_response(&WorldsPanelTemplate::from_worlds(
-                &worlds.unwrap_or_default(),
-                &games_per_world,
-            ))
-        }
+        Ok(_) => ok(""),
         Err(e) => action_error_response(e, "Failed to create world"),
     }
 }
@@ -193,15 +185,7 @@ pub async fn update_world_handler(
         .world_catalogue
         .update_world(world_id, world_card, map)
     {
-        Ok(()) => {
-            let worlds = state.world_catalogue.list_worlds();
-            let games = state.game_catalogue.list_games().unwrap_or_default();
-            let games_per_world = games_per_world(&games);
-            render_response(&WorldsPanelTemplate::from_worlds(
-                &worlds.unwrap_or_default(),
-                &games_per_world,
-            ))
-        }
+        Ok(()) => ok(""),
         Err(e) => internal_error(format!("Failed to update world: {e}")),
     }
 }
@@ -212,10 +196,7 @@ pub async fn delete_world_handler(
 ) -> Response<axum::body::Body> {
     match state.world_catalogue.delete_world(&key) {
         Ok(()) => ok(""),
-        Err(e) if e.is_user_displayable() => {
-            let error_html = render_error(&e.to_string());
-            ok(format!(r#"<li class="world-item">{error_html}</li>"#))
-        }
+        Err(e) if e.is_user_displayable() => bad_request(render_error(&e.to_string())),
         Err(e) => internal_error(render_error(&e.to_string())),
     }
 }
@@ -228,8 +209,8 @@ pub struct WorldPostureForm {
 }
 
 /// Auto-save the world's narrative posture. Patches only the posture
-/// fields; invalid values render an error fragment into `#world-posture-status`
-/// and mutate nothing.
+/// fields; a saved change answers nothing, and an invalid value answers a 400
+/// error fragment and mutates nothing.
 pub async fn update_world_posture_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
@@ -252,7 +233,7 @@ pub async fn update_world_posture_handler(
     let (mode, perspective, tense) = match parsed {
         (Ok(mode), Ok(perspective), Ok(tense)) => (mode, perspective, tense),
         (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
-            return ok(render_error(&e));
+            return bad_request(render_error(&e));
         }
     };
 
@@ -276,7 +257,7 @@ pub async fn update_world_posture_handler(
         .world_catalogue
         .update_world(world_id, world_card, map)
     {
-        Ok(()) => ok(r#"<span class="posture-status">Saved</span>"#),
+        Ok(()) => ok(""),
         Err(e) => internal_error(format!("Failed to update world posture: {e}")),
     }
 }

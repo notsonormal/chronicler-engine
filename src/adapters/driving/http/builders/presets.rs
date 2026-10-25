@@ -23,7 +23,7 @@ pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
         textarea_field_readonly("Output Format", preset.output_format.as_deref(), 6);
 
     format!(
-        r#"<div class="preset-card view-form">
+        r#"<div class="preset-card view-form" id="preset-card-{id}" data-work>
     <div class="card-header">
         <span class="card-title">View {name}</span>
     </div>
@@ -103,11 +103,11 @@ pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String
     };
 
     format!(
-        r#"<div class="preset-card edit-form">
+        r#"<div class="preset-card edit-form" id="preset-card-{id}" data-work>
     <div class="card-header">
         <span class="card-title">Edit {name}</span>
     </div>
-    <form hx-post="/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML">
+    <form hx-post="/prompt-presets/{id}" hx-swap="none">
         <input type="hidden" name="preset_type" value="{preset_type_escaped}" />
         <div class="form-group">
             <label for="edit-name-{id}">Name</label>
@@ -131,7 +131,7 @@ pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String
 /// `preview` arrives pre-truncated: newlines flattened, a cut marked with an ellipsis.
 #[derive(Template)]
 #[template(
-    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if !self.active_badges.is_empty() %} active{% endif %}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% for badge in self.active_badges %}<span class="badge primary">{{ badge }}</span>{% endfor %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% for button in self.activate_buttons %}<button hx-post="/prompt-presets/{{ preset.id }}/activate{{ button.mode_query }}" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-primary">{{ button.label }}</button>{% endfor %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-target="closest .preset-card" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-target=".prompt-presets-panel" hx-swap="outerHTML" class="btn-cyan">Duplicate</button></div></div>"##,
+    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if !self.active_badges.is_empty() %} active{% endif %}" id="preset-card-{{ preset.id }}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% for badge in self.active_badges %}<span class="badge primary">{{ badge }}</span>{% endfor %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% for button in self.activate_buttons %}<button hx-post="/prompt-presets/{{ preset.id }}/activate{{ button.mode_query }}" hx-swap="none" class="btn-primary">{{ button.label }}</button>{% endfor %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-swap="none" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-swap="none" class="btn-cyan">Duplicate</button></div></div>"##,
     ext = "html"
 )]
 pub struct PresetCardTemplate {

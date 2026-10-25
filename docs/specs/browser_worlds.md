@@ -10,6 +10,7 @@ Endpoint: browser DOM.
 Given the world edit form is open with #world-posture-status rendered
 When the client changes the Tense select to "present"
 Then the browser POSTs /worlds/test/posture with the posture group
+And the browser flags the save on #world-posture-status (data-saved)
 And after a reload the re-opened edit form shows "present" selected
 ```
 
@@ -19,7 +20,8 @@ And after a reload the re-opened edit form shows "present" selected
 Given the world edit form is open
 And the Cancel control has focus
 When the client activates Cancel
-Then the worlds panel shows the world list again
+Then the editor slot is empty and the worlds panel shows the world list again
+And Cancel sent no request
 And focus is on a control inside the worlds panel
 ```
 
@@ -29,21 +31,20 @@ And focus is on a control inside the worlds panel
 Given the Worlds tab shows two worlds
 And the first world's Delete control has focus
 When the client confirms the delete
-Then that world's row is removed
+Then the panel loads and that world's row is removed
 And the surviving world's Edit control has focus
 When the client confirms the delete of the last world
 Then no world row remains
 And focus is on a control inside the worlds panel
 ```
 
-#### Scenario 29.5: A refused world delete draws its message in the row and focuses it
+#### Scenario 29.5: A refused world delete reports in the row's own slot and keeps focus
 
 ```gherkin
 Given the Worlds tab shows two worlds
 And the first world's Delete control has focus
 When the client confirms a delete the engine refuses because the world still has games
-And a poll settles while that delete's swap is in flight
-Then that row holds the refusal message in place of the world
-And the surviving world keeps its own controls
-And the refusal message has focus
+Then that row's own inline slot holds the refusal message
+And both rows stay in place, as the same elements
+And the Delete control keeps focus
 ```

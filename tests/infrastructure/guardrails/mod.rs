@@ -513,6 +513,43 @@ fn guardrails_handler_headers() {
     );
 }
 
+/// The templates: the sources of the HTTP adapter (tests excluded) and the shell.
+fn template_sources() -> Vec<(String, String)> {
+    let mut sources: Vec<(String, String)> = src_snapshot()
+        .iter()
+        .filter(|file| file.path.starts_with("adapters/driving/http/"))
+        .filter(|file| !file.path.ends_with("_tests.rs"))
+        .map(|file| (file.path.clone(), file.content.clone()))
+        .collect();
+    sources.push((
+        "assets/index.html".to_string(),
+        std::fs::read_to_string("assets/index.html").unwrap(),
+    ));
+    sources
+}
+
+#[test]
+fn guardrails_templates_target_no_region() {
+    let regions = shell_regions();
+    let errors: Vec<Violation> = template_sources()
+        .iter()
+        .flat_map(|(path, content)| check_template_targets(path, content, &regions))
+        .collect();
+    assert_violations(
+        &errors,
+        "no template targets a region element or swaps one with outerHTML",
+    );
+}
+
+#[test]
+fn guardrails_templates_have_no_out_of_band_swaps() {
+    let errors: Vec<Violation> = template_sources()
+        .iter()
+        .flat_map(|(path, content)| check_no_out_of_band_swaps(path, content))
+        .collect();
+    assert_violations(&errors, "no template has hx-swap-oob");
+}
+
 #[test]
 fn guardrails_walker_banned_name() {
     let files = src_snapshot();

@@ -7,6 +7,28 @@ use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
 
+/// A saved change answers nothing, so a test reads the result from the panel.
+async fn settings_panel(app: &axum::Router) -> String {
+    let req = Request::builder()
+        .uri("/fragment/settings")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    String::from_utf8_lossy(&body).into_owned()
+}
+
+async fn assert_answers_nothing(response: axum::response::Response) {
+    assert!(response.status().is_success());
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    assert!(body.is_empty(), "a saved change answers nothing: {body:?}");
+}
+
 #[tokio::test]
 async fn test_add_connection_openrouter() {
     let _guard = SettingsTestGuard::new();
@@ -23,16 +45,13 @@ async fn test_add_connection_openrouter() {
             "conn_name=My+OpenRouter&conn_provider=openrouter&conn_model=openai/gpt-4o&conn_api_key=sk-test&conn_base_url=",
         ))
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    assert_answers_nothing(response).await;
+    let body_str = settings_panel(&app).await;
     assert!(
         body_str.contains("My OpenRouter"),
-        "Expected new connection name in response: {body_str}"
+        "Expected new connection name in the panel: {body_str}"
     );
 }
 
@@ -52,16 +71,13 @@ async fn test_add_connection_deepseek() {
             "conn_name=My+DeepSeek&conn_provider=deepseek&conn_model=deepseek-chat&conn_api_key=&conn_base_url=",
         ))
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    assert_answers_nothing(response).await;
+    let body_str = settings_panel(&app).await;
     assert!(
         body_str.contains("My DeepSeek"),
-        "Expected new connection name in response: {body_str}"
+        "Expected new connection name in the panel: {body_str}"
     );
 }
 
@@ -79,13 +95,10 @@ async fn test_set_narrator() {
         )
         .body(Body::from("connection_id=openrouter-euryale"))
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    assert_answers_nothing(response).await;
+    let body_str = settings_panel(&app).await;
     assert!(
         body_str.contains(r#"<option value="openrouter-euryale" selected>"#),
         "Expected euryale selected as Narrator: {body_str}"
@@ -106,13 +119,10 @@ async fn test_set_quantifier() {
         )
         .body(Body::from("connection_id=ollama-gemma-4-26B"))
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    assert_answers_nothing(response).await;
+    let body_str = settings_panel(&app).await;
     assert!(
         body_str.contains(r#"<option value="ollama-gemma-4-26B" selected>"#),
         "Expected gemma selected as Quantifier: {body_str}"
@@ -135,7 +145,11 @@ async fn test_set_narrator_not_found() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
+    assert_eq!(
+        response.status(),
+        http::StatusCode::BAD_REQUEST,
+        "an unknown connection is refused with a non-2xx error fragment"
+    );
     let body = axum::body::to_bytes(response.into_body(), 16384)
         .await
         .unwrap();
@@ -156,13 +170,10 @@ async fn test_delete_connection() {
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    assert_answers_nothing(response).await;
+    let body_str = settings_panel(&app).await;
     assert!(
         !body_str.contains(r#"hx-get="/fragment/connections/ollama-gemma-4-26B/edit"#),
         "Expected the deleted connection to leave the list: '{body_str}'"
@@ -181,7 +192,11 @@ async fn test_delete_connection_not_found() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
+    assert_eq!(
+        response.status(),
+        http::StatusCode::BAD_REQUEST,
+        "an unknown connection is refused with a non-2xx error fragment"
+    );
     let body = axum::body::to_bytes(response.into_body(), 16384)
         .await
         .unwrap();
@@ -208,13 +223,10 @@ async fn test_edit_connection() {
             "conn_name=Updated+Name&conn_provider=openrouter&conn_model=gpt-4o&conn_api_key=new-key&conn_base_url=",
         ))
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    assert_answers_nothing(response).await;
+    let body_str = settings_panel(&app).await;
     assert!(
         body_str.contains("Updated Name"),
         "Expected updated connection name: {body_str}"
@@ -288,7 +300,11 @@ async fn test_edit_connection_form_not_found() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
+    assert_eq!(
+        response.status(),
+        http::StatusCode::BAD_REQUEST,
+        "an unknown connection is refused, so the editor slot stays empty"
+    );
     let body = axum::body::to_bytes(response.into_body(), 1024)
         .await
         .unwrap();
@@ -315,16 +331,13 @@ async fn test_add_connection_with_single_user_message() {
             "conn_name=My+Mock&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&single_user_message=true",
         ))
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    assert_answers_nothing(response).await;
+    let body_str = settings_panel(&app).await;
     assert!(
         body_str.contains("My Mock"),
-        "Expected new connection name in response: {body_str}"
+        "Expected new connection name in the panel: {body_str}"
     );
 }
 
@@ -344,13 +357,10 @@ async fn test_edit_connection_preserves_single_user_message() {
             "conn_name=Updated+Name&conn_provider=openrouter&conn_model=gpt-4o&conn_api_key=new-key&conn_base_url=&single_user_message=true",
         ))
         .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
 
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 16384)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    assert_answers_nothing(response).await;
+    let body_str = settings_panel(&app).await;
     assert!(
         body_str.contains("Updated Name"),
         "Expected updated connection name: {body_str}"

@@ -194,6 +194,27 @@ pub(super) async fn wait_until_focused(
     .await
 }
 
+/// Focus lands inside `selector` or on the element itself: a load that removes
+/// the focused node and every row near it leaves focus on the region.
+pub(super) async fn wait_until_focus_within(
+    page: &playwright_rs::Page,
+    selector: &str,
+    timeout: Duration,
+) -> bool {
+    wait_for_condition_async(timeout, Duration::from_millis(25), || async {
+        page.evaluate::<String, bool>(
+            r#"(selector) => {
+                const el = document.querySelector(selector);
+                return !!el && el.contains(document.activeElement);
+            }"#,
+            Some(&selector.to_string()),
+        )
+        .await
+        .unwrap()
+    })
+    .await
+}
+
 pub(super) async fn active_element_is(page: &playwright_rs::Page, selector: &str) -> bool {
     page.evaluate::<String, bool>(
         r#"(selector) => {

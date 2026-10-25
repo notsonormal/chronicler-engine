@@ -22,14 +22,14 @@ function errorDisclosureHtml(popoverId, message, rawText) {
     '<span class="error-disclosure-message">' +
     '<span class="error-disclosure-text">' + escapeHtml(message) + "</span></span>" +
     '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
-    escapeHtml(popoverId) + '">Details</button>' +
-    '<div class="error-detail-popover" id="' + escapeHtml(popoverId) + '" hidden>' +
+    escapeHtml(popoverId) + '" data-keep="aria-expanded">Details</button>' +
+    '<div class="error-detail-popover" id="' + escapeHtml(popoverId) + '" hidden data-keep="hidden style">' +
     '<pre class="error-detail-raw">' + escapeHtml(rawText) + "</pre></div></div>"
   );
 }
 
 const INLINE_ERROR_CONTAINERS =
-  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .worlds-panel, .games-panel";
+  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, .worlds-panel, .games-panel";
 
 let generatedErrorSlots = 0;
 
@@ -195,12 +195,14 @@ document.body.addEventListener("htmx:afterRequest", function (evt) {
 
 document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);
 
-// A swap replaces the open disclosure node, which collapses it and drops focus.
+// The open state lives in `hidden` and the position `style` of the popover, and
+// in `aria-expanded` of the toggle. Each lists its attributes in `data-keep`, so a
+// load of the region keeps them. A node that a load replaces takes the server's
+// state, and this record puts it back.
 let openErrorDetails = null;
 
 function closeErrorPopover(popover) {
   if (!popover) return;
-  popover.classList.remove("open");
   popover.hidden = true;
   if (openErrorDetails && openErrorDetails.popoverId === popover.id) {
     openErrorDetails = null;
@@ -228,7 +230,6 @@ function restoreOpenErrorDetails() {
     openErrorDetails = null;
     return;
   }
-  popover.classList.add("open");
   popover.hidden = false;
   toggle.setAttribute("aria-expanded", "true");
   const focusFell =
@@ -238,7 +239,9 @@ function restoreOpenErrorDetails() {
 }
 
 function closeAllErrorPopovers() {
-  document.querySelectorAll(".error-detail-popover.open").forEach(closeErrorPopover);
+  document
+    .querySelectorAll(".error-detail-popover:not([hidden])")
+    .forEach(closeErrorPopover);
 }
 
 function positionErrorPopover(popover, toggle) {
@@ -261,7 +264,7 @@ document.addEventListener("click", function (evt) {
   if (toggle) {
     const popover = document.getElementById(toggle.getAttribute("aria-controls"));
     if (popover) {
-      const open = popover.classList.toggle("open");
+      const open = popover.hidden;
       popover.hidden = !open;
       toggle.setAttribute("aria-expanded", String(open));
       if (open) {

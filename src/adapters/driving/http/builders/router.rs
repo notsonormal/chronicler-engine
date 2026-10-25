@@ -61,6 +61,10 @@ pub fn build_router(app_state: AppState) -> Router {
         )
         .route("/fragment/header", get(layout::handlers::header_fragment))
         .route(
+            "/fragment/failure-banner",
+            get(layout::handlers::failure_banner_fragment),
+        )
+        .route(
             "/fragment/story-log",
             get(layout::handlers::story_log_fragment),
         )

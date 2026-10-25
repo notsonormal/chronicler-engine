@@ -1,10 +1,21 @@
 # Feature Spec: Worlds
 
 Endpoints:
+- `GET /fragment/worlds`
+- `GET /fragment/worlds/new`
+- `GET /worlds/:key/edit`
 - `POST /worlds`
 - `POST /worlds/:key`
 - `POST /worlds/:key/posture`
 - `POST /worlds/:key/delete`
+
+The Worlds panel is a live region of the worlds and games kinds. Its fragment
+carries no root element of its own, and it carries an empty editor slot
+(`#world-editor`). The World editor opens into that slot, and its root holds the
+panel (`data-work`) until the edit ends. A World save answers nothing on success:
+an empty 200. A refusal answers a 400 error fragment, and a failure a 500 error
+fragment. The control that saved reports the error in its own slot. The saved
+World reaches the screen when the panel loads.
 
 ## Scenarios
 
@@ -15,7 +26,7 @@ Endpoints:
 ```gherkin
 Given a seeded world in Interactive Fiction mode with perspective "second" and tense "past"
 When the client POST /worlds/{key} with the full form but no posture fields
-Then the response is a 200 and the panel re-renders
+Then the response is a 200 with an empty body
 And the stored world still carries mode "interactive_fiction", perspective "second", and tense "past"
 ```
 
@@ -53,17 +64,17 @@ Then the stored world's options_always_on is false
 
 ### World posture auto-save
 
-The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers with the `#world-posture-status` fragment. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment, so the contract is verified at request level and the browser keeps only a wiring check.
+The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers an empty 200 for a saved change. The browser shows "Saved" in `#world-posture-status`, and a refused or failed save puts the select back to its rendered value, with the error in the posture group's own slot. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment, so the contract is verified at request level and the browser keeps only a wiring check.
 
 #### Scenario 25.5: The posture endpoint patches and reports per outcome
 
 ```gherkin
 Given a seeded world in Interactive Fiction mode with tense "past"
 When the client POST /worlds/{key}/posture with a valid tense patch
-Then the response is a 200 carrying the "Saved" status span
+Then the response is a 200 with an empty body
 And the stored world's tense is the patched value
 When the client POST /worlds/{key}/posture with an invalid narrator_mode
-Then the response is a 200 carrying an error fragment
+Then the response is a 400 carrying an error fragment
 And the stored world is mutated not at all
 When the client POST /worlds/{key}/posture for an unknown key
 Then the response is a 400
@@ -82,7 +93,8 @@ And the narrator_mode, narrative_perspective, and narrative_tense selects are re
 And the narrator_mode select renders "interactive_fiction" selected
 And the narrative_perspective select renders "second" selected
 And the narrative_tense select renders "past" selected
-And the body contains the #world-posture-status target
+And the editor root holds its panel (data-work), and carries no hx-target
+And the body contains the #world-posture-status flag, which a load keeps (data-keep), and the posture group's own error slot
 And the posture selects auto-save to /worlds/posture_world/posture
 ```
 
@@ -117,6 +129,8 @@ And the body carries the error fragment naming the storage failure
 Given a seeded World with exactly one game
 When the client GET /fragment/worlds
 Then the response status is "200 OK"
+And the body holds an empty editor slot, and no root element of its own
+And the World's row carries a stable id
 And the World's card shows "1 game" and not "1 games"
 When a second game is created in that World
 And the client GET /fragment/worlds
@@ -130,7 +144,7 @@ Then the World's card shows "2 games"
 ```gherkin
 Given a seeded World with exactly one game
 When the client POST /worlds/{key}/delete
-Then the response is a 200 that holds the refusal "Cannot delete world with 1 game"
+Then the response is a 400 that holds the refusal "Cannot delete world with 1 game"
 And the refusal does not read "1 games"
 When a second game is created in that World
 And the client POST /worlds/{key}/delete
@@ -145,6 +159,7 @@ Given a seeded World "posture_world" with no games
 When the client POST /worlds/posture_world/delete
 Then the response is a 200 with an empty body
 And the World is no longer stored
+And a following GET /fragment/worlds does not list it
 When the client POST /worlds/nonexistent/delete
 Then the response is a 200 with an empty body
 ```

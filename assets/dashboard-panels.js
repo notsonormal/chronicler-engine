@@ -1,11 +1,11 @@
-// Panel chrome: the tab bar, the Settings sub-tabs, the LLM Messages expansion toggle, the swap focus restore and the world posture status clear.
+// Panel chrome: the tab bar, the Settings sub-tabs, the LLM Messages expansion toggle, the swap focus restore, the editor focus and the world posture status clear.
 
 // htmx restores focus only to an id that survives the swap, so a control
 // replaced by a different one (Edit to form, Cancel to list) needs this
-// fallback. Every panel swapped as a whole is listed, so a panel rewrite cannot
-// silently drop out of the restore.
-const FOCUS_SWAP_TARGETS =
-  ".worlds-panel, .prompt-presets-panel, .preset-card, .settings-panel";
+// fallback. A panel is a live region: its load keeps what it does not change, and
+// the focus rule of dashboard-live.js moves focus when a load removes the focused
+// node. A preset card is the one element that a view change still replaces.
+const FOCUS_SWAP_TARGETS = ".preset-card";
 const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";
 // A form field is the better landing spot: an Edit that opens a form should put
 // the caret in its first field, not on the back link above it.
@@ -121,10 +121,18 @@ document.body.addEventListener("htmx:afterSettle", function (evt) {
   }
 });
 
+// An editor opens into its slot, where the control that opened it is hidden, so
+// focus goes to the first field of the editor.
+document.body.addEventListener("htmx:afterSettle", function (evt) {
+  const slot = evt.detail && evt.detail.target;
+  if (!slot || !slot.classList || !slot.classList.contains("editor-slot")) return;
+  if (slot.firstElementChild) focusInto(slot);
+});
+
 // A failed Update World must not sit under green feedback from an earlier auto-save.
 function clearPostureStatus() {
   const status = document.getElementById("world-posture-status");
-  if (status) status.innerHTML = "";
+  if (status) status.removeAttribute("data-saved");
 }
 
 // Tab state is client-only, so the active tab is remembered for a reload of the
@@ -178,24 +186,20 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // The Settings panel is swapped as a whole, so the sub-tab buttons cannot be bound per button.
+  // The selected sub-tab is view state in `aria-selected` (buttons) and `hidden`
+  // (panels). Both are in `data-keep`, so a load of the Settings panel keeps them.
   document.addEventListener("click", (event) => {
     const subtab = event.target.closest(".settings-subtab");
     if (!subtab) return;
     const panel = subtab.closest(".settings-panel");
     if (!panel) return;
     panel.querySelectorAll(".settings-subtab").forEach((b) => {
-      const selected = b === subtab;
-      b.classList.toggle("active", selected);
-      b.setAttribute("aria-selected", selected ? "true" : "false");
+      b.setAttribute("aria-selected", b === subtab ? "true" : "false");
     });
-    panel
-      .querySelectorAll(".settings-subtab-panel")
-      .forEach((p) => p.classList.remove("active"));
-    const target = panel.querySelector(
-      "#" + subtab.getAttribute("aria-controls"),
-    );
-    if (target) target.classList.add("active");
+    const target = subtab.getAttribute("aria-controls");
+    panel.querySelectorAll(".settings-subtab-panel").forEach((p) => {
+      p.hidden = p.id !== target;
+    });
   });
 
   // The header holds the open state in aria-expanded and the body in hidden. A

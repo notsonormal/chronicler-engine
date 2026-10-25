@@ -11,7 +11,6 @@ use crate::domain::model::settings::AppSettings;
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="prompt-presets-panel">
     <div class="preset-section">
         <h2>System Prompts</h2>
         <p class="preset-section-desc">These prompts are sent as the system message to the narration LLM.</p>
@@ -19,9 +18,9 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <details class="preset-add">
+        <details class="preset-add" data-keep="open" data-close-on-save>
             <summary class="btn-cyan preset-add-toggle">Add System Prompt Preset</summary>
-            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <form hx-post="/prompt-presets" hx-swap="none" data-reset-on-save>
                 <input type="hidden" name="preset_type" value="system" />
                 <div class="form-group">
                     <label for="system-preset-name">Name</label>
@@ -58,9 +57,9 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <details class="preset-add">
+        <details class="preset-add" data-keep="open" data-close-on-save>
             <summary class="btn-cyan preset-add-toggle">Add Quantifier Prompt Preset</summary>
-            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <form hx-post="/prompt-presets" hx-swap="none" data-reset-on-save>
                 <input type="hidden" name="preset_type" value="quantifier" />
                 <div class="form-group">
                     <label for="quantifier-preset-name">Name</label>
@@ -93,9 +92,9 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <details class="preset-add">
+        <details class="preset-add" data-keep="open" data-close-on-save>
             <summary class="btn-cyan preset-add-toggle">Add Impersonate Prompt Preset</summary>
-            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <form hx-post="/prompt-presets" hx-swap="none" data-reset-on-save>
                 <input type="hidden" name="preset_type" value="impersonate" />
                 <div class="form-group">
                     <label for="impersonate-preset-name">Name</label>
@@ -132,9 +131,9 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <details class="preset-add">
+        <details class="preset-add" data-keep="open" data-close-on-save>
             <summary class="btn-cyan preset-add-toggle">Add Options Prompt Preset</summary>
-            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
+            <form hx-post="/prompt-presets" hx-swap="none" data-reset-on-save>
                 <input type="hidden" name="preset_type" value="options" />
                 <div class="form-group">
                     <label for="options-preset-name">Name</label>
@@ -163,7 +162,6 @@ use crate::domain::model::settings::AppSettings;
             </form>
         </details>
     </div>
-</div>
 "##,
     ext = "html"
 )]

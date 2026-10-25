@@ -10,12 +10,13 @@ Endpoint: browser DOM.
 Given a non-default system preset exists that allows only Novel
 When the client opens the Prompt Presets tab
 And clicks the preset card's Duplicate button
-Then the panel re-renders with a copy named "<preset> (Copy)"
+Then the panel loads with a copy named "<preset> (Copy)"
 And the copy offers only "Set Active (Novel)"
 When the client clicks the copy's Edit button
 Then that card renders an edit form with the mode checkboxes
 When the client ticks the Interactive Fiction checkbox and submits Save
-And the page is reloaded
+Then the edit ends and the panel loads the saved card
+When the page is reloaded
 Then the re-opened panel's copy card offers both "Set Active (Novel)" and "Set Active (Interactive Fiction)"
 ```
 
@@ -35,8 +36,8 @@ And the form's Name field has focus
 Given the Prompt Presets tab shows two non-default presets in one section
 And the first card's Delete control has focus
 When the client confirms the delete
-Then that card is removed
-And the next card's Edit control has focus
+Then the panel loads and that card is removed
+And a control in the next card has focus
 When the client confirms the delete of the last non-default card
 Then that card is removed
 And a control in the card before it has focus

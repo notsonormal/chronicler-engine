@@ -166,7 +166,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `world_storage.rs` — Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 - **test_utils/**
     - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.
-    - `html.rs` — HTML slicing helpers for panel markup without element ids — locate a region by a stable anchor string.
+    - `html.rs` — HTML slicing helpers for panel markup — locate a region by a stable anchor string.
     - `htmx_settle.rs` — htmx settle harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
     - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.

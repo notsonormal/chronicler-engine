@@ -1,4 +1,4 @@
-//! HTML slicing helpers for panel markup without element ids — locate a region by a stable anchor string.
+//! HTML slicing helpers for panel markup — locate a region by a stable anchor string.
 
 /// Slice one `<div class="{card_class}…">…</div>` region out of a rendered
 /// panel: find `anchor` (a string unique to the card — its duplicate URL or
@@ -6,9 +6,9 @@
 /// slice at the next card's opening tag (or EOF). `None` when `anchor` is
 /// absent.
 ///
-/// Cards deliberately carry no `data-id` (see STRATEGY.md "Stub tier's
-/// accepted tax"), so the anchor + sibling-bound algorithm is the shared
-/// shape; callers keep their own anchor logic and assertions.
+/// A card carries an `id` for the morph of a load, and a test anchors on a
+/// string the card renders anyway, so the anchor + sibling-bound algorithm is the
+/// shared shape; callers keep their own anchor logic and assertions.
 pub fn card_html_slice<'a>(body: &'a str, card_class: &str, anchor: &str) -> Option<&'a str> {
     let opening = format!("<div class=\"{card_class}");
     let anchor_pos = body.find(anchor)?;

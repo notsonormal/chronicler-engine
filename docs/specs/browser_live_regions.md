@@ -150,7 +150,9 @@ Then the focus is on a control in the entry that is now the newest
 Given each region of the table above, with its section open
 And every interactive control of the region is in its engaged state:
   an open edit with typed text and focus, a focused Option, an open Details disclosure, a text selection,
-  an open rename form with typed text, a chosen option of a select, an expanded LLM message
+  an open rename form with typed text, a chosen option of a select, an expanded LLM message,
+  an open error Details popover in the failure banner, the chosen Settings sub-tab,
+  an open connection editor, a preset card in edit, an open World editor, each with typed text and focus
 When each kind that the region lists moves, one kind at a time, and the page asks
 Then each node, value, open state, selection and focus of the engaged state is as it was
 When every edit of the region ends
@@ -163,7 +165,7 @@ Then the region loads exactly once, and it reports data-live-state "current"
 Given the dashboard shell is served and no number moves
 When the page starts
 Then the page asks once without waiting for the timer
-And each region of the header and the Game tab loads its fragment exactly once
+And each region of the header (the header and the failure banner) and the Game tab loads its fragment exactly once
 And each of those regions reports data-live-state "current"
 And each region of another section does not load, and reports data-live-state "stale"
 ```
@@ -242,4 +244,43 @@ Then .games-panel loads its fragment
 And the inline error slot still shows the same error
 When the same action succeeds
 Then the inline error slot is empty and hidden
+```
+
+#### Scenario 44.20: A preset card in edit survives the Activate of another card
+
+```gherkin
+Given .prompt-presets-panel is open and current
+And a preset card is in edit, with a changed name and focus in the name field
+When the client presses Set Active on another preset card, and the engine answers 200
+Then the page asks at once
+And the card in edit is the same element, with its changed name
+And .prompt-presets-panel reports data-live-state "held" and has not loaded
+When the client cancels the edit
+Then .prompt-presets-panel loads exactly once, and it reports data-live-state "current"
+And the other card shows its Active badge
+```
+
+#### Scenario 44.21: A World editor survives a Game rename that raises games
+
+```gherkin
+Given .worlds-panel is open and current
+And the World editor is open in #world-editor, with a changed name and focus
+When a Game is renamed, so the number of `games` moves, and the page asks
+Then the editor is the same element, with its changed name
+And .worlds-panel reports data-live-state "held" and has not loaded
+When the client closes the editor with Cancel
+Then .worlds-panel loads exactly once, and it reports data-live-state "current"
+And #world-editor is empty
+```
+
+#### Scenario 44.22: A connection editor keeps the chosen sub-tab, and Cancel sends no request
+
+```gherkin
+Given .settings-panel is open and current, with the Text Check sub-tab chosen
+And the connection editor is open in #connection-editor
+When the number of `settings` moves, and the page asks
+Then .settings-panel reports data-live-state "held" and has not loaded
+When the client cancels the editor
+Then Cancel sent no request, and .settings-panel loads exactly once
+And the Text Check sub-tab is still the chosen one
 ```

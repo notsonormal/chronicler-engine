@@ -21,6 +21,14 @@ pub async fn header_fragment(
     render_fragment(&state, |s| s.render_header(game_id), "header_fragment")
 }
 
+pub async fn failure_banner_fragment(State(state): State<AppState>) -> Response<Body> {
+    render_fragment(
+        &state,
+        |s| s.render_failure_banner(),
+        "failure_banner_fragment",
+    )
+}
+
 pub async fn story_log_fragment(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,

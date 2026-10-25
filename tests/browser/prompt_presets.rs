@@ -31,8 +31,8 @@ async fn test_preset_duplicate_edit_save_click_chain() {
             let seed_card = preset_card_selector(seed_name);
             wait_until_visible(&page, &seed_card, Duration::from_millis(5000)).await;
 
-            // The whole panel is replaced (hx-target `.prompt-presets-panel`,
-            // `outerHTML`).
+            // Duplicate answers nothing: the presets number moves, and the
+            // panel loads the copy.
             let duplicate_selector = format!("{seed_card} button:has-text('Duplicate')");
             click_and_settle(&page, &duplicate_selector, ".prompt-presets-panel").await;
 
@@ -72,9 +72,8 @@ async fn test_preset_duplicate_edit_save_click_chain() {
                 .expect("tick the IF mode flag");
 
             let save_selector = format!("{edit_form} button:has-text('Save')");
-            // The Save swap replaces the card in place (`hx-target
-            // closest .preset-card`) — await the card, not the panel.
-            click_and_settle(&page, &save_selector, ".preset-card").await;
+            // Save answers nothing: the edit ends, and the panel loads the card.
+            click_and_settle(&page, &save_selector, ".prompt-presets-panel").await;
 
             // Reload before asserting: a fragment edit that only re-rendered
             // client-side would pass an assertion made in the same document.

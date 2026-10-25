@@ -6,6 +6,15 @@ use super::support::wait_until_focused;
 use super::*;
 use super::support::StubRunner;
 
+async fn element_is_visible(page: &playwright_rs::Page, selector: &str) -> bool {
+    page.evaluate::<String, bool>(
+        "(selector) => { const el = document.querySelector(selector); return !!el && !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); }",
+        Some(&selector.to_string()),
+    )
+    .await
+    .unwrap()
+}
+
 async fn open_settings(page: &playwright_rs::Page) {
     page.locator(r#"[data-tab="settings"]"#)
         .await
@@ -36,8 +45,8 @@ async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
                     const connectionsPanel = document.getElementById('settings-connections');
                     return [
                         tab.getAttribute('aria-selected'),
-                        textPanel.classList.contains('active'),
-                        connectionsPanel.classList.contains('active'),
+                        !textPanel.hidden,
+                        !connectionsPanel.hidden,
                     ];
                 })()"#,
             None,
@@ -66,17 +75,17 @@ async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
         .unwrap();
 
     let kept: bool = page
-            .evaluate::<(), bool>(
-                r#"(() => {
+        .evaluate::<(), bool>(
+            r#"(() => {
                     const tab = document.getElementById('subtab-text-check');
                     return tab.getAttribute('aria-selected') === 'true'
-                        && document.getElementById('settings-text-check').classList.contains('active')
-                        && !document.getElementById('settings-connections').classList.contains('active');
+                        && !document.getElementById('settings-text-check').hidden
+                        && document.getElementById('settings-connections').hidden;
                 })()"#,
-                None,
-            )
-            .await
-            .unwrap();
+            None,
+        )
+        .await
+        .unwrap();
     assert!(
         kept,
         "the selected sub-tab must survive a top-level tab change"
@@ -86,8 +95,9 @@ async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
 // [docs/specs/browser_settings.md] SCENARIO: 40.2
 async fn check_add_and_edit_open_the_shared_connection_form_page(
     page: playwright_rs::Page,
-    _stub: StubServer,
+    stub: StubServer,
 ) {
+    let stub = stub.changes_handle();
     open_settings(&page).await;
 
     page.locator(".connection-add button")
@@ -107,6 +117,10 @@ async fn check_add_and_edit_open_the_shared_connection_form_page(
         back_link.contains("Connections"),
         "the form page must offer a back link to Connections, got {back_link:?}"
     );
+    assert!(
+        !element_is_visible(&page, ".connection-list").await,
+        "while the editor is open, the list of its panel is hidden"
+    );
 
     page.locator(".connection-form-page .back-link")
         .await
@@ -114,6 +128,11 @@ async fn check_add_and_edit_open_the_shared_connection_form_page(
         .await
         .unwrap();
     wait_until_visible(&page, ".connection-list", Duration::from_secs(5)).await;
+    assert_eq!(
+        stub.loads("/fragment/connections/new"),
+        1,
+        "closing the editor sends no request: the only request was the one that opened it"
+    );
 
     let edit_selector = r#".connection-row:has(.connection-name:text-is("openrouter-gpt-4o-mini")) button:has-text('Edit')"#;
     page.locator(edit_selector).await.click(None).await.unwrap();
@@ -139,13 +158,13 @@ async fn check_add_and_edit_open_the_shared_connection_form_page(
 }
 
 // [docs/specs/browser_settings.md] SCENARIO: 40.3
-async fn check_settings_panel_swaps_keep_keyboard_focus_in_the_panel(
+async fn check_opening_and_closing_the_connection_editor_keeps_keyboard_focus_in_the_panel(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
     open_settings(&page).await;
 
-    let edit = r#".connection-row:has(.connection-name:text-is("openrouter-gpt-4o-mini")) button:has-text('Edit')"#;
+    let edit = r#"#connection-openrouter-gpt-4o-mini button[hx-get$="/edit"]"#;
     page.locator(edit).await.focus().await.unwrap();
     page.locator(edit).await.click(None).await.unwrap();
     wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
@@ -159,12 +178,11 @@ async fn check_settings_panel_swaps_keep_keyboard_focus_in_the_panel(
     page.locator(back).await.click(None).await.unwrap();
     wait_until_visible(&page, ".connection-list", Duration::from_secs(5)).await;
     assert!(
-        wait_until_focused(&page, "#role-select-narrator", Duration::from_secs(2)).await,
-        "the back link must land focus back in the Connections view, not on the page body"
+        wait_until_focused(&page, edit, Duration::from_secs(2)).await,
+        "the back link must land focus on the control that opened the editor, not on the page body"
     );
 
-    // The role-change swap re-renders the panel, but htmx restores focus to
-    // the select that came back with the same id.
+    // A role change swaps nothing, so the select keeps focus.
     page.locator("#role-select-quantifier")
         .await
         .focus()
@@ -199,7 +217,7 @@ async fn run_settings_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_settings_panel_swaps_keep_keyboard_focus_in_the_panel,
+            check_opening_and_closing_the_connection_editor_keeps_keyboard_focus_in_the_panel,
         )
         .await;
     runner.finish().await;

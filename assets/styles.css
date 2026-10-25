@@ -950,7 +950,7 @@ body {
     color: var(--color-text-primary);
 }
 
-.settings-subtab.active {
+.settings-subtab[aria-selected="true"] {
     color: var(--color-accent-ok);
     border-bottom-color: var(--color-accent-ok);
 }
@@ -963,13 +963,30 @@ body {
 }
 
 .settings-subtab-panel {
-    display: none;
+    display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
 }
 
-.settings-subtab-panel.active {
-    display: flex;
+.settings-subtab-panel[hidden] {
+    display: none;
+}
+
+/* An editor slot holds the editor that a view change loaded into it. A slot with
+   no editor takes no space. While it holds one, the list of its panel is hidden,
+   so the panel looks as it did when the editor replaced the whole panel. */
+.editor-slot:empty {
+    display: none;
+}
+
+.settings-panel:has(#connection-editor > *) > :not(#connection-editor) {
+    display: none;
+}
+
+/* The "Saved" line of an auto-save control is view state: the browser sets
+   data-saved after a save that went through. */
+.saved-flag[data-saved]::before {
+    content: "Saved";
 }
 
 .section-heading {
@@ -1091,6 +1108,12 @@ body {
 .connection-add {
     display: flex;
     justify-content: flex-start;
+}
+
+.connection-form-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
 }
 
 .connection-form-page .back-link {
@@ -1244,7 +1267,7 @@ body {
 }
 
 .error-detail-popover {
-    display: none;
+    display: block;
     position: fixed;
     z-index: 1200;
     min-width: 220px;
@@ -1260,8 +1283,8 @@ body {
     text-align: left;
 }
 
-.error-detail-popover.open {
-    display: block;
+.error-detail-popover[hidden] {
+    display: none;
 }
 
 .error-detail-raw {

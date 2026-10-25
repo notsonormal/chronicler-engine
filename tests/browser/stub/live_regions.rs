@@ -5,6 +5,8 @@
 // then runs one ask and returns when every load of that ask has settled, so each
 // check decides when the page asks and what the stub answers.
 
+use std::time::Duration;
+
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 
 use super::support::{read_banner, StubRunner};
@@ -28,11 +30,11 @@ impl Region {
     }
 }
 
-const REGIONS: [Region; 7] = [
+const REGIONS: [Region; 11] = [
     Region {
         selector: "#header",
         path: "/fragment/header",
-        kinds: &["games", "settings", "llm"],
+        kinds: &["games"],
         section: "",
     },
     Region {
@@ -71,6 +73,30 @@ const REGIONS: [Region; 7] = [
         kinds: &["llm"],
         section: "llm-messages",
     },
+    Region {
+        selector: "#failure-banner-degraded",
+        path: "/fragment/failure-banner",
+        kinds: &["settings", "llm"],
+        section: "",
+    },
+    Region {
+        selector: ".settings-panel",
+        path: "/fragment/settings",
+        kinds: &["settings", "llm"],
+        section: "settings",
+    },
+    Region {
+        selector: ".prompt-presets-panel",
+        path: "/fragment/prompt-presets",
+        kinds: &["presets", "settings", "games"],
+        section: "prompt-presets",
+    },
+    Region {
+        selector: ".worlds-panel",
+        path: "/fragment/worlds",
+        kinds: &["worlds", "games"],
+        section: "worlds",
+    },
 ];
 
 const ALL_KINDS: [&str; 8] = [
@@ -80,6 +106,10 @@ const ALL_KINDS: [&str; 8] = [
 const STORY_LOG: usize = 1;
 const GAMES_PANEL: usize = 5;
 const LLM_PANEL: usize = 6;
+const FAILURE_BANNER: usize = 7;
+const SETTINGS_PANEL: usize = 8;
+const PRESETS_PANEL: usize = 9;
+const WORLDS_PANEL: usize = 10;
 
 /// The loads a moved `kind` starts on the Game tab: each visible region that lists it.
 fn expected_loads(kind: &str) -> Vec<usize> {
@@ -264,7 +294,7 @@ async fn check_a_moved_number_loads_the_regions_that_list_its_kind(
         assert_eq!(
             moved,
             expected_loads(kind),
-            "loads of [header, story log, sidebar, dock, status, games, llm] after `{kind}` moved"
+            "loads of [header, story log, sidebar, dock, status, games, llm, banner, settings, presets, worlds] after `{kind}` moved"
         );
     }
 }
@@ -442,7 +472,7 @@ async fn check_a_page_that_becomes_visible_asks_at_once(
     );
     assert_eq!(
         loads_since(&changes, &before),
-        vec![0, 0, 0, 1, 0, 0, 0],
+        expected_loads("options"),
         "only the dock lists `options`"
     );
 }
@@ -762,6 +792,200 @@ const LLM_ENGAGED: Engaged = Engaged {
     end: None,
 };
 
+/// Runs `action`, and returns once the htmx swap that it started has settled.
+/// htmx settles a swap 20 ms after it lands, and the page moves focus into a new
+/// editor then, so a check that engages the editor waits for that settle first.
+/// A load of a region settles with the region as its element, and does not count.
+macro_rules! after_settle {
+    () => {
+        r#"const afterSettle = (action) => new Promise((resolve) => {
+        document.body.addEventListener('htmx:afterSettle', function once(evt) {
+            const elt = evt.detail && evt.detail.elt;
+            if (elt && elt.hasAttribute && elt.hasAttribute('data-live')) return;
+            document.body.removeEventListener('htmx:afterSettle', once);
+            resolve();
+        });
+        action();
+    });"#
+    };
+}
+
+const BANNER_ENGAGED: Engaged = Engaged {
+    region: FAILURE_BANNER,
+    engage: r#"() => {
+        const toggle = document.querySelector('#failure-banner-degraded .error-details-toggle');
+        toggle.click();
+        toggle.focus();
+        window.__bannerToggle = toggle;
+        window.__bannerPopover = document.getElementById('failure-banner-popover');
+        return window.__bannerPopover.hidden ? 'the popover did not open' : '';
+    }"#,
+    check: r#"() => {
+        const toggle = document.querySelector('#failure-banner-degraded .error-details-toggle');
+        const popover = document.getElementById('failure-banner-popover');
+        if (toggle !== window.__bannerToggle) return 'the toggle is a new element';
+        if (popover !== window.__bannerPopover) return 'the popover is a new element';
+        if (popover.hidden) return 'the popover closed';
+        if (toggle.getAttribute('aria-expanded') !== 'true') return 'aria-expanded changed';
+        if (!popover.style.left) return 'the position of the popover was lost';
+        return document.activeElement === toggle ? '' : 'the focus moved';
+    }"#,
+    end: None,
+};
+
+const SUBTAB_ENGAGED: Engaged = Engaged {
+    region: SETTINGS_PANEL,
+    engage: r#"() => {
+        const tab = document.getElementById('subtab-text-check');
+        tab.click();
+        window.__subtab = tab;
+        window.__textPanel = document.getElementById('settings-text-check');
+        return tab.getAttribute('aria-selected') === 'true' ? '' : 'the sub-tab did not open';
+    }"#,
+    check: r#"() => {
+        const tab = document.getElementById('subtab-text-check');
+        const textPanel = document.getElementById('settings-text-check');
+        if (tab !== window.__subtab) return 'the sub-tab is a new element';
+        if (textPanel !== window.__textPanel) return 'the Text Check panel is a new element';
+        if (tab.getAttribute('aria-selected') !== 'true') return 'the sub-tab lost its selection';
+        if (document.getElementById('subtab-connections').getAttribute('aria-selected') !== 'false') {
+            return 'the Connections sub-tab is selected again';
+        }
+        if (textPanel.hidden) return 'the Text Check panel is hidden';
+        return document.getElementById('settings-connections').hidden ? '' : 'the Connections panel shows';
+    }"#,
+    end: None,
+};
+
+const CONNECTION_EDITOR_ENGAGED: Engaged = Engaged {
+    region: SETTINGS_PANEL,
+    engage: concat!(
+        "async () => {",
+        after_settle!(),
+        r#"
+        await afterSettle(() =>
+            document.querySelector('#connection-openrouter-gpt-4o-mini button[hx-get$="/edit"]').click());
+        const input = document.getElementById('conn_name');
+        if (!input) return 'the editor did not open';
+        input.value = 'A typed connection';
+        input.focus();
+        window.__editor = document.getElementById('connection-form-page');
+        window.__editorInput = input;
+        return document.activeElement === input ? '' : 'the name field has no focus';
+    }"#
+    ),
+    check: r#"() => {
+        const editor = document.getElementById('connection-form-page');
+        const input = document.getElementById('conn_name');
+        if (editor !== window.__editor) return 'the editor is a new element';
+        if (!editor.hasAttribute('data-work')) return 'the editor lost its hold';
+        if (input !== window.__editorInput) return 'the name field is a new element';
+        if (input.value !== 'A typed connection') return 'the typed name changed: ' + input.value;
+        return document.activeElement === input ? '' : 'the name field lost focus';
+    }"#,
+    end: Some(
+        r#"async () => {
+        document.querySelector('#connection-editor .back-link').click();
+        await window.chroniclerLive.settle();
+        return '';
+    }"#,
+    ),
+};
+
+const PRESET_EDIT_ENGAGED: Engaged = Engaged {
+    region: PRESETS_PANEL,
+    engage: OPEN_PRESET_EDIT,
+    check: PRESET_EDIT_IS_INTACT,
+    end: Some(END_PRESET_EDIT),
+};
+
+const WORLD_EDITOR_ENGAGED: Engaged = Engaged {
+    region: WORLDS_PANEL,
+    engage: OPEN_WORLD_EDITOR,
+    check: WORLD_EDITOR_IS_INTACT,
+    end: Some(END_WORLD_EDITOR),
+};
+
+const OPEN_PRESET_EDIT: &str = concat!(
+    "async () => {",
+    after_settle!(),
+    r#"
+    await afterSettle(() =>
+        document.querySelector('button[hx-get="/fragment/prompt-presets/custom_ref/edit"]').click());
+    const input = document.getElementById('edit-name-custom_ref');
+    if (!input) return 'the editor did not open';
+    input.value = 'A typed preset name';
+    input.focus();
+    window.__presetEditor = document.getElementById('preset-card-custom_ref');
+    window.__presetInput = input;
+    return document.activeElement === input ? '' : 'the name field has no focus';
+}"#
+);
+
+const PRESET_EDIT_IS_INTACT: &str = r#"() => {
+    const card = document.getElementById('preset-card-custom_ref');
+    const input = document.getElementById('edit-name-custom_ref');
+    if (card !== window.__presetEditor) return 'the card in edit is a new element';
+    if (!card.classList.contains('edit-form')) return 'the card left its edit';
+    if (input !== window.__presetInput) return 'the name field is a new element';
+    if (input.value !== 'A typed preset name') return 'the typed name changed: ' + input.value;
+    return document.activeElement === input ? '' : 'the name field lost focus';
+}"#;
+
+/// The edit after a click on another card: the click moved focus to that card's
+/// control, and the edit keeps everything else.
+const PRESET_EDIT_IS_INTACT_AFTER_A_CLICK_ELSEWHERE: &str = r#"() => {
+    const card = document.getElementById('preset-card-custom_ref');
+    const input = document.getElementById('edit-name-custom_ref');
+    if (card !== window.__presetEditor) return 'the card in edit is a new element';
+    if (!card.classList.contains('edit-form')) return 'the card left its edit';
+    if (input !== window.__presetInput) return 'the name field is a new element';
+    return input.value === 'A typed preset name' ? '' : 'the typed name changed: ' + input.value;
+}"#;
+
+/// Cancel replaces the card with its list card. The edit ends when the replaced
+/// card is in the page, and the page asks when that request ends.
+const END_PRESET_EDIT: &str = r#"async () => {
+    document.querySelector('#preset-card-custom_ref .form-actions button[type=button]').click();
+    for (let i = 0; i < 100 && document.querySelector('#preset-card-custom_ref.edit-form'); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await window.chroniclerLive.settle();
+    return '';
+}"#;
+
+const OPEN_WORLD_EDITOR: &str = concat!(
+    "async () => {",
+    after_settle!(),
+    r#"
+    await afterSettle(() =>
+        document.querySelector('#world-test button[hx-get$="/edit"]').click());
+    const input = document.querySelector('#world-editor input[name="name"]');
+    if (!input) return 'the editor did not open';
+    input.value = 'A typed world name';
+    input.focus();
+    window.__worldEditor = document.getElementById('world-form-container');
+    window.__worldInput = input;
+    return document.activeElement === input ? '' : 'the name field has no focus';
+}"#
+);
+
+const WORLD_EDITOR_IS_INTACT: &str = r#"() => {
+    const editor = document.getElementById('world-form-container');
+    const input = document.querySelector('#world-editor input[name="name"]');
+    if (editor !== window.__worldEditor) return 'the editor is a new element';
+    if (!editor.hasAttribute('data-work')) return 'the editor lost its hold';
+    if (input !== window.__worldInput) return 'the name field is a new element';
+    if (input.value !== 'A typed world name') return 'the typed name changed: ' + input.value;
+    return document.activeElement === input ? '' : 'the name field lost focus';
+}"#;
+
+const END_WORLD_EDITOR: &str = r#"async () => {
+    document.querySelector('#world-editor button[data-close-editor].btn-cyan').click();
+    await window.chroniclerLive.settle();
+    return '';
+}"#;
+
 /// The scripts of one engaged state are built from the scripts of the single
 /// scenarios, so each state is defined once.
 fn leak(text: String) -> &'static str {
@@ -812,6 +1036,30 @@ async fn check_a_load_keeps_the_engaged_state_of_each_region(
 
     open_section(&page, "llm-messages", ".llm-messages-panel").await;
     assert_engaged_state_survives(&page, &changes, &LLM_ENGAGED).await;
+
+    stub.failure_handle().set_header_degraded(true);
+    ask_once(&page).await;
+    // The load settles a moment after its request ends, and the banner shows then.
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+            || async { read_banner(&page).await.0 },
+        )
+        .await,
+        "the degraded banner must show before its disclosure is engaged"
+    );
+    assert_engaged_state_survives(&page, &changes, &BANNER_ENGAGED).await;
+
+    open_section(&page, "settings", ".settings-panel").await;
+    assert_engaged_state_survives(&page, &changes, &SUBTAB_ENGAGED).await;
+    assert_engaged_state_survives(&page, &changes, &CONNECTION_EDITOR_ENGAGED).await;
+
+    open_section(&page, "prompt-presets", ".prompt-presets-panel").await;
+    assert_engaged_state_survives(&page, &changes, &PRESET_EDIT_ENGAGED).await;
+
+    open_section(&page, "worlds", ".worlds-panel").await;
+    assert_engaged_state_survives(&page, &changes, &WORLD_EDITOR_ENGAGED).await;
 }
 
 /// Opens a dashboard section the way the player does, and waits until every
@@ -1181,6 +1429,150 @@ async fn check_a_load_keeps_an_inline_error_that_is_showing(
     assert!(!shown, "a save that goes through clears the error");
 }
 
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.20
+async fn check_a_card_in_edit_survives_the_activate_of_another_card(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "prompt-presets", ".prompt-presets-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_PRESET_EDIT).await, "");
+    let loads = changes.loads("/fragment/prompt-presets");
+    let asks = changes.asks();
+    page.locator(r#"button[hx-post="/prompt-presets/custom_two/activate?mode=novel"]"#)
+        .await
+        .click(None)
+        .await
+        .expect("press Set Active on the other card");
+    wait_for_asks(&changes, asks + 1).await;
+    settle(&page).await;
+
+    assert_eq!(
+        eval_string(&page, PRESET_EDIT_IS_INTACT_AFTER_A_CLICK_ELSEWHERE).await,
+        "",
+        "the other card's Activate must not destroy the card in edit"
+    );
+    assert_eq!(live_state(&page, ".prompt-presets-panel").await, "held");
+    assert_eq!(
+        changes.loads("/fragment/prompt-presets"),
+        loads,
+        "a held panel must not load"
+    );
+
+    assert_eq!(eval_string(&page, END_PRESET_EDIT).await, "");
+    assert_eq!(
+        changes.loads("/fragment/prompt-presets"),
+        loads + 1,
+        "ending the edit must load the panel once"
+    );
+    assert_eq!(live_state(&page, ".prompt-presets-panel").await, "current");
+    let badge = page
+        .locator("#preset-card-custom_two .badge.primary")
+        .await
+        .inner_text()
+        .await
+        .unwrap();
+    assert!(
+        badge.contains("Active"),
+        "the load shows the Activate that waited: {badge:?}"
+    );
+}
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.21
+async fn check_a_world_editor_survives_a_game_rename_that_raises_games(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "worlds", ".worlds-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_WORLD_EDITOR).await, "");
+    let loads = changes.loads("/fragment/worlds");
+    let renamed = eval_string(
+        &page,
+        r#"async () => {
+            const response = await actionFetch('/games/2/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'display_name=Renamed+elsewhere',
+            });
+            await window.chroniclerLive.settle();
+            return response.ok ? '' : 'the rename failed';
+        }"#,
+    )
+    .await;
+    assert_eq!(renamed, "");
+
+    assert_eq!(
+        eval_string(&page, WORLD_EDITOR_IS_INTACT).await,
+        "",
+        "a Game rename must not destroy the open World editor"
+    );
+    assert_eq!(live_state(&page, ".worlds-panel").await, "held");
+    assert_eq!(changes.loads("/fragment/worlds"), loads);
+
+    assert_eq!(eval_string(&page, END_WORLD_EDITOR).await, "");
+    assert_eq!(
+        changes.loads("/fragment/worlds"),
+        loads + 1,
+        "closing the editor must load the panel once"
+    );
+    assert_eq!(live_state(&page, ".worlds-panel").await, "current");
+    assert_eq!(
+        page.query_selector_all("#world-editor > *")
+            .await
+            .unwrap()
+            .len(),
+        0,
+        "the load renders the editor slot empty"
+    );
+}
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.22
+async fn check_a_connection_editor_keeps_the_sub_tab_and_cancel_loads_the_panel_once(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "settings", ".settings-panel").await;
+
+    assert_eq!(eval_string(&page, SUBTAB_ENGAGED.engage).await, "");
+    assert_eq!(
+        eval_string(&page, CONNECTION_EDITOR_ENGAGED.engage).await,
+        ""
+    );
+    let loads = changes.loads("/fragment/settings");
+    let requests = changes.loads("/fragment/connections/openrouter-gpt-4o-mini/edit");
+    changes.bump("settings");
+    ask_once(&page).await;
+    assert_eq!(live_state(&page, ".settings-panel").await, "held");
+    assert_eq!(changes.loads("/fragment/settings"), loads);
+
+    assert_eq!(
+        eval_string(&page, CONNECTION_EDITOR_ENGAGED.end.unwrap()).await,
+        ""
+    );
+    assert_eq!(
+        changes.loads("/fragment/connections/openrouter-gpt-4o-mini/edit"),
+        requests,
+        "Cancel sends no request"
+    );
+    assert_eq!(
+        changes.loads("/fragment/settings"),
+        loads + 1,
+        "Cancel ends the edit, and the panel loads once"
+    );
+    assert_eq!(
+        eval_string(&page, SUBTAB_ENGAGED.check).await,
+        "",
+        "the sub-tab is still the one the player chose, after the editor and the load"
+    );
+}
+
 #[tokio::test]
 async fn run_live_regions_checks() {
     let mut runner = StubRunner::launch().await;
@@ -1286,6 +1678,24 @@ async fn run_live_regions_checks() {
         .run(
             outcome,
             check_the_new_game_selects_keep_the_players_choice_through_a_load,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_a_card_in_edit_survives_the_activate_of_another_card,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_a_world_editor_survives_a_game_rename_that_raises_games,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_a_connection_editor_keeps_the_sub_tab_and_cancel_loads_the_panel_once,
         )
         .await;
     runner.finish().await;

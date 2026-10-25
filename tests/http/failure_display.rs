@@ -45,7 +45,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         .save_llm_message(&llm_message("narrator", "mock", None, -20))
         .unwrap();
 
-    let body = fetch_body(&app, "/fragment/header").await;
+    let body = fetch_body(&app, "/fragment/failure-banner").await;
     assert!(
         body.contains("failure-banner"),
         "a degraded Quantifier must raise the banner: {body}"
@@ -88,7 +88,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
     storage
         .save_llm_message(&llm_message("quantifier", "mock", None, 0))
         .unwrap();
-    let body = fetch_body(&app, "/fragment/header").await;
+    let body = fetch_body(&app, "/fragment/failure-banner").await;
     assert!(
         !body.contains("error-disclosure"),
         "a later success must clear the banner: {body}"
@@ -110,7 +110,7 @@ async fn test_degraded_trigger_role_raises_the_banner() {
         ))
         .unwrap();
 
-    let body = fetch_body(&app, "/fragment/header").await;
+    let body = fetch_body(&app, "/fragment/failure-banner").await;
     assert!(
         body.contains("failure-banner"),
         "a degraded Trigger must raise the banner: {body}"
@@ -127,43 +127,19 @@ async fn test_degraded_trigger_role_raises_the_banner() {
         body.contains(r#"<pre class="error-detail-raw">trigger call timed out</pre>"#),
         "the raw failure text must be reachable inside the disclosure: {body}"
     );
+    let settings = fetch_body(&app, "/fragment/settings").await;
     assert!(
-        body.contains(
-            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"></span>"#
-        ),
-        "a Trigger failure has no Settings row to mark: {body}"
+        settings
+            .contains(r#"<span class="subtab-marker-slot" id="subtab-connections-marker"></span>"#),
+        "a Trigger failure has no Settings row to mark: {settings}"
     );
 }
 
 // [docs/specs/failure_display.md] SCENARIO: 38.6
 #[tokio::test]
-async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
+async fn test_header_carries_the_game_name_only_and_settings_renders_its_own_role_health() {
     let (state, storage) = TestAppBuilder::default_test().build_service_with_storage();
     let app = build_router(state);
-
-    let settings = fetch_body(&app, "/fragment/settings").await;
-    for cell_id in [
-        "role-health-narrator",
-        "role-health-quantifier",
-        "subtab-connections-marker",
-    ] {
-        assert!(
-            settings.contains(&format!(r#"id="{cell_id}""#)),
-            "the Settings panel must render the cell '{cell_id}' the header poll refreshes: {settings}"
-        );
-    }
-    assert!(
-        !settings.contains("hx-swap-oob"),
-        "the panel's own cells are not out-of-band swaps: {settings}"
-    );
-
-    let header = fetch_body(&app, "/fragment/header").await;
-    assert!(
-        header.contains(
-            r#"<span class="role-health-slot" id="role-health-narrator" hx-swap-oob="true"><span class="role-health unknown">No calls yet</span>"#
-        ),
-        "a role with no recorded attempt must swap in as no calls: {header}"
-    );
 
     storage
         .save_llm_message(&llm_message(
@@ -179,39 +155,57 @@ async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
 
     let header = fetch_body(&app, "/fragment/header").await;
     assert!(
-        header.contains(
-            r#"<span class="role-health-slot" id="role-health-quantifier" hx-swap-oob="true"><span class="role-health degraded">Degraded</span>"#
-        ),
-        "the degraded role's cell must swap in as Degraded: {header}"
+        header.contains("game-title"),
+        "the header carries the game name: {header}"
+    );
+    for forbidden in [
+        "failure-banner",
+        "role-health",
+        "subtab-connections-marker",
+        "hx-swap-oob",
+    ] {
+        assert!(
+            !header.contains(forbidden),
+            "the header carries no '{forbidden}': {header}"
+        );
+    }
+
+    let settings = fetch_body(&app, "/fragment/settings").await;
+    assert!(
+        !settings.contains("hx-swap-oob"),
+        "the panel's own cells are not out-of-band swaps: {settings}"
+    );
+    for cell_id in ["role-health-narrator", "role-health-quantifier"] {
+        assert!(
+            settings.contains(&format!(r#"id="{cell_id}""#)),
+            "the Settings panel must render the cell '{cell_id}': {settings}"
+        );
+    }
+    assert!(
+        settings.contains(r#"<span class="role-health-slot" id="role-health-quantifier"><span class="role-health degraded">Degraded</span>"#),
+        "the degraded role's cell must read Degraded: {settings}"
     );
     assert!(
-        header.contains(
-            r#"<span class="role-health-slot" id="role-health-narrator" hx-swap-oob="true"><span class="role-health healthy">Healthy</span>"#
-        ),
-        "a role whose newest attempt succeeded must swap in as Healthy: {header}"
+        settings.contains(r#"<span class="role-health-slot" id="role-health-narrator"><span class="role-health healthy">Healthy</span>"#),
+        "a role whose newest attempt succeeded must read Healthy: {settings}"
     );
     assert!(
-        header.contains(
-            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"><span class="subtab-degraded-marker""#
-        ),
-        "the Connections sub-tab's warning marker must ride along: {header}"
+        settings.contains(r#"<span class="subtab-marker-slot" id="subtab-connections-marker"><span class="subtab-degraded-marker""#),
+        "the Connections sub-tab's warning marker must be present: {settings}"
     );
 
     storage
         .save_llm_message(&llm_message("quantifier", "mock", None, 0))
         .unwrap();
-    let header = fetch_body(&app, "/fragment/header").await;
+    let settings = fetch_body(&app, "/fragment/settings").await;
     assert!(
-        header.contains(
-            r#"<span class="role-health-slot" id="role-health-quantifier" hx-swap-oob="true"><span class="role-health healthy">Healthy</span>"#
-        ),
-        "a later success must swap the cell back to Healthy: {header}"
+        settings.contains(r#"<span class="role-health-slot" id="role-health-quantifier"><span class="role-health healthy">Healthy</span>"#),
+        "a later success must read Healthy: {settings}"
     );
     assert!(
-        header.contains(
-            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"></span>"#
-        ),
-        "a recovered role must clear the marker: {header}"
+        settings
+            .contains(r#"<span class="subtab-marker-slot" id="subtab-connections-marker"></span>"#),
+        "a recovered role must clear the marker: {settings}"
     );
 }
 

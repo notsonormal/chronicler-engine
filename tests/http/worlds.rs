@@ -124,12 +124,13 @@ async fn test_world_posture_autosave_returns_saved_span_http() {
         "narrative_tense=present",
     )
     .await;
-    assert!(resp.status().is_success(), "the auto-save should succeed");
-    let body = response_body(resp).await;
-    assert!(
-        body.contains("Saved") && body.contains("posture-status"),
-        "the auto-save must return the Saved status span, got: {body:?}"
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::OK,
+        "the auto-save should succeed"
     );
+    let body = response_body(resp).await;
+    assert_eq!(body, "", "a saved posture answers nothing");
 
     let (stored, _) = updated_world(&state).await;
     assert_eq!(
@@ -150,9 +151,10 @@ async fn test_world_posture_invalid_value_returns_error_span_http() {
         "narrator_mode=warp_drive",
     )
     .await;
-    assert!(
-        resp.status().is_success(),
-        "an invalid value is a form error, not a 500"
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::BAD_REQUEST,
+        "an invalid value is a refusal: non-2xx, so the select goes back"
     );
     let body = response_body(resp).await;
     assert!(
@@ -294,8 +296,16 @@ async fn test_world_edit_form_renders_posture_selects_http() {
     assert_option_selected(&html, "past", "the stored Past tense must render selected");
 
     assert!(
-        html.contains(r#"id="world-posture-status""#),
-        "the posture status target must be rendered: {html}"
+        html.contains(r#"id="world-posture-status""#) && html.contains(r#"data-keep="data-saved""#),
+        "the posture status flag must be rendered, and kept through a load: {html}"
+    );
+    assert!(
+        html.contains(r#"data-error-slot="world-posture""#),
+        "the posture group must carry its own error slot: {html}"
+    );
+    assert!(
+        html.contains("data-work"),
+        "the editor holds its panel until the edit ends: {html}"
     );
     // The slot a failed create or update reports into, so the client keeps the
     // panel the failure describes.
@@ -306,6 +316,10 @@ async fn test_world_edit_form_renders_posture_selects_http() {
     assert!(
         html.contains(r#"hx-post="/worlds/posture_world/posture""#),
         "the posture selects must auto-save to this world: {html}"
+    );
+    assert!(
+        !html.contains("hx-target"),
+        "the editor targets no element: its saves swap nothing: {html}"
     );
 }
 
@@ -319,6 +333,18 @@ async fn test_worlds_fragment_pluralises_game_count_http() {
 
     let html = fetch_body(&app, "/fragment/worlds").await;
 
+    assert!(
+        html.contains(r#"<li class="world-item" id="world-test">"#),
+        "a World row carries a stable id, so a load keeps the row: {html}"
+    );
+    assert!(
+        html.contains(r#"<div class="editor-slot" id="world-editor"></div>"#),
+        "the list renders the editor slot empty: {html}"
+    );
+    assert!(
+        !html.contains("worlds-panel"),
+        "the shell's .worlds-panel is the region: the fragment repeats no root: {html}"
+    );
     assert!(
         html.contains("(1 game)"),
         "a World with one game must show a singular count: {html}"
@@ -431,7 +457,11 @@ async fn test_world_delete_refusal_pluralises_the_game_count_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
 
     let resp = post_form(&app, "/worlds/test/delete", "").await;
-    assert_eq!(resp.status(), http::StatusCode::OK);
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::BAD_REQUEST,
+        "a refusal is non-2xx, so the row stays and its slot shows the refusal"
+    );
     let html = response_body(resp).await;
     assert!(
         html.contains("Cannot delete world with 1 game"),
@@ -482,6 +512,11 @@ async fn test_world_delete_removes_a_world_with_no_games_http() {
             .expect("read the world")
             .is_none(),
         "the deleted World is no longer stored"
+    );
+    let list = fetch_body(&app, "/fragment/worlds").await;
+    assert!(
+        !list.contains(r#"id="world-posture_world""#),
+        "a following list does not hold the deleted World: {list}"
     );
 
     let resp = post_form(&app, "/worlds/nonexistent/delete", "").await;

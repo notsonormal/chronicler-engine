@@ -19,11 +19,14 @@ pub fn render_error(message: &str) -> String {
     error_fragment(format!("Error: {message}"))
 }
 
+/// The popover's open state is view state: `hidden` and the position `style` stay
+/// on the node through a load (`data-keep`), and so does `aria-expanded` on the toggle.
+///
 /// The short line needs its own block box for the status column's two-line clamp;
 /// the message itself is the disclosure's flex item.
 pub fn error_disclosure(popover_id: &str, message: &str, detail_html: &str) -> String {
     format!(
-        "<div class=\"error-disclosure\"><span class=\"error-disclosure-message\"><span class=\"error-disclosure-text\">{message}</span></span><button type=\"button\" class=\"error-details-toggle\" aria-expanded=\"false\" aria-controls=\"{popover_id}\">Details</button><div class=\"error-detail-popover\" id=\"{popover_id}\" hidden>{detail_html}</div></div>",
+        "<div class=\"error-disclosure\"><span class=\"error-disclosure-message\"><span class=\"error-disclosure-text\">{message}</span></span><button type=\"button\" class=\"error-details-toggle\" aria-expanded=\"false\" aria-controls=\"{popover_id}\" data-keep=\"aria-expanded\">Details</button><div class=\"error-detail-popover\" id=\"{popover_id}\" hidden data-keep=\"hidden style\">{detail_html}</div></div>",
         message = html_escape(message),
         popover_id = html_escape(popover_id),
         detail_html = detail_html,

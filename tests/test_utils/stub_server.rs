@@ -17,8 +17,16 @@ use axum::Router;
 use chrono::{TimeZone, Utc};
 
 use chronicler_engine::adapters::driving::http::utils::response::BUSY_STATUS;
-use chronicler_engine::adapters::driving::http::builders::headers::header_fragment_html;
-use chronicler_engine::adapters::driving::http::builders::presets::preset_edit_form_html;
+use chronicler_engine::adapters::driving::http::builders::headers::{
+    failure_banner_html, header_fragment_html,
+};
+use chronicler_engine::adapters::driving::http::builders::presets::{
+    preset_edit_form_html, PresetCardTemplate,
+};
+use chronicler_engine::adapters::driving::http::prompt_presets::templates::PromptPresetsTemplate;
+use chronicler_engine::adapters::driving::http::worlds::templates::worlds::{
+    WorldFormTemplate, WorldsPanelTemplate,
+};
 use chronicler_engine::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GameRowView, GamesPanelTemplate, PersonaRowView,
 };
@@ -49,11 +57,10 @@ use super::CONFIG_PATH;
 const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
-const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.html");
-const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
 
-fn header_html(degraded: bool) -> String {
-    let roles = if degraded {
+/// The one role health the stub knows: a degraded Quantifier, or none.
+fn stub_roles(degraded: bool) -> Vec<RoleHealth> {
+    if degraded {
         vec![RoleHealth {
             role: Role::Quantifier,
             backend_model: Some("Mock mock".to_string()),
@@ -61,9 +68,15 @@ fn header_html(degraded: bool) -> String {
         }]
     } else {
         Vec::new()
-    };
+    }
+}
 
-    header_fragment_html("Test Realm_2026-09-17_1".to_string(), &roles).expect("render header")
+fn header_html() -> String {
+    header_fragment_html("Test Realm_2026-09-17_1".to_string()).expect("render header")
+}
+
+fn failure_banner_html_for(degraded: bool) -> String {
+    failure_banner_html(&stub_roles(degraded))
 }
 
 const NARRATIVE_TEXT: &str = "Welcome to the Test World, Test Player! This is a simple scenario for testing the starting scenarios feature. Feel free to explore and test the game engine.\n\nThe tavern around you is warm and inviting. Wooden beams stretch across the ceiling, and a crackling fire in the hearth casts dancing shadows on the walls. The smell of fresh bread and mulled cider fills the air.\n\nBehind the bar, the bartender wipes down a mug and glances your way. \"First time in the Test Realm?\" he asks with a knowing smile. \"Don't worry, everyone here is friendly. Mostly.\"\n\nA merchant in the corner adjusts her pack and catches your eye. \"If you're heading north to the village square, mind the cobblestones. They get slippery after dark,\" she advises.\n\nYou take a moment to gather your bearings. The road ahead promises adventure, but for now, the warmth of the tavern offers a brief respite.";
@@ -196,10 +209,10 @@ fn games_html(games: &StubGames) -> String {
     .expect("render the Games panel")
 }
 
-fn settings_html() -> String {
+fn settings_html(degraded: bool) -> String {
     use askama::Template;
 
-    SettingsTemplate::from_settings(&AppSettings::default(), &[], None)
+    SettingsTemplate::from_settings(&AppSettings::default(), &stub_roles(degraded))
         .render()
         .expect("render settings")
 }
@@ -212,18 +225,163 @@ fn connection_form_html(connection: Option<&LlmConnection>) -> String {
         .expect("render connection form")
 }
 
-fn custom_preset() -> PromptPreset {
+fn custom_preset(id: &str, name: &str) -> PromptPreset {
     PromptPreset {
-        id: "custom_ref".to_string(),
-        name: "My Custom Prompt".to_string(),
+        id: id.to_string(),
+        name: name.to_string(),
         role: None,
-        instructions: Some("A custom system prompt for the stub fixture.".to_string()),
+        instructions: Some(format!("{name}, a custom system prompt for the stub.")),
         writing_style: None,
         output_format: None,
         allowed_modes: vec![NarratorMode::Novel],
         is_default: false,
         preset_type: PresetType::System,
     }
+}
+
+fn default_preset(
+    id: &str,
+    name: &str,
+    preset_type: PresetType,
+    mode: NarratorMode,
+) -> PromptPreset {
+    PromptPreset {
+        id: id.to_string(),
+        name: name.to_string(),
+        role: None,
+        instructions: Some(format!("The default {name} prompt of the stub.")),
+        writing_style: None,
+        output_format: None,
+        allowed_modes: vec![mode],
+        is_default: true,
+        preset_type,
+    }
+}
+
+/// The presets the stub lists: the defaults, and the custom System presets that
+/// a delete removes, a duplicate adds and an Activate marks.
+struct StubPresets {
+    custom: Vec<PromptPreset>,
+    active_system: String,
+    copies: u32,
+}
+
+impl StubPresets {
+    fn new() -> Self {
+        Self {
+            custom: vec![
+                custom_preset("custom_ref", "My Custom Prompt"),
+                custom_preset("custom_two", "Second Custom Prompt"),
+            ],
+            active_system: "system_default".to_string(),
+            copies: 0,
+        }
+    }
+
+    fn settings(&self) -> AppSettings {
+        let mut settings = AppSettings::default();
+        settings.set_active_preset(
+            PresetType::System,
+            NarratorMode::Novel,
+            self.active_system.clone(),
+        );
+        settings
+    }
+
+    fn system_presets(&self) -> Vec<PromptPreset> {
+        let mut presets = vec![
+            default_preset(
+                "system_default",
+                "Default",
+                PresetType::System,
+                NarratorMode::Novel,
+            ),
+            default_preset(
+                "system_if_default",
+                "Interactive Fiction",
+                PresetType::System,
+                NarratorMode::InteractiveFiction,
+            ),
+        ];
+        presets.extend(self.custom.iter().cloned());
+        presets
+    }
+
+    fn find(&self, id: &str) -> Option<PromptPreset> {
+        self.system_presets()
+            .into_iter()
+            .find(|preset| preset.id == id)
+    }
+}
+
+fn presets_html(presets: &StubPresets) -> String {
+    use askama::Template;
+
+    PromptPresetsTemplate {
+        system_presets: presets.system_presets(),
+        quantifier_presets: vec![default_preset(
+            "quantifier_default",
+            "Default",
+            PresetType::Quantifier,
+            NarratorMode::Novel,
+        )],
+        impersonate_presets: vec![default_preset(
+            "impersonate_default",
+            "Default",
+            PresetType::Impersonate,
+            NarratorMode::Novel,
+        )],
+        options_presets: Vec::new(),
+        settings: presets.settings(),
+    }
+    .render()
+    .expect("render the Prompt Presets panel")
+}
+
+/// The Worlds the stub lists: a delete removes one and a save renames one.
+struct StubWorlds {
+    worlds: Vec<WorldCard>,
+    posture_failing: bool,
+}
+
+impl StubWorlds {
+    fn new() -> Self {
+        Self {
+            worlds: vec![
+                WorldCard {
+                    key: "redmist_estate".to_string(),
+                    name: "Redmist Estate".to_string(),
+                    description: "The Redmist Estate stands in Islaport, a large coastal city on the eastern seaboard.".to_string(),
+                    ..Default::default()
+                },
+                WorldCard {
+                    key: "test".to_string(),
+                    name: "Test Realm".to_string(),
+                    description: "A small testing kingdom for UI tests".to_string(),
+                    ..Default::default()
+                },
+            ],
+            posture_failing: false,
+        }
+    }
+}
+
+fn worlds_html(worlds: &StubWorlds) -> String {
+    use askama::Template;
+
+    let games_per_world = HashMap::from([("test".to_string(), 1usize)]);
+    WorldsPanelTemplate::from_worlds(&worlds.worlds, &games_per_world)
+        .render()
+        .expect("render the Worlds panel")
+}
+
+fn world_form_html(world: Option<&WorldCard>) -> String {
+    use askama::Template;
+    use chronicler_engine::domain::model::map::MapDef;
+
+    WorldFormTemplate::from_world_data(world, world.map(|_| MapDef::default()).as_ref(), &[])
+        .render()
+        .expect("render the World form")
 }
 
 const CANNED_OPTIONS: [&str; 3] = [
@@ -333,6 +491,8 @@ struct StubState {
     story_log_delay_ms: std::sync::atomic::AtomicU64,
     options_failed: std::sync::atomic::AtomicBool,
     games: std::sync::Mutex<StubGames>,
+    presets: std::sync::Mutex<StubPresets>,
+    worlds: std::sync::Mutex<StubWorlds>,
     llm_message_count: std::sync::atomic::AtomicUsize,
 }
 
@@ -476,6 +636,8 @@ impl StubServer {
             story_log_delay_ms: std::sync::atomic::AtomicU64::new(0),
             options_failed: std::sync::atomic::AtomicBool::new(false),
             games: std::sync::Mutex::new(StubGames::new()),
+            presets: std::sync::Mutex::new(StubPresets::new()),
+            worlds: std::sync::Mutex::new(StubWorlds::new()),
             llm_message_count: std::sync::atomic::AtomicUsize::new(1),
         });
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
@@ -851,6 +1013,15 @@ impl StubFailureHandle {
             .store(failing, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// A World posture auto-save answers a 400 refusal until this is turned off.
+    pub fn set_world_posture_failing(&self, failing: bool) {
+        self.state
+            .worlds
+            .lock()
+            .expect("stub worlds lock poisoned")
+            .posture_failing = failing;
+    }
+
     pub fn set_preset_card_refused(&self, refused: bool) {
         self.state
             .preset_card_refused
@@ -972,10 +1143,10 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/connections/:id/edit",
             post(|| async { client_refusal("Unknown LLM backend 'bogus_provider'") }),
         )
-        // A role change re-renders the whole panel, the way the engine answers it.
+        // A saved role change answers nothing, the way the engine answers it.
         .route(
             "/connections/set-quantifier",
-            post(|| async { Html(settings_html()) }),
+            post(|| async { (StatusCode::OK, "").into_response() }),
         )
         .route(
             "/prompt-presets",
@@ -986,6 +1157,15 @@ fn stub_router(state: Arc<StubState>) -> Router {
             post(|| async { client_failure("preset save failure") }),
         )
         .route("/prompt-presets/:id/delete", post(delete_preset))
+        .route("/prompt-presets/:id/activate", post(activate_preset))
+        .route("/prompt-presets/:id/duplicate", post(duplicate_preset))
+        .route("/worlds", post(save_world))
+        .route("/worlds/:key", post(save_world))
+        .route("/worlds/:key/posture", post(save_world_posture))
+        .route(
+            "/settings/text-check",
+            post(|| async { (StatusCode::OK, "").into_response() }),
+        )
         .route("/games/:id/posture", post(failing_posture_save))
         // The real delete answers an empty body, so htmx removes the row the
         // control sits in.
@@ -1010,6 +1190,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/status/reset-busy", post(reset_busy))
         .route("/changes", get(changes_answer))
         .route("/fragment/header", get(header_fragment))
+        .route("/fragment/failure-banner", get(failure_banner_fragment))
         .route("/fragment/story-log", get(story_log_fragment))
         .route(
             "/fragment/visual-sidebar",
@@ -1017,10 +1198,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route("/fragment/options-dock", get(options_dock_fragment))
         .route("/fragment/llm-messages", get(llm_messages_fragment))
-        .route(
-            "/fragment/settings",
-            get(|| async { Html(settings_html()) }),
-        )
+        .route("/fragment/settings", get(settings_fragment))
         .route(
             "/fragment/connections/new",
             get(|| async { Html(connection_form_html(None)) }),
@@ -1032,15 +1210,18 @@ fn stub_router(state: Arc<StubState>) -> Router {
                 Html(connection_form_html(Some(&settings.connections[0])))
             }),
         )
-        .route(
-            "/fragment/prompt-presets",
-            get(|| async { Html(FIXTURE_PROMPT_PRESETS) }),
-        )
+        .route("/fragment/prompt-presets", get(presets_fragment))
+        .route("/fragment/prompt-presets/:id", get(preset_card_fragment))
         .route(
             "/fragment/prompt-presets/:id/edit",
             get(preset_edit_form_fragment),
         )
-        .route("/fragment/worlds", get(|| async { Html(FIXTURE_WORLDS) }))
+        .route("/fragment/worlds", get(worlds_fragment))
+        .route(
+            "/fragment/worlds/new",
+            get(|| async { Html(world_form_html(None)) }),
+        )
+        .route("/worlds/:key/edit", get(edit_world_form_fragment))
         .route("/fragment/games", get(games_fragment))
         .nest_service("/assets", tower_http::services::ServeDir::new("assets"))
         .nest_service("/data", tower_http::services::ServeDir::new("data"))
@@ -1202,9 +1383,18 @@ async fn fail_polls_middleware(
     next.run(request).await
 }
 
-async fn header_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+async fn header_fragment() -> Html<String> {
+    Html(header_html())
+}
+
+async fn failure_banner_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     use std::sync::atomic::Ordering::SeqCst;
-    Html(header_html(state.header_degraded.load(SeqCst)))
+    Html(failure_banner_html_for(state.header_degraded.load(SeqCst)))
+}
+
+async fn settings_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    use std::sync::atomic::Ordering::SeqCst;
+    Html(settings_html(state.header_degraded.load(SeqCst)))
 }
 
 fn swipe_script_entries(text: &str, active_swipe_index: usize) -> Vec<StoryRow> {
@@ -1421,46 +1611,184 @@ async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body>
     client_failure("Stub retrigger failure")
 }
 
-/// The real preset delete answers an empty body, so htmx removes the card the
-/// control sits in.
-async fn delete_preset(State(state): State<Arc<StubState>>) -> Response<Body> {
+async fn presets_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    let presets = state.presets.lock().expect("stub presets lock poisoned");
+    Html(presets_html(&presets))
+}
+
+/// A card's Cancel loads the card back in place of its editor.
+async fn preset_card_fragment(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    use askama::Template;
+
+    let presets = state.presets.lock().expect("stub presets lock poisoned");
+    let Some(preset) = presets.find(&id) else {
+        return Html(render_error("Preset not found"));
+    };
+    Html(
+        PresetCardTemplate::from_settings(&preset, &presets.settings())
+            .render()
+            .expect("render the preset card"),
+    )
+}
+
+/// The real preset delete answers nothing for a delete that went through: the
+/// next load of the panel no longer lists the card.
+async fn delete_preset(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response<Body> {
     if state
         .row_deletes_succeed
         .load(std::sync::atomic::Ordering::SeqCst)
     {
+        state
+            .presets
+            .lock()
+            .expect("stub presets lock poisoned")
+            .custom
+            .retain(|preset| preset.id != id);
+        state.bump(&["presets"]);
         (StatusCode::OK, "").into_response()
     } else {
         client_refusal("Preset is a mode default; change the default before deleting")
     }
 }
 
+#[derive(serde::Deserialize)]
+struct ActivateQuery {
+    mode: Option<String>,
+}
+
+/// The real Activate answers nothing and moves the presets and settings numbers.
+async fn activate_preset(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    axum::extract::Query(query): axum::extract::Query<ActivateQuery>,
+) -> Response<Body> {
+    if query.mode.as_deref().unwrap_or("novel") == "novel" {
+        state
+            .presets
+            .lock()
+            .expect("stub presets lock poisoned")
+            .active_system = id;
+    }
+    state.bump(&["presets", "settings"]);
+    (StatusCode::OK, "").into_response()
+}
+
+/// The real Duplicate answers nothing and moves the presets number.
+async fn duplicate_preset(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response<Body> {
+    {
+        let mut presets = state.presets.lock().expect("stub presets lock poisoned");
+        let Some(source) = presets.find(&id) else {
+            return client_refusal("Preset not found");
+        };
+        presets.copies += 1;
+        let number = presets.copies;
+        let mut copy = source.clone();
+        copy.id = format!("{}_copy{number}", source.id);
+        copy.name = format!("{} (Copy {number})", source.name);
+        copy.is_default = false;
+        presets.custom.push(copy);
+    }
+    state.bump(&["presets"]);
+    (StatusCode::OK, "").into_response()
+}
+
 /// The card's Edit control: the engine answers a default preset's edit with a
 /// 200 error fragment in place of the card.
-async fn preset_edit_form_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+async fn preset_edit_form_fragment(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.preset_card_refused.load(SeqCst) {
         return Html("<div class=\"error-message\">Cannot edit default presets</div>".to_string());
     }
-    Html(preset_edit_form_html(&custom_preset(), "system"))
+    let presets = state.presets.lock().expect("stub presets lock poisoned");
+    match presets.find(&id) {
+        Some(preset) => Html(preset_edit_form_html(&preset, "system")),
+        None => Html(render_error("Preset not found")),
+    }
 }
 
-/// The real world delete answers an empty body for a delete that went through,
-/// and a 200 error fragment in place of the row for a world that still has
-/// games.
-async fn delete_world(State(state): State<Arc<StubState>>) -> Response<Body> {
+async fn worlds_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    let worlds = state.worlds.lock().expect("stub worlds lock poisoned");
+    Html(worlds_html(&worlds))
+}
+
+async fn edit_world_form_fragment(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(key): axum::extract::Path<String>,
+) -> Response<Body> {
+    let worlds = state.worlds.lock().expect("stub worlds lock poisoned");
+    match worlds.worlds.iter().find(|world| world.key == key) {
+        Some(world) => Html(world_form_html(Some(world))).into_response(),
+        None => client_refusal("World not found"),
+    }
+}
+
+/// The real World save answers nothing and moves the worlds number.
+async fn save_world(
+    State(state): State<Arc<StubState>>,
+    Form(form): Form<HashMap<String, String>>,
+) -> Response<Body> {
+    {
+        let mut worlds = state.worlds.lock().expect("stub worlds lock poisoned");
+        let key = form.get("key").cloned().unwrap_or_default();
+        let name = form.get("name").cloned().unwrap_or_default();
+        match worlds.worlds.iter_mut().find(|world| world.key == key) {
+            Some(world) => world.name = name,
+            None => worlds.worlds.push(WorldCard {
+                key,
+                name,
+                ..Default::default()
+            }),
+        }
+    }
+    state.bump(&["worlds"]);
+    (StatusCode::OK, "").into_response()
+}
+
+/// The real posture auto-save answers nothing for a saved change, and a refusal
+/// for a value it cannot take.
+async fn save_world_posture(State(state): State<Arc<StubState>>) -> Response<Body> {
+    if state
+        .worlds
+        .lock()
+        .expect("stub worlds lock poisoned")
+        .posture_failing
+    {
+        return client_refusal("Unknown narrator mode");
+    }
+    state.bump(&["worlds"]);
+    (StatusCode::OK, "").into_response()
+}
+
+/// The real world delete answers nothing for a delete that went through, and a
+/// 400 refusal for a world that still has games.
+async fn delete_world(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(key): axum::extract::Path<String>,
+) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.world_delete_refused.load(SeqCst) {
-        return (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            format!(
-                "<li class=\"world-item\">{}</li>",
-                render_error("World still has games")
-            ),
-        )
-            .into_response();
+        return client_refusal("World still has games");
     }
     if state.row_deletes_succeed.load(SeqCst) {
+        state
+            .worlds
+            .lock()
+            .expect("stub worlds lock poisoned")
+            .worlds
+            .retain(|world| world.key != key);
+        state.bump(&["worlds"]);
         (StatusCode::OK, "").into_response()
     } else {
         client_failure("Stub world delete failure")

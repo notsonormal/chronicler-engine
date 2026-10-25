@@ -3,6 +3,8 @@
 Endpoints:
 - `POST /action`
 - `GET /fragment/header`
+- `GET /fragment/failure-banner`
+- `GET /fragment/settings`
 - `GET /fragment/visual-sidebar`
 - `GET /status/busy`
 
@@ -10,18 +12,18 @@ Endpoints:
 
 ### Header health
 
-#### Scenario 38.1: A degraded role raises the header banner and clears on recovery
+#### Scenario 38.1: A degraded role raises the failure banner and clears on recovery
 
 ```gherkin
 Given an active Game whose newest Quantifier attempt carries an error message
-When the client GET /fragment/header
+When the client GET /fragment/failure-banner
 Then the response carries a failure banner naming the Quantifier and its failure effect
 And the banner states that role health covers every game
 And the banner's Details disclosure lists each role with the backend and model of its newest attempt
 And a role whose newest attempt succeeded reads as a success
 And a role with no recorded attempt reads as having no calls
 And the raw failure text is reachable only inside that disclosure
-When a later Quantifier attempt succeeds and the client GET /fragment/header again
+When a later Quantifier attempt succeeds and the client GET /fragment/failure-banner again
 Then the response carries no failure banner
 ```
 
@@ -29,25 +31,29 @@ Then the response carries no failure banner
 
 ```gherkin
 Given an active Game whose newest Trigger attempt carries an error message
-When the client GET /fragment/header
+When the client GET /fragment/failure-banner
 Then the response carries a failure banner naming the Trigger and its failure effect
 And its Details disclosure lists the Trigger role with that raw failure text
-And the Connections sub-tab's warning marker stays empty
+When the client GET /fragment/settings
+Then the Connections sub-tab's warning marker stays empty
 ```
 
-#### Scenario 38.6: The header load keeps the Settings role health current
+#### Scenario 38.6: The header carries the game name only, and the Settings panel renders its own role health
 
 ```gherkin
-Given a client showing the dashboard, whose Settings panel rendered a health cell per role row
-When a role's newest attempt fails
-And the client GET /fragment/header
-Then the response carries an out-of-band swap for that role's health cell
-And the cell reports the role as Degraded
-And the response carries an out-of-band swap for the Connections sub-tab's warning marker, which is present
+Given a client showing the dashboard, with a role whose newest attempt failed
+When the client GET /fragment/header
+Then the response carries the game name
+And the response carries no failure banner and no health cell
+And the response carries no out-of-band swap
+When the client GET /fragment/settings
+Then the response carries a health cell for each role row, with no out-of-band swap
+And the failed role's cell reports it as Degraded
+And the response carries the Connections sub-tab's warning marker, which is present
 When a later attempt for that role succeeds
-And the client GET /fragment/header again
+And the client GET /fragment/settings again
 Then the cell reports the role as Healthy
-And the marker's swap is empty
+And the marker is empty
 ```
 
 ### Failed requests

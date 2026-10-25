@@ -30,7 +30,7 @@ async fn error_detail_popover_open(page: &playwright_rs::Page, popover_id: &str)
     page.evaluate::<String, bool>(
         r#"(id) => {
             const popover = document.getElementById(id);
-            return !!popover && popover.classList.contains('open') && !popover.hidden;
+            return !!popover && !popover.hidden;
         }"#,
         Some(&popover_id.to_string()),
     )
@@ -95,7 +95,7 @@ async fn measure_action_area(page: &playwright_rs::Page) -> (f64, f64) {
 async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stub: StubServer) {
     let failures = stub.failure_handle();
     failures.set_header_degraded(true);
-    poll_now(&page, "#header").await;
+    poll_now(&page, "#failure-banner-degraded").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -126,15 +126,15 @@ async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stu
         .await
         .unwrap();
     let (open, detail) = page
-                .evaluate::<(), (bool, String)>(
-                    r#"() => {
+        .evaluate::<(), (bool, String)>(
+            r#"() => {
                         const popover = document.getElementById('failure-banner-popover');
-                        return [!!popover && popover.classList.contains('open'), popover ? popover.textContent : ''];
+                        return [!!popover && !popover.hidden, popover ? popover.textContent : ''];
                     }"#,
-                    None,
-                )
-                .await
-                .unwrap();
+            None,
+        )
+        .await
+        .unwrap();
     assert!(open, "Details should open the banner's anchored disclosure");
     assert!(
         detail.contains("Mock mock"),
@@ -388,7 +388,7 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
                                 return !!now
                                     && now === window.__statusToggleBefore
                                     && !!popover
-                                    && popover.classList.contains('open');
+                                    && !popover.hidden;
                             }"#,
                             None,
                         )
@@ -417,13 +417,13 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.27
-async fn check_banner_details_popover_survives_a_header_poll(
+async fn check_banner_details_popover_survives_a_banner_load(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let failures = stub.failure_handle();
     failures.set_header_degraded(true);
-    poll_now(&page, "#header").await;
+    poll_now(&page, "#failure-banner-degraded").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -454,7 +454,7 @@ async fn check_banner_details_popover_survives_a_header_poll(
             .await
             .unwrap();
 
-    poll_now(&page, "#header").await;
+    poll_now(&page, "#failure-banner-degraded").await;
 
     assert!(
                 wait_for_condition_async(
@@ -466,9 +466,9 @@ async fn check_banner_details_popover_survives_a_header_poll(
                                 const now = document.querySelector('#failure-banner-degraded .error-details-toggle');
                                 const popover = document.getElementById('failure-banner-popover');
                                 return !!now
-                                    && now !== window.__bannerToggleBefore
+                                    && now === window.__bannerToggleBefore
                                     && !!popover
-                                    && popover.classList.contains('open');
+                                    && !popover.hidden;
                             }"#,
                             None,
                         )
@@ -477,7 +477,7 @@ async fn check_banner_details_popover_survives_a_header_poll(
                     },
                 )
                 .await,
-                "the header poll's out-of-band banner refresh must not collapse the open disclosure"
+                "a load of the banner must keep its open disclosure, on the same node"
             );
     assert!(
         active_element_is(&page, "#failure-banner-degraded .error-details-toggle").await,
@@ -680,7 +680,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
     );
     let raw_hidden: bool = page
                 .evaluate::<(), bool>(
-                    "() => { const p = document.querySelector('#status-error-popover'); return !!p && !p.classList.contains('open'); }",
+                    "() => { const p = document.querySelector('#status-error-popover'); return !!p && p.hidden; }",
                     None,
                 )
                 .await
@@ -706,23 +706,23 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
         .await
         .unwrap();
     let (open, raw_shown) = page
-                .evaluate::<(), (bool, String)>(
-                    r#"() => {
+        .evaluate::<(), (bool, String)>(
+            r#"() => {
                         const popover = document.getElementById('status-error-popover');
                         const raw = popover ? popover.querySelector('.error-detail-raw') : null;
-                        return [!!popover && popover.classList.contains('open'), raw ? raw.textContent.trim() : ''];
+                        return [!!popover && !popover.hidden, raw ? raw.textContent.trim() : ''];
                     }"#,
-                    None,
-                )
-                .await
-                .unwrap();
+            None,
+        )
+        .await
+        .unwrap();
     assert!(open, "Details should open the anchored disclosure");
     assert_eq!(raw, raw_shown, "the disclosure shows the raw text");
 
     page.keyboard().press("Escape", None).await.unwrap();
     let closed: bool = page
                 .evaluate::<(), bool>(
-                    "() => { const p = document.getElementById('status-error-popover'); return !!p && !p.classList.contains('open'); }",
+                    "() => { const p = document.getElementById('status-error-popover'); return !!p && p.hidden; }",
                     None,
                 )
                 .await
@@ -1028,9 +1028,9 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
     }
 }
 
-// The two tab panels load once per page load, the Games panel when its section
-// opens, so this test arms the stub and reloads rather than waiting for a load
-// that no number would start.
+// A panel loads when a number of its kinds moves, and a panel in a hidden section
+// waits until its section opens, so this test arms the stub and reloads rather
+// than waiting for a load that no number would start.
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.33
 async fn check_failed_panel_load_reports_inside_the_panel(
     page: playwright_rs::Page,
@@ -1101,6 +1101,9 @@ async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _
             .await
             .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
 
+        // A section loads its panel when it opens, so the rows exist once the
+        // control does.
+        wait_until_visible(&page, control, Duration::from_secs(5)).await;
         let rows_before = page.query_selector_all(row).await.unwrap_or_default().len();
         page.locator(control)
             .await
@@ -1245,7 +1248,7 @@ async fn run_failure_display_banner_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_banner_details_popover_survives_a_header_poll,
+            check_banner_details_popover_survives_a_banner_load,
         )
         .await;
     runner.finish().await;

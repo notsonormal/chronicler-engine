@@ -147,7 +147,7 @@ Then the error is gone
 
 ```gherkin
 Given a role is degraded
-When the header loads with the degraded-role banner
+When the failure banner region loads the degraded-role banner
 Then the banner is visible and reports itself as status
 And the banner names the role, its failure effect, and the banner's engine-wide scope
 And its Details control opens the anchored disclosure
@@ -204,8 +204,8 @@ Then the disclosure is closed
 ```gherkin
 Given the banner reports a degraded role
 And the disclosure's Details control has been activated, so it is open with focus
-When the header loads again and refreshes the banner
-Then the disclosure is still open
+When the banner region loads again
+Then the disclosure is still open, on the same element (the popover lists its open state in data-keep)
 And focus is still in its Details control
 And the banner is still up
 ```
