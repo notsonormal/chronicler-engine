@@ -14,7 +14,7 @@ pub use super::wait::wait_for_element_children;
 use super::wait::wait_until_visible;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
-use super::wait::wait_for_status_busy;
+use super::wait::wait_for_action_acknowledged;
 pub use super::wait::wait_for_story_log;
 
 pub async fn goto_with_connection_check(
@@ -127,10 +127,10 @@ impl SharedBrowser {
     }
 }
 
-/// The load that htmx runs at page load carries no record, so the first ask of
-/// the page loads every region a second time. A stub test starts after that
-/// ask: only a number the test moves can load a region afterwards, and a state
-/// the test writes into a region is not replaced by a late first ask.
+/// The first ask of the page loads every region once. A stub test starts after
+/// that ask has settled: only a number the test moves can load a region
+/// afterwards, and a state the test writes into a region is not replaced by a
+/// late first ask.
 async fn make_regions_current(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         "async () => { await window.chroniclerLive.settle(); await window.chroniclerLive.askOnce(); }",
@@ -272,12 +272,11 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
         )
         .await;
 
-    // Confirm the action was acknowledged before returning: the
-    // `/action/check` response swaps "Thinking..." into #status-display. Without
-    // this wait, a subsequent `wait_for_status_ready` can return on the STALE
-    // pre-action "Ready" (before the swap arrives) and race the test — see
-    // `wait_for_status_busy`.
-    wait_for_status_busy(page).await;
+    // Confirm the action was acknowledged before returning: the action area
+    // consumes the input of a command the engine took. Without this wait, a
+    // subsequent `wait_for_status_ready` can return on the STALE pre-action
+    // "Ready" — see `wait_for_action_acknowledged`.
+    wait_for_action_acknowledged(page).await;
 
     dismiss_text_check_if_present(page).await;
 }

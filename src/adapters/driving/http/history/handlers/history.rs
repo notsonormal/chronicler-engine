@@ -23,7 +23,7 @@ pub async fn edit_history_handler(
     Form(form): Form<EditHistoryForm>,
 ) -> Response {
     match state.game_writer.edit(game_id, id, &form.text) {
-        Ok(()) => ok("<span class=\"status ready\">Edited</span>"),
+        Ok(()) => ok(""),
         Err(refusal) => refusal.into_response(),
     }
 }

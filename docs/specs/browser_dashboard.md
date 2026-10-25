@@ -17,9 +17,10 @@ Then the same #command-form element is still in the document (form is a static s
 
 ```gherkin
 Given the page is loaded and idle
+And the Narrator has not answered
 When the client submits the command "wait"
 Then #status-display text is not "Ready" within 500ms
-And #status-display text contains one of "Thinking", "Narrating", "Generating", or "Quantifying"
+And #status-display text contains the label of the Job's step, "Generating narration..."
 ```
 
 #### Scenario 16.9: Primary button locks and unlocks with the status after confirming a preview
@@ -29,7 +30,7 @@ Given the client submitted a command the text-check preview intercepted, so the 
 When the client confirms the preview, so a generation starts
 Then the primary button is disabled and labelled as a generating indicator
 And the command form is the same node as before
-When the status poll reports idle and the status display returns to Ready
+When the status display loads idle and returns to Ready
 Then the primary button is enabled again with a "Send" label
 ```
 
@@ -38,7 +39,7 @@ Then the primary button is enabled again with a "Send" label
 ```gherkin
 Given the client submitted a command the text-check preview intercepted, so the preview is open
 When the client confirms the preview
-And the /status/busy poll returns an error fragment
+And the status display loads an error fragment
 Then the status display shows the error's short line
 And the command form is still in the document
 And the raw error text is not visible until the client opens the Details disclosure
@@ -95,14 +96,14 @@ Then a skip link targets the main landmark
 And a label names the command input "Action"
 ```
 
-#### Scenario 16.18: A failed poll leaves its region unchanged and marks the banner
+#### Scenario 16.18: A failed load leaves its region unchanged and marks the banner
 
 ```gherkin
 Given the dashboard is loaded and the story log shows its entries
-When a story-log poll fails
+When a story-log load fails
 Then the banner is visible and reports the engine as unreachable
 And the story log still shows the same entries
-When a later story-log poll succeeds
+When a later story-log load succeeds
 Then the banner disappears
 ```
 
@@ -146,7 +147,7 @@ Then the error is gone
 
 ```gherkin
 Given a role is degraded
-When the header poll carries the degraded-role banner
+When the header loads with the degraded-role banner
 Then the banner is visible and reports itself as status
 And the banner names the role, its failure effect, and the banner's engine-wide scope
 And its Details control opens the anchored disclosure
@@ -186,36 +187,36 @@ And the panel keeps the content it had
 And the banner is not raised
 ```
 
-#### Scenario 16.26: The status display's open Details disclosure survives a poll
+#### Scenario 16.26: The status display's open Details disclosure survives a load
 
 ```gherkin
 Given the status display shows a generation error
 And the error's Details disclosure is open with focus in its Details control
-When the status poll re-renders the display
+When the status display loads again
 Then the disclosure is still open
 And focus is still in its Details control
 When the client presses Escape
 Then the disclosure is closed
 ```
 
-#### Scenario 16.27: The banner's open Details disclosure survives a poll
+#### Scenario 16.27: The banner's open Details disclosure survives a load
 
 ```gherkin
 Given the banner reports a degraded role
 And the disclosure's Details control has been activated, so it is open with focus
-When the header poll refreshes the banner
+When the header loads again and refreshes the banner
 Then the disclosure is still open
 And focus is still in its Details control
 And the banner is still up
 ```
 
-#### Scenario 16.28: The status poll leaves generating and re-enables Send
+#### Scenario 16.28: A load of the status display that leaves generating re-enables Send
 
 ```gherkin
-Given the dashboard is loaded and the status poll reports a generation step
+Given the dashboard is loaded and the status display loads a generation step
 Then #status-display shows a generating state
 And #submit-btn is disabled
-When the status poll reports idle
+When the status display loads idle
 Then #status-display returns to Ready
 And #submit-btn is enabled
 And pressing Enter in #command-form input[name="command"] submits the form
@@ -369,15 +370,17 @@ Then #status-display carries the ready state's class again
 And Ready is drawn in its own colour
 ```
 
-#### Scenario 16.42: A refused concurrent send keeps the typed command and shows the wait state
+#### Scenario 16.42: A refused concurrent send keeps the typed command and reports in the command form's slot
 
 ```gherkin
 Given the dashboard is loaded
 And a generation is already in flight
 When the client submits a command the engine refuses
-Then #status-display carries the wait state's class and not the ready state's
-And the wait label is drawn in the palette's body text colour
+Then the command form's own inline error slot says that the Game is busy
+And its Details disclosure holds the engine's answer
+And the status display keeps the state it had
 And the command input still holds the typed command
+And no preview is open
 ```
 
 #### Scenario 16.43: Every failure sentence reads in full in the status column
@@ -391,3 +394,29 @@ And the command input and the action area keep their sizes
 When the viewport width is 1024
 Then the whole sentence for every kind still reads in full
 ```
+
+#### Scenario 16.44: A confirm that the busy Game refuses reports on the command form's slot
+
+```gherkin
+Given the dashboard is loaded with text check enabled and the preview is open
+And a generation is already in flight
+When the client confirms the preview and the engine refuses the command
+Then the preview closes
+And the command form's own inline error slot says that the Game is busy
+And the command input still holds the typed command
+```
+
+#### Scenario 16.45: The action area shows its own state until the status display shows the send
+
+```gherkin
+Given the dashboard is loaded and idle
+And the status display cannot load
+When the client submits a command the engine takes
+Then #action-status shows "Thinking..."
+And the primary button is disabled and labelled as a generating indicator
+When the status display can load and the page asks
+Then #action-status is empty
+And #status-display shows the label of the Job's step
+And the primary button is disabled
+```
+

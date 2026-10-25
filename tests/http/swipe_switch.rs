@@ -11,7 +11,10 @@ use chronicler_engine::test_support::{
 
 use crate::support::app_wiring::app_with_script;
 use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
-use crate::support::http_requests::{fetch_body, post_action, post_empty, response_body, wait_settled};
+use crate::support::http_requests::{
+    assert_answers_nothing, fetch_body, fetch_status_label, post_action, post_empty, response_body,
+    wait_settled,
+};
 
 fn first_switch_target(log_fragment: &str) -> (u64, usize) {
     let marker = "switchSwipe(";
@@ -58,12 +61,11 @@ async fn test_switch_swipe_leaves_the_game_idle_http() {
     let (message_id, target) = last_message_with_two_swipes(&app, &state).await;
 
     let resp = post_empty(&app, &format!("/message/{message_id}/swipe/{target}")).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_answers_nothing(resp).await;
 
-    let status = fetch_body(&app, "/status/busy").await;
+    let status = fetch_status_label(&app).await;
     assert_eq!(
-        status.trim(),
-        "idle",
+        status, "Ready",
         "a restored swipe must leave the game idle, not stuck generating"
     );
 }

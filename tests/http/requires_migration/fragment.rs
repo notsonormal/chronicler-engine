@@ -138,7 +138,10 @@ async fn test_action_handler_accepts_command() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    assert!(body_str.contains("status"));
+    assert!(
+        body_str.is_empty(),
+        "an accepted command answers nothing: {body_str}"
+    );
     assert!(
         wait_settled(&state, 1000).await,
         "the accepted Action's Job should settle"
@@ -166,8 +169,8 @@ async fn test_action_handler_empty_command() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Thinking"),
-        "Expected empty command to trigger continuation: {body_str}"
+        body_str.is_empty(),
+        "Expected empty command to trigger continuation (a dispatched command answers nothing): {body_str}"
     );
     assert!(
         wait_settled(&state, 1000).await,
@@ -236,10 +239,7 @@ async fn test_edit_history_handler_success() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Edited"),
-        "Expected success message: {body_str}"
-    );
+    assert!(body_str.is_empty(), "an edit answers nothing: {body_str}");
 }
 
 #[tokio::test]

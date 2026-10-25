@@ -6,7 +6,7 @@
     <title>Chronicler Engine</title>
     <script src="/assets/htmx.min.js?v=1"></script>
     <script src="/assets/idiomorph-ext.min.js?v=1"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=7" />
+    <link rel="stylesheet" href="/assets/styles.css?v=9" />
     <link rel="stylesheet" href="/assets/worlds.css?v=6" />
     <link rel="stylesheet" href="/assets/games.css?v=4" />
   </head>
@@ -78,7 +78,7 @@
         id="header"
         data-live="games settings llm"
         hx-get="/fragment/header"
-        hx-trigger="load, refresh"
+        hx-trigger="refresh"
         hx-swap="morph:innerHTML"
       ></div>
     </div>
@@ -104,14 +104,14 @@
           aria-label="Story log"
           data-live="story busy worlds"
           hx-get="/fragment/story-log"
-          hx-trigger="load, refresh"
+          hx-trigger="refresh"
           hx-swap="morph:innerHTML"
         ></div>
         <div
           class="visual-sidebar"
           data-live="story worlds"
           hx-get="/fragment/visual-sidebar"
-          hx-trigger="load, refresh"
+          hx-trigger="refresh"
           hx-swap="morph:innerHTML"
         ></div>
       </div>
@@ -120,7 +120,7 @@
         id="options-dock"
         data-live="options busy"
         hx-get="/fragment/options-dock"
-        hx-trigger="load, refresh"
+        hx-trigger="refresh"
         hx-swap="morph:innerHTML"
       ></div>
       <div class="action-area" id="action-area">
@@ -154,8 +154,7 @@
         <form
           id="autoplay-form"
           hx-post="/autoplay"
-          hx-target="#status-display"
-          hx-swap="innerHTML"
+          hx-swap="none"
           hx-sync="this:drop"
           hx-on::after-request="onAutoplayAfterRequest(event)"
         >
@@ -180,20 +179,21 @@
           id="stop-btn"
           hx-post="/status/reset-busy"
           hx-swap="none"
-          hx-on::after-request="chroniclerLive.askNow()"
         >
           <svg class="icon" aria-hidden="true"><use href="#i-x" /></svg> Stop
         </button>
+        <!-- The action area's own state, next to the live status display that it never writes. -->
+        <div class="status thinking" id="action-status"></div>
         <div
           class="status ready"
           id="status-display"
           data-live="busy"
           hx-get="/status/busy"
-          hx-trigger="load, refresh"
+          hx-trigger="refresh"
           hx-swap="morph:innerHTML"
-          hx-on::after-swap="onStatusPoll(this)"
+          hx-on::after-swap="onStatusPoll()"
         >
-          <span class="status ready">Ready</span>
+          <span class="status ready" data-status="idle">Ready</span>
         </div>
       </div>
       <div
@@ -274,10 +274,10 @@
     </main>
 
 
-    <script src="/assets/dashboard-errors.js?v=2"></script>
-    <script src="/assets/dashboard-live.js?v=1"></script>
-    <script src="/assets/dashboard-action-area.js?v=4"></script>
-    <script src="/assets/dashboard-story-log.js?v=3"></script>
+    <script src="/assets/dashboard-errors.js?v=3"></script>
+    <script src="/assets/dashboard-live.js?v=3"></script>
+    <script src="/assets/dashboard-action-area.js?v=5"></script>
+    <script src="/assets/dashboard-story-log.js?v=4"></script>
     <script src="/assets/dashboard-slash-menu.js?v=1"></script>
     <script src="/assets/dashboard-panels.js?v=1"></script>
   </body>

@@ -211,7 +211,7 @@ async fn check_failed_save_restores_entry_and_releases_the_hold(
 // The stub answers the retry route with a 500, so the shipped retry click
 // exercises the recovery path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.5
-async fn check_failed_retry_clears_pending_status_and_re_enables_send(
+async fn check_failed_retry_reports_in_the_story_log_and_re_enables_send(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -227,22 +227,22 @@ async fn check_failed_retry_clears_pending_status_and_re_enables_send(
         wait_for_condition_async(
             Duration::from_secs(5),
             Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#status-display").await.0 },
+            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
         )
         .await,
-        "a failed retry should report in the status display"
+        "a failed retry should report in the story log's error slot"
     );
-    let (_, message, raw) = read_error_disclosure(&page, "#status-display").await;
+    let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
     assert!(
         message.contains("Failed to generate a new swipe"),
-        "the status display should name the failed action, got {message:?}"
+        "the error slot should name the failed action, got {message:?}"
     );
     assert!(
         raw.contains("Stub retry failure"),
         "the server's own text belongs in the disclosure, got {raw:?}"
     );
     assert!(
-        !error_details_open(&page, "#status-display").await,
+        !error_details_open(&page, "#story-log-error").await,
         "the raw error text must not be on screen until the client opens Details"
     );
 
@@ -531,22 +531,22 @@ async fn check_failed_retrigger_posts_to_retrigger_and_recovers(
         wait_for_condition_async(
             Duration::from_secs(5),
             Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#status-display").await.0 },
+            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
         )
         .await,
-        "a failed retrigger should report in the status display"
+        "a failed retrigger should report in the story log's error slot"
     );
-    let (_, message, raw) = read_error_disclosure(&page, "#status-display").await;
+    let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
     assert!(
         message.contains("Failed to retrigger the event"),
-        "the status display should name the failed action, got {message:?}"
+        "the error slot should name the failed action, got {message:?}"
     );
     assert!(
         raw.contains("Stub retrigger failure"),
         "the server's own text belongs in the disclosure, got {raw:?}"
     );
     assert!(
-        !error_details_open(&page, "#status-display").await,
+        !error_details_open(&page, "#story-log-error").await,
         "the raw error text must not be on screen until the client opens Details"
     );
 
@@ -1003,7 +1003,7 @@ async fn run_story_log_edit_failure_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_retry_clears_pending_status_and_re_enables_send,
+            check_failed_retry_reports_in_the_story_log_and_re_enables_send,
         )
         .await;
     runner

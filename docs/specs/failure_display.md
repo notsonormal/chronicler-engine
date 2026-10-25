@@ -35,7 +35,7 @@ And its Details disclosure lists the Trigger role with that raw failure text
 And the Connections sub-tab's warning marker stays empty
 ```
 
-#### Scenario 38.6: The header poll keeps the Settings role health current
+#### Scenario 38.6: The header load keeps the Settings role health current
 
 ```gherkin
 Given a client showing the dashboard, whose Settings panel rendered a health cell per role row
@@ -52,7 +52,7 @@ And the marker's swap is empty
 
 ### Failed requests
 
-#### Scenario 38.2: A failed poll answers non-2xx and asks the client to change nothing
+#### Scenario 38.2: A failed load answers non-2xx and asks the client to change nothing
 
 ```gherkin
 Given an active Game whose visual sidebar cannot render
@@ -61,7 +61,7 @@ Then the response is non-2xx
 And the response asks the client to swap nothing
 ```
 
-#### Scenario 38.4: A failed user action is not a failed poll
+#### Scenario 38.4: A failed user action is not a failed load
 
 ```gherkin
 Given an active Game whose posture auto-save cannot be stored
@@ -78,7 +78,7 @@ And the response does not ask the client to swap nothing
 ```gherkin
 Given a Game whose last generation failed with a raw transport message
 When the client GET /status/busy
-Then the response carries one short user-facing line
+Then the response carries data-status "failed" and one short user-facing line
 And the raw transport message is reachable only inside the response's disclosure
 ```
 

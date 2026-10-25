@@ -136,6 +136,24 @@ function reportSlotFailure(slot, xhr) {
   slot.dataset.unreachable = "true";
 }
 
+// A write that the busy Game refuses answers 200 with the wait status, so the
+// answer is not an error to htmx. It writes nothing, and the refused action
+// says so in its own slot.
+const BUSY_REFUSAL_DETAIL = "Still thinking...";
+
+function isBusyAnswer(body) {
+  return typeof body === "string" && body.includes('class="status wait"');
+}
+
+function answeredBusy(event) {
+  const xhr = event && event.detail ? event.detail.xhr : null;
+  return !!xhr && isBusyAnswer(xhr.responseText);
+}
+
+function reportBusyRefusal(slot, refusedWhat) {
+  renderInlineError(slot, "The Game is busy, so " + refusedWhat + ".", BUSY_REFUSAL_DETAIL);
+}
+
 function throwServerDetail(response) {
   return response.text().then((body) => {
     throw new Error(
@@ -169,6 +187,8 @@ document.body.addEventListener("htmx:sendError", function (evt) {
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   if (!evt.detail.successful) return;
   clearUnreachable();
+  // The refused action reports its own message in this slot.
+  if (answeredBusy(evt)) return;
   clearInlineError(inlineErrorSlotFor(evt.detail.elt));
   clearUnreachableSlots();
 });

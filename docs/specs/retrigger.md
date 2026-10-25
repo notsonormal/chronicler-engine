@@ -14,8 +14,9 @@ And the last Message is a non-event Narration (the main narration)
 And the story log holds N Messages
 And a narrator backend that returns a non-empty continuation for the trigger prompt
 When the client sends POST /retrigger
+Then the response is 200 with an empty body
 And the Game is no longer busy
-Then the story log holds N+1 Messages (the original history is preserved; the new event narration is appended, not a replacement)
+And the story log holds N+1 Messages (the original history is preserved; the new event narration is appended, not a replacement)
 And the new Message is an event Narration (it carries an event header)
 And the generation status is Idle
 ```

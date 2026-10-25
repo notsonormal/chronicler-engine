@@ -3,11 +3,11 @@
 
 use axum::{body::Body, http::StatusCode, response::Response};
 
-/// `dashboard-action-area.js` keys the wait state on the `.status.wait` class in this
-/// markup; the stub server answers a refused Action with it.
+/// The answer of a write that the busy Game refuses. `dashboard-errors.js` keys the
+/// refusal on the `status wait` class in this markup and reports it in the slot of
+/// the refused action; the markup itself is never shown. The stub server answers a
+/// refused Action with it.
 pub const BUSY_STATUS: &str = "<span class=\"status wait\">Still thinking...</span>";
-
-pub const THINKING_STATUS: &str = "<span class=\"status thinking\">Thinking...</span>";
 
 #[allow(clippy::expect_used)]
 fn status_response(status: StatusCode, body: impl Into<String>) -> Response<Body> {

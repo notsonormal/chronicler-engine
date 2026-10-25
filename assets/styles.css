@@ -690,20 +690,26 @@ body {
     color: var(--color-accent-yellow);
 }
 
-.status.wait {
-    color: var(--color-text-primary);
-}
-
 .status.error {
     color: var(--color-accent-red);
 }
 
 /* The action area must not resize as the status text changes. */
-#status-display {
+#status-display,
+#action-status {
     flex: 0 0 240px;
     width: 240px;
     min-width: 0;
     overflow: hidden;
+}
+
+/* The action area's own state takes the status column while it shows. */
+#action-status:empty {
+    display: none;
+}
+
+.action-area:has(#action-status:not(:empty)) #status-display {
+    display: none;
 }
 
 #status-display .error-disclosure {
@@ -1707,7 +1713,8 @@ input[type="checkbox"]:focus {
         margin-left: 0;
     }
 
-    #status-display {
+    #status-display,
+    #action-status {
         flex: 0 0 auto;
         width: auto;
     }

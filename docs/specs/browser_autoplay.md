@@ -21,16 +21,16 @@ And #status-display shows "Autoplay: cycle 1/10 Generating narration..." at once
 #### Scenario 42.2: The status display shows the progress of the run and the action area offers only Stop
 
 ```gherkin
-Given the status poll answers "autoplay 2/10 narrating"
+Given the status display loads the label "Autoplay: cycle 2/10 Generating narration..."
 Then #status-display shows "Autoplay: cycle 2/10 Generating narration..."
 And #stop-btn is visible
 And the command input, the Send button and #autoplay-btn are not visible
 
-When the status poll answers "autoplay 2/10"
+When the status display loads the label "Autoplay: cycle 2/10"
 Then #status-display shows "Autoplay: cycle 2/10"
 And #stop-btn is visible
 
-When the status poll answers "idle"
+When the status display loads the label "Ready"
 Then #status-display shows "Ready"
 And #stop-btn is not visible
 And the command input, the Send button and #autoplay-btn are visible and enabled
@@ -80,3 +80,25 @@ When the client presses the Delete control and confirms
 Then the story log's error slot shows a line that names the busy Game
 And the story log still shows every entry it showed
 ```
+
+#### Scenario 42.6: A start that the busy Game refuses reports in the Autoplay form's slot
+
+```gherkin
+Given a Job or a run holds the Game, so POST /autoplay answers "Still thinking..."
+When the client presses #autoplay-btn
+Then the Autoplay form's own inline error slot says that the Game is busy
+And its Details disclosure holds the engine's answer
+And the command input and #autoplay-btn are enabled
+And #action-status is empty
+```
+
+#### Scenario 42.7: A retry that the busy Game refuses reports in the story log's error slot
+
+```gherkin
+Given a Job or a run holds the Game, so POST /swipe/new answers "Still thinking..."
+When the client presses the Retry control
+Then the story log's error slot shows a line that names the busy Game
+And #action-status is empty
+And the command input and #submit-btn are enabled
+```
+

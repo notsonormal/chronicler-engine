@@ -7,6 +7,7 @@ use axum::{extract::State, response::Html, response::Response, Json};
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
 use crate::adapters::driving::http::utils::fragment::render_fragment;
+use crate::adapters::driving::http::utils::response::html_escape;
 use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
 use crate::application::generation::gate::Busy;
@@ -84,15 +85,15 @@ pub async fn busy_status_handler(
     current: Option<CurrentGame>,
 ) -> Html<String> {
     let Some(CurrentGame(game_id)) = current else {
-        return Html("idle".to_string());
+        return Html(idle_answer());
     };
     match state.game_view_query.status(game_id) {
         Ok(Status::Busy(busy)) => Html(busy_answer(&busy)),
-        Ok(Status::Failed(failure)) => Html(failure_disclosure(&failure)),
-        Ok(Status::Idle) => Html("idle".to_string()),
+        Ok(Status::Failed(failure)) => Html(failure_answer(&failure)),
+        Ok(Status::Idle) => Html(idle_answer()),
         Err(e) => {
             tracing::error!("busy_status_handler: {e}");
-            Html(failure_disclosure(&GenerationFailure::unreadable(
+            Html(failure_answer(&GenerationFailure::unreadable(
                 Record::Game,
                 &e,
             )))
@@ -100,26 +101,41 @@ pub async fn busy_status_handler(
     }
 }
 
-fn busy_answer(busy: &Busy) -> String {
+pub fn idle_answer() -> String {
+    status_element("idle", "ready", "Ready")
+}
+
+/// The status display's answer: one element. `data-status` holds the machine
+/// state that the action area reads, and the label is the text the display shows.
+fn status_element(state: &str, class: &str, label: &str) -> String {
+    format!(
+        "<span class=\"status {class}\" data-status=\"{state}\">{}</span>",
+        html_escape(label)
+    )
+}
+
+pub fn busy_answer(busy: &Busy) -> String {
     match busy {
-        Busy::Job(step) => step.as_endpoint_str().to_string(),
+        Busy::Job(step) => status_element("thinking", "thinking", step.label()),
         Busy::Autoplay { progress, step } => {
-            let mut answer = format!("autoplay {}/{}", progress.cycle(), progress.budget);
+            let mut label = format!("Autoplay: cycle {}/{}", progress.cycle(), progress.budget);
             if let Some(step) = step {
-                answer.push(' ');
-                answer.push_str(step.as_endpoint_str());
+                label.push(' ');
+                label.push_str(step.label());
             }
-            answer
+            status_element("autoplay", "thinking autoplay", &label)
         }
     }
 }
 
-fn failure_disclosure(failure: &GenerationFailure) -> String {
-    error_disclosure(
+/// The failure line stays a server-rendered error disclosure.
+pub fn failure_answer(failure: &GenerationFailure) -> String {
+    let disclosure = error_disclosure(
         "status-error-popover",
         &failure.line(),
         &raw_error_detail(&failure.raw),
-    )
+    );
+    format!("<div data-status=\"failed\">{disclosure}</div>")
 }
 
 pub async fn reset_busy_handler(

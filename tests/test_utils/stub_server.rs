@@ -17,22 +17,24 @@ use axum::Router;
 use chrono::{TimeZone, Utc};
 
 use chronicler_engine::adapters::driving::http::utils::response::BUSY_STATUS;
-use chronicler_engine::adapters::driving::http::builders::headers::{
-    add_status_swap_headers, header_fragment_html,
-};
+use chronicler_engine::adapters::driving::http::builders::headers::header_fragment_html;
 use chronicler_engine::adapters::driving::http::builders::presets::preset_edit_form_html;
 use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate,
 };
-use chronicler_engine::adapters::driving::http::utils::error::{
-    error_disclosure, raw_error_detail, render_error,
+use chronicler_engine::adapters::driving::http::layout::handlers::{
+    busy_answer, failure_answer, idle_answer,
 };
+use chronicler_engine::adapters::driving::http::utils::error::render_error;
+use chronicler_engine::application::generation::gate::{AutoplayProgress, Busy};
 use chronicler_engine::application::games::view_query::RoleHealth;
 use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::llm_message::LlmMessage;
 use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
 use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection, NarratorMode};
-use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
+use chronicler_engine::domain::model::state::generation_status::{
+    GenerationFailure, GenerationFailureKind, Step,
+};
 use chronicler_engine::domain::model::state::message_types::{StoryRow, MessageType};
 use chronicler_engine::test_support::default_story_row;
 
@@ -208,15 +210,22 @@ pub enum StubActionOutcome {
     Refused,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum StubStatus {
-    /// The engine is idle; the poll answers "idle".
+    /// The engine is idle; the status display answers Ready.
     #[default]
     Idle,
-    /// The engine is generating; the poll answers the step name.
-    Step(String),
-    /// A failed generation; the poll answers the error fragment, clamped to
-    /// the sentence the failure kind names, over this raw text.
+    /// A Job runs at this step; the status display answers the label of the step.
+    Step(Step),
+    /// An Autoplay run holds the Game: the cycle, the budget and the step of the
+    /// run's Job, or none between two Jobs.
+    Autoplay {
+        done: u32,
+        budget: u32,
+        step: Option<Step>,
+    },
+    /// A failed generation; the status display answers the error fragment,
+    /// clamped to the sentence the failure kind names, over this raw text.
     Error(GenerationFailureKind, String),
 }
 
@@ -719,7 +728,7 @@ pub struct StubStatusHandle {
 }
 
 impl StubStatusHandle {
-    /// The status display polls every 5s, so a change lands on a later cycle.
+    /// Moves the busy number, so the status display loads on the next ask.
     pub fn set(&self, status: StubStatus) {
         *self.state.status.lock().expect("stub status lock poisoned") = status;
         self.state.bump(&["busy"]);
@@ -836,15 +845,14 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route("/worlds/:key/delete", post(delete_world))
         .route("/history/delete", post(delete_message))
-        .route(
-            "/swipe/new",
-            post(|| async { client_failure("Stub retry failure") }),
-        )
+        .route("/swipe/new", post(retry_swipe))
+        .route("/autoplay", post(start_autoplay))
         .route("/retrigger", post(record_retrigger))
         // The real switch makes another Swipe active; the stub scripts only the two
         // log shapes and the dock drop a switch test observes.
         .route("/message/:id/swipe/:index", post(switch_swipe))
         .route("/status/busy", get(status_busy))
+        .route("/status/reset-busy", post(reset_busy))
         .route("/changes", get(changes_answer))
         .route("/fragment/header", get(header_fragment))
         .route("/fragment/story-log", get(story_log_fragment))
@@ -1028,6 +1036,13 @@ async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     Html(story_log_html(&restored_swipe_entries())).into_response()
 }
 
+/// The real Stop answers a plain word and moves the busy state.
+async fn reset_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
+    *state.status.lock().expect("stub status lock poisoned") = StubStatus::Idle;
+    state.bump(&["busy"]);
+    (StatusCode::OK, "reset").into_response()
+}
+
 async fn changes_answer(State(state): State<Arc<StubState>>) -> axum::Json<serde_json::Value> {
     let answer = state
         .changes
@@ -1073,37 +1088,34 @@ async fn action_check(
             .into_response();
     }
     match state.action_outcome {
-        StubActionOutcome::Pending => {
-            let mut response = (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                r#"<span class="status thinking">Thinking...</span>"#,
-            )
-                .into_response();
-            add_status_swap_headers(&mut response);
-            response
-        }
-        StubActionOutcome::Refused => {
-            let mut response = (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                BUSY_STATUS,
-            )
-                .into_response();
-            add_status_swap_headers(&mut response);
-            response
-        }
-        StubActionOutcome::Error => {
-            let mut response = (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                render_error(&format!("Failed to process action: {command}")),
-            )
-                .into_response();
-            add_status_swap_headers(&mut response);
-            response
-        }
+        StubActionOutcome::Pending => dispatched(&state),
+        StubActionOutcome::Refused => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            BUSY_STATUS,
+        )
+            .into_response(),
+        StubActionOutcome::Error => action_failure(command),
     }
+}
+
+/// The engine answers nothing for a command it took, and its Job holds the
+/// Game, so the busy state moves.
+fn dispatched(state: &StubState) -> Response<Body> {
+    *state.status.lock().expect("stub status lock poisoned") = StubStatus::Step(Step::Narrating);
+    state.bump(&["busy"]);
+    (StatusCode::OK, "").into_response()
+}
+
+/// The 500 a failing engine action produces: the engine's own error render
+/// naming the command, so the disclosure's raw text is the server's response.
+fn action_failure(command: &str) -> Response<Body> {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        render_error(&format!("Failed to process action: {command}")),
+    )
+        .into_response()
 }
 
 async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
@@ -1113,13 +1125,17 @@ async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
         .expect("stub status lock poisoned")
         .clone();
     let body = match status {
-        StubStatus::Idle => "idle".to_string(),
-        StubStatus::Step(step) => step,
-        StubStatus::Error(kind, raw) => error_disclosure(
-            "status-error-popover",
-            &kind.line(&raw),
-            &raw_error_detail(&raw),
-        ),
+        StubStatus::Idle => idle_answer(),
+        StubStatus::Step(step) => busy_answer(&Busy::Job(step)),
+        StubStatus::Autoplay { done, budget, step } => busy_answer(&Busy::Autoplay {
+            progress: AutoplayProgress { done, budget },
+            step,
+        }),
+        StubStatus::Error(kind, raw) => failure_answer(&GenerationFailure {
+            kind,
+            named: raw.clone(),
+            raw,
+        }),
     };
     (
         StatusCode::OK,
@@ -1129,32 +1145,23 @@ async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
         .into_response()
 }
 
-/// The stub consumes the engine's `add_status_swap_headers`, so the canned shape
-/// cannot drift from the real route's. An error outcome answers the 500 a failing
-/// engine action produces, so a test can drive a refused confirm.
+/// An error outcome answers the 500 a failing engine action produces, so a test
+/// can drive a refused confirm. A refused outcome answers the wait status.
 async fn action_confirm(
     State(state): State<Arc<StubState>>,
     Form(form): Form<HashMap<String, String>>,
 ) -> Response<Body> {
-    if state.action_outcome == StubActionOutcome::Error {
-        let command = form.get("command").map(String::as_str).unwrap_or_default();
-        let mut response = (
-            StatusCode::INTERNAL_SERVER_ERROR,
+    let command = form.get("command").map(String::as_str).unwrap_or_default();
+    match state.action_outcome {
+        StubActionOutcome::Error => action_failure(command),
+        StubActionOutcome::Refused => (
+            StatusCode::OK,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            render_error(&format!("Failed to process action: {command}")),
+            BUSY_STATUS,
         )
-            .into_response();
-        add_status_swap_headers(&mut response);
-        return response;
+            .into_response(),
+        StubActionOutcome::Pending => dispatched(&state),
     }
-    let mut response = (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        r#"<span class="status thinking">Thinking...</span>"#,
-    )
-        .into_response();
-    add_status_swap_headers(&mut response);
-    response
 }
 
 async fn failing_posture_save() -> Response<Body> {
@@ -1164,6 +1171,41 @@ async fn failing_posture_save() -> Response<Body> {
         render_error("Failed to save posture"),
     )
         .into_response()
+}
+
+/// The retry route: a refusal while the Game is busy, else the 500 the retry
+/// failure scenario drives.
+async fn retry_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
+    if state
+        .story_writes_refused_as_busy
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+    }
+    client_failure("Stub retry failure")
+}
+
+/// The Autoplay start answers by the action outcome: it takes the budget and the
+/// run holds the Game, or the busy Game refuses it, or it fails.
+async fn start_autoplay(State(state): State<Arc<StubState>>) -> Response<Body> {
+    match state.action_outcome {
+        StubActionOutcome::Pending => {
+            *state.status.lock().expect("stub status lock poisoned") = StubStatus::Autoplay {
+                done: 0,
+                budget: 10,
+                step: Some(Step::Narrating),
+            };
+            state.bump(&["busy"]);
+            (StatusCode::OK, "").into_response()
+        }
+        StubActionOutcome::Refused => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            BUSY_STATUS,
+        )
+            .into_response(),
+        StubActionOutcome::Error => client_failure("Stub autoplay failure"),
+    }
 }
 
 async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body> {

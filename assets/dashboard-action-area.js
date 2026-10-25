@@ -1,19 +1,54 @@
-// The action area: the command form, its Checking/Generating state machine, the status display and the live-region announcements.
+// The action area: the command form, its Checking/Generating state machine, the reading of the status display and the live-region announcements.
 
-// The DOM carries every action-area state except an in-flight check.
+// The DOM carries every action-area state except an in-flight check and a send
+// that the status display has not shown yet.
 let checkInFlight = false;
 
-function statusShows(selector) {
+// The action area's own state between an accepted send and the first load of the
+// status display that follows it. The status display is a live region: the
+// action area reads it and never writes it. This state shows in #action-status.
+let sendPending = false;
+let pendingLoadStarted = false;
+
+function renderActionStatus() {
+  const own = document.getElementById("action-status");
+  if (!own) return;
+  own.innerHTML = sendPending
+    ? '<span class="status thinking">Thinking...</span>'
+    : "";
+}
+
+function beginPending() {
+  sendPending = true;
+  pendingLoadStarted = false;
+  renderActionStatus();
+}
+
+function endPending() {
+  sendPending = false;
+  pendingLoadStarted = false;
+  renderActionStatus();
+  syncActionState();
+}
+
+// The machine state of the status display: `data-status` of the answer.
+function statusShows(state) {
   const statusDisplay = document.getElementById("status-display");
-  return !!(statusDisplay && statusDisplay.querySelector(selector));
+  return !!(
+    statusDisplay && statusDisplay.querySelector('[data-status="' + state + '"]')
+  );
 }
 
 function statusIsGenerating() {
-  return statusShows(".status.thinking");
+  return statusShows("thinking");
 }
 
 function statusIsAutoplay() {
-  return statusShows(".status.autoplay");
+  return statusShows("autoplay");
+}
+
+function actionIsGenerating() {
+  return sendPending || statusIsGenerating();
 }
 
 function previewIsOpen() {
@@ -24,7 +59,7 @@ function previewIsOpen() {
 function deriveActionState() {
   if (checkInFlight) return "checking";
   if (statusIsAutoplay()) return "autoplay";
-  if (statusIsGenerating()) return "generating";
+  if (actionIsGenerating()) return "generating";
   if (previewIsOpen()) return "preview";
   return "idle";
 }
@@ -96,27 +131,23 @@ function syncActionState() {
   previewWasOpen = open;
 }
 
-function setStatus(label, statusClass) {
-  const statusDisplay = document.getElementById("status-display");
-  if (statusDisplay) {
-    statusDisplay.innerHTML =
-      '<span class="status ' + statusClass + '">' + label + "</span>";
-  }
-}
+// The container's own class colours whatever it holds, and the failure line is a
+// server-rendered disclosure, so the state is read back off the answer's
+// `data-status` instead of being remembered. Only the state classes are
+// touched, so htmx's own transient classes survive.
+const STATUS_STATE_CLASSES = ["ready", "thinking", "error"];
 
-// The container's own class colours whatever it holds, and a server-rendered
-// error disclosure replaces the inner span without touching it, so the state is
-// read back off the content instead of being remembered. Only the state classes
-// are touched, so htmx's own transient classes survive.
-const STATUS_STATE_CLASSES = ["ready", "thinking", "wait", "error"];
+const STATUS_CLASS_OF_STATE = {
+  idle: "ready",
+  thinking: "thinking",
+  autoplay: "thinking",
+  failed: "error",
+};
 
 function statusDisplayState(statusDisplay) {
-  if (statusDisplay.querySelector(".error-disclosure, .status.error")) {
-    return "error";
-  }
-  if (statusIsGenerating()) return "thinking";
-  if (statusDisplay.querySelector(".status.wait")) return "wait";
-  return "ready";
+  const answer = statusDisplay.querySelector("[data-status]");
+  const state = answer ? answer.dataset.status : "idle";
+  return STATUS_CLASS_OF_STATE[state] || "ready";
 }
 
 function syncStatusClass() {
@@ -124,13 +155,6 @@ function syncStatusClass() {
   if (!statusDisplay) return;
   statusDisplay.classList.remove(...STATUS_STATE_CLASSES);
   statusDisplay.classList.add(statusDisplayState(statusDisplay));
-}
-
-// A 200 answer can still refuse the command: the engine reports a generation
-// already in flight as the wait state, and that command was never taken.
-function commandWasRefused() {
-  const statusDisplay = document.getElementById("status-display");
-  return !!statusDisplay && statusDisplayState(statusDisplay) === "wait";
 }
 
 function writeLiveRegion(id, text) {
@@ -230,69 +254,31 @@ function announceOptions() {
 }
 
 function updateToThinking() {
-  setStatus("Thinking...", "thinking");
-  applyStatusDisplay();
+  beginPending();
+  syncActionState();
 }
 
-const PHASE_LABELS = {
-  narrating: "Generating narration...",
-  quantifying: "Quantifying...",
-  "generating-event": "Generating event...",
-  options: "Generating options...",
-};
-
-const AUTOPLAY_ANSWER = /^autoplay (\d+)\/(\d+)(?: (\S+))?$/;
-
-function autoplayLabel(match) {
-  const progress = "Autoplay: cycle " + match[1] + "/" + match[2];
-  const step = PHASE_LABELS[match[3]];
-  return step ? progress + " " + step : progress;
-}
-
-// The morph swap reads the elements of an answer only, so a bare-text answer
-// ("idle", a step name) would empty the display. Until /status/busy renders its
-// own element (the status display rewrite), the bare text gets one here.
-document.body.addEventListener("htmx:beforeSwap", function (evt) {
-  const target = evt.detail && evt.detail.target;
-  if (!target || target.id !== "status-display" || evt.detail.elt !== target) {
-    return;
-  }
-  const body = evt.detail.serverResponse;
-  if (body && !body.trimStart().startsWith("<")) {
-    evt.detail.serverResponse =
-      '<span class="status-answer">' + escapeHtml(body) + "</span>";
+// The status display loads after each send the engine took. The first load that
+// starts after the send ends the action area's own state, because that load
+// reads the state the send caused.
+document.body.addEventListener("htmx:beforeRequest", function (evt) {
+  const target = evt.detail && evt.detail.elt;
+  if (sendPending && target && target.id === "status-display") {
+    pendingLoadStarted = true;
   }
 });
 
-function onAutoplayAfterRequest(event) {
-  if (requestSucceeded(event)) chroniclerLive.askNow();
-}
+// A write that the busy Game refuses answers 200 with the wait status. It
+// swaps nothing, and the refused action reports in its own slot.
+document.body.addEventListener("htmx:beforeSwap", function (evt) {
+  const xhr = evt.detail && evt.detail.xhr;
+  if (xhr && isBusyAnswer(xhr.responseText)) evt.detail.shouldSwap = false;
+});
 
-// /status/busy returns a bare phase name, an autoplay progress answer or
-// "idle" as plain text, or an error fragment, which stays in place for
-// applyStatusDisplay.
-function onStatusPoll(el) {
-  const text = el.textContent.trim();
-  const run = AUTOPLAY_ANSWER.exec(text);
-  if (text === "idle") {
-    setStatus("Ready", "ready");
-  } else if (run) {
-    setStatus(autoplayLabel(run), "thinking autoplay");
-  } else if (PHASE_LABELS[text]) {
-    setStatus(PHASE_LABELS[text], "thinking");
-  }
-  applyStatusDisplay();
-}
-
-// The status poll replaces this disclosure on its next cycle.
-function showStatusError(message, rawText) {
-  const statusDisplay = document.getElementById("status-display");
-  if (!statusDisplay) return;
-  statusDisplay.innerHTML = errorDisclosureHtml(
-    "status-error-popover",
-    message,
-    rawText
-  );
+// The status display answers one element whose `data-status` holds the state:
+// the action area reads it and writes nothing into the region.
+function onStatusPoll() {
+  if (sendPending && pendingLoadStarted) endPending();
   applyStatusDisplay();
 }
 
@@ -308,13 +294,6 @@ document.body.addEventListener("htmx:afterSwap", function (evt) {
     announceOptions();
   }
 });
-
-// Raw-fetch paths get no htmx swap, so a failure would otherwise leave
-// "Thinking..." with Send stuck as a generating indicator.
-function resetStatusToReady() {
-  setStatus("Ready", "ready");
-  applyStatusDisplay();
-}
 
 function onCommandBeforeRequest() {
   checkInFlight = true;
@@ -332,24 +311,49 @@ function clearCommandInput() {
   if (form) form.reset();
 }
 
+function commandFormSlot() {
+  return document.querySelector('#command-form [data-error-slot="action"]');
+}
+
 function onCommandAfterRequest(event) {
   checkInFlight = false;
-  // The preview keeps the flagged command for editing, and a dispatched
-  // command has been consumed, so clear the input. A refused one was not.
-  if (requestSucceeded(event) && !previewIsOpen() && !commandWasRefused()) {
+  if (answeredBusy(event)) {
+    // The engine did not take the command, so the input keeps it.
+    reportBusyRefusal(commandFormSlot(), "the command was not sent");
+  } else if (requestSucceeded(event) && !previewIsOpen()) {
+    // The preview keeps the flagged command for editing, and a dispatched
+    // command has been consumed, so clear the input.
     clearCommandInput();
+    beginPending();
   }
   syncActionState();
 }
 
 // Both of the preview's send controls post a command the engine consumes.
 function onPreviewSendAfterRequest(event) {
-  if (requestSucceeded(event)) {
+  if (answeredBusy(event)) {
+    reportBusyRefusal(commandFormSlot(), "the command was not sent");
+  } else if (requestSucceeded(event)) {
     clearCommandInput();
+    beginPending();
   } else {
     reportConfirmFailure(event);
   }
   closeActionPreview();
+}
+
+// The Autoplay start takes the budget and answers nothing. A refusal reports in
+// the form's own slot, and the run shows in the status display.
+function onAutoplayAfterRequest(event) {
+  if (answeredBusy(event)) {
+    reportBusyRefusal(
+      document.querySelector('#autoplay-form [data-error-slot="autoplay"]'),
+      "the run did not start",
+    );
+  } else if (requestSucceeded(event)) {
+    beginPending();
+    syncActionState();
+  }
 }
 
 // A confirm the engine never took reports on the command form's own slot: the
@@ -357,7 +361,7 @@ function onPreviewSendAfterRequest(event) {
 // request's sendError after this event, on a preview that is already gone.
 function reportConfirmFailure(event) {
   reportSlotFailure(
-    document.querySelector('#command-form [data-error-slot="action"]'),
+    commandFormSlot(),
     event && event.detail ? event.detail.xhr : null,
   );
 }
@@ -371,8 +375,8 @@ function closeActionPreview() {
 function useOption(btn) {
   const input = commandInput();
   // The input is disabled only during a text check, so a generation in
-  // flight needs the explicit statusIsGenerating() guard.
-  if (!input || input.disabled || statusIsGenerating()) return;
+  // flight needs the explicit actionIsGenerating() guard.
+  if (!input || input.disabled || actionIsGenerating()) return;
   input.value = btn.textContent;
   document.getElementById("command-form").requestSubmit();
 }

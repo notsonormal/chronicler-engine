@@ -19,6 +19,23 @@ pub async fn response_body(resp: axum::response::Response<Body>) -> String {
     String::from_utf8_lossy(&bytes).to_string()
 }
 
+/// An action that went through answers 200 with no body and no header that
+/// steers the browser: the data reaches the screen through the change numbers.
+pub async fn assert_answers_nothing(resp: axum::response::Response<Body>) {
+    assert_eq!(resp.status(), http::StatusCode::OK);
+    for name in ["HX-Retarget", "HX-Reswap", "HX-Refresh"] {
+        assert!(
+            resp.headers().get(name).is_none(),
+            "a successful action must carry no {name} header"
+        );
+    }
+    let body = response_body(resp).await;
+    assert!(
+        body.is_empty(),
+        "a successful action answers nothing: {body}"
+    );
+}
+
 pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
@@ -30,6 +47,22 @@ pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
 /// disclosure.
 pub async fn fetch_busy_status(app: &axum::Router) -> String {
     fetch_body(app, "/status/busy").await
+}
+
+/// The label the status display shows: the text of the `/status/busy` answer.
+pub async fn fetch_status_label(app: &axum::Router) -> String {
+    let body = fetch_busy_status(app).await;
+    let mut label = String::new();
+    let mut in_tag = false;
+    for ch in body.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => label.push(ch),
+            _ => {}
+        }
+    }
+    label.trim().to_string()
 }
 
 pub async fn post_form(

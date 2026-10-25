@@ -18,7 +18,8 @@ use crate::support::http_assertions::{
 };
 use crate::support::http_fixtures::{append_narrations, story_of};
 use crate::support::http_requests::{
-    fetch_body, fetch_busy_status, post_action, post_empty, post_form, response_body, wait_settled,
+    fetch_status_label, assert_answers_nothing, fetch_body, post_action, post_empty, post_form,
+    response_body, wait_settled,
 };
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
@@ -216,7 +217,7 @@ async fn test_delete_removes_entry_from_fragment_http() {
     );
 
     let resp = post_empty(&app, "/history/delete").await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_answers_nothing(resp).await;
 
     let after = fetch_body(&app, "/fragment/story-log").await;
     let after_count = after.matches("class=\"log-entry").count();
@@ -418,8 +419,8 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
     );
 
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "quantifying",
+        fetch_status_label(&app).await,
+        "Quantifying...",
         "the status names the step the held call runs in"
     );
     let log = fetch_body(&app, "/fragment/story-log").await;
@@ -482,5 +483,33 @@ async fn test_the_story_log_offers_retrigger_on_an_impersonate_input() {
             .count(),
         1,
         "only the last .log-entry offers Retrigger"
+    );
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.15
+#[tokio::test]
+async fn test_edit_answers_nothing_and_the_log_shows_the_new_text_http() {
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().turn("You examine the room.")))
+        .build_with_state();
+    let _ = post_action(&app, "examine room").await;
+    assert!(wait_settled(&state, 1000).await, "narration should persist");
+    let last = story_of(&state)
+        .last()
+        .expect("the Action wrote a Narration")
+        .id;
+
+    let resp = post_form(
+        &app,
+        &format!("/history/{last}"),
+        "text=The+room+is+silent.",
+    )
+    .await;
+    assert_answers_nothing(resp).await;
+
+    let log = fetch_body(&app, "/fragment/story-log").await;
+    assert!(
+        log.contains("The room is silent."),
+        "the story log shows the edited text: {log}"
     );
 }

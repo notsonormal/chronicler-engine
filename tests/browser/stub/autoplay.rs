@@ -2,12 +2,13 @@
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::state::generation_status::Step;
+
 use super::support::{poll_now, StubRunner};
 use super::*;
 
-async fn poll_answer(page: &playwright_rs::Page, stub: &StubServer, answer: &str) {
-    stub.status_handle()
-        .set(StubStatus::Step(answer.to_string()));
+async fn poll_answer(page: &playwright_rs::Page, stub: &StubServer, status: StubStatus) {
+    stub.status_handle().set(status);
     poll_now(page, "#status-display").await;
 }
 
@@ -26,7 +27,16 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
-    poll_answer(&page, &stub, "autoplay 2/10 narrating").await;
+    poll_answer(
+        &page,
+        &stub,
+        StubStatus::Autoplay {
+            done: 1,
+            budget: 10,
+            step: Some(Step::Narrating),
+        },
+    )
+    .await;
     assert_eq!(
         status_display_text(&page).await,
         "Autoplay: cycle 2/10 Generating narration..."
@@ -42,14 +52,23 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
         );
     }
 
-    poll_answer(&page, &stub, "autoplay 2/10").await;
+    poll_answer(
+        &page,
+        &stub,
+        StubStatus::Autoplay {
+            done: 1,
+            budget: 10,
+            step: None,
+        },
+    )
+    .await;
     assert_eq!(status_display_text(&page).await, "Autoplay: cycle 2/10");
     assert!(
         is_visible(&page, "#stop-btn").await,
         "Stop shows between two Jobs of the run"
     );
 
-    poll_answer(&page, &stub, "idle").await;
+    poll_answer(&page, &stub, StubStatus::Idle).await;
     assert_eq!(status_display_text(&page).await, "Ready");
     assert!(
         !is_visible(&page, "#stop-btn").await,
@@ -221,6 +240,92 @@ async fn check_a_delete_refused_for_a_held_game_shows_the_busy_message(
     );
 }
 
+// [docs/specs/browser_autoplay.md] SCENARIO: 42.6
+async fn check_a_start_refused_for_a_busy_game_reports_in_the_autoplay_form_slot(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    page.locator("#autoplay-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    let slot = r#"#autoplay-form [data-error-slot="autoplay"]"#;
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(50),
+            || async { read_error_disclosure(&page, slot).await.0 },
+        )
+        .await,
+        "the refused start reports in the Autoplay form's own slot"
+    );
+    let (_, line, detail) = read_error_disclosure(&page, slot).await;
+    assert!(
+        line.contains("busy"),
+        "the line names the busy Game, got {line:?}"
+    );
+    assert!(
+        detail.contains("Still thinking..."),
+        "the details carry the engine's answer, got {detail:?}"
+    );
+    for selector in ["#command-input", "#autoplay-btn"] {
+        assert!(
+            is_enabled(&page, selector).await,
+            "{selector} stays enabled after a refused start"
+        );
+    }
+    assert_eq!(
+        own_state_text(&page).await,
+        "",
+        "a refusal leaves no pending state"
+    );
+}
+
+async fn own_state_text(page: &playwright_rs::Page) -> String {
+    page.evaluate::<(), String>(
+        "(() => document.getElementById('action-status').textContent.trim())()",
+        None,
+    )
+    .await
+    .unwrap()
+}
+
+// [docs/specs/browser_autoplay.md] SCENARIO: 42.7
+async fn check_a_retry_refused_for_a_busy_game_reports_in_the_story_log_slot(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    stub.save_handle().set_story_writes_refused_as_busy(true);
+    page.locator(".swipe-btn[title='Retry']")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    let (line, detail) = wait_for_busy_line_in_the_story_log_slot(&page).await;
+    assert!(
+        line.contains("busy"),
+        "the line names the busy Game, got {line:?}"
+    );
+    assert!(
+        detail.contains("Still thinking..."),
+        "the details carry the engine's answer, got {detail:?}"
+    );
+    assert_eq!(
+        own_state_text(&page).await,
+        "",
+        "a refusal leaves no pending state"
+    );
+    for selector in ["#command-input", "#submit-btn"] {
+        assert!(
+            is_enabled(&page, selector).await,
+            "{selector} stays enabled after a refused retry"
+        );
+    }
+}
+
 #[tokio::test]
 async fn run_autoplay_checks() {
     let mut runner = StubRunner::launch().await;
@@ -246,6 +351,18 @@ async fn run_autoplay_checks() {
         .run(
             StubActionOutcome::Pending,
             check_a_delete_refused_for_a_held_game_shows_the_busy_message,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Refused,
+            check_a_start_refused_for_a_busy_game_reports_in_the_autoplay_form_slot,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_retry_refused_for_a_busy_game_reports_in_the_story_log_slot,
         )
         .await;
     runner.finish().await;

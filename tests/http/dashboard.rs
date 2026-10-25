@@ -17,8 +17,8 @@ use chronicler_engine::test_support::{
 use crate::support::http_assertions::{defined_icons, referenced_icons};
 use crate::support::http_fixtures::{seed_offered_set, story_of};
 use crate::support::http_requests::{
-    fetch_body, fetch_busy_status, post_action, post_empty, response_body, wait_for_jobs,
-    wait_settled,
+    fetch_status_label, fetch_body, fetch_busy_status, post_action, post_empty, response_body,
+    wait_for_jobs, wait_settled,
 };
 
 // [docs/specs/dashboard.md] SCENARIO: 39.1
@@ -26,8 +26,8 @@ use crate::support::http_requests::{
 async fn test_busy_status_answers_from_live_registry() {
     assert_eq!(
         fetch_busy_status(&TestAppBuilder::default_app()).await,
-        "idle",
-        "a Game with no Job and no failure line answers idle"
+        r#"<span class="status ready" data-status="idle">Ready</span>"#,
+        "a Game with no Job and no failure line answers the idle status"
     );
 
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
@@ -42,8 +42,8 @@ async fn test_busy_status_answers_from_live_registry() {
     );
     assert_eq!(
         fetch_busy_status(&app).await,
-        "narrating",
-        "a Job at its narrator call answers its step name"
+        r#"<span class="status thinking" data-status="thinking">Generating narration...</span>"#,
+        "a Job at its narrator call answers the label of its step"
     );
     hold.release();
     assert!(
@@ -67,8 +67,8 @@ async fn test_busy_status_answers_from_live_registry() {
     );
     assert_eq!(
         fetch_busy_status(&app).await,
-        "quantifying",
-        "a Job at its analysis answers its step name"
+        r#"<span class="status thinking" data-status="thinking">Quantifying...</span>"#,
+        "a Job at its analysis answers the label of its step"
     );
     hold.release();
     assert!(
@@ -85,6 +85,10 @@ async fn test_busy_status_answers_from_live_registry() {
         "the failing Job should end"
     );
     let status = fetch_busy_status(&app).await;
+    assert!(
+        status.contains(r#"data-status="failed""#),
+        "a Game with a failure line answers the failed status, got: {status}"
+    );
     assert!(
         status.contains("answer could not be read"),
         "a Game with no Job and a failure line answers that line, got: {status}"
@@ -292,8 +296,8 @@ async fn stop_dock_read_fails() {
         "a stop that cannot read the dock answers failed"
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "narrating",
+        fetch_status_label(&app).await,
+        "Generating narration...",
         "the Job keeps running: the status still names its step"
     );
 
@@ -328,7 +332,10 @@ async fn status_read_fails() {
         status.contains("The data for this request is missing: the game."),
         "a status read that fails answers with a failure line, got: {status}"
     );
-    assert_ne!(status.trim(), "idle");
+    assert!(
+        !status.contains(r#"data-status="idle""#),
+        "a status read that fails is not the idle status, got: {status}"
+    );
 }
 
 // [docs/specs/dashboard.md] SCENARIO: 39.10
@@ -355,8 +362,8 @@ async fn status_with_no_active_game() {
         .build();
 
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
-        "a status poll with no active Game answers idle"
+        fetch_status_label(&app).await,
+        "Ready",
+        "a status display with no active Game answers Ready"
     );
 }

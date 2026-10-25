@@ -7,7 +7,7 @@ use axum::{
 };
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::response::{ok, THINKING_STATUS};
+use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::AppState;
 use crate::application::autoplay::budget::Budget;
 use crate::application::autoplay::driver::AutoplayRun;
@@ -28,7 +28,7 @@ pub async fn start_autoplay_handler(
         Err(refusal) => return refusal.into_response(),
     };
     match AutoplayRun::start(&state.game_writer, state.job_deps.clone(), game_id, budget) {
-        Ok(()) => ok(THINKING_STATUS),
+        Ok(()) => ok(""),
         Err(refusal) => refusal.into_response(),
     }
 }

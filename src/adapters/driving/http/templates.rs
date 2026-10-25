@@ -112,11 +112,11 @@ impl OptionsDockTemplate {
     </div>
     {# The corrections are suggestions the player opts into, so Send Original keeps the primary style. #}
     <div class="form-actions">
-        <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-on::after-request="onPreviewSendAfterRequest(event)">
+        <form method="post" hx-post="/action/confirm" hx-swap="none" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <input type="hidden" name="command" value="{{ original }}" />
             <button type="submit" class="btn-primary btn-original">Send Original</button>
         </form>
-        <form method="post" hx-post="/action/confirm" hx-target="#action-preview" hx-swap="innerHTML" hx-include="#corrected-textarea" hx-on::after-request="onPreviewSendAfterRequest(event)">
+        <form method="post" hx-post="/action/confirm" hx-swap="none" hx-include="#corrected-textarea" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <button type="submit" class="btn-cyan">Send with edits</button>
         </form>
         <button type="button" class="btn-cyan preview-cancel" onclick="closeActionPreview()">Cancel</button>

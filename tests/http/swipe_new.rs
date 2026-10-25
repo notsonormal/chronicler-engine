@@ -20,7 +20,8 @@ use crate::support::app_wiring::{
 use crate::support::http_assertions::{assert_still_thinking, status_error_message};
 use crate::support::http_fixtures::{break_start_room, room_header_of, story_of};
 use crate::support::http_requests::{
-    fetch_busy_status, post_action, post_empty, post_form, wait_settled,
+    fetch_status_label, assert_answers_nothing, fetch_busy_status, post_action, post_empty,
+    post_form, wait_settled,
 };
 
 fn story_log_counts(state: &AppState) -> (usize, usize) {
@@ -111,7 +112,7 @@ async fn test_retry_replaces_narration_with_new_swipe_http() {
     assert!(wait_settled(&state, 2000).await, "action should complete");
 
     let resp = post_empty(&app, "/swipe/new").await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_answers_nothing(resp).await;
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
     let messages = story_of(&state);
@@ -128,8 +129,8 @@ async fn test_retry_replaces_narration_with_new_swipe_http() {
     assert_eq!(retried.swipes.len(), 2, "retry appended a swipe");
     assert_eq!(retried.text(), "Second.", "active swipe is the retry");
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "retry should finish in the Idle state"
     );
 }
@@ -338,8 +339,8 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
         "retry should complete even with no movement"
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "status should not be Busy"
     );
 }
@@ -473,8 +474,8 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
         "active swipe text should be the new retry narration, not the original"
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "event retry should finish in the Idle state"
     );
 }
@@ -604,8 +605,8 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
         "new swipe should be the active swipe"
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "event retry should finish in the Idle state"
     );
 }
@@ -651,7 +652,7 @@ async fn test_event_retry_does_not_carry_the_previous_swipes_encounter_http() {
         2,
         "event retry appends exactly one swipe"
     );
-    assert_eq!(fetch_busy_status(&app).await, "idle");
+    assert_eq!(fetch_status_label(&app).await, "Ready");
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 10.6
@@ -763,7 +764,7 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
         Some(seeded_header),
         "the retry reuses the event's own event record"
     );
-    assert_eq!(fetch_busy_status(&app).await, "idle");
+    assert_eq!(fetch_status_label(&app).await, "Ready");
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 10.7
@@ -1249,8 +1250,8 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "retry should finish in the Idle state"
     );
 
@@ -1307,7 +1308,7 @@ async fn test_retry_of_a_bare_impersonate_runs_http() {
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
-    assert_eq!(fetch_busy_status(&app).await, "idle");
+    assert_eq!(fetch_status_label(&app).await, "Ready");
     let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
@@ -1365,8 +1366,8 @@ async fn test_retry_typed_input_generates_input_swipe_http() {
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "retry should finish in the Idle state"
     );
 

@@ -144,11 +144,19 @@ async function runAsk() {
   return loads;
 }
 
-// One ask at a time: an ask waits for the one before it.
+// One ask at a time: an ask waits for the one before it. An ask that has not
+// started yet serves every caller that comes before it starts, because it
+// starts after each of their requests has ended.
+let queuedAsk = null;
+
 function askNow() {
+  if (queuedAsk) return queuedAsk;
   asksPending += 1;
   const run = askChain
-    .then(runAsk)
+    .then(() => {
+      queuedAsk = null;
+      return runAsk();
+    })
     .catch((error) => {
       console.error("The change ask failed:", error);
       return [];
@@ -157,7 +165,16 @@ function askNow() {
       asksPending -= 1;
     });
   askChain = run;
+  queuedAsk = run;
   return run;
+}
+
+// The one way a script sends an action: the page asks as soon as the request
+// ends, so the result shows without waiting for the next ask of the timer.
+function actionFetch(url, init) {
+  return fetch(url, init).finally(() => {
+    askNow();
+  });
 }
 
 function liveTick() {
@@ -203,12 +220,26 @@ function liveWorkEnded() {
 
 liveTimer = setInterval(liveTick, LIVE_ASK_INTERVAL_MS);
 
+// The first ask of the page finds no record, so it loads every region. It waits
+// until htmx has processed the page: a `refresh` sent before htmx initialises a
+// node issues no request. htmx registers its own DOMContentLoaded handler in
+// the head, so a handler registered here runs after it.
+function startFirstAsk() {
+  askNow();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startFirstAsk);
+} else {
+  startFirstAsk();
+}
+
 document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible") askNow();
 });
 
-// A region's own load: the one htmx runs at page load and each one the loop
-// starts with `refresh`.
+// A region's own load: each one the loop starts with `refresh`, and the one a
+// caller starts through `htmx.ajax` with the region as its source.
 document.body.addEventListener("htmx:beforeRequest", function (evt) {
   const region = evt.detail && evt.detail.elt;
   if (!isLiveRegion(region)) return;
@@ -251,7 +282,12 @@ document.body.addEventListener("htmx:afterSwap", function (evt) {
 // and a refused load leave the region due.
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   const region = evt.detail && evt.detail.elt;
-  if (!isLiveRegion(region)) return;
+  // Every other request that ends is an action, or a view change that may
+  // follow one: the page asks at once.
+  if (!isLiveRegion(region)) {
+    askNow();
+    return;
+  }
   const record = liveRecordOf(region);
   if (record.swapped) {
     record.numbers = record.pending;

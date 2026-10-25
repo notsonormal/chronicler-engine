@@ -1,8 +1,11 @@
 //! Tests for the live-region guardrail.
 
-use crate::live_regions::check_live_regions_in_shell;
+use crate::live_regions::{
+    check_handlers_retarget_no_region, check_live_regions_in_shell, check_scripts_use_action_fetch,
+    check_scripts_write_no_region, region_names,
+};
 
-const GOOD_REGION: &str = r#"<div id="story-log" data-live="story busy worlds" hx-get="/fragment/story-log" hx-trigger="load, refresh" hx-swap="morph:innerHTML"></div>"#;
+const GOOD_REGION: &str = r#"<div id="story-log" data-live="story busy worlds" hx-get="/fragment/story-log" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>"#;
 
 #[test]
 fn test_check_live_regions_in_shell_accepts_a_region_with_the_load_path() {
@@ -11,13 +14,13 @@ fn test_check_live_regions_in_shell_accepts_a_region_with_the_load_path() {
 
 #[test]
 fn test_check_live_regions_in_shell_accepts_a_region_that_spans_lines() {
-    let content = "<div\n  data-live=\"games\"\n  hx-get=\"/fragment/header\"\n  hx-trigger=\"load, refresh\"\n  hx-swap=\"morph:innerHTML\"\n></div>";
+    let content = "<div\n  data-live=\"games\"\n  hx-get=\"/fragment/header\"\n  hx-trigger=\"refresh\"\n  hx-swap=\"morph:innerHTML\"\n></div>";
     assert!(check_live_regions_in_shell("assets/index.html", content).is_empty());
 }
 
 #[test]
 fn test_check_live_regions_in_shell_rejects_an_every_trigger() {
-    let content = GOOD_REGION.replace("load, refresh", "load, every 2s, refresh");
+    let content = GOOD_REGION.replace("\"refresh\"", "\"every 2s, refresh\"");
     let violations = check_live_regions_in_shell("assets/index.html", &content);
     assert_eq!(violations.len(), 1);
     assert!(violations[0].message.contains("`every` trigger"));
@@ -25,10 +28,27 @@ fn test_check_live_regions_in_shell_rejects_an_every_trigger() {
 
 #[test]
 fn test_check_live_regions_in_shell_rejects_a_missing_refresh_trigger() {
-    let content = GOOD_REGION.replace("load, refresh", "load");
+    let content = GOOD_REGION.replace("\"refresh\"", "\"load\"");
     let violations = check_live_regions_in_shell("assets/index.html", &content);
     assert_eq!(violations.len(), 1);
     assert!(violations[0].message.contains("hx-trigger"));
+}
+
+#[test]
+fn test_check_live_regions_in_shell_rejects_a_load_trigger_beside_refresh() {
+    let content = GOOD_REGION.replace("\"refresh\"", "\"load, refresh\"");
+    let violations = check_live_regions_in_shell("assets/index.html", &content);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("hx-trigger=\"refresh\""));
+}
+
+#[test]
+fn test_check_live_regions_in_shell_rejects_a_region_with_no_trigger() {
+    let content = GOOD_REGION.replace(" hx-trigger=\"refresh\"", "");
+    assert_eq!(
+        check_live_regions_in_shell("assets/index.html", &content).len(),
+        1
+    );
 }
 
 #[test]
@@ -77,4 +97,110 @@ fn test_check_live_regions_in_shell_fails_a_shell_with_no_live_region() {
     let violations = check_live_regions_in_shell("assets/index.html", "<div id=\"x\"></div>");
     assert_eq!(violations.len(), 1);
     assert!(violations[0].message.contains("guards nothing"));
+}
+
+const SHELL: &str = r#"
+<div class="header" id="header" data-live="games" hx-get="/fragment/header" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>
+<div class="visual-sidebar" data-live="story worlds" hx-get="/fragment/visual-sidebar" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>
+<div class="games-panel" hx-get="/fragment/games" hx-trigger="load"></div>
+<div id="action-preview" class="action-preview"></div>
+"#;
+
+fn regions() -> Vec<String> {
+    region_names(SHELL)
+}
+
+#[test]
+fn test_region_names_take_the_id_else_the_first_class_of_each_region() {
+    let names = regions();
+    for expected in [
+        "header",
+        "visual-sidebar",
+        "games-panel",
+        "failure-banner-degraded",
+    ] {
+        assert!(
+            names.iter().any(|name| name == expected),
+            "{expected} in {names:?}"
+        );
+    }
+    assert!(
+        !names.iter().any(|name| name == "action-preview"),
+        "an element that loads nothing is not a region: {names:?}"
+    );
+}
+
+#[test]
+fn test_scripts_write_no_region_rejects_a_write_through_a_selector() {
+    let script = r#"document.getElementById("header").innerHTML = html;"#;
+    let violations = check_scripts_write_no_region("assets/dashboard-x.js", script, &regions());
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("region element"));
+}
+
+#[test]
+fn test_scripts_write_no_region_rejects_a_write_through_a_declared_identifier() {
+    let script = "const area = document.querySelector(\"#games-tab > .games-panel\");\nfunction paint() {\n  area.innerHTML = '<p>x</p>';\n}";
+    let violations = check_scripts_write_no_region("assets/dashboard-x.js", script, &regions());
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].line, 3);
+}
+
+#[test]
+fn test_scripts_write_no_region_rejects_an_outer_html_and_an_insert() {
+    let script = "document.querySelector('.visual-sidebar').outerHTML = a;\ndocument.getElementById(\"header\").insertAdjacentHTML(\"beforeend\", b);";
+    assert_eq!(
+        check_scripts_write_no_region("assets/dashboard-x.js", script, &regions()).len(),
+        2
+    );
+}
+
+#[test]
+fn test_scripts_write_no_region_rejects_an_htmx_ajax_into_a_region() {
+    let script =
+        r##"htmx.ajax("GET", "/fragment/story-log", { target: "#header", swap: "innerHTML" });"##;
+    let violations = check_scripts_write_no_region("assets/dashboard-x.js", script, &regions());
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("htmx.ajax"));
+}
+
+#[test]
+fn test_scripts_write_no_region_accepts_a_write_to_an_element_that_is_not_a_region() {
+    let script = "const preview = document.getElementById(\"action-preview\");\npreview.innerHTML = \"\";\nconst own = document.getElementById(\"action-status\");\nown.innerHTML = x;\nconst shown = degraded.innerHTML.trim() !== \"\";";
+    assert!(check_scripts_write_no_region("assets/dashboard-x.js", script, &regions()).is_empty());
+}
+
+#[test]
+fn test_scripts_write_no_region_accepts_a_comparison_and_a_read() {
+    let script = "const region = document.getElementById(\"header\");\nif (region.innerHTML === \"\") {}\nconst html = region.innerHTML;";
+    assert!(check_scripts_write_no_region("assets/dashboard-x.js", script, &regions()).is_empty());
+}
+
+#[test]
+fn test_scripts_use_action_fetch_rejects_a_raw_fetch() {
+    let script = "function save() {\n  fetch(\"/history/1\", { method: \"POST\" });\n}";
+    let violations = check_scripts_use_action_fetch("assets/dashboard-x.js", script);
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].line, 2);
+}
+
+#[test]
+fn test_scripts_use_action_fetch_accepts_the_wrapper_and_a_comment() {
+    let script = "// A raw fetch(url) answers nothing to the page.\nactionFetch(\"/history/1\", { method: \"POST\" });\nwindow.fetchCount += 1;";
+    assert!(check_scripts_use_action_fetch("assets/dashboard-x.js", script).is_empty());
+}
+
+#[test]
+fn test_handlers_retarget_no_region_rejects_a_retarget_into_a_region() {
+    let source =
+        r##"response.headers_mut().insert("HX-Retarget", HeaderValue::from_static("#header"));"##;
+    let violations = check_handlers_retarget_no_region("src/x.rs", source, &regions());
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("HX-Retarget"));
+}
+
+#[test]
+fn test_handlers_retarget_no_region_accepts_a_retarget_to_another_element() {
+    let source = r##"response.headers_mut().insert("HX-Retarget", HeaderValue::from_static("#action-preview"));"##;
+    assert!(check_handlers_retarget_no_region("src/x.rs", source, &regions()).is_empty());
 }

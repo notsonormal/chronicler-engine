@@ -451,6 +451,65 @@ fn guardrails_live_regions_in_shell() {
     assert_violations(&errors, "live regions in the dashboard shell");
 }
 
+fn dashboard_scripts() -> Vec<(String, String)> {
+    let mut scripts: Vec<(String, String)> = std::fs::read_dir("assets")
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with("dashboard-") && name.ends_with(".js"))
+                .unwrap_or(false)
+        })
+        .map(|path| {
+            let content = std::fs::read_to_string(&path).unwrap();
+            (path.to_string_lossy().to_string(), content)
+        })
+        .collect();
+    scripts.sort();
+    assert!(!scripts.is_empty(), "no dashboard script found");
+    scripts
+}
+
+fn shell_regions() -> Vec<String> {
+    region_names(&std::fs::read_to_string("assets/index.html").unwrap())
+}
+
+#[test]
+fn guardrails_scripts_write_no_region() {
+    let regions = shell_regions();
+    let errors: Vec<Violation> = dashboard_scripts()
+        .iter()
+        .flat_map(|(path, script)| check_scripts_write_no_region(path, script, &regions))
+        .collect();
+    assert_violations(&errors, "dashboard scripts write no region element");
+}
+
+#[test]
+fn guardrails_scripts_use_action_fetch() {
+    let errors: Vec<Violation> = dashboard_scripts()
+        .iter()
+        .filter(|(path, _)| !path.ends_with("dashboard-live.js"))
+        .flat_map(|(path, script)| check_scripts_use_action_fetch(path, script))
+        .collect();
+    assert_violations(
+        &errors,
+        "dashboard scripts send actions through actionFetch",
+    );
+}
+
+#[test]
+fn guardrails_handlers_retarget_no_region() {
+    let regions = shell_regions();
+    let errors: Vec<Violation> = src_snapshot()
+        .iter()
+        .filter(|file| file.path.starts_with("adapters/driving/http/"))
+        .flat_map(|file| check_handlers_retarget_no_region(&file.path, &file.content, &regions))
+        .collect();
+    assert_violations(&errors, "handlers retarget no region element");
+}
+
 #[test]
 fn guardrails_walker_banned_name() {
     let files = src_snapshot();

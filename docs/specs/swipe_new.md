@@ -14,8 +14,9 @@ And a narrator backend that returns "First." then "Second." for successive narra
 When the client sends POST /action with command="look"
 And the Game is no longer busy
 And the client sends POST /swipe/new
+Then the response is 200 with an empty body
 And the Game is no longer busy
-Then the story log holds 2 Narration entries (its opening Narration and the Action's)
+And the story log holds 2 Narration entries (its opening Narration and the Action's)
 And the Action's Narration entry keeps its message ID and has 2 swipes (one appended by the retry)
 And the active swipe's text is "Second."
 And the generation status is Idle

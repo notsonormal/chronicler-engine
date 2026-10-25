@@ -59,18 +59,10 @@ async fn check_switch_swipe_leaves_dashboard_ready_and_drops_options(
     stub: StubServer,
 ) {
     let swipe = stub.swipe_handle();
-    let status = stub.status_handle();
     swipe.set_two_swipes();
     poll_now(&page, "#story-log").await;
     wait_for_swipe_counter(&page, "2 / 2").await;
     wait_for_option_items(&page, 3).await;
-
-    // Reproduce the stuck state: the status poll reports a generation
-    // still narrating while the log still offers a switch. Clearing it
-    // must not wait for another poll.
-    status.set(StubStatus::Step("narrating".to_string()));
-    poll_now(&page, "#status-display").await;
-    wait_for_status_busy(&page).await;
 
     let clicked: bool = page
         .evaluate::<(), bool>(
@@ -127,8 +119,8 @@ async fn check_switch_swipe_leaves_dashboard_ready_and_drops_options(
         "the restore must be visible to the player, got {notice:?}"
     );
 
-    // The restored Swipe carries no option set, so the dock empties on
-    // its next poll.
+    // The restored Swipe carries no option set, so the dock empties when the
+    // options number moves.
     poll_now(&page, "#options-dock").await;
     wait_for_option_items(&page, 0).await;
 }

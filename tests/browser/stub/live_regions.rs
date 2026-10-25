@@ -94,9 +94,9 @@ async fn live_state(page: &playwright_rs::Page, selector: &str) -> String {
     .unwrap()
 }
 
-/// Stops the timer, then asks once so that every region has loaded under the
-/// numbers the stub holds now: the first ask loads each region once, because the
-/// load that htmx runs at page load carries no record.
+/// Stops the timer, then asks once so that every region is current under the
+/// numbers the stub holds now. The first ask of the page already loaded each
+/// region once, so this ask loads none.
 async fn start_current(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>("() => window.chroniclerLive.stopTimer()", None)
         .await
@@ -110,6 +110,87 @@ async fn start_current(page: &playwright_rs::Page) {
             region.selector
         );
     }
+}
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.14
+async fn check_at_page_start_each_region_loads_exactly_once(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    // The runner opened the page and let its first ask settle. The timer has
+    // not run since: it stops here, so a later ask cannot add a load.
+    page.evaluate::<(), ()>("() => window.chroniclerLive.stopTimer()", None)
+        .await
+        .expect("the page stops its timer");
+    for region in &REGIONS {
+        assert_eq!(
+            changes.loads(region.path),
+            1,
+            "{} must load exactly once at page start",
+            region.selector
+        );
+        assert_eq!(live_state(&page, region.selector).await, "current");
+    }
+}
+
+async fn wait_for_asks(changes: &StubChangesHandle, expected: usize) {
+    assert!(
+        wait_for_condition_async(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_millis(20),
+            || async { changes.asks() >= expected }
+        )
+        .await,
+        "the page must ask at once, without the timer: {} asks, wanted {expected}",
+        changes.asks()
+    );
+}
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.15
+async fn check_an_action_asks_at_once_when_its_request_ends(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+
+    let asks = changes.asks();
+    let status_loads = changes.loads("/status/busy");
+    page.evaluate::<(), ()>("() => document.getElementById('stop-btn').click()", None)
+        .await
+        .expect("the test presses Stop");
+    wait_for_asks(&changes, asks + 1).await;
+    settle(&page).await;
+    assert_eq!(
+        changes.loads("/status/busy"),
+        status_loads + 1,
+        "Stop moved the busy state, so the status display loads once"
+    );
+
+    stub.save_handle().set_delete_succeeds(true);
+    super::support::accept_delete_confirmation(&page).await;
+    let asks = changes.asks();
+    let entries = page
+        .query_selector_all("#story-log .log-entry")
+        .await
+        .unwrap()
+        .len();
+    page.locator("#story-log .log-entry:last-child .delete-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_for_asks(&changes, asks + 1).await;
+    settle(&page).await;
+    assert_eq!(
+        page.query_selector_all("#story-log .log-entry")
+            .await
+            .unwrap()
+            .len(),
+        entries - 1,
+        "the story log loads at once and no longer shows the deleted entry"
+    );
 }
 
 // [docs/specs/browser_live_regions.md] SCENARIO: 44.1
@@ -628,6 +709,12 @@ async fn check_a_load_keeps_the_engaged_state_of_each_game_tab_region(
 async fn run_live_regions_checks() {
     let mut runner = StubRunner::launch().await;
     let outcome = StubActionOutcome::Pending;
+    runner
+        .run(outcome, check_at_page_start_each_region_loads_exactly_once)
+        .await;
+    runner
+        .run(outcome, check_an_action_asks_at_once_when_its_request_ends)
+        .await;
     runner
         .run(
             outcome,

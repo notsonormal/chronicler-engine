@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use playwright_rs::AriaRole;
 
-use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
+use chronicler_engine::domain::model::state::generation_status::{GenerationFailureKind, Step};
 
 use super::support::poll_now;
 use super::*;
@@ -69,7 +69,7 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
     watch_live_region(&page, "status-announcer").await;
     watch_live_region(&page, "status-error-announcer").await;
 
-    status.set(StubStatus::Step("narrating".to_string()));
+    status.set(StubStatus::Step(Step::Narrating));
     poll_now(&page, "#status-display").await;
     assert!(
         wait_for_condition_async(

@@ -20,7 +20,8 @@ use crate::support::app_wiring::{
 use crate::support::http_assertions::{assert_still_thinking, assert_story_log_ends_with_message};
 use crate::support::http_fixtures::{story_of, OFFERED_SET};
 use crate::support::http_requests::{
-    fetch_body, fetch_busy_status, post_action, post_empty, wait_settled,
+    fetch_status_label, assert_answers_nothing, fetch_body, fetch_busy_status, post_action,
+    post_empty, wait_settled,
 };
 
 fn story_log_holds_event_narration(state: &AppState) -> bool {
@@ -57,7 +58,7 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
     let n = story_of(&state).len();
 
     let resp = post_empty(&app, "/retrigger").await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_answers_nothing(resp).await;
     assert!(
         wait_settled(&state, 2000).await,
         "retrigger should complete"
@@ -76,8 +77,8 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
         "new message should have event_header"
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "retrigger should finish in the Idle state"
     );
 }
@@ -222,7 +223,7 @@ async fn test_retrigger_on_an_impersonate_input_runs_http() {
         new_message.event_header().is_some(),
         "the new message is an event Narration"
     );
-    assert_eq!(fetch_busy_status(&app).await, "idle");
+    assert_eq!(fetch_status_label(&app).await, "Ready");
 }
 
 // [docs/specs/retrigger.md] SCENARIO: 14.1

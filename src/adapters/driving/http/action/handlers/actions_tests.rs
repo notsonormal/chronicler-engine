@@ -76,8 +76,8 @@ async fn test_action_handler_empty_command() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Thinking"),
-        "Expected Thinking status: {body_str}"
+        body_str.is_empty(),
+        "A dispatched command answers nothing: {body_str}"
     );
 }
 
@@ -99,7 +99,10 @@ async fn test_action_handler_whitespace_command() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    assert!(body_str.contains("Thinking"));
+    assert!(
+        body_str.is_empty(),
+        "A dispatched command answers nothing: {body_str}"
+    );
 }
 
 #[tokio::test]
@@ -138,8 +141,8 @@ async fn test_action_handler_guide_command_dispatches() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Thinking"),
-        "guide command should dispatch to the continue seam: {body_str}"
+        body_str.is_empty(),
+        "guide command should dispatch to the continue seam (a dispatched command answers nothing): {body_str}"
     );
 }
 
@@ -162,8 +165,8 @@ async fn test_action_handler_narrator_command_dispatches() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Thinking"),
-        "narrator command should dispatch to the continue seam: {body_str}"
+        body_str.is_empty(),
+        "narrator command should dispatch to the continue seam (a dispatched command answers nothing): {body_str}"
     );
 }
 
@@ -186,8 +189,8 @@ async fn test_action_handler_impersonate_command_dispatches() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Thinking"),
-        "impersonate command should dispatch to the continue seam: {body_str}"
+        body_str.is_empty(),
+        "impersonate command should dispatch to the continue seam (a dispatched command answers nothing): {body_str}"
     );
 }
 
@@ -245,7 +248,10 @@ async fn test_action_check_handler_empty_command() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    assert!(body_str.contains("Thinking"));
+    assert!(
+        body_str.is_empty(),
+        "A dispatched command answers nothing: {body_str}"
+    );
 }
 
 #[tokio::test]

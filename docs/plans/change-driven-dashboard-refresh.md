@@ -273,7 +273,8 @@ Today's actions that change, from `rg 'hx-target' src/adapters/driving/http asse
 | Autoplay start | Answers into `#status-display` | Nothing; the busy number loads the status display |
 | Swipe switch (`switchSwipe`) | `fetch`, then `#story-log.innerHTML = html` | `fetch`, then ask at once; the story number loads the log |
 | Story-log edit save, delete last, Retry, Retrigger | `fetch`; the log waits for its next poll | `fetch`, then ask at once |
-| Command send, preview confirm | Answer `#action-preview` | Unchanged: the preview is the action area's own element (statement 4) |
+| Command send (`POST /action/check`) | Answers `#action-preview` | Unchanged: the preview is the action area's own element (statement 4) |
+| Preview confirm (`POST /action/confirm`) | Its form targets `#action-preview`, but the answer carries `HX-Retarget: #status-display` (`add_status_swap_headers`), so it writes the status display | Nothing on success; the busy number loads the status display. A refusal goes to the action form's inline slot. `add_status_swap_headers` goes (found after stage 2a). |
 
 ### 6. The header and the failure banner
 
@@ -297,7 +298,7 @@ The guardrails are one test file in the `guardrails` binary. They fail when:
 - a template in `src/adapters/driving/http/` or `index.html` has an `hx-target` that names a region element (a selector in the `data-live` set), or swaps a region element with `outerHTML`;
 - a template has `hx-swap-oob`;
 - a script in `assets/dashboard-*.js` writes `innerHTML` or `outerHTML` of a region element;
-- a handler answers `HX-Refresh`.
+- a handler answers `HX-Refresh`, or an `HX-Retarget` that names a region element.
 
 The two exhaustive maps in §2 are checked by the compiler, not by a guardrail.
 

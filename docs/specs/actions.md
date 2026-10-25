@@ -14,8 +14,9 @@ Endpoints:
 Given a Game whose story log holds only its opening Narration
 And an LLM backend that returns "You see a small wooden room." for any narration prompt
 When the client POST /action with command="look"
+Then the response is 200 with an empty body
 And the Game is no longer busy (status not generating)
-Then the story log gained exactly 2 messages:
+And the story log gained exactly 2 messages:
   - one player-input message whose text is "look"
   - one Narration message whose text is "You see a small wooden room."
 And the generation status is Idle
@@ -355,12 +356,12 @@ Given a Game whose story log holds only its opening Narration
 And text check mode is Spell with auto-check enabled
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action/check with command="/guide look at the casle" (a deliberate misspelling the spell check would flag)
-Then the response contains no text-check preview
+Then the response is 200 with an empty body, and it contains no text-check preview
 And the guide action is dispatched directly
 And the Game is no longer busy
 And a narration message has created scene history
 When the client POST /action/check with command="/options" (an engine command the dispatch layer handles)
-Then the response contains no text-check preview
+Then the response is 200 with an empty body, and it contains no text-check preview
 And the options action is dispatched directly
 And the Game is no longer busy
 When the client POST /action/check with command="look at the casle" (same words, plain input)
@@ -373,20 +374,21 @@ text and is checked like ordinary player input.
 
 ### Confirm
 
-#### Scenario 1.13: Confirming a preview retargets the status display
+#### Scenario 1.13: Confirming a preview dispatches the command and answers nothing
 
 ```gherkin
 Given a game state with a command held in the text-check preview
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action/confirm with that command
-Then the response is the status fragment alone, not the action area or the command form
-And the response retargets #status-display
+Then the response is 200 with an empty body
+And the response carries no HX-Retarget, HX-Reswap or HX-Refresh header
 And the Game is no longer busy
 ```
 
-The confirm path is the preview's send: it dispatches the checked command
-without swapping a fresh action area back in, so the status display alone
-reflects the running generation.
+The confirm path is the preview's send: it dispatches the checked command.
+The running generation shows in the status display, which loads when the
+busy state changes. A confirm that the engine refuses answers the refusal
+and writes no region.
 
 ## Properties
 

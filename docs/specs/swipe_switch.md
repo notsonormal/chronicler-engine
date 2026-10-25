@@ -11,8 +11,8 @@ Endpoint: `POST /message/:id/swipe/:index`
 ```gherkin
 Given a game whose last Message has two Swipes
 When the client switches to the other Swipe
-And the client reads the generation status
-Then the generation status is idle
+Then the response is 200 with an empty body
+And the generation status is idle
 ```
 
 #### Scenario 36.2: Switching to another swipe drops the offered options

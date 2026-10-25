@@ -133,17 +133,11 @@ function cancelEdit() {
 }
 
 // A 200 can still refuse a story write: a Job or an Autoplay run holds the Game.
-function answeredWaitStatus(body) {
-  return body.includes('class="status wait"');
-}
-
-const GAME_BUSY_DETAIL = "Still thinking...";
-
 // True when the body is the busy answer; the story-log error then says what the
 // refused action was.
 function reportedBusy(body, message) {
-  if (!answeredWaitStatus(body)) return false;
-  showStoryLogError(message, GAME_BUSY_DETAIL);
+  if (!isBusyAnswer(body)) return false;
+  showStoryLogError(message, BUSY_REFUSAL_DETAIL);
   return true;
 }
 
@@ -155,7 +149,7 @@ function submitEdit() {
   formData.append("text", newText);
   let editKeptOpen = false;
   // Kept set until the outcome is known, so a failed save can restore the entry.
-  fetch(`/history/${editState.id}`, {
+  actionFetch(`/history/${editState.id}`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: formData,
@@ -186,28 +180,41 @@ function submitEdit() {
     });
 }
 
-// Retry and retrigger run through raw fetch, so the failure path reports
-// its own error and resets the status the htmx swaps never restored.
-function submitGenerationRequest(url, failureMessage) {
+// Retry and retrigger answer nothing when the engine takes them, and the Job
+// they start shows in the status display. A refusal or a failure reports in the
+// story log's error slot and ends the action area's own state.
+function submitGenerationRequest(url, failureMessage, busyMessage) {
+  clearInlineError(storyLogErrorSlot());
   updateToThinking();
-  fetch(url, { method: "POST" })
+  actionFetch(url, { method: "POST" })
     .then((response) => {
       if (!response.ok) return throwServerDetail(response);
       return response.text();
     })
+    .then((body) => {
+      if (reportedBusy(body, busyMessage)) endPending();
+    })
     .catch((err) => {
       console.error(`${failureMessage}:`, err);
-      resetStatusToReady();
-      showStatusError(failureMessage, err.message);
+      endPending();
+      showStoryLogError(failureMessage, err.message);
     });
 }
 
 function submitNewSwipe() {
-  submitGenerationRequest("/swipe/new", "Failed to generate a new swipe");
+  submitGenerationRequest(
+    "/swipe/new",
+    "Failed to generate a new swipe",
+    "The Game is busy, so the retry was not started.",
+  );
 }
 
 function submitRetrigger() {
-  submitGenerationRequest("/retrigger", "Failed to retrigger the event");
+  submitGenerationRequest(
+    "/retrigger",
+    "Failed to retrigger the event",
+    "The Game is busy, so the retrigger was not started.",
+  );
 }
 
 // A restored swipe leaves no state signal, so the restore is announced explicitly.
@@ -224,19 +231,18 @@ function announceSwipeRestore() {
 
 function switchSwipe(messageId, index) {
   clearInlineError(storyLogErrorSlot());
-  fetch(`/message/${messageId}/swipe/${index}`, { method: "POST" })
+  actionFetch(`/message/${messageId}/swipe/${index}`, { method: "POST" })
     .then((response) => {
       if (!response.ok) return throwServerDetail(response);
       return response.text();
     })
-    .then((html) => {
-      if (reportedBusy(html, "The Game is busy, so the swipe was not switched.")) {
+    .then((body) => {
+      if (reportedBusy(body, "The Game is busy, so the swipe was not switched.")) {
         return;
       }
-      document.getElementById("story-log").innerHTML = html;
-      // The restore is settled: drop any stale generating label without waiting for the 5s poll.
-      resetStatusToReady();
-      announceSwipeRestore();
+      // The story log loads the restored Swipe, so the restore is announced
+      // once that load has settled.
+      return chroniclerLive.settle().then(announceSwipeRestore);
     })
     .catch((err) => {
       console.error("Swipe switch failed:", err);
@@ -259,19 +265,14 @@ function focusAfterLogDelete() {
 function deleteMessage() {
   if (!confirm("Delete this message?")) return;
   clearInlineError(storyLogErrorSlot());
-  fetch("/history/delete", { method: "POST" })
+  actionFetch("/history/delete", { method: "POST" })
     .then((response) => {
       if (!response.ok) return throwServerDetail(response);
       return response.text().then((body) => {
         if (reportedBusy(body, "The Game is busy, so the message was not deleted.")) {
           return;
         }
-        return htmx
-          .ajax("GET", "/fragment/story-log", {
-            target: "#story-log",
-            swap: "innerHTML",
-          })
-          .then(() => focusAfterLogDelete());
+        return chroniclerLive.settle().then(focusAfterLogDelete);
       });
     })
     .catch((err) => {
@@ -280,7 +281,7 @@ function deleteMessage() {
     });
 }
 
-// A poll morphs the log in place, so its scroll position survives the swap and
+// A load morphs the log in place, so its scroll position survives the swap and
 // a new entry would land below the fold. A swap that adds an entry scrolls the
 // log back to its bottom, but only when the log was already there: a player
 // reading further up keeps their place.

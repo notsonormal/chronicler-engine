@@ -135,7 +135,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `inherent_impl.rs` — Inherent impl locality guardrail: every inherent impl must live in the type's defining file or a folder named after the type.
       - `inherent_impl_tests.rs` — Tests for the inherent impl locality guardrail.
       - `layers.rs` — Layer-boundary guardrail tests: server vs. application vs. storage separation, handler return-type enforcement, urlencoded form safety, and the HTTP adapter's storage leak.
-      - `live_regions.rs` — Live-region guardrail: each element of the dashboard shell that lists data kinds in `data-live` loads through the one load path.
+      - `live_regions.rs` — Live-region guardrails: each element of the dashboard shell that lists data kinds in `data-live` loads through the one load path, and no script or handler writes a region by another path.
       - `live_regions_tests.rs` — Tests for the live-region guardrail.
       - `location.rs` — Location guardrail tests: ensures `#[test]` / `#[cfg(test)]` units live in the correct directory (e.g., unit tests stay in `src/`, integration tests stay in `tests/`).
       - `location_tests.rs` — Tests for `location.rs` guardrail.

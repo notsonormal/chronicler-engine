@@ -1,9 +1,7 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! Header fragment, Settings role-health cell and status-swap header builders.
+//! Header fragment and Settings role-health cell builders.
 
 use askama::Template;
-
-use axum::{body::Body, http::HeaderValue, response::Response};
 
 use crate::adapters::driving::http::templates::HeaderTemplate;
 use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
@@ -190,13 +188,4 @@ pub fn header_fragment_html(game_name: String, roles: &[RoleHealth]) -> Result<S
         "{header}<div id=\"failure-banner-degraded\" hx-swap-oob=\"true\">{banner}</div>{}",
         settings_health_swaps(roles)
     ))
-}
-
-pub fn add_status_swap_headers(response: &mut Response<Body>) {
-    response
-        .headers_mut()
-        .insert("HX-Retarget", HeaderValue::from_static("#status-display"));
-    response
-        .headers_mut()
-        .insert("HX-Reswap", HeaderValue::from_static("innerHTML"));
 }

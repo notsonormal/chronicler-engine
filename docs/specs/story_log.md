@@ -60,7 +60,7 @@ When the client POST /action with command="examine room"
 And the Game is no longer busy
 And the client GET /fragment/story-log (at least 2 .log-entry rendered)
 And the client POST /history/delete
-Then the response status is "200 OK"
+Then the response is 200 with an empty body
 And the client GET /fragment/story-log renders exactly one fewer .log-entry
 ```
 
@@ -103,7 +103,7 @@ And the story log still holds every Message of the Job
 Given a Game whose Job is held at the analysis call of a Narration
 When the client GET /fragment/story-log
 Then the rendered log holds the Narration's text
-And the client GET /status/busy answers "quantifying"
+And the client GET /status/busy answers the status "thinking" with the label "Quantifying..."
 ```
 
 #### Scenario 8.9: An edit of a Message that does not exist is refused
@@ -167,4 +167,13 @@ And the state of that Input's Swipe holds an event record
 When the client GET /fragment/story-log
 Then the last .log-entry carries the `.retrigger-btn` control
 And no other .log-entry carries it
+```
+
+#### Scenario 8.15: An edit answers nothing and the story log shows the new text
+
+```gherkin
+Given a Game whose last Message is a Narration
+When the client POST /history/:id with the id of that Message and a new text
+Then the response is 200 with an empty body
+And the client GET /fragment/story-log shows the new text on that Message
 ```

@@ -139,3 +139,26 @@ Then each node, value, open state, selection and focus of the engaged state is a
 When every edit of the region ends
 Then the region loads exactly once, and it reports data-live-state "current"
 ```
+
+#### Scenario 44.14: At page start each region loads exactly once
+
+```gherkin
+Given the dashboard shell is served and no number moves
+When the page starts
+Then the page asks once without waiting for the timer
+And each region loads its fragment exactly once
+And each region reports data-live-state "current"
+```
+
+#### Scenario 44.15: An action asks at once when its request ends
+
+```gherkin
+Given the dashboard is loaded, every region is current, and the timer of the page does not run
+When an htmx request that is not the load of a region ends, for example the Stop control
+Then the page sends GET /changes at once
+And each region that lists a kind the action moved loads its fragment
+
+When a script action ends, for example the Delete control of the story log
+Then the page sends GET /changes at once
+And the story log loads its fragment and no longer shows the deleted entry
+```

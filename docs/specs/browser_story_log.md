@@ -44,14 +44,14 @@ And the entry's pre-edit action controls are available again
 And #story-log no longer holds an edit
 ```
 
-#### Scenario 30.5: A failed retry clears the pending status and re-enables Send
+#### Scenario 30.5: A failed retry reports in the story log's error slot and re-enables Send
 
 ```gherkin
 Given the dashboard is idle and #submit-btn is enabled
 When the client clicks the retry swipe button and the retry request fails
-Then #status-display shows a short failure message for the retry
+Then #story-log-error shows a short failure message for the retry
 And the raw error text is not visible until the client opens the Details disclosure
-And #status-display no longer shows "Thinking..."
+And the status display does not show "Thinking..."
 And #submit-btn is enabled
 ```
 
@@ -103,31 +103,31 @@ Then the entry's pre-edit action controls are restored immediately
 Given the dashboard is idle with Send enabled
 And a retrigger control is available on the last narration
 When the client clicks the retrigger control and the retrigger request fails
-Then #status-display shows a short failure message for the retrigger
+Then #story-log-error shows a short failure message for the retrigger
 And the raw error text is not visible until the client opens the Details disclosure
 And the client sent the request to the retrigger endpoint
-And #status-display no longer shows "Thinking..."
+And the status display does not show "Thinking..."
 And #submit-btn is enabled
 ```
 
-#### Scenario 30.11: A text selection in the log survives the poll
+#### Scenario 30.11: A text selection in the log survives a load
 
 ```gherkin
 Given a story log with at least one .log-entry rendered
 And no edit is active
 And part of an entry's text is selected
-When at least two story-log polling cycles elapse
+When the story number moves twice and the story log loads after each move
 Then the same text is still selected
 And the entries are the same nodes that held the selection
 ```
 
-#### Scenario 30.12: Focus inside a log entry survives the poll
+#### Scenario 30.12: Focus inside a log entry survives a load
 
 ```gherkin
 Given a story log with at least one .log-entry rendered
 And no edit is active
 And a control inside an entry has keyboard focus
-When at least two story-log polling cycles elapse
+When the story number moves twice and the story log loads after each move
 Then the same control still has keyboard focus
 And the entry is the same node the control belonged to
 ```
@@ -141,13 +141,13 @@ Then #story-log has an accessible name
 And pressing ArrowDown scrolls the log's content
 ```
 
-#### Scenario 30.14: A poll that drops the oldest entry keeps the rest
+#### Scenario 30.14: A load that drops the oldest entry keeps the rest
 
 ```gherkin
-Given a story log showing an oldest entry the next poll no longer returns
-When the polling cycle renders the shorter log
+Given a story log showing an oldest entry the next load no longer returns
+When the load renders the shorter log
 Then the dropped entry is removed from the DOM
-And the entries that remain are the same nodes as before the poll
+And the entries that remain are the same nodes as before the load
 ```
 
 #### Scenario 30.15: Editing locks the other entries' edit controls
@@ -199,22 +199,22 @@ And its Details disclosure holds the raw server text
 And the story log still shows the entry it showed before
 ```
 
-#### Scenario 30.20: A poll that appends an entry follows the log's bottom
+#### Scenario 30.20: A load that appends an entry follows the log's bottom
 
 ```gherkin
 Given a story log whose content overflows its container
 And #story-log is scrolled to its bottom
-When a polling cycle appends an entry
+When a load appends an entry
 Then #story-log is scrolled to its bottom
 And the appended entry is in view
 ```
 
-#### Scenario 30.21: A poll that appends an entry leaves a scrolled-up log alone
+#### Scenario 30.21: A load that appends an entry leaves a scrolled-up log alone
 
 ```gherkin
 Given a story log whose content overflows its container
 And #story-log is scrolled away from its bottom
-When a polling cycle appends an entry
+When a load appends an entry
 Then #story-log keeps the scroll position it had
 And the bottom of the appended entry stays below the fold
 ```

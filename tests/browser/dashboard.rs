@@ -55,21 +55,29 @@ async fn test_status_updates_during_generation() {
         CONFIG_PATH,
         TEST_WORLD,
         TEST_PERSONA,
-        |page, _port| async move {
+        |page, port| async move {
+            // The mock model answers at once, so the narrator that holds the Job at
+            // its call is a model that never answers.
+            let _silent_model = inject_silent_narrator(port).await;
             send_action(&page, "wait").await;
 
-            let status_text = page
-                .locator("#status-display")
-                .await
-                .inner_text()
-                .await
-                .unwrap_or_default();
+            let shows_the_step = wait_for_condition_async(
+                Duration::from_millis(500),
+                Duration::from_millis(25),
+                || async {
+                    let status_text = page
+                        .locator("#status-display")
+                        .await
+                        .inner_text()
+                        .await
+                        .unwrap_or_default();
+                    status_text.contains("Generating narration")
+                },
+            )
+            .await;
             assert!(
-                status_text.contains("Thinking")
-                    || status_text.contains("Narrating")
-                    || status_text.contains("Generating")
-                    || status_text.contains("Quantifying"),
-                "Status should show generating state, got: {status_text}"
+                shows_the_step,
+                "the status display should show the step of the generation within 500ms"
             );
         },
     )

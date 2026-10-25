@@ -21,8 +21,8 @@ use crate::support::http_fixtures::{
     create_game_from, room_header_of, story_of, story_of_game, OFFERED_SET,
 };
 use crate::support::http_requests::{
-    fetch_body, post_action, post_empty, post_form, response_body, wait_for_jobs, wait_idle,
-    wait_settled,
+    fetch_body, fetch_status_label, post_action, post_empty, post_form, response_body,
+    wait_for_jobs, wait_idle, wait_settled,
 };
 
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
@@ -298,11 +298,10 @@ async fn test_reset_while_job_runs_keeps_only_the_new_game_opening() {
             .any(|text| text == "The stopped narration."),
         "the late answer of the Job the reset ended must not join the new Game"
     );
-    let status = fetch_body(&app, "/status/busy").await;
     assert_eq!(
-        status.trim(),
-        "idle",
-        "the new Game answers idle, with no failure line"
+        fetch_status_label(&app).await,
+        "Ready",
+        "the new Game answers Ready, with no failure line"
     );
 }
 
@@ -686,7 +685,7 @@ static STOP_ROWS: &[StopRow] = &[
             fires_trigger: false,
         },
         held: Role::Narrator,
-        status: Some("narrating"),
+        status: Some("Generating narration..."),
         after_stop: StoryLogAfterStop::PlanInput,
     },
     StopRow {
@@ -694,7 +693,7 @@ static STOP_ROWS: &[StopRow] = &[
             fires_trigger: true,
         },
         held: Role::Quantifier,
-        status: Some("quantifying"),
+        status: Some("Quantifying..."),
         after_stop: StoryLogAfterStop::InputAndNarration,
     },
     StopRow {
@@ -702,37 +701,37 @@ static STOP_ROWS: &[StopRow] = &[
             fires_trigger: false,
         },
         held: Role::Options,
-        status: Some("options"),
+        status: Some("Generating options..."),
         after_stop: StoryLogAfterStop::InRoom { room: MOVED_ROOM },
     },
     StopRow {
         kind: JobKind::Impersonate,
         held: Role::Narrator,
-        status: Some("narrating"),
+        status: Some("Generating narration..."),
         after_stop: StoryLogAfterStop::NoMessage,
     },
     StopRow {
         kind: JobKind::Impersonate,
         held: Role::Quantifier,
-        status: Some("quantifying"),
+        status: Some("Quantifying..."),
         after_stop: StoryLogAfterStop::ImpersonateInput,
     },
     StopRow {
         kind: JobKind::InputRetry,
         held: Role::Narrator,
-        status: Some("narrating"),
+        status: Some("Generating narration..."),
         after_stop: StoryLogAfterStop::NoMessage,
     },
     StopRow {
         kind: JobKind::EventNarration,
         held: Role::Trigger,
-        status: Some("generating-event"),
+        status: Some("Generating event..."),
         after_stop: StoryLogAfterStop::MainNarrationOnly,
     },
     StopRow {
         kind: JobKind::EventNarrationAnalysis,
         held: Role::Quantifier,
-        status: Some("quantifying"),
+        status: Some("Quantifying..."),
         after_stop: StoryLogAfterStop::EventNarrationWithFiredTrigger,
     },
 ];
@@ -938,11 +937,10 @@ async fn run_stop_row(row: &'static StopRow) {
     );
 
     if let Some(status) = row.status {
-        let answered = fetch_body(&start.app, "/status/busy").await;
         assert_eq!(
-            answered.trim(),
+            fetch_status_label(&start.app).await,
             status,
-            "{label}: the status poll names the step the call runs in"
+            "{label}: the status display names the step the call runs in"
         );
     }
 
@@ -956,10 +954,9 @@ async fn run_stop_row(row: &'static StopRow) {
         wait_idle(&start.state, 2000).await,
         "{label}: the Game should end idle at once"
     );
-    let status = fetch_body(&start.app, "/status/busy").await;
     assert_eq!(
-        status.trim(),
-        "idle",
+        fetch_status_label(&start.app).await,
+        "Ready",
         "{label}: a stopped Game is idle, with no failure line"
     );
 
