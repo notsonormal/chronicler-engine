@@ -184,13 +184,10 @@ class StatusTests(unittest.TestCase):
         self.assertIn("live-holder", joined)
         self.assertIn(f"pid {os.getpid()}", joined)
 
-    def test_free_with_leftover_holder_of_a_dead_pid_is_stale_not_held(self):
+    def test_free_with_leftover_holder_of_a_dead_pid_gives_one_verdict(self):
         self._write_holder(self._dead_pid(), "ghost")
         self.assertEqual(build_slot.slot_status(self.out.append), 0)
-        joined = "\n".join(self.out)
-        self.assertIn("Build slot: free.", joined)
-        self.assertIn("stale", joined)
-        self.assertIn("ghost", joined)
+        self.assertEqual(self.out, ["Build slot: free."])
 
     def test_dead_recorded_pid_never_flips_a_held_verdict(self):
         self._hold_exclusively()

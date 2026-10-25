@@ -15,12 +15,12 @@ Create a task list (using `TaskCreate`) for all these steps.
 1. Verify that the implementation matches the existing plan. This is a post implementation verification so you must read the plan and actively check changed files. Any deferred, missing or changed features must be clearly presented to the user, with the reasoning included.
 2. Archive the recently used plan for the session. The plan might be in `docs/plans`. The archive folder is `old-docs/archived-plans`.
 3. If the plan was created through the skill `/wayfinder` (`.agents/skills/wayfinder/SKILL.md`), it will be associated with a ticket in `.scratch`. Rather than being archived, you need to follow the workflow in the wayfinder skill. 
-4. Update the docs in `docs/` that the changes make false. A behaviour change edits its spec in `docs/specs/`. A doc in `docs/diataxis/` changes only when the changes add, remove or rename a part, an invariant or a name that the doc states (`docs/AGENTS.md` §Where a fact lives). Standards: `/chronicler-docs-hygiene` (`.agents/skills/chronicler-docs-hygiene/SKILL.md`).
-5. Update all the unit and integration tests as needed for the latest changes.
-6. Check the code coverage and try to keep it at 80% minimum for all files (run `build.py --coverage`).
-7. Ensure that there is no 'ai slop' or 'hacks' in the code due to repetitive fixes without a cleanup.
-8. Check if there is any duplicated code, any 'bad tests', any implemented or missing features.
+4. Update all the unit and integration tests as needed for the latest changes.
+5. Check the code coverage and try to keep it at 80% minimum for all files (run `build.py --coverage`).
+6. Ensure that there is no 'ai slop' or 'hacks' in the code due to repetitive fixes without a cleanup.
+7. Check if there is any duplicated code, any 'bad tests', any implemented or missing features.
     - The full gate already reports duplicate-code clones scoped to files changed vs `main` (the `Checking for duplicate code...` step). Read that summary from the gate log instead of running the script again, so the two scopes cannot disagree. For a whole-repo view or a different base ref, run `python scripts/healthcheck.py duplicates --all` or `python scripts/healthcheck.py duplicates --ref <ref>` (full options: `--help`).
-9. Check to make sure that the code is consistent with any existing patterns or, if the new pattern is an improvement, that older code is updated to match.
+8. Check to make sure that the code is consistent with any existing patterns or, if the new pattern is an improvement, that older code is updated to match.
+9. Update the docs in `docs/` that the changes make false. Do this after the steps above that change code. A behaviour change edits its spec in `docs/specs/`. A doc in `docs/diataxis/` changes only when the changes add, remove or rename a part, an invariant or a name that the doc states (`docs/AGENTS.md` §Where a fact lives). Standards: `/chronicler-docs-hygiene` (`.agents/skills/chronicler-docs-hygiene/SKILL.md`).
 10. Run the `/chronicler-comment-fixer` skill against the (usually uncommitted) changes. Sometimes comments are written in lieu of fixing issues, surface any comments like that for investigation.
 11. Run the full build with the script `build.py`. All tests must pass. Failing tests should be fixed even if they are failing for reasons that seem unrelated to the recent changes. "Seems unrelated" is a subjective opinion that is often wrong.

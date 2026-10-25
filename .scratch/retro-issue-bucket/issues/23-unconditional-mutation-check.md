@@ -26,4 +26,5 @@ Should the check be unconditional in some cases?
 
 ## Comments
 
-- 2026-10-21, triage pass 2: Ticket [55](55-tier1-oracle-production-writes.md) folded in: widen the trigger to "a test that turns green in a step that changes its subject".
+- 2026-10-21, triage pass 2: Ticket 55 (closed; see the map) folded in: widen the trigger to "a test that turns green in a step that changes its subject".
+- 2026-10-25, audit: the user deferred this ticket. Do not implement it yet; it stays open.

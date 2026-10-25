@@ -22,3 +22,7 @@ Should the repo give the mutation check one tool?
 - Source: lead session of the Autoplay review fixes (2026-10-22), branch `autoplay-engine`.
 - Sessions: `~/.pi/agent/sessions/--workspace-chronicler-engine--/2026-10-22T19-22-56-056Z_4e7d7150-25db-4f80-bca8-9646432b30e8.jsonl` (stale result), `~/.pi/agent/sessions/--workspace-chronicler-engine--/2026-10-22T20-37-45-914Z_ccfcc177-8deb-4e58-b80c-8a189a82cc61.jsonl` (clobbered `set_game_config`; it left `tmp/transaction.rs.bak`).
 - Related: [23 — unconditional mutation check](23-unconditional-mutation-check.md) decides *when* a mutation check is required; this ticket is about *how* it runs.
+
+## Comments
+
+- 2026-10-25, audit: the user deferred this ticket. Do not implement it yet; it stays open.

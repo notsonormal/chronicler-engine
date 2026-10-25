@@ -122,7 +122,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `app_wiring.rs` — Test-app builders for the http test binary: scripted-model AppState + router bundles.
       - `http_assertions.rs` — Rendered-HTML assertions shared by the http test binary.
       - `http_fixtures.rs` — HTTP test fixtures: storage seeding, story reads and world-card builders for the endpoint tests.
-      - `http_requests.rs` — HTTP request plumbing for the http test binary: POST builders, body readers, generation-idle polling.
+      - `http_requests.rs` — HTTP request plumbing for the http test binary: POST builders, body readers, and the waits for a Job to end (`wait_idle`, `wait_settled`, `wait_for_jobs`).
       - `mod.rs` — Concept modules for the HTTP test binary's shared surface (requests, fixtures, assertions, app wiring).
 - **infrastructure/**
     - `architecture.rs` — Architecture guardrail tests using arch-lint — fail the build on any violation defined in `arch-lint.toml`; run with `cargo nextest run --test architecture`.

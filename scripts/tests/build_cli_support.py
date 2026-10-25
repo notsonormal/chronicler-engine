@@ -26,4 +26,6 @@ def reset_epilogue_state():
     build._NextestSummary.label = ""
     build._NextestSummary.sizes = {}
     build._NextestLeaks.lines = []
+    build._TestFailures.lines = []
+    build._StepFailures.lines = []
     build._CompileErrors.lines = []

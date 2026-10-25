@@ -355,7 +355,7 @@ Avoid **analysis paralysis**: when reasoning stops converging, act instead — r
 
 `tmp/` is the git-ignored scratch folder.
 
-Every build action goes through `build.py`. Each run writes `logs/build_*.log` and appends a row to `logs/build_history.txt`. Call `build.py` with a bash timeout of 1200 seconds. A piped `tail` of stdout loses the result when the run times out, so read the result from the newest log file:
+Every build action goes through `build.py`. Each run writes `logs/build_*.log` and appends a row to `logs/build_history.txt`. Run `build.py` in the foreground, with the `timeout` parameter of the bash tool set to 1200. A piped `tail` of stdout loses the result when the run times out, so read the result from the newest log file:
 
 ```bash
 tail -n 10 "$(ls -t logs/build_*.log | head -1)"
@@ -363,7 +363,7 @@ tail -n 10 "$(ls -t logs/build_*.log | head -1)"
 
 | Command | Covers | Warm cost |
 |---|---|---|
-| `python build.py clippy` | Compile and lint of all targets; warnings are errors | ~12 s |
+| `python build.py clippy` | Formatting check (`cargo fmt --check`), then compile and lint of all targets; warnings are errors | ~12 s |
 | `python build.py test-pattern "<pattern>"` | Tests whose name contains the pattern (a substring, not a regex), in every test binary | ~3 s, depends on the pattern |
 | `python build.py test-pattern "<pattern>" --test-target <name>` | Tests whose name matches the pattern, in one test binary (`--test <name>`; `--test-target lib` for the lib unit tests). Only that binary is rebuilt | ~6 s after a one-line edit |
 | `python build.py integration` | Every test binary except browser, architecture and guardrails; lib unit tests included | ~21 s |

@@ -260,6 +260,164 @@ class NextestStashTests(unittest.TestCase):
         self.assertEqual(build._NextestLeaks.lines, [])
 
 
+class NextestFailureTests(unittest.TestCase):
+    """A red run keeps each FAIL line and the cause of a failed non-nextest step."""
+
+    PANIC_OUTPUT = (
+        "        FAIL [   0.120s] ( 3/9) chronicler_engine::guardrails guardrails_long_comment_runs\n"
+        "  stdout ───\n\n"
+        "--- STDERR:              chronicler_engine::guardrails guardrails_long_comment_runs ---\n"
+        "\n"
+        "thread 'guardrails_long_comment_runs' panicked at tests/guardrails/gate.rs:338:9:\n"
+        "gate.rs:338 [WARN] Long comment run\n"
+        "note: run with `RUST_BACKTRACE=1`\n"
+        "        FAIL [   0.120s] ( 3/9) chronicler_engine::guardrails guardrails_long_comment_runs\n"
+        "     Summary [   1.000s] 9 tests run: 8 passed, 1 failed, 0 skipped\n"
+    )
+
+    def setUp(self):
+        reset_epilogue_state()
+
+    def tearDown(self):
+        reset_epilogue_state()
+
+    def _stash(self, output, label="Running guardrail tests..."):
+        build._NextestSummary.label = label
+        build._stash_nextest_summary(output)
+
+    def test_fail_line_is_kept_once_with_its_panic_message(self):
+        self._stash(self.PANIC_OUTPUT)
+        self.assertEqual(
+            build._TestFailures.lines,
+            [
+                (
+                    "Running guardrail tests...",
+                    "chronicler_engine::guardrails guardrails_long_comment_runs",
+                    "gate.rs:338 [WARN] Long comment run",
+                )
+            ],
+        )
+
+    def test_fail_line_without_stderr_keeps_an_empty_message(self):
+        self._stash("        FAIL [   0.1s] ( 1/1) bin::t\n")
+        self.assertEqual(
+            build._TestFailures.lines, [("Running guardrail tests...", "bin::t", "")]
+        )
+
+    def test_pass_line_is_not_a_failure(self):
+        self._stash("        PASS [   0.1s] ( 1/1) bin::t\n")
+        self.assertEqual(build._TestFailures.lines, [])
+
+    def test_failed_non_nextest_step_keeps_its_last_lines(self):
+        build._NextestSummary.label = "Checking guardrails.md freshness..."
+        build._stash_failure("one\n\ntwo\nthree\nfour\nfix: python scripts/generate_guardrails_doc.py\n\n")
+        self.assertEqual(
+            build._StepFailures.lines,
+            [
+                (
+                    "Checking guardrails.md freshness...",
+                    ["three", "four", "fix: python scripts/generate_guardrails_doc.py"],
+                )
+            ],
+        )
+
+    def test_failed_nextest_or_compile_step_keeps_no_tail(self):
+        build._stash_failure(self.PANIC_OUTPUT)
+        build._stash_failure("error[E0599]: no method\n --> src/a.rs:1:1\n")
+        self.assertEqual(build._StepFailures.lines, [])
+
+    @staticmethod
+    def _run_main(printed, failed_step, setup):
+        memlog = _MemLog()
+        gate_args = SimpleNamespace(
+            command=None, cleanup=False, llm_only=False, no_browser=False
+        )
+
+        def fake_gate(_args, record):
+            setup()
+            record.failures.append(failed_step)
+
+        with mock.patch.object(
+            build, "parse_args", return_value=gate_args
+        ), mock.patch.object(build, "run_gate", side_effect=fake_gate), mock.patch.object(
+            build, "clean_old_logs"
+        ), mock.patch.object(
+            build, "_tree_identity", return_value="abc"
+        ), mock.patch.object(
+            build, "_append_history"
+        ), mock.patch.object(
+            build, "_last_tier_sizes", return_value={}
+        ), mock.patch(
+            "builtins.print", side_effect=lambda msg="": printed.append(msg)
+        ), mock.patch(
+            "builtins.open", return_value=memlog
+        ):
+            return build.main()
+
+    def test_epilogue_prints_the_failures_block(self):
+        printed = []
+        label = "Running guardrail tests..."
+        exit_code = self._run_main(
+            printed, label, lambda: self._stash(self.PANIC_OUTPUT, label)
+        )
+        self.assertEqual(exit_code, 1)
+        idx = printed.index("--- Failures ---")
+        self.assertEqual(printed[idx + 1], f"  {label}")
+        self.assertEqual(
+            printed[idx + 2],
+            "    FAIL chronicler_engine::guardrails guardrails_long_comment_runs",
+        )
+        self.assertEqual(printed[idx + 3], "      gate.rs:338 [WARN] Long comment run")
+
+    def test_epilogue_prints_the_cause_of_a_failed_non_nextest_step(self):
+        printed = []
+        label = "Checking guardrails.md freshness..."
+
+        def setup():
+            build._NextestSummary.label = label
+            build._stash_failure("stale\nrun: python scripts/generate_guardrails_doc.py\n")
+
+        self._run_main(printed, label, setup)
+        idx = printed.index("--- Failures ---")
+        self.assertEqual(printed[idx + 1], f"  {label}")
+        self.assertEqual(printed[idx + 2], "    stale")
+        self.assertEqual(
+            printed[idx + 3], "    run: python scripts/generate_guardrails_doc.py"
+        )
+
+    def test_epilogue_bounds_the_test_list(self):
+        printed = []
+        label = "Running integration tests..."
+        output = "".join(
+            f"        FAIL [   0.1s] ( {i}/30) bin::t{i}\n" for i in range(25)
+        )
+        self._run_main(printed, label, lambda: self._stash(output, label))
+        self.assertEqual(sum(1 for msg in printed if msg.startswith("    FAIL ")), 20)
+        self.assertIn("  ... 5 more, see the log", printed)
+
+    def test_green_run_prints_no_failures_block(self):
+        printed = []
+        build._TestFailures.lines = [("Some step", "bin::t", "")]
+        gate_args = SimpleNamespace(
+            command=None, cleanup=False, llm_only=False, no_browser=False
+        )
+        with mock.patch.object(
+            build, "parse_args", return_value=gate_args
+        ), mock.patch.object(build, "run_gate"), mock.patch.object(
+            build, "clean_old_logs"
+        ), mock.patch.object(
+            build, "_tree_identity", return_value="abc"
+        ), mock.patch.object(
+            build, "_append_history"
+        ), mock.patch(
+            "builtins.print", side_effect=lambda msg="": printed.append(msg)
+        ), mock.patch(
+            "builtins.open", return_value=_MemLog()
+        ):
+            build.main()
+        self.assertNotIn("--- Failures ---", printed)
+
+
 class NextestEpilogueTests(unittest.TestCase):
     """The epilogue prints the one-liner directly before the build banner."""
 

@@ -29,6 +29,10 @@ Where should the check live?
 
 - Ticket 15 edited scenario 9.2 of `docs/specs/swipe_new.md`, so the "reword when edited" rule applied to the whole file. The document review listed 29 lines across about 20 scenarios and properties, for example `message_service.load_or_fresh().narrative.input_buffer.status is GenerationStatus::Error(msg)`. The lead reworded all of them.
 - The standards review then found one more leftover (`never stuck \`Generating\`` in I.1). A lint would have found all of them in one pass.
-- The spec-axis code review reported the rewording as scope creep (finding 6, session `01a12d31-7858-74b1-b842-ce6d120162ef`). The user ruled on 2026-10-11 that reviews must fix older problems in the files a change touches (see [Scope the comment pass to the lines the diff adds](12-comment-pass-scope-to-the-diff.md)), so that finding was wrong. The gap is in the code-review spec brief, not in this rule.
+- The spec-axis code review reported the rewording as scope creep (finding 6, session `01a12d31-7858-74b1-b842-ce6d120162ef`). The user ruled on 2026-10-11 that reviews must fix older problems in the files a change touches (see Scope the comment pass to the lines the diff adds (ticket 12, closed; see the map)), so that finding was wrong. The gap is in the code-review spec brief, not in this rule.
 - `swipe_new.md` now has none of these identifiers, so a ratchet there would start at zero.
 - Sessions: document review `01a12d26-c327-71c6-8485-983fc7949bdd`; standards review `01a12d31-6ae2-7628-9e61-cdb59383a0e5`.
+
+## Comments
+
+- 2026-10-25, audit: the user deferred this ticket. Do not implement it yet; it stays open.

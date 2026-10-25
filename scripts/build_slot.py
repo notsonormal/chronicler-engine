@@ -119,10 +119,7 @@ def slot_status(echo: Callable[[str], None] = print) -> int:
         return 1
     with contextlib.suppress(Exception):
         handle.close()
-    holder = _describe_holder(lock)
     echo("Build slot: free.")
-    if holder:
-        echo(f"  leftover .holder is stale: {holder}")
     return 0
 
 

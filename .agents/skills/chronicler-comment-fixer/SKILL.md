@@ -27,7 +27,7 @@ python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --branc
 python .agents/skills/chronicler-comment-fixer/scripts/comment_finder.py --branch develop
 ```
 
-The script prints `path:line - comment_text`.
+The script prints `path:line - comment_text`. A line with a change word (`renamed`, `became`, `stays`, `no longer`, `used to`, `was changed`) ends in `[change-word: ...]`; judge each flagged line against `CODING_STANDARDS.md` (comments never reference the task).
 
 ## 2. Classify every line, then act
 
@@ -50,7 +50,10 @@ Keep a comment only when **both** hold:
 1. **Non-obvious.** It names a hidden constraint or a behaviour that would surprise a reader. Not a restatement of what the next line does. Not a reason a reader can derive.
 2. **Not carried by the code.** The reason is not already recoverable from a symbol name, a type, a field, a function name, a test name, or an assertion message. If renaming the symbol would make the comment redundant, rename the symbol and delete the comment.
 
-If either part fails, delete. If the reason is real but the code could carry it, delete and raise a reshape flag.
+If either part fails, delete. If the reason is real but the code could carry it:
+
+- **In the file you judge:** a rename or a visibility or `cfg` gate. Make the change, delete the comment, and report a rewrite.
+- **Across files, or a design call:** delete the comment and raise a reshape flag.
 
 The default is delete. A comment that survives on a technicality is noise. The survivors are rare: an invariant with no symbol for it, a browser or OS behaviour that would surprise, an ordering constraint, a hidden coupling.
 
@@ -137,4 +140,8 @@ Severity levels:
 
 # RESHAPE FLAGS: (OFFERED, FAIL reports only)
   FILE:SYMBOL - minimal shape change that removes the comment's reason
+
+# DELETED REASONS:
+  FILE:LINE - the deleted comment, in full - the KEEP part it fails
+  (every deleted comment that states a why; the caller checks each one)
 ```

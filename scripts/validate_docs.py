@@ -41,6 +41,21 @@ Rules (only enforced on STANDARD docs):
                               This one check also runs on the hand-written
                               root docs (see ROOT_DOCS), which name paths too.
 
+Route rule (runs on every `docs/**/*.md` and `.agents/skills/**/SKILL.md`):
+
+  UNKNOWN_ROUTE            — an HTTP route string that is not a route of the
+                              generated table `docs/diataxis/reference/frontend/
+                              http_routes.md`. A route string is a path whose
+                              first segment is a first segment of a table route.
+                              A `:param` segment of the table matches any one
+                              segment. Fenced code blocks are scanned, because
+                              `curl` examples there are what an agent copies.
+                              Exempt: `docs/plans/` (transient: plans name
+                              routes that no longer exist), `old-docs/`, and the
+                              table itself. A route followed by `…`, `...`, `*`,
+                              `<` or a trailing `/` names a family, not a route, and is
+                              skipped.
+
 Diátaxis-front-matter rules (only enforced on STANDARD docs under
 docs/diataxis/):
 
@@ -161,6 +176,17 @@ DOC_ANCHOR_LINE = re.compile(r"^\s*(?://!|//|#)?\s*\[DOC:[^]]*\]")
 # comment prefix) so format-string literals mentioning `[DOC: ...]` inside
 # test guardrails are not mistaken for real anchors.
 DOC_ANCHOR = re.compile(r"^\s*(?://!|//|#)?\s*\[DOC:\s+([a-zA-Z0-9_/.\\-]+\.md)\s*\]")
+
+# A row of the generated route table: `| POST | `/games/:id/switch` | `handler` |`.
+ROUTE_TABLE_ROW = re.compile(r"^\|\s*[A-Z]+\s*\|\s*`(/[^`]*)`\s*\|")
+
+ROUTES_DOC = Path("docs") / "diataxis" / "reference" / "frontend" / "http_routes.md"
+
+# Directories under docs/ whose routes are not checked (see UNKNOWN_ROUTE).
+ROUTE_EXEMPT_DIR_NAMES: set[str] = {"plans", "old-docs"}
+
+# Characters that follow a route and show it is a family or a pattern.
+ROUTE_FAMILY_FOLLOWERS = ("\u2026", "...", "*", "<")
 
 # Paths whose existence we never check (network, mail, in-page anchors).
 URI_SCHEMES = ("http://", "https://", "mailto:")
@@ -1057,6 +1083,114 @@ def check_test_support_rules(report: FileReport, path: Path, engine_root: Path) 
 
 
 # ---------------------------------------------------------------------------
+# Route check.
+# ---------------------------------------------------------------------------
+
+
+def load_route_table(engine_root: Path) -> list[list[str]] | None:
+    """Return the routes of the generated table as segment lists, or None if absent."""
+    table_path = engine_root / ROUTES_DOC
+    if not table_path.is_file():
+        return None
+    routes: list[list[str]] = []
+    for line in table_path.read_text(encoding="utf-8").splitlines():
+        match = ROUTE_TABLE_ROW.match(line)
+        if match:
+            routes.append([seg for seg in match.group(1).split("/") if seg])
+    return routes
+
+
+def route_prefixes(routes: list[list[str]]) -> set[str]:
+    """The first segments of the table routes: the prefixes that mark a route string."""
+    return {segments[0] for segments in routes if segments}
+
+
+def route_pattern(prefixes: set[str]) -> re.Pattern[str]:
+    """Regex that finds a route string whose first segment is one of `prefixes`.
+
+    A URL or `localhost` host and port before the path are consumed, so
+    `curl localhost:8080/x` is found. A bare route must not follow a path character: `http/action`
+    in a source path is not the route `/action`.
+    """
+    alternatives = "|".join(re.escape(prefix) for prefix in sorted(prefixes, key=len, reverse=True))
+    return re.compile(
+        r"(?:(?:https?://[\w.-]+|localhost|127\.0\.0\.1)(?::[\w${}]+)?(?=/)|(?<![\w./:{}~>\-]))"
+        rf"(/(?:{alternatives})(?![\w-])(?:/[\w:{{}}.\-]*)*)"
+    )
+
+
+def route_is_listed(route: str, routes: list[list[str]]) -> bool:
+    """True when `route` equals a table route, a `:param` segment matching any one segment."""
+    segments = [seg for seg in route.split("/") if seg]
+    for listed in routes:
+        if len(listed) != len(segments):
+            continue
+        if all(want.startswith(":") or want == got for want, got in zip(listed, segments)):
+            return True
+    return False
+
+
+def check_routes(report: FileReport, routes: list[list[str]], pattern: re.Pattern[str]) -> None:
+    """Flag a route string that the generated route table does not list."""
+    text = read_text(report)
+    if text is None:
+        return
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for match in pattern.finditer(line):
+            raw = match.group(1)
+            if raw.endswith("/"):
+                continue
+            route = raw.rstrip(".,;:)")
+            follower = line[match.start(1) + len(route):][:3]
+            if follower.startswith(ROUTE_FAMILY_FOLLOWERS):
+                continue
+            if route_is_listed(route, routes):
+                continue
+            report.violations.append(
+                Violation(
+                    ERROR,
+                    "UNKNOWN_ROUTE",
+                    f"Line {lineno}: route `{route}` is not listed in "
+                    f"{ROUTES_DOC.as_posix()}",
+                )
+            )
+
+
+def collect_route_files(engine_root: Path) -> list[Path]:
+    """Markdown under docs/ (minus exempt dirs and the table) and every skill SKILL.md."""
+    docs_root = engine_root / "docs"
+    table_path = (engine_root / ROUTES_DOC).resolve()
+    files: set[Path] = set()
+    for path in docs_root.rglob("*.md"):
+        rel = path.relative_to(docs_root)
+        if any(part in ROUTE_EXEMPT_DIR_NAMES for part in rel.parts):
+            continue
+        if path.resolve() == table_path:
+            continue
+        files.add(path)
+    files.update((engine_root / ".agents" / "skills").glob("*/SKILL.md"))
+    return sorted(files)
+
+
+def scan_routes(files: list[Path], engine_root: Path) -> list[FileReport]:
+    """Route check over `files`. A missing route table is one error, not a silent pass."""
+    routes = load_route_table(engine_root)
+    if routes is None:
+        report = FileReport(engine_root / ROUTES_DOC)
+        report.violations.append(
+            Violation(ERROR, "UNKNOWN_ROUTE", "route table missing; run scripts/extract_http_routes.py")
+        )
+        return [report]
+    pattern = route_pattern(route_prefixes(routes))
+    reports = []
+    for path in files:
+        report = FileReport(path)
+        check_routes(report, routes, pattern)
+        reports.append(report)
+    return reports
+
+
+# ---------------------------------------------------------------------------
 # Scanning and rendering.
 # ---------------------------------------------------------------------------
 
@@ -1203,10 +1337,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: file not found: {args.path}", file=sys.stderr)
             return 2
         try:
-            rel = target.relative_to(engine_root)
+            rel = target.relative_to(engine_root.resolve())
         except ValueError:
             rel = None
-        if rel is None or not rel.parts[:2] == ["docs", "diataxis"]:
+        if rel is None or rel.parts[:2] != ("docs", "diataxis"):
             print(
                 f"Error: --path file must be under docs/diataxis/: {args.path}",
                 file=sys.stderr,
@@ -1230,6 +1364,14 @@ def main(argv: list[str] | None = None) -> int:
     print(rendered)
 
     md_errors, md_warnings = error_count, warning_count
+
+    route_files = [target] if args.path else collect_route_files(engine_root)
+    route_render, route_err, route_warn, _ = render_reports(
+        scan_routes(route_files, engine_root), engine_root
+    )
+    print(route_render)
+    md_errors += route_err
+    md_warnings += route_warn
 
     anchor_files = collect_anchor_files(engine_root)
     if anchor_files:

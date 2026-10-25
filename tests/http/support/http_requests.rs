@@ -1,4 +1,4 @@
-//! HTTP request plumbing for the http test binary: POST builders, body readers, generation-idle polling.
+//! HTTP request plumbing for the http test binary: POST builders, body readers, and the waits for a Job to end (`wait_idle`, `wait_settled`, `wait_for_jobs`).
 
 use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::test_support::STRAY_CALL_MARKER;

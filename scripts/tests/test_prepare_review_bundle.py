@@ -94,6 +94,74 @@ class BundleCliTests(unittest.TestCase):
         self.assertIn("second commit", (out / "commits.txt").read_text())
         self.assertIn("changed after base", (out / "src.patch").read_text())
 
+    def test_worktree_mode_diffs_the_ref_against_the_working_tree(self):
+        base = self._sha("HEAD")
+        (self.repo / "src" / "a.py").write_text("committed after base\n")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-qm", "second commit")
+        (self.repo / "src" / "a.py").write_text("uncommitted fix\n")
+        (self.repo / "src" / "new.py").write_text("untracked contents\n")
+
+        result = _run(self.repo, "--ref", base, "--worktree")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = Path(result.stdout.strip())
+        self.assertEqual(out.name, f"{self._sha('--short', 'HEAD')}-worktree")
+        patch = (out / "src.patch").read_text()
+        self.assertIn("uncommitted fix", patch)
+        self.assertIn("untracked contents", patch)
+        self.assertNotIn("committed after base", patch, "the diff ends at the tree, not at HEAD")
+        self.assertIn("src/new.py", (out / "untracked.txt").read_text())
+        self.assertIn("second commit", (out / "commits.txt").read_text())
+        readme = (out / "README.md").read_text()
+        self.assertIn(f"- mode: worktree (working tree against {base})", readme)
+        self.assertIn(f"- fixed point: {base}", readme)
+
+    def test_worktree_without_ref_is_refused(self):
+        result = _run(self.repo, "--worktree")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--worktree is valid only with --ref", result.stderr)
+
+    def test_readme_points_at_the_clone_report_with_the_fixed_point(self):
+        base = self._sha("HEAD")
+        cases = {
+            ("--ref", base): f"python scripts/healthcheck.py duplicates --ref {base}`",
+            ("--ref", base, "--worktree"): f"python scripts/healthcheck.py duplicates --ref {base}`",
+            (): "python scripts/healthcheck.py duplicates --ref HEAD`",
+        }
+        for index, (args, expected) in enumerate(cases.items()):
+            result = _run(self.repo, *args, "--out", f"tmp/clone-{index}")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            readme = (Path(result.stdout.strip()) / "README.md").read_text()
+            self.assertIn(expected, readme, args)
+
+    def test_readme_slice_command_extracts_exactly_one_file(self):
+        (self.repo / "src" / "b.py").write_text("b base\n")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-qm", "add b")
+        (self.repo / "src" / "a.py").write_text("a edited\n")
+        (self.repo / "src" / "b.py").write_text("b edited\n")
+        (self.repo / "src" / "c.py").write_text("c untracked\n")
+
+        result = _run(self.repo)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = Path(result.stdout.strip())
+        readme = (out / "README.md").read_text()
+        self.assertNotIn("largest areas first", readme)
+        command = next(line for line in readme.splitlines() if line.startswith("awk "))
+        for path, wanted, unwanted in (
+            ("src/b.py", "b edited", ("a edited", "c untracked")),
+            ("src/c.py", "c untracked", ("a edited", "b edited")),
+        ):
+            sliced = subprocess.run(
+                command.replace("PATH", path),
+                shell=True, cwd=self.repo, capture_output=True, text=True,
+            )
+            self.assertEqual(sliced.returncode, 0, sliced.stderr)
+            self.assertEqual(sliced.stdout.count("diff --git"), 1, sliced.stdout)
+            self.assertIn(wanted, sliced.stdout)
+            for other in unwanted:
+                self.assertNotIn(other, sliced.stdout)
+
     def test_untracked_contents_reach_their_area_patch(self):
         untracked = {
             "src/new.py": "brand new source contents\n",

@@ -25,7 +25,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build  # noqa: E402
-from build_cli_support import _MemLog  # noqa: E402
+from build_cli_support import _MemLog, reset_epilogue_state  # noqa: E402
 
 
 class RegistryTests(unittest.TestCase):
@@ -491,6 +491,103 @@ class StepCommandTests(unittest.TestCase):
     def test_test_target_is_ignored_by_a_non_test_step(self):
         command = build._step_command(build.REGISTRY["clippy"], None, None, "http")
         self.assertEqual(command, build.REGISTRY["clippy"].cmd)
+
+
+class ClippyFormatCheckTests(unittest.TestCase):
+    """The narrow `clippy` step runs `cargo fmt --check` first and fails fast."""
+
+    def setUp(self):
+        reset_epilogue_state()
+
+    def tearDown(self):
+        reset_epilogue_state()
+
+    @staticmethod
+    def _run_step(command, fmt_result):
+        events = []
+        record = build.StepRecord()
+        args = SimpleNamespace(command=command, target_dir=None, release=False)
+
+        def fake_fmt(cmd, **_kwargs):
+            events.append(("fmt", cmd))
+            return fmt_result
+
+        def fake_timed(_counter, _record, label, cmd, **_kwargs):
+            events.append(("step", cmd))
+
+        with mock.patch.object(build, "check_rust_version"), mock.patch.object(
+            build, "_cargo_env_for", return_value={}
+        ), mock.patch.object(build, "_warn_if_target_locked"), mock.patch.object(
+            build.subprocess, "run", side_effect=fake_fmt
+        ), mock.patch.object(
+            build, "_timed_run", side_effect=fake_timed
+        ), mock.patch.object(build, "both_print"):
+            try:
+                build.run_step(args, record)
+                exited = None
+            except SystemExit as err:
+                exited = err.code
+        return events, record, exited
+
+    def test_clean_formatting_runs_the_fmt_check_before_clippy(self):
+        fmt = SimpleNamespace(returncode=0, stdout="", stderr="")
+        events, record, exited = self._run_step("clippy", fmt)
+        self.assertIsNone(exited)
+        self.assertEqual(
+            events,
+            [
+                ("fmt", "cargo fmt --check"),
+                ("step", "cargo clippy --all-targets --all-features -- -D warnings"),
+            ],
+        )
+        self.assertEqual(record.failures, [])
+
+    def test_unformatted_files_fail_fast_and_are_named(self):
+        fmt = SimpleNamespace(
+            returncode=1,
+            stdout="Diff in /x/tests/http/settings.rs:568:\n-  a \n+  a\nDiff in /x/src/a.rs:1:\n",
+            stderr="",
+        )
+        with mock.patch.object(build.os.path, "relpath", side_effect=lambda p: p[3:]):
+            events, record, exited = self._run_step("clippy", fmt)
+        self.assertEqual(exited, 1)
+        self.assertEqual(events, [("fmt", "cargo fmt --check")])
+        self.assertEqual(record.failures, ["Checking formatting..."])
+        self.assertEqual(
+            build._StepFailures.lines,
+            [
+                (
+                    "Checking formatting...",
+                    [
+                        "unformatted: tests/http/settings.rs",
+                        "unformatted: src/a.rs",
+                        "fix: python build.py fmt",
+                    ],
+                )
+            ],
+        )
+
+    def test_other_steps_do_not_run_the_fmt_check(self):
+        fmt = SimpleNamespace(returncode=1, stdout="", stderr="")
+        events, _record, exited = self._run_step("check", fmt)
+        self.assertIsNone(exited)
+        self.assertEqual([kind for kind, _ in events], ["step"])
+
+    def test_full_gate_plan_is_unchanged(self):
+        labels = [
+            step.label
+            for step in build._plan_gate_steps(
+                SimpleNamespace(
+                    no_fmt=False,
+                    no_browser=False,
+                    coverage=False,
+                    include_llm=False,
+                    test_timings=False,
+                )
+            )
+        ]
+        self.assertNotIn("Checking formatting...", labels)
+        self.assertIn("Formatting...", labels)
 
 
 class CargoEnvTests(unittest.TestCase):

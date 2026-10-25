@@ -151,6 +151,52 @@ class GatePlanTests(unittest.TestCase):
         totals = {msg.split("]")[0].split("/")[1] for msg in progress}
         self.assertEqual(totals, {str(len(plan))})
 
+    def test_report_only_steps_get_timing_rows(self):
+        args = self.gate_args()
+        plan = build._plan_gate_steps(args)
+        record = build.StepRecord()
+        with mock.patch.object(build, "_timed_run"), mock.patch.object(
+            build, "_copy_deployment_assets"
+        ), mock.patch.object(build, "_generate_coverage_report"), mock.patch.object(
+            build, "run", return_value=0
+        ), mock.patch.object(build, "both_print"):
+            build._execute_gate_plan(plan, args, {}, record)
+        rows = {row["step"]: row for row in record.timings}
+        for label in (
+            "Installing git hooks...",
+            "Removing safe worktrees and pruning stale target dirs...",
+            "Checking for duplicate code...",
+        ):
+            self.assertTrue(rows[label]["report_only"], label)
+            self.assertFalse(rows[label]["failed"], label)
+            self.assertFalse(rows[label]["warned"], label)
+        self.assertEqual(record.failures, [])
+
+    def test_failed_report_only_step_warns_and_keeps_the_gate_green(self):
+        args = self.gate_args()
+        plan = [step for step in build._plan_gate_steps(args) if step.kind == "duplicates"]
+        record = build.StepRecord()
+        with mock.patch.object(build, "run", return_value=1), mock.patch.object(
+            build, "both_print"
+        ):
+            build._execute_gate_plan(plan, args, {}, record)
+        self.assertEqual(record.failures, [])
+        printed = []
+        with mock.patch.object(
+            build, "both_print", side_effect=lambda msg="": printed.append(msg)
+        ):
+            build._print_step_summary(record.timings, record.failures, "log")
+        self.assertTrue(
+            any(
+                "[WARN]" in msg
+                and "Checking for duplicate code..." in msg
+                and "report-only" in msg
+                for msg in printed
+            ),
+            printed,
+        )
+        self.assertFalse(any("[FAILED]" in msg for msg in printed))
+
     def test_duplicates_step_is_report_only(self):
         plan = build._plan_gate_steps(self.gate_args())
         dup_steps = [step for step in plan if step.kind == "duplicates"]

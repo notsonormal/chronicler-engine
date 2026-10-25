@@ -6,6 +6,7 @@ Finds and filters comment patterns in Rust, Python, JavaScript, HTML and CSS fil
 
 import argparse
 import bisect
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,27 @@ if _sys.platform == "win32":
     _sys.stderr = io.TextIOWrapper(_sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
+# Words that narrate a change instead of stating the code's current state.
+# The finder only flags them; the fixer judges each flagged line.
+CHANGE_WORDS = (
+    "rename", "renamed", "became", "stays", "no longer", "used to", "was changed",
+)
+CHANGE_WORD_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(word).replace(r"\ ", r"\s+") for word in CHANGE_WORDS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def change_words_in(text: str) -> list[str]:
+    """Return the distinct change words of `text`, lowercase, in order of first use."""
+    found: list[str] = []
+    for match in CHANGE_WORD_PATTERN.finditer(text):
+        word = re.sub(r"\s+", " ", match.group(1).lower())
+        if word not in found:
+            found.append(word)
+    return found
+
+
 @dataclass
 class CommentMatch:
     """Represents a single comment match."""
@@ -27,8 +49,12 @@ class CommentMatch:
     content: str
 
     def format_rich(self) -> str:
-        """Format match as path:line - comment."""
-        return f"{self.file_path}:{self.line_number} - {self.content}"
+        """Format match as path:line - comment, plus a change-word flag when one is found."""
+        line = f"{self.file_path}:{self.line_number} - {self.content}"
+        words = change_words_in(self.content)
+        if words:
+            line += f"  [change-word: {', '.join(words)}]"
+        return line
 
 
 SCRIPT_DIR = Path(__file__).parent.resolve()

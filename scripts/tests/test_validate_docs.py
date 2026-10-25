@@ -509,5 +509,102 @@ class TestDocAnchors(unittest.TestCase):
         self.assertEqual(rules, {"TEST_SUPPORT_ANCHOR_FORBIDDEN"})
 
 
+class TestRouteCheck(unittest.TestCase):
+    """UNKNOWN_ROUTE: route strings in docs and skills must be in the generated table."""
+
+    TABLE = (
+        "| Method | Path | Handler |\n|---|---|---|\n"
+        "| GET | `/` | `index_handler` |\n"
+        "| GET | `/status/busy` | `busy_status_handler` |\n"
+        "| POST | `/games/:id/switch` | `switch_game_handler` |\n"
+        "| POST | `/message/:id/swipe/:index` | `switch_swipe_handler` |\n"
+        "| GET | `/fragment/header` | `header_fragment` |\n"
+    )
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        table = self.root / vd.ROUTES_DOC
+        table.parent.mkdir(parents=True)
+        table.write_text(self.TABLE, encoding="utf-8")
+
+    def messages(self, text: str, rel: str = "docs/diataxis/how-to/x.md") -> list[str]:
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        (report,) = vd.scan_routes([path], self.root)
+        return [v.message for v in report.violations]
+
+    def test_prefixes_come_from_the_table(self) -> None:
+        routes = vd.load_route_table(self.root)
+        self.assertEqual(vd.route_prefixes(routes), {"status", "games", "message", "fragment"})
+
+    def test_listed_routes_pass_including_params_and_hosts(self) -> None:
+        text = (
+            "Poll `/status/busy`, then `curl http://localhost:3001/fragment/header`.\n"
+            "```sh\ncurl -X POST localhost:$PORT/games/7/switch\n```\n"
+            "Use `/message/{id}/swipe/2` or `/games/:id/switch`.\n"
+        )
+        self.assertEqual(self.messages(text), [])
+
+    def test_unknown_route_is_an_error_with_line_and_route(self) -> None:
+        text = "ok `/status/busy`\nstale `/status/generating` here\n"
+        (message,) = self.messages(text)
+        self.assertIn("Line 2", message)
+        self.assertIn("`/status/generating`", message)
+
+    def test_wrong_segment_count_is_unknown(self) -> None:
+        self.assertEqual(len(self.messages("`/games/7/switch/now` and `/games/7`")), 2)
+
+    def test_source_paths_and_file_paths_are_not_routes(self) -> None:
+        text = (
+            "`application/games/active.rs`, `data/settings.json`, "
+            "`<target-dir>/status/x`, `http/fragment/y`.\n"
+        )
+        self.assertEqual(self.messages(text), [])
+
+    def test_family_mentions_are_not_routes(self) -> None:
+        self.assertEqual(self.messages("`/fragment/\u2026`, `/fragment/*`, `/fragment/<name>`, `/fragment/`"), [])
+
+    def test_trailing_punctuation_is_not_part_of_the_route(self) -> None:
+        self.assertEqual(self.messages("See /status/busy. Also (/fragment/header)."), [])
+
+    def test_collect_route_files_exempts_plans_old_docs_and_the_table(self) -> None:
+        for rel in (
+            "docs/plans/p.md",
+            "docs/old-docs/o.md",
+            "docs/specs/s.md",
+            ".agents/skills/demo/SKILL.md",
+            ".agents/skills/demo/other.md",
+        ):
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x\n", encoding="utf-8")
+        found = {p.relative_to(self.root).as_posix() for p in vd.collect_route_files(self.root)}
+        self.assertEqual(found, {"docs/specs/s.md", ".agents/skills/demo/SKILL.md"})
+
+    def test_missing_route_table_is_an_error(self) -> None:
+        (self.root / vd.ROUTES_DOC).unlink()
+        (report,) = vd.scan_routes([], self.root)
+        self.assertEqual([v.rule for v in report.violations], ["UNKNOWN_ROUTE"])
+
+    def test_live_table_lists_a_param_route_and_rejects_a_removed_one(self) -> None:
+        routes = vd.load_route_table(REPO_ROOT)
+        self.assertTrue(vd.route_is_listed("/message/3/swipe/1", routes))
+        self.assertTrue(vd.route_is_listed("/status/busy", routes))
+        self.assertFalse(vd.route_is_listed("/status/generating", routes))
+
+
+
+class TestPathOption(unittest.TestCase):
+    def test_path_accepts_a_diataxis_doc(self) -> None:
+        doc = REPO_ROOT / "docs" / "diataxis" / "reference" / "game_flow.md"
+        self.assertIn(vd.main(["--path", str(doc), "--list"]), (0, 1))
+
+    def test_path_rejects_a_doc_outside_diataxis(self) -> None:
+        self.assertEqual(vd.main(["--path", str(REPO_ROOT / "AGENTS.md")]), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

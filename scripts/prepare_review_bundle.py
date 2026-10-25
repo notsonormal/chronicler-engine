@@ -105,7 +105,11 @@ def _prepare_run_dir(out_dir: Path) -> None:
 
 
 def _base_arg(mode: str, ref: str | None) -> str:
-    return f"{ref}...HEAD" if mode == "ref" else "HEAD"
+    if mode == "ref":
+        return f"{ref}...HEAD"
+    if mode == "worktree":
+        return str(ref)
+    return "HEAD"
 
 
 def _patch_text(base: str, files: list[str], repo_root: Path) -> str:
@@ -161,8 +165,10 @@ def _readme_text(
     has_commits: bool,
 ) -> str:
     mode_line = (
-        f"working tree against {base}" if mode == "uncommitted" else f"three-dot diff against {ref}"
+        f"three-dot diff against {ref}" if mode == "ref" else f"working tree against {base}"
     )
+    # The duplicates report scopes to files changed against one ref, working tree included.
+    duplicates_ref = "HEAD" if mode == "uncommitted" else ref
     lines = [
         "# Review bundle",
         "",
@@ -177,7 +183,7 @@ def _readme_text(
         "| --- | --- |",
         "| `stat.txt` | diffstat and per-area file counts |",
     ]
-    area_note = "tracked + untracked contents" if mode == "uncommitted" else "tracked changes"
+    area_note = "tracked changes" if mode == "ref" else "tracked + untracked contents"
     for area, filename, _prefixes in AREAS:
         lines.append(f"| `{filename}` | {area} patches ({area_note}) |")
     if has_commits:
@@ -185,13 +191,18 @@ def _readme_text(
     lines += [
         "| `untracked.txt` | untracked file names |",
         "| `deleted.txt` | deleted file names |",
+        "| clone pairs | `python scripts/healthcheck.py duplicates --ref "
+        f"{duplicates_ref}` lists the clone pairs in the changed files |",
         "",
         "## How to read",
         "",
         "```sh",
         f"less {out_dir}/stat.txt",
-        f"less {out_dir}/src.patch        # largest areas first",
+        f"less {out_dir}/src.patch",
         f"grep -n '^diff --git' {out_dir}/*.patch",
+        "# one file out of a patch (replace PATH with the repo path)",
+        "awk -v f='diff --git a/PATH ' '/^diff --git/{p=(index($0,f)==1)} p' "
+        f"{out_dir}/src.patch",
         "```",
         "",
     ]
@@ -204,9 +215,9 @@ def build_bundle(mode: str, ref: str | None, out_dir: Path, repo_root: Path) -> 
             f"refusing to write outside a gitignored path: {out_dir} "
             "(use a path under tmp/)"
         )
-    if mode == "ref":
+    if mode in ("ref", "worktree"):
         if ref is None:
-            raise BundleError("--ref needs a fixed point")
+            raise BundleError(f"{mode} mode needs a fixed point (--ref)")
         _resolve_ref(ref, repo_root)
 
     base = _base_arg(mode, ref)
@@ -216,7 +227,7 @@ def build_bundle(mode: str, ref: str | None, out_dir: Path, repo_root: Path) -> 
     )
     untracked = (
         _nul_split(_git(["ls-files", "--others", "--exclude-standard", "-z"], repo_root).stdout)
-        if mode == "uncommitted"
+        if mode != "ref"
         else []
     )
 
@@ -241,7 +252,7 @@ def build_bundle(mode: str, ref: str | None, out_dir: Path, repo_root: Path) -> 
     (out_dir / "stat.txt").write_text(
         _stat_text(base, repo_root, area_counts, untracked, deleted), encoding="utf-8"
     )
-    has_commits = mode == "ref"
+    has_commits = mode in ("ref", "worktree")
     if has_commits:
         (out_dir / "commits.txt").write_text(
             _git(["log", f"{ref}..HEAD", "--oneline"], repo_root).stdout, encoding="utf-8"
@@ -262,15 +273,23 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--uncommitted", action="store_true", help="diff the working tree against HEAD (default)"
     )
     mode.add_argument("--ref", metavar="REF", help="three-dot diff against REF")
+    parser.add_argument(
+        "--worktree",
+        action="store_true",
+        help="with --ref: diff REF against the working tree, untracked files included",
+    )
     parser.add_argument("--out", metavar="DIR", help="run directory (default tmp/review/<sha>-<mode>)")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.worktree and not args.ref:
+        parser.error("--worktree is valid only with --ref")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         repo_root = _repo_root()
-        mode = "ref" if args.ref else "uncommitted"
+        mode = ("worktree" if args.worktree else "ref") if args.ref else "uncommitted"
         if args.out:
             out_dir = Path(args.out)
             if not out_dir.is_absolute():

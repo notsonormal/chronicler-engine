@@ -151,6 +151,28 @@ class _NextestLeaks:
     lines: list[tuple[str, str, str]] = []
 
 
+class _TestFailures:
+    """nextest FAIL lines, captured so the epilogue can name the failing test.
+
+    ``lines`` holds ``(step label, test name, first stderr message line)``, one
+    entry per test. The epilogue prints the first ``LIMIT``.
+    """
+
+    LIMIT = 20
+    lines: list[tuple[str, str, str]] = []
+
+
+class _StepFailures:
+    """Last output lines of failed steps that are not nextest runs.
+
+    A compile error has its own capture (``_CompileErrors``), so a step whose
+    output carries one is left out. ``lines`` holds ``(step label, tail lines)``.
+    """
+
+    TAIL = 3
+    lines: list[tuple[str, list[str]]] = []
+
+
 class _CompileErrors:
     """rustc/clippy errors from failed commands, re-printed at the epilogue.
 
@@ -376,6 +398,48 @@ def _summary_size(output: str) -> int | None:
     return size
 
 
+# A panic header, with the message inline (old format) or on the next line.
+_PANIC_RE = re.compile(r"panicked at (?:\S+?:\d+:\d+:?\s*)?(.*)$")
+_MESSAGE_LIMIT = 200
+
+
+def _first_failure_message(following: list[str]) -> str:
+    """The first non-empty stderr line of a failed test; a panic gives its message.
+
+    ``following`` is the output after the test's FAIL line. The scan stops at the
+    next nextest result or summary line. Returns "" when no stderr is shown.
+    """
+    in_stderr = False
+    rest = iter(following)
+    for raw in rest:
+        if _NEXTEST_RESULT_RE.match(raw) or _NEXTEST_SUMMARY_RE.match(raw):
+            break
+        stripped = raw.strip()
+        if stripped.startswith("--- STD"):
+            in_stderr = stripped.startswith("--- STDERR")
+            continue
+        if not in_stderr or not stripped:
+            continue
+        panic = _PANIC_RE.search(stripped)
+        if panic is None:
+            return stripped[:_MESSAGE_LIMIT]
+        inline = panic.group(1).strip()
+        if inline:
+            return inline[:_MESSAGE_LIMIT]
+        return next((l.strip() for l in rest if l.strip()), "")[:_MESSAGE_LIMIT]
+    return ""
+
+
+def _record_test_failure(label: str, name: str, message: str) -> None:
+    """nextest prints a FAIL line live and again in the final list; keep one."""
+    for i, (old_label, old_name, old_message) in enumerate(_TestFailures.lines):
+        if (old_label, old_name) == (label, name):
+            if message and not old_message:
+                _TestFailures.lines[i] = (label, name, message)
+            return
+    _TestFailures.lines.append((label, name, message))
+
+
 def _stash_nextest_summary(output: str, cmd: str | None = None) -> None:
     line = _nextest_summary_line(output)
     if line is not None:
@@ -384,11 +448,18 @@ def _stash_nextest_summary(output: str, cmd: str | None = None) -> None:
         size = _summary_size(output)
         if tier is not None and size is not None:
             _NextestSummary.sizes[_NextestSummary.label] = _TierSize(tier, size)
-    for raw in output.splitlines():
+    output_lines = output.splitlines()
+    for i, raw in enumerate(output_lines):
         m = _NEXTEST_RESULT_RE.match(raw)
         if m is None:
             continue
         status = raw.strip().split(maxsplit=1)[0]
+        if status == "FAIL":
+            _record_test_failure(
+                _NextestSummary.label,
+                m.group(2).strip(),
+                _first_failure_message(output_lines[i + 1 : i + 60]),
+            )
         entry = (_NextestSummary.label, status, m.group(2).strip())
         # nextest prints a LEAK or FLAKY line live and again in the final list.
         if status in ("LEAK", "FLAKY") and entry not in _NextestLeaks.lines:
@@ -409,11 +480,14 @@ _COMPILE_ERROR_NOISE = (
 )
 
 
-def _stash_compile_errors(output: str) -> None:
+def _stash_compile_errors(output: str) -> bool:
+    """Capture rustc/clippy errors; return whether the output had any."""
+    found = False
     lines = output.splitlines()
     for i, raw in enumerate(lines):
         if not _COMPILE_ERROR_RE.match(raw) or raw.startswith(_COMPILE_ERROR_NOISE):
             continue
+        found = True
         rendered = raw.strip()
         for follow in lines[i + 1 : i + 4]:
             stripped = follow.strip()
@@ -424,6 +498,25 @@ def _stash_compile_errors(output: str) -> None:
                 break
         if rendered not in _CompileErrors.lines:
             _CompileErrors.lines.append(rendered)
+    return found
+
+
+def _stash_failure(output: str) -> None:
+    """Capture the cause of a failed step: compile errors, else the output tail.
+
+    A nextest run is named by its FAIL lines, so only a step with neither a
+    compile error nor a nextest summary gets its last lines kept.
+    """
+    if _stash_compile_errors(output) or _nextest_summary_line(output) is not None:
+        return
+    tail = [
+        line.strip()[:_MESSAGE_LIMIT]
+        for line in output.splitlines()
+        if line.strip()
+    ][-_StepFailures.TAIL :]
+    entry = (_NextestSummary.label, tail)
+    if tail and entry not in _StepFailures.lines:
+        _StepFailures.lines.append(entry)
 
 
 def _nextest_duration_to_secs(token: str) -> float:
@@ -558,7 +651,7 @@ def run_with_test_timings(cmd, env=None, check=True):
     both_print("---")
 
     if result.returncode != 0:
-        _stash_compile_errors(output)
+        _stash_failure(output)
         both_print(f"FAILED with code {result.returncode}")
         if check:
             sys.exit(result.returncode)
@@ -646,7 +739,7 @@ REGISTRY: dict[str, StepSpec] = {
             "clippy",
             "Running clippy...",
             "cargo clippy --all-targets --all-features -- -D warnings",
-            help="Lint Rust sources; warnings are errors.",
+            help="Check formatting (cargo fmt --check), then lint Rust sources; warnings are errors.",
         ),
         StepSpec(
             "test-structure",
@@ -1195,7 +1288,7 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
         # epilogue must still be able to print the pass/fail counts.
         _stash_nextest_summary(out or "", cmd)
         if process.returncode != 0:
-            _stash_compile_errors(out or "")
+            _stash_failure(out or "")
         if check and process.returncode != 0:
             both_print(f"FAILED with code {process.returncode}")
             sys.exit(process.returncode)
@@ -1224,7 +1317,7 @@ def run(cmd, cwd=None, check=True, show_output=True, env=None):
         output = _combined_output(result)
         _stash_nextest_summary(output, cmd)
         if result.returncode != 0:
-            _stash_compile_errors(output)
+            _stash_failure(output)
         if check and result.returncode != 0:
             both_print(f"FAILED with code {result.returncode}")
             sys.exit(result.returncode)
@@ -1245,6 +1338,35 @@ def is_target_locked(target_dir: Path) -> bool:
     return False  # No lock file, or shared holders only, assume not locked
 
 
+def _print_failures(failed_steps):
+    """Name the failing tests and the causes of the failed non-nextest steps.
+
+    Only steps in ``failed_steps`` count: a report-only step that warned is not a
+    failure. The first ``_TestFailures.LIMIT`` tests print; the rest are counted.
+    """
+    tests = [entry for entry in _TestFailures.lines if entry[0] in failed_steps]
+    steps = [entry for entry in _StepFailures.lines if entry[0] in failed_steps]
+    if not tests and not steps:
+        return
+    both_print("")
+    both_print("--- Failures ---")
+    last_label = None
+    for label, name, message in tests[: _TestFailures.LIMIT]:
+        if label != last_label:
+            both_print(f"  {label}")
+            last_label = label
+        both_print(f"    FAIL {name}")
+        if message:
+            both_print(f"      {message}")
+    if len(tests) > _TestFailures.LIMIT:
+        both_print(f"  ... {len(tests) - _TestFailures.LIMIT} more, see the log")
+    for label, tail in steps:
+        both_print(f"  {label}")
+        for line in tail:
+            both_print(f"    {line}")
+    both_print("---")
+
+
 def _print_step_summary(step_timings, step_failures, log_path):
     if not step_timings:
         return
@@ -1252,8 +1374,14 @@ def _print_step_summary(step_timings, step_failures, log_path):
     both_print("--- Step Timing Summary ---")
     total = sum(t["elapsed_sec"] for t in step_timings)
     for t in step_timings:
-        status = "FAILED" if t["failed"] else "OK"
-        both_print(f"  {t['elapsed_sec']:>6.2f}s  [{status}]  {t['step']}")
+        if t["failed"]:
+            status = "FAILED"
+        elif t.get("warned"):
+            status = "WARN"
+        else:
+            status = "OK"
+        note = "  (report-only)" if t.get("report_only") else ""
+        both_print(f"  {t['elapsed_sec']:>6.2f}s  [{status}]  {t['step']}{note}")
     both_print(f"  {'':>6}   Total: {total:.2f}s")
     if step_failures:
         both_print(f"\n  Failed steps: {', '.join(step_failures)}")
@@ -1271,15 +1399,20 @@ class StepRecord:
         self.failures = []
 
 
-def _record_step(record, label, start, *, failed):
+def _record_step(record, label, start, *, failed, report_only=False):
+    """Record one step's row. A report-only step that did not complete is a
+    warning: it never joins ``record.failures``, so it never turns the gate red.
+    """
     record.timings.append(
         {
             "step": label,
             "elapsed_sec": round(time.time() - start, 2),
-            "failed": failed,
+            "failed": failed and not report_only,
+            "warned": failed and report_only,
+            "report_only": report_only,
         }
     )
-    if failed:
+    if failed and not report_only:
         record.failures.append(label)
 
 
@@ -1473,7 +1606,9 @@ def _execute_gate_plan(plan, args, cargo_env, record):
             # Best-effort environment setup: a hook problem must not block a
             # build, so a failure warns without recording a step failure.
             counter.next(step.label)
+            start = time.time()
             rc = run(REGISTRY["install-hooks"].cmd, check=False, env=cargo_env)
+            _record_step(record, step.label, start, failed=rc != 0, report_only=True)
             if rc != 0:
                 both_print(
                     "    Warning: git hook installation failed; "
@@ -1481,12 +1616,16 @@ def _execute_gate_plan(plan, args, cargo_env, record):
                 )
         elif step.kind == "worktrees":
             counter.next(step.label)
-            _run_remove_worktrees(cargo_env)
+            start = time.time()
+            rc = _run_remove_worktrees(cargo_env)
+            _record_step(record, step.label, start, failed=rc != 0, report_only=True)
         elif step.kind == "note":
             counter.next(step.label)
         elif step.kind == "duplicates":
             counter.next(step.label)
-            _run_duplicates_report(cargo_env)
+            start = time.time()
+            rc = _run_duplicates_report(cargo_env)
+            _record_step(record, step.label, start, failed=rc != 0, report_only=True)
         else:  # pragma: no cover - guarded by construction
             raise ValueError(f"Unknown gate step kind: {step.kind}")
 
@@ -1496,21 +1635,24 @@ def _run_duplicates_report(cargo_env):
 
     The summary is written to the build log by ``run``'s captured child output.
     A missing jscpd or an unparsable report warns and continues, so this step is
-    report-only per decision D3.
+    report-only per decision D3. Returns the exit code for the timing row.
     """
     rc = run(REGISTRY["duplicates"].cmd, check=False, env=cargo_env)
     if rc != 0:
         both_print("    Warning: duplicate check did not complete (report-only step).")
+    return rc
 
 
 def _run_remove_worktrees(cargo_env):
     """Remove safe-to-lose worktrees and prune stale target dirs, without failing the gate.
 
     Housekeeping like hook install: a failed removal warns and the build continues.
+    Returns the exit code for the timing row.
     """
     rc = run(REGISTRY["remove-worktrees"].cmd, check=False, env=cargo_env)
     if rc != 0:
         both_print("    Warning: worktree removal did not complete; the build continues.")
+    return rc
 
 
 def _copy_deployment_assets(args):
@@ -1599,6 +1741,64 @@ def run_gate(args, record):
     _gate_tail(args)
 
 
+_FORMAT_CHECK_CMD = "cargo fmt --check"
+_FORMAT_CHECK_LABEL = "Checking formatting..."
+# rustfmt --check reports "Diff in <path>:<line>:" (older: "Diff in <path> at line <n>:").
+_FMT_DIFF_RE = re.compile(r"^Diff in (.+?)(?::\d+:| at line \d+:)\s*$")
+_FMT_FILE_LIMIT = 10
+
+
+def _relative_path(path: str) -> str:
+    try:
+        return os.path.relpath(path)
+    except ValueError:
+        return path
+
+
+def _check_formatting(counter, record, env):
+    """Fail fast when ``cargo fmt --check`` finds unformatted files.
+
+    Only the narrow ``clippy`` step runs it. The full gate runs ``fmt``, which
+    rewrites the files, so it needs no check.
+    """
+    counter.next(_FORMAT_CHECK_LABEL)
+    both_print(f"$ {_FORMAT_CHECK_CMD}")
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    start = time.time()
+    result = subprocess.run(
+        _FORMAT_CHECK_CMD,
+        shell=True,
+        cwd=os.getcwd(),
+        env=merged_env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    output = _combined_output(result)
+    _log_write(output + "\n")
+    failed = result.returncode != 0
+    _record_step(record, _FORMAT_CHECK_LABEL, start, failed=failed)
+    if not failed:
+        return
+    files = []
+    for raw in output.splitlines():
+        m = _FMT_DIFF_RE.match(raw.strip())
+        if m and _relative_path(m.group(1)) not in files:
+            files.append(_relative_path(m.group(1)))
+    detail = [f"unformatted: {name}" for name in files[:_FMT_FILE_LIMIT]]
+    if len(files) > _FMT_FILE_LIMIT:
+        detail.append(f"... {len(files) - _FMT_FILE_LIMIT} more files")
+    if not detail:
+        detail = [l.strip() for l in output.splitlines() if l.strip()][-_StepFailures.TAIL :]
+    detail.append("fix: python build.py fmt")
+    _StepFailures.lines.append((_FORMAT_CHECK_LABEL, detail))
+    both_print(f"FAILED with code {result.returncode}")
+    sys.exit(result.returncode)
+
+
 def run_step(args, record):
     """Single-step mode: run one registry step with a minimal prelude.
 
@@ -1618,7 +1818,10 @@ def run_step(args, record):
         custom=bool(getattr(args, "target_dir", None)),
     )
 
-    counter = StepCounter(1)
+    counts_format_check = args.command == "clippy"
+    counter = StepCounter(2 if counts_format_check else 1)
+    if counts_format_check:
+        _check_formatting(counter, record, cargo_env)
     _timed_run(
         counter,
         record,
@@ -2041,6 +2244,7 @@ def main():
             both_print(_NextestSummary.line_text(_epilogue_baselines()))
         for label, status, name in _NextestLeaks.lines:
             both_print(f"{status.lower()} test: {name}  ({label})")
+        _print_failures(set(record.failures))
         if browser_skipped:
             both_print('skipped: browser tier (run "python build.py browser")')
         if _CompileErrors.lines:
