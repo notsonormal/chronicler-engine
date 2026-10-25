@@ -9,6 +9,9 @@
 
 const LIVE_ASK_INTERVAL_MS = 1000;
 
+// Fields that hold no value of the player.
+const FIELD_WITHOUT_VALUE = "input[type=hidden], input[type=button], input[type=submit]";
+
 // The region's own record: the numbers of its kinds at its last good load (null
 // when nothing is known, so the region is due), the numbers of the ask that
 // started the load in flight, and what that load did.
@@ -60,9 +63,7 @@ function fieldIsDirty(field) {
   if (field.matches("input[type=checkbox], input[type=radio]")) {
     return field.checked !== field.defaultChecked;
   }
-  if (field.matches("input[type=hidden], input[type=button], input[type=submit]")) {
-    return false;
-  }
+  if (field.matches(FIELD_WITHOUT_VALUE)) return false;
   if (field.tagName === "SELECT") {
     const options = Array.from(field.options);
     if (field.multiple) {
@@ -94,8 +95,6 @@ function editFieldsOf(element) {
   if (element.matches("input, textarea, select")) return [element];
   return Array.from(element.querySelectorAll("input, textarea, select"));
 }
-
-const FIELD_WITHOUT_VALUE = "input[type=hidden], input[type=button], input[type=submit]";
 
 // The saved value is the rendered value now, so the field is no longer changed.
 function settleField(field) {
@@ -179,23 +178,25 @@ function settleSave(evt) {
     endEdit(element);
     return;
   }
-  if (element.tagName === "FORM") {
-    // A form that saves on change (`data-autosave`) is a control: its fields go
-    // back to the rendered values. Any other form keeps the player's edit.
-    if (element.hasAttribute("data-autosave")) editFieldsOf(element).forEach(restoreRenderedValue);
-    if (refused) {
-      const what = element.getAttribute("data-refusal-what") || "the change was not saved";
-      reportBusyRefusal(inlineErrorSlotFor(element, true), what);
-    }
-    return;
-  }
-  restoreRenderedValue(element);
+  // A form that saves on change (`data-autosave`) is a control: its fields go
+  // back to the rendered values. Any other form keeps the player's edit.
+  if (element.tagName !== "FORM") restoreRenderedValue(element);
+  else if (element.hasAttribute("data-autosave")) editFieldsOf(element).forEach(restoreRenderedValue);
   if (refused) {
-    reportBusyRefusal(inlineErrorSlotFor(element, true), "the change was not saved");
+    const what = element.getAttribute("data-refusal-what") || "the change was not saved";
+    reportBusyRefusal(inlineErrorSlotFor(element, true), what);
   }
 }
 
-function settleLoad(region, record) {
+function beginLoad(region, record, answer) {
+  record.loading = true;
+  record.swapped = false;
+  record.held = false;
+  record.pending = answer;
+  setLiveState(region, "loading");
+}
+
+function settleLoad(record) {
   record.loading = false;
   record.pending = null;
   const waiters = record.waiters;
@@ -205,18 +206,14 @@ function settleLoad(region, record) {
 
 function startLoad(region, answer) {
   const record = liveRecordOf(region);
-  record.loading = true;
   record.requested = false;
-  record.swapped = false;
-  record.held = false;
-  record.pending = answer;
-  setLiveState(region, "loading");
+  beginLoad(region, record, answer);
   const done = new Promise((resolve) => record.waiters.push(resolve));
   htmx.trigger(region, "refresh");
   if (!record.requested) {
     // htmx issued no request, so no afterRequest will end this load.
     setLiveState(region, "due");
-    settleLoad(region, record);
+    settleLoad(record);
   }
   return done;
 }
@@ -314,10 +311,12 @@ async function settleLive() {
   }
 }
 
-// What the loop gives to a caller that needs one deterministic ask: the tests,
-// and the actions that ask at once when their request ends.
+// The hooks of the loop. `settle` is for a script that needs the result of an
+// ask on screen before it moves focus. The rest is the test API: the stub
+// browser tests have no other way to make one ask, stop the timer, run one tick
+// of it, or wait for the loop to go quiet, without sleeping. They ship in
+// production because the tests run against the same file.
 window.chroniclerLive = {
-  askNow: askNow,
   askOnce: async function () {
     const loads = await askNow();
     await Promise.all(loads);
@@ -331,32 +330,16 @@ window.chroniclerLive = {
   },
 };
 
-// An edit that ends in a held region frees it, so the page asks and the region
-// loads the data it waited for.
-function liveWorkEnded() {
-  return askNow();
-}
-
-// A section that opens shows its regions: the page asks, and each region of the
-// section that is due loads.
-function liveSectionOpened() {
-  return askNow();
-}
-
 liveTimer = setInterval(liveTick, LIVE_ASK_INTERVAL_MS);
 
 // The first ask of the page finds no record, so it loads every region. It waits
 // until htmx has processed the page: a `refresh` sent before htmx initialises a
 // node issues no request. htmx registers its own DOMContentLoaded handler in
 // the head, so a handler registered here runs after it.
-function startFirstAsk() {
-  askNow();
-}
-
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", startFirstAsk);
+  document.addEventListener("DOMContentLoaded", () => askNow());
 } else {
-  startFirstAsk();
+  askNow();
 }
 
 document.addEventListener("visibilitychange", function () {
@@ -370,12 +353,7 @@ document.body.addEventListener("htmx:beforeRequest", function (evt) {
   if (!isLiveRegion(region)) return;
   const record = liveRecordOf(region);
   record.requested = true;
-  if (record.loading) return;
-  record.loading = true;
-  record.swapped = false;
-  record.held = false;
-  record.pending = lastAnswer;
-  setLiveState(region, "loading");
+  if (!record.loading) beginLoad(region, record, lastAnswer);
 });
 
 // This listener comes before the focus listener of dashboard-panels.js and the
@@ -424,7 +402,7 @@ document.body.addEventListener("htmx:afterRequest", function (evt) {
     setLiveState(region, "due");
   }
   record.focusPlan = null;
-  settleLoad(region, record);
+  settleLoad(record);
 });
 
 // View state lives in attributes that the server never changes. An element
@@ -528,5 +506,6 @@ document.addEventListener("click", function (evt) {
     region.focus();
   }
   editorOpener = null;
-  liveWorkEnded();
+  // The editor held its region. The page asks, and the region loads what it waited for.
+  askNow();
 });

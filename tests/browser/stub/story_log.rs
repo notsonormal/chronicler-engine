@@ -3,20 +3,20 @@
 use std::time::Duration;
 
 use super::*;
-use super::support::{StubRunner, install_story_poll_counter, poll_now, story_poll_count};
+use super::support::{StubRunner, install_story_load_counter, load_now, story_load_count};
 
 /// A state that survives one morph by chance must also survive the next, so
-/// the preservation tests run two story-log poll cycles.
-async fn poll_story_log_twice(page: &playwright_rs::Page) {
-    poll_now(page, "#story-log").await;
-    poll_now(page, "#story-log").await;
+/// the preservation tests load the story log twice.
+async fn load_story_log_twice(page: &playwright_rs::Page) {
+    load_now(page, "#story-log").await;
+    load_now(page, "#story-log").await;
 }
 
-// An innerHTML swap would replace the node and lose the selection, so the poll
+// An innerHTML swap would replace the node and lose the selection, so the load
 // must morph.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.11
-async fn check_text_selection_survives_the_poll(page: playwright_rs::Page, _stub: StubServer) {
-    install_story_poll_counter(&page).await;
+async fn check_text_selection_survives_the_load(page: playwright_rs::Page, _stub: StubServer) {
+    install_story_load_counter(&page).await;
 
     let selected = page
         .evaluate::<(), String>(
@@ -36,14 +36,11 @@ async fn check_text_selection_survives_the_poll(page: playwright_rs::Page, _stub
         .unwrap();
     assert!(!selected.is_empty(), "the test must create a selection");
 
-    poll_story_log_twice(&page).await;
-    let polled = wait_for_condition_async(
-        Duration::from_secs(8),
-        Duration::from_millis(50),
-        || async { story_poll_count(&page).await >= 2.0 },
-    )
-    .await;
-    assert!(polled, "the story log must poll at least twice");
+    load_story_log_twice(&page).await;
+    assert!(
+        story_load_count(&page).await >= 2.0,
+        "the story log must load at least twice"
+    );
 
     let (still_selected, same_node) = page
         .evaluate::<(), (bool, bool)>(
@@ -61,18 +58,18 @@ async fn check_text_selection_survives_the_poll(page: playwright_rs::Page, _stub
         .unwrap();
     assert!(
         still_selected,
-        "a text selection in the log must survive the poll"
+        "a text selection in the log must survive the load"
     );
     assert!(
         same_node,
-        "an idle poll must not replace the entry the selection is in"
+        "an idle load must not replace the entry the selection is in"
     );
 }
 
-// An innerHTML swap would drop focus to the body, so the poll must morph.
+// An innerHTML swap would drop focus to the body, so the load must morph.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.12
-async fn check_entry_focus_survives_the_poll(page: playwright_rs::Page, _stub: StubServer) {
-    install_story_poll_counter(&page).await;
+async fn check_entry_focus_survives_the_load(page: playwright_rs::Page, _stub: StubServer) {
+    install_story_load_counter(&page).await;
 
     page.locator(".log-entry.narration .retrigger-btn")
         .await
@@ -86,14 +83,11 @@ async fn check_entry_focus_survives_the_poll(page: playwright_rs::Page, _stub: S
     .await
     .unwrap();
 
-    poll_story_log_twice(&page).await;
-    let polled = wait_for_condition_async(
-        Duration::from_secs(8),
-        Duration::from_millis(50),
-        || async { story_poll_count(&page).await >= 2.0 },
-    )
-    .await;
-    assert!(polled, "the story log must poll at least twice");
+    load_story_log_twice(&page).await;
+    assert!(
+        story_load_count(&page).await >= 2.0,
+        "the story log must load at least twice"
+    );
 
     let (focused, same_node) = page
         .evaluate::<(), (bool, bool)>(
@@ -105,10 +99,10 @@ async fn check_entry_focus_survives_the_poll(page: playwright_rs::Page, _stub: S
         )
         .await
         .unwrap();
-    assert!(focused, "focus inside a log entry must survive the poll");
+    assert!(focused, "focus inside a log entry must survive the load");
     assert!(
         same_node,
-        "an idle poll must not replace the focused control"
+        "an idle load must not replace the focused control"
     );
 }
 
@@ -176,13 +170,13 @@ async fn check_story_log_is_keyboard_scrollable(page: playwright_rs::Page, _stub
 // The 50-entry cap drops the oldest entry, so the morph's removal matching must
 // keep every surviving entry's nodes.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.14
-async fn check_poll_removal_keeps_the_surviving_entries(
+async fn check_load_removal_keeps_the_surviving_entries(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let story = stub.story_log_handle();
     story.set_extra_oldest(true);
-    poll_now(&page, "#story-log").await;
+    load_now(&page, "#story-log").await;
     let grew = wait_for_condition_async(
         Duration::from_secs(8),
         Duration::from_millis(50),
@@ -197,7 +191,7 @@ async fn check_poll_removal_keeps_the_surviving_entries(
         },
     )
     .await;
-    assert!(grew, "the poll must render the extra oldest entry");
+    assert!(grew, "the load must render the extra oldest entry");
 
     page.evaluate::<(), ()>(
         r#"(() => {
@@ -211,7 +205,7 @@ async fn check_poll_removal_keeps_the_surviving_entries(
     .unwrap();
 
     story.set_extra_oldest(false);
-    poll_now(&page, "#story-log").await;
+    load_now(&page, "#story-log").await;
     let shrank = wait_for_condition_async(
         Duration::from_secs(8),
         Duration::from_millis(50),
@@ -226,7 +220,7 @@ async fn check_poll_removal_keeps_the_surviving_entries(
         },
     )
     .await;
-    assert!(shrank, "the poll must drop the extra oldest entry");
+    assert!(shrank, "the load must drop the extra oldest entry");
 
     let kept = page
         .evaluate::<(), bool>(
@@ -319,11 +313,11 @@ async fn wait_for_story_log_entries(page: &playwright_rs::Page, expected: f64) {
         },
     )
     .await;
-    assert!(rendered, "the poll must render {expected} entries");
+    assert!(rendered, "the load must render {expected} entries");
 }
 
 // [docs/specs/browser_story_log.md] SCENARIO: 30.20
-async fn check_poll_that_appends_an_entry_follows_the_bottom(
+async fn check_load_that_appends_an_entry_follows_the_bottom(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -341,23 +335,23 @@ async fn check_poll_that_appends_an_entry_follows_the_bottom(
     );
 
     story.append_narration("A new dawn breaks over the courtyard.");
-    poll_now(&page, "#story-log").await;
+    load_now(&page, "#story-log").await;
     wait_for_story_log_entries(&page, before.entries + 1.0).await;
 
     let after = read_story_log_scroll(&page).await;
     assert!(
         after.bottom_gap <= 8.0,
-        "a poll that appends an entry must scroll the log to its bottom, gap {} px",
+        "a load that appends an entry must scroll the log to its bottom, gap {} px",
         after.bottom_gap
     );
     assert!(
         after.newest_in_view,
-        "the appended entry must be in view after the poll"
+        "the appended entry must be in view after the load"
     );
 }
 
 // [docs/specs/browser_story_log.md] SCENARIO: 30.21
-async fn check_poll_that_appends_an_entry_leaves_a_scrolled_up_log_alone(
+async fn check_load_that_appends_an_entry_leaves_a_scrolled_up_log_alone(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -374,13 +368,13 @@ async fn check_poll_that_appends_an_entry_leaves_a_scrolled_up_log_alone(
     );
 
     story.append_narration("A new dawn breaks over the courtyard.");
-    poll_now(&page, "#story-log").await;
+    load_now(&page, "#story-log").await;
     wait_for_story_log_entries(&page, before.entries + 1.0).await;
 
     let after = read_story_log_scroll(&page).await;
     assert_eq!(
         after.scroll_top, before.scroll_top,
-        "a poll must not move a log the player scrolled away from its bottom"
+        "a load must not move a log the player scrolled away from its bottom"
     );
     assert!(
         after.newest_tail_below_view,
@@ -390,7 +384,7 @@ async fn check_poll_that_appends_an_entry_leaves_a_scrolled_up_log_alone(
     );
 }
 
-// The load swap is the one the player sees before any poll runs, so its
+// The load swap is the one the player sees before any ask runs, so its
 // follow-the-bottom must land on the first render too.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.23
 async fn check_first_load_swap_lands_at_the_logs_bottom(
@@ -427,13 +421,13 @@ async fn run_story_log_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_text_selection_survives_the_poll,
+            check_text_selection_survives_the_load,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_entry_focus_survives_the_poll,
+            check_entry_focus_survives_the_load,
         )
         .await;
     runner
@@ -445,19 +439,19 @@ async fn run_story_log_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_poll_removal_keeps_the_surviving_entries,
+            check_load_removal_keeps_the_surviving_entries,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_poll_that_appends_an_entry_follows_the_bottom,
+            check_load_that_appends_an_entry_follows_the_bottom,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_poll_that_appends_an_entry_leaves_a_scrolled_up_log_alone,
+            check_load_that_appends_an_entry_leaves_a_scrolled_up_log_alone,
         )
         .await;
     runner

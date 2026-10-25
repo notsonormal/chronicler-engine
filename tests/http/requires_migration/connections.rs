@@ -3,6 +3,7 @@
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
 
+use chronicler_engine::test_support::assert_answers_nothing;
 use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
@@ -19,14 +20,6 @@ async fn settings_panel(app: &axum::Router) -> String {
         .await
         .unwrap();
     String::from_utf8_lossy(&body).into_owned()
-}
-
-async fn assert_answers_nothing(response: axum::response::Response) {
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 1024)
-        .await
-        .unwrap();
-    assert!(body.is_empty(), "a saved change answers nothing: {body:?}");
 }
 
 #[tokio::test]

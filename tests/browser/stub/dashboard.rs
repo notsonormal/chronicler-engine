@@ -7,7 +7,9 @@ use chronicler_engine::domain::model::state::generation_status::GenerationFailur
 use chronicler_engine::domain::model::state::generation_status::Step;
 
 use super::*;
-use super::support::{StubRunner, active_element_is, poll_now, read_banner, read_command_input};
+use super::support::{
+    StubRunner, active_element_is, assert_busy_refusal, load_now, read_banner, read_command_input,
+};
 
 async fn stash_action_area_nodes(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
@@ -99,7 +101,7 @@ async fn check_primary_button_locks_and_unlocks_after_confirm(
     stub: StubServer,
 ) {
     let status = stub.status_handle();
-    // Keep the stub generating so no poll unlocks the button before the assertion reads it.
+    // Keep the stub generating so no load unlocks the button before the assertion reads it.
     status.set(StubStatus::Step(Step::Narrating));
     stash_action_area_nodes(&page).await;
 
@@ -128,7 +130,7 @@ async fn check_primary_button_locks_and_unlocks_after_confirm(
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     wait_for_status_ready(&page).await;
     let (disabled, label) = read_submit_button(&page).await;
     assert!(
@@ -154,7 +156,7 @@ async fn check_status_error_shows_in_the_status_display_after_confirm(
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -193,7 +195,7 @@ async fn check_status_error_shows_in_the_status_display_after_confirm(
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     wait_for_status_ready(&page).await;
     assert!(
         wait_for_condition_async(
@@ -210,7 +212,7 @@ async fn check_status_error_shows_in_the_status_display_after_confirm(
 async fn check_preview_opens_beside_status_display(page: playwright_rs::Page, stub: StubServer) {
     let status = stub.status_handle();
     status.set(StubStatus::Step(Step::Narrating));
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     wait_for_status_busy(&page).await;
 
     submit_intercepted_command_direct(&page).await;
@@ -416,14 +418,14 @@ async fn check_dashboard_exposes_landmarks_and_a_labelled_command_input(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.28
-async fn check_status_poll_leaves_generating_and_enter_submits(
+async fn check_status_load_leaves_generating_and_enter_submits(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let status = stub.status_handle();
     let action = stub.action_handle();
     status.set(StubStatus::Step(Step::Narrating));
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -431,7 +433,7 @@ async fn check_status_poll_leaves_generating_and_enter_submits(
             || async { read_submit_button(&page).await.0 },
         )
         .await,
-        "the poll's phase should lock Send"
+        "the status load's phase should lock Send"
     );
     let status_text = page
         .locator("#status-display")
@@ -445,10 +447,13 @@ async fn check_status_poll_leaves_generating_and_enter_submits(
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     wait_for_status_ready(&page).await;
     let (disabled, _) = read_submit_button(&page).await;
-    assert!(!disabled, "Send should unlock once the poll reports idle");
+    assert!(
+        !disabled,
+        "Send should unlock once the status load reports idle"
+    );
 
     // Only a real Enter runs the browser's disabled-default-button check;
     // `requestSubmit()` bypasses it.
@@ -533,24 +538,12 @@ async fn check_refused_concurrent_send_keeps_the_command_and_reports_in_the_form
     .unwrap();
 
     let slot = r#"#command-form [data-error-slot="action"]"#;
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, slot).await.0 },
-        )
-        .await,
-        "a refused concurrent send must report in the command form's own slot"
-    );
-    let (_, line, detail) = read_error_disclosure(&page, slot).await;
-    assert!(
-        line.contains("busy"),
-        "the line names the busy Game, got {line:?}"
-    );
-    assert!(
-        detail.contains("Still thinking..."),
-        "the details carry the engine's answer, got {detail:?}"
-    );
+    assert_busy_refusal(
+        &page,
+        slot,
+        "a refused concurrent send must report in the command form's own slot",
+    )
+    .await;
     assert_eq!(
         read_command_input(&page).await,
         "look around",
@@ -593,24 +586,12 @@ async fn check_confirm_refused_for_a_busy_game_reports_on_the_command_form_slot(
     wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
 
     let slot = r#"#command-form [data-error-slot="action"]"#;
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, slot).await.0 },
-        )
-        .await,
-        "a refused confirm must report in the command form's own slot"
-    );
-    let (_, line, detail) = read_error_disclosure(&page, slot).await;
-    assert!(
-        line.contains("busy"),
-        "the line names the busy Game, got {line:?}"
-    );
-    assert!(
-        detail.contains("Still thinking..."),
-        "the details carry the engine's answer, got {detail:?}"
-    );
+    assert_busy_refusal(
+        &page,
+        slot,
+        "a refused confirm must report in the command form's own slot",
+    )
+    .await;
     assert_eq!(
         read_command_input(&page).await,
         "look at the casle",
@@ -705,7 +686,7 @@ async fn run_dashboard_action_area_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_status_poll_leaves_generating_and_enter_submits,
+            check_status_load_leaves_generating_and_enter_submits,
         )
         .await;
     runner

@@ -84,7 +84,7 @@ The Worlds editor and the connection editor open into an editor slot of their re
 | `data-close-on-save` | On a `<details>`: a save of its form closes it. |
 | `data-reset-on-save` | On a form that creates something: a save returns it to the empty rendered form. |
 | `data-autosave` | On a form that saves on change: a failed save returns its fields to the rendered values. |
-| `data-saved-flag` | On a saving control: the id of the element that shows "Saved" after a save that went through. |
+| `data-saved-flag` | On a saving control: the id of the element that shows "Saved" after a save that went through. That element has the class `saved-flag`, which draws the text. |
 | `data-saved` | On that element: the "Saved" state. A load keeps it. |
 | `data-refusal-what` | On a saving form: the words that finish "The Game is busy, so …" when the busy Game refuses the save. |
 | `data-opens-editor` | On a control that opens an editor: Cancel returns focus to it. |

@@ -19,7 +19,7 @@ pub use context::{
     seed_default_impersonate_preset, seed_default_preset,
 };
 pub use fixtures::*;
-pub use http::body_text;
+pub use http::{assert_answers_nothing, body_text};
 pub use scripted_model::{analysis_report, ModelCall, ModelHold, ScriptedModel, STRAY_CALL_MARKER};
 pub use test_app_builder::TestAppBuilder;
 pub use test_data_builder::{TestData, TestDataBuilder};

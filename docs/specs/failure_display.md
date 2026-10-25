@@ -67,6 +67,16 @@ Then the response is non-2xx
 And the response asks the client to swap nothing
 ```
 
+#### Scenario 38.18: A panel load that cannot read its data answers non-2xx and asks the client to change nothing
+
+```gherkin
+Given the settings, the Games or the Worlds cannot be read from storage
+When the client GETs /fragment/settings, /fragment/prompt-presets, /fragment/worlds or /fragment/games
+Then each response is non-2xx
+And each response asks the client to swap nothing
+And the body of each response is an error fragment
+```
+
 #### Scenario 38.4: A failed user action is not a failed load
 
 ```gherkin

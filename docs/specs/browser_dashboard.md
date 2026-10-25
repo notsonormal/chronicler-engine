@@ -271,7 +271,7 @@ And the raw server text is reachable in that error's disclosure
 #### Scenario 16.33: A failed panel load reports inside the panel
 
 ```gherkin
-Given the dashboard loads and the Worlds and Games panel fragment loads fail
+Given the dashboard loads and the Worlds, Games, Settings and Prompt Presets panel fragment loads fail
 When the client opens each of those tabs
 Then that panel shows a short failure message
 And its Details disclosure holds the raw server text

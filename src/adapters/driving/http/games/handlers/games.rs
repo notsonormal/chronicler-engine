@@ -20,17 +20,20 @@ use crate::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GamesPanelTemplate, PersonaRowView,
 };
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::fragment::{render_failure_response, render_response};
+use crate::adapters::driving::http::utils::fragment::{
+    failed_fragment_response, render_failure_response, render_response,
+};
 use crate::adapters::driving::http::utils::error::action_error_response;
-use crate::adapters::driving::http::utils::response::{internal_error, ok};
+use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
 
 pub async fn list_games_fragment(
     State(state): State<AppState>,
     current: Option<CurrentGame>,
 ) -> Response<axum::body::Body> {
-    let Ok((active_game, saved_games)) = current_and_saved_games(&state, current) else {
-        return internal_error("Failed to list games");
+    let (active_game, saved_games) = match current_and_saved_games(&state, current) {
+        Ok(games) => games,
+        Err(e) => return failed_fragment_response(&format!("Failed to list games: {e}")),
     };
 
     let posture_html = match &active_game {
@@ -48,8 +51,9 @@ pub async fn list_games_fragment(
     let active_game = active_game.map(view_of);
     let saved_games: Vec<_> = saved_games.into_iter().map(view_of).collect();
 
-    let Ok(worlds) = state.world_catalogue.list_worlds() else {
-        return internal_error("Failed to list worlds");
+    let worlds = match state.world_catalogue.list_worlds() {
+        Ok(worlds) => worlds,
+        Err(e) => return failed_fragment_response(&format!("Failed to list worlds: {e}")),
     };
 
     let personas: Vec<PersonaRowView> = match state.persona_catalogue.list_personas() {

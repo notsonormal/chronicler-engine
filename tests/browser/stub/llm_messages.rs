@@ -11,7 +11,7 @@
 
 use std::time::Duration;
 
-use super::support::{ask_page_once, stop_page_timer, StubRunner};
+use super::support::{ask_once, stop_page_timer, StubRunner};
 use super::*;
 
 /// Open the LLM Messages tab. The section loads its region when it opens, so the
@@ -97,7 +97,7 @@ async fn load_the_panel(page: &playwright_rs::Page, stub: &StubServer) {
     let changes = stub.changes_handle();
     let before = changes.loads("/fragment/llm-messages");
     changes.bump("llm");
-    ask_page_once(page).await;
+    ask_once(page).await;
     assert_eq!(
         changes.loads("/fragment/llm-messages"),
         before + 1,

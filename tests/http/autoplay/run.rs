@@ -233,7 +233,7 @@ async fn test_a_failed_narrator_call_ends_the_run_and_its_failure_line_stays() {
     let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("answer could not be read"),
-        "the status poll shows the failure line of the Job, got: {status}"
+        "the status load shows the failure line of the Job, got: {status}"
     );
     assert_eq!(
         narrator_calls(&model).len(),
@@ -720,7 +720,7 @@ async fn test_while_a_run_holds_the_game_the_config_writes_are_refused_and_the_c
 
 // [docs/specs/autoplay.md] SCENARIO: 41.13
 #[tokio::test]
-async fn test_the_status_poll_answers_with_the_progress_while_a_run_holds_the_game() {
+async fn test_the_status_load_answers_with_the_progress_while_a_run_holds_the_game() {
     let model = Arc::new(
         ScriptedModel::new()
             .turn(FIRST_INPUT)
@@ -780,7 +780,7 @@ async fn test_the_status_poll_answers_with_the_progress_while_a_run_holds_the_ga
 
 // [docs/specs/autoplay.md] SCENARIO: 41.13
 #[tokio::test]
-async fn test_the_status_poll_names_no_step_between_two_jobs_of_a_run() {
+async fn test_the_status_load_names_no_step_between_two_jobs_of_a_run() {
     let model = Arc::new(ScriptedModel::new().turn(FIRST_INPUT));
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
@@ -1001,7 +1001,7 @@ async fn test_a_run_whose_story_cannot_be_read_ends_with_the_failure_line_of_the
     let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("the story read failed"),
-        "the status poll shows the failure line of the unreadable story, got: {status}"
+        "the status load shows the failure line of the unreadable story, got: {status}"
     );
     assert!(model.calls().is_empty(), "no model call is made");
 }
@@ -1063,7 +1063,7 @@ async fn test_a_run_whose_start_state_cannot_be_read_ends_with_the_failure_line_
     let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("the start state"),
-        "the status poll names the start state, got: {status}"
+        "the status load names the start state, got: {status}"
     );
     assert!(
         status.contains("the start state is unreadable"),

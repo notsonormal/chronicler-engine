@@ -7,7 +7,7 @@ use futures_util::future::FutureExt;
 
 use super::*;
 
-const POLL_NOW_TIMEOUT: Duration = Duration::from_secs(5);
+const LOAD_NOW_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct CheckReport {
     name: String,
@@ -115,10 +115,8 @@ fn print_summary(reports: &[CheckReport]) {
 ///
 /// The request goes out whatever the region holds, and the hold still applies
 /// to its swap, so the helper also runs where an edit holds the region.
-pub(super) async fn poll_now(page: &playwright_rs::Page, selector: &str) {
-    page.evaluate::<(), ()>("() => window.chroniclerLive.askOnce()", None)
-        .await
-        .expect("the page asks before the forced load");
+pub(super) async fn load_now(page: &playwright_rs::Page, selector: &str) {
+    ask_once(page).await;
     let fired = page
         .evaluate::<String, String>(
             r#"async (selector) => {
@@ -135,11 +133,11 @@ pub(super) async fn poll_now(page: &playwright_rs::Page, selector: &str) {
                     if (Date.now() > deadline) return 'an earlier request never finished';
                     await new Promise((resolve) => setTimeout(resolve, 10));
                 }
-                window.__pollNowHandled = false;
+                window.__loadNowHandled = false;
                 let ownXhr = null;
                 const once = (evt) => {
                     if (ownXhr && evt.detail && evt.detail.xhr === ownXhr) {
-                        window.__pollNowHandled = true;
+                        window.__loadNowHandled = true;
                         document.body.removeEventListener('htmx:afterRequest', once);
                     }
                 };
@@ -152,17 +150,17 @@ pub(super) async fn poll_now(page: &playwright_rs::Page, selector: &str) {
         )
         .await
         .unwrap();
-    assert!(fired.is_empty(), "poll_now('{selector}'): {fired}");
+    assert!(fired.is_empty(), "load_now('{selector}'): {fired}");
 
-    let handled = wait_for_condition_async(POLL_NOW_TIMEOUT, Duration::from_millis(10), || async {
-        page.evaluate::<(), bool>("() => window.__pollNowHandled === true", None)
+    let handled = wait_for_condition_async(LOAD_NOW_TIMEOUT, Duration::from_millis(10), || async {
+        page.evaluate::<(), bool>("() => window.__loadNowHandled === true", None)
             .await
             .unwrap_or(false)
     })
     .await;
     assert!(
         handled,
-        "poll_now('{selector}'): the poll was never answered within {POLL_NOW_TIMEOUT:?}"
+        "load_now('{selector}'): the load was never answered within {LOAD_NOW_TIMEOUT:?}"
     );
 }
 
@@ -175,7 +173,7 @@ pub(super) async fn stop_page_timer(page: &playwright_rs::Page) {
 
 /// One ask of the page, which returns when every load that the ask started has
 /// settled.
-pub(super) async fn ask_page_once(page: &playwright_rs::Page) {
+pub(super) async fn ask_once(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>("() => window.chroniclerLive.askOnce()", None)
         .await
         .expect("the page runs one ask");
@@ -284,23 +282,39 @@ pub(super) async fn read_banner(page: &playwright_rs::Page) -> (bool, String, St
     .unwrap()
 }
 
-pub(super) async fn story_poll_count(page: &playwright_rs::Page) -> f64 {
-    page.evaluate::<(), f64>("(() => window.__storyPolls || 0)()", None)
+pub(super) async fn story_load_count(page: &playwright_rs::Page) -> f64 {
+    page.evaluate::<(), f64>("(() => window.__storyLoads || 0)()", None)
         .await
         .unwrap_or(0.0)
 }
 
-pub(super) async fn install_story_poll_counter(page: &playwright_rs::Page) {
+pub(super) async fn install_story_load_counter(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
-            window.__storyPolls = 0;
+            window.__storyLoads = 0;
             document.body.addEventListener('htmx:afterRequest', (evt) => {
                 const elt = evt.detail && evt.detail.elt;
-                if (elt && elt.id === 'story-log') window.__storyPolls += 1;
+                if (elt && elt.id === 'story-log') window.__storyLoads += 1;
             });
         })()"#,
         None,
     )
     .await
     .unwrap();
+}
+
+/// Waits until `slot` shows the refusal of a busy Game, and checks that its line
+/// names the busy Game and its details carry the engine's answer. `shows` is the
+/// failure message of the wait.
+pub(super) async fn assert_busy_refusal(page: &playwright_rs::Page, slot: &str, shows: &str) {
+    wait_for_error_disclosure(page, slot, shows).await;
+    let (_, line, detail) = read_error_disclosure(page, slot).await;
+    assert!(
+        line.contains("busy"),
+        "the line names the busy Game, got {line:?}"
+    );
+    assert!(
+        detail.contains("Still thinking..."),
+        "the details carry the engine's answer, got {detail:?}"
+    );
 }

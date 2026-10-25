@@ -23,8 +23,9 @@ where
     }
 }
 
-/// A 500 that tells htmx to leave the page alone.
-fn failed_fragment_response(message: &str) -> Response<Body> {
+/// The answer of a region load that fails: a 500 that tells htmx to leave the
+/// region as it is.
+pub(crate) fn failed_fragment_response(message: &str) -> Response<Body> {
     let mut response = (
         StatusCode::INTERNAL_SERVER_ERROR,
         Html(render_error(message)),

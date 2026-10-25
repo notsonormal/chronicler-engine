@@ -670,7 +670,7 @@ enum StoryLogAfterStop {
 struct StopRow {
     kind: JobKind,
     held: Role,
-    /// The step the status poll answers while the call is held, where the
+    /// The step the status display load answers while the call is held, where the
     /// design names the step.
     status: Option<&'static str>,
     after_stop: StoryLogAfterStop,

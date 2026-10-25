@@ -44,3 +44,14 @@ And the Edit control that opened the editor has keyboard focus
 When the client changes the Quantifier role's connection
 Then #role-select-quantifier has keyboard focus
 ```
+
+#### Scenario 40.4: A text check change that is saved shows the visible "Saved" line
+
+```gherkin
+Given the dashboard is loaded on the Text Check sub-tab
+And #text-check-status shows no text
+When the client changes the Check Mode select to "spell"
+And the engine answers 200
+Then the browser POSTs /settings/text-check
+And #text-check-status shows the text "Saved"
+```

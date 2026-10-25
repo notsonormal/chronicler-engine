@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use super::*;
-use super::support::{StubRunner, install_story_poll_counter, poll_now, story_poll_count};
+use super::support::{StubRunner, install_story_load_counter, load_now, story_load_count};
 
 /// An open editor carries `data-work`, and the live loop holds a region that
 /// holds one.
@@ -153,15 +153,12 @@ async fn check_failed_save_restores_entry_and_releases_the_hold(
         .await
         .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
-        )
-        .await,
-        "a failed save should report in the story log's error slot"
-    );
+    wait_for_error_disclosure(
+        &page,
+        "#story-log-error",
+        "a failed save should report in the story log's error slot",
+    )
+    .await;
     let (_, save_message, save_raw) = read_error_disclosure(&page, "#story-log-error").await;
     assert!(
         !save_message.is_empty(),
@@ -223,15 +220,12 @@ async fn check_failed_retry_reports_in_the_story_log_and_re_enables_send(
 
     // Reading the disclosure first also guarantees the synchronous recovery
     // ran before the Send/status assertion below.
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
-        )
-        .await,
-        "a failed retry should report in the story log's error slot"
-    );
+    wait_for_error_disclosure(
+        &page,
+        "#story-log-error",
+        "a failed retry should report in the story log's error slot",
+    )
+    .await;
     let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
     assert!(
         message.contains("Failed to generate a new swipe"),
@@ -328,7 +322,7 @@ async fn check_edit_textarea_fits_content_and_takes_focus(
 
 // [docs/specs/browser_story_log.md] SCENARIO: 30.7
 async fn check_escape_cancels_edit(page: playwright_rs::Page, stub: StubServer) {
-    install_story_poll_counter(&page).await;
+    install_story_load_counter(&page).await;
     let original_text = narration_text(&page).await;
     assert!(!original_text.is_empty(), "Should have original text");
 
@@ -375,13 +369,13 @@ async fn check_escape_cancels_edit(page: playwright_rs::Page, stub: StubServer) 
         "Escape must put focus on the entry's edit button"
     );
 
-    let polled = wait_for_condition_async(
+    let loaded = wait_for_condition_async(
         Duration::from_millis(4000),
         Duration::from_millis(20),
-        || async { story_poll_count(&page).await >= 1.0 },
+        || async { story_load_count(&page).await >= 1.0 },
     )
     .await;
-    assert!(polled, "the held load never ran after Escape");
+    assert!(loaded, "the held load never ran after Escape");
     assert!(
         wait_for_condition_async(
             Duration::from_millis(1000),
@@ -527,15 +521,12 @@ async fn check_failed_retrigger_posts_to_retrigger_and_recovers(
 
     // Reading the disclosure first also guarantees the recovery ran before
     // the assertions below.
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
-        )
-        .await,
-        "a failed retrigger should report in the story log's error slot"
-    );
+    wait_for_error_disclosure(
+        &page,
+        "#story-log-error",
+        "a failed retrigger should report in the story log's error slot",
+    )
+    .await;
     let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
     assert!(
         message.contains("Failed to retrigger the event"),
@@ -696,7 +687,7 @@ async fn check_failed_save_releases_the_edit_lock(page: playwright_rs::Page, _st
 // The lock must outlive a successful save: releasing it early would let a
 // second editor open on the stale textarea.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.17
-async fn check_successful_save_holds_the_edit_lock_until_the_poll(
+async fn check_successful_save_holds_the_edit_lock_until_the_load(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -801,15 +792,12 @@ async fn check_failed_delete_reports_in_the_story_log_slot(
         .await
         .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
-        )
-        .await,
-        "a failed delete should report in the story log's error slot"
-    );
+    wait_for_error_disclosure(
+        &page,
+        "#story-log-error",
+        "a failed delete should report in the story log's error slot",
+    )
+    .await;
     let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
     assert!(
         message.contains("Failed to delete the message"),
@@ -836,7 +824,7 @@ async fn check_failed_swipe_switch_reports_in_the_story_log_slot(
     let swipe = stub.swipe_handle();
     swipe.set_two_swipes();
     swipe.set_switch_failing();
-    poll_now(&page, "#story-log").await;
+    load_now(&page, "#story-log").await;
 
     assert!(
                 wait_for_condition_async(
@@ -867,15 +855,12 @@ async fn check_failed_swipe_switch_reports_in_the_story_log_slot(
     .await
     .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
-        )
-        .await,
-        "a failed swipe switch should report in the story log's error slot"
-    );
+    wait_for_error_disclosure(
+        &page,
+        "#story-log-error",
+        "a failed swipe switch should report in the story log's error slot",
+    )
+    .await;
     let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
     assert!(
         message.contains("Failed to switch the swipe"),
@@ -1021,7 +1006,7 @@ async fn run_story_log_edit_failure_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_successful_save_holds_the_edit_lock_until_the_poll,
+            check_successful_save_holds_the_edit_lock_until_the_load,
         )
         .await;
     runner

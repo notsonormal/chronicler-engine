@@ -75,7 +75,7 @@ impl CharacterHeadshotsTemplate {
     }
 }
 
-/// An empty set renders an empty body, keeping the action area's polling container alive.
+/// An empty set of Options and no failure render an empty body.
 #[derive(Template)]
 #[template(
     source = r##"{% if vm.failure.is_some() %}<div class="options-notice" role="status"><span class="options-notice-line">{{ vm.failure.as_ref().unwrap().reason }}</span><details class="options-notice-details" data-keep="open"><summary>Details</summary><pre>{{ vm.failure.as_ref().unwrap().raw }}</pre></details></div>{% else %}{% if !vm.options.is_empty() %}<div class="options-strip"><div class="options-label"><span>options — pick one, or type your own</span><form class="options-regen-form" hx-post="/action/check" hx-swap="none" hx-sync="this:drop" data-refusal-what="the new options were not requested"><input type="hidden" name="command" value="/options" /><button type="submit" class="mini-btn" title="New options" aria-label="New options" hx-on::before-request="updateToThinking()" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"/></svg></button></form></div>{% for option in vm.options %}<div class="option-item"><button type="button" class="option-btn" onclick="useOption(this)" {% if vm.is_busy %}disabled{% endif %}>{{ option }}</button><button type="button" class="mini-btn" onclick="editOption(this)" title="Edit before send" aria-label="Edit before send" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></div>{% endfor %}</div>{% endif %}{% endif %}"##,

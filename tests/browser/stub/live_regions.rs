@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 
-use super::support::{read_banner, StubRunner};
+use super::support::{ask_once, read_banner, stop_page_timer, StubRunner};
 use super::*;
 
 /// A live region: the selector of its element, the path it loads, the kinds its
@@ -148,12 +148,6 @@ async fn eval_string(page: &playwright_rs::Page, script: &str) -> String {
         .unwrap_or_else(|e| panic!("evaluate failed: {e}\n{script}"))
 }
 
-async fn ask_once(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>("() => window.chroniclerLive.askOnce()", None)
-        .await
-        .expect("the page runs one ask");
-}
-
 async fn settle(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>("() => window.chroniclerLive.settle()", None)
         .await
@@ -173,9 +167,7 @@ async fn live_state(page: &playwright_rs::Page, selector: &str) -> String {
 /// numbers the stub holds now. The first ask of the page already loaded each
 /// region once, so this ask loads none.
 async fn start_current(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>("() => window.chroniclerLive.stopTimer()", None)
-        .await
-        .expect("the page stops its timer");
+    stop_page_timer(page).await;
     ask_once(page).await;
     for region in &REGIONS {
         let expected = if region.starts_visible() {
@@ -200,9 +192,7 @@ async fn check_at_page_start_each_region_loads_exactly_once(
     let changes = stub.changes_handle();
     // The runner opened the page and let its first ask settle. The timer has
     // not run since: it stops here, so a later ask cannot add a load.
-    page.evaluate::<(), ()>("() => window.chroniclerLive.stopTimer()", None)
-        .await
-        .expect("the page stops its timer");
+    stop_page_timer(&page).await;
     for region in &REGIONS {
         let (loads, state) = if region.starts_visible() {
             (1, "current")
@@ -354,7 +344,7 @@ async fn check_a_failed_ask_shows_unreachable_and_a_good_ask_clears_it(
     start_current(&page).await;
 
     let before = region_loads(&changes);
-    failure.set_polls_failing(true);
+    failure.set_asks_and_loads_failing(true);
     ask_once(&page).await;
     let (visible, role, text) = read_banner(&page).await;
     assert!(visible, "a failed ask must show the banner");
@@ -365,7 +355,7 @@ async fn check_a_failed_ask_shows_unreachable_and_a_good_ask_clears_it(
     );
     assert_eq!(loads_since(&changes, &before), vec![0; REGIONS.len()]);
 
-    failure.set_polls_failing(false);
+    failure.set_asks_and_loads_failing(false);
     ask_once(&page).await;
     let (visible, _, text) = read_banner(&page).await;
     assert!(!visible, "a good ask must clear the banner, got {text:?}");
@@ -943,16 +933,18 @@ const PRESET_EDIT_IS_INTACT_AFTER_A_CLICK_ELSEWHERE: &str = r#"() => {
     return input.value === 'A typed preset name' ? '' : 'the typed name changed: ' + input.value;
 }"#;
 
-/// Cancel replaces the card with its list card. The edit ends when the replaced
-/// card is in the page, and the page asks when that request ends.
-const END_PRESET_EDIT: &str = r#"async () => {
-    document.querySelector('#preset-card-custom_ref .form-actions button[type=button]').click();
-    for (let i = 0; i < 100 && document.querySelector('#preset-card-custom_ref.edit-form'); i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 25));
-    }
+/// Cancel replaces the card with its list card. The edit ends when htmx has
+/// settled that replacement, and the page asks when that request ends.
+const END_PRESET_EDIT: &str = concat!(
+    "async () => {",
+    after_settle!(),
+    r#"
+    await afterSettle(() =>
+        document.querySelector('#preset-card-custom_ref .form-actions button[type=button]').click());
     await window.chroniclerLive.settle();
     return '';
-}"#;
+}"#
+);
 
 const OPEN_WORLD_EDITOR: &str = concat!(
     "async () => {",

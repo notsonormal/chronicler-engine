@@ -199,6 +199,34 @@ async fn check_opening_and_closing_the_connection_editor_keeps_keyboard_focus_in
     );
 }
 
+// [docs/specs/browser_settings.md] SCENARIO: 40.4
+async fn check_a_saved_text_check_change_shows_the_saved_line(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_settings(&page).await;
+    page.locator("#subtab-text-check")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_visible(&page, "#check_mode", Duration::from_secs(5)).await;
+
+    let shown_before: String = page
+        .evaluate::<(), String>(
+            "() => getComputedStyle(document.getElementById('text-check-status'), '::before').content",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        shown_before, "none",
+        "the status line must show no text before a save"
+    );
+
+    select_option_and_await_saved(&page, "#check_mode", "spell", "text-check-status").await;
+}
+
 #[tokio::test]
 async fn run_settings_checks() {
     let mut runner = StubRunner::launch().await;
@@ -218,6 +246,12 @@ async fn run_settings_checks() {
         .run(
             StubActionOutcome::Pending,
             check_opening_and_closing_the_connection_editor_keeps_keyboard_focus_in_the_panel,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_saved_text_check_change_shows_the_saved_line,
         )
         .await;
     runner.finish().await;

@@ -9,9 +9,9 @@ use chronicler_engine::domain::model::state::generation_status::GenerationFailur
 use playwright_rs::Viewport;
 
 use super::*;
-use super::support::{StubRunner, active_element_is, poll_now, read_banner, read_command_input};
+use super::support::{StubRunner, active_element_is, load_now, read_banner, read_command_input};
 
-/// A failed action leaves Send locked until the next idle poll and swaps nothing
+/// A failed action leaves Send locked until the next idle status load and swaps nothing
 /// on its 500, so this submits the form directly rather than clicking Send.
 async fn submit_command(page: &playwright_rs::Page, command: &str) {
     fill_command_input(page, command).await;
@@ -95,7 +95,7 @@ async fn measure_action_area(page: &playwright_rs::Page) -> (f64, f64) {
 async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stub: StubServer) {
     let failures = stub.failure_handle();
     failures.set_header_degraded(true);
-    poll_now(&page, "#failure-banner-degraded").await;
+    load_now(&page, "#failure-banner-degraded").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -143,7 +143,7 @@ async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stu
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.18
-async fn check_failed_poll_keeps_region_and_marks_banner(
+async fn check_failed_ask_keeps_region_and_marks_banner(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -153,8 +153,8 @@ async fn check_failed_poll_keeps_region_and_marks_banner(
         .await
         .unwrap();
 
-    failures.set_polls_failing(true);
-    poll_now(&page, "#story-log").await;
+    failures.set_asks_and_loads_failing(true);
+    load_now(&page, "#story-log").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -162,10 +162,10 @@ async fn check_failed_poll_keeps_region_and_marks_banner(
             || async { read_banner(&page).await.0 },
         )
         .await,
-        "a failed poll should raise the banner"
+        "a failed ask should raise the banner"
     );
     let (visible, role, text) = read_banner(&page).await;
-    assert!(visible, "the banner should be up on a failed poll");
+    assert!(visible, "the banner should be up on a failed ask");
     assert_eq!(role, "alert", "an unreachable banner reports role alert");
     assert!(
         text.contains("unreachable"),
@@ -178,11 +178,11 @@ async fn check_failed_poll_keeps_region_and_marks_banner(
         .unwrap();
     assert_eq!(
         after, before,
-        "a failed poll must leave the story log's last good content in place"
+        "a failed ask must leave the story log's last good content in place"
     );
 
-    failures.set_polls_failing(false);
-    poll_now(&page, "#story-log").await;
+    failures.set_asks_and_loads_failing(false);
+    load_now(&page, "#story-log").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -190,7 +190,7 @@ async fn check_failed_poll_keeps_region_and_marks_banner(
             || async { !read_banner(&page).await.0 },
         )
         .await,
-        "a later successful poll should clear the banner"
+        "a later successful ask should clear the banner"
     );
 }
 
@@ -249,7 +249,7 @@ async fn check_failed_action_renders_inline_slot(page: playwright_rs::Page, _stu
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.25
-async fn check_failed_non_poll_action_does_not_raise_unreachable_banner(
+async fn check_failed_action_does_not_raise_unreachable_banner(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -296,7 +296,7 @@ async fn check_failed_non_poll_action_does_not_raise_unreachable_banner(
         read_error_disclosure(&page, "#game-posture-controls [data-error-slot]").await;
     assert!(
         slot_visible,
-        "a failed non-poll action must report on its own surface"
+        "a failed action must report on its own surface"
     );
     assert!(
         slot_message.contains("action failed"),
@@ -330,13 +330,13 @@ async fn check_failed_non_poll_action_does_not_raise_unreachable_banner(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.26
-async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page, stub: StubServer) {
+async fn check_status_details_popover_survives_a_load(page: playwright_rs::Page, stub: StubServer) {
     let status = stub.status_handle();
     status.set(StubStatus::Error(
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -351,7 +351,7 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
             },
         )
         .await,
-        "the status poll should swap in the clamped error disclosure"
+        "the status load should swap in the clamped error disclosure"
     );
 
     page.locator("#status-display .error-details-toggle")
@@ -374,7 +374,7 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
             .await
             .unwrap();
 
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
 
     assert!(
                 wait_for_condition_async(
@@ -401,7 +401,7 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
             );
     assert!(
         active_element_is(&page, "#status-display .error-details-toggle").await,
-        "focus should return to the disclosure's toggle after the poll"
+        "focus should return to the disclosure's toggle after the load"
     );
 
     page.keyboard().press("Escape", None).await.unwrap();
@@ -423,7 +423,7 @@ async fn check_banner_details_popover_survives_a_banner_load(
 ) {
     let failures = stub.failure_handle();
     failures.set_header_degraded(true);
-    poll_now(&page, "#failure-banner-degraded").await;
+    load_now(&page, "#failure-banner-degraded").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -454,7 +454,7 @@ async fn check_banner_details_popover_survives_a_banner_load(
             .await
             .unwrap();
 
-    poll_now(&page, "#failure-banner-degraded").await;
+    load_now(&page, "#failure-banner-degraded").await;
 
     assert!(
                 wait_for_condition_async(
@@ -481,7 +481,7 @@ async fn check_banner_details_popover_survives_a_banner_load(
             );
     assert!(
         active_element_is(&page, "#failure-banner-degraded .error-details-toggle").await,
-        "focus should return to the banner disclosure's toggle after the poll"
+        "focus should return to the banner disclosure's toggle after the load"
     );
 }
 
@@ -642,7 +642,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -657,7 +657,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
             },
         )
         .await,
-        "the status poll should swap in the clamped error disclosure"
+        "the status load should swap in the clamped error disclosure"
     );
 
     let (message, raw) = page
@@ -730,7 +730,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
     assert!(closed, "Escape should close the disclosure");
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     wait_for_status_ready(&page).await;
     let gone: bool = page
         .evaluate::<(), bool>(
@@ -838,7 +838,7 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
         GenerationFailureKind::PromptTooLong,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -869,7 +869,7 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_now(&page, "#status-display").await;
     wait_for_status_ready(&page).await;
     let recovered = read_status_state(&page).await;
     assert!(
@@ -974,7 +974,7 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
             };
             let sentence = kind.line(&raw);
             status.set(StubStatus::Error(kind, raw));
-            poll_now(&page, "#status-display").await;
+            load_now(&page, "#status-display").await;
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(10),
@@ -1040,7 +1040,12 @@ async fn check_failed_panel_load_reports_inside_the_panel(
     stub.failure_handle().set_panel_loads_failing(true);
     page.goto(&url, None).await.unwrap();
 
-    for (tab, panel) in [("worlds", ".worlds-panel"), ("games", ".games-panel")] {
+    for (tab, panel) in [
+        ("worlds", ".worlds-panel"),
+        ("games", ".games-panel"),
+        ("settings", ".settings-panel"),
+        ("prompt-presets", ".prompt-presets-panel"),
+    ] {
         page.locator(&format!(r#"[data-tab="{tab}"]"#))
             .await
             .click(None)
@@ -1048,15 +1053,12 @@ async fn check_failed_panel_load_reports_inside_the_panel(
             .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
 
         let slot = format!("{panel} [data-error-slot]");
-        assert!(
-            wait_for_condition_async(
-                Duration::from_secs(5),
-                Duration::from_millis(50),
-                || async { read_error_disclosure(&page, &slot).await.0 },
-            )
-            .await,
-            "a failed {tab} panel load must report inside the panel"
-        );
+        wait_for_error_disclosure(
+            &page,
+            &slot,
+            "a failed {tab} panel load must report inside the panel",
+        )
+        .await;
         let (_, message, raw) = read_error_disclosure(&page, &slot).await;
         assert!(
             !message.is_empty() && !message.contains("panel load failed"),
@@ -1112,15 +1114,12 @@ async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _
             .unwrap_or_else(|e| panic!("click '{control}' failed: {e}"));
 
         let slot = format!("{row} > [data-error-slot]");
-        assert!(
-            wait_for_condition_async(
-                Duration::from_secs(5),
-                Duration::from_millis(50),
-                || async { read_error_disclosure(&page, &slot).await.0 },
-            )
-            .await,
-            "a failed action in a {tab} row must report in that row"
-        );
+        wait_for_error_disclosure(
+            &page,
+            &slot,
+            "a failed action in a {tab} row must report in that row",
+        )
+        .await;
         let (_, message, raw) = read_error_disclosure(&page, &slot).await;
         assert!(
             !message.is_empty() && !message.contains(failure),
@@ -1199,7 +1198,7 @@ async fn check_engine_recovery_clears_the_inline_error_and_banner(
     );
 
     lifecycle.restart().await;
-    poll_now(&page, "#story-log").await;
+    load_now(&page, "#story-log").await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -1236,13 +1235,13 @@ async fn run_failure_display_banner_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_poll_keeps_region_and_marks_banner,
+            check_failed_ask_keeps_region_and_marks_banner,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_status_details_popover_survives_a_poll,
+            check_status_details_popover_survives_a_load,
         )
         .await;
     runner
@@ -1266,7 +1265,7 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_non_poll_action_does_not_raise_unreachable_banner,
+            check_failed_action_does_not_raise_unreachable_banner,
         )
         .await;
     runner

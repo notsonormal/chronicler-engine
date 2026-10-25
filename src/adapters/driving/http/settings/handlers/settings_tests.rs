@@ -16,7 +16,7 @@ use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::wiring::build_app_graph_for_tests;
 
-use crate::test_support::{body_text, test_connection};
+use crate::test_support::{assert_answers_nothing, body_text, test_connection};
 
 fn make_test_app_state() -> AppState {
     make_app_state_with_settings(AppSettings::default())
@@ -44,15 +44,17 @@ fn mock_connection(id: &str, name: &str) -> LlmConnection {
 async fn test_settings_panel_returns_html() {
     let app_state = make_test_app_state();
     let response = settings_panel(axum::extract::State(app_state)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let html = body_text(response).await;
 
     assert!(
-        !response.0.contains("settings-panel"),
+        !html.contains("settings-panel"),
         "the shell's .settings-panel is the region, so the fragment repeats no root"
     );
-    assert!(response.0.contains("Connections"));
-    assert!(response.0.contains("Text Check"));
+    assert!(html.contains("Connections"));
+    assert!(html.contains("Text Check"));
     assert!(
-        response.0.contains(r#"id="connection-editor""#),
+        html.contains(r#"id="connection-editor""#),
         "the panel renders its editor slot, empty"
     );
 }
@@ -68,12 +70,7 @@ async fn test_save_text_check_handler_spell_mode() {
     let response =
         save_text_check_handler(axum::extract::State(app_state.clone()), Form(form)).await;
 
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a saved change answers nothing"
-    );
+    assert_answers_nothing(response).await;
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.text_check.mode, TextCheckMode::Spell);
@@ -207,12 +204,7 @@ async fn test_add_connection_handler_adds_connection() {
 
     let response =
         add_connection_handler(axum::extract::State(app_state.clone()), Form(form)).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a saved connection answers nothing"
-    );
+    assert_answers_nothing(response).await;
 
     let settings = app_state.settings().expect("settings read should succeed");
     let new_conn = settings.connections.last().unwrap();
@@ -292,12 +284,7 @@ async fn test_edit_connection_handler_updates_connection() {
         Form(form),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a saved connection answers nothing"
-    );
+    assert_answers_nothing(response).await;
     let settings = app_state.settings().expect("settings read should succeed");
     assert!(
         settings.connections.iter().any(|c| c.name == "New Name"),
@@ -348,8 +335,7 @@ async fn test_delete_connection_handler_removes_connection() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(body_text(response).await, "", "a delete answers nothing");
+    assert_answers_nothing(response).await;
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.connections.len(), 1);
@@ -473,12 +459,7 @@ async fn test_set_narrator_handler_updates_id() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a role change answers nothing"
-    );
+    assert_answers_nothing(response).await;
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.narration_connection_id, "conn-1");
@@ -521,12 +502,7 @@ async fn test_set_quantifier_handler_updates_id() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a role change answers nothing"
-    );
+    assert_answers_nothing(response).await;
 
     let settings = app_state.settings().expect("settings read should succeed");
     assert_eq!(settings.quantifier_connection_id, "conn-1");

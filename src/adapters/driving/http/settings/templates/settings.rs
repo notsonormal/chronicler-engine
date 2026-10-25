@@ -264,7 +264,7 @@ pub struct ConnectionTestResultTemplate {
 <div class="connection-card" id="text-check-card">
     <div class="card-header">
         <span class="card-title">Spell &amp; Grammar Check</span>
-        <span class="text-check-status" id="text-check-status" data-keep="data-saved"></span>
+        <span class="text-check-status saved-flag" id="text-check-status" data-keep="data-saved"></span>
     </div>
     <div class="card-details">
         Check player input for spelling and grammar issues before sending to the LLM.

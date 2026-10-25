@@ -211,7 +211,7 @@ async fn test_header_carries_the_game_name_only_and_settings_renders_its_own_rol
 
 // [docs/specs/failure_display.md] SCENARIO: 38.2
 #[tokio::test]
-async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
+async fn test_failed_load_answers_non_2xx_and_reswap_none() {
     let storage = Arc::new(empty_sqlite_storage());
     let state = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -227,7 +227,7 @@ async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
     assert_eq!(
         response.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
-        "a failed poll must answer non-2xx, not 200 with an error body"
+        "a failed load must answer non-2xx, not 200 with an error body"
     );
     assert_eq!(
         response
@@ -235,8 +235,46 @@ async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
             .get("HX-Reswap")
             .and_then(|value| value.to_str().ok()),
         Some("none"),
-        "a failed poll must ask the client to swap nothing"
+        "a failed load must ask the client to swap nothing"
     );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.18
+#[tokio::test]
+async fn test_failed_panel_loads_answer_non_2xx_and_reswap_none() {
+    for (path, call) in [
+        ("/fragment/settings", StorageCall::GetSettings),
+        ("/fragment/prompt-presets", StorageCall::GetSettings),
+        ("/fragment/worlds", StorageCall::ListWorlds),
+        ("/fragment/games", StorageCall::ListGames),
+    ] {
+        let (storage, failures) = empty_sqlite_storage().with_test_failures();
+        let (app, _state) = TestAppBuilder::default_test()
+            .storage(Arc::new(storage))
+            .build_with_state();
+        failures.set(call, TestOverride::internal("the data is unreadable"));
+
+        let request = Request::builder().uri(path).body(Body::empty()).unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "{path}: a failed load must answer non-2xx, not 200 with an error body"
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get("HX-Reswap")
+                .and_then(|value| value.to_str().ok()),
+            Some("none"),
+            "{path}: a failed load must ask the client to swap nothing"
+        );
+        let body = crate::support::http_requests::response_body(response).await;
+        assert!(
+            body.contains(r#"class="error-message""#) && body.contains("the data is unreadable"),
+            "{path}: the body is an error fragment that names the failure: {body}"
+        );
+    }
 }
 
 // [docs/specs/failure_display.md] SCENARIO: 38.3
@@ -335,7 +373,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 
 // [docs/specs/failure_display.md] SCENARIO: 38.4
 #[tokio::test]
-async fn test_failed_user_action_is_not_a_failed_poll() {
+async fn test_failed_user_action_is_not_a_failed_load() {
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
     failures.set_write(
         TxWrite::SetGameConfig,

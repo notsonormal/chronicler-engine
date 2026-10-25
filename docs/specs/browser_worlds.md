@@ -10,7 +10,7 @@ Endpoint: browser DOM.
 Given the world edit form is open with #world-posture-status rendered
 When the client changes the Tense select to "present"
 Then the browser POSTs /worlds/test/posture with the posture group
-And the browser flags the save on #world-posture-status (data-saved)
+And #world-posture-status shows the text "Saved"
 And after a reload the re-opened edit form shows "present" selected
 ```
 

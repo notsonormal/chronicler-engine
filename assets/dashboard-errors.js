@@ -29,7 +29,7 @@ function errorDisclosureHtml(popoverId, message, rawText) {
 }
 
 const INLINE_ERROR_CONTAINERS =
-  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, .worlds-panel, .games-panel";
+  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, .worlds-panel, .games-panel, .settings-panel, .prompt-presets-panel";
 
 let generatedErrorSlots = 0;
 

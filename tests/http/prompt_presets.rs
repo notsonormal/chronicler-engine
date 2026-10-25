@@ -9,7 +9,7 @@ use tower::util::ServiceExt;
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::prompt_preset_service::PromptPresetService;
-use chronicler_engine::test_support::body_text;
+use chronicler_engine::test_support::{assert_answers_nothing, body_text};
 use chronicler_engine::test_support::TestPromptPreset;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::empty_sqlite_storage;
@@ -59,12 +59,7 @@ fn preset_id_by_name(presets: &PromptPresetService, name: &str) -> String {
 /// A saved change answers nothing, and the panel shows it: this asserts the
 /// empty 200 and reads the panel that the next load renders.
 async fn panel_after(app: &axum::Router, response: axum::response::Response) -> String {
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a saved change answers nothing: the panel load shows it"
-    );
+    assert_answers_nothing(response).await;
     fetch_body(app, "/fragment/prompt-presets").await
 }
 
@@ -462,12 +457,7 @@ async fn test_update_preset_renders_card_with_new_name() {
         "name=After&instructions=Updated.&preset_type=system",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a saved change answers nothing"
-    );
+    assert_answers_nothing(response).await;
     let body = fetch_body(&app, &format!("/fragment/prompt-presets/{preset_id}")).await;
     assert!(body.contains(r#"<div class="preset-card""#));
     assert!(body.contains("After"));
@@ -513,12 +503,7 @@ async fn test_update_preset_ignores_form_preset_type() {
         "name=Updated&instructions=Updated.&preset_type=quantifier",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "update must succeed and answer nothing"
-    );
+    assert_answers_nothing(response).await;
 
     let stored = app_state
         .prompt_preset_service
@@ -1116,8 +1101,7 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
              &allowed_mode_novel=true&allowed_mode_if=true",
     )
     .await;
-    assert_eq!(saved.status(), StatusCode::OK);
-    assert_eq!(body_text(saved).await, "", "a saved change answers nothing");
+    assert_answers_nothing(saved).await;
     let card = fetch_body(&app, &format!("/fragment/prompt-presets/{copy_id}")).await;
     assert!(
         card.contains("Set Active (Interactive Fiction)"),
@@ -1252,12 +1236,7 @@ async fn test_update_preset_keeps_its_own_name() {
         "name=Alpha&instructions=Changed.&preset_type=system",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a saved change answers nothing"
-    );
+    assert_answers_nothing(response).await;
     let body = fetch_body(&app, &format!("/fragment/prompt-presets/{preset_id}")).await;
     let card = preset_card_html_slice(&body, "Alpha").expect("the updated card must render");
     assert!(

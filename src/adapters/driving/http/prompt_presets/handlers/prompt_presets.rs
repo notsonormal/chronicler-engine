@@ -17,7 +17,9 @@ use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response,
     error_fragment_response,
 };
-use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
+use crate::adapters::driving::http::utils::fragment::{
+    failed_fragment_response, render_or_error_fragment,
+};
 use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
 use crate::adapters::driving::http::utils::response::ok;
 
@@ -104,7 +106,7 @@ pub async fn view_preset_form_handler(
 pub async fn panel_handler(State(app_state): State<AppState>) -> Response<Body> {
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => return error_fragment_response(format!("Load failed: {e}")),
+        Err(e) => return failed_fragment_response(&format!("Load failed: {e}")),
     };
 
     Html(render_or_error_fragment(&presets_template(

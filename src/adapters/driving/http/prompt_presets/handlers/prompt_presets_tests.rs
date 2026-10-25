@@ -11,7 +11,7 @@ use crate::adapters::driving::http::prompt_presets::handlers::{
 };
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::TestPromptPreset;
-use crate::test_support::body_text;
+use crate::test_support::{assert_answers_nothing, body_text};
 
 fn make_test_app_state_with_preset(
     preset: PromptPreset,
@@ -109,7 +109,7 @@ async fn test_duplicate_preset_handler() {
         axum::extract::Path("orig".to_string()),
     )
     .await;
-    assert_eq!(body_text(response).await, "", "a duplicate answers nothing");
+    assert_answers_nothing(response).await;
     let names: Vec<String> = app_state
         .prompt_preset_service
         .list_presets(PresetType::System)

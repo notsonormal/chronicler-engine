@@ -4,12 +4,12 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::state::generation_status::Step;
 
-use super::support::{poll_now, StubRunner};
+use super::support::{assert_busy_refusal, load_now, StubRunner};
 use super::*;
 
-async fn poll_answer(page: &playwright_rs::Page, stub: &StubServer, status: StubStatus) {
+async fn show_status(page: &playwright_rs::Page, stub: &StubServer, status: StubStatus) {
     stub.status_handle().set(status);
-    poll_now(page, "#status-display").await;
+    load_now(page, "#status-display").await;
 }
 
 async fn is_visible(page: &playwright_rs::Page, selector: &str) -> bool {
@@ -27,7 +27,7 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
-    poll_answer(
+    show_status(
         &page,
         &stub,
         StubStatus::Autoplay {
@@ -52,7 +52,7 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
         );
     }
 
-    poll_answer(
+    show_status(
         &page,
         &stub,
         StubStatus::Autoplay {
@@ -68,7 +68,7 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
         "Stop shows between two Jobs of the run"
     );
 
-    poll_answer(&page, &stub, StubStatus::Idle).await;
+    show_status(&page, &stub, StubStatus::Idle).await;
     assert_eq!(status_display_text(&page).await, "Ready");
     assert!(
         !is_visible(&page, "#stop-btn").await,
@@ -80,20 +80,6 @@ async fn check_status_shows_the_run_progress_and_the_action_area_offers_only_sto
             "{selector} is usable again once the run ends"
         );
     }
-}
-
-async fn wait_for_busy_line_in_the_story_log_slot(page: &playwright_rs::Page) -> (String, String) {
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(page, "#story-log-error").await.0 }
-        )
-        .await,
-        "the refused write reports in the story log's error slot"
-    );
-    let (_, line, detail) = read_error_disclosure(page, "#story-log-error").await;
-    (line, detail)
 }
 
 // [docs/specs/browser_autoplay.md] SCENARIO: 42.5
@@ -119,24 +105,12 @@ async fn check_a_save_refused_for_a_held_game_keeps_the_editor_open(
         .await
         .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 }
-        )
-        .await,
-        "the refused save reports in the story log's error slot"
-    );
-    let (_, line, detail) = read_error_disclosure(&page, "#story-log-error").await;
-    assert!(
-        line.contains("busy"),
-        "the line names the busy Game, got {line:?}"
-    );
-    assert!(
-        detail.contains("Still thinking..."),
-        "the details carry the engine's answer, got {detail:?}"
-    );
+    assert_busy_refusal(
+        &page,
+        "#story-log-error",
+        "the refused save reports in the story log's error slot",
+    )
+    .await;
     let textarea = page.locator("#edit-textarea").await;
     assert_eq!(
         textarea.input_value(None).await.unwrap(),
@@ -159,7 +133,7 @@ async fn check_a_swipe_switch_refused_for_a_held_game_shows_the_busy_message(
     stub: StubServer,
 ) {
     stub.swipe_handle().set_two_swipes();
-    poll_now(&page, "#story-log").await;
+    load_now(&page, "#story-log").await;
     let counter = "#story-log .swipe-counter";
     wait_until_visible(&page, counter, Duration::from_millis(2000)).await;
     assert_eq!(
@@ -181,15 +155,12 @@ async fn check_a_swipe_switch_refused_for_a_held_game_shows_the_busy_message(
         .await
         .unwrap();
 
-    let (line, detail) = wait_for_busy_line_in_the_story_log_slot(&page).await;
-    assert!(
-        line.contains("busy"),
-        "the line names the busy Game, got {line:?}"
-    );
-    assert!(
-        detail.contains("Still thinking..."),
-        "the details carry the engine's answer, got {detail:?}"
-    );
+    assert_busy_refusal(
+        &page,
+        "#story-log-error",
+        "the refused write reports in the story log's error slot",
+    )
+    .await;
     assert_eq!(
         page.locator(counter)
             .await
@@ -224,15 +195,12 @@ async fn check_a_delete_refused_for_a_held_game_shows_the_busy_message(
         .await
         .unwrap();
 
-    let (line, detail) = wait_for_busy_line_in_the_story_log_slot(&page).await;
-    assert!(
-        line.contains("busy"),
-        "the line names the busy Game, got {line:?}"
-    );
-    assert!(
-        detail.contains("Still thinking..."),
-        "the details carry the engine's answer, got {detail:?}"
-    );
+    assert_busy_refusal(
+        &page,
+        "#story-log-error",
+        "the refused write reports in the story log's error slot",
+    )
+    .await;
     assert_eq!(
         count_log_entries(&page).await,
         entries_before,
@@ -252,24 +220,12 @@ async fn check_a_start_refused_for_a_busy_game_reports_in_the_autoplay_form_slot
         .unwrap();
 
     let slot = r#"#autoplay-form [data-error-slot="autoplay"]"#;
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, slot).await.0 },
-        )
-        .await,
-        "the refused start reports in the Autoplay form's own slot"
-    );
-    let (_, line, detail) = read_error_disclosure(&page, slot).await;
-    assert!(
-        line.contains("busy"),
-        "the line names the busy Game, got {line:?}"
-    );
-    assert!(
-        detail.contains("Still thinking..."),
-        "the details carry the engine's answer, got {detail:?}"
-    );
+    assert_busy_refusal(
+        &page,
+        slot,
+        "the refused start reports in the Autoplay form's own slot",
+    )
+    .await;
     for selector in ["#command-input", "#autoplay-btn"] {
         assert!(
             is_enabled(&page, selector).await,
@@ -304,15 +260,12 @@ async fn check_a_retry_refused_for_a_busy_game_reports_in_the_story_log_slot(
         .await
         .unwrap();
 
-    let (line, detail) = wait_for_busy_line_in_the_story_log_slot(&page).await;
-    assert!(
-        line.contains("busy"),
-        "the line names the busy Game, got {line:?}"
-    );
-    assert!(
-        detail.contains("Still thinking..."),
-        "the details carry the engine's answer, got {detail:?}"
-    );
+    assert_busy_refusal(
+        &page,
+        "#story-log-error",
+        "the refused write reports in the story log's error slot",
+    )
+    .await;
     assert_eq!(
         own_state_text(&page).await,
         "",

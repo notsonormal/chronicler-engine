@@ -199,9 +199,9 @@ pub async fn open_preset_editor(page: &playwright_rs::Page, card_selector: &str)
 }
 
 /// Choose `value` in an auto-save select whose answer swaps nothing, and wait for
-/// the browser to flag the save: it sets `data-saved` on `#flag_id` once the
-/// request ended well. An empty answer fires no htmx settle, so the flag is the
-/// observable end of the save.
+/// the browser to show "Saved" on `#flag_id`: the line that the player reads,
+/// which the browser draws once the request ended well. An empty answer fires no
+/// htmx settle, so the visible line is the observable end of the save.
 pub async fn select_option_and_await_saved(
     page: &playwright_rs::Page,
     selector: &str,
@@ -213,7 +213,9 @@ pub async fn select_option_and_await_saved(
         .select_option(value, None)
         .await
         .unwrap_or_else(|e| panic!("select_option('{selector}' -> '{value}') failed: {e}"));
-    let script = format!("() => document.getElementById('{flag_id}').hasAttribute('data-saved')");
+    let script = format!(
+        "() => {{ const flag = document.getElementById('{flag_id}'); return getComputedStyle(flag, '::before').content === '\"Saved\"'; }}"
+    );
     let saved = wait_for_condition_async(
         Duration::from_secs(5),
         Duration::from_millis(25),
@@ -226,7 +228,7 @@ pub async fn select_option_and_await_saved(
     .await;
     assert!(
         saved,
-        "select_option('{selector}' -> '{value}'): the save was never flagged on #{flag_id}"
+        "select_option('{selector}' -> '{value}'): #{flag_id} never showed the text Saved"
     );
 }
 
@@ -391,6 +393,20 @@ pub async fn read_error_disclosure(
     )
     .await
     .unwrap()
+}
+
+/// Waits until `selector` shows an error disclosure. `shows` is the failure
+/// message of the wait.
+pub async fn wait_for_error_disclosure(page: &playwright_rs::Page, selector: &str, shows: &str) {
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(50),
+            || async { read_error_disclosure(page, selector).await.0 }
+        )
+        .await,
+        "{shows}"
+    );
 }
 
 pub async fn error_details_open(page: &playwright_rs::Page, selector: &str) -> bool {

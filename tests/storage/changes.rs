@@ -5,30 +5,20 @@ use chronicler_engine::domain::model::change::ChangeVersions;
 use chronicler_engine::domain::model::game::{GameId, NewGame};
 use chronicler_engine::domain::model::dock::DockRecord;
 use chronicler_engine::domain::model::message::SwipeAt;
-use chronicler_engine::domain::model::settings::{
-    AppSettings, NarrativePerspective, NarrativeTense, NarratorMode,
-};
+use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::generation_status::GenerationFailure;
 use chronicler_engine::test_support::{
-    dummy_message, dummy_swipe, empty_sqlite_storage, seed_game_row, tx_token,
+    test_new_game, dummy_message, dummy_swipe, empty_sqlite_storage, seed_game_row, tx_token,
 };
 
 fn new_game(name: &str) -> NewGame {
-    NewGame {
-        world_name: "Seam World".to_string(),
-        world_key: "seam_world".to_string(),
-        persona_key: "seam_persona".to_string(),
-        persona_name: "Seam Persona".to_string(),
-        name: name.to_string(),
-        narrator_mode: NarratorMode::Novel,
-        narrative_perspective: NarrativePerspective::Third,
-        narrative_tense: NarrativeTense::Past,
-        system_prompt_preset_id: "system_default".to_string(),
-        quantifier_prompt_preset_id: "quantifier_default".to_string(),
-        impersonate_prompt_preset_id: "impersonate_default".to_string(),
-        options_prompt_preset_id: "options_default".to_string(),
-        options_always_on: false,
-    }
+    test_new_game(
+        "Seam World",
+        "seam_world",
+        "seam_persona",
+        "Seam Persona",
+        name,
+    )
 }
 
 fn versions_of(storage: &Storage, game: GameId) -> ChangeVersions {

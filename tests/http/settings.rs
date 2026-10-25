@@ -12,7 +12,7 @@ use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection};
-use chronicler_engine::test_support::body_text;
+use chronicler_engine::test_support::{assert_answers_nothing, body_text};
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::empty_sqlite_storage;
@@ -96,6 +96,12 @@ async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
     assert!(body.contains(r#"id="text-check-card""#));
     assert!(body.contains(r#"id="check_mode""#));
     assert!(body.contains(r#"name="enable_auto_check""#));
+    assert!(
+        body.contains(
+            r#"class="text-check-status saved-flag" id="text-check-status" data-keep="data-saved""#
+        ),
+        "the text-check status must be a saved-flag that a load keeps, so the browser can show Saved: {body}"
+    );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.12
@@ -111,12 +117,7 @@ async fn test_text_check_autosave_stores_mode_and_check_before_sending() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a saved change answers nothing: the panel load shows it"
-    );
+    assert_answers_nothing(response).await;
 
     let panel = get_body(&app, "/fragment/settings").await;
     assert!(
@@ -210,7 +211,24 @@ async fn test_failed_settings_panel_load_reports_inside_the_panel() {
         TestOverride::internal("settings read failure"),
     );
 
-    let body = get_body(&app, "/fragment/settings").await;
+    let request = Request::builder()
+        .uri("/fragment/settings")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "a failed load answers non-2xx, so the loaded panel stays as it is"
+    );
+    assert_eq!(
+        response
+            .headers()
+            .get("HX-Reswap")
+            .and_then(|value| value.to_str().ok()),
+        Some("none")
+    );
+    let body = body_text(response).await;
 
     assert!(
         body.contains("settings read failure"),
@@ -273,12 +291,7 @@ async fn test_narrator_role_select_applies_at_once() {
     );
 
     let response = post_form(&app, "/connections/set-narrator", "connection_id=mock-b").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a role change answers nothing"
-    );
+    assert_answers_nothing(response).await;
     let panel = get_body(&app, "/fragment/settings").await;
     let narrator_row = panel
         .split(r#"id="role-row-quantifier""#)
@@ -313,12 +326,7 @@ async fn test_quantifier_role_select_applies_at_once() {
     let (app, state, _storage) = app_with_production_graph(settings);
 
     let response = post_form(&app, "/connections/set-quantifier", "connection_id=mock-b").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a role change answers nothing"
-    );
+    assert_answers_nothing(response).await;
     let panel = get_body(&app, "/fragment/settings").await;
     let quantifier_row = panel
         .split(r#"id="role-row-quantifier""#)
@@ -379,8 +387,7 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
     );
 
     let response = post_form(&app, "/connections/mock-c/delete", "").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(body_text(response).await, "", "a delete answers nothing");
+    assert_answers_nothing(response).await;
     let panel = get_body(&app, "/fragment/settings").await;
     assert!(
         !panel.contains(r#"hx-get="/fragment/connections/mock-c/edit"#),
@@ -533,12 +540,7 @@ async fn test_connection_edit_keeps_its_own_name() {
         "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model-2&conn_api_key=&conn_base_url=",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        body_text(response).await,
-        "",
-        "a saved connection answers nothing"
-    );
+    assert_answers_nothing(response).await;
     let panel = get_body(&app, "/fragment/settings").await;
     let row = connection_row(&panel, &id);
     assert!(

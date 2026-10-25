@@ -126,7 +126,7 @@ function cancelEdit() {
   if (editState === null) return;
   const entryId = editState.id;
   revertEdit();
-  liveWorkEnded();
+  askNow();
   const entry = document.querySelector(`[data-id="${entryId}"]`);
   const editBtn = entry ? entry.querySelector(".edit-btn") : null;
   if (editBtn) editBtn.focus();
@@ -134,10 +134,10 @@ function cancelEdit() {
 
 // A 200 can still refuse a story write: a Job or an Autoplay run holds the Game.
 // True when the body is the busy answer; the story-log error then says what the
-// refused action was.
-function reportedBusy(body, message) {
+// refused action was (`refusedWhat`, for example "the edit was not saved").
+function reportedBusy(body, refusedWhat) {
   if (!isBusyAnswer(body)) return false;
-  showStoryLogError(message, BUSY_REFUSAL_DETAIL);
+  reportBusyRefusal(storyLogErrorSlot(), refusedWhat);
   return true;
 }
 
@@ -159,7 +159,7 @@ function submitEdit() {
       return response.text();
     })
     .then((body) => {
-      if (reportedBusy(body, "The Game is busy, so the edit was not saved.")) {
+      if (reportedBusy(body, "the edit was not saved")) {
         editKeptOpen = true;
         return;
       }
@@ -177,14 +177,14 @@ function submitEdit() {
       showStoryLogError("Failed to save the message.", err.message);
     })
     .finally(() => {
-      if (!editKeptOpen) liveWorkEnded();
+      if (!editKeptOpen) askNow();
     });
 }
 
 // Retry and retrigger answer nothing when the engine takes them, and the Job
 // they start shows in the status display. A refusal or a failure reports in the
 // story log's error slot and ends the action area's own state.
-function submitGenerationRequest(url, failureMessage, busyMessage) {
+function submitGenerationRequest(url, failureMessage, refusedWhat) {
   clearInlineError(storyLogErrorSlot());
   updateToThinking();
   actionFetch(url, { method: "POST" })
@@ -193,7 +193,7 @@ function submitGenerationRequest(url, failureMessage, busyMessage) {
       return response.text();
     })
     .then((body) => {
-      if (reportedBusy(body, busyMessage)) endPending();
+      if (reportedBusy(body, refusedWhat)) endPending();
     })
     .catch((err) => {
       console.error(`${failureMessage}:`, err);
@@ -206,7 +206,7 @@ function submitNewSwipe() {
   submitGenerationRequest(
     "/swipe/new",
     "Failed to generate a new swipe",
-    "The Game is busy, so the retry was not started.",
+    "the retry was not started",
   );
 }
 
@@ -214,7 +214,7 @@ function submitRetrigger() {
   submitGenerationRequest(
     "/retrigger",
     "Failed to retrigger the event",
-    "The Game is busy, so the retrigger was not started.",
+    "the retrigger was not started",
   );
 }
 
@@ -238,7 +238,7 @@ function switchSwipe(messageId, index) {
       return response.text();
     })
     .then((body) => {
-      if (reportedBusy(body, "The Game is busy, so the swipe was not switched.")) {
+      if (reportedBusy(body, "the swipe was not switched")) {
         return;
       }
       // The story log loads the restored Swipe, so the restore is announced
@@ -270,7 +270,7 @@ function deleteMessage() {
     .then((response) => {
       if (!response.ok) return throwServerDetail(response);
       return response.text().then((body) => {
-        if (reportedBusy(body, "The Game is busy, so the message was not deleted.")) {
+        if (reportedBusy(body, "the message was not deleted")) {
           return;
         }
         return chroniclerLive.settle().then(focusAfterLogDelete);

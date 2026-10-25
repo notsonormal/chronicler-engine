@@ -480,7 +480,7 @@ struct StubState {
     delete_succeeds: std::sync::atomic::AtomicBool,
     deleted: std::sync::atomic::AtomicBool,
     header_degraded: std::sync::atomic::AtomicBool,
-    polls_failing: std::sync::atomic::AtomicBool,
+    asks_and_loads_failing: std::sync::atomic::AtomicBool,
     row_deletes_succeed: std::sync::atomic::AtomicBool,
     world_delete_refused: std::sync::atomic::AtomicBool,
     preset_card_refused: std::sync::atomic::AtomicBool,
@@ -625,7 +625,7 @@ impl StubServer {
             delete_succeeds: std::sync::atomic::AtomicBool::new(false),
             deleted: std::sync::atomic::AtomicBool::new(false),
             header_degraded: std::sync::atomic::AtomicBool::new(false),
-            polls_failing: std::sync::atomic::AtomicBool::new(false),
+            asks_and_loads_failing: std::sync::atomic::AtomicBool::new(false),
             row_deletes_succeed: std::sync::atomic::AtomicBool::new(false),
             world_delete_refused: std::sync::atomic::AtomicBool::new(false),
             preset_card_refused: std::sync::atomic::AtomicBool::new(false),
@@ -999,14 +999,14 @@ impl StubFailureHandle {
         self.state.bump(&["llm"]);
     }
 
-    pub fn set_polls_failing(&self, failing: bool) {
+    pub fn set_asks_and_loads_failing(&self, failing: bool) {
         self.state
-            .polls_failing
+            .asks_and_loads_failing
             .store(failing, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// The Worlds and Games panels load once per page load, the Games panel when
-    /// its section opens, so arming this has no effect on a panel that has loaded.
+    /// Every panel loads once per page load, or when its section opens, so arming
+    /// this has no effect on a panel that has loaded.
     pub fn set_panel_loads_failing(&self, failing: bool) {
         self.state
             .panel_loads_failing
@@ -1227,7 +1227,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .nest_service("/data", tower_http::services::ServeDir::new("data"))
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&state),
-            fail_polls_middleware,
+            count_and_fail_reads_middleware,
         ))
         .with_state(state)
 }
@@ -1334,7 +1334,14 @@ fn story_log_entries_with_extra_oldest() -> Vec<StoryRow> {
     entries
 }
 
-async fn fail_polls_middleware(
+const PANEL_LOAD_PATHS: [&str; 4] = [
+    "/fragment/worlds",
+    "/fragment/games",
+    "/fragment/settings",
+    "/fragment/prompt-presets",
+];
+
+async fn count_and_fail_reads_middleware(
     State(state): State<Arc<StubState>>,
     request: axum::extract::Request,
     next: axum::middleware::Next,
@@ -1357,7 +1364,7 @@ async fn fail_polls_middleware(
     if path == "/fragment/story-log" && delay_ms > 0 {
         tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
     }
-    let is_panel_load = path == "/fragment/worlds" || path == "/fragment/games";
+    let is_panel_load = PANEL_LOAD_PATHS.contains(&path.as_str());
     if is_panel_load && state.panel_loads_failing.load(SeqCst) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1366,13 +1373,14 @@ async fn fail_polls_middleware(
         )
             .into_response();
     }
-    let is_poll = is_load || path == "/changes";
-    let failing = state.polls_failing.load(SeqCst) || (is_load && state.loads_failing.load(SeqCst));
-    if is_poll && failing {
+    let is_read = is_load || path == "/changes";
+    let failing =
+        state.asks_and_loads_failing.load(SeqCst) || (is_load && state.loads_failing.load(SeqCst));
+    if is_read && failing {
         let mut response = (
             StatusCode::INTERNAL_SERVER_ERROR,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            render_error("poll failed"),
+            render_error("read failed"),
         )
             .into_response();
         response

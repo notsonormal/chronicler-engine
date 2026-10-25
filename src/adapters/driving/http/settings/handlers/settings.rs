@@ -11,10 +11,12 @@ use crate::adapters::driving::http::settings::templates::settings::{
 };
 use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response, error_disclosure,
-    raw_error_detail, refusal_message_without_layer_prefix_for_validation_and_config, render_error,
+    raw_error_detail, refusal_message_without_layer_prefix_for_validation_and_config,
 };
 use crate::adapters::driving::http::utils::response::ok;
-use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
+use crate::adapters::driving::http::utils::fragment::{
+    failed_fragment_response, render_or_error_fragment,
+};
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, opt_string};
 use crate::application::connection_test_service::ConnectionTestResult;
 use crate::domain::model::agent::Role;
@@ -22,15 +24,17 @@ use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort, TextCheckMode};
 use crate::error::EngineError;
 
-pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
-    match app_state.settings() {
-        Ok(settings) => match app_state.game_view_query.role_health() {
-            Ok(roles) => Html(render_or_error_fragment(&SettingsTemplate::from_settings(
-                &settings, &roles,
-            ))),
-            Err(e) => Html(render_error(&e.to_string())),
-        },
-        Err(e) => Html(render_error(&e.to_string())),
+pub async fn settings_panel(State(app_state): State<AppState>) -> Response<Body> {
+    let settings = match app_state.settings() {
+        Ok(settings) => settings,
+        Err(e) => return failed_fragment_response(&e.to_string()),
+    };
+    match app_state.game_view_query.role_health() {
+        Ok(roles) => Html(render_or_error_fragment(&SettingsTemplate::from_settings(
+            &settings, &roles,
+        )))
+        .into_response(),
+        Err(e) => failed_fragment_response(&e.to_string()),
     }
 }
 

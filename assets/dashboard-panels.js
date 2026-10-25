@@ -105,7 +105,8 @@ function activateTab(btn) {
   const panel = document.getElementById(btn.dataset.tab + "-tab");
   if (panel) {
     panel.classList.add("active");
-    liveSectionOpened(panel);
+    // A section that opens shows its regions: each one that is due loads.
+    askNow();
   }
 }
 

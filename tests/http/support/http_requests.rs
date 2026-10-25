@@ -19,22 +19,7 @@ pub async fn response_body(resp: axum::response::Response<Body>) -> String {
     String::from_utf8_lossy(&bytes).to_string()
 }
 
-/// An action that went through answers 200 with no body and no header that
-/// steers the browser: the data reaches the screen through the change numbers.
-pub async fn assert_answers_nothing(resp: axum::response::Response<Body>) {
-    assert_eq!(resp.status(), http::StatusCode::OK);
-    for name in ["HX-Retarget", "HX-Reswap", "HX-Refresh"] {
-        assert!(
-            resp.headers().get(name).is_none(),
-            "a successful action must carry no {name} header"
-        );
-    }
-    let body = response_body(resp).await;
-    assert!(
-        body.is_empty(),
-        "a successful action answers nothing: {body}"
-    );
-}
+pub use chronicler_engine::test_support::assert_answers_nothing;
 
 pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();

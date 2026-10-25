@@ -116,8 +116,8 @@ async fn test_the_autoplay_control_starts_a_run_with_the_default_budget() {
                 .await
                 .expect_settled("start the run");
 
-            // The status poll runs every 5 seconds, so a run that shows within 3
-            // seconds shows because the start polls at once.
+            // The status display loads only when a number moves, so a run that shows within 3
+            // seconds shows because the start asks at once.
             wait_for_within(
                 Duration::from_secs(3),
                 "the status display shows the run with its budget",

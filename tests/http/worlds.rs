@@ -296,7 +296,8 @@ async fn test_world_edit_form_renders_posture_selects_http() {
     assert_option_selected(&html, "past", "the stored Past tense must render selected");
 
     assert!(
-        html.contains(r#"id="world-posture-status""#) && html.contains(r#"data-keep="data-saved""#),
+        html.contains(r#"saved-flag" data-keep="data-saved""#)
+            && html.contains(r#"id="world-posture-status""#),
         "the posture status flag must be rendered, and kept through a load: {html}"
     );
     assert!(
