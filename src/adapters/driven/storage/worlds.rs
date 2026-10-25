@@ -8,7 +8,7 @@ use chrono::Utc;
 
 use crate::error::{DatabaseContext, EngineError};
 use crate::domain::model::agent::WorldView;
-use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::character::{CharacterCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::utils::game_rules::GameWorld;
@@ -29,7 +29,7 @@ pub struct WorldBundle {
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
     pub persona: Arc<PersonaCard>,
-    pub npcs: HashMap<String, NpcCard>,
+    pub characters: HashMap<String, CharacterCard>,
 }
 
 impl WorldBundle {
@@ -37,7 +37,7 @@ impl WorldBundle {
     pub fn game_world(&self) -> GameWorld<'_> {
         GameWorld {
             map: &self.map,
-            characters: &self.npcs,
+            characters: &self.characters,
             persona_name: &self.persona.sheet.name,
         }
     }
@@ -48,8 +48,8 @@ impl WorldBundle {
             room: state.room(&self.map),
             map: &self.map,
             persona: &self.persona,
-            characters: &self.npcs,
-            present: &state.scene.npcs_in_area,
+            characters: &self.characters,
+            present: &state.scene.characters_present,
         }
     }
 }
@@ -128,7 +128,7 @@ impl Storage {
         let game = self.require_game(game_id)?;
         let world_with_map = self.require_world(&game.world_key)?;
         let persona = self.require_persona(&game.persona_key)?;
-        let npcs: HashMap<String, NpcCard> = self
+        let characters: HashMap<String, CharacterCard> = self
             .list_characters(world_with_map.world_id)?
             .into_iter()
             .map(|n| (n.id.clone(), n))
@@ -137,7 +137,7 @@ impl Storage {
             world: Arc::new(world_with_map.world_card),
             map: Arc::new(world_with_map.map),
             persona: Arc::new(persona),
-            npcs,
+            characters,
         })
     }
 

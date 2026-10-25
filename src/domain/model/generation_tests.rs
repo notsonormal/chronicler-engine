@@ -11,26 +11,26 @@ use super::state::message_types::{MessageKind, MessageType};
 use super::state::movement::MovementState;
 use super::state::scene_state::SceneState;
 use super::state::swipe_state::SwipeState;
-use super::state::trigger_context::{EventRecord, TriggerRef};
+use super::state::event_record::{EventRecord, TriggerRef};
 use super::tail::Tail;
-use super::trigger::NpcEncounterLog;
+use super::trigger::Encounters;
 
-fn state_in(room: &str, trigger_context: Option<EventRecord>) -> SwipeState {
+fn state_in(room: &str, event_record: Option<EventRecord>) -> SwipeState {
     SwipeState {
         movement: MovementState {
             current_room_id: room.to_string(),
             dynamic_rooms: Default::default(),
         },
         scene: SceneState::default(),
-        npc_encounter_log: NpcEncounterLog::default(),
-        trigger_context,
+        encounters: Encounters::default(),
+        event_record,
     }
 }
 
 fn event_record_repeating(repeat: bool) -> EventRecord {
     EventRecord {
         trigger: TriggerRef {
-            npc_id: "npc_1".to_string(),
+            character_id: "character_1".to_string(),
             trigger_idx: 0,
             trigger_name: "The gate opens".to_string(),
             trigger_repeat: repeat,
@@ -153,7 +153,7 @@ fn plan_retry_by_last_kind() {
         (
             "a typed Input",
             tail_after_one_message(MessageKind::TypedInput),
-            Generation::UserRegen,
+            Generation::InputRetry,
             SwipeAt {
                 message: 6,
                 swipe: 0,
@@ -248,7 +248,7 @@ fn plan_retrigger_refused() {
     };
     let rows = [
         (
-            "no trigger context",
+            "no event record",
             tail_after_one_message(MessageKind::Narration),
         ),
         (
@@ -262,7 +262,7 @@ fn plan_retrigger_refused() {
         assert_eq!(
             plan(JobRequest::Retrigger, tail),
             Err(PlanRefusal::BadRequest(
-                "No trigger context available".to_string()
+                "No event record available".to_string()
             )),
             "a Retrigger with {case}"
         );
@@ -422,14 +422,14 @@ fn plan_first_step_of_an_event_retry_is_the_event_step() {
 }
 
 #[test]
-fn plan_user_regen_not_analysed() {
+fn plan_input_retry_not_analysed() {
     let tail = tail_after_one_message(MessageKind::TypedInput);
 
     let order = first_order(plan(JobRequest::Retry, tail));
 
     assert!(
         !order.is_analysed(),
-        "a user regen ends after its text save"
+        "the Retry of a typed Input ends after its text save"
     );
 }
 
@@ -481,8 +481,8 @@ fn write_the_record_of_each_kind() {
             Maker::Player,
         ),
         (
-            Generation::UserRegen,
-            Kind::UserRegen,
+            Generation::InputRetry,
+            Kind::InputRetry,
             MessageType::Input,
             MessageKind::TypedInput,
             Maker::Player,
@@ -516,7 +516,7 @@ fn preset_type_by_kind() {
             Generation::Impersonate { direction: None },
             PresetType::Impersonate,
         ),
-        (Generation::UserRegen, PresetType::System),
+        (Generation::InputRetry, PresetType::System),
         (Generation::Event(event_record()), PresetType::System),
     ];
 
@@ -594,17 +594,17 @@ fn write_event_marks_one_shot() {
         .swipe
         .state;
 
-    assert!(one_shot.trigger_context.is_none());
-    assert!(one_shot.npc_encounter_log.is_trigger_fired("npc_1", 0));
-    assert!(repeating.trigger_context.is_none());
+    assert!(one_shot.event_record.is_none());
+    assert!(one_shot.encounters.is_trigger_fired("character_1", 0));
+    assert!(repeating.event_record.is_none());
     assert!(
-        !repeating.npc_encounter_log.is_trigger_fired("npc_1", 0),
+        !repeating.encounters.is_trigger_fired("character_1", 0),
         "a repeating Trigger is not added to the fired set"
     );
 }
 
 #[test]
-fn write_narration_clears_the_trigger_context() {
+fn write_narration_clears_the_event_record() {
     let started_from = state_in("room1", Some(event_record()));
 
     let state = order_of(Generation::Narration { guide: None })
@@ -612,15 +612,15 @@ fn write_narration_clears_the_trigger_context() {
         .swipe
         .state;
 
-    assert!(state.trigger_context.is_none());
+    assert!(state.event_record.is_none());
     assert_eq!(state.movement.current_room_id, "room1");
 }
 
 #[test]
-fn write_user_regen_not_analysed() {
+fn write_input_retry_not_analysed() {
     let started_from = state_in("room1", Some(event_record()));
 
-    let written = order_of(Generation::UserRegen).write("text".to_string(), &started_from);
+    let written = order_of(Generation::InputRetry).write("text".to_string(), &started_from);
 
     assert_eq!(written.swipe.state, started_from);
     assert_eq!(written.swipe.maker, Maker::Player);

@@ -11,7 +11,7 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
-use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
+use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection};
 use chronicler_engine::test_support::body_text;
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::TestAppBuilder;
@@ -590,7 +590,7 @@ fn single_mock_settings(id: &str, model: &str) -> AppSettings {
 /// A provider that fails every call, so a connection test can exercise the
 /// failure shape without a network dependency.
 fn failing_connection_test_factory() -> ProviderFactory {
-    Arc::new(|_config: &LlmProviderConfig| {
+    Arc::new(|_config: &LlmConnection| {
         Arc::new(MockBackend::new().with_fail()) as Arc<dyn LlmProvider>
     })
 }

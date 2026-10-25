@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Character Card",
-  "description": "Configuration for a character (Player or NPC) in Chronicler Engine.",
+  "description": "Configuration for a Character in Chronicler Engine: a person in a World whom the player does not play.",
   "type": "object",
   "properties": {
     "id": {

@@ -4,7 +4,7 @@
 mod debug;
 
 pub use self::debug::{
-    DebugBackendResponse, debug_backend_handler, debug_is_generating_handler, debug_state_handler,
+    DebugBackendResponse, debug_backend_handler, debug_is_busy_handler, debug_state_handler,
 };
 
 #[cfg(test)]

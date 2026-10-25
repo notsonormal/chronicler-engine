@@ -10,8 +10,9 @@ use crate::application::agents::quantifier::types::{
 
 #[derive(Deserialize, Debug)]
 struct QuantifierJsonResponse {
-    #[serde(default)]
-    npcs_in_room: Vec<String>,
+    /// An edited prompt preset can ask for `npcs_in_room`.
+    #[serde(default, alias = "npcs_in_room")]
+    characters_present: Vec<String>,
     #[serde(default)]
     movement: Option<MovementJson>,
 }
@@ -23,38 +24,41 @@ pub(crate) struct MovementJson {
     destination: Option<String>,
 }
 
-/// Extract NPC IDs from a quantifier response using JSON-first then text fallback.
-pub(crate) fn extract_npcs(response: &str, known_npc_ids: &[String]) -> QuantifierParseResult {
+/// Extract Character IDs from a quantifier response using JSON-first then text fallback.
+pub(crate) fn extract_characters(
+    response: &str,
+    known_character_ids: &[String],
+) -> QuantifierParseResult {
     let trimmed = response.trim();
 
     // Strategy 1: Try JSON parse
-    if let Ok((npc_ids, _movement)) = try_parse_json_full(trimmed) {
-        let valid_ids: Vec<String> = npc_ids
+    if let Ok((character_ids, _movement)) = try_parse_json_full(trimmed) {
+        let valid_ids: Vec<String> = character_ids
             .into_iter()
-            .filter(|id| known_npc_ids.contains(id))
+            .filter(|id| known_character_ids.contains(id))
             .collect();
 
         // JSON parsed successfully - this is High confidence even if the
-        // result is empty (the LLM correctly determined no NPCs are present)
+        // result is empty (the LLM correctly determined no Characters are present)
         return QuantifierParseResult {
-            npc_ids: valid_ids,
+            character_ids: valid_ids,
             confidence: QuantifierConfidence::High,
         };
     }
 
-    // Strategy 2: Text fallback - match known NPC IDs in the response
-    let text_ids = extract_npc_ids_from_text(trimmed, known_npc_ids);
+    // Strategy 2: Text fallback - match known Character IDs in the response
+    let text_ids = extract_character_ids_from_text(trimmed, known_character_ids);
 
     if !text_ids.is_empty() {
         return QuantifierParseResult {
-            npc_ids: text_ids,
+            character_ids: text_ids,
             confidence: QuantifierConfidence::Medium,
         };
     }
 
     // Strategy 3: No valid IDs found
     QuantifierParseResult {
-        npc_ids: Vec::new(),
+        character_ids: Vec::new(),
         confidence: QuantifierConfidence::Low,
     }
 }
@@ -66,11 +70,11 @@ pub(crate) fn try_parse_json_full(
     match serde_json::from_str::<QuantifierJsonResponse>(response) {
         Ok(parsed) => {
             tracing::debug!(
-                "[Quantifier] JSON parsed successfully: npcs={:?}, movement={:?}",
-                parsed.npcs_in_room,
+                "[Quantifier] JSON parsed successfully: characters={:?}, movement={:?}",
+                parsed.characters_present,
                 parsed.movement
             );
-            return Ok((parsed.npcs_in_room, parsed.movement));
+            return Ok((parsed.characters_present, parsed.movement));
         }
         Err(e) => {
             tracing::debug!("[Quantifier] Direct JSON parse failed: {}", e);
@@ -81,11 +85,11 @@ pub(crate) fn try_parse_json_full(
         match serde_json::from_str::<QuantifierJsonResponse>(&json_content) {
             Ok(parsed) => {
                 tracing::debug!(
-                    "[Quantifier] Code fence JSON parsed: npcs={:?}, movement={:?}",
-                    parsed.npcs_in_room,
+                    "[Quantifier] Code fence JSON parsed: characters={:?}, movement={:?}",
+                    parsed.characters_present,
                     parsed.movement
                 );
-                return Ok((parsed.npcs_in_room, parsed.movement));
+                return Ok((parsed.characters_present, parsed.movement));
             }
             Err(e) => {
                 tracing::debug!("[Quantifier] Code fence JSON parse failed: {}", e);
@@ -99,11 +103,11 @@ pub(crate) fn try_parse_json_full(
             match serde_json::from_str::<QuantifierJsonResponse>(json_str) {
                 Ok(parsed) => {
                     tracing::debug!(
-                        "[Quantifier] Extracted JSON parsed: npcs={:?}, movement={:?}",
-                        parsed.npcs_in_room,
+                        "[Quantifier] Extracted JSON parsed: characters={:?}, movement={:?}",
+                        parsed.characters_present,
                         parsed.movement
                     );
-                    return Ok((parsed.npcs_in_room, parsed.movement));
+                    return Ok((parsed.characters_present, parsed.movement));
                 }
                 Err(e) => {
                     tracing::debug!("[Quantifier] Extracted JSON parse failed: {}", e);
@@ -126,11 +130,14 @@ fn extract_json_from_code_fence(response: &str) -> Option<String> {
     Some(remaining[..end_idx].trim().to_string())
 }
 
-pub(crate) fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]) -> Vec<String> {
+pub(crate) fn extract_character_ids_from_text(
+    response: &str,
+    known_character_ids: &[String],
+) -> Vec<String> {
     let response_lower = response.to_lowercase();
     let mut found = Vec::new();
 
-    for id in known_npc_ids {
+    for id in known_character_ids {
         if response_lower.contains(&id.to_lowercase()) {
             found.push(id.clone());
         }
@@ -139,24 +146,27 @@ pub(crate) fn extract_npc_ids_from_text(response: &str, known_npc_ids: &[String]
     found
 }
 
-pub(crate) fn parse_with_movement(response: &str, known_npc_ids: &[String]) -> QuantifierReading {
+pub(crate) fn parse_with_movement(
+    response: &str,
+    known_character_ids: &[String],
+) -> QuantifierReading {
     let trimmed = response.trim();
 
     tracing::debug!(
         "[Quantifier Parser] Attempting to parse {} chars",
         trimmed.len()
     );
-    if let Ok((npc_ids, movement_json)) = try_parse_json_full(trimmed) {
+    if let Ok((character_ids, movement_json)) = try_parse_json_full(trimmed) {
         tracing::debug!(
-            "[Quantifier Parser] JSON parsing succeeded: {} NPCs found",
-            npc_ids.len()
+            "[Quantifier Parser] JSON parsing succeeded: {} Characters found",
+            character_ids.len()
         );
-        let valid_ids: Vec<String> = npc_ids
+        let valid_ids: Vec<String> = character_ids
             .into_iter()
-            .filter(|id| known_npc_ids.contains(id))
+            .filter(|id| known_character_ids.contains(id))
             .collect();
         tracing::debug!(
-            "[Quantifier Parser] After filtering: {} valid NPCs ({:?})",
+            "[Quantifier Parser] After filtering: {} valid Characters ({:?})",
             valid_ids.len(),
             valid_ids
         );
@@ -174,8 +184,8 @@ pub(crate) fn parse_with_movement(response: &str, known_npc_ids: &[String]) -> Q
         });
 
         return QuantifierReading {
-            npcs: QuantifierParseResult {
-                npc_ids: valid_ids,
+            characters: QuantifierParseResult {
+                character_ids: valid_ids,
                 confidence: QuantifierConfidence::High,
             },
             movement: movement.unwrap_or(MovementParseResult {
@@ -185,16 +195,19 @@ pub(crate) fn parse_with_movement(response: &str, known_npc_ids: &[String]) -> Q
         };
     }
     tracing::debug!("[Quantifier Parser] JSON failed, falling back to text extraction");
-    let npcs = extract_npcs(response, known_npc_ids);
+    let characters = extract_characters(response, known_character_ids);
     tracing::debug!(
-        "[Quantifier Parser] Text extraction found {} NPCs ({:?}) with {:?} confidence",
-        npcs.npc_ids.len(),
-        npcs.npc_ids,
-        npcs.confidence
+        "[Quantifier Parser] Text extraction found {} Characters ({:?}) with {:?} confidence",
+        characters.character_ids.len(),
+        characters.character_ids,
+        characters.confidence
     );
     let movement = MovementParseResult {
         movement_type: None,
         destination: None,
     };
-    QuantifierReading { npcs, movement }
+    QuantifierReading {
+        characters,
+        movement,
+    }
 }

@@ -24,7 +24,7 @@ use crate::support::http_fixtures::{
     break_start_room, corrupt_start_state, room_header_of, story_of, OFFERED_SET,
 };
 use crate::support::http_requests::{
-    fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
+    fetch_body, fetch_busy_status, post_action, post_action_check, post_empty, post_form,
     response_body, wait_settled,
 };
 
@@ -60,7 +60,7 @@ async fn test_action_succeeds_one_narration_idle_http() {
         Some("You see a small wooden room.")
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "action should finish in the Idle state"
     );
@@ -93,7 +93,7 @@ async fn test_input_persisted_before_narration_http() {
     assert_eq!(messages[input_idx].text(), "examine the room");
     assert_eq!(messages[narration_idx].text(), "It is a small wooden room.");
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "input persistence should finish in the Idle state"
     );
@@ -101,14 +101,14 @@ async fn test_input_persisted_before_narration_http() {
 
 // [docs/specs/actions.md] SCENARIO: 1.4
 #[tokio::test]
-async fn test_quantifier_npc_fires_trigger_http() {
-    use chronicler_engine::domain::model::character::NpcCard;
+async fn test_quantifier_character_fires_trigger_http() {
+    use chronicler_engine::domain::model::character::CharacterCard;
     use chronicler_engine::domain::model::trigger::{
         ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
     };
 
-    let npc = NpcCard {
-        id: "npc_1".to_string(),
+    let character = CharacterCard {
+        id: "character_1".to_string(),
         sheet: chronicler_engine::test_support::TestPersona::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
@@ -118,23 +118,25 @@ async fn test_quantifier_npc_fires_trigger_http() {
             },
             narration: TriggerNarration {
                 name: "Greeting".to_string(),
-                narration_prompt: "The NPC greets you warmly.".to_string(),
+                narration_prompt: "The Character greets you warmly.".to_string(),
             },
             repeat: false,
             room_id: None,
         }],
         relationships: vec![],
     };
-    let data = TestDataBuilder::default_test().npcs(vec![npc]).build();
+    let data = TestDataBuilder::default_test()
+        .characters(vec![character])
+        .build();
 
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The main narration.")
-                .after_narration(analysis_report(&["npc_1"], None))
-                .event_narration("The NPC greets you warmly.")
-                .after_narration(analysis_report(&["npc_1"], None)),
+                .after_narration(analysis_report(&["character_1"], None))
+                .event_narration("The Character greets you warmly.")
+                .after_narration(analysis_report(&["character_1"], None)),
         ))
         .build_with_state();
 
@@ -157,7 +159,7 @@ async fn test_quantifier_npc_fires_trigger_http() {
         "main + trigger continuation narrations, got {narration_count}"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "trigger action should finish in the Idle state"
     );
@@ -165,11 +167,13 @@ async fn test_quantifier_npc_fires_trigger_http() {
 
 // [docs/specs/actions.md] SCENARIO: 1.7
 #[tokio::test]
-async fn test_no_trigger_npc_produces_narration_no_event_http() {
-    use chronicler_engine::test_support::TestNpc;
+async fn test_no_trigger_character_produces_narration_no_event_http() {
+    use chronicler_engine::test_support::TestCharacter;
 
-    let npc = TestNpc::named("bartender", "Bartender");
-    let data = TestDataBuilder::default_test().npcs(vec![npc]).build();
+    let character = TestCharacter::named("bartender", "Bartender");
+    let data = TestDataBuilder::default_test()
+        .characters(vec![character])
+        .build();
 
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
@@ -198,7 +202,7 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
         );
     }
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "no-trigger action should finish in the Idle state"
     );
@@ -208,16 +212,16 @@ async fn test_no_trigger_npc_produces_narration_no_event_http() {
 #[tokio::test]
 async fn test_trigger_does_not_refire_on_second_encounter_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
-    let shopkeeper = TestNpc::with_times_met_trigger(
+    let shopkeeper = TestCharacter::with_times_met_trigger(
         "shopkeeper",
         "Shopkeeper Sarah",
         ComparisonOperator::Eq,
         0,
     );
     let data = TestDataBuilder::default_test()
-        .npcs(vec![shopkeeper])
+        .characters(vec![shopkeeper])
         .build();
 
     let (app, state) = TestAppBuilder::default_test()
@@ -258,7 +262,7 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         "one-shot trigger should fire at most once, got {trigger_narrations} trigger narrations"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "second encounter should finish in the Idle state"
     );
@@ -293,7 +297,7 @@ async fn test_empty_command_continuation_no_input_http() {
         Some("The scene continues.")
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "continuation should finish in the Idle state"
     );
@@ -301,22 +305,22 @@ async fn test_empty_command_continuation_no_input_http() {
 
 // [docs/specs/actions.md] SCENARIO: 1.6
 #[tokio::test]
-async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
+async fn test_trigger_continuation_reruns_quantifier_detects_new_character_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
-    // evaluate_triggers iterates every world NPC, not just npcs_in_area, so the
+    // evaluate_triggers iterates every world Character, not just characters_present, so the
     // shopkeeper's times_met trigger fires the continuation.
-    let shopkeeper = TestNpc::with_times_met_trigger(
+    let shopkeeper = TestCharacter::with_times_met_trigger(
         "shopkeeper",
         "Shopkeeper Sarah",
         ComparisonOperator::Eq,
         0,
     );
-    let gabriella = TestNpc::named("gabriella", "Gabriella");
+    let gabriella = TestCharacter::named("gabriella", "Gabriella");
     let data = chronicler_engine::test_support::TestDataBuilder::default_test()
-        .npcs(vec![shopkeeper, gabriella])
-        .room_npc("gabriella")
+        .characters(vec![shopkeeper, gabriella])
+        .room_character("gabriella")
         .build();
 
     let (app, state) = TestAppBuilder::default_test()
@@ -339,12 +343,12 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
         .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed");
     assert!(
-        debug.npcs_in_area.contains(&"gabriella".to_string()),
-        "gabriella should be in npcs_in_area after trigger continuation, got: {:?}",
-        debug.npcs_in_area
+        debug.characters_present.contains(&"gabriella".to_string()),
+        "gabriella should be in characters_present after trigger continuation, got: {:?}",
+        debug.characters_present
     );
     let gabriella_state = debug
-        .npc_encounter_log
+        .encounters
         .get("gabriella")
         .expect("gabriella should have encounter-log entry");
     assert_eq!(gabriella_state.times_met, 1, "times_met should be 1");
@@ -356,7 +360,7 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_npc_http() {
 
 // [docs/specs/actions.md] SCENARIO: 2.1
 #[tokio::test]
-async fn test_nonexistent_room_sets_error_status_http() {
+async fn test_nonexistent_room_sets_failed_status_http() {
     // The room lookup fails before the analysis call, so this script omits the
     // analysis.
     let storage = Arc::new(empty_sqlite_storage());
@@ -370,7 +374,7 @@ async fn test_nonexistent_room_sets_error_status_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 2000).await);
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The room non_existent_room is not on the map."),
         "the failure names the invalid room, got: {status}"
@@ -387,28 +391,28 @@ async fn test_nonexistent_room_sets_error_status_http() {
 
 // [docs/specs/actions.md] SCENARIO: 2.2
 #[tokio::test]
-async fn test_failing_narrator_sets_error_status_http() {
+async fn test_failing_narrator_sets_failed_status_http() {
     let (app, state) = app_with_model(Arc::new(ScriptedModel::new().failed(Role::Narrator)));
 
     let resp = post_action(&app, "look").await;
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 2000).await);
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     let message = status_error_message(&status);
     assert!(!message.is_empty(), "error message should be non-empty");
 }
 
 // [docs/specs/actions.md] SCENARIO: 2.4
 #[tokio::test]
-async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
-    use chronicler_engine::domain::model::character::NpcCard;
+async fn test_trigger_narration_failure_preserves_main_sets_failed_http() {
+    use chronicler_engine::domain::model::character::CharacterCard;
     use chronicler_engine::domain::model::trigger::{
         ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
     };
 
-    let npc = NpcCard {
-        id: "npc_1".to_string(),
+    let character = CharacterCard {
+        id: "character_1".to_string(),
         sheet: chronicler_engine::test_support::TestPersona::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
@@ -418,30 +422,32 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
             },
             narration: TriggerNarration {
                 name: "Greeting".to_string(),
-                narration_prompt: "The NPC greets you.".to_string(),
+                narration_prompt: "The Character greets you.".to_string(),
             },
             repeat: false,
             room_id: None,
         }],
         relationships: vec![],
     };
-    let data = TestDataBuilder::default_test().npcs(vec![npc]).build();
+    let data = TestDataBuilder::default_test()
+        .characters(vec![character])
+        .build();
 
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("Main narration preserved.")
-                .after_narration(analysis_report(&["npc_1"], None))
+                .after_narration(analysis_report(&["character_1"], None))
                 .failed(Role::Trigger),
         ))
         .build_with_state();
 
-    let resp = post_action(&app, "examine the npc").await;
+    let resp = post_action(&app, "examine the character").await;
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 2000).await);
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The event narration failed."),
         "the failure line of a failed event narration, got: {status}"
@@ -496,9 +502,9 @@ async fn test_trigger_narration_failure_preserves_main_sets_error_http() {
 
 // [docs/specs/actions.md] SCENARIO: 2.5
 #[tokio::test]
-async fn test_quantifier_transport_failure_completes_action_and_keeps_npcs_http() {
+async fn test_quantifier_transport_failure_completes_action_and_keeps_characters_http() {
     // The quantifier retries once, so a failed analysis fails twice.
-    assert_quantifier_failure_keeps_npcs(Arc::new(
+    assert_quantifier_failure_keeps_characters(Arc::new(
         ScriptedModel::new()
             .narration("The innkeeper glances your way.")
             .failed(Role::Quantifier)
@@ -509,9 +515,9 @@ async fn test_quantifier_transport_failure_completes_action_and_keeps_npcs_http(
 
 // [docs/specs/actions.md] SCENARIO: 2.5
 #[tokio::test]
-async fn test_quantifier_unparseable_answer_completes_action_and_keeps_npcs_http() {
+async fn test_quantifier_unparseable_answer_completes_action_and_keeps_characters_http() {
     // The quantifier retries once, so an unparseable answer is read twice.
-    assert_quantifier_failure_keeps_npcs(Arc::new(
+    assert_quantifier_failure_keeps_characters(Arc::new(
         ScriptedModel::new()
             .narration("The innkeeper glances your way.")
             .after_narration("There is no room report in this answer.")
@@ -520,17 +526,17 @@ async fn test_quantifier_unparseable_answer_completes_action_and_keeps_npcs_http
     .await;
 }
 
-async fn assert_quantifier_failure_keeps_npcs(model: Arc<ScriptedModel>) {
+async fn assert_quantifier_failure_keeps_characters(model: Arc<ScriptedModel>) {
     let (app, state) = app_with_model(Arc::clone(&model));
 
-    let npcs_before = state
+    let characters_before = state
         .game_view_query
         .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed")
-        .npcs_in_area;
+        .characters_present;
     assert!(
-        !npcs_before.is_empty(),
-        "the setup must start from a non-empty NPC set: {npcs_before:?}"
+        !characters_before.is_empty(),
+        "the setup must start from a non-empty Character set: {characters_before:?}"
     );
 
     let resp = post_action(&app, "look").await;
@@ -541,18 +547,18 @@ async fn assert_quantifier_failure_keeps_npcs(model: Arc<ScriptedModel>) {
     );
 
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "the action must finish in the Idle state"
     );
-    let npcs_after = state
+    let characters_after = state
         .game_view_query
         .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed")
-        .npcs_in_area;
+        .characters_present;
     assert_eq!(
-        npcs_after, npcs_before,
-        "the scene must keep its prior NPC set after a quantifier failure"
+        characters_after, characters_before,
+        "the scene must keep its prior Character set after a quantifier failure"
     );
     assert_eq!(
         llm_call_count(&state, "quantifier"),
@@ -583,9 +589,9 @@ async fn test_delayed_llm_completes_without_deadlock_http() {
         "a held LLM call should complete once released"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
-        "status should not be Generating"
+        "status should not be Busy"
     );
 }
 
@@ -773,7 +779,7 @@ async fn test_bare_slash_impersonate_produces_input_http() {
         None,
         "a bare /impersonate stores no direction"
     );
-    assert_eq!(fetch_generating_status(&app).await, "idle");
+    assert_eq!(fetch_busy_status(&app).await, "idle");
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.10
@@ -1143,7 +1149,7 @@ async fn test_missing_persona_answers_500_with_the_missing_data_line_http() {
         "the refused Action gains no Message, so the story log keeps its entries"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains(line),
         "the Game carries the same missing-data line: {status}"

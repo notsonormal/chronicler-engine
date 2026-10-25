@@ -5,10 +5,10 @@ use crate::domain::model::state::message_types::{StoryRow, MessageType};
 use crate::domain::model::story_window::StoryWindowEntry;
 use crate::test_support::fixtures::{default_story_row, window_entries};
 use crate::adapters::driving::http::templates::{
-    HeaderTemplate, NarrativeLogTemplate, OptionsDockTemplate, VisualSidebarTemplate,
+    HeaderTemplate, NarrationLogTemplate, OptionsDockTemplate, VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
-    NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
+    CharacterPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
 
 #[test]
@@ -49,7 +49,7 @@ fn test_header_template_has_no_hardcoded_connection_status() {
 
 #[test]
 fn test_story_log_template_empty() {
-    let template = NarrativeLogTemplate::new(&[], false, false);
+    let template = NarrationLogTemplate::new(&[], false, false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.is_empty(),
@@ -66,7 +66,7 @@ fn test_story_log_template_with_entries() {
         timestamp: Utc::now(),
         ..default_story_row(MessageType::Narration)
     }];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Welcome to the adventure!"));
     assert!(rendered.contains("narration"));
@@ -81,7 +81,7 @@ fn test_story_log_template_escapes_html() {
         timestamp: Utc::now(),
         ..default_story_row(MessageType::Narration)
     }];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(!rendered.contains("<script>"));
 }
@@ -104,7 +104,7 @@ fn test_story_log_template_has_message_actions() {
             ..default_story_row(MessageType::Input)
         },
     ];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("message-header"));
     assert!(rendered.contains("message-actions"));
@@ -123,7 +123,7 @@ fn test_story_log_template_edit_path_hooks() {
         timestamp: Utc::now(),
         ..default_story_row(MessageType::Narration)
     }];
-    let rendered = NarrativeLogTemplate::new(&window_entries(&entries), false, false)
+    let rendered = NarrationLogTemplate::new(&window_entries(&entries), false, false)
         .render()
         .unwrap();
     assert!(rendered.contains(r#"data-id="1""#), "entry: {rendered}");
@@ -144,7 +144,7 @@ fn test_story_log_template_edit_path_hooks() {
         timestamp: Utc::now(),
         ..default_story_row(MessageType::Narration)
     }];
-    let escaped = NarrativeLogTemplate::new(&window_entries(&quoted), false, false)
+    let escaped = NarrationLogTemplate::new(&window_entries(&quoted), false, false)
         .render()
         .unwrap();
     assert!(
@@ -172,7 +172,7 @@ fn test_story_log_template_renders_event_header() {
             ..default_story_row(MessageType::Narration)
         },
     ];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("event-header"));
     assert!(rendered.contains("Gabriella Introduction"));
@@ -206,7 +206,7 @@ fn test_story_log_template_renders_the_room_header() {
             room_header: None,
         },
     ];
-    let template = NarrativeLogTemplate::new(&entries, false, false);
+    let template = NarrationLogTemplate::new(&entries, false, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("location-header"));
     assert!(rendered.contains("Entrance Hall"));
@@ -233,7 +233,7 @@ fn test_story_log_template_retrigger_button_shown_when_the_window_allows_it() {
             ..default_story_row(MessageType::Narration)
         },
     ];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), true, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), true, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("retrigger-btn"));
     assert!(rendered.contains("submitRetrigger"));
@@ -249,7 +249,7 @@ fn test_story_log_template_retrigger_button_hidden_when_the_window_refuses_it() 
         timestamp: Utc::now(),
         ..default_story_row(MessageType::Narration)
     }];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(!rendered.contains("retrigger-btn"));
 }
@@ -263,7 +263,7 @@ fn test_story_log_template_swipe_controls_on_last_narration_with_one_swipe() {
         timestamp: Utc::now(),
         ..default_story_row(MessageType::Narration)
     }];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("swipe-controls"),
@@ -291,7 +291,7 @@ fn test_story_log_template_swipe_controls_on_last_input_with_one_swipe() {
         timestamp: Utc::now(),
         ..default_story_row(MessageType::Input)
     }];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("swipe-controls"),
@@ -309,7 +309,7 @@ fn test_story_log_template_swipe_controls_on_last_input() {
         timestamp: Utc::now(),
         ..default_story_row(MessageType::Input)
     }];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(
         rendered.contains("swipe-controls"),
@@ -327,7 +327,7 @@ fn test_story_log_template_no_swipe_controls_on_system() {
         timestamp: Utc::now(),
         ..default_story_row(MessageType::System)
     }];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(
         !rendered.contains("swipe-controls"),
@@ -353,7 +353,7 @@ fn test_story_log_template_no_swipe_controls_on_non_last_narration() {
             ..default_story_row(MessageType::System)
         },
     ];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(
         !rendered.contains("swipe-controls"),
@@ -373,7 +373,7 @@ fn test_story_log_template_swipe_navigation_between_existing_swipes() {
     entry.swipe_count = 3;
     entry.active_swipe_index = 1;
     let entries = vec![entry];
-    let template = NarrativeLogTemplate::new(&window_entries(&entries), false, false);
+    let template = NarrationLogTemplate::new(&window_entries(&entries), false, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("swipe-controls"));
     assert!(rendered.contains("2 / 3"));
@@ -419,27 +419,27 @@ fn test_visual_sidebar_no_image() {
     ));
     let rendered = template.render().unwrap();
     assert!(rendered.contains("no-image"));
-    assert!(rendered.contains("No Location Image"));
+    assert!(rendered.contains("No Room Image"));
 }
 
 #[test]
-fn test_visual_sidebar_with_npcs() {
+fn test_visual_sidebar_with_characters() {
     let template = VisualSidebarTemplate::new(VisualSidebarViewModel::new(
         Some("/images/room.png".to_string()),
         "Test Room".to_string(),
         vec![
-            NpcPortraitView {
-                image_path: "/images/npc1.png".to_string(),
+            CharacterPortraitView {
+                image_path: "/images/character1.png".to_string(),
                 name: "Alice".to_string(),
             },
-            NpcPortraitView {
-                image_path: "/images/npc2.png".to_string(),
+            CharacterPortraitView {
+                image_path: "/images/character2.png".to_string(),
                 name: "Bob".to_string(),
             },
         ],
     ));
     let rendered = template.render().unwrap();
-    assert!(rendered.contains("npc-portrait"));
+    assert!(rendered.contains("character-portrait"));
     assert!(rendered.contains("Alice"));
     assert!(rendered.contains("Bob"));
 }
@@ -542,7 +542,7 @@ fn test_options_dock_renders_escaped_option_rows() {
     assert!(rendered.contains("options — pick one, or type your own"));
     assert!(rendered.contains(r#"value="/options""#));
     assert!(rendered.contains("Open the creaking door"));
-    assert!(rendered.contains(r#"aria-label="Regenerate options""#));
+    assert!(rendered.contains(r#"aria-label="New options""#));
     assert_eq!(
         rendered.matches(r#"aria-label="Edit before send""#).count(),
         2
@@ -558,6 +558,6 @@ fn test_options_dock_busy_disables_all_controls() {
     let template = OptionsDockTemplate::new(OptionsDockViewModel::new(options, true, None));
     let rendered = template.render().unwrap();
 
-    // 2 option buttons + 2 edit buttons + the regenerate button.
+    // 2 option buttons + 2 edit buttons + the new-Options button.
     assert_eq!(rendered.matches("disabled").count(), 5);
 }

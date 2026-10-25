@@ -10,7 +10,7 @@ use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
-use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig, ReasoningEffort};
+use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort};
 use chronicler_engine::test_support::body_text;
 use chronicler_engine::TestAppBuilder;
 
@@ -427,9 +427,9 @@ async fn test_form_connection_test_hands_the_typed_reasoning_effort_to_the_provi
     let (state, _storage) = TestAppBuilder::default_test()
         .settings(single_mock_settings("saved-conn", "saved-model"))
         .build_service_with_storage();
-    let tested: Arc<Mutex<Vec<LlmProviderConfig>>> = Arc::default();
+    let tested: Arc<Mutex<Vec<LlmConnection>>> = Arc::default();
     let capture = Arc::clone(&tested);
-    let factory: ProviderFactory = Arc::new(move |config: &LlmProviderConfig| {
+    let factory: ProviderFactory = Arc::new(move |config: &LlmConnection| {
         capture.lock().unwrap().push(config.clone());
         Arc::new(MockBackend::new()) as Arc<dyn LlmProvider>
     });

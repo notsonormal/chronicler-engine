@@ -29,7 +29,7 @@ async fn test_create_game_handler() {
             description: "Test scenario".to_string(),
             starting_room_id: "start".to_string(),
             text: "Welcome to the test world!".to_string(),
-            npcs: vec![],
+            characters_present: vec![],
         },
     ];
     let mut map = TestMap::single_room("start");

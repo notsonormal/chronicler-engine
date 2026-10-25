@@ -1,7 +1,7 @@
-use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
+use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard};
 
 #[test]
-fn test_npc_card_serde() {
+fn test_character_card_serde() {
     let json = r#"{
         "id": "carla",
         "name": "Carla",
@@ -10,11 +10,11 @@ fn test_npc_card_serde() {
         "scenario": "Guarding",
         "profile_image": "data/images/carla.png"
     }"#;
-    let npc: NpcCard = serde_json::from_str(json).unwrap();
-    assert_eq!(npc.id, "carla");
-    assert_eq!(npc.sheet.name, "Carla");
+    let character: CharacterCard = serde_json::from_str(json).unwrap();
+    assert_eq!(character.id, "carla");
+    assert_eq!(character.sheet.name, "Carla");
     assert_eq!(
-        npc.sheet.profile_image,
+        character.sheet.profile_image,
         Some("data/images/carla.png".to_string())
     );
 }
@@ -35,7 +35,7 @@ fn test_player_card_serde() {
 }
 
 #[test]
-fn test_npc_card_headshot_image() {
+fn test_character_card_headshot_image() {
     let json = r#"{
         "id": "carla",
         "name": "Carla",
@@ -45,15 +45,15 @@ fn test_npc_card_headshot_image() {
         "profile_image": "data/images/carla.png",
         "headshot_image": "data/images/carla_headshot.png"
     }"#;
-    let npc: NpcCard = serde_json::from_str(json).unwrap();
+    let character: CharacterCard = serde_json::from_str(json).unwrap();
     assert_eq!(
-        npc.sheet.headshot_image,
+        character.sheet.headshot_image,
         Some("data/images/carla_headshot.png".to_string())
     );
 }
 
 #[test]
-fn test_npc_card_headshot_image_none() {
+fn test_character_card_headshot_image_none() {
     let json = r#"{
         "id": "carla",
         "name": "Carla",
@@ -62,10 +62,10 @@ fn test_npc_card_headshot_image_none() {
         "scenario": "Guarding",
         "profile_image": "data/images/carla.png"
     }"#;
-    let npc: NpcCard = serde_json::from_str(json).unwrap();
-    assert_eq!(npc.sheet.headshot_image, None);
+    let character: CharacterCard = serde_json::from_str(json).unwrap();
+    assert_eq!(character.sheet.headshot_image, None);
     assert_eq!(
-        npc.sheet.profile_image,
+        character.sheet.profile_image,
         Some("data/images/carla.png".to_string())
     );
 }
@@ -133,7 +133,7 @@ fn test_preferred_image_none_when_both_absent() {
 }
 
 #[test]
-fn test_npc_card_relationships_deserialize() {
+fn test_character_card_relationships_deserialize() {
     let json = r#"{
         "id": "carla",
         "name": "Carla",
@@ -144,18 +144,18 @@ fn test_npc_card_relationships_deserialize() {
             {"with": "gabriella", "static": "Carla distrusts Gabriella.", "dynamic": "open hostility"}
         ]
     }"#;
-    let npc: NpcCard = serde_json::from_str(json).unwrap();
-    assert_eq!(npc.relationships.len(), 1);
-    assert_eq!(npc.relationships[0].with, "gabriella");
+    let character: CharacterCard = serde_json::from_str(json).unwrap();
+    assert_eq!(character.relationships.len(), 1);
+    assert_eq!(character.relationships[0].with, "gabriella");
     assert_eq!(
-        npc.relationships[0].static_text,
+        character.relationships[0].static_text,
         "Carla distrusts Gabriella."
     );
-    assert_eq!(npc.relationships[0].dynamic, "open hostility");
+    assert_eq!(character.relationships[0].dynamic, "open hostility");
 }
 
 #[test]
-fn test_npc_card_relationships_default_empty() {
+fn test_character_card_relationships_default_empty() {
     let json = r#"{
         "id": "carla",
         "name": "Carla",
@@ -163,14 +163,14 @@ fn test_npc_card_relationships_default_empty() {
         "personality": "Strict",
         "scenario": "Guarding"
     }"#;
-    let npc: NpcCard = serde_json::from_str(json).unwrap();
-    assert!(npc.relationships.is_empty());
+    let character: CharacterCard = serde_json::from_str(json).unwrap();
+    assert!(character.relationships.is_empty());
 }
 #[test]
 fn test_relationship_display_text_uses_dynamic_when_present() {
     use crate::domain::model::character::Relationship;
     let rel = Relationship {
-        with: "NPC1".to_string(),
+        with: "Character1".to_string(),
         static_text: "Static description".to_string(),
         dynamic: "Dynamic update".to_string(),
     };
@@ -180,7 +180,7 @@ fn test_relationship_display_text_uses_dynamic_when_present() {
 fn test_relationship_display_text_fallback_to_static() {
     use crate::domain::model::character::Relationship;
     let rel = Relationship {
-        with: "NPC2".to_string(),
+        with: "Character2".to_string(),
         static_text: "Static description".to_string(),
         dynamic: String::new(),
     };
@@ -190,7 +190,7 @@ fn test_relationship_display_text_fallback_to_static() {
 fn test_relationship_display_text_both_empty() {
     use crate::domain::model::character::Relationship;
     let rel = Relationship {
-        with: "NPC3".to_string(),
+        with: "Character3".to_string(),
         static_text: String::new(),
         dynamic: String::new(),
     };

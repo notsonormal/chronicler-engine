@@ -9,16 +9,16 @@ use chronicler_engine::application::agents::AgentRunner;
 use chronicler_engine::application::llm_recorder::LlmCallRecorder;
 use chronicler_engine::bootstrap::wiring::build_app_graph;
 use chronicler_engine::domain::model::agent::Role;
-use chronicler_engine::domain::model::character::NpcCard;
+use chronicler_engine::domain::model::character::CharacterCard;
 use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::map::MapDef;
-use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
+use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection};
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, configured_runner, empty_sqlite_storage, make_test_job_deps,
     test_connection, make_test_recorder_with_storage, seed_game_row, test_new_game, ScriptedModel,
-    TestAppBuilder, TestDataBuilder, TestMap, TestNpc, TestPersona,
+    TestAppBuilder, TestDataBuilder, TestMap, TestCharacter, TestPersona,
 };
 
 use crate::support::http_fixtures::{append_narrations, seeded_storage_with_initial_game};
@@ -93,16 +93,16 @@ pub fn app_with_production_graph(settings: AppSettings) -> (axum::Router, AppSta
     (build_router(state.clone()), state, storage)
 }
 
-/// A Game over `map` whose starting room holds `npc`, so the Turn's analysis
+/// A Game over `map` whose starting room holds `character`, so the Quantifier of the Job
 /// meets it and its Trigger fires.
-pub fn app_with_a_triggered_npc(
+pub fn app_with_a_triggered_character(
     map: MapDef,
-    npc: NpcCard,
+    character: CharacterCard,
     model: ScriptedModel,
 ) -> (axum::Router, AppState) {
     let data = TestDataBuilder::default_test()
         .map(map)
-        .npcs(vec![npc])
+        .characters(vec![character])
         .build();
     TestAppBuilder::default_test()
         .data(data)
@@ -111,17 +111,23 @@ pub fn app_with_a_triggered_npc(
 }
 
 /// A Game whose `/impersonate` fired a Trigger and whose event Narration failed, so
-/// the Impersonate Input holds the trigger context. The model holds the replies of
+/// the Impersonate Input holds the event record. The model holds the replies of
 /// one Retrigger.
 pub async fn app_after_an_impersonate_with_a_failed_event() -> (axum::Router, AppState) {
-    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    let character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
     let model = ScriptedModel::new()
         .narration("I say hello.")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .failed(Role::Trigger)
         .event_narration("The event fires again.")
-        .after_narration(analysis_report(&["npc_1"], None));
-    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
+        .after_narration(analysis_report(&["character_1"], None));
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::single_room("room_1"), character, model);
 
     assert!(
         post_action(&app, "/impersonate hello")
@@ -144,7 +150,7 @@ pub fn long_story_app(window: Option<u32>) -> (axum::Router, AppState, Arc<Stora
             .turn("First narration.")
             .turn("Second narration."),
     );
-    let connection = LlmProviderConfig {
+    let connection = LlmConnection {
         model: "mock-model".into(),
         max_context_tokens: window,
         ..test_connection("narration-conn", LlmBackendType::Mock)

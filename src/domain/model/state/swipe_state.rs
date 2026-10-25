@@ -1,32 +1,39 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! The game state of one Swipe: movement, scene and encounter log
+//! The game state of one Swipe: movement, the Characters present, encounters and the event record
 
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::scenario::StartingScenario;
-use crate::domain::model::trigger::NpcEncounterLog;
+use crate::domain::model::trigger::Encounters;
 use super::movement::MovementState;
 use super::scene_state::SceneState;
-use super::trigger_context::EventRecord;
+use super::event_record::EventRecord;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SwipeState {
     pub movement: MovementState,
     pub scene: SceneState,
-    pub npc_encounter_log: NpcEncounterLog,
+    /// The stored key is `npc_encounter_log`.
+    #[serde(rename = "npc_encounter_log")]
+    pub encounters: Encounters,
     /// The event record of the Trigger that fired for this Swipe.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trigger_context: Option<EventRecord>,
+    /// The stored key is `trigger_context`.
+    #[serde(
+        default,
+        rename = "trigger_context",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub event_record: Option<EventRecord>,
 }
 
 impl SwipeState {
     pub fn starting(
         scenario: Option<&StartingScenario>,
-        characters: &HashMap<String, NpcCard>,
+        characters: &HashMap<String, CharacterCard>,
         starting_room: &str,
     ) -> Self {
         let mut state = Self {
@@ -35,11 +42,11 @@ impl SwipeState {
                 dynamic_rooms: HashMap::new(),
             },
             scene: SceneState::default(),
-            npc_encounter_log: NpcEncounterLog::default(),
-            trigger_context: None,
+            encounters: Encounters::default(),
+            event_record: None,
         };
         if let Some(scenario) = scenario {
-            state.init_scenario_npcs(scenario, characters);
+            state.init_scenario_characters(scenario, characters);
         }
         state
     }
@@ -54,22 +61,27 @@ impl SwipeState {
             .or_else(|| self.movement.dynamic_rooms.get(room_id))
     }
 
-    pub fn init_scenario_npcs(
+    pub fn init_scenario_characters(
         &mut self,
         scenario: &StartingScenario,
-        npcs: &HashMap<String, NpcCard>,
+        characters: &HashMap<String, CharacterCard>,
     ) {
-        for npc_id in &scenario.npcs {
-            if let Some(npc) = npcs.get(npc_id).cloned() {
+        for character_id in &scenario.characters_present {
+            if let Some(character) = characters.get(character_id).cloned() {
                 let encounter = self
-                    .npc_encounter_log
-                    .npcs
-                    .entry(npc_id.clone())
+                    .encounters
+                    .characters
+                    .entry(character_id.clone())
                     .or_default();
                 encounter.times_met = 1;
                 encounter.currently_meeting = true;
-                if !self.scene.npcs_in_area.iter().any(|n| n.id == *npc_id) {
-                    self.scene.npcs_in_area.push(npc);
+                if !self
+                    .scene
+                    .characters_present
+                    .iter()
+                    .any(|n| n.id == *character_id)
+                {
+                    self.scene.characters_present.push(character);
                 }
             }
         }

@@ -6,7 +6,7 @@ use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::llm_message::DbLlmMessage;
 use crate::domain::model::llm_message::LlmMessage;
 
-/// How many forensics rows a database keeps. A read of the whole retained
+/// How many LLM message rows a database keeps. A read of the whole retained
 /// window asks for this, and so sees every row retention left behind.
 pub const LLM_MESSAGE_RETENTION_LIMIT: usize = 50;
 

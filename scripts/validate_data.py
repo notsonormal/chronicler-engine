@@ -26,6 +26,22 @@ def validate_group(files, schema, label):
     return errors
 
 
+def scenario_character_ids(scenario):
+    """The Character ids a Scenario names: the key `characters`, or the older key `npcs`."""
+    return scenario.get("characters", scenario.get("npcs", []))
+
+
+def missing_scenario_characters(scenarios, chars_dir):
+    """The (scenario id, Character id, file) of each Character a Scenario names that has no file."""
+    missing = []
+    for scenario in scenarios:
+        for character_id in scenario_character_ids(scenario):
+            character_file = chars_dir / f"{character_id}.json"
+            if not character_file.exists():
+                missing.append((scenario.get("id"), character_id, character_file))
+    return missing
+
+
 def check_asset(base_dir, asset_path, context):
     if asset_path:
         full_path = base_dir / asset_path
@@ -129,14 +145,15 @@ def validate_all():
                         room.get("image_path"),
                         f"Map {map_file.name} Room {room.get('id')}"
                     )
-                    for npc_id in room.get("npcs", []):
-                        npc_file = chars_dir / f"{npc_id}.json"
-                        if not npc_file.exists():
-                            print(
-                                f"FAIL: Map {map_file.name} Room {room.get('id')}\n"
-                                f"  References missing NPC '{npc_id}' ({npc_file})"
-                            )
-                            errors += 1
+
+        for scenario_id, character_id, character_file in missing_scenario_characters(
+            scenarios, chars_dir
+        ):
+            print(
+                f"FAIL: {world_file} Scenario {scenario_id}\n"
+                f"  References missing Character '{character_id}' ({character_file})"
+            )
+            errors += 1
 
         if chars_dir.exists():
             for char_file in chars_dir.glob("*.json"):

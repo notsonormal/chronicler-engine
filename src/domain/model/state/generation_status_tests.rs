@@ -1,6 +1,6 @@
 use crate::domain::model::agent::Kind;
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind, Record};
-use crate::error::{EngineError, InternalError, LlmFailure, NarrativeFailure};
+use crate::error::{EngineError, InternalError, LlmFailure, NarrationFailure};
 
 fn kind_of(error: EngineError) -> GenerationFailureKind {
     GenerationFailure::from_engine_error(&error).kind
@@ -50,7 +50,7 @@ fn test_context_overflow_is_prompt_too_long() {
 #[test]
 fn test_prompt_build_failure_is_prompt_too_long() {
     assert_eq!(
-        kind_of(EngineError::Narrative(NarrativeFailure::PromptBuild {
+        kind_of(EngineError::Narration(NarrationFailure::PromptBuild {
             stage: "narration",
             reason: "budget",
         })),
@@ -94,7 +94,7 @@ fn test_spent_token_budget_is_its_own_kind() {
 #[test]
 fn test_narration_generation_failure_is_unreadable_answer() {
     assert_eq!(
-        kind_of(EngineError::Narrative(NarrativeFailure::Generation {
+        kind_of(EngineError::Narration(NarrationFailure::Generation {
             stage: "narration",
             reason: "empty",
         })),
@@ -165,7 +165,7 @@ fn failure_of_event() {
         "the line of the inner failure is in the raw text"
     );
 
-    for kind in [Kind::Narration, Kind::Impersonate, Kind::UserRegen] {
+    for kind in [Kind::Narration, Kind::Impersonate, Kind::InputRetry] {
         assert_eq!(
             inner.clone().of_generation(kind),
             inner,

@@ -2,7 +2,7 @@
 //! Ollama LLM provider
 
 use crate::error::EngineError;
-use crate::domain::model::settings::{LlmProviderConfig, ReasoningEffort};
+use crate::domain::model::settings::{LlmConnection, ReasoningEffort};
 use crate::adapters::driven::llm::transport::{call_chat_completions, ChatCompletionRequest};
 
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
@@ -17,7 +17,7 @@ pub struct OllamaBackend {
 }
 
 impl OllamaBackend {
-    pub fn from_config(connection: &LlmProviderConfig) -> Self {
+    pub fn from_config(connection: &LlmConnection) -> Self {
         Self {
             base_url: connection.resolve_base_url(),
             model: connection.model.clone(),

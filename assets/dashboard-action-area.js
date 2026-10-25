@@ -237,7 +237,7 @@ function updateToThinking() {
 
 const PHASE_LABELS = {
   narrating: "Generating narration...",
-  quantifying: "Quantifying scene...",
+  quantifying: "Quantifying...",
   "generating-event": "Generating event...",
   options: "Generating options...",
 };
@@ -258,7 +258,7 @@ function onAutoplayAfterRequest(event) {
   if (requestSucceeded(event)) pollStatusNow();
 }
 
-// /status/generating returns a bare phase name, an autoplay progress answer or
+// /status/busy returns a bare phase name, an autoplay progress answer or
 // "idle" as plain text, or an error fragment, which stays in place for
 // applyStatusDisplay.
 function onStatusPoll(el) {

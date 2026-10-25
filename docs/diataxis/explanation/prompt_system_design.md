@@ -11,13 +11,13 @@ OpenAI-compatible APIs expect the system role to carry imperative instructions a
 
 The assembler's output is two message halves and one shared token budget.
 
-## Two tiers of NPC awareness
+## Two tiers of Character awareness
 
-The prompt carries two NPC blocks. `<KnownNpcs>` is a condensed roster of every NPC in the World: name, an `(in room)` / `(elsewhere)` presence marker, and a short summary. `<NpcsInRoom>` is full character cards for NPCs in the current room only.
+The prompt carries two Character blocks. `<KnownCharacters>` is a condensed roster of every Character in the World: name, an `(in room)` / `(elsewhere)` presence marker, and a short summary. `<CharactersPresent>` is full Character cards for Characters in the current room only.
 
-Full cards carry the detail — description, personality, scenario, relationships — the model needs to write for an NPC the player is currently interacting with. Condensed cards carry enough identity and motivation that the model can reference off-screen characters or write introduction scenes when they walk in. The two tiers serve different needs: full detail for NPCs the model is writing for right now, condensed identity for NPCs that need to remain available.
+Full cards carry the detail — description, personality, scenario, relationships — the model needs to write for a Character the player is currently interacting with. Condensed cards carry enough identity and motivation that the model can reference off-screen characters or write introduction scenes when they walk in. The two tiers serve different needs: full detail for Characters the model is writing for right now, condensed identity for Characters that need to remain available.
 
-The design pays for two render paths and a presence-marker computation. Off-screen awareness lives at the condensed tier; full-card detail is reserved for the NPCs the player is interacting with.
+The design pays for two render paths and a presence-marker computation. Off-screen awareness lives at the condensed tier; full-card detail is reserved for the Characters the player is interacting with.
 
 ## Prose constraints placed at the end of the user message
 
@@ -29,7 +29,7 @@ The assembler holds the two sections as a single splice string and renders them 
 
 ## XML sections as content labels
 
-The assembled prompt is organised as labelled sections — `<role>`, `<instructions>`, `<global_rules>`, `<writing_style>`, `<output_format>`, and the data wrappers (`<GameState>`, `<KnownNpcs>`, `<ConversationHistory>`, `<PlayerInput>`). Each section is a content carrier: the prose or data inside the tag is what the model reads, in the order the assembler renders the tags.
+The assembled prompt is organised as labelled sections — `<role>`, `<instructions>`, `<global_rules>`, `<writing_style>`, `<output_format>`, and the data wrappers (`<GameState>`, `<KnownCharacters>`, `<ConversationHistory>`, `<PlayerInput>`). Each section is a content carrier: the prose or data inside the tag is what the model reads, in the order the assembler renders the tags.
 
 The labels give the user an edit handle per section. `<role>` carries role definition; `<instructions>` carries imperative rules; `<global_rules>` carries the world-bound rules from `world.json`; `<output_format>` carries the structural rules the generation must follow. Editing one aspect means editing the section that aspect lives in; the surrounding structure stays stable across edits.
 

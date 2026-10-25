@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! Multi-stage prompt builder.
 
-use crate::domain::model::character::{NpcCard, Relationship};
+use crate::domain::model::character::{CharacterCard, Relationship};
 use crate::domain::model::prompt_preset::{PresetField, PromptPreset};
 use crate::domain::model::template::TemplateVars;
 
@@ -72,25 +72,26 @@ pub(crate) fn build_post_history_prompt(
         .join("\n\n")
 }
 
-pub(crate) fn render_known_npc_entry(
-    npc: &NpcCard,
+pub(crate) fn render_known_character_entry(
+    character: &CharacterCard,
     in_area_ids: &std::collections::HashSet<&str>,
     template_vars: &TemplateVars,
 ) -> String {
-    let presence = if in_area_ids.contains(npc.id.as_str()) {
+    let presence = if in_area_ids.contains(character.id.as_str()) {
         "(in room)"
     } else {
         "(elsewhere)"
     };
-    let mut entry = format!("- {} {}\n", npc.sheet.name, presence);
+    let mut entry = format!("- {} {}\n", character.sheet.name, presence);
 
-    let summary_text = npc
+    let summary_text = character
         .sheet
         .summary
         .clone()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| {
-            npc.sheet
+            character
+                .sheet
                 .description
                 .lines()
                 .take(3)
@@ -107,12 +108,12 @@ pub(crate) fn render_known_npc_entry(
 }
 
 pub(crate) fn render_present_relationships(
-    npc: &NpcCard,
-    all_npcs: &[NpcCard],
+    character: &CharacterCard,
+    all_characters: &[CharacterCard],
     in_area_ids: &std::collections::HashSet<&str>,
     template_vars: &TemplateVars,
 ) -> Option<String> {
-    let present_relations: Vec<&Relationship> = npc
+    let present_relations: Vec<&Relationship> = character
         .relationships
         .iter()
         .filter(|r| in_area_ids.contains(r.with.as_str()))
@@ -124,7 +125,7 @@ pub(crate) fn render_present_relationships(
 
     let mut block = String::from("Relationships:\n");
     for rel in present_relations {
-        let partner_name = all_npcs
+        let partner_name = all_characters
             .iter()
             .find(|n| n.id == rel.with)
             .map(|n| n.sheet.name.as_str())

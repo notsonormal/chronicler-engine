@@ -1,4 +1,4 @@
-//! Seam contract of the Options Agent, the Options hook's Agent.
+//! Seam contract of the Options Agent, the Agent of the end-of-Job hook.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,9 +9,9 @@ use crate::application::agents::trait_def::EndOfJobAgent;
 use crate::domain::model::agent::{
     AgentConfig, AgentSettings, BackendSelector, HookInput, Role, WorldView,
 };
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
-use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona};
 use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
 
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
@@ -34,8 +34,8 @@ fn options_agent(model: Arc<ScriptedModel>) -> OptionsGeneratorAgent {
 struct Scene {
     map: crate::domain::model::map::MapDef,
     persona: crate::domain::model::character::PersonaCard,
-    characters: HashMap<String, NpcCard>,
-    present: Vec<NpcCard>,
+    characters: HashMap<String, CharacterCard>,
+    present: Vec<CharacterCard>,
     story: Vec<StoryRow>,
 }
 
@@ -43,16 +43,16 @@ impl Scene {
     fn new() -> Self {
         let map = TestMap::single_room("start");
         let persona = TestPersona::standard();
-        let npcs = vec![TestNpc::named("npc_1", "Test NPC")];
-        let characters = npcs
+        let present = vec![TestCharacter::named("character_1", "Test Character")];
+        let characters = present
             .iter()
-            .map(|npc| (npc.id.clone(), npc.clone()))
+            .map(|character| (character.id.clone(), character.clone()))
             .collect();
         Self {
             map,
             persona,
             characters,
-            present: npcs,
+            present,
             story: vec![StoryRow {
                 message_type: MessageType::Narration,
                 text: "The innkeeper glances your way.".to_string(),

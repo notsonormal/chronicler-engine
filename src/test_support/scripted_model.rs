@@ -17,7 +17,7 @@ use crate::application::ports::llm_provider::{
     AGENT_TRIGGER,
 };
 use crate::domain::model::agent::Role;
-use crate::error::{EngineError, NarrativeFailure};
+use crate::error::{EngineError, NarrationFailure};
 
 /// The words a stray call's failure carries, so an endpoint that cannot reach
 /// the fake (a support helper holding only the app) can still spot one.
@@ -248,7 +248,7 @@ impl LlmProvider for ScriptedModel {
                 model_name: self.model().to_string(),
                 agent_name: agent_name.to_string(),
             }),
-            Reply::Failed => Err(EngineError::Narrative(NarrativeFailure::Generation {
+            Reply::Failed => Err(EngineError::Narration(NarrationFailure::Generation {
                 stage: "scripted",
                 reason: "configured_failure",
             })),
@@ -359,10 +359,10 @@ impl Drop for ModelHold {
     }
 }
 
-/// A parsed report is a High-confidence analysis, so the turn reports no
+/// A parsed report is a High-confidence analysis, so the Job reports no
 /// uncertain-detection notice.
-pub fn analysis_report(npcs_in_room: &[&str], movement_destination: Option<&str>) -> String {
-    let npcs = npcs_in_room
+pub fn analysis_report(characters_present: &[&str], movement_destination: Option<&str>) -> String {
+    let characters = characters_present
         .iter()
         .map(|id| format!("\"{id}\""))
         .collect::<Vec<_>>()
@@ -373,5 +373,5 @@ pub fn analysis_report(npcs_in_room: &[&str], movement_destination: Option<&str>
         }
         None => "null".to_string(),
     };
-    format!("{{\"npcs_in_room\": [{npcs}], \"movement\": {movement}}}")
+    format!("{{\"characters_present\": [{characters}], \"movement\": {movement}}}")
 }

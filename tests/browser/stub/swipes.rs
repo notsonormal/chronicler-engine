@@ -72,7 +72,7 @@ async fn check_switch_swipe_leaves_dashboard_ready_and_drops_options(
     // must not wait for another poll.
     status.set(StubStatus::Step("narrating".to_string()));
     poll_now(&page, "#status-display").await;
-    wait_for_status_generating(&page).await;
+    wait_for_status_busy(&page).await;
 
     let clicked: bool = page
         .evaluate::<(), bool>(

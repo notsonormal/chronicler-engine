@@ -9,7 +9,7 @@ Endpoint: `POST /retrigger`
 #### Scenario 13.1: Retrigger creates a new event narration message and does not roll back state
 
 ```gherkin
-Given a Game whose current state holds a trigger context
+Given a Game whose current state holds an event record
 And the last Message is a non-event Narration (the main narration)
 And the story log holds N Messages
 And a narrator backend that returns a non-empty continuation for the trigger prompt
@@ -23,7 +23,7 @@ And the generation status is Idle
 #### Scenario 13.2: Retrigger does not move the player
 
 ```gherkin
-Given a Game whose current state holds a trigger context
+Given a Game whose current state holds an event record
 And the last Message is a non-event Narration
 And the player stands in "room2"
 When the client sends POST /retrigger
@@ -34,7 +34,7 @@ Then the player still stands in "room2" (a retrigger applies no movement)
 #### Scenario 13.3: Retrigger sends the rendered direction to the model
 
 ```gherkin
-Given a Game whose current state holds a trigger context
+Given a Game whose current state holds an event record
 And the last Message is a non-event Narration
 And the Trigger's direction names the player with the placeholder {{user}}
 When the client sends POST /retrigger
@@ -47,7 +47,7 @@ And the call carries no unreplaced {{user}}
 
 ```gherkin
 Given a Game whose last Message is an Impersonate Input
-And the state of that Input's Swipe holds a trigger context
+And the state of that Input's Swipe holds an event record
 And a narrator backend that returns a non-empty continuation for the trigger prompt
 When the client sends POST /retrigger
 And the Game is no longer busy
@@ -57,10 +57,10 @@ And the generation status is Idle
 
 ### Retrigger error cases
 
-#### Scenario 14.1: Retrigger with no trigger context returns 400
+#### Scenario 14.1: Retrigger with no event record returns 400
 
 ```gherkin
-Given a Game whose current state holds no trigger context
+Given a Game whose current state holds no event record
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 And no generation is started
@@ -70,7 +70,7 @@ And no generation is started
 
 ```gherkin
 Given a Game whose last Message is a typed Input
-And the state of that Input's Swipe holds a trigger context
+And the state of that Input's Swipe holds an event record
 When the client sends POST /retrigger
 Then the response is 400 Bad Request
 And no generation is started
@@ -86,10 +86,10 @@ Then the response is 400 Bad Request
 And the story-log fragment offers no `.retrigger-btn` control
 ```
 
-#### Scenario 14.5: Retrigger trigger narration failure sets Error
+#### Scenario 14.5: Retrigger trigger narration failure sets Failed
 
 ```gherkin
-Given a Game whose current state holds a trigger context
+Given a Game whose current state holds an event record
 And the last Message is a non-event Narration
 And a narrator backend that fails for the trigger continuation prompt
 When the client sends POST /retrigger
@@ -133,6 +133,6 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   missing: …", not a user error (400).
 - **I.8** Retrigger rejects concurrent generation the same way an Action
   does: 200 with a `"Still thinking..."` status, no generation started.
-- **I.9** A failed event Narration leaves the trigger context of the last
+- **I.9** A failed event Narration leaves the event record of the last
   Narration in place. Retrigger stays available as a recovery path after
   the failure, with no new Action.

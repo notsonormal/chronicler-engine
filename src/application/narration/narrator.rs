@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::prompting::token_budget::TokenBudget;
-use crate::application::prompting::{AssembledPrompt, NpcContext, PromptAssembler, PromptContext};
+use crate::application::prompting::{AssembledPrompt, CharacterContext, PromptAssembler, PromptContext};
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::generation::Generation;
 use crate::domain::model::map::Room;
@@ -32,7 +32,7 @@ pub struct NarrationValues<'a> {
     pub narrative_perspective: NarrativePerspective,
     pub narrative_tense: NarrativeTense,
     pub room: &'a Room,
-    pub npcs: NpcContext<'a>,
+    pub characters: CharacterContext<'a>,
     pub persona: &'a PersonaCard,
     /// The entries the narration follows.
     pub history: &'a [StoryRow],
@@ -111,7 +111,7 @@ impl Narrator {
             values.narrative_perspective,
             values.narrative_tense,
             values.room,
-            values.npcs,
+            values.characters,
             values.persona,
             &user_message,
             values.history,
@@ -119,7 +119,7 @@ impl Narrator {
         let context = match generation {
             Generation::Impersonate { .. } => context.with_impersonate(true),
             Generation::Narration { guide } => context.with_guide(guide.clone()),
-            Generation::UserRegen | Generation::Event(_) => context,
+            Generation::InputRetry | Generation::Event(_) => context,
         };
         let assembled = self
             .assemble(&context, preset, response_length, budget)
@@ -152,14 +152,14 @@ impl Narrator {
         })
     }
 
-    /// The Player's direction for an Impersonate, the Input's own text for a user
-    /// regen, the Trigger's continuation prompt for an event, and otherwise the
+    /// The Player's direction for an Impersonate, the Input's own text for the Retry
+    /// of a typed Input, the Trigger's continuation prompt for an event, and otherwise the
     /// Input the new text follows: the request's own text, or the Input that ends
     /// the window.
     fn user_message(generation: &Generation, values: &NarrationValues) -> String {
         match generation {
             Generation::Impersonate { direction } => direction.clone().unwrap_or_default(),
-            Generation::UserRegen => values.tail.last.text().to_string(),
+            Generation::InputRetry => values.tail.last.text().to_string(),
             Generation::Event(record) => {
                 Self::continuation_user_message(values.history, &record.direction)
             }
@@ -178,7 +178,7 @@ impl Narrator {
             .map(|entry| entry.text.as_str())
             .unwrap_or("");
         format!(
-            "Previous narration:\n{previous}\n\nTrigger event: {direction}\n\n\
+            "Previous narration:\n{previous}\n\nTrigger direction: {direction}\n\n\
              Continue the scene naturally, incorporating the trigger event into the narrative. \
              Do NOT repeat or contradict what was already described. Build naturally on the existing scene."
         )

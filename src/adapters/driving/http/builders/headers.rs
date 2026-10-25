@@ -28,8 +28,8 @@ pub fn role_label(role: Role) -> &'static str {
 
 pub fn role_failure_effect(role: Role) -> &'static str {
     match role {
-        Role::Narrator => "the turn was left unnarrated",
-        Role::Quantifier => "using fallback NPC IDs",
+        Role::Narrator => "no narration was written",
+        Role::Quantifier => "keeping the Characters present",
         Role::Options => "showing no options",
         Role::Trigger => "skipping the trigger",
     }

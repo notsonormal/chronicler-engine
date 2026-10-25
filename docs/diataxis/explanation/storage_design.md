@@ -5,7 +5,7 @@ title: Storage and Bootstrap Design
 
 ## Overview
 
-The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; a save-unit rule that every write to a Game's story records runs inside one `Tx`, opened by `GameWriter`, so the records of one request land whole; and a paired `get_*` / `require_*` read-helper contract that lets the storage interface distinguish absence-as-OK from absence-as-error.
+The persistence + bootstrap subsystem has five moving parts that fit together as one design: a single concrete `Storage` struct whose backend sits behind a mutex and is selected from a `Backend` enum; a `BackendKind` decorator that wraps a real backend for failure injection in tests; a two-phase bootstrap that seeds the database once at boot and then reads only from the database at runtime; a transaction rule that every write to a Game's story records runs inside a `Tx` that `GameWriter` opens, and each `Tx` lands whole (one request can run several); and a paired `get_*` / `require_*` read-helper contract that lets the storage interface distinguish absence-as-OK from absence-as-error.
 
 ## The storage struct and its backend decorator
 
@@ -19,7 +19,7 @@ A `Storage` holds no Game, so each caller names the Game it reads or writes, and
 
 ## The database as the sole source of truth at runtime
 
-The engine reads from SQLite at runtime and never from JSON files. The runtime card types (`WorldCard`, `PersonaCard`, `NpcCard`) carry no filesystem pointer — the database row is the only authority. If a piece of runtime code reaches for a JSON file instead of the database, it has crossed a boundary that the design holds strict.
+The engine reads from SQLite at runtime and never from JSON files. The runtime card types (`WorldCard`, `PersonaCard`, `CharacterCard`) carry no filesystem pointer — the database row is the only authority. If a piece of runtime code reaches for a JSON file instead of the database, it has crossed a boundary that the design holds strict.
 
 The boundary is enforced by a two-phase bootstrap. Phase 1 runs once at boot: JSON files under `data/` are read, parsed into seed manifest types, and inserted into the database. Phase 2 covers everything after seeding: every read comes from the database, and the JSON files are no longer consulted. The HTTP server binds only after Phase 1 has completed; the bootstrap boundary is a hard precondition for serving requests.
 
@@ -35,25 +35,25 @@ Idempotent. Existing rows are not duplicated. The seeder checks for the row by p
 
 Startup-blocking. The HTTP server binds only after seeding has completed. A partial seed is an unsafe state — some rows present, others missing, foreign-key edges broken — so the contract is hard: the engine refuses to serve requests until Phase 1 has finished. The seeder running to completion is the precondition for runtime.
 
-Non-fatal on corrupt files. A malformed JSON file is skipped with a tracing warning, and the seeder continues with the remaining files. A typo in one NPC's seed file stops only that one character from loading; the engine still boots and the rest of the world remains playable. The error surfaces in the logs, where the developer can find it.
+Non-fatal on corrupt files. A malformed JSON file is skipped with a tracing warning, and the seeder continues with the remaining files. A typo in one Character's seed file stops only that one Character from loading; the engine still boots and the rest of the world remains playable. The error surfaces in the logs, where the developer can find it.
 
 DB is the sole source of truth afterwards. Once a row exists, the JSON file that produced it is no longer consulted. The seed files are templates the seeder reads once; the database is authoritative for every read after that.
 
 The seeding order satisfies the foreign-key edges. Worlds and maps are seeded first because characters reference the world's numeric id, and that id exists only after the world row is written. Personas are world-independent and seeded in their own pass; prompt presets are independent of world, character, and persona. Game-scoped rows that reference any seeded row see a fully-populated parent.
 
-## Save units
+## Transactions
 
-Every write to the records of a Game's story runs inside one `Tx`. A `Tx` is one SQLite transaction. It holds the backend mutex for its whole run and rolls back when it is dropped without a commit. A save unit therefore lands whole or not at all.
+Every write to the records of a Game's story runs inside one `Tx`. A `Tx` is one SQLite transaction. It holds the backend mutex for its whole run and rolls back when it is dropped without a commit. A transaction therefore lands whole or not at all.
 
-The unit is the answer to a failure that sequential statements allow: a crash between two statements leaves a text with no state, or a state with no text. The Swipe holds its own Swipe state, so the common write is one Swipe row, and a write that needs more than one row (create, a text save, a swipe switch, a delete) writes them in one unit.
+The transaction is the answer to a failure that sequential statements allow: a crash between two statements leaves a text with no state, or a state with no text. The Swipe holds its own Swipe state, so the common write is one Swipe row, and a write that needs more than one row (create, a text save, a swipe switch, a delete) writes them in one transaction.
 
 The dock record is a table of its own, because the config routes write the Game record with no busy check.
 
-`GameWriter` decides what a unit holds, because it knows the request and checks the job id in the same hold. `Storage` supplies the mechanism and knows nothing of Jobs. The split keeps the layers narrow: a reader of a `Tx` method sees one record write, and a reader of `GameWriter` sees which records change together.
+`GameWriter` decides what a transaction holds, because it knows the request and checks the job id in the same hold. `Storage` supplies the mechanism and knows nothing of Jobs. The split keeps the layers narrow: a reader of a `Tx` method sees one record write, and a reader of `GameWriter` sees which records change together.
 
-A unit holds the backend mutex for its whole run, so a `Storage` call inside the closure of a unit would wait on the mutex that the unit itself holds.
+A transaction holds the backend mutex for its whole run, so a `Storage` call inside the closure of a transaction would wait on the mutex that the transaction itself holds.
 
-Every test that uses `Storage` runs on SQLite. Tier-1 tests and unit tests open a SQLite `:memory:` database because a rollback and a failure in the middle of a unit are properties of the real backend, and a fake would only mimic them.
+Every test that uses `Storage` runs on SQLite. Tier-1 tests and unit tests open a SQLite `:memory:` database because a rollback and a failure in the middle of a transaction are properties of the real backend, and a fake would only mimic them.
 
 The seed flow sits outside this rule. It runs at startup, not on user request, and its non-atomicity is bounded by the absence of concurrent readers.
 
@@ -75,9 +75,9 @@ LLM narration is non-deterministic. The same player input can produce a strong p
 
 ### Per-swipe state binding
 
-Narration mutates state. The Quantifier runs after the narration LLM. It detects NPCs and movement, and the game rules update the scene state and the encounter counters. Two narrations of one input therefore leave two different game states. Each Swipe keeps the Swipe state that its own generation produced, so the text on screen and the world state always come from the same generation. A text-only swipe would show the text of one generation over the state of another: a "ghost state".
+Narration mutates state. The Quantifier runs after the narration LLM. It detects Characters and movement, and the game rules update the scene state and the encounter counters. Two narrations of one input therefore leave two different game states. Each Swipe keeps the Swipe state that its own generation produced, so the text on screen and the world state always come from the same generation. A text-only swipe would show the text of one generation over the state of another: a "ghost state".
 
-A Swipe state on the Swipe also removes the need for a live state. The current state is the Swipe state of the active Swipe of the last Message, so a swipe switch and a delete change the current state by changing which Swipe is active. Nothing is copied or restored.
+A Swipe state on the Swipe also removes the need for a separate current state. The current state is the Swipe state of the active Swipe of the last Message, so a swipe switch and a delete change the current state by changing which Swipe is active. Nothing is copied or restored.
 
 ### Two writes to one Swipe state
 
@@ -85,7 +85,7 @@ The story log shows a new text as soon as the narrator call returns. The analysi
 
 ### Last-message-only swiping
 
-Swiping is bounded to the last message. Each message depends on the state produced by the message before it: a narration's quantifier detected NPCs the next narration assumes are present; an event header recorded a trigger firing the next message's state reflects.
+Swiping is bounded to the last message. Each message depends on the state produced by the message before it: a narration's quantifier detected Characters the next narration assumes are present; an event header recorded a trigger firing the next message's state reflects.
 
 A swipe on a non-last message would discard every message after it — the swipe rewinds state the subsequent messages were built on, so they cannot stand.
 

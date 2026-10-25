@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/narrative/narration_system.md]
-//! LLM call orchestrator - owns forensics save + postprocessing
+//! LLM call orchestrator - owns the LLM message save + postprocessing
 
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ use crate::error::EngineError;
 pub type ProviderResolver =
     Arc<dyn Fn() -> Result<Arc<dyn LlmProvider>, EngineError> + Send + Sync>;
 
-/// Persists one forensics record; injected so a test can capture or fail a save.
+/// Persists one LLM message; injected so a test can capture or fail a save.
 pub type SaveLlmMessageFn = Arc<dyn Fn(&LlmMessage) -> Result<(), EngineError> + Send + Sync>;
 
 pub struct LlmCallRecorder {

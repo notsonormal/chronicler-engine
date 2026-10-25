@@ -10,7 +10,7 @@ use tower::util::ServiceExt;
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride, TxWrite};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
-use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig};
+use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection};
 use chronicler_engine::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind, Record,
 };
@@ -37,7 +37,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         .save_llm_message(&llm_message(
             "quantifier",
             "mock",
-            Some("fallback NPC IDs used"),
+            Some("Characters present kept"),
             -10,
         ))
         .unwrap();
@@ -51,7 +51,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         "a degraded Quantifier must raise the banner: {body}"
     );
     assert!(
-        body.contains("Quantifier failed") && body.contains("using fallback NPC IDs"),
+        body.contains("Quantifier failed") && body.contains("keeping the Characters present"),
         "the banner must name the role and what the engine did instead: {body}"
     );
     assert!(
@@ -81,7 +81,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         "the two roles with no recorded attempt must read as no calls: {body}"
     );
     assert!(
-        body.contains(r#"<pre class="error-detail-raw">fallback NPC IDs used</pre>"#),
+        body.contains(r#"<pre class="error-detail-raw">Characters present kept</pre>"#),
         "the raw failure text must be reachable inside the disclosure: {body}"
     );
 
@@ -169,7 +169,7 @@ async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
         .save_llm_message(&llm_message(
             "quantifier",
             "mock",
-            Some("fallback NPC IDs used"),
+            Some("Characters present kept"),
             -10,
         ))
         .unwrap();
@@ -256,7 +256,7 @@ async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The language model could not be reached."),
         "the clamped line carries a short user-facing message: {body}"
@@ -282,7 +282,7 @@ async fn test_missing_preset_failure_clamps_with_the_missing_data_line() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The data for this request is missing: the preset."),
         "a missing preset keeps its own line, not the general one: {body}"
@@ -311,7 +311,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("Reasoning used the budget. Lower the reasoning effort."),
         "a spent token budget must keep its own line: {body}"
@@ -393,7 +393,7 @@ async fn test_empty_answer_keeps_its_own_line_clamps() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The language model gave an empty answer."),
         "an empty answer keeps its own line: {body}"
@@ -415,7 +415,7 @@ async fn test_empty_answer_keeps_its_own_line_clamps() {
 // [docs/specs/failure_display.md] SCENARIO: 38.10
 #[tokio::test]
 async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
-    // The start state's encounter log names a Character the World does not hold,
+    // The start state's encounters name a Character the World does not hold,
     // so the game rules refuse to apply the analysis. The narration itself answers
     // and is saved first.
     let storage = Arc::new(empty_sqlite_storage());
@@ -424,12 +424,12 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("The room waits.")
-                .after_narration("{\"npcs_in_room\": [], \"movement\": null}"),
+                .after_narration("{\"characters_present\": [], \"movement\": null}"),
         ))
         .build_with_state();
     corrupt_start_state(&storage, active_game_of(&state), |broken| {
         broken
-            .npc_encounter_log
+            .encounters
             .set_currently_meeting("a_ghost_the_world_lacks", true);
     });
 
@@ -443,12 +443,12 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The text was saved, but the game state could not be updated."),
         "a contradiction keeps its own line: {body}"
     );
-    let raw = "npc_encounter_log references unknown NPC";
+    let raw = "encounters references unknown Character";
     assert!(
         status_error_message(&body).contains(raw),
         "the disclosure holds the raw internal message: {body}"
@@ -509,7 +509,7 @@ async fn test_save_failure_clamps_with_the_save_line_and_saves_no_narration() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The new text could not be saved."),
         "a refused save keeps the save-failed line: {body}"
@@ -549,7 +549,7 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
     let _guard = SettingsTestGuard::new();
     // The fixed safety margin and minimum input budget together exceed this
     // window, so the prompt can never fit beside the system prompt.
-    let connection = LlmProviderConfig {
+    let connection = LlmConnection {
         max_context_tokens: Some(512),
         ..test_connection("narration-conn", LlmBackendType::Mock)
     };
@@ -576,7 +576,7 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The story was too long for the language model."),
         "a prompt that cannot fit keeps the prompt-too-long line: {body}"
@@ -637,7 +637,7 @@ async fn preset_game_read_fails() {
 
     // The status reads the Game row, so the read works again before it asks.
     failures.clear(StorageCall::GetGame);
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The data for this request is missing: the game."),
         "an unreadable Game row is a failure line that names the Game, not a registry preset: {body}"
@@ -692,7 +692,7 @@ async fn status_after_a_read_fails_behind_a_call(call: StorageCall, held: Role) 
 
     // The status reads the Game row, so every read works again before it asks.
     failures.clear_all();
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     let narrations = story_of(&state)
         .iter()
         .filter(|message| message.message_type == MessageType::Narration)
@@ -765,7 +765,7 @@ async fn job_read_names_record_world() {
     );
 
     failures.clear_all();
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The data for this request is missing: the world."),
         "the line names the World: {body}"
@@ -817,7 +817,7 @@ async fn job_read_names_record_accept_start_state() {
     );
 
     failures.clear_all();
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains(line),
         "the status carries the line of the answer: {body}"
@@ -876,7 +876,7 @@ async fn job_read_names_record_preset() {
             "the Job should end before the status reads"
         );
 
-        let body = fetch_body(&app, "/status/generating").await;
+        let body = fetch_body(&app, "/status/busy").await;
         assert!(
             body.contains("The data for this request is missing: the preset."),
             "{preset_type:?}: the line names the preset: {body}"
@@ -926,7 +926,7 @@ async fn state_update_refused() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/generating").await;
+    let body = fetch_body(&app, "/status/busy").await;
     assert!(
         body.contains("The text was saved, but the game state could not be updated."),
         "a refused state update shows the contradiction line: {body}"

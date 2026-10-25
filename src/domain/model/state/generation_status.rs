@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::agent::Kind;
-use crate::error::{EngineError, LlmFailure, NarrativeFailure};
+use crate::error::{EngineError, LlmFailure, NarrationFailure};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GenerationStatus {
@@ -12,9 +12,9 @@ pub enum GenerationStatus {
     #[default]
     Idle,
     /// A Job or an Autoplay run holds the Game; the Job's `Step` names the sub-stage.
-    Generating,
+    Busy,
     /// Generation failed; the payload classifies the failure.
-    Error(GenerationFailure),
+    Failed(GenerationFailure),
 }
 
 impl GenerationFailureKind {
@@ -207,11 +207,11 @@ impl GenerationFailure {
                 LlmFailure::Timeout | LlmFailure::Network { .. } | LlmFailure::Http { .. },
             ) => GenerationFailureKind::Unreachable,
             EngineError::ContextOverflow { .. }
-            | EngineError::Narrative(NarrativeFailure::PromptBuild { .. }) => {
+            | EngineError::Narration(NarrationFailure::PromptBuild { .. }) => {
                 GenerationFailureKind::PromptTooLong
             }
             EngineError::Llm(LlmFailure::ParseError { .. } | LlmFailure::EmptyResponse { .. })
-            | EngineError::Narrative(NarrativeFailure::Generation { .. }) => {
+            | EngineError::Narration(NarrationFailure::Generation { .. }) => {
                 GenerationFailureKind::UnreadableAnswer
             }
             EngineError::Llm(LlmFailure::TokenBudgetSpent { .. }) => {
@@ -225,13 +225,13 @@ impl GenerationFailure {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Step {
-    /// Narrator LLM generating the scene response.
+    /// Narrator LLM writing the Narration.
     Narrating,
-    /// Quantifier LLM evaluating NPC presence and movement.
+    /// Quantifier LLM evaluating which Characters are present, and movement.
     Quantifying,
     /// Event-generation LLM producing derived side effects.
     GeneratingEvent,
-    /// Options LLM producing the pickable option set.
+    /// Options LLM producing the Options to pick from.
     Options,
 }
 

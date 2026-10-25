@@ -3,7 +3,7 @@ use askama::Template;
 use crate::application::games::view_query::RoleHealth;
 use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode, TextCheckSettings};
+use crate::domain::model::settings::{AppSettings, LlmConnection, TextCheckMode, TextCheckSettings};
 use crate::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate, TextCheckCardTemplate,
 };
@@ -13,12 +13,12 @@ use crate::test_support::test_connection;
 fn two_connection_settings() -> AppSettings {
     AppSettings {
         connections: vec![
-            LlmProviderConfig {
+            LlmConnection {
                 name: "Test Narrator".into(),
                 api_key: Some("sk-test".into()),
                 ..test_connection("conn-1", LlmBackendType::OpenRouter)
             },
-            LlmProviderConfig {
+            LlmConnection {
                 name: "Test Quantifier".into(),
                 model: "llama3".into(),
                 base_url: Some("http://localhost:11434".into()),
@@ -120,7 +120,7 @@ fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
     );
     assert!(html.contains("error-details-toggle"));
     assert!(
-        html.contains("Narrator failed — the turn was left unnarrated"),
+        html.contains("Narrator failed — no narration was written"),
         "the row's message must name the role's failure once, without the header's engine-wide suffix: {html}"
     );
     assert!(

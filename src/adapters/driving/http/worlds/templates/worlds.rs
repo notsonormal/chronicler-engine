@@ -94,7 +94,7 @@ impl WorldsPanelTemplate {
         {% endif %}
 
         <div class="form-group">
-            <label class="checkbox-label"><input type="checkbox" name="options_always_on" value="true" {% if options_always_on %}checked{% endif %} /> Auto-generate options after each turn</label>
+            <label class="checkbox-label"><input type="checkbox" name="options_always_on" value="true" {% if options_always_on %}checked{% endif %} /> Generate options after each narration</label>
         </div>
 
         <label>Map JSON:

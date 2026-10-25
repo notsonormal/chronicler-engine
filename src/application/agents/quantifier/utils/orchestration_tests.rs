@@ -3,17 +3,19 @@ use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::agent::WorldView;
 use crate::domain::model::state::message_types::StoryRow;
 use crate::error::EngineError;
-use crate::test_support::fixtures::{TestSwipeState, TestMap, TestNpc, TestPersona};
+use crate::test_support::fixtures::{TestSwipeState, TestMap, TestCharacter, TestPersona};
 use crate::test_support::make_test_recorder;
 
-use super::orchestration::{determine_npcs_in_room, quantify_room_with_llm_call, static_npc_result};
-use crate::test_support::quantifier::{make_npc, make_room};
+use super::orchestration::{
+    determine_characters_present, quantify_room_with_llm_call, static_character_result,
+};
+use crate::test_support::quantifier::{make_character, make_room};
 use crate::application::agents::quantifier::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext,
     QuantifierReading,
@@ -26,15 +28,15 @@ fn recorder_with(backend: impl LlmProvider + 'static) -> Arc<LlmCallRecorder> {
 #[test]
 fn test_quantifier_retry_on_low_confidence() {
     let room = make_room();
-    let carla = make_npc("carla", "Carla");
-    let all_npcs = vec![carla];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let carla = make_character("carla", "Carla");
+    let all_characters = vec![carla];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -45,29 +47,29 @@ fn test_quantifier_retry_on_low_confidence() {
     let backend = crate::adapters::driven::llm::providers::MockBackend::default()
         .with_prompt_responses(vec![
             "I am not sure what to say here.".to_string(),
-            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+            r#"{"characters_present": ["carla"], "movement": {"type": null}}"#.to_string(),
         ]);
 
     let recorder = recorder_with(backend);
     let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla".to_string()]);
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
+    assert_eq!(result.characters.character_ids, vec!["carla".to_string()]);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::High);
     assert_eq!(result.movement.movement_type, None);
 }
 
 #[test]
 fn test_quantifier_no_retry_when_high_confidence() {
     let room = make_room();
-    let carla = make_npc("carla", "Carla");
-    let all_npcs = vec![carla];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let carla = make_character("carla", "Carla");
+    let all_characters = vec![carla];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -77,13 +79,13 @@ fn test_quantifier_no_retry_when_high_confidence() {
 
     let backend = crate::adapters::driven::llm::providers::MockBackend::default()
         .with_prompt_responses(vec![
-            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+            r#"{"characters_present": ["carla"], "movement": {"type": null}}"#.to_string(),
         ]);
 
     let recorder = recorder_with(backend);
     let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
 
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::High);
 }
 
 fn make_test_llm_result(text: &str) -> LlmCallResult {
@@ -98,7 +100,7 @@ fn make_test_llm_result(text: &str) -> LlmCallResult {
 }
 
 struct HighConfidenceBackend {
-    npc_ids: Vec<String>,
+    character_ids: Vec<String>,
 }
 
 struct MediumConfidenceBackend;
@@ -121,9 +123,9 @@ impl LlmProvider for HighConfidenceBackend {
         _user_prompt: &str,
         _max_tokens: Option<u32>,
     ) -> Result<LlmCallResult, EngineError> {
-        let npcs_json = serde_json::to_string(&self.npc_ids).unwrap_or_default();
+        let characters_json = serde_json::to_string(&self.character_ids).unwrap_or_default();
         Ok(make_test_llm_result(&format!(
-            r#"{{"npcs_in_room": {npcs_json}, "movement": {{"type": "entering", "destination": "kitchen"}}}}"#
+            r#"{{"characters_present": {characters_json}, "movement": {{"type": "entering", "destination": "kitchen"}}}}"#
         )))
     }
 }
@@ -193,10 +195,10 @@ fn display_name_for_id(id: &str) -> String {
     }
 }
 
-fn npc_map_from_ids(ids: &[String]) -> HashMap<String, NpcCard> {
+fn character_map_from_ids(ids: &[String]) -> HashMap<String, CharacterCard> {
     ids.iter()
-        .map(|id| TestNpc::named(id, &display_name_for_id(id)))
-        .map(|npc| (npc.id.clone(), npc))
+        .map(|id| TestCharacter::named(id, &display_name_for_id(id)))
+        .map(|character| (character.id.clone(), character))
         .collect()
 }
 
@@ -214,11 +216,11 @@ fn map_with_room(room: &Room) -> MapDef {
     }
 }
 
-fn determine_npcs_with_room(
+fn determine_characters_with_room(
     state: &mut SwipeState,
     current_room: &Room,
-    npc_pool_ids: &[String],
-    scene_npcs: &[NpcCard],
+    character_pool_ids: &[String],
+    scene_characters: &[CharacterCard],
     player_action: &str,
     recorder: &LlmCallRecorder,
 ) -> QuantifierReading {
@@ -226,22 +228,22 @@ fn determine_npcs_with_room(
     use crate::domain::model::state::message_types::StoryRow;
     let map = map_with_room(current_room);
     let persona = TestPersona::standard();
-    let npcs = npc_map_from_ids(npc_pool_ids);
-    state.scene.npcs_in_area = scene_npcs.to_vec();
+    let characters = character_map_from_ids(character_pool_ids);
+    state.scene.characters_present = scene_characters.to_vec();
     let story: Vec<StoryRow> = Vec::new();
     let world = WorldView {
         room: Some(current_room),
         map: &map,
         persona: &persona,
-        characters: &npcs,
-        present: scene_npcs,
+        characters: &characters,
+        present: scene_characters,
     };
     let input = HookInput {
         text: Some(player_action),
         story: &story,
         world: &world,
     };
-    determine_npcs_in_room(
+    determine_characters_present(
         &input,
         recorder,
         &crate::domain::model::agent::AgentSettings::default(),
@@ -250,15 +252,15 @@ fn determine_npcs_with_room(
 }
 
 #[test]
-fn test_determine_npcs_high_confidence() {
+fn test_determine_characters_high_confidence() {
     let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = HighConfidenceBackend {
-        npc_ids: vec!["carla".to_string()],
+        character_ids: vec!["carla".to_string()],
     };
     let recorder = recorder_with(backend);
-    let result = determine_npcs_with_room(
+    let result = determine_characters_with_room(
         &mut state,
         &room,
         &["carla".to_string(), "gabriella".to_string()],
@@ -267,20 +269,20 @@ fn test_determine_npcs_high_confidence() {
         recorder.as_ref(),
     );
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
+    assert_eq!(result.characters.character_ids, vec!["carla"]);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::High);
     assert_eq!(result.movement.movement_type, Some(MovementType::Entering));
     assert_eq!(result.movement.destination, Some("kitchen".to_string()));
 }
 
 #[test]
-fn test_determine_npcs_medium_confidence() {
+fn test_determine_characters_medium_confidence() {
     let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = MediumConfidenceBackend;
     let recorder = recorder_with(backend);
-    let result = determine_npcs_with_room(
+    let result = determine_characters_with_room(
         &mut state,
         &room,
         &["carla".to_string()],
@@ -289,65 +291,65 @@ fn test_determine_npcs_medium_confidence() {
         recorder.as_ref(),
     );
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::Medium);
+    assert_eq!(result.characters.character_ids, vec!["carla"]);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::Medium);
 }
 
 #[test]
-fn test_determine_npcs_low_confidence_fallback() {
+fn test_determine_characters_low_confidence_fallback() {
     let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = LowConfidenceBackend;
     let recorder = recorder_with(backend);
-    let scene_npcs = vec![
-        make_npc("carla", "Carla"),
-        make_npc("gabriella", "Gabriella"),
+    let scene_characters = vec![
+        make_character("carla", "Carla"),
+        make_character("gabriella", "Gabriella"),
     ];
-    let result = determine_npcs_with_room(
+    let result = determine_characters_with_room(
         &mut state,
         &room,
         &["carla".to_string(), "gabriella".to_string()],
-        &scene_npcs,
+        &scene_characters,
         "test",
         recorder.as_ref(),
     );
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla", "gabriella"]);
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
+    assert_eq!(result.characters.character_ids, vec!["carla", "gabriella"]);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::Low);
 }
 
 #[test]
-fn test_determine_npcs_backend_error_fallback() {
+fn test_determine_characters_backend_error_fallback() {
     let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = ErrBackend;
     let recorder = recorder_with(backend);
-    let scene_npcs = vec![make_npc("carla", "Carla")];
-    let result = determine_npcs_with_room(
+    let scene_characters = vec![make_character("carla", "Carla")];
+    let result = determine_characters_with_room(
         &mut state,
         &room,
         &["carla".to_string()],
-        &scene_npcs,
+        &scene_characters,
         "test",
         recorder.as_ref(),
     );
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
+    assert_eq!(result.characters.character_ids, vec!["carla"]);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::Low);
 }
 
 #[test]
-fn test_determine_npcs_filters_unknown_backend_ids() {
+fn test_determine_characters_filters_unknown_backend_ids() {
     let mut state = TestSwipeState::in_room("hall");
     let room = make_room();
 
     let backend = HighConfidenceBackend {
-        npc_ids: vec!["carla".to_string(), "unknown".to_string()],
+        character_ids: vec!["carla".to_string(), "unknown".to_string()],
     };
     let recorder = recorder_with(backend);
-    let result = determine_npcs_with_room(
+    let result = determine_characters_with_room(
         &mut state,
         &room,
         &["carla".to_string()],
@@ -356,21 +358,21 @@ fn test_determine_npcs_filters_unknown_backend_ids() {
         recorder.as_ref(),
     );
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+    assert_eq!(result.characters.character_ids, vec!["carla"]);
 }
 
 #[test]
 fn test_quantifier_retry_on_llm_error() {
     let room = make_room();
-    let carla = make_npc("carla", "Carla");
-    let all_npcs = vec![carla];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let carla = make_character("carla", "Carla");
+    let all_characters = vec![carla];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -407,27 +409,27 @@ fn test_quantifier_retry_on_llm_error() {
                 url: "mock".to_string(),
                 detail: "Network error".to_string(),
             })),
-            Ok(r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string()),
+            Ok(r#"{"characters_present": ["carla"], "movement": {"type": null}}"#.to_string()),
         ]),
     };
 
     let recorder = recorder_with(backend);
     let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+    assert_eq!(result.characters.character_ids, vec!["carla"]);
 }
 
 #[test]
 fn test_quantifier_all_attempts_fail_fallback() {
     let room = make_room();
-    let all_npcs: Vec<NpcCard> = vec![];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let all_characters: Vec<CharacterCard> = vec![];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -441,21 +443,21 @@ fn test_quantifier_all_attempts_fail_fallback() {
     let recorder = recorder_with(backend);
     let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
 
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::Low);
     assert_eq!(result.movement.movement_type, None);
 }
 
 #[test]
 fn test_quantifier_low_confidence_then_error_fallback() {
     let room = make_room();
-    let all_npcs: Vec<NpcCard> = vec![];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let all_characters: Vec<CharacterCard> = vec![];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -470,55 +472,55 @@ fn test_quantifier_low_confidence_then_error_fallback() {
     let recorder = recorder_with(backend);
     let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
 
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::Low);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::Low);
 }
 
 #[test]
-fn test_static_npc_result_preserves_movement() {
+fn test_static_character_result_preserves_movement() {
     let state = TestSwipeState::in_room("hall");
     let movement = MovementParseResult {
         movement_type: Some(MovementType::Leaving),
         destination: Some("garden".to_string()),
     };
 
-    let npcs = std::collections::HashMap::new();
+    let characters = std::collections::HashMap::new();
     let map = TestMap::single_room("hall");
     let persona = TestPersona::standard();
     let world = WorldView {
         room: map.get_room_by_id("hall"),
         map: &map,
         persona: &persona,
-        characters: &npcs,
-        present: &state.scene.npcs_in_area,
+        characters: &characters,
+        present: &state.scene.characters_present,
     };
-    let result = static_npc_result(&world, movement.clone());
+    let result = static_character_result(&world, movement.clone());
 
-    assert!(result.npcs.npc_ids.is_empty());
+    assert!(result.characters.character_ids.is_empty());
     assert_eq!(result.movement.movement_type, Some(MovementType::Leaving));
     assert_eq!(result.movement.destination, Some("garden".to_string()));
 }
 
 #[test]
-fn test_static_npc_result_fallback_to_scene_npcs() {
+fn test_static_character_result_fallback_to_scene_characters() {
     let mut state = TestSwipeState::in_room("hall");
     state
         .scene
-        .npcs_in_area
-        .push(TestNpc::named("carla", "Carla"));
+        .characters_present
+        .push(TestCharacter::named("carla", "Carla"));
 
-    let npcs = std::collections::HashMap::new();
+    let characters = std::collections::HashMap::new();
     let map = TestMap::single_room("hall");
     let persona = TestPersona::standard();
     let world = WorldView {
         room: map.get_room_by_id("hall"),
         map: &map,
         persona: &persona,
-        characters: &npcs,
-        present: &state.scene.npcs_in_area,
+        characters: &characters,
+        present: &state.scene.characters_present,
     };
-    let result = static_npc_result(&world, MovementParseResult::default());
+    let result = static_character_result(&world, MovementParseResult::default());
 
-    assert_eq!(result.npcs.npc_ids, vec!["carla"]);
+    assert_eq!(result.characters.character_ids, vec!["carla"]);
 }
 
 #[test]
@@ -527,15 +529,15 @@ fn test_quantifier_routes_through_recorder_for_forensics() {
     use crate::test_support::make_test_recorder_with_storage;
 
     let room = make_room();
-    let carla = make_npc("carla", "Carla");
-    let all_npcs = vec![carla];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let carla = make_character("carla", "Carla");
+    let all_characters = vec![carla];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -545,14 +547,14 @@ fn test_quantifier_routes_through_recorder_for_forensics() {
 
     let backend = crate::adapters::driven::llm::providers::MockBackend::default()
         .with_prompt_responses(vec![
-            r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
+            r#"{"characters_present": ["carla"], "movement": {"type": null}}"#.to_string(),
         ]);
 
     let storage = Arc::new(Storage::new_in_memory());
     let recorder = make_test_recorder_with_storage(Arc::new(backend), Arc::clone(&storage));
     let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
 
-    assert_eq!(result.npcs.confidence, QuantifierConfidence::High);
+    assert_eq!(result.characters.confidence, QuantifierConfidence::High);
     assert_eq!(
         storage
             .list_latest_llm_messages(10)

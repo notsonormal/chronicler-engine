@@ -1,10 +1,10 @@
 # Feature Spec: Dashboard
 
 Endpoints:
-- `GET /status/generating` (the dashboard chrome's status poll)
-- `POST /status/reset-generating` (the stop)
+- `GET /status/busy` (the dashboard chrome's status poll)
+- `POST /status/reset-busy` (the stop)
 - `GET /fragment/options-dock`
-- `GET /debug/is_generating`
+- `GET /debug/is_busy`
 - `GET /debug/state`
 - `GET /` (the shell that defines the icons)
 
@@ -14,19 +14,19 @@ Endpoints:
 
 ```gherkin
 Given a Game whose Job is at the narrator call of a Narration
-When the client requests GET /status/generating
+When the client requests GET /status/busy
 Then the response body is "narrating"
 
 Given a Game whose Job is at its analysis
-When the client requests GET /status/generating
+When the client requests GET /status/busy
 Then the response body is "quantifying"
 
 Given a Game with no Job and a failure line
-When the client requests GET /status/generating
+When the client requests GET /status/busy
 Then the response body carries that failure line
 
 Given a Game with no Job and no failure line
-When the client requests GET /status/generating
+When the client requests GET /status/busy
 Then the response body is "idle"
 ```
 
@@ -43,12 +43,12 @@ And each fragment named above shows at least one icon
 
 ```gherkin
 Given a Game with an offered set and a Job
-When the client requests GET /fragment/options-dock and GET /debug/is_generating
+When the client requests GET /fragment/options-dock and GET /debug/is_busy
 Then the dock's controls are disabled
 And the debug response body is "true"
 
 Given a Game with an offered set and no Job
-When the client requests GET /fragment/options-dock and GET /debug/is_generating
+When the client requests GET /fragment/options-dock and GET /debug/is_busy
 Then the dock's controls are enabled
 And the debug response body is "false"
 ```
@@ -58,7 +58,7 @@ And the debug response body is "false"
 ```gherkin
 Given a Game whose Job is held at one model call of the Examples table below
 And the status poll answers with the step name of that row
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 Then the stop answers "reset"
 And the Game is idle
 And the status poll answers with no failure line
@@ -76,7 +76,7 @@ Examples:
 | event Narration | the event narrator call | generating-event | the Narration that fired the Trigger, and no event Narration |
 | event Narration | the analysis call | quantifying | the Input of the Job, the Narration that fired the Trigger and the event Narration, with the one-shot Trigger fired in the state of the event Narration |
 
-A stop inside a save unit is not observable: a save unit takes milliseconds, so a stop just before one leaves the records of the model call before it.
+A stop inside a transaction is not observable: a transaction takes milliseconds, so a stop just before one leaves the records of the model call before it.
 ```
 
 #### Scenario 39.5: A stopped Job's late answer changes nothing, and the next Job saves its own text
@@ -97,11 +97,11 @@ And the story log holds no Narration of the stopped Job
 ```gherkin
 Given a Game whose Job is at the narrator call of a Narration
 When the client requests GET /debug/state
-Then the response reports the status "Generating" and the Step "Narrating"
+Then the response reports the status "Busy" and the Step "Narrating"
 
 Given a Game with no Job and a failure line
 When the client requests GET /debug/state
-Then the response reports the status "Error" with the kind of that failure line, and no Step
+Then the response reports the status "Failed" with the kind of that failure line, and no Step
 
 Given a Game with no Job and no failure line
 When the client requests GET /debug/state
@@ -121,7 +121,7 @@ Then the response status is "500 Internal Server Error"
 ```gherkin
 Given a Game whose Job is held at its narrator call
 And a storage that rejects the read of the dock record
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 Then the stop answers "failed"
 And the status poll still answers with the step of the Job
 When the Job's model answer arrives
@@ -133,7 +133,7 @@ Then the Job saves its Narration and the Game is idle
 ```gherkin
 Given a Game with no Job
 And a storage that rejects the read of the Game
-When the client requests GET /status/generating
+When the client requests GET /status/busy
 Then the response body carries the line "The data for this request is missing: the game."
 And the response body is not "idle"
 ```
@@ -142,7 +142,7 @@ And the response body is not "idle"
 
 ```gherkin
 Given no active Game
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 Then the stop answers "failed"
 ```
 
@@ -150,6 +150,6 @@ Then the stop answers "failed"
 
 ```gherkin
 Given no active Game
-When the client requests GET /status/generating
+When the client requests GET /status/busy
 Then the response body is "idle"
 ```

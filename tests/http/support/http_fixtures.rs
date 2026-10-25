@@ -12,7 +12,7 @@ use chronicler_engine::domain::model::state::swipe_state::SwipeState;
 use chronicler_engine::domain::model::map::MapDef;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{
-    LlmProviderConfig, NarrativePerspective, NarrativeTense, NarratorMode,
+    LlmConnection, NarrativePerspective, NarrativeTense, NarratorMode,
 };
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
@@ -23,8 +23,8 @@ use chronicler_engine::test_support::{
 use crate::support::http_requests::post_form;
 
 /// A Mock connection whose id doubles as its name.
-pub fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
-    LlmProviderConfig {
+pub fn mock_connection(id: &str, model: &str) -> LlmConnection {
+    LlmConnection {
         model: model.into(),
         ..test_connection(id, LlmBackendType::Mock)
     }
@@ -144,7 +144,7 @@ pub fn world_form_body(world: &WorldCard, map: &MapDef) -> String {
 pub fn seed_offered_set(state: &AppState, options: &[&str]) {
     let record = DockRecord {
         offered: options.iter().map(|option| (*option).to_string()).collect(),
-        notice: None,
+        failure: None,
     };
     state
         .job_deps

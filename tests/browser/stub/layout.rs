@@ -34,11 +34,14 @@ async fn run_layout() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_npc_portraits_horizontal_layout,
+            check_character_portraits_horizontal_layout,
         )
         .await;
     runner
-        .run(StubActionOutcome::Pending, check_npc_portraits_fixed_width)
+        .run(
+            StubActionOutcome::Pending,
+            check_character_portraits_fixed_width,
+        )
         .await;
     runner
         .run(
@@ -204,11 +207,11 @@ async fn check_element_positioning(page: Page, _stub: StubServer) {
     );
 }
 
-async fn check_npc_portraits_horizontal_layout(page: Page, _stub: StubServer) {
+async fn check_character_portraits_horizontal_layout(page: Page, _stub: StubServer) {
     let flex_wrap: String = page
         .evaluate::<(), String>(
             r#"(() => {
-                    const el = document.querySelector('.npc-portraits');
+                    const el = document.querySelector('.character-portraits');
                     if (!el) return 'no-element';
                     return window.getComputedStyle(el).flexWrap;
                 })()"#,
@@ -218,13 +221,13 @@ async fn check_npc_portraits_horizontal_layout(page: Page, _stub: StubServer) {
         .unwrap();
     assert_eq!(
         flex_wrap, "nowrap",
-        "NPC portraits should have flex-wrap: nowrap"
+        "Character portraits should have flex-wrap: nowrap"
     );
 
     let overflow_x: String = page
         .evaluate::<(), String>(
             r#"(() => {
-                    const el = document.querySelector('.npc-portraits');
+                    const el = document.querySelector('.character-portraits');
                     if (!el) return 'no-element';
                     return window.getComputedStyle(el).overflowX;
                 })()"#,
@@ -234,15 +237,15 @@ async fn check_npc_portraits_horizontal_layout(page: Page, _stub: StubServer) {
         .unwrap();
     assert_eq!(
         overflow_x, "auto",
-        "NPC portraits should have overflow-x: auto"
+        "Character portraits should have overflow-x: auto"
     );
 }
 
-async fn check_npc_portraits_fixed_width(page: Page, _stub: StubServer) {
+async fn check_character_portraits_fixed_width(page: Page, _stub: StubServer) {
     let width: f64 = page
         .evaluate::<(), f64>(
             r#"(() => {
-                    const el = document.querySelector('.image-container.npc-portrait img');
+                    const el = document.querySelector('.image-container.character-portrait img');
                     if (!el) return 0;
                     const rect = el.getBoundingClientRect();
                     return rect.width;
@@ -254,7 +257,7 @@ async fn check_npc_portraits_fixed_width(page: Page, _stub: StubServer) {
 
     assert!(
         width > 50.0 && width < 120.0,
-        "NPC portrait should have fixed width around 80px, got {width}"
+        "Character portrait should have fixed width around 80px, got {width}"
     );
 }
 

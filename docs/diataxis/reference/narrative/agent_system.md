@@ -34,14 +34,14 @@ An Agent reads values, never storage: a `HookInput` and an `AgentSettings`. The
 step that calls the hook owns every read and write, so an Agent writes no game
 record.
 
-## Per-Agent Backends
+## Per-Agent Connections
 
 The wiring binds each agent to its recorder at startup, from the Agent's type.
 That binding decides the agent's connection.
 
-## NPC Events
+## Character Transitions
 
-The game rules derive Character enter and leave events by comparing the Characters present before the generation with the `QuantifierResult`.
+The game rules derive Character enter and leave transitions by comparing the Characters present before the generation with the `QuantifierResult`.
 
 ## Document References
 

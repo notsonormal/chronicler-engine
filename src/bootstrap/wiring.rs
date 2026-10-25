@@ -30,10 +30,10 @@ use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::game::GameId;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::llm_message::LlmMessage;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::error::Result;
 
-fn provider_from_config(config: &LlmProviderConfig) -> Arc<dyn LlmProvider> {
+fn provider_from_config(config: &LlmConnection) -> Arc<dyn LlmProvider> {
     match config.provider {
         LlmBackendType::Mock => Arc::new(MockBackend::new().with_model(config.model.as_str())),
         LlmBackendType::DeepSeek => Arc::new(DeepSeekBackend::from_config(config)),
@@ -47,7 +47,7 @@ fn provider_from_config(config: &LlmProviderConfig) -> Arc<dyn LlmProvider> {
 fn recorder_with_storage(
     storage: Arc<Storage>,
     role: &'static str,
-    pick: fn(&AppSettings) -> Result<LlmProviderConfig>,
+    pick: fn(&AppSettings) -> Result<LlmConnection>,
 ) -> Arc<LlmCallRecorder> {
     let resolver_storage = Arc::clone(&storage);
     let resolve: ProviderResolver = Arc::new(move || {

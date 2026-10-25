@@ -8,14 +8,13 @@ pub enum Action {
     /// narrated as the player's action. Passes through the player-input text
     /// check like any free text.
     FreeAction(String),
-    /// A steering instruction shaping how the narrator writes the next
-    /// scene; never treated as an in-story player action.
+    /// A Guided Generation direction for the next Narration; never treated
+    /// as an in-story player action.
     Guide(String),
-    /// The player dictates their own character's action. The optional
-    /// payload steers how the narrator renders it.
+    /// The narrator writes the player's next Input as the Persona. The optional
+    /// payload steers it.
     Impersonate(Option<String>),
-    /// Regenerate the pickable next-action set for the current scene on
-    /// demand; narrates nothing and requires existing scene history.
+    /// New Options on demand; narrates nothing and requires an existing story.
     Options,
 }
 

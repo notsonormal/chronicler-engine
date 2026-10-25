@@ -7,7 +7,7 @@ use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::state::generation_status::{Record, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::EventRecord;
+use crate::domain::model::state::event_record::EventRecord;
 use crate::domain::model::tail::Tail;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +25,7 @@ pub enum Place {
 pub enum Generation {
     Narration { guide: Option<String> },
     Impersonate { direction: Option<String> },
-    UserRegen,
+    InputRetry,
     Event(EventRecord),
 }
 
@@ -34,7 +34,7 @@ impl Generation {
         match self {
             Self::Narration { .. } => Kind::Narration,
             Self::Impersonate { .. } => Kind::Impersonate,
-            Self::UserRegen => Kind::UserRegen,
+            Self::InputRetry => Kind::InputRetry,
             Self::Event(_) => Kind::Event,
         }
     }
@@ -81,16 +81,16 @@ impl GenerationOrder {
         }
     }
 
-    /// A user regen ends after its text save: the Quantifier and the Game rules
+    /// The Retry of a typed Input ends after its text save: the Quantifier and the Game rules
     /// read a Narration or an Impersonate Input, not a typed Input again.
     pub fn is_analysed(&self) -> bool {
-        !matches!(self.generation, Generation::UserRegen)
+        !matches!(self.generation, Generation::InputRetry)
     }
 
     /// The one home of the Message kind, type, maker, stored inputs and event
     /// header. The new Swipe holds the state the Game rules read: the start state
-    /// with no trigger context, and for an event its one-shot Trigger marked fired.
-    /// A user regen keeps the start state as it is.
+    /// with no event record, and for an event its one-shot Trigger marked fired.
+    /// The Retry of a typed Input keeps the start state as it is.
     pub fn write(&self, text: String, start: &SwipeState) -> NewSwipe {
         match &self.generation {
             Generation::Narration { guide } => NewSwipe {
@@ -110,7 +110,7 @@ impl GenerationOrder {
                     ..Swipe::new(text, Maker::Player, Self::without_context(start))
                 },
             },
-            Generation::UserRegen => NewSwipe {
+            Generation::InputRetry => NewSwipe {
                 message_type: MessageType::Input,
                 kind: MessageKind::TypedInput,
                 swipe: Swipe::new(text, Maker::Player, start.clone()),
@@ -118,9 +118,10 @@ impl GenerationOrder {
             Generation::Event(record) => {
                 let mut state = Self::without_context(start);
                 if !record.trigger.trigger_repeat {
-                    state
-                        .npc_encounter_log
-                        .mark_trigger_fired(&record.trigger.npc_id, record.trigger.trigger_idx);
+                    state.encounters.mark_trigger_fired(
+                        &record.trigger.character_id,
+                        record.trigger.trigger_idx,
+                    );
                 }
                 NewSwipe {
                     message_type: MessageType::Narration,
@@ -136,7 +137,7 @@ impl GenerationOrder {
 
     fn without_context(start: &SwipeState) -> SwipeState {
         SwipeState {
-            trigger_context: None,
+            event_record: None,
             ..start.clone()
         }
     }
@@ -243,8 +244,7 @@ impl JobPlan {
                 Ok(Self::of_one(Self::redo(&tail), None))
             }
             JobRequest::Retrigger => {
-                let refused =
-                    || PlanRefusal::BadRequest("No trigger context available".to_string());
+                let refused = || PlanRefusal::BadRequest("No event record available".to_string());
                 let tail = tail.ok_or_else(refused)?;
                 let record = tail.retrigger_record().ok_or_else(refused)?.clone();
                 Ok(Self::of_one(
@@ -323,7 +323,7 @@ impl JobPlan {
             MessageKind::ImpersonateInput => Generation::Impersonate {
                 direction: last_swipe.and_then(|swipe| swipe.impersonate_direction.clone()),
             },
-            MessageKind::TypedInput => Generation::UserRegen,
+            MessageKind::TypedInput => Generation::InputRetry,
         };
         GenerationOrder {
             generation,

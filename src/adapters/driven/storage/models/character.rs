@@ -2,10 +2,10 @@
 //! Character database model
 
 use crate::error::EngineError;
-use crate::domain::model::character::{CharacterSheet, NpcCard, Relationship};
+use crate::domain::model::character::{CharacterSheet, CharacterCard, Relationship};
 use crate::domain::model::trigger::Trigger;
 
-/// Database row for `characters` table (NpcCard).
+/// Database row for `characters` table (CharacterCard).
 pub struct DbCharacter {
     pub id: i64,
     pub key: String,
@@ -47,7 +47,7 @@ impl DbCharacter {
         })
     }
 
-    pub(crate) fn to_card(&self) -> Result<NpcCard, EngineError> {
+    pub(crate) fn to_card(&self) -> Result<CharacterCard, EngineError> {
         let inventory: Vec<String> = serde_json::from_str(&self.inventory)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize inventory: {e}")))?;
         let triggers: Vec<Trigger> = serde_json::from_str(&self.triggers)
@@ -55,7 +55,7 @@ impl DbCharacter {
         let relationships: Vec<Relationship> = serde_json::from_str(&self.relationships)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize relationships: {e}")))?;
 
-        Ok(NpcCard {
+        Ok(CharacterCard {
             id: self.key.clone(),
             sheet: CharacterSheet {
                 name: self.name.clone(),

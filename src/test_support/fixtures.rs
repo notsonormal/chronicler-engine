@@ -5,14 +5,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
+use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::game::GameId;
 use crate::domain::model::message::{Maker, Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{
-    LlmProviderConfig, NarrativePerspective, NarrativeTense, NarratorMode,
+    LlmConnection, NarrativePerspective, NarrativeTense, NarratorMode,
 };
 use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::state::swipe_state::SwipeState;
@@ -32,10 +32,10 @@ use crate::application::ports::llm_provider::LlmProvider;
 
 /// A connection with every optional field unset and its name equal to its id.
 /// A test sets the fields it cares about with struct-update syntax:
-/// `LlmProviderConfig { model: "m".into(), ..test_connection("c", LlmBackendType::Mock) }`.
+/// `LlmConnection { model: "m".into(), ..test_connection("c", LlmBackendType::Mock) }`.
 /// A new connection field needs no edit in a test that does not use it.
-pub fn test_connection(id: &str, provider: LlmBackendType) -> LlmProviderConfig {
-    LlmProviderConfig::new(id, id, provider)
+pub fn test_connection(id: &str, provider: LlmBackendType) -> LlmConnection {
+    LlmConnection::new(id, id, provider)
 }
 
 pub struct TestWorld;
@@ -83,9 +83,9 @@ impl TestPersona {
     }
 }
 
-pub struct TestNpc;
+pub struct TestCharacter;
 
-impl TestNpc {
+impl TestCharacter {
     fn sheet(name: &str) -> CharacterSheet {
         CharacterSheet {
             name: name.to_string(),
@@ -99,8 +99,8 @@ impl TestNpc {
         }
     }
 
-    pub fn named(id: &str, name: &str) -> NpcCard {
-        NpcCard {
+    pub fn named(id: &str, name: &str) -> CharacterCard {
+        CharacterCard {
             id: id.to_string(),
             sheet: Self::sheet(name),
             inventory: vec![],
@@ -109,8 +109,13 @@ impl TestNpc {
         }
     }
 
-    pub fn with_times_met_trigger(id: &str, name: &str, op: ComparisonOperator, n: u32) -> NpcCard {
-        NpcCard {
+    pub fn with_times_met_trigger(
+        id: &str,
+        name: &str,
+        op: ComparisonOperator,
+        n: u32,
+    ) -> CharacterCard {
+        CharacterCard {
             id: id.to_string(),
             sheet: Self::sheet(name),
             inventory: vec![],
@@ -136,8 +141,8 @@ impl TestNpc {
         op: ComparisonOperator,
         n: u32,
         room_id: &str,
-    ) -> NpcCard {
-        NpcCard {
+    ) -> CharacterCard {
+        CharacterCard {
             id: id.to_string(),
             sheet: Self::sheet(name),
             inventory: vec![],
@@ -385,14 +390,14 @@ pub fn create_test_world_with_scenario() -> WorldCard {
             description: "A test".to_string(),
             starting_room_id: "room1".to_string(),
             text: "You wake up in a cozy room.".to_string(),
-            npcs: vec![],
+            characters_present: vec![],
         }],
         ..Default::default()
     }
 }
 
-pub fn shopkeeper_npc() -> NpcCard {
-    NpcCard {
+pub fn shopkeeper_character() -> CharacterCard {
+    CharacterCard {
         id: "shopkeeper".into(),
         sheet: CharacterSheet {
             name: "Shopkeeper Sarah".into(),

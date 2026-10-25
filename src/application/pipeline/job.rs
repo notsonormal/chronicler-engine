@@ -17,9 +17,9 @@ use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
 use crate::application::prompting::token_budget::TokenBudget;
-use crate::application::prompting::NpcContext;
+use crate::application::prompting::CharacterContext;
 use crate::domain::model::agent::{AgentSettings, HookInput, Kind, AGENT_HISTORY_WINDOW};
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::game::{Game, GameId};
 use crate::domain::model::generation::{GenerationOrder, JobPlan, JobRequest, OptionsRun, Place};
 use crate::domain::model::message::SwipeAt;
@@ -129,7 +129,7 @@ impl Job {
         span.record("step", tracing::field::debug(plan.first_step()));
     }
 
-    /// A step that fails ends the Job, and every save unit that landed before it
+    /// A step that fails ends the Job, and every transaction that landed before it
     /// stays. The Options run follows a Narration that was saved, whatever failed
     /// after it except a moved entry.
     fn run(&self, plan: JobPlan) -> JobEnd {
@@ -252,15 +252,15 @@ impl Job {
         )?;
         let budget = Self::budget(&settings)?;
 
-        let all_npcs: Vec<NpcCard> = bundle.npcs.values().cloned().collect();
+        let all_characters: Vec<CharacterCard> = bundle.characters.values().cloned().collect();
         let values = NarrationValues {
             world: &bundle.world,
             narrative_perspective: game.narrative_perspective,
             narrative_tense: game.narrative_tense,
             room,
-            npcs: NpcContext {
-                all_npcs: &all_npcs,
-                npcs_in_area: &start.scene.npcs_in_area,
+            characters: CharacterContext {
+                all_characters: &all_characters,
+                characters_present: &start.scene.characters_present,
             },
             persona: &bundle.persona,
             history: &history,

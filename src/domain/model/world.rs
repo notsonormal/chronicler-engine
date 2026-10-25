@@ -26,7 +26,7 @@ pub struct WorldCard {
     pub narrative_perspective: NarrativePerspective,
     #[serde(default = "world_defaults::default_world_narrative_tense")]
     pub narrative_tense: NarrativeTense,
-    /// Author default: generate pickable options after every narration turn.
+    /// Author default: generate Options after every narration.
     /// Games inherit this at creation (per-game override on `Game`).
     #[serde(default = "world_defaults::default_options_always_on")]
     pub options_always_on: bool,

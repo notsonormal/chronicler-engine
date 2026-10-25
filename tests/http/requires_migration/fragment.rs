@@ -55,7 +55,7 @@ async fn test_visual_sidebar_renders_room_image() {
         "Expected room image in sidebar: {body}"
     );
     assert!(
-        !body.contains("No Location Image"),
+        !body.contains("No Room Image"),
         "Should not show placeholder when image exists: {body}"
     );
 }
@@ -190,11 +190,11 @@ async fn test_character_headshots_fragment() {
 }
 
 #[tokio::test]
-async fn test_reset_generating_handler() {
+async fn test_reset_busy_handler() {
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
-        .uri("/status/reset-generating")
+        .uri("/status/reset-busy")
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
@@ -266,7 +266,7 @@ async fn test_edit_history_handler_not_found() {
 
 #[tokio::test]
 async fn test_delete_history_handler_success() {
-    // The story keeps its opening, so the Message the delete removes is the turn's
+    // The story keeps its opening, so the Message the delete removes is the Job's
     // Narration.
     let (app, state) = one_turn_app();
     assert!(post_action(&app, "look").await.status().is_success());

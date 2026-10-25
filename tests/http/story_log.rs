@@ -9,7 +9,7 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder,
-    TestDataBuilder, TestNpc,
+    TestDataBuilder, TestCharacter,
 };
 
 use crate::support::app_wiring::app_after_an_impersonate_with_a_failed_event;
@@ -18,8 +18,7 @@ use crate::support::http_assertions::{
 };
 use crate::support::http_fixtures::{append_narrations, story_of};
 use crate::support::http_requests::{
-    fetch_body, fetch_generating_status, post_action, post_empty, post_form, response_body,
-    wait_settled,
+    fetch_body, fetch_busy_status, post_action, post_empty, post_form, response_body, wait_settled,
 };
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
@@ -355,11 +354,11 @@ async fn test_story_log_fragment_declares_no_log_container() {
 #[tokio::test]
 async fn test_story_log_icon_buttons_have_accessible_names() {
     // The Action's Trigger fires but its continuation fails, so the main Narration
-    // keeps the trigger context that offers Retrigger on the last entry.
+    // keeps the event record that offers Retrigger on the last entry.
     let data = TestDataBuilder::default_test()
-        .npcs(vec![TestNpc::with_times_met_trigger(
-            "npc_1",
-            "Test NPC",
+        .characters(vec![TestCharacter::with_times_met_trigger(
+            "character_1",
+            "Test Character",
             ComparisonOperator::Eq,
             0,
         )])
@@ -369,7 +368,7 @@ async fn test_story_log_icon_buttons_have_accessible_names() {
         .model(Arc::new(
             ScriptedModel::new()
                 .narration("You look around.")
-                .after_narration(analysis_report(&["npc_1"], None))
+                .after_narration(analysis_report(&["character_1"], None))
                 .failed(Role::Trigger),
         ))
         .build_with_state();
@@ -421,7 +420,7 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
     );
 
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "quantifying",
         "the status names the step the held call runs in"
     );

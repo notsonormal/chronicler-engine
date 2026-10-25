@@ -337,7 +337,7 @@ impl TextCheckSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LlmProviderConfig {
+pub struct LlmConnection {
     pub id: String,
     pub name: String,
     pub provider: LlmBackendType,
@@ -356,7 +356,7 @@ pub struct LlmProviderConfig {
     pub reasoning_effort: Option<ReasoningEffort>,
 }
 
-impl LlmProviderConfig {
+impl LlmConnection {
     pub fn new(id: impl Into<String>, name: impl Into<String>, provider: LlmBackendType) -> Self {
         Self {
             id: id.into(),
@@ -447,7 +447,7 @@ impl LlmProviderConfig {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppSettings {
-    pub connections: Vec<LlmProviderConfig>,
+    pub connections: Vec<LlmConnection>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     #[serde(default = "settings_defaults::default_response_length")]
@@ -464,23 +464,23 @@ pub struct AppSettings {
 
 impl Default for AppSettings {
     fn default() -> Self {
-        let gpt4o = LlmProviderConfig::new(
+        let gpt4o = LlmConnection::new(
             "openrouter-gpt-4o-mini",
             "openrouter-gpt-4o-mini",
             LlmBackendType::OpenRouter,
         );
-        let euryale = LlmProviderConfig {
+        let euryale = LlmConnection {
             model: "sao10k/l3.3-euryale-70b".into(),
-            ..LlmProviderConfig::new(
+            ..LlmConnection::new(
                 "openrouter-euryale",
                 "openrouter-euryale",
                 LlmBackendType::OpenRouter,
             )
         };
-        let gemma = LlmProviderConfig {
+        let gemma = LlmConnection {
             model: "hf.co/mradermacher/gemma-4-26B-A4B-it-abliterated-i1-GGUF:latest".into(),
             base_url: Some("http://localhost:11434/v1".into()),
-            ..LlmProviderConfig::new(
+            ..LlmConnection::new(
                 "ollama-gemma-4-26B",
                 "ollama-gemma-4-26B",
                 LlmBackendType::Ollama,
@@ -527,24 +527,24 @@ impl AppSettings {
         }
     }
 
-    pub fn find_connection(&self, id: &str) -> Option<&LlmProviderConfig> {
+    pub fn find_connection(&self, id: &str) -> Option<&LlmConnection> {
         self.connections.iter().find(|c| c.id == id)
     }
 
-    pub fn find_connection_mut(&mut self, id: &str) -> Option<&mut LlmProviderConfig> {
+    pub fn find_connection_mut(&mut self, id: &str) -> Option<&mut LlmConnection> {
         self.connections.iter_mut().find(|c| c.id == id)
     }
 
-    pub fn get_narration_connection(&self) -> Option<&LlmProviderConfig> {
+    pub fn get_narration_connection(&self) -> Option<&LlmConnection> {
         self.find_connection(&self.narration_connection_id)
     }
 
-    pub fn get_quantifier_connection(&self) -> Option<&LlmProviderConfig> {
+    pub fn get_quantifier_connection(&self) -> Option<&LlmConnection> {
         self.find_connection(&self.quantifier_connection_id)
     }
 
     /// The narration connection, or an error naming the missing id.
-    pub fn narration_connection(&self) -> crate::error::Result<LlmProviderConfig> {
+    pub fn narration_connection(&self) -> crate::error::Result<LlmConnection> {
         self.get_narration_connection().cloned().ok_or_else(|| {
             EngineError::Config(format!(
                 "narration_connection_id '{}' is not in the connections list",
@@ -554,7 +554,7 @@ impl AppSettings {
     }
 
     /// The quantifier connection, or an error naming the missing id.
-    pub fn quantifier_connection(&self) -> crate::error::Result<LlmProviderConfig> {
+    pub fn quantifier_connection(&self) -> crate::error::Result<LlmConnection> {
         self.get_quantifier_connection().cloned().ok_or_else(|| {
             EngineError::Config(format!(
                 "quantifier_connection_id '{}' is not in the connections list",

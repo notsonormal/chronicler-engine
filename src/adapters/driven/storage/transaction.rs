@@ -4,7 +4,7 @@
 use crate::adapters::driven::storage::core::WriteOverrides;
 use crate::adapters::driven::storage::utils::require_message_of_game;
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
-use crate::domain::model::dock::{DockRecord, Notice};
+use crate::domain::model::dock::{DockRecord, OptionsFailure};
 use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::message::{Message, Swipe, SwipeAt};
 use crate::domain::model::state::generation_status::GenerationFailure;
@@ -26,7 +26,7 @@ pub enum TxWrite {
     SetGameFailure,
     SetGameConfig,
     PutDock,
-    PutDockNotice,
+    PutOptionsFailure,
     ClearDock,
 }
 
@@ -273,20 +273,20 @@ impl<'a> Tx<'a> {
         self.write_dock(record)
     }
 
-    /// Replaces the notice and keeps the offered set the row holds.
-    pub fn put_dock_notice(&mut self, notice: &Notice) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::PutDockNotice)?;
+    /// Replaces the Options failure and keeps the offered set the row holds.
+    pub fn put_options_failure(&mut self, failure: &OptionsFailure) -> Result<(), EngineError> {
+        self.writes.fail_if_injected(TxWrite::PutOptionsFailure)?;
         self.conn
             .execute(
                 "INSERT INTO game_docks (game_id, notice) VALUES (?1, ?2) \
                  ON CONFLICT(game_id) DO UPDATE SET notice = excluded.notice",
-                rusqlite::params![self.game.0 as i64, serde_json::to_string(notice)?],
+                rusqlite::params![self.game.0 as i64, serde_json::to_string(failure)?],
             )
-            .db_context("Failed to write the dock notice")?;
+            .db_context("Failed to write the Options failure")?;
         Ok(())
     }
 
-    /// The row stays, with no offered set and no notice: a Game holds one dock
+    /// The row stays, with no offered set and no Options failure: a Game holds one dock
     /// record.
     pub fn clear_dock(&mut self) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::ClearDock)?;
@@ -302,7 +302,7 @@ impl<'a> Tx<'a> {
                     self.game.0 as i64,
                     offered,
                     record
-                        .notice
+                        .failure
                         .as_ref()
                         .map(serde_json::to_string)
                         .transpose()?,

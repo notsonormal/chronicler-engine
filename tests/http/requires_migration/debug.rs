@@ -1,4 +1,4 @@
-//! HTTP integration tests for the debug endpoints: `/debug/state` returns the expected JSON shape and `/debug/is_generating` reflects the actual generation status.
+//! HTTP integration tests for the debug endpoints: `/debug/state` returns the expected JSON shape and `/debug/is_busy` reflects the actual busy state.
 
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
@@ -23,10 +23,10 @@ async fn test_debug_state_endpoint_returns_json() {
         serde_json::from_slice(&body).expect("Response should be valid JSON");
 
     assert!(json.get("current_room_id").is_some());
-    assert!(json.get("npcs_in_area").is_some());
+    assert!(json.get("characters_present").is_some());
     assert!(json.get("generation_status").is_some());
     assert!(json.get("step").is_some());
-    assert!(json.get("npc_encounter_log").is_some());
+    assert!(json.get("encounters").is_some());
     assert!(json.get("narration_history_tail").is_some());
 
     assert!(
@@ -34,8 +34,8 @@ async fn test_debug_state_endpoint_returns_json() {
         "current_room_id should be a string"
     );
     assert!(
-        json["npcs_in_area"].is_array(),
-        "npcs_in_area should be an array"
+        json["characters_present"].is_array(),
+        "characters_present should be an array"
     );
     // Unit enum variants serialize as strings, tagged variants as objects
     let status = &json["generation_status"];
@@ -45,13 +45,13 @@ async fn test_debug_state_endpoint_returns_json() {
     );
     if let Some(s) = status.as_str() {
         assert!(
-            s == "Idle" || s == "Generating",
-            "generation_status should be Idle or Generating, got: {s}"
+            s == "Idle" || s == "Busy",
+            "generation_status should be Idle or Busy, got: {s}"
         );
     } else if let Some(obj) = status.as_object() {
         assert!(
-            obj.contains_key("Error"),
-            "Error variant should have 'Error' key"
+            obj.contains_key("Failed"),
+            "Failed variant should have 'Failed' key"
         );
     }
 }
@@ -75,10 +75,10 @@ async fn test_debug_state_endpoint_includes_all_documented_fields() {
 
     let required_fields = [
         "current_room_id",
-        "npcs_in_area",
+        "characters_present",
         "generation_status",
         "step",
-        "npc_encounter_log",
+        "encounters",
         "narration_history_tail",
         "narration_history_length",
         "dynamic_rooms",
@@ -111,11 +111,11 @@ async fn test_debug_state_endpoint_includes_all_documented_fields() {
 }
 
 #[tokio::test]
-async fn test_debug_is_generating_returns_false_by_default() {
+async fn test_debug_is_busy_returns_false_by_default() {
     let app = TestAppBuilder::default_app();
 
     let req = Request::builder()
-        .uri("/debug/is_generating")
+        .uri("/debug/is_busy")
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
@@ -127,7 +127,7 @@ async fn test_debug_is_generating_returns_false_by_default() {
     assert_eq!(
         &body[..],
         b"false",
-        "is_generating should return 'false' by default"
+        "is_busy should return 'false' by default"
     );
 }
 

@@ -3,8 +3,7 @@ use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::domain::model::{
     agent::{AgentConfig, BackendSelector},
     settings::{
-        AppSettings, LlmProviderConfig, NarratorMode, ReasoningEffort, TextCheckMode,
-        TextCheckSettings,
+        AppSettings, LlmConnection, NarratorMode, ReasoningEffort, TextCheckMode, TextCheckSettings,
     },
 };
 use crate::error::EngineError;
@@ -214,7 +213,7 @@ fn test_update_settings_error_aborts_the_write_sqlite() {
 fn test_save_then_get_settings_roundtrip() {
     let storage = Storage::new_in_memory();
     let mut custom = AppSettings {
-        connections: vec![LlmProviderConfig::new(
+        connections: vec![LlmConnection::new(
             "test",
             "Test",
             crate::domain::model::llm_backend::LlmBackendType::OpenRouter,
@@ -280,7 +279,7 @@ fn test_save_then_get_settings_roundtrip() {
 fn test_save_then_get_settings_roundtrip_sqlite() {
     let storage = sqlite_storage().unwrap();
     let mut custom = AppSettings {
-        connections: vec![LlmProviderConfig::new(
+        connections: vec![LlmConnection::new(
             "test",
             "Test",
             crate::domain::model::llm_backend::LlmBackendType::OpenRouter,
@@ -385,7 +384,7 @@ fn test_save_settings_updates_existing_sqlite() {
 #[test]
 fn test_save_then_get_settings_preserves_connection_fields() {
     let storage = Storage::new_in_memory();
-    let conn = LlmProviderConfig {
+    let conn = LlmConnection {
         name: "Conn 1".into(),
         model: "llama3".into(),
         api_key: Some("secret-key".into()),
@@ -428,7 +427,7 @@ fn test_save_then_get_settings_preserves_connection_fields() {
 #[test]
 fn test_save_then_get_settings_preserves_connection_fields_sqlite() {
     let storage = sqlite_storage().unwrap();
-    let conn = LlmProviderConfig {
+    let conn = LlmConnection {
         name: "Conn 1".into(),
         model: "llama3".into(),
         api_key: Some("secret-key".into()),
@@ -687,7 +686,7 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 30);
+    assert_eq!(version, 31);
 }
 
 #[test]

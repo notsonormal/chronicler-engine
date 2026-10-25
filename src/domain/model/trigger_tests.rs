@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::domain::model::trigger::{
-    ComparisonOperator, NpcEncounterLog, NpcEncounterState, Trigger, TriggerNarration,
-    TriggerRequirement,
+    ComparisonOperator, Encounters, Encounter, Trigger, TriggerNarration, TriggerRequirement,
 };
 
 #[test]
@@ -84,21 +83,21 @@ fn test_trigger_serde_with_room_id() {
 }
 
 #[test]
-fn test_npc_encounter_state_default() {
-    let state = NpcEncounterState::default();
+fn test_encounter_default() {
+    let state = Encounter::default();
     assert_eq!(state.times_met, 0);
     assert!(state.trigger_fired.is_empty());
 }
 
 #[test]
-fn test_npc_encounter_log_default() {
-    let state = NpcEncounterLog::default();
-    assert!(state.npcs.is_empty());
+fn test_encounters_default() {
+    let state = Encounters::default();
+    assert!(state.characters.is_empty());
 }
 
 #[test]
-fn test_npc_encounter_state_update() {
-    let mut state = NpcEncounterState {
+fn test_character_encounter_state_update() {
+    let mut state = Encounter {
         times_met: 5,
         ..Default::default()
     };
@@ -111,50 +110,50 @@ fn test_npc_encounter_state_update() {
 }
 
 #[test]
-fn test_npc_encounter_log_npc_tracking() {
-    let mut state = NpcEncounterLog::default();
-    state.npcs.insert(
+fn test_encounters_character_tracking() {
+    let mut state = Encounters::default();
+    state.characters.insert(
         "carla".to_string(),
-        NpcEncounterState {
+        Encounter {
             times_met: 3,
             trigger_fired: HashMap::new(),
             currently_meeting: false,
         },
     );
 
-    assert!(state.npcs.contains_key("carla"));
-    assert_eq!(state.npcs.get("carla").unwrap().times_met, 3);
+    assert!(state.characters.contains_key("carla"));
+    assert_eq!(state.characters.get("carla").unwrap().times_met, 3);
 }
 
 #[test]
 fn test_currently_meeting_tracks_encounters() {
-    let mut npc_encounter_log = NpcEncounterLog::default();
+    let mut encounters = Encounters::default();
 
-    assert!(!npc_encounter_log.is_currently_meeting("carla"));
-    npc_encounter_log.set_currently_meeting("carla", true);
-    assert!(npc_encounter_log.is_currently_meeting("carla"));
+    assert!(!encounters.is_currently_meeting("carla"));
+    encounters.set_currently_meeting("carla", true);
+    assert!(encounters.is_currently_meeting("carla"));
 
-    npc_encounter_log.set_currently_meeting("carla", false);
-    assert!(!npc_encounter_log.is_currently_meeting("carla"));
+    encounters.set_currently_meeting("carla", false);
+    assert!(!encounters.is_currently_meeting("carla"));
 }
 
 #[test]
 fn test_increment_times_met_always_increments() {
-    let mut npc_encounter_log = NpcEncounterLog::default();
+    let mut encounters = Encounters::default();
 
-    npc_encounter_log.increment_times_met("gabriella");
-    assert_eq!(npc_encounter_log.get_times_met("gabriella"), 1);
+    encounters.increment_times_met("gabriella");
+    assert_eq!(encounters.get_times_met("gabriella"), 1);
 
-    npc_encounter_log.increment_times_met("gabriella");
-    assert_eq!(npc_encounter_log.get_times_met("gabriella"), 2);
+    encounters.increment_times_met("gabriella");
+    assert_eq!(encounters.get_times_met("gabriella"), 2);
 }
 
 #[test]
-fn test_check_condition_missing_npc_defaults_to_zero() {
-    let npc_encounter_log = NpcEncounterLog::default();
+fn test_check_condition_missing_character_defaults_to_zero() {
+    let encounters = Encounters::default();
     let condition = TriggerRequirement {
         operator: ComparisonOperator::Eq,
         threshold: 0,
     };
-    assert!(npc_encounter_log.check_condition("unknown_npc", &condition));
+    assert!(encounters.check_condition("unknown_character", &condition));
 }

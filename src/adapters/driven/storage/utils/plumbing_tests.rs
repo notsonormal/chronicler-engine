@@ -71,7 +71,7 @@ fn test_fresh_database_has_game_posture_columns() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 30);
+    assert_eq!(version, 31);
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn test_v22_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 30);
+    assert_eq!(version, 31);
 }
 
 #[test]
@@ -465,7 +465,7 @@ fn test_v28_deletes_saved_games_and_drops_the_snapshot_tables() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 30);
+    assert_eq!(version, 31);
 }
 
 #[test]
@@ -573,4 +573,58 @@ fn test_v30_deletes_the_saved_games() {
             .unwrap();
         assert_eq!(rows, 0, "{table} must hold no row of a saved Game");
     }
+}
+
+#[test]
+fn test_v31_renames_the_character_ids_tag_in_stored_presets() {
+    let conn = Connection::open_in_memory().unwrap();
+    migrate_up_to(&conn, 30).unwrap();
+    conn.execute(
+        "INSERT INTO prompt_presets (id, name, preset_type, role, instructions, writing_style, \
+         output_format, created_at, updated_at) VALUES ('tagged', 'n', 'quantifier', \
+         'Read <available_npc_ids>.', 'Use the exact NPC IDs provided in the \
+         <available_npc_ids> list.', NULL, '<available_npc_ids>', 't', 't')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO prompt_presets (id, name, preset_type, instructions, created_at, updated_at) \
+         VALUES ('plain', 'n', 'quantifier', 'Use the NPC IDs.', 't', 't')",
+        [],
+    )
+    .unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    let row = |id: &str| -> (
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) {
+        conn.query_row(
+            "SELECT role, instructions, writing_style, output_format \
+             FROM prompt_presets WHERE id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        row("tagged"),
+        (
+            Some("Read <available_character_ids>.".to_string()),
+            Some(
+                "Use the exact NPC IDs provided in the <available_character_ids> list.".to_string()
+            ),
+            None,
+            Some("<available_character_ids>".to_string()),
+        ),
+        "the tag is renamed in every text column and a NULL column stays NULL"
+    );
+    assert_eq!(
+        row("plain"),
+        (None, Some("Use the NPC IDs.".to_string()), None, None),
+        "a preset without the tag is unchanged"
+    );
 }

@@ -2,7 +2,7 @@
 
 use chronicler_engine::adapters::driven::storage::db::DbPool;
 use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrite};
-use chronicler_engine::domain::model::dock::{DockRecord, Notice};
+use chronicler_engine::domain::model::dock::{DockRecord, OptionsFailure};
 use chronicler_engine::domain::model::game::{GameId, NewGame};
 use chronicler_engine::domain::model::message::{Maker, Message, Swipe, SwipeAt};
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
@@ -13,8 +13,8 @@ use chronicler_engine::domain::model::state::message_types::{MessageKind, Messag
 use chronicler_engine::domain::model::state::movement::MovementState;
 use chronicler_engine::domain::model::state::scene_state::SceneState;
 use chronicler_engine::domain::model::state::swipe_state::SwipeState;
-use chronicler_engine::domain::model::state::trigger_context::{EventRecord, TriggerRef};
-use chronicler_engine::domain::model::trigger::NpcEncounterLog;
+use chronicler_engine::domain::model::state::event_record::{EventRecord, TriggerRef};
+use chronicler_engine::domain::model::trigger::Encounters;
 use chronicler_engine::error::EngineError;
 use chronicler_engine::test_support::tx_token;
 
@@ -45,8 +45,8 @@ fn state_in(room: &str) -> SwipeState {
             dynamic_rooms: Default::default(),
         },
         scene: SceneState::default(),
-        npc_encounter_log: NpcEncounterLog::default(),
-        trigger_context: None,
+        encounters: Encounters::default(),
+        event_record: None,
     }
 }
 
@@ -66,7 +66,7 @@ fn narration_message(text: &str) -> Message {
 fn event_record() -> EventRecord {
     EventRecord {
         trigger: TriggerRef {
-            npc_id: "npc_1".to_string(),
+            character_id: "character_1".to_string(),
             trigger_idx: 0,
             trigger_name: "The gate opens".to_string(),
             trigger_repeat: false,
@@ -343,11 +343,11 @@ fn the_window_read_carries_whether_the_end_of_the_story_allows_a_retrigger() {
         .expect("the window read should succeed");
     assert!(
         !window.retrigger_allowed,
-        "a story whose last state holds no trigger context allows no Retrigger"
+        "a story whose last state holds no event record allows no Retrigger"
     );
 
     let triggered = SwipeState {
-        trigger_context: Some(event_record()),
+        event_record: Some(event_record()),
         ..state_in("room1")
     };
     storage
@@ -370,7 +370,7 @@ fn the_window_read_carries_whether_the_end_of_the_story_allows_a_retrigger() {
         .expect("the window read should succeed");
     assert!(
         window.retrigger_allowed,
-        "a last Narration with a trigger context allows a Retrigger"
+        "a last Narration with an event record allows a Retrigger"
     );
 }
 
@@ -624,7 +624,7 @@ fn the_dock_record_lands_whole_and_reads_back() {
     let game_id = game_without_messages(&storage, "Docked");
     let record = DockRecord {
         offered: vec!["look around".to_string(), "open the gate".to_string()],
-        notice: None,
+        failure: None,
     };
 
     storage
@@ -639,14 +639,14 @@ fn the_dock_record_lands_whole_and_reads_back() {
     assert_eq!(stored, record);
 }
 
-// CASE story-dock-notice: the dock record carries its notice
+// CASE story-dock-options-failure: the dock record carries its Options failure
 #[test]
-fn the_dock_record_carries_its_notice() {
+fn the_dock_record_carries_its_options_failure() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
     let game_id = game_without_messages(&storage, "Docked");
     let record = DockRecord {
         offered: Vec::new(),
-        notice: Some(Notice {
+        failure: Some(OptionsFailure {
             reason: "Options generation failed".to_string(),
             raw: "the model wrote no option".to_string(),
         }),
@@ -661,10 +661,10 @@ fn the_dock_record_carries_its_notice() {
         .get(game_id)
         .expect("the dock read should succeed")
         .expect("the dock record stays");
-    assert_eq!(stored.notice, record.notice);
+    assert_eq!(stored.failure, record.failure);
 }
 
-// CASE story-dock-clear: a cleared dock record keeps its row with no offered set and no notice
+// CASE story-dock-clear: a cleared dock record keeps its row with no offered set and no Options failure
 #[test]
 fn a_cleared_dock_record_keeps_its_row() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
@@ -673,7 +673,7 @@ fn a_cleared_dock_record_keeps_its_row() {
         .transaction(game_id, tx_token(), |tx| {
             tx.put_dock(&DockRecord {
                 offered: vec!["look around".to_string()],
-                notice: Some(Notice {
+                failure: Some(OptionsFailure {
                     reason: "Options generation failed".to_string(),
                     raw: "the model wrote no option".to_string(),
                 }),
@@ -693,13 +693,13 @@ fn a_cleared_dock_record_keeps_its_row() {
     assert_eq!(
         stored,
         DockRecord::default(),
-        "the record stays with no offered set and no notice"
+        "the record stays with no offered set and no Options failure"
     );
 }
 
-// CASE notice-keeps-set: the notice-only write replaces the notice and keeps the offered set
+// CASE options-failure-keeps-set: the Options-failure-only write replaces the Options failure and keeps the offered set
 #[test]
-fn the_notice_only_write_keeps_the_offered_set() {
+fn the_options_failure_only_write_keeps_the_offered_set() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
     let game_id = game_without_messages(&storage, "Docked");
     let offered = vec!["look around".to_string(), "open the gate".to_string()];
@@ -707,21 +707,21 @@ fn the_notice_only_write_keeps_the_offered_set() {
         .transaction(game_id, tx_token(), |tx| {
             tx.put_dock(&DockRecord {
                 offered: offered.clone(),
-                notice: Some(Notice {
+                failure: Some(OptionsFailure {
                     reason: "an older reason".to_string(),
                     raw: "an older raw text".to_string(),
                 }),
             })
         })
         .expect("the dock unit should succeed");
-    let notice = Notice {
+    let failure = OptionsFailure {
         reason: "Options generation failed".to_string(),
         raw: "the model wrote no option".to_string(),
     };
 
     storage
-        .transaction(game_id, tx_token(), |tx| tx.put_dock_notice(&notice))
-        .expect("the notice unit should succeed");
+        .transaction(game_id, tx_token(), |tx| tx.put_options_failure(&failure))
+        .expect("the Options failure transaction should succeed");
 
     let stored = storage
         .docks()
@@ -729,30 +729,34 @@ fn the_notice_only_write_keeps_the_offered_set() {
         .expect("the dock read should succeed")
         .expect("the dock record stays");
     assert_eq!(stored.offered, offered, "the offered set stays");
-    assert_eq!(stored.notice, Some(notice), "the notice is the new one");
+    assert_eq!(
+        stored.failure,
+        Some(failure),
+        "the Options failure is the new one"
+    );
 }
 
-// CASE notice-keeps-set-no-row: the notice-only write on a Game with no dock row leaves an empty offered set
+// CASE options-failure-keeps-set-no-row: the Options-failure-only write on a Game with no dock row leaves an empty offered set
 #[test]
-fn the_notice_only_write_with_no_dock_row_leaves_no_offered_set() {
+fn the_options_failure_only_write_with_no_dock_row_leaves_no_offered_set() {
     let storage = chronicler_engine::test_support::empty_sqlite_storage();
     let game_id = game_without_messages(&storage, "Docked");
-    let notice = Notice {
+    let failure = OptionsFailure {
         reason: "Options generation failed".to_string(),
         raw: "the model wrote no option".to_string(),
     };
 
     storage
-        .transaction(game_id, tx_token(), |tx| tx.put_dock_notice(&notice))
-        .expect("the notice unit should succeed");
+        .transaction(game_id, tx_token(), |tx| tx.put_options_failure(&failure))
+        .expect("the Options failure transaction should succeed");
 
     let stored = storage
         .docks()
         .get(game_id)
         .expect("the dock read should succeed")
-        .expect("the notice write makes the row");
+        .expect("the Options failure write makes the row");
     assert_eq!(stored.offered, Vec::<String>::new());
-    assert_eq!(stored.notice, Some(notice));
+    assert_eq!(stored.failure, Some(failure));
 }
 
 // CASE story-active-swipe: the active Swipe of a Message of the Game reads back, and another Game's Message answers none
@@ -965,5 +969,124 @@ fn a_failed_read_names_its_method_in_the_database_error() {
             }
         ),
         "the text read names itself, got: {text_error}"
+    );
+}
+
+/// A Swipe state with the stored keys
+/// `npcs_in_area`, `npc_encounter_log`, `npcs`, `trigger_context` and `npc_id`.
+const SWIPE_STATE_WITH_THE_OLD_KEYS: &str = r#"{
+    "movement": {"current_room_id": "room1", "dynamic_rooms": {}},
+    "scene": {"npcs_in_area": [
+        {"id": "character_1", "name": "Carla", "description": "d", "personality": "p", "scenario": "s",
+         "example_dialogue": "", "summary": null, "profile_image": null, "headshot_image": null,
+         "inventory": [], "triggers": [], "relationships": []}
+    ]},
+    "npc_encounter_log": {"npcs": {
+        "character_1": {"times_met": 2, "trigger_fired": {"0": true}, "currently_meeting": true}
+    }},
+    "trigger_context": {
+        "trigger": {"npc_id": "character_1", "trigger_idx": 0, "trigger_name": "The gate opens", "trigger_repeat": false},
+        "name": "The gate opens",
+        "direction": "the gate swings open"
+    }
+}"#;
+
+// CASE story-swipe-state-old-keys: a Swipe state stored with the old keys still loads
+#[test]
+fn a_swipe_state_stored_with_the_old_keys_still_loads() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone());
+    let (game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
+    pool.conn()
+        .execute(
+            "UPDATE message_swipes SET state = ?1 WHERE message_id = ?2 AND swipe_index = 0",
+            rusqlite::params![SWIPE_STATE_WITH_THE_OLD_KEYS, message_id as i64],
+        )
+        .expect("the state column should update");
+
+    let state = storage
+        .stories()
+        .swipe_state(
+            game_id,
+            SwipeAt {
+                message: message_id,
+                swipe: 0,
+            },
+        )
+        .expect("the state read should succeed")
+        .expect("the Swipe holds a state");
+
+    assert_eq!(state.movement.current_room_id, "room1");
+    assert_eq!(state.scene.characters_present.len(), 1);
+    assert_eq!(state.scene.characters_present[0].id, "character_1");
+    assert_eq!(state.encounters.get_times_met("character_1"), 2);
+    assert!(state.encounters.is_trigger_fired("character_1", 0));
+    assert!(state.encounters.is_currently_meeting("character_1"));
+    let record = state.event_record.expect("the event record loads");
+    assert_eq!(record.trigger.character_id, "character_1");
+    assert_eq!(record.header_name, "The gate opens");
+}
+
+// CASE story-swipe-state-old-keys-written: a Swipe state is written with the old keys
+#[test]
+fn a_swipe_state_is_written_with_the_old_keys() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone());
+    let (game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
+    let at = SwipeAt {
+        message: message_id,
+        swipe: 0,
+    };
+    let state: SwipeState =
+        serde_json::from_str(SWIPE_STATE_WITH_THE_OLD_KEYS).expect("the old keys load");
+
+    storage
+        .transaction(game_id, tx_token(), |tx| tx.set_swipe_state(at, &state))
+        .expect("the state update should succeed");
+
+    let stored: serde_json::Value = pool
+        .conn()
+        .query_row(
+            "SELECT state FROM message_swipes WHERE message_id = ?1 AND swipe_index = 0",
+            rusqlite::params![message_id as i64],
+            |row| row.get::<_, String>(0),
+        )
+        .map(|json| serde_json::from_str(&json).expect("the column holds JSON"))
+        .expect("the state column should read");
+    let expected: serde_json::Value =
+        serde_json::from_str(SWIPE_STATE_WITH_THE_OLD_KEYS).expect("the fixture is JSON");
+    assert_eq!(stored, expected, "the stored keys do not change");
+}
+
+// CASE dock-record-old-column: a dock record stored in the `notice` column still loads
+#[test]
+fn a_dock_stored_in_the_notice_column_still_loads() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone());
+    let game_id = game_without_messages(&storage, "Story");
+    pool.conn()
+        .execute(
+            "INSERT OR REPLACE INTO game_docks (game_id, offered, notice) VALUES (?1, ?2, ?3)",
+            rusqlite::params![
+                game_id.0 as i64,
+                r#"["Open the door"]"#,
+                r#"{"reason":"the model wrote no option","raw":"a raw text"}"#,
+            ],
+        )
+        .expect("the dock row should write");
+
+    let dock = storage
+        .docks()
+        .get(game_id)
+        .expect("the dock read should succeed")
+        .expect("the Game holds a dock record");
+
+    assert_eq!(dock.offered, vec!["Open the door".to_string()]);
+    assert_eq!(
+        dock.failure,
+        Some(OptionsFailure {
+            reason: "the model wrote no option".to_string(),
+            raw: "a raw text".to_string(),
+        })
     );
 }

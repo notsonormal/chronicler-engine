@@ -4,7 +4,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use crate::adapters::driven::utils::mock::extract_player_input;
-use crate::error::{EngineError, NarrativeFailure};
+use crate::error::{EngineError, NarrationFailure};
 
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 
@@ -26,7 +26,7 @@ impl MockBackend {
         Self::default()
     }
 
-    /// Keeps the connection this mock stands in for visible in logs, forensics,
+    /// Keeps the connection this mock stands in for visible in logs, LLM messages,
     /// and the debug endpoint.
     pub fn with_model(mut self, model: &str) -> Self {
         self.model = Some(model.to_string());
@@ -83,7 +83,7 @@ impl MockBackend {
     }
 
     fn make_error(&self) -> EngineError {
-        EngineError::Narrative(NarrativeFailure::Generation {
+        EngineError::Narration(NarrationFailure::Generation {
             stage: "mock",
             reason: "configured_failure",
         })
@@ -151,7 +151,7 @@ impl LlmProvider for MockBackend {
             if self.should_fail.load(Ordering::SeqCst)
                 || self.trigger_narration_should_fail.load(Ordering::SeqCst)
             {
-                return Err(EngineError::Narrative(NarrativeFailure::Generation {
+                return Err(EngineError::Narration(NarrationFailure::Generation {
                     stage: "mock_trigger",
                     reason: "configured_failure",
                 }));

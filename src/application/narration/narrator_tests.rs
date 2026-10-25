@@ -5,9 +5,9 @@ use std::sync::Arc;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narration::{NarrationValues, Narrated, Narrator};
 use crate::application::prompting::token_budget::{TokenBudget, MAX_CONTEXT_TOKENS, MAX_HISTORY_TOKENS};
-use crate::application::prompting::{NpcContext, PromptAssembler};
+use crate::application::prompting::{CharacterContext, PromptAssembler};
 use crate::domain::model::agent::Role;
-use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard, Relationship};
+use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard, Relationship};
 use crate::domain::model::generation::Generation;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Maker, Message, Swipe};
@@ -15,10 +15,10 @@ use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::{EventRecord, TriggerRef};
+use crate::domain::model::state::event_record::{EventRecord, TriggerRef};
 use crate::domain::model::tail::Tail;
 use crate::domain::model::world::WorldCard;
-use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona, TestWorld};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona, TestWorld};
 use crate::test_support::{
     make_test_recorder, make_test_recorder_with_storage, ModelCall, ScriptedModel,
 };
@@ -69,14 +69,14 @@ fn impersonate_preset() -> PromptPreset {
     }
 }
 
-fn npc_card(
+fn character_card(
     id: &str,
     name: &str,
     summary: Option<&str>,
     description: &str,
     relationships: Vec<Relationship>,
-) -> NpcCard {
-    NpcCard {
+) -> CharacterCard {
+    CharacterCard {
         id: id.to_string(),
         sheet: CharacterSheet {
             name: name.to_string(),
@@ -98,16 +98,16 @@ struct Fixture {
     world: WorldCard,
     map: MapDef,
     persona: PersonaCard,
-    characters: Vec<NpcCard>,
-    present: Vec<NpcCard>,
+    characters: Vec<CharacterCard>,
+    present: Vec<CharacterCard>,
     history: Vec<StoryRow>,
-    /// The story ends with the player's typed Input, which a user regen repeats.
+    /// The story ends with the player's typed Input, which the Retry of a typed Input repeats.
     tail: Tail,
 }
 
 impl Fixture {
     fn new() -> Self {
-        let characters = vec![TestNpc::named("npc_1", "Test NPC")];
+        let characters = vec![TestCharacter::named("character_1", "Test Character")];
         let mut world = TestWorld::minimal();
         world.global_rules = vec!["No fast travel.".to_string()];
         Self {
@@ -139,7 +139,11 @@ impl Fixture {
         }
     }
 
-    fn with_characters(mut self, characters: Vec<NpcCard>, present: Vec<NpcCard>) -> Self {
+    fn with_characters(
+        mut self,
+        characters: Vec<CharacterCard>,
+        present: Vec<CharacterCard>,
+    ) -> Self {
         self.characters = characters;
         self.present = present;
         self
@@ -192,9 +196,9 @@ impl Fixture {
                 narrative_perspective: NarrativePerspective::Second,
                 narrative_tense: NarrativeTense::Present,
                 room,
-                npcs: NpcContext {
-                    all_npcs: &self.characters,
-                    npcs_in_area: &self.present,
+                characters: CharacterContext {
+                    all_characters: &self.characters,
+                    characters_present: &self.present,
                 },
                 persona: &self.persona,
                 history,
@@ -294,9 +298,9 @@ fn test_every_prompt_layer_renders() {
     );
     for layer in [
         "<GameState>",
-        "<KnownNpcs>",
-        "<NpcsInRoom>",
-        "<PlayerCharacter>",
+        "<KnownCharacters>",
+        "<CharactersPresent>",
+        "<Persona>",
         "<WorldLore>",
         "<ConversationHistory>",
         "<PlayerInput>",
@@ -584,7 +588,7 @@ fn test_an_impersonate_prompt_drops_the_player_layer_and_the_guide() {
     let user = sent_prompt(&case, &preset()).user_prompt;
 
     assert!(
-        !user.contains("<PlayerCharacter>"),
+        !user.contains("<Persona>"),
         "an impersonate turn drops the player layer: {user}"
     );
     assert!(!user.contains("<Guide>"), "and renders no guide: {user}");
@@ -633,17 +637,17 @@ fn test_the_world_global_rules_render_into_the_system_prompt() {
     );
 }
 
-// CASE narrator-npc-summary: a Character with a summary renders that summary, not the long description.
+// CASE narrator-character-summary: a Character with a summary renders that summary, not the long description.
 #[test]
 fn test_a_character_with_a_summary_renders_that_summary() {
-    let npc = npc_card("n1", "Alice", Some("Short summary."), "Long desc.", vec![]);
-    let fixture = Fixture::new().with_characters(vec![npc.clone()], vec![npc]);
+    let character = character_card("n1", "Alice", Some("Short summary."), "Long desc.", vec![]);
+    let fixture = Fixture::new().with_characters(vec![character.clone()], vec![character]);
 
     let call = sent_prompt(
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     );
-    let known = layer(&call.user_prompt, "<KnownNpcs>", "</KnownNpcs>");
+    let known = layer(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
 
     assert!(
         known.contains("Alice (in room)"),
@@ -659,19 +663,19 @@ fn test_a_character_with_a_summary_renders_that_summary() {
     );
 }
 
-// CASE narrator-npc-description-lines: a Character without a summary renders the first three description lines.
+// CASE narrator-character-description-lines: a Character without a summary renders the first three description lines.
 #[test]
 fn test_a_character_without_a_summary_renders_three_description_lines() {
     let description = "line one.\nline two.\nline three.\nline four.";
-    let npc = npc_card("n2", "Bob", None, description, vec![]);
-    // Known to the World, absent from the scene.
-    let fixture = Fixture::new().with_characters(vec![npc], vec![]);
+    let character = character_card("n2", "Bob", None, description, vec![]);
+    // Known to the World, not among the Characters present.
+    let fixture = Fixture::new().with_characters(vec![character], vec![]);
 
     let call = sent_prompt(
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     );
-    let known = layer(&call.user_prompt, "<KnownNpcs>", "</KnownNpcs>");
+    let known = layer(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
 
     assert!(
         known.contains("Bob (elsewhere)"),
@@ -686,11 +690,11 @@ fn test_a_character_without_a_summary_renders_three_description_lines() {
     );
 }
 
-// CASE narrator-npc-relationships-absent: no relationships block renders while the related Character is away.
+// CASE narrator-character-relationships-absent: no relationships block renders while the related Character is away.
 #[test]
 fn test_no_relationships_block_renders_while_the_related_character_is_away() {
-    let partner = npc_card("p1", "Partner", None, "d", vec![]);
-    let self_card = npc_card(
+    let partner = character_card("p1", "Partner", None, "d", vec![]);
+    let self_card = character_card(
         "n3",
         "Self",
         None,
@@ -715,11 +719,11 @@ fn test_no_relationships_block_renders_while_the_related_character_is_away() {
     );
 }
 
-// CASE narrator-npc-relationships-present: the relationships block renders the present Character's name.
+// CASE narrator-character-relationships-present: the relationships block renders the present Character's name.
 #[test]
 fn test_the_relationships_block_renders_the_present_characters_name() {
-    let partner = npc_card("p1", "Partner", None, "d", vec![]);
-    let self_card = npc_card(
+    let partner = character_card("p1", "Partner", None, "d", vec![]);
+    let self_card = character_card(
         "n4",
         "Self",
         None,
@@ -777,9 +781,9 @@ fn test_a_prompt_that_cannot_fit_the_window_fails() {
     big_room.description = "x".repeat(2000);
     let mut case = fixture.narration(&[], "look");
     case.values.room = &big_room;
-    case.values.npcs = NpcContext {
-        all_npcs: &[],
-        npcs_in_area: &[],
+    case.values.characters = CharacterContext {
+        all_characters: &[],
+        characters_present: &[],
     };
     let after_trim = narrate_with(&model, &case, &preset(), tight);
     assert!(after_trim.is_err(), "an unfittable user half must fail");
@@ -1098,7 +1102,7 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
 fn event_record() -> EventRecord {
     EventRecord {
         trigger: TriggerRef {
-            npc_id: "npc_1".to_string(),
+            character_id: "character_1".to_string(),
             trigger_idx: 0,
             trigger_name: "The gate opens".to_string(),
             trigger_repeat: false,
@@ -1119,7 +1123,7 @@ fn test_a_call_carries_the_role_of_its_generation() {
             false,
             "narrator",
         ),
-        (Generation::UserRegen, false, "narrator"),
+        (Generation::InputRetry, false, "narrator"),
         (Generation::Event(event_record()), true, "trigger"),
     ];
 
@@ -1179,13 +1183,13 @@ fn test_each_generation_makes_its_user_message_and_flags() {
             None,
             false,
         ),
-        // A user regen repeats the Input the tail ends with.
-        (Generation::UserRegen, None, TYPED_INPUT, None, true),
+        // The Retry of a typed Input repeats the Input the tail ends with.
+        (Generation::InputRetry, None, TYPED_INPUT, None, true),
         // An event continues the narration that fired it.
         (
             Generation::Event(event_record()),
             None,
-            "Previous narration:\nYou enter the inn.\n\nTrigger event: the gate swings open\n\nContinue the scene naturally",
+            "Previous narration:\nYou enter the inn.\n\nTrigger direction: the gate swings open\n\nContinue the scene naturally",
             None,
             true,
         ),
@@ -1203,7 +1207,7 @@ fn test_each_generation_makes_its_user_message_and_flags() {
             "{label}: the user message: {rendered}"
         );
         assert_eq!(
-            user.contains("<PlayerCharacter>"),
+            user.contains("<Persona>"),
             player_layer,
             "{label}: the player layer: {user}"
         );

@@ -14,7 +14,7 @@ pub(crate) fn parse_datetime(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
-const LATEST_VERSION: i32 = 30;
+const LATEST_VERSION: i32 = 31;
 
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
     migrate_up_to(conn, LATEST_VERSION)
@@ -207,7 +207,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         exec(
             "CREATE TABLE IF NOT EXISTS characters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT NOT NULL,             -- from NpcCard.id (e.g. 'elena_voss')
+                key TEXT NOT NULL,             -- from CharacterCard.id (e.g. 'elena_voss')
                 world_id INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
                 description TEXT NOT NULL DEFAULT '',
@@ -481,7 +481,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(22) {
-        // A corrupt v15 replay blob degraded the turn to a plain retry at parse
+        // A corrupt v15 replay blob degraded the generation to a plain Retry at parse
         // time, so the backfill skips non-JSON values. Producers never set
         // impersonate_direction and guide together; the impersonate direction wins.
         if !column_exists(conn, "message_swipes", "impersonated") {
@@ -714,7 +714,7 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(30) {
-        // The trigger context of a Swipe state changed from a Trigger reference to the
+        // The event record of a Swipe state changed from a Trigger reference to the
         // whole event record, so the Games the older code saved cannot be read.
         exec("DELETE FROM game_docks")?;
         exec("DELETE FROM message_swipes")?;
@@ -722,6 +722,22 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         exec("DELETE FROM games")?;
 
         conn.pragma_update(None, "user_version", 30)
+            .db_context("Failed to set user_version")?;
+    }
+
+    if due(31) {
+        // The Quantifier prompt holds its id list in `<available_character_ids>`. A
+        // stored preset copy that names `<available_npc_ids>` points the model at a
+        // list that the prompt does not hold.
+        for column in ["role", "instructions", "writing_style", "output_format"] {
+            exec(&format!(
+                "UPDATE prompt_presets \
+                 SET {column} = replace({column}, 'available_npc_ids', 'available_character_ids') \
+                 WHERE {column} LIKE '%available_npc_ids%'"
+            ))?;
+        }
+
+        conn.pragma_update(None, "user_version", 31)
             .db_context("Failed to set user_version")?;
     }
 

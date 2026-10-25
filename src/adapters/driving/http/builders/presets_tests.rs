@@ -362,9 +362,9 @@ fn test_preset_view_form_html_with_json_content() {
         id: "quantifier_default".into(),
         name: "Default".into(),
         role: Some("You are a scene quantifier for a text adventure game.".into()),
-        instructions: Some("Your task is to determine which NPCs are present in the current room and whether the player actually moved to a new location.\n\nHow to determine movement:\n1. Read <CurrentRoom> — this is where the player is right now.".into()),
+        instructions: Some("Your task is to determine which Characters are present in the current room and whether the player actually moved to a new location.\n\nHow to determine movement:\n1. Read <CurrentRoom> — this is where the player is right now.".into()),
         writing_style: None,
-        output_format: Some("Respond ONLY with a JSON object in this exact format:\n{\"npcs_in_room\": [\"id1\", \"id2\"], \"movement\": {\"type\": \"entering|in|leaving\", \"destination\": \"room_id\"}}".into()),
+        output_format: Some("Respond ONLY with a JSON object in this exact format:\n{\"characters_present\": [\"id1\", \"id2\"], \"movement\": {\"type\": \"entering|in|leaving\", \"destination\": \"room_id\"}}".into()),
         allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::Quantifier,
@@ -372,11 +372,11 @@ fn test_preset_view_form_html_with_json_content() {
     let html = preset_view_form_html(&preset);
     assert!(html.contains("scene quantifier"), "role should be present");
     assert!(
-        html.contains("determine which NPCs"),
+        html.contains("determine which Characters"),
         "instructions should be present"
     );
     assert!(
-        html.contains("npcs_in_room"),
+        html.contains("characters_present"),
         "output_format with JSON braces should be present"
     );
 }

@@ -358,7 +358,7 @@ async fn test_update_world_handler_invalid_json() {
 /// Scenario-list JSON containing one scenario with the given id (shape
 /// mirrors `StartingScenario`).
 fn single_scenario_json(id: &str) -> String {
-    json!([{ "id": id, "name": "Intro", "description": "d", "starting_room_id": "room_1", "text": "t", "npcs": [] }])
+    json!([{ "id": id, "name": "Intro", "description": "d", "starting_room_id": "room_1", "text": "t", "characters": [] }])
         .to_string()
 }
 

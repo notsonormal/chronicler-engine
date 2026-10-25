@@ -9,54 +9,48 @@ pub struct QuantifierResult {
     pub destination: Option<String>,
 }
 
-/// Transition type for NPC area changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NpcTransitionType {
-    /// NPC entered the area (was not present, now present).
+pub enum CharacterTransitionType {
+    /// The Character was not among the Characters present and now is.
     Entered,
-    /// NPC left the area (was present, now not present).
+    /// The Character was among the Characters present and now is not.
     Left,
 }
 
-/// A single NPC area transition event.
-///
-/// These events are **engine state** — computed from a diff between previous and current
-/// NPC presence, NOT from the quantifier LLM output directly. The quantifier detects
-/// which NPCs are in the room; the engine computes Enter/Leave transitions via set diff.
+/// The engine computes a transition from the set difference of the Characters present before
+/// and after; the Quantifier result does not name transitions.
 #[derive(Debug, Clone)]
-pub struct NpcEvent {
-    /// NPC ID that moved.
-    pub npc_id: String,
-    /// Type of transition.
-    pub event_type: NpcTransitionType,
+pub struct CharacterTransition {
+    pub character_id: String,
+    pub event_type: CharacterTransitionType,
 }
 
 /// The Character transitions between two sets of Character ids.
 #[derive(Debug, Clone, Default)]
-pub struct NpcEventList {
-    pub events: Vec<NpcEvent>,
+pub struct CharacterTransitions {
+    pub events: Vec<CharacterTransition>,
 }
 
-impl NpcEventList {
-    pub fn from_diff(previous_npc_ids: &[String], current_npc_ids: &[String]) -> Self {
-        let previous_set: std::collections::HashSet<_> = previous_npc_ids.iter().collect();
-        let current_set: std::collections::HashSet<_> = current_npc_ids.iter().collect();
+impl CharacterTransitions {
+    pub fn from_diff(previous_character_ids: &[String], current_character_ids: &[String]) -> Self {
+        let previous_set: std::collections::HashSet<_> = previous_character_ids.iter().collect();
+        let current_set: std::collections::HashSet<_> = current_character_ids.iter().collect();
 
         let mut events = Vec::new();
 
-        for npc_id in current_npc_ids {
-            if !previous_set.contains(npc_id) {
-                events.push(NpcEvent {
-                    npc_id: npc_id.clone(),
-                    event_type: NpcTransitionType::Entered,
+        for character_id in current_character_ids {
+            if !previous_set.contains(character_id) {
+                events.push(CharacterTransition {
+                    character_id: character_id.clone(),
+                    event_type: CharacterTransitionType::Entered,
                 });
             }
         }
-        for npc_id in previous_npc_ids {
-            if !current_set.contains(npc_id) {
-                events.push(NpcEvent {
-                    npc_id: npc_id.clone(),
-                    event_type: NpcTransitionType::Left,
+        for character_id in previous_character_ids {
+            if !current_set.contains(character_id) {
+                events.push(CharacterTransition {
+                    character_id: character_id.clone(),
+                    event_type: CharacterTransitionType::Left,
                 });
             }
         }

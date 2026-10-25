@@ -31,8 +31,8 @@ pub fn build_router(app_state: AppState) -> Router {
         .route("/reset", post(chat_window::handlers::reset_handler))
         .route("/debug/state", get(debug::handlers::debug_state_handler))
         .route(
-            "/debug/is_generating",
-            get(debug::handlers::debug_is_generating_handler),
+            "/debug/is_busy",
+            get(debug::handlers::debug_is_busy_handler),
         )
         .route(
             "/debug/backend",
@@ -76,13 +76,10 @@ pub fn build_router(app_state: AppState) -> Router {
             "/fragment/character-headshots",
             get(layout::handlers::character_headshots_fragment),
         )
+        .route("/status/busy", get(layout::handlers::busy_status_handler))
         .route(
-            "/status/generating",
-            get(layout::handlers::generating_status_handler),
-        )
-        .route(
-            "/status/reset-generating",
-            post(layout::handlers::reset_generating_handler),
+            "/status/reset-busy",
+            post(layout::handlers::reset_busy_handler),
         )
         .route(
             "/fragment/llm-messages",

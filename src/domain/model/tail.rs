@@ -4,7 +4,7 @@
 use crate::domain::model::message::{Message, SwipeAt};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::EventRecord;
+use crate::domain::model::state::event_record::EventRecord;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tail {
@@ -45,7 +45,7 @@ impl Tail {
     }
 
     /// The event record a Retrigger repeats (R-65): a Narration that is not an event
-    /// Narration, or an Impersonate Input, with a trigger context in its current
+    /// Narration, or an Impersonate Input, with an event record in its current
     /// state.
     pub fn retrigger_record(&self) -> Option<&EventRecord> {
         let kind_allows = matches!(
@@ -55,7 +55,7 @@ impl Tail {
         if !kind_allows {
             return None;
         }
-        self.current_state()?.trigger_context.as_ref()
+        self.current_state()?.event_record.as_ref()
     }
 
     pub fn retrigger_allowed(&self) -> bool {

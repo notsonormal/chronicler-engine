@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
-use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::character::{CharacterCard, PersonaCard};
 use crate::domain::model::game::GameId;
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::world::WorldCard;
@@ -13,8 +13,8 @@ pub struct TestDataBuilder {
     world: WorldCard,
     map: MapDef,
     persona: PersonaCard,
-    npcs: Vec<NpcCard>,
-    room_npcs: Vec<String>,
+    characters: Vec<CharacterCard>,
+    room_characters: Vec<String>,
 }
 
 impl TestDataBuilder {
@@ -30,7 +30,7 @@ impl TestDataBuilder {
                 starting_room_id: "room_1".to_string(),
                 text: "Welcome to the Test World, {{user}}! You find yourself in a cozy room with wooden beams and a warm fire. The smell of fresh bread fills the air. A friendly innkeeper behind the bar glances your way and smiles."
                     .to_string(),
-                npcs: vec!["npc_1".to_string()],
+                characters_present: vec!["character_1".to_string()],
             }],
             ..Default::default()
         };
@@ -72,17 +72,17 @@ impl TestDataBuilder {
             inventory: vec![],
         };
 
-        let npcs = vec![NpcCard {
-            id: "npc_1".to_string(),
+        let characters = vec![CharacterCard {
+            id: "character_1".to_string(),
             sheet: crate::domain::model::character::CharacterSheet {
-                name: "Test NPC".to_string(),
-                description: "A test NPC".to_string(),
+                name: "Test Character".to_string(),
+                description: "A test Character".to_string(),
                 personality: "Friendly".to_string(),
                 scenario: "Test scenario.".to_string(),
                 example_dialogue: "Hello there!".to_string(),
                 summary: None,
-                profile_image: Some("data/images/npc.png".to_string()),
-                headshot_image: Some("data/images/npc_headshot.png".to_string()),
+                profile_image: Some("data/images/character.png".to_string()),
+                headshot_image: Some("data/images/character_headshot.png".to_string()),
             },
             inventory: vec![],
             triggers: vec![],
@@ -93,8 +93,8 @@ impl TestDataBuilder {
             world,
             map,
             persona,
-            npcs,
-            room_npcs: vec!["npc_1".to_string()],
+            characters,
+            room_characters: vec!["character_1".to_string()],
         }
     }
 
@@ -113,18 +113,18 @@ impl TestDataBuilder {
         self
     }
 
-    pub fn npc(mut self, npc: NpcCard) -> Self {
-        self.npcs.push(npc);
+    pub fn character(mut self, character: CharacterCard) -> Self {
+        self.characters.push(character);
         self
     }
 
-    pub fn npcs(mut self, npcs: Vec<NpcCard>) -> Self {
-        self.npcs = npcs;
+    pub fn characters(mut self, characters: Vec<CharacterCard>) -> Self {
+        self.characters = characters;
         self
     }
 
-    pub fn room_npc(mut self, npc_id: &str) -> Self {
-        self.room_npcs.push(npc_id.to_string());
+    pub fn room_character(mut self, character_id: &str) -> Self {
+        self.room_characters.push(character_id.to_string());
         self
     }
 
@@ -146,8 +146,8 @@ impl TestDataBuilder {
             world: Arc::new(self.world),
             map: Arc::new(self.map),
             persona: Arc::new(self.persona),
-            npcs: self.npcs,
-            room_npcs: self.room_npcs,
+            characters: self.characters,
+            room_characters: self.room_characters,
         }
     }
 }
@@ -157,8 +157,8 @@ pub struct TestData {
     pub world: Arc<WorldCard>,
     pub map: Arc<MapDef>,
     pub persona: Arc<PersonaCard>,
-    pub npcs: Vec<NpcCard>,
-    pub room_npcs: Vec<String>,
+    pub characters: Vec<CharacterCard>,
+    pub room_characters: Vec<String>,
 }
 
 impl TestData {
@@ -172,9 +172,9 @@ impl TestData {
         storage
             .seed_persona(&self.persona.key, &self.persona)
             .expect("test setup: seed persona");
-        for npc in &self.npcs {
+        for character in &self.characters {
             storage
-                .seed_character(world_id, npc)
+                .seed_character(world_id, character)
                 .expect("test setup: seed character");
         }
         crate::test_support::seed_game_row(
@@ -189,8 +189,8 @@ impl TestData {
         )
     }
 
-    pub fn find_npc(&self, id: &str) -> Option<&NpcCard> {
-        self.npcs.iter().find(|n| n.id == id)
+    pub fn find_character(&self, id: &str) -> Option<&CharacterCard> {
+        self.characters.iter().find(|n| n.id == id)
     }
 
     pub fn world_key(&self) -> String {

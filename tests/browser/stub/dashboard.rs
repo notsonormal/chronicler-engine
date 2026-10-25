@@ -75,7 +75,7 @@ async fn confirm_text_check_preview(page: &playwright_rs::Page) {
         .unwrap();
 
     wait_until_hidden(page, ".text-check-preview", Duration::from_secs(5)).await;
-    wait_for_status_generating(page).await;
+    wait_for_status_busy(page).await;
 }
 
 async fn read_submit_button(page: &playwright_rs::Page) -> (bool, String) {
@@ -209,7 +209,7 @@ async fn check_preview_opens_beside_status_display(page: playwright_rs::Page, st
     let status = stub.status_handle();
     status.set(StubStatus::Step("narrating".to_string()));
     poll_now(&page, "#status-display").await;
-    wait_for_status_generating(&page).await;
+    wait_for_status_busy(&page).await;
 
     submit_intercepted_command_direct(&page).await;
 

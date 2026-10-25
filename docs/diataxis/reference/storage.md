@@ -5,7 +5,7 @@ title: Storage
 
 ## Overview
 
-`Storage` is the engine's persistence boundary for game sessions, narrative content, settings, and LLM call forensics. Bootstrap seeding, which writes the first rows, belongs to startup.
+`Storage` is the engine's persistence boundary for Games, their stories, settings, and LLM messages. Bootstrap seeding, which writes the first rows, belongs to startup.
 
 ## Backend and BackendKind
 
@@ -30,7 +30,7 @@ process lives in `ActiveGame` (`application/games/active.rs`).
 | Game | The World, the Persona, the prompt presets, the always-on toggle, the names, and the **failure line** | `games` |
 | Message | The place in the story, its kind (typed Input, Impersonate Input, Narration or event Narration) and the active Swipe. An event Narration also holds its event record. | `messages` |
 | Swipe | The text, the stored inputs of its generation, the maker and the **Swipe state** | `message_swipes` |
-| Dock record | The offered set and at most one notice. A Game has one. | `game_docks` |
+| Dock record | The offered set and at most one Options failure. A Game has one. | `game_docks` |
 
 The holder of a busy Game lives in memory and holds the busy mark.
 
@@ -43,15 +43,15 @@ The holder of a busy Game lives in memory and holds the busy mark.
 
 ## Transactions
 
-`Storage::transaction` runs one **save unit**: the record writes of one request. The unit holds the backend mutex for its whole run, so the closure of a unit makes no `Storage` call: such a call waits on the mutex the unit already holds.
+One `Storage::transaction` call runs one **transaction**: a group of record writes that lands whole. A request can run several transactions. A Job opens one transaction for each save it makes. A transaction holds the backend mutex for its whole run, so the closure of a transaction makes no `Storage` call: that call would wait on the mutex.
 
-- **`Tx`** holds the record writes of one unit, and every record write exists only on `Tx`. It exists on SQLite only. A `Tx` serves one Game, so no write reaches another Game.
-- **`TxToken`** is the capability that opens a unit. Its constructor is crate-private, and guardrail Rule 3 (call site) limits its callers to `GameWriter`'s registry and `test_support/`.
+- **`Tx`** holds the record writes of one transaction, and every record write exists only on `Tx`. It exists on SQLite only. A `Tx` serves one Game, so no write reaches another Game.
+- **`TxToken`** is the capability that opens a transaction. Its constructor is crate-private, and guardrail Rule 3 (call site) limits its callers to `GameWriter`'s registry and `test_support/`.
 - **`StorageCall`** is the typed key of one `Storage` method. The test layer fails a method by its `StorageCall`, so a test can fail one `Storage` method.
-- **`TxWrite`** is the typed key of one record write. A write checks its key before it writes, so a test can fail one write in the middle of a unit.
-- **`Storage::transaction_new_game`** opens a unit that creates a Game: it writes the Game row first, so the writes that follow it in the same unit know the new Game.
+- **`TxWrite`** is the typed key of one record write. A write checks its key before it writes, so a test can fail one write in the middle of a transaction.
+- **`Storage::transaction_new_game`** opens a transaction that creates a Game: it writes the Game row first, so the writes that follow it in the same transaction know the new Game.
 
-A unit lands **whole, or not at all**. A closure that fails and a closure that panics both roll the unit back.
+A transaction lands **whole, or not at all**. A closure that fails and a closure that panics both roll the transaction back.
 
 ## The Newest Game of a World
 
@@ -80,26 +80,26 @@ A statement that SQLite refuses gives `EngineError::Database`. Its `context` nam
 The schema has 11 tables, organized into three logical clusters:
 
 1. **Game state** — the story and the dock of a Game, rooted at `games`.
-2. **World catalogue** — the static world definitions and NPCs, rooted at `worlds`.
-3. **Standalone** — settings, prompt presets, and LLM call forensics; independent of any game or world.
+2. **World catalogue** — the static world definitions and Characters, rooted at `worlds`.
+3. **Standalone** — settings, prompt presets, and LLM messages; independent of any game or world.
 
 ### Game state cluster
 
-- **`games`** — top-level game session record. It holds the failure line of the Game.
-- **`messages`** — the story of a Game in order. Each row is one Message, written by a save unit. There is exactly one story per game.
+- **`games`** — top-level Game record. It holds the failure line of the Game.
+- **`messages`** — the story of a Game in order. Each row is one Message, written by a transaction. There is exactly one story per game.
 - **`message_swipes`** — the Swipes of a Message. A Swipe holds the text, the stored inputs of its generation (so a Retry of that Swipe re-applies the same steering), the maker and its Swipe state.
-- **`game_docks`** — the dock record of a Game: the offered set and the notice.
+- **`game_docks`** — the dock record of a Game: the offered set and the Options failure.
 
 ### World catalogue cluster
 
 - **`worlds`** — world definitions, identified by a unique `key`. Root of the world catalogue: `maps` and `characters` belong to a world.
 - **`maps`** — map data per world.
-- **`characters`** — NPC definitions per world. Each character has a unique `key` within its world.
+- **`characters`** — Character definitions per world. Each Character has a unique `key` within its world.
 - **`personas`** — player personas, identified by a unique `key`. Stands alone — no SQL FK relationships — but referenced logically by `games.persona_key`.
 
 ### Standalone tables
 
-- **`llm_messages`** — forensics log of LLM API calls, for debugging and prompt engineering. Pruned automatically to a fixed row cap.
+- **`llm_messages`** — the LLM messages: one row for each model call, for debugging and prompt engineering. Pruned automatically to a fixed row cap.
 - **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is a text key. Storage reads, writes and deletes the rows and counts the Games that hold a preset in their preset slots. `PromptPresetService` in the application layer chooses the preset of a Game and decides whether an edit or a delete is allowed.
 
 ## Relationships
@@ -108,7 +108,7 @@ The schema has 11 tables, organized into three logical clusters:
 
 ```mermaid
 flowchart TD
-    games["games<br/>session record"]
+    games["games<br/>Game record"]
     messages["messages<br/>the story"]
     swipes["message_swipes<br/>texts and Swipe states"]
     docks["game_docks<br/>dock record"]
@@ -126,7 +126,7 @@ A Swipe holds its own Swipe state, so a swipe switch needs no second record: the
 flowchart TD
     worlds["worlds<br/>world definitions"]
     maps["maps<br/>per-world map data"]
-    characters["characters<br/>per-world NPCs"]
+    characters["characters<br/>per-world Characters"]
     personas["personas<br/>player personas"]
 
     worlds -->|"1 → ∞, cascades"| maps
@@ -144,7 +144,7 @@ Several relationships between clusters are **not** SQL foreign keys. Integrity f
 
 The story has two pieces: `Message` and `Swipe`.
 
-- **`Message`** — a single narrative unit. It holds the kind and the active Swipe.
+- **`Message`** — one item of a Game's story. It holds the kind and the active Swipe.
 - **`Swipe`** — one text of a `Message`. The content fields live on the Swipe.
 
 Persistence mirrors this split: identity fields live on `messages`, and content fields live on `message_swipes`.

@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::trigger_context::EventRecord;
+use super::event_record::EventRecord;
 
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

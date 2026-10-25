@@ -1,4 +1,4 @@
-use crate::domain::model::character::{CharacterSheet, NpcCard};
+use crate::domain::model::character::{CharacterSheet, CharacterCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
@@ -121,8 +121,8 @@ fn storage_with_world() -> (Storage, i64) {
     (storage, world_id)
 }
 
-fn test_character_card(id: &str, name: &str) -> NpcCard {
-    NpcCard {
+fn test_character_card(id: &str, name: &str) -> CharacterCard {
+    CharacterCard {
         id: id.to_string(),
         sheet: CharacterSheet {
             name: name.to_string(),

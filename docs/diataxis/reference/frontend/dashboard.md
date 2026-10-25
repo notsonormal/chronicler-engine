@@ -27,13 +27,13 @@ The Game tab has four regions: the story log, the visual sidebar, the options do
 
 - **Story log** — the story window of the Game: its newest Messages, in order.
 - **Visual sidebar** — the image of the current room and the portraits of the Characters in it.
-- **Action area** — the command input, the Autoplay control, the text-check preview, and the status display.
+- **Action area** — the Action input, the Autoplay control, the text-check preview, and the status display.
 
 Each live region polls its own fragment.
 
 The action area is in one of five states: **Idle**, **Checking**, **Generating**, **Autoplay**, and **Preview**. When the text check is on, the text check sits between a typed send and the request to the engine. The status display shows the step of the running Job, or the failure line of the last Job.
 
-The Autoplay control holds a cycle budget and a start button. While an Autoplay run holds the Game, the action area is in the Autoplay state: it shows a Stop control in place of the command input and the Autoplay control, and the status display shows the cycle of the run. The Game is view-only: the controls that change the story and the Game's config are disabled, and the Games list marks the Game. Reading, scrolling and the Game switch stay open.
+The Autoplay control holds a cycle budget and a start button. While an Autoplay run holds the Game, the action area is in the Autoplay state: it shows a Stop control in place of the Action input and the Autoplay control, and the status display shows the cycle of the run. The Game is view-only: the controls that change the story and the Game's config are disabled, and the Games list marks the Game. Reading, scrolling and the Game switch stay open.
 
 ## Failures and Health
 
@@ -52,7 +52,7 @@ The server owns the three role states. It reads them from the LLM Messages recor
 
 Each story-log entry is one Message. Edit sits on every entry. The last entry alone carries Retrigger and Delete.
 
-A swipe switch makes the target Swipe active, so every region shows the Swipe state of that Swipe. Only the last Message shows swipe controls. Retry adds a new swipe to it. Retrigger runs the stored trigger context's trigger narration again, as a new event Message.
+A swipe switch makes the target Swipe active, so every region shows the Swipe state of that Swipe. Only the last Message shows swipe controls. Retry adds a new swipe to it. Retrigger runs the stored event record's trigger narration again, as a new event Message.
 
 ## Management Panels
 

@@ -19,7 +19,7 @@ async fn check_option_click_during_generation_does_not_submit(
     wait_for_element_children(&page, "#options-dock .option-item", 3).await;
 
     // The stub's acknowledgement lands "Thinking..." in the status
-    // display, so the dock's options outlive their turn.
+    // display, so the dock's options outlive their Job.
     send_action(&page, "look").await;
     let requests_before = actions.count();
     assert_eq!(

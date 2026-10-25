@@ -62,7 +62,7 @@ async fn test_switch_swipe_leaves_the_game_idle_http() {
     let resp = post_empty(&app, &format!("/message/{message_id}/swipe/{target}")).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let status = fetch_body(&app, "/status/generating").await;
+    let status = fetch_body(&app, "/status/busy").await;
     assert_eq!(
         status.trim(),
         "idle",

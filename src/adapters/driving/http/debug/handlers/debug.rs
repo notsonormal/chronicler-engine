@@ -29,7 +29,7 @@ pub async fn debug_state_handler(
     Ok(Json(view))
 }
 
-pub async fn debug_is_generating_handler(
+pub async fn debug_is_busy_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
 ) -> String {

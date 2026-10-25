@@ -38,7 +38,7 @@ Seeding completes before the HTTP server starts. A malformed world, persona, or 
 
 Bootstrap picks the newest Game of the selected World through `GameCatalogue`.
 A World with no Game gets one through
-`GameCatalogue::create_game`, the path the Games page uses. That path writes the Game, its dock record and its opening Narration in one save unit.
+`GameCatalogue::create_game`, the path the Games page uses. That path writes the Game, its dock record and its opening Narration in one transaction.
 
 Every Game is idle after a start. The holders of the busy state live in memory.
 
@@ -60,7 +60,7 @@ The engine reads seed data from JSON files under `data/` during bootstrap. The f
 
 | Schema file | Defines |
 |---|---|
-| `data/schemas/character.schema.json` | Shared `CharacterSheet` shape that both `PersonaCard` and `NpcCard` flatten. |
+| `data/schemas/character.schema.json` | Shared `CharacterSheet` shape that both `PersonaCard` and `CharacterCard` flatten. |
 | `data/schemas/world.schema.json` | `WorldManifest` on-disk world shape. |
 | `data/schemas/map.schema.json` | `MapDef` world map shape. |
 | `data/schemas/settings.schema.json` | `AppSettings` engine settings file shape. |
@@ -72,16 +72,16 @@ The schema files are authoritative for seed-file fields and validation.
 ### Character identity and file locations
 
 - `PersonaCard.key` is the JSON filename stem. The loader sets it from the persona filename; it is not part of the persona seed-file shape.
-- `NpcCard.id` is a field in the NPC seed file.
-- NPC files live at `data/characters/<group>/*.json`, where `<group>` is the world's `characters_dir` value. When that value is empty, the loader uses the world `id`.
+- `CharacterCard.id` is a field in the Character seed file.
+- Character files live at `data/characters/<group>/*.json`, where `<group>` is the world's `characters_dir` value. When that value is empty, the loader uses the world `id`.
 
 ### Seed-only world pointers
 
 `WorldManifest.map_file` and `WorldManifest.characters_dir` are file pointers used during seeding. Conversion to `WorldCard` strips those pointers, so the runtime world card carries no filesystem locations.
 
-### Persona and NPC roles
+### Persona and Character cards
 
-`PersonaCard` carries the shared character data. `triggers` and `relationships` belong to `NpcCard` and are NPC-only concerns.
+`PersonaCard` carries the shared character data. `triggers` and `relationships` belong to `CharacterCard` and are Character-only concerns.
 
 ### Trigger requirements
 

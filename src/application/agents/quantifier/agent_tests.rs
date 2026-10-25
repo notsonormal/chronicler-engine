@@ -9,13 +9,13 @@ use crate::domain::model::agent::{
     AgentConfig, AgentSettings, BackendSelector, HookInput, Role, WorldView,
 };
 use crate::domain::model::quantifier::QuantifierResult;
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
-use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona};
 use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
 
-const NPC_ID: &str = "npc_1";
+const CHARACTER_ID: &str = "character_1";
 
 fn config() -> AgentConfig {
     AgentConfig {
@@ -34,8 +34,8 @@ fn quantifier(model: Arc<ScriptedModel>) -> QuantifierAgent {
 struct Turn {
     map: MapDef,
     persona: crate::domain::model::character::PersonaCard,
-    characters: HashMap<String, NpcCard>,
-    present: Vec<NpcCard>,
+    characters: HashMap<String, CharacterCard>,
+    present: Vec<CharacterCard>,
     story: Vec<StoryRow>,
     text: String,
 }
@@ -44,16 +44,16 @@ impl Turn {
     fn new() -> Self {
         let map = TestMap::single_room("start");
         let persona = TestPersona::standard();
-        let npcs = vec![TestNpc::named(NPC_ID, "Test NPC")];
-        let characters = npcs
+        let present = vec![TestCharacter::named(CHARACTER_ID, "Test Character")];
+        let characters = present
             .iter()
-            .map(|npc| (npc.id.clone(), npc.clone()))
+            .map(|character| (character.id.clone(), character.clone()))
             .collect();
         Self {
             map,
             persona,
             characters,
-            present: npcs.clone(),
+            present,
             story: vec![StoryRow {
                 message_type: MessageType::Narration,
                 text: "The innkeeper glances your way.".to_string(),
@@ -109,7 +109,7 @@ fn settings() -> AgentSettings {
 fn test_the_agent_returns_a_quantifier_result() {
     let turn = Turn::new();
     let model = Arc::new(ScriptedModel::new().after_narration(
-        r#"{"npcs_in_room": ["npc_1"], "movement": {"type": "Entering", "destination": "room2"}}"#,
+        r#"{"characters_present": ["character_1"], "movement": {"type": "Entering", "destination": "room2"}}"#,
     ));
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
@@ -119,30 +119,48 @@ fn test_the_agent_returns_a_quantifier_result() {
     assert_eq!(
         result,
         QuantifierResult {
-            present: vec![NPC_ID.to_string()],
+            present: vec![CHARACTER_ID.to_string()],
             destination: Some("room2".to_string()),
         }
     );
 }
 
-// CASE quantifier-npc-ids: a parsed room report names the Characters present.
+// CASE quantifier-character-ids: a parsed room report names the Characters present.
 #[test]
 fn test_parsed_report_names_the_characters_present() {
     let turn = Turn::new();
-    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"npcs_in_room": ["npc_1"]}"#));
+    let model = Arc::new(
+        ScriptedModel::new().after_narration(r#"{"characters_present": ["character_1"]}"#),
+    );
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
         .expect("a parsed report is a result");
 
-    assert_eq!(result.present, vec![NPC_ID.to_string()]);
+    assert_eq!(result.present, vec![CHARACTER_ID.to_string()]);
 }
 
-// CASE quantifier-empty-report: an empty report replaces the scene's Characters.
+// CASE quantifier-old-field: an answer that names the Characters present in the field `npcs_in_room` still parses.
+#[test]
+fn test_an_answer_with_the_old_field_name_still_parses() {
+    let turn = Turn::new();
+    let model = Arc::new(ScriptedModel::new().after_narration(
+        r#"{"npcs_in_room": ["character_1"], "movement": {"type": "Entering", "destination": "room2"}}"#,
+    ));
+    let world = turn.world();
+    let result = quantifier(Arc::clone(&model))
+        .run(&turn.input(&world), &settings())
+        .expect("an answer with the old field is a result");
+
+    assert_eq!(result.present, vec![CHARACTER_ID.to_string()]);
+    assert_eq!(result.destination.as_deref(), Some("room2"));
+}
+
+// CASE quantifier-empty-report: an empty report replaces the Characters present.
 #[test]
 fn test_an_empty_report_replaces_the_scenes_characters() {
     let turn = Turn::new();
-    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"npcs_in_room": []}"#));
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
@@ -159,14 +177,15 @@ fn test_an_empty_report_replaces_the_scenes_characters() {
 fn test_an_unknown_character_id_is_dropped() {
     let turn = Turn::new();
     let model = Arc::new(
-        ScriptedModel::new().after_narration(r#"{"npcs_in_room": ["npc_1", "someone_else"]}"#),
+        ScriptedModel::new()
+            .after_narration(r#"{"characters_present": ["character_1", "someone_else"]}"#),
     );
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
         .run(&turn.input(&world), &settings())
         .expect("a parsed report is a result");
 
-    assert_eq!(result.present, vec![NPC_ID.to_string()]);
+    assert_eq!(result.present, vec![CHARACTER_ID.to_string()]);
 }
 
 // CASE quantifier-movement: a parsed report names the room the player enters.
@@ -174,7 +193,7 @@ fn test_an_unknown_character_id_is_dropped() {
 fn test_parsed_report_names_the_room_the_player_enters() {
     let turn = Turn::new();
     let model = Arc::new(ScriptedModel::new().after_narration(
-        r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#,
+        r#"{"characters_present": [], "movement": {"type": "Entering", "destination": "room2"}}"#,
     ));
     let world = turn.world();
     let result = quantifier(Arc::clone(&model))
@@ -184,7 +203,7 @@ fn test_parsed_report_names_the_room_the_player_enters() {
     assert_eq!(result.destination.as_deref(), Some("room2"));
 }
 
-// CASE quantifier-low-confidence: an unparseable answer falls back to the scene's Characters.
+// CASE quantifier-low-confidence: an unparseable answer falls back to the Characters present.
 #[test]
 fn test_an_unparseable_answer_keeps_the_scenes_characters() {
     let turn = Turn::new();
@@ -198,7 +217,7 @@ fn test_an_unparseable_answer_keeps_the_scenes_characters() {
         .run(&turn.input(&world), &settings())
         .expect("the fallback is a result");
 
-    assert_eq!(result.present, vec![NPC_ID.to_string()]);
+    assert_eq!(result.present, vec![CHARACTER_ID.to_string()]);
     assert_eq!(result.destination, None);
 }
 
@@ -210,7 +229,7 @@ fn test_a_low_confidence_answer_is_read_again() {
         ScriptedModel::new()
             .after_narration("no report in this answer")
             .after_narration(
-                r#"{"npcs_in_room": [], "movement": {"type": "Entering", "destination": "room2"}}"#,
+                r#"{"characters_present": [], "movement": {"type": "Entering", "destination": "room2"}}"#,
             ),
     );
     let world = turn.world();
@@ -229,7 +248,7 @@ fn test_a_low_confidence_answer_is_read_again() {
     );
 }
 
-// CASE quantifier-transport-failure: both attempts fail and the fallback keeps the scene's Characters.
+// CASE quantifier-transport-failure: both attempts fail and the fallback keeps the Characters present.
 #[test]
 fn test_a_transport_failure_keeps_the_scenes_characters() {
     let turn = Turn::new();
@@ -243,7 +262,7 @@ fn test_a_transport_failure_keeps_the_scenes_characters() {
         .run(&turn.input(&world), &settings())
         .expect("the fallback is a result");
 
-    assert_eq!(result.present, vec![NPC_ID.to_string()]);
+    assert_eq!(result.present, vec![CHARACTER_ID.to_string()]);
 }
 
 // CASE quantifier-no-text: a hook input without saved text fails.
@@ -272,7 +291,7 @@ fn test_a_hook_input_without_a_room_fails() {
 #[test]
 fn test_the_settings_preset_reaches_the_prompt() {
     let turn = Turn::new();
-    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"npcs_in_room": []}"#));
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
     let settings = AgentSettings {
         preset: Some("Report the Characters for {{user}}.".to_string()),
         max_tokens: None,
@@ -297,7 +316,7 @@ fn test_the_settings_preset_reaches_the_prompt() {
 #[test]
 fn test_a_good_call_is_recorded_with_its_prompts() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
-    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"npcs_in_room": []}"#));
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
     let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
     let agent = QuantifierAgent::from_config(&config(), recorder).expect("the quantifier builds");
     let turn = Turn::new();

@@ -3,7 +3,7 @@
 const SLASH_COMMANDS = [
   { cmd: "/impersonate", desc: "Write as the player persona" },
   { cmd: "/guide", desc: "Steer the next generation (Guided Generation)" },
-  { cmd: "/options", desc: "Suggest actions (generate pickable options)" },
+  { cmd: "/options", desc: "Offer Options to pick from" },
 ];
 let slashMenu = null;
 let slashMatches = [];

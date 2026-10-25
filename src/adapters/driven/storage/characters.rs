@@ -4,12 +4,12 @@
 use chrono::Utc;
 
 use crate::error::{DatabaseContext, EngineError};
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::adapters::driven::storage::models::character::DbCharacter;
 
 impl Storage {
-    pub fn list_characters(&self, world_id: i64) -> Result<Vec<NpcCard>, EngineError> {
+    pub fn list_characters(&self, world_id: i64) -> Result<Vec<CharacterCard>, EngineError> {
         self.with_backend_mut(StorageCall::ListCharacters, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
@@ -26,7 +26,11 @@ impl Storage {
         })
     }
 
-    pub fn get_character(&self, world_id: i64, key: &str) -> Result<Option<NpcCard>, EngineError> {
+    pub fn get_character(
+        &self,
+        world_id: i64,
+        key: &str,
+    ) -> Result<Option<CharacterCard>, EngineError> {
         self.with_backend_mut(StorageCall::GetCharacter, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
@@ -43,7 +47,7 @@ impl Storage {
         })
     }
 
-    pub fn seed_character(&self, world_id: i64, card: &NpcCard) -> Result<(), EngineError> {
+    pub fn seed_character(&self, world_id: i64, card: &CharacterCard) -> Result<(), EngineError> {
         self.with_backend_mut(StorageCall::SeedCharacter, |backend| match backend {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();

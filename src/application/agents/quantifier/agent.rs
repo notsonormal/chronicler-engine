@@ -13,7 +13,7 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::LlmProvider;
 
 use super::types::QuantifierReading;
-use super::utils::orchestration::determine_npcs_in_room;
+use super::utils::orchestration::determine_characters_present;
 
 pub struct QuantifierAgent {
     name: String,
@@ -59,7 +59,7 @@ impl AfterNarrationAgent for QuantifierAgent {
         input: &HookInput,
         settings: &AgentSettings,
     ) -> Result<QuantifierResult, EngineError> {
-        determine_npcs_in_room(input, self.recorder.as_ref(), settings)
+        determine_characters_present(input, self.recorder.as_ref(), settings)
             .map(QuantifierReading::into_result)
     }
 }

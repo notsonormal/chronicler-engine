@@ -7,7 +7,7 @@ use crate::test_support::active_game_of;
 use crate::test_support::TestAppBuilder;
 
 #[tokio::test]
-async fn test_retrigger_handler_returns_400_when_no_trigger_context() {
+async fn test_retrigger_handler_returns_400_when_no_event_record() {
     let state = TestAppBuilder::default_test().build_service();
 
     let response = retrigger_handler(
@@ -18,7 +18,7 @@ async fn test_retrigger_handler_returns_400_when_no_trigger_context() {
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
-        "a Retrigger with no trigger context is refused as a bad request"
+        "a Retrigger with no event record is refused as a bad request"
     );
 }
 

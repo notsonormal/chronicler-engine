@@ -67,7 +67,7 @@ pub async fn llm_messages_fragment(State(state): State<AppState>) -> Response<Bo
     render_fragment(&state, |s| s.render_llm_messages(), "llm_messages_fragment")
 }
 
-pub async fn generating_status_handler(
+pub async fn busy_status_handler(
     State(state): State<AppState>,
     current: Option<CurrentGame>,
 ) -> Html<String> {
@@ -79,7 +79,7 @@ pub async fn generating_status_handler(
         Ok(Status::Failed(failure)) => Html(failure_disclosure(&failure)),
         Ok(Status::Idle) => Html("idle".to_string()),
         Err(e) => {
-            tracing::error!("generating_status_handler: {e}");
+            tracing::error!("busy_status_handler: {e}");
             Html(failure_disclosure(&GenerationFailure::unreadable(
                 Record::Game,
                 &e,
@@ -110,7 +110,7 @@ fn failure_disclosure(failure: &GenerationFailure) -> String {
     )
 }
 
-pub async fn reset_generating_handler(
+pub async fn reset_busy_handler(
     State(state): State<AppState>,
     current: Option<CurrentGame>,
 ) -> Html<String> {
@@ -120,7 +120,7 @@ pub async fn reset_generating_handler(
     match state.game_writer.stop(game_id) {
         Ok(()) => Html("reset".to_string()),
         Err(e) => {
-            tracing::error!("reset_generating_handler: {e}");
+            tracing::error!("reset_busy_handler: {e}");
             Html("failed".to_string())
         }
     }

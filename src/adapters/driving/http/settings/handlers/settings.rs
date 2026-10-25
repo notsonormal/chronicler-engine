@@ -18,7 +18,7 @@ use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id
 use crate::application::connection_test_service::ConnectionTestResult;
 use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig, ReasoningEffort, TextCheckMode};
+use crate::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort, TextCheckMode};
 use crate::error::EngineError;
 
 pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
@@ -118,11 +118,11 @@ impl ConnectionForm {
     /// The one mapping from the form to a connection, shared by add, edit and the
     /// form test. `id` is the stored connection id, or empty for testing unsaved
     /// form values. The form does not own `max_tokens`, so it comes back `None`.
-    fn into_config(self, id: String) -> Result<LlmProviderConfig, String> {
+    fn into_config(self, id: String) -> Result<LlmConnection, String> {
         let provider = self.resolved_provider()?;
         let max_context_tokens = self.resolved_max_context_tokens()?;
         let reasoning_effort = self.resolved_reasoning_effort()?;
-        Ok(LlmProviderConfig {
+        Ok(LlmConnection {
             id,
             name: self.conn_name,
             provider,
@@ -225,7 +225,7 @@ pub async fn edit_connection_handler(
         .settings_service
         .update_connection(&id, move |connection| {
             let max_tokens = connection.max_tokens;
-            *connection = LlmProviderConfig {
+            *connection = LlmConnection {
                 max_tokens,
                 ..replacement
             };

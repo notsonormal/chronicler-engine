@@ -53,15 +53,15 @@ impl<'a> OptionsPromptBuilder<'a> {
 
         prompt.push_str("</CurrentRoom>\n\n");
 
-        if !self.context.npcs_in_area.is_empty() {
-            prompt.push_str("<NpcsInArea>\n");
-            for npc in self.context.npcs_in_area {
+        if !self.context.characters_present.is_empty() {
+            prompt.push_str("<CharactersPresent>\n");
+            for character in self.context.characters_present {
                 prompt.push_str(&format!(
-                    "  <Npc id=\"{}\" name=\"{}\">{}</Npc>\n",
-                    npc.id, npc.sheet.name, npc.sheet.description
+                    "  <Character id=\"{}\" name=\"{}\">{}</Character>\n",
+                    character.id, character.sheet.name, character.sheet.description
                 ));
             }
-            prompt.push_str("</NpcsInArea>\n\n");
+            prompt.push_str("</CharactersPresent>\n\n");
         }
 
         if !self.context.recent_history.is_empty() {

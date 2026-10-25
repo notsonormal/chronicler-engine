@@ -38,7 +38,7 @@ Then the primary button is enabled again with a "Send" label
 ```gherkin
 Given the client submitted a command the text-check preview intercepted, so the preview is open
 When the client confirms the preview
-And the /status/generating poll returns an error fragment
+And the /status/busy poll returns an error fragment
 Then the status display shows the error's short line
 And the command form is still in the document
 And the raw error text is not visible until the client opens the Details disclosure
@@ -92,7 +92,7 @@ And the Settings panel is the visible one
 ```gherkin
 Given the dashboard is loaded
 Then a skip link targets the main landmark
-And a label names the command input "Command"
+And a label names the command input "Action"
 ```
 
 #### Scenario 16.18: A failed poll leaves its region unchanged and marks the banner

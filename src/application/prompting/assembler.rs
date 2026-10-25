@@ -12,10 +12,10 @@ use crate::domain::model::world::WorldCard;
 use crate::application::prompting::token_budget as budget;
 use crate::application::prompting::token_budget::{truncate_to_budget, TokenBudget};
 use crate::application::prompting::builders::sections::{
-    build_post_history_prompt, build_system_prompt, render_known_npc_entry,
+    build_post_history_prompt, build_system_prompt, render_known_character_entry,
     render_present_relationships, sanitize_for_prompt,
 };
-use crate::application::prompting::types::NpcContext;
+use crate::application::prompting::types::CharacterContext;
 use crate::application::prompting::utils::context::fit_messages_to_context;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,7 +33,7 @@ pub struct PromptContext<'a> {
     pub narrative_perspective: NarrativePerspective,
     pub narrative_tense: NarrativeTense,
     pub room: &'a Room,
-    pub npcs: NpcContext<'a>,
+    pub characters: CharacterContext<'a>,
     pub persona: &'a PersonaCard,
     pub user_message: &'a str,
     pub history: &'a [StoryRow],
@@ -72,7 +72,7 @@ impl PromptAssembler {
         let renderer = LayerRenderer {
             world: context.world,
             room: context.room,
-            npcs: context.npcs,
+            characters: context.characters,
             persona: context.persona,
             user_message: context.user_message,
             history: context.history,
@@ -111,7 +111,7 @@ impl PromptContext<'_> {
         narrative_perspective: NarrativePerspective,
         narrative_tense: NarrativeTense,
         room: &'a Room,
-        npcs: NpcContext<'a>,
+        characters: CharacterContext<'a>,
         persona: &'a PersonaCard,
         user_message: &'a str,
         history: &'a [StoryRow],
@@ -121,7 +121,7 @@ impl PromptContext<'_> {
             narrative_perspective,
             narrative_tense,
             room,
-            npcs,
+            characters,
             persona,
             user_message,
             history,
@@ -148,7 +148,7 @@ impl PromptContext<'_> {
 struct LayerRenderer<'a> {
     world: &'a WorldCard,
     room: &'a Room,
-    npcs: NpcContext<'a>,
+    characters: CharacterContext<'a>,
     persona: &'a crate::domain::model::character::PersonaCard,
     user_message: &'a str,
     history: &'a [StoryRow],
@@ -169,7 +169,7 @@ impl<'a> LayerRenderer<'a> {
 
         let user = [
             self.render_game_state_layer(),
-            self.render_npc_cards_layer(),
+            self.render_character_cards_layer(),
             self.render_persona_layer(),
             self.render_world_info_layer(),
             self.render_history_layer(),
@@ -195,7 +195,7 @@ impl<'a> LayerRenderer<'a> {
 
     fn render_game_state_layer(&self) -> String {
         let mut output = String::from("<GameState>\n");
-        output.push_str("Current Location: ");
+        output.push_str("Current Room: ");
         output.push_str(&self.room.name);
         output.push_str("\n\n");
         output.push_str(&self.template_vars.render(&self.room.description));
@@ -204,52 +204,52 @@ impl<'a> LayerRenderer<'a> {
         output
     }
 
-    fn render_npc_cards_layer(&self) -> String {
+    fn render_character_cards_layer(&self) -> String {
         let mut output = String::new();
         let in_area_ids: std::collections::HashSet<_> = self
-            .npcs
-            .npcs_in_area
+            .characters
+            .characters_present
             .iter()
             .map(|n| n.id.as_str())
             .collect();
 
-        output.push_str("<KnownNpcs>");
-        if self.npcs.all_npcs.is_empty() {
+        output.push_str("<KnownCharacters>");
+        if self.characters.all_characters.is_empty() {
             output.push_str("No characters in this world.\n");
         } else {
-            for npc in self.npcs.all_npcs {
-                output.push_str(&render_known_npc_entry(
-                    npc,
+            for character in self.characters.all_characters {
+                output.push_str(&render_known_character_entry(
+                    character,
                     &in_area_ids,
                     self.template_vars,
                 ));
             }
         }
-        output.push_str("</KnownNpcs>\n\n");
+        output.push_str("</KnownCharacters>\n\n");
 
-        output.push_str("<NpcsInRoom>");
-        if self.npcs.npcs_in_area.is_empty() {
-            output.push_str("No NPCs are present in this location.\n");
+        output.push_str("<CharactersPresent>");
+        if self.characters.characters_present.is_empty() {
+            output.push_str("No Characters are present in this Room.\n");
         } else {
-            for npc in self.npcs.npcs_in_area {
+            for character in self.characters.characters_present {
                 output.push_str("--- ");
-                output.push_str(&npc.sheet.name);
+                output.push_str(&character.sheet.name);
                 output.push_str(" ---\n");
                 output.push_str("Description: ");
-                output.push_str(&self.template_vars.render(&npc.sheet.description));
+                output.push_str(&self.template_vars.render(&character.sheet.description));
                 output.push('\n');
                 output.push_str("Personality: ");
-                output.push_str(&self.template_vars.render(&npc.sheet.personality));
+                output.push_str(&self.template_vars.render(&character.sheet.personality));
                 output.push('\n');
-                if !npc.sheet.scenario.is_empty() {
+                if !character.sheet.scenario.is_empty() {
                     output.push_str("Context: ");
-                    output.push_str(&self.template_vars.render(&npc.sheet.scenario));
+                    output.push_str(&self.template_vars.render(&character.sheet.scenario));
                     output.push('\n');
                 }
 
                 let relations_block = render_present_relationships(
-                    npc,
-                    self.npcs.all_npcs,
+                    character,
+                    self.characters.all_characters,
                     &in_area_ids,
                     self.template_vars,
                 );
@@ -260,7 +260,7 @@ impl<'a> LayerRenderer<'a> {
                 output.push('\n');
             }
         }
-        output.push_str("</NpcsInRoom>\n");
+        output.push_str("</CharactersPresent>\n");
 
         output
     }
@@ -269,7 +269,7 @@ impl<'a> LayerRenderer<'a> {
         if self.impersonate {
             return String::new();
         }
-        let mut output = String::from("<PlayerCharacter>\n");
+        let mut output = String::from("<Persona>\n");
         output.push_str("Name: ");
         output.push_str(&self.persona.sheet.name);
         output.push_str("\n\n");
@@ -283,7 +283,7 @@ impl<'a> LayerRenderer<'a> {
         output.push_str(&self.template_vars.render(&self.persona.sheet.scenario));
         output.push('\n');
 
-        output.push_str("</PlayerCharacter>\n");
+        output.push_str("</Persona>\n");
         output
     }
 

@@ -46,7 +46,7 @@ chrome_devtools_evaluate(expression="(async () => { for (let i = 0; i < 30; i++)
 
 **Each `chrome_devtools_evaluate` call has a fixed 10 s cap** (`Timed out waiting for CDP response: Runtime.evaluate`), and an LLM turn takes longer. Click in one call, then poll in short calls of 8 s or less until the state you want appears. A timed-out call does not stop the page's JS or undo the click. Poll again, and keep the browser running.
 
-For a turn in flight, poll `#status-display` until it reads "Ready" — during generation it reads "Thinking", "Narrating", "Generating" or "Quantifying" (spec 16.6). `/status/generating` returns a bare phase name or `idle`, and `onStatusPoll` maps `idle` to "Ready" in the DOM, so poll the element, not the endpoint.
+While a Job runs, poll `#status-display` until it reads "Ready" — during generation it reads "Thinking", "Narrating", "Generating" or "Quantifying" (spec 16.6). `/status/busy` returns a bare step name or `idle`, and `onStatusPoll` maps `idle` to "Ready" in the DOM, so poll the element, not the endpoint.
 
 Done when the surface under test is on screen.
 
@@ -57,7 +57,7 @@ Done when the surface under test is on screen.
 chrome_devtools_evaluate(expression="(() => ({ title: document.title, sections: [...document.querySelectorAll('[id]')].map(e => e.id).slice(0, 30), storyLogEntries: document.querySelectorAll('#story-log .log-entry').length, actionArea: !!document.querySelector('#action-area'), statusDisplay: document.querySelector('#status-display')?.textContent.trim() }))()")
 
 // Fragments and status respond from page context, leaving the dashboard loaded
-chrome_devtools_evaluate(expression="(async () => { const paths = ['/fragment/options-dock', '/fragment/character-headshots', '/status/generating']; const out = {}; for (const p of paths) { out[p] = (await fetch(p)).status; } return out; })()")
+chrome_devtools_evaluate(expression="(async () => { const paths = ['/fragment/options-dock', '/fragment/character-headshots', '/status/busy']; const out = {}; for (const p of paths) { out[p] = (await fetch(p)).status; } return out; })()")
 
 // Shot — returns the image inline and writes it to savePath (a temp file if omitted)
 chrome_devtools_screenshot(savePath="tmp/chronicler-ui.png")
@@ -65,7 +65,7 @@ chrome_devtools_screenshot(savePath="tmp/chronicler-ui.png")
 
 For a long review, or for a viewport other than the default, use `node scripts/cdp.mjs shot`: see ENVIRONMENT.md's *Long reviews and viewports*.
 
-For a post-plan pass, fetch the full dashboard set instead — `header`, `story-log`, `visual-sidebar`, `options-dock`, `character-headshots`, `settings`, `prompt-presets`, `games`, `worlds`, `llm-messages` — plus `/status/generating`, and confirm each is 200.
+For a post-plan pass, fetch the full dashboard set instead — `header`, `story-log`, `visual-sidebar`, `options-dock`, `character-headshots`, `settings`, `prompt-presets`, `games`, `worlds`, `llm-messages` — plus `/status/busy`, and confirm each is 200.
 
 **Done only when you have looked at a shot.** A green test, a DOM dump, a clean engine log and a delegated agent's report are each narrower evidence, and none of them stands in for a shot of the rendered page that you have personally compared against expectations. Write findings to the ticket as they are established, so a dead session costs the shots rather than the analysis. Console messages have no tool equivalent. A hand-started server writes its log to `logs/chronicler_<date>.<date>.log` under its working directory, for example `logs/chronicler_20261009.2026-10-09.log`. Every server started that day writes to the same file. Filter it by time or by request id. The server's stdout shows only the build. Test servers write `tmp/test_server_logs/{port}_{stream}.log` (see `tests/AGENTS.md`).
 
@@ -104,7 +104,7 @@ Selector vocabulary: `docs/specs/browser_*.md`, enforced in `tests/browser/` (`d
 
 | Symptom | Check |
 |---|---|
-| Status display frozen | `/status/generating`; `#status-display` swaps on its own 5s poll |
+| Status display frozen | `/status/busy`; `#status-display` swaps on its own 5s poll |
 | Capability tool missing | `chrome_devtools_load`; loader missing → `/reload` |
 | Endpoint unreachable, or `Page.enable` times out | `/home/node/.pi/start-browser.sh`, then retry |
 | `Timed out waiting for CDP response: Runtime.evaluate` | The 10 s cap (step 2). The page's JS is still running. Poll again in a short call |

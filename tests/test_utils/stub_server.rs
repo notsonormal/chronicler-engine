@@ -31,7 +31,7 @@ use chronicler_engine::application::games::view_query::RoleHealth;
 use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::llm_message::LlmMessage;
 use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
-use chronicler_engine::domain::model::settings::{AppSettings, LlmProviderConfig, NarratorMode};
+use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection, NarratorMode};
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 use chronicler_engine::domain::model::state::message_types::{StoryRow, MessageType};
 use chronicler_engine::test_support::default_story_row;
@@ -51,7 +51,7 @@ fn header_html(degraded: bool) -> String {
         vec![RoleHealth {
             role: Role::Quantifier,
             backend_model: Some("Mock mock".to_string()),
-            last_error: Some("fallback NPC IDs used".to_string()),
+            last_error: Some("Characters present kept".to_string()),
         }]
     } else {
         Vec::new()
@@ -64,14 +64,14 @@ const NARRATIVE_TEXT: &str = "Welcome to the Test World, Test Player! This is a 
 
 fn story_log_html(entries: &[StoryRow]) -> String {
     use askama::Template;
-    use chronicler_engine::adapters::driving::http::templates::NarrativeLogTemplate;
+    use chronicler_engine::adapters::driving::http::templates::NarrationLogTemplate;
     use chronicler_engine::test_support::fixtures::window_entries;
 
     let mut window = window_entries(entries);
     if let Some(opening) = window.iter_mut().find(|entry| entry.row.id == 1) {
         opening.room_header = Some("Test Tavern".to_string());
     }
-    NarrativeLogTemplate::new(&window, true, false)
+    NarrationLogTemplate::new(&window, true, false)
         .render()
         .expect("render story log")
 }
@@ -127,7 +127,7 @@ fn settings_html() -> String {
         .expect("render settings")
 }
 
-fn connection_form_html(connection: Option<&LlmProviderConfig>) -> String {
+fn connection_form_html(connection: Option<&LlmConnection>) -> String {
     use askama::Template;
 
     ConnectionFormTemplate::new(connection)
@@ -659,7 +659,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         // The real switch makes another Swipe active; the stub scripts only the two
         // log shapes and the dock drop a switch test observes.
         .route("/message/:id/swipe/:index", post(switch_swipe))
-        .route("/status/generating", get(status_generating))
+        .route("/status/busy", get(status_busy))
         .route("/fragment/header", get(header_fragment))
         .route("/fragment/story-log", get(story_log_fragment))
         .route(
@@ -769,7 +769,7 @@ async fn fail_polls_middleware(
         )
             .into_response();
     }
-    let is_poll = path.starts_with("/fragment/") || path == "/status/generating";
+    let is_poll = path.starts_with("/fragment/") || path == "/status/busy";
     if is_poll && state.polls_failing.load(SeqCst) {
         let mut response = (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -890,7 +890,7 @@ async fn action_check(
     }
 }
 
-async fn status_generating(State(state): State<Arc<StubState>>) -> Response<Body> {
+async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
     let status = state
         .status
         .lock()

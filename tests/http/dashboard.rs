@@ -1,4 +1,4 @@
-//! HTTP E2E tests for dashboard chrome: the shell's icon sprite, the generating-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
+//! HTTP E2E tests for dashboard chrome: the shell's icon sprite, the busy-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
 
 use std::sync::Arc;
 
@@ -17,15 +17,15 @@ use chronicler_engine::test_support::{
 use crate::support::http_assertions::{defined_icons, referenced_icons};
 use crate::support::http_fixtures::{seed_offered_set, story_of};
 use crate::support::http_requests::{
-    fetch_body, fetch_generating_status, post_action, post_empty, response_body, wait_for_jobs,
+    fetch_body, fetch_busy_status, post_action, post_empty, response_body, wait_for_jobs,
     wait_settled,
 };
 
 // [docs/specs/dashboard.md] SCENARIO: 39.1
 #[tokio::test]
-async fn test_generating_status_answers_from_live_registry() {
+async fn test_busy_status_answers_from_live_registry() {
     assert_eq!(
-        fetch_generating_status(&TestAppBuilder::default_app()).await,
+        fetch_busy_status(&TestAppBuilder::default_app()).await,
         "idle",
         "a Game with no Job and no failure line answers idle"
     );
@@ -41,7 +41,7 @@ async fn test_generating_status_answers_from_live_registry() {
         "the held narrator call should reach the model"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "narrating",
         "a Job at its narrator call answers its step name"
     );
@@ -66,7 +66,7 @@ async fn test_generating_status_answers_from_live_registry() {
         "the held analysis call should reach the model"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "quantifying",
         "a Job at its analysis answers its step name"
     );
@@ -84,7 +84,7 @@ async fn test_generating_status_answers_from_live_registry() {
         wait_settled(&state, 1000).await,
         "the failing Job should end"
     );
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("answer could not be read"),
         "a Game with no Job and a failure line answers that line, got: {status}"
@@ -96,7 +96,7 @@ async fn test_generating_status_answers_from_live_registry() {
 // [docs/specs/dashboard.md] SCENARIO: 39.2
 #[tokio::test]
 async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
-    // A real turn gives the shell a story of more than its opening Narration.
+    // A real Job gives the shell a story of more than its opening Narration.
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::new(ScriptedModel::new().turn("You look around.")))
         .build_with_state();
@@ -161,7 +161,7 @@ async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
     );
 
     assert_eq!(
-        fetch_body(&app, "/debug/is_generating").await,
+        fetch_body(&app, "/debug/is_busy").await,
         "true",
         "a Game with a Job reports true"
     );
@@ -181,7 +181,7 @@ async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
     seed_offered_set(&state, &["Ask the bartender"]);
 
     assert_eq!(
-        fetch_body(&app, "/debug/is_generating").await,
+        fetch_body(&app, "/debug/is_busy").await,
         "false",
         "a Game with no Job reports false"
     );
@@ -210,7 +210,7 @@ async fn test_the_debug_state_names_a_step_only_while_a_job_runs() {
         "the held narrator call should reach the model"
     );
     let json = debug_state_json(&app).await;
-    assert_eq!(json["generation_status"], "Generating", "{json}");
+    assert_eq!(json["generation_status"], "Busy", "{json}");
     assert_eq!(
         json["step"], "Narrating",
         "a Job at its narrator call names its step: {json}"
@@ -231,7 +231,7 @@ async fn test_the_debug_state_names_a_step_only_while_a_job_runs() {
     );
     let json = debug_state_json(&app).await;
     assert_eq!(
-        json["generation_status"]["Error"]["kind"], "UnreadableAnswer",
+        json["generation_status"]["Failed"]["kind"], "UnreadableAnswer",
         "a Game with a failure line reports the kind of that line: {json}"
     );
     assert!(
@@ -283,7 +283,7 @@ async fn stop_dock_read_fails() {
         StorageCall::DocksGet,
         TestOverride::internal("the dock is unreadable"),
     );
-    let stop = post_empty(&app, "/status/reset-generating").await;
+    let stop = post_empty(&app, "/status/reset-busy").await;
     failures.clear_all();
 
     assert_eq!(
@@ -292,7 +292,7 @@ async fn stop_dock_read_fails() {
         "a stop that cannot read the dock answers failed"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "narrating",
         "the Job keeps running: the status still names its step"
     );
@@ -322,7 +322,7 @@ async fn status_read_fails() {
         StorageCall::GetGame,
         TestOverride::internal("the Game is unreadable"),
     );
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
 
     assert!(
         status.contains("The data for this request is missing: the game."),
@@ -340,7 +340,7 @@ async fn stop_with_no_active_game() {
         .build();
 
     assert_eq!(
-        response_body(post_empty(&app, "/status/reset-generating").await).await,
+        response_body(post_empty(&app, "/status/reset-busy").await).await,
         "failed",
         "a stop with no active Game answers failed"
     );
@@ -355,7 +355,7 @@ async fn status_with_no_active_game() {
         .build();
 
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "a status poll with no active Game answers idle"
     );

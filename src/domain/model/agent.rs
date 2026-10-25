@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::character::{CharacterCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::state::generation_status::Step;
 use crate::domain::model::state::message_types::StoryRow;
@@ -16,7 +16,7 @@ pub enum Role {
     Narrator,
     /// Reads a generation's new text and gives the Quantifier result.
     Quantifier,
-    /// Offers the pickable next actions.
+    /// Offers Options to pick from.
     Options,
     /// Fires the configured trigger conditions.
     Trigger,
@@ -46,8 +46,8 @@ pub enum Kind {
     Narration,
     /// The player dictating their own Persona's Message.
     Impersonate,
-    /// A Retry that regenerates the player's own message.
-    UserRegen,
+    /// The Retry of a typed Input: the player's own message is written again.
+    InputRetry,
     /// A Trigger's continuation narration.
     Event,
 }
@@ -84,8 +84,8 @@ pub struct WorldView<'a> {
     pub room: Option<&'a Room>,
     pub map: &'a MapDef,
     pub persona: &'a PersonaCard,
-    pub characters: &'a HashMap<String, NpcCard>,
-    pub present: &'a [NpcCard],
+    pub characters: &'a HashMap<String, CharacterCard>,
+    pub present: &'a [CharacterCard],
 }
 
 /// The hook step owns every read and write an Agent needs.

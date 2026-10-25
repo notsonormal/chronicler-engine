@@ -1,4 +1,4 @@
-use crate::error::{EngineError, InternalError, LlmFailure, NarrativeFailure};
+use crate::error::{EngineError, InternalError, LlmFailure, NarrationFailure};
 
 #[test]
 fn test_engine_error_from_io_error() {
@@ -91,7 +91,7 @@ fn test_llm_error_string_maps_user_facing_messages() {
             "LLM Error: HTTP 503 — unavailable",
         ),
         (
-            EngineError::Narrative(NarrativeFailure::PromptBuild {
+            EngineError::Narration(NarrationFailure::PromptBuild {
                 stage: "assembly",
                 reason: "budget",
             }),
@@ -210,7 +210,7 @@ fn test_llm_failure_display() {
 
 #[test]
 fn test_narrative_failure_display() {
-    let err = NarrativeFailure::Generation {
+    let err = NarrationFailure::Generation {
         stage: "test",
         reason: "failed",
     };
@@ -231,17 +231,17 @@ fn test_llm_failure_into_engine_error() {
 
 #[test]
 fn test_narrative_failure_into_engine_error() {
-    let nar_err = NarrativeFailure::PromptBuild {
+    let nar_err = NarrationFailure::PromptBuild {
         stage: "test",
         reason: "budget",
     };
     let engine_err: EngineError = nar_err.into();
     match engine_err {
-        EngineError::Narrative(NarrativeFailure::PromptBuild { stage, reason }) => {
+        EngineError::Narration(NarrationFailure::PromptBuild { stage, reason }) => {
             assert_eq!(stage, "test");
             assert_eq!(reason, "budget");
         }
-        other => panic!("Expected EngineError::Narrative(PromptBuild), got: {other:?}"),
+        other => panic!("Expected EngineError::Narration(PromptBuild), got: {other:?}"),
     }
 }
 

@@ -34,60 +34,65 @@ pub struct Trigger {
     pub room_id: Option<String>,
 }
 
-/// Per-NPC encounter state.
+/// Per-Character encounter state.
 ///
 /// - `times_met`: Increments on first encounter (Entered from !currently_meeting)
 /// - `currently_meeting`: Set on Entered, cleared on Left
 /// - `trigger_fired`: Fired non-repeatable trigger indices
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct NpcEncounterState {
+pub struct Encounter {
     pub times_met: u32,
     pub trigger_fired: HashMap<usize, bool>,
     pub currently_meeting: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct NpcEncounterLog {
-    pub npcs: HashMap<String, NpcEncounterState>,
+pub struct Encounters {
+    /// The stored key is `npcs`.
+    #[serde(rename = "npcs")]
+    pub characters: HashMap<String, Encounter>,
 }
 
-impl NpcEncounterLog {
-    pub fn increment_times_met(&mut self, npc_id: &str) {
-        let entry = self.npcs.entry(npc_id.to_string()).or_default();
+impl Encounters {
+    pub fn increment_times_met(&mut self, character_id: &str) {
+        let entry = self.characters.entry(character_id.to_string()).or_default();
         entry.times_met += 1;
     }
 
-    pub fn mark_trigger_fired(&mut self, npc_id: &str, trigger_index: usize) {
-        let entry = self.npcs.entry(npc_id.to_string()).or_default();
+    pub fn mark_trigger_fired(&mut self, character_id: &str, trigger_index: usize) {
+        let entry = self.characters.entry(character_id.to_string()).or_default();
         entry.trigger_fired.insert(trigger_index, true);
     }
 
-    pub fn set_currently_meeting(&mut self, npc_id: &str, meeting: bool) {
-        let entry = self.npcs.entry(npc_id.to_string()).or_default();
+    pub fn set_currently_meeting(&mut self, character_id: &str, meeting: bool) {
+        let entry = self.characters.entry(character_id.to_string()).or_default();
         entry.currently_meeting = meeting;
     }
 
-    pub fn get_times_met(&self, npc_id: &str) -> u32 {
-        self.npcs.get(npc_id).map(|s| s.times_met).unwrap_or(0)
+    pub fn get_times_met(&self, character_id: &str) -> u32 {
+        self.characters
+            .get(character_id)
+            .map(|s| s.times_met)
+            .unwrap_or(0)
     }
 
-    pub fn is_trigger_fired(&self, npc_id: &str, trigger_index: usize) -> bool {
-        self.npcs
-            .get(npc_id)
+    pub fn is_trigger_fired(&self, character_id: &str, trigger_index: usize) -> bool {
+        self.characters
+            .get(character_id)
             .and_then(|s| s.trigger_fired.get(&trigger_index))
             .copied()
             .unwrap_or(false)
     }
 
-    pub fn is_currently_meeting(&self, npc_id: &str) -> bool {
-        self.npcs
-            .get(npc_id)
+    pub fn is_currently_meeting(&self, character_id: &str) -> bool {
+        self.characters
+            .get(character_id)
             .map(|s| s.currently_meeting)
             .unwrap_or(false)
     }
 
-    pub fn check_condition(&self, npc_id: &str, condition: &TriggerRequirement) -> bool {
-        let times_met = self.get_times_met(npc_id);
+    pub fn check_condition(&self, character_id: &str, condition: &TriggerRequirement) -> bool {
+        let times_met = self.get_times_met(character_id);
         match condition.operator {
             ComparisonOperator::Eq => times_met == condition.threshold,
             ComparisonOperator::Lt => times_met < condition.threshold,

@@ -1,10 +1,11 @@
 //! Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 
 use chronicler_engine::domain::model::map::{MapDef, Overworld};
-use chronicler_engine::domain::model::character::{CharacterSheet, NpcCard};
+use chronicler_engine::domain::model::character::{CharacterSheet, CharacterCard};
 use chronicler_engine::domain::model::scenario::StartingScenario;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
+use chronicler_engine::adapters::driven::storage::db::DbPool;
 use chronicler_engine::adapters::driven::storage::Storage;
 use chronicler_engine::error::EngineError;
 
@@ -33,12 +34,12 @@ fn make_test_map(id: &str, name: &str) -> MapDef {
     }
 }
 
-fn make_test_npc(id: &str, name: &str) -> NpcCard {
-    NpcCard {
+fn make_test_character(id: &str, name: &str) -> CharacterCard {
+    CharacterCard {
         id: id.to_string(),
         sheet: CharacterSheet {
             name: name.to_string(),
-            description: "Test NPC".to_string(),
+            description: "Test Character".to_string(),
             personality: "Curious".to_string(),
             scenario: "In a test world".to_string(),
             ..Default::default()
@@ -64,7 +65,7 @@ fn make_tagged_world(key: &str, tag: &str, variant: bool) -> WorldCard {
             description: format!("{tag} scenario description"),
             starting_room_id: "start".to_string(),
             text: format!("{tag} opening"),
-            npcs: vec![],
+            characters_present: vec![],
         }],
         default_scenario_id: Some(format!("{tag}_scenario")),
         default_room_image: Some(format!("/images/{tag}.png")),
@@ -211,7 +212,7 @@ fn test_create_world_with_full_data() {
         description: "A test scenario".to_string(),
         starting_room_id: "start".to_string(),
         text: "Welcome!".to_string(),
-        npcs: vec![],
+        characters_present: vec![],
     }];
     world_card.default_scenario_id = Some("scenario1".to_string());
 
@@ -321,7 +322,7 @@ fn test_world_with_scenarios() {
             description: "Start your journey".to_string(),
             starting_room_id: "start".to_string(),
             text: "Welcome to the adventure!".to_string(),
-            npcs: vec![],
+            characters_present: vec![],
         },
         StartingScenario {
             id: "advanced".to_string(),
@@ -329,7 +330,7 @@ fn test_world_with_scenarios() {
             description: "For experienced players".to_string(),
             starting_room_id: "start".to_string(),
             text: "You're already an expert!".to_string(),
-            npcs: vec![],
+            characters_present: vec![],
         },
     ];
     world_card.default_scenario_id = Some("intro".to_string());
@@ -439,7 +440,10 @@ fn test_seed_world_keeps_id_and_dependents() {
         .unwrap();
     let original_id = storage.get_world("reseed_id").unwrap().unwrap().world_id;
     storage
-        .seed_character(original_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .seed_character(
+            original_id,
+            &make_test_character("elena_voss", "Elena Voss"),
+        )
         .unwrap();
 
     storage
@@ -506,7 +510,7 @@ fn test_delete_world_drops_its_characters() {
         )
         .unwrap();
     storage
-        .seed_character(world_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .seed_character(world_id, &make_test_character("elena_voss", "Elena Voss"))
         .unwrap();
 
     storage.delete_world("char_world").unwrap();
@@ -665,7 +669,10 @@ fn test_sqlite_seed_world_keeps_id_and_dependents() {
         .unwrap();
     let original_id = storage.get_world("reseed_id").unwrap().unwrap().world_id;
     storage
-        .seed_character(original_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .seed_character(
+            original_id,
+            &make_test_character("elena_voss", "Elena Voss"),
+        )
         .unwrap();
 
     storage
@@ -741,7 +748,7 @@ fn test_sqlite_delete_world_drops_its_characters() {
         )
         .unwrap();
     storage
-        .seed_character(world_id, &make_test_npc("elena_voss", "Elena Voss"))
+        .seed_character(world_id, &make_test_character("elena_voss", "Elena Voss"))
         .unwrap();
 
     storage.delete_world("char_world").unwrap();
@@ -749,5 +756,35 @@ fn test_sqlite_delete_world_drops_its_characters() {
     assert!(
         storage.list_characters(world_id).unwrap().is_empty(),
         "deleting a world must drop its characters, as SQLite's cascade does"
+    );
+}
+
+#[test]
+fn test_world_stored_with_the_old_scenario_key_still_loads() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone());
+    let world_card = make_test_world("old_key_world", "Old Key World");
+    storage
+        .create_world(&world_card, &make_test_map("old_key_map", "Old Key Map"))
+        .unwrap();
+    pool.conn()
+        .execute(
+            "UPDATE worlds SET scenarios = ?1 WHERE key = 'old_key_world'",
+            rusqlite::params![
+                r#"[{"id":"intro","name":"Intro","description":"d","starting_room_id":"start","text":"t","npcs":["bartender"]}]"#
+            ],
+        )
+        .expect("the scenarios column should update");
+
+    let world = storage
+        .list_worlds()
+        .unwrap()
+        .into_iter()
+        .find(|world| world.key == "old_key_world")
+        .expect("the World is listed");
+
+    assert_eq!(
+        world.scenarios[0].characters_present,
+        vec!["bartender".to_string()]
     );
 }

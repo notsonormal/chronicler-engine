@@ -42,7 +42,8 @@
           "description": { "type": "string" },
           "starting_room_id": { "type": "string", "default": "start" },
           "text": { "type": "string" },
-          "npcs": {
+          "characters": {
+            "description": "The ids of the Characters present at the start. Older World files use the key `npcs`, which the engine still reads.",
             "type": "array",
             "items": { "type": "string" }
           }

@@ -86,7 +86,7 @@ impl GameViewQuery {
             })
     }
 
-    pub fn get_npc_headshots(
+    pub fn get_character_headshots(
         &self,
         game_id: GameId,
         scene_only: bool,
@@ -94,30 +94,35 @@ impl GameViewQuery {
         let storage = &self.storage;
         let game = storage.require_game(game_id.0)?;
         let world_with_map = storage.require_world(&game.world_key)?;
-        let npcs_list = storage.list_characters(world_with_map.world_id)?;
+        let characters_list = storage.list_characters(world_with_map.world_id)?;
 
-        let npc_ids: Vec<String> = if scene_only {
+        let character_ids: Vec<String> = if scene_only {
             self.current_state(game_id)?
                 .scene
-                .npcs_in_area
+                .characters_present
                 .iter()
-                .map(|npc| npc.id.clone())
+                .map(|character| character.id.clone())
                 .collect()
         } else {
-            npcs_list.iter().map(|npc| npc.id.clone()).collect()
+            characters_list
+                .iter()
+                .map(|character| character.id.clone())
+                .collect()
         };
 
-        let npc_data: Vec<(String, String)> = npc_ids
+        let character_data: Vec<(String, String)> = character_ids
             .iter()
             .filter_map(|id| {
-                let npc = npcs_list.iter().find(|npc| &npc.id == id)?;
-                let image_path = npc.sheet.preferred_image()?.to_string();
-                let name = npc.sheet.name.clone();
+                let character = characters_list
+                    .iter()
+                    .find(|character| &character.id == id)?;
+                let image_path = character.sheet.preferred_image()?.to_string();
+                let name = character.sheet.name.clone();
                 Some((image_path, name))
             })
             .collect();
 
-        Ok(npc_data)
+        Ok(character_data)
     }
 
     pub fn get_debug_state(&self, game_id: GameId) -> Result<DebugStateView, ApplicationError> {
@@ -127,9 +132,9 @@ impl GameViewQuery {
         let history_tail = self.storage.stories().entries(game_id, None, 5)?;
         let status = self.status(game_id)?;
         let (generation_status, step, last_error) = match status {
-            Status::Busy(busy) => (GenerationStatus::Generating, busy.step().cloned(), None),
+            Status::Busy(busy) => (GenerationStatus::Busy, busy.step().cloned(), None),
             Status::Failed(failure) => (
-                GenerationStatus::Error(failure.clone()),
+                GenerationStatus::Failed(failure.clone()),
                 None,
                 Some(failure.raw),
             ),
@@ -138,15 +143,15 @@ impl GameViewQuery {
 
         Ok(DebugStateView {
             current_room_id: state.movement.current_room_id.clone(),
-            npcs_in_area: state
+            characters_present: state
                 .scene
-                .npcs_in_area
+                .characters_present
                 .iter()
-                .map(|npc| npc.id.clone())
+                .map(|character| character.id.clone())
                 .collect(),
             generation_status,
             step,
-            npc_encounter_log: state.npc_encounter_log.npcs.clone(),
+            encounters: state.encounters.characters.clone(),
             narration_history_tail: history_tail,
             narration_history_length: count,
             dynamic_rooms: state.movement.dynamic_rooms.keys().cloned().collect(),

@@ -7,16 +7,16 @@ use serde::Serialize;
 
 use crate::domain::model::state::generation_status::{GenerationStatus, Step};
 use crate::domain::model::state::message_types::StoryRow;
-use crate::domain::model::trigger::NpcEncounterState;
+use crate::domain::model::trigger::Encounter;
 
 #[derive(Clone, Serialize)]
 pub struct DebugStateView {
     pub current_room_id: String,
-    pub npcs_in_area: Vec<String>,
+    pub characters_present: Vec<String>,
     pub generation_status: GenerationStatus,
     /// The step of the running Job; `None` when no Job runs.
     pub step: Option<Step>,
-    pub npc_encounter_log: HashMap<String, NpcEncounterState>,
+    pub encounters: HashMap<String, Encounter>,
     pub narration_history_tail: Vec<StoryRow>,
     pub narration_history_length: usize,
     pub dynamic_rooms: Vec<String>,

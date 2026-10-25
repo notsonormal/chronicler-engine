@@ -209,7 +209,7 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
         "the first Job should reach its narrator call"
     );
 
-    let stop = post_empty(&app, "/status/reset-generating").await;
+    let stop = post_empty(&app, "/status/reset-busy").await;
     assert_eq!(
         response_body(stop).await,
         "reset",
@@ -299,7 +299,7 @@ async fn test_reset_while_job_runs_keeps_only_the_new_game_opening() {
             .any(|text| text == "The stopped narration."),
         "the late answer of the Job the reset ended must not join the new Game"
     );
-    let status = fetch_body(&app, "/status/generating").await;
+    let status = fetch_body(&app, "/status/busy").await;
     assert_eq!(
         status.trim(),
         "idle",
@@ -479,7 +479,7 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
 const GAME_A_NARRATION: &str = "Game A's narration.";
 const GAME_B_NARRATION: &str = "Game B's narration.";
 const MAIN_NARRATION: &str = "The main narration.";
-const EVENT_NARRATION: &str = "The NPC greets you warmly.";
+const EVENT_NARRATION: &str = "The Character greets you warmly.";
 const SECOND_PRESET_TEXT: &str = "SecondPresetMarker";
 
 // [docs/specs/actions.md] SCENARIO: 6.4
@@ -569,19 +569,19 @@ async fn test_the_event_narration_call_uses_the_preset_active_when_it_runs() {
     );
 }
 
-/// The World data of the Turn whose analysis fires the Character's Trigger.
+/// The World data of the Job whose analysis fires the Character's Trigger.
 fn trigger_world() -> chronicler_engine::test_support::TestData {
     TestDataBuilder::default_test()
-        .npcs(vec![triggered_npc()])
+        .characters(vec![triggered_character()])
         .build()
 }
 
 fn triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
     ScriptedModel::new()
         .narration(narration)
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .event_narration(event_narration)
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -591,8 +591,8 @@ enum JobKind {
     Narration { fires_trigger: bool },
     /// `/impersonate`: an Impersonate generation, whose Input comes at its text save.
     Impersonate,
-    /// A retry of a typed Input: a user regen, which ends at its text save.
-    TypedInputRetry,
+    /// The Retry of a typed Input, which ends at its text save.
+    InputRetry,
     /// The event Narration a fired Trigger starts, held at its narrator call.
     EventNarration,
     /// The same event Narration, held at its own analysis call: the second
@@ -610,7 +610,7 @@ impl JobKind {
                 fires_trigger: false,
             } => "Narration".to_string(),
             Self::Impersonate => "Impersonate".to_string(),
-            Self::TypedInputRetry => "Retry of a typed Input".to_string(),
+            Self::InputRetry => "Retry of a typed Input".to_string(),
             Self::EventNarration | Self::EventNarrationAnalysis => "event Narration".to_string(),
         }
     }
@@ -623,7 +623,7 @@ impl JobKind {
         match self {
             Self::Narration { .. } => Some(ACTION_INPUT),
             Self::EventNarration | Self::EventNarrationAnalysis => Some(EVENT_ACTION_INPUT),
-            Self::Impersonate | Self::TypedInputRetry => None,
+            Self::Impersonate | Self::InputRetry => None,
         }
     }
 }
@@ -667,7 +667,7 @@ struct StopRow {
 }
 
 /// The rows of the design's stop table, one per (kind of Job, model call) the
-/// fake can hold. A save unit takes no time a client can observe, so a stop
+/// fake can hold. A transaction takes no time a client can observe, so a stop
 /// just before one leaves the records of the model call before it.
 static STOP_ROWS: &[StopRow] = &[
     StopRow {
@@ -707,7 +707,7 @@ static STOP_ROWS: &[StopRow] = &[
         after_stop: StoryLogAfterStop::ImpersonateInput,
     },
     StopRow {
-        kind: JobKind::TypedInputRetry,
+        kind: JobKind::InputRetry,
         held: Role::Narrator,
         status: Some("narrating"),
         after_stop: StoryLogAfterStop::NoMessage,
@@ -793,7 +793,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
                 story_before,
             }
         }
-        JobKind::TypedInputRetry => {
+        JobKind::InputRetry => {
             let model = Arc::new(
                 ScriptedModel::new()
                     .turn(SCRIPTED_NARRATION)
@@ -869,14 +869,14 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
 
 /// The Character whose Trigger fires on the analysis that first sees it in the
 /// room, which starts an event Narration.
-fn triggered_npc() -> chronicler_engine::domain::model::character::NpcCard {
+fn triggered_character() -> chronicler_engine::domain::model::character::CharacterCard {
     use chronicler_engine::domain::model::trigger::{
         ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
     };
     use chronicler_engine::test_support::TestPersona;
 
-    chronicler_engine::domain::model::character::NpcCard {
-        id: "npc_1".to_string(),
+    chronicler_engine::domain::model::character::CharacterCard {
+        id: "character_1".to_string(),
         sheet: TestPersona::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
@@ -922,7 +922,7 @@ async fn run_stop_row(row: &'static StopRow) {
     );
 
     if let Some(status) = row.status {
-        let answered = fetch_body(&start.app, "/status/generating").await;
+        let answered = fetch_body(&start.app, "/status/busy").await;
         assert_eq!(
             answered.trim(),
             status,
@@ -930,7 +930,7 @@ async fn run_stop_row(row: &'static StopRow) {
         );
     }
 
-    let stop = post_empty(&start.app, "/status/reset-generating").await;
+    let stop = post_empty(&start.app, "/status/reset-busy").await;
     assert_eq!(
         response_body(stop).await,
         "reset",
@@ -940,7 +940,7 @@ async fn run_stop_row(row: &'static StopRow) {
         wait_idle(&start.state, 2000).await,
         "{label}: the Game should end idle at once"
     );
-    let status = fetch_body(&start.app, "/status/generating").await;
+    let status = fetch_body(&start.app, "/status/busy").await;
     assert_eq!(
         status.trim(),
         "idle",
@@ -1131,8 +1131,8 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                 .expect("the debug state reads back");
             assert_eq!(
                 debug
-                    .npc_encounter_log
-                    .get("npc_1")
+                    .encounters
+                    .get("character_1")
                     .and_then(|encounter| encounter.trigger_fired.get(&0))
                     .copied(),
                 Some(true),
@@ -1167,7 +1167,7 @@ async fn active_game_on_an_always_on_world(
             description: "The World's opening.".to_string(),
             starting_room_id: STARTING_ROOM.to_string(),
             text: WORLD_OPENING_TEXT.to_string(),
-            npcs: vec![],
+            characters_present: vec![],
         }],
         ..Default::default()
     };
@@ -1176,7 +1176,7 @@ async fn active_game_on_an_always_on_world(
         .expect("the always-on World seeds");
     if fires_trigger {
         storage
-            .seed_character(world_id, &triggered_npc())
+            .seed_character(world_id, &triggered_character())
             .expect("the Character of the Trigger seeds");
     }
     create_game_from(app, state, storage, active_game_of(state), &world.key).await

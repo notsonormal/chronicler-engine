@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! The dock record: the offered set and the one notice of a Game
+//! The dock record: the offered set and the one Options failure of a Game
 
 use serde::{Deserialize, Serialize};
 
@@ -11,11 +11,11 @@ pub struct DockRecord {
     pub offered: Vec<String>,
     /// Present when a reason line stands in for the offered set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub notice: Option<Notice>,
+    pub failure: Option<OptionsFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Notice {
+pub struct OptionsFailure {
     pub reason: String,
     /// The raw text behind the details disclosure.
     pub raw: String,

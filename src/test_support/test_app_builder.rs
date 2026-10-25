@@ -178,12 +178,12 @@ impl TestAppBuilder {
 
         let mut state = SwipeState::starting(None, &HashMap::new(), &starting_room);
 
-        for npc in test_data
-            .npcs
+        for character in test_data
+            .characters
             .iter()
-            .filter(|n| test_data.room_npcs.contains(&n.id))
+            .filter(|n| test_data.room_characters.contains(&n.id))
         {
-            state.scene.npcs_in_area.push(npc.clone());
+            state.scene.characters_present.push(character.clone());
         }
 
         if let Some(game_id) = seeded_game {

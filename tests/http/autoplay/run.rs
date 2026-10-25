@@ -14,7 +14,7 @@ use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, configured_runner, empty_sqlite_storage, ScriptedModel,
-    TestMap, TestNpc, TestPromptPreset,
+    TestMap, TestCharacter, TestPromptPreset,
 };
 
 use super::{
@@ -23,12 +23,12 @@ use super::{
     SECOND_NARRATION,
 };
 use crate::support::app_wiring::{
-    app_with_a_triggered_npc, app_with_model_and_storage, app_with_script,
+    app_with_a_triggered_character, app_with_model_and_storage, app_with_script,
 };
 use crate::support::http_assertions::assert_still_thinking;
 use crate::support::http_fixtures::{create_game_from, story_of_game};
 use crate::support::http_requests::{
-    fetch_body, fetch_generating_status, post_action, post_empty, post_form, response_body,
+    fetch_body, fetch_busy_status, post_action, post_empty, post_form, response_body,
     wait_for_jobs, wait_for_jobs_running_at_most, wait_settled,
 };
 
@@ -118,23 +118,29 @@ async fn test_a_run_whose_last_message_is_an_unanswered_input_starts_with_a_cont
 // [docs/specs/autoplay.md] SCENARIO: 41.3
 #[tokio::test]
 async fn test_a_trigger_in_a_continue_job_adds_its_event_narration_to_the_cycle() {
-    const EVENT_NARRATION: &str = "The NPC greets you warmly.";
+    const EVENT_NARRATION: &str = "The Character greets you warmly.";
     // The Trigger is scoped to the second room, which only the Continue Job's
     // analysis moves the player into.
-    let npc =
-        TestNpc::with_room_scoped_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0, "room2");
+    let character = TestCharacter::with_room_scoped_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+        "room2",
+    );
     let model = ScriptedModel::new()
         .narration(FIRST_INPUT)
         .after_narration(analysis_report(&[], None))
         .narration(FIRST_NARRATION)
-        .after_narration(analysis_report(&["npc_1"], Some("room2")))
+        .after_narration(analysis_report(&["character_1"], Some("room2")))
         .event_narration(EVENT_NARRATION)
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .narration(SECOND_INPUT)
         .after_narration(analysis_report(&[], None))
         .narration(SECOND_NARRATION)
         .after_narration(analysis_report(&[], None));
-    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::two_rooms("room_1", "room2"), character, model);
     let game = active_game_of(&state);
 
     let started = start_autoplay(&app, "cycles=2").await;
@@ -169,19 +175,25 @@ async fn test_a_trigger_in_a_continue_job_adds_its_event_narration_to_the_cycle(
 // [docs/specs/autoplay.md] SCENARIO: 41.21
 #[tokio::test]
 async fn test_a_trigger_in_an_impersonate_job_answers_the_input_and_ends_the_cycle() {
-    const EVENT_NARRATION: &str = "The NPC greets you warmly.";
-    let npc =
-        TestNpc::with_room_scoped_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0, "room2");
+    const EVENT_NARRATION: &str = "The Character greets you warmly.";
+    let character = TestCharacter::with_room_scoped_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+        "room2",
+    );
     let model = ScriptedModel::new()
         .narration(FIRST_INPUT)
-        .after_narration(analysis_report(&["npc_1"], Some("room2")))
+        .after_narration(analysis_report(&["character_1"], Some("room2")))
         .event_narration(EVENT_NARRATION)
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .narration(SECOND_INPUT)
         .after_narration(analysis_report(&[], None))
         .narration(SECOND_NARRATION)
         .after_narration(analysis_report(&[], None));
-    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::two_rooms("room_1", "room2"), character, model);
     let game = active_game_of(&state);
 
     let started = start_autoplay(&app, "cycles=2").await;
@@ -222,7 +234,7 @@ async fn test_a_failed_narrator_call_ends_the_run_and_its_failure_line_stays() {
         vec![(MessageType::Input, FIRST_INPUT.to_string())],
         "the Impersonate Input stays, and the failed Continue saved no Narration"
     );
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("answer could not be read"),
         "the status poll shows the failure line of the Job, got: {status}"
@@ -236,7 +248,7 @@ async fn test_a_failed_narrator_call_ends_the_run_and_its_failure_line_stays() {
 
 // [docs/specs/autoplay.md] SCENARIO: 41.5
 #[tokio::test]
-async fn test_a_failed_options_run_writes_its_notice_and_the_run_goes_on() {
+async fn test_a_failed_options_run_writes_its_options_failure_and_the_run_goes_on() {
     const UNPARSEABLE: &str = "no parseable options in this response";
     let model = Arc::new(
         ScriptedModel::new()
@@ -278,7 +290,7 @@ async fn test_a_failed_options_run_writes_its_notice_and_the_run_goes_on() {
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         dock.contains("options-notice-line") && dock.contains("Options generation failed"),
-        "the dock shows the Notice of the failed Options run, got: {dock}"
+        "the dock shows the Options failure of the failed Options run, got: {dock}"
     );
     assert_status(&app, "idle", "a failed Options run leaves no failure line").await;
 }
@@ -767,14 +779,14 @@ async fn test_the_status_poll_names_no_step_between_two_jobs_of_a_run() {
 
     assert_status(&app, "autoplay 1/2", "a run between two Jobs names no step").await;
     assert_eq!(
-        fetch_body(&app, "/debug/is_generating").await.trim(),
+        fetch_body(&app, "/debug/is_busy").await.trim(),
         "true",
         "the debug answer reads the holder as busy"
     );
     let debug: serde_json::Value = serde_json::from_str(&fetch_body(&app, "/debug/state").await)
         .expect("/debug/state answers JSON");
     assert_eq!(
-        debug["generation_status"], "Generating",
+        debug["generation_status"], "Busy",
         "the debug state reads the holder as busy"
     );
     assert!(
@@ -971,7 +983,7 @@ async fn test_a_run_whose_story_cannot_be_read_ends_with_the_failure_line_of_the
     assert!(started.status().is_success(), "the start should accept");
     wait_for_run(&state, game).await;
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("the story read failed"),
         "the status poll shows the failure line of the unreadable story, got: {status}"
@@ -1033,7 +1045,7 @@ async fn test_a_run_whose_start_state_cannot_be_read_ends_with_the_failure_line_
     wait_for_run(&state, game).await;
 
     failures.clear_all();
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("the start state"),
         "the status poll names the start state, got: {status}"

@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/narrative/options.md]
-//! Options agent system — generates the pickable next-action option set.
+//! Options agent system — generates the Options to pick from.
 pub mod agent;
 pub mod prompt;
 pub(crate) mod types;

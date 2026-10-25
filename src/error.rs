@@ -38,14 +38,14 @@ pub enum LlmFailure {
 }
 
 #[derive(Error, Debug)]
-pub enum NarrativeFailure {
+pub enum NarrationFailure {
     /// Prompt assembly could not satisfy stage `stage`; reason is a short slug, not user-facing prose.
     #[error("Prompt build failed at stage '{stage}': {reason}")]
     PromptBuild {
         stage: &'static str,
         reason: &'static str,
     },
-    /// Narration LLM call completed but post-processing rejected the output as unusable for the scene.
+    /// Narration LLM call completed but post-processing rejected the output as unusable as a Narration.
     #[error("Narration generation failed at stage '{stage}': {reason}")]
     Generation {
         stage: &'static str,
@@ -103,9 +103,9 @@ impl LlmFailure {
     }
 }
 
-impl From<NarrativeFailure> for EngineError {
-    fn from(e: NarrativeFailure) -> Self {
-        EngineError::Narrative(e)
+impl From<NarrationFailure> for EngineError {
+    fn from(e: NarrationFailure) -> Self {
+        EngineError::Narration(e)
     }
 }
 
@@ -131,9 +131,9 @@ pub enum EngineError {
     #[error("LLM error: {0}")]
     Llm(#[source] LlmFailure),
 
-    /// Narrative pipeline (prompt build or generation post-processing) rejected the output.
-    #[error("Narrative generation error: {0}")]
-    Narrative(#[source] NarrativeFailure),
+    /// Narration pipeline (prompt build or generation post-processing) rejected the output.
+    #[error("Narration generation error: {0}")]
+    Narration(#[source] NarrationFailure),
 
     /// Room lookup by identifier failed.
     #[error("Room not found: {0}")]
@@ -143,7 +143,7 @@ pub enum EngineError {
     #[error("Message not found: {0}")]
     MessageNotFound(u64),
 
-    /// Game id does not correspond to a live game session in storage.
+    /// Game id does not correspond to a Game in storage.
     #[error("Game not found: {0}")]
     GameNotFound(u64),
 
@@ -172,7 +172,7 @@ pub enum EngineError {
     #[error("Configuration error: {0}")]
     Config(String),
 
-    /// Use-case guard rejected the request (e.g. no scene to act on); message is user-facing.
+    /// Use-case guard rejected the request (e.g. no story to act on); message is user-facing.
     #[error("Validation error: {0}")]
     Validation(String),
 
@@ -260,7 +260,7 @@ impl EngineError {
             EngineError::Llm(LlmFailure::Http { status, body }) => {
                 format!("LLM Error: HTTP {status} \u{2014} {body}")
             }
-            EngineError::Narrative(nf) => format!("LLM Error: {nf}"),
+            EngineError::Narration(nf) => format!("LLM Error: {nf}"),
             _ => format!("LLM Error: {self}"),
         }
     }

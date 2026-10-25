@@ -5,7 +5,7 @@ use axum::Form;
 use axum::extract::Path;
 
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
+use crate::domain::model::settings::{AppSettings, LlmConnection, TextCheckMode};
 use crate::adapters::driving::http::settings::handlers::{
     add_connection_handler, delete_connection_handler, edit_connection_form,
     edit_connection_handler, new_connection_form, save_text_check_handler, set_narrator_handler,
@@ -31,8 +31,8 @@ fn make_app_state_with_settings(settings: AppSettings) -> AppState {
     AppState::from_wired(wired)
 }
 
-fn mock_connection(id: &str, name: &str) -> LlmProviderConfig {
-    LlmProviderConfig {
+fn mock_connection(id: &str, name: &str) -> LlmConnection {
+    LlmConnection {
         name: name.into(),
         model: "mock-model".into(),
         ..test_connection(id, LlmBackendType::Mock)
@@ -194,7 +194,7 @@ async fn test_edit_connection_form_not_found() {
 async fn test_add_connection_handler_adds_connection() {
     let app_state = make_test_app_state();
     let form = ConnectionForm {
-        conn_name: "Test LlmProviderConfig".into(),
+        conn_name: "Test LlmConnection".into(),
         conn_provider: "openrouter".into(),
         conn_model: "openai/gpt-4".into(),
         conn_api_key: "sk-test".into(),
@@ -212,7 +212,7 @@ async fn test_add_connection_handler_adds_connection() {
 
     let settings = app_state.settings().expect("settings read should succeed");
     let new_conn = settings.connections.last().unwrap();
-    assert_eq!(new_conn.name, "Test LlmProviderConfig");
+    assert_eq!(new_conn.name, "Test LlmConnection");
     assert_eq!(new_conn.provider, LlmBackendType::OpenRouter);
     assert_eq!(new_conn.model, "openai/gpt-4");
     assert_eq!(new_conn.api_key, Some("sk-test".into()));

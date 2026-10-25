@@ -66,7 +66,7 @@ Two port traits are accepted (`LlmProvider`, `TextChecker`); LLM message persist
 
 ## The single-process deployment contract
 
-The engine deploys as one process against one SQLite file. The busy-state registry is process-local; two engines pointed at the same database would not see each other's busy Games, and each could start a Job on the same Game. The single-process commitment is the deployment contract — horizontal scaling is not on the table, and the architecture is free to use process-local concurrency primitives (the registry lock, RAII drops of a Job's writer) without paying for cross-process coordination. Restarting the engine is safe because no saved record holds a busy mark: every Game is idle after a start, and every save unit that landed before the restart stays.
+The engine deploys as one process against one SQLite file. The busy-state registry is process-local; two engines pointed at the same database would not see each other's busy Games, and each could start a Job on the same Game. The single-process commitment is the deployment contract — horizontal scaling is not on the table, and the architecture is free to use process-local concurrency primitives (the registry lock, RAII drops of a Job's writer) without paying for cross-process coordination. Restarting the engine is safe because no saved record holds a busy mark: every Game is idle after a start, and every transaction that landed before the restart stays.
 
 ## Architectural commitments
 
@@ -76,7 +76,7 @@ A small set of guarantees follow from the shape above. Each is machine-checked o
 - Single-process deployment — one engine, one database; the busy-state registry is process-local.
 - Tokio-only concurrency — `spawn_blocking` for synchronous services; no `std::thread::spawn` anywhere in `src/`.
 - Lock-poison recovery — every `Mutex` site recovers via `into_inner()`; a panic does not corrupt the lock.
-- Restart safety — the busy mark lives in memory, and each save unit lands whole, so a restart leaves every Game idle and no record half-written.
+- Restart safety — the busy mark lives in memory, and each transaction lands whole, so a restart leaves every Game idle and no record half-written.
 - One Job per Game — a second request for a busy Game is refused with "Still thinking...", matching single-player semantics.
 
 ## Document References

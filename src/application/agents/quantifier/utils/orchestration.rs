@@ -3,7 +3,7 @@
 
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::domain::model::agent::{AgentSettings, HookInput};
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::error::EngineError;
 
 use crate::application::agents::quantifier::parser::parse_with_movement;
@@ -13,7 +13,7 @@ use crate::application::agents::quantifier::types::{
     QuantifierReading, RoomInfo,
 };
 
-pub(crate) fn determine_npcs_in_room(
+pub(crate) fn determine_characters_present(
     input: &HookInput,
     recorder: &LlmCallRecorder,
     settings: &AgentSettings,
@@ -26,8 +26,8 @@ pub(crate) fn determine_npcs_in_room(
         EngineError::RoomNotFound("current room not set in the hook input".into())
     })?;
 
-    let previous_room_npcs: Vec<NpcCard> = world.present.to_vec();
-    let all_npcs: Vec<NpcCard> = world.characters.values().cloned().collect();
+    let previous_characters_present: Vec<CharacterCard> = world.present.to_vec();
+    let all_characters: Vec<CharacterCard> = world.characters.values().cloned().collect();
 
     let all_rooms: Vec<RoomInfo> = world
         .map
@@ -44,8 +44,8 @@ pub(crate) fn determine_npcs_in_room(
 
     let context = QuantifierPromptContext {
         room: current_room,
-        previous_room_npcs: &previous_room_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters_present,
+        all_known_characters: &all_characters,
         all_rooms: &all_rooms,
         player_name: &world.persona.sheet.name,
         recent_history: input.story,
@@ -64,8 +64,8 @@ pub(crate) fn quantify_room_with_llm_call(
 ) -> QuantifierReading {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
         room: context.room,
-        previous_room_npcs: context.previous_room_npcs,
-        all_known_npcs: context.all_known_npcs,
+        previous_characters_present: context.previous_characters_present,
+        all_known_characters: context.all_known_characters,
         all_rooms: context.all_rooms,
         player_name: context.player_name,
         recent_history: context.recent_history,
@@ -82,9 +82,9 @@ pub(crate) fn quantify_room_with_llm_call(
     );
 
     let known_ids: Vec<String> = context
-        .all_known_npcs
+        .all_known_characters
         .iter()
-        .map(|npc| npc.id.clone())
+        .map(|character| character.id.clone())
         .collect();
 
     let max_attempts = 2;
@@ -108,9 +108,9 @@ pub(crate) fn quantify_room_with_llm_call(
 
                 let result = parse_with_movement(response, &known_ids);
                 tracing::info!(
-                    "[Quantifier] Detected NPCs: {:?} (confidence: {:?})",
-                    result.npcs.npc_ids,
-                    result.npcs.confidence
+                    "[Quantifier] Detected Characters: {:?} (confidence: {:?})",
+                    result.characters.character_ids,
+                    result.characters.confidence
                 );
                 if let Some(mt) = &result.movement.movement_type {
                     tracing::info!(
@@ -122,7 +122,7 @@ pub(crate) fn quantify_room_with_llm_call(
                     tracing::info!("[Quantifier] No movement detected");
                 }
 
-                if result.npcs.confidence.is_low() && attempt < max_attempts {
+                if result.characters.confidence.is_low() && attempt < max_attempts {
                     tracing::warn!("[Quantifier] Low confidence on attempt {attempt}, retrying...");
                     continue;
                 }
@@ -140,12 +140,12 @@ pub(crate) fn quantify_room_with_llm_call(
     }
 
     tracing::warn!(
-        "[Quantifier] All attempts failed, using fallback NPC IDs. Last error: {}",
+        "[Quantifier] All attempts failed, keeping the Characters present. Last error: {}",
         last_error.as_deref().unwrap_or("unknown")
     );
     QuantifierReading {
-        npcs: QuantifierParseResult {
-            npc_ids: Vec::new(),
+        characters: QuantifierParseResult {
+            character_ids: Vec::new(),
             confidence: QuantifierConfidence::Low,
         },
         movement: MovementParseResult {
@@ -159,40 +159,43 @@ pub(crate) fn process_quantifier_result(
     result: QuantifierReading,
     world: &crate::domain::model::agent::WorldView<'_>,
 ) -> QuantifierReading {
-    match result.npcs.confidence {
+    match result.characters.confidence {
         QuantifierConfidence::High | QuantifierConfidence::Medium => {
-            tracing::info!("[Quantifier] Using dynamic NPCs: {:?}", result.npcs.npc_ids);
+            tracing::info!(
+                "[Quantifier] Using dynamic Characters: {:?}",
+                result.characters.character_ids
+            );
             // A Character the World does not know cannot be present.
-            let npc_ids = result
-                .npcs
-                .npc_ids
+            let character_ids = result
+                .characters
+                .character_ids
                 .into_iter()
                 .filter(|id| world.characters.contains_key(id))
                 .collect();
             QuantifierReading {
-                npcs: QuantifierParseResult {
-                    npc_ids,
-                    confidence: result.npcs.confidence,
+                characters: QuantifierParseResult {
+                    character_ids,
+                    confidence: result.characters.confidence,
                 },
                 movement: result.movement,
             }
         }
         QuantifierConfidence::Low => {
-            tracing::info!("[Quantifier] Low confidence, using static NPCs");
-            static_npc_result(world, result.movement)
+            tracing::info!("[Quantifier] Low confidence, using static Characters");
+            static_character_result(world, result.movement)
         }
     }
 }
 
-pub(crate) fn static_npc_result(
+pub(crate) fn static_character_result(
     world: &crate::domain::model::agent::WorldView<'_>,
     movement: MovementParseResult,
 ) -> QuantifierReading {
-    let npc_ids = world.present.iter().map(|n| n.id.clone()).collect();
+    let character_ids = world.present.iter().map(|n| n.id.clone()).collect();
 
     QuantifierReading {
-        npcs: QuantifierParseResult {
-            npc_ids,
+        characters: QuantifierParseResult {
+            character_ids,
             confidence: QuantifierConfidence::Low,
         },
         movement,

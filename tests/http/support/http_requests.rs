@@ -28,8 +28,8 @@ pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
 
 /// The status endpoint answers `idle`, a step endpoint string, or the failure
 /// disclosure.
-pub async fn fetch_generating_status(app: &axum::Router) -> String {
-    fetch_body(app, "/status/generating").await
+pub async fn fetch_busy_status(app: &axum::Router) -> String {
+    fetch_body(app, "/status/busy").await
 }
 
 pub async fn post_form(
@@ -98,7 +98,7 @@ pub async fn post_form_with_hx(
 }
 
 /// Waits for the Game's holder to go. It observes nothing but the wait itself,
-/// so a test that also reads the turn's outcome calls `wait_settled`.
+/// so a test that also reads the Job's outcome calls `wait_settled`.
 pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
     let game_id = active_game_of(state);
     wait_for_condition_async(
@@ -113,7 +113,7 @@ pub async fn wait_idle(state: &AppState, timeout_ms: u64) -> bool {
 }
 
 /// Waits for the Job to settle, then checks that no model call went unscripted.
-/// Every tier-1 test whose turn runs an analysis ends here.
+/// Every tier-1 test whose Job runs an analysis ends here.
 pub async fn wait_settled(state: &AppState, timeout_ms: u64) -> bool {
     let idle = wait_idle(state, timeout_ms).await;
     if idle {

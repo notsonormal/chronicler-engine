@@ -4,11 +4,13 @@
 use std::collections::HashMap;
 
 use crate::domain::model::agent::Kind;
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::{MapDef, Room};
-use crate::domain::model::quantifier::{NpcEvent, NpcEventList, NpcTransitionType, QuantifierResult};
+use crate::domain::model::quantifier::{
+    CharacterTransition, CharacterTransitions, CharacterTransitionType, QuantifierResult,
+};
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::state::trigger_context::{EventRecord, TriggerRef};
+use crate::domain::model::state::event_record::{EventRecord, TriggerRef};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::trigger::Trigger;
 use crate::error::{EngineError, Result};
@@ -19,7 +21,7 @@ use crate::error::InternalError;
 #[derive(Debug, Clone, Copy)]
 pub struct GameWorld<'a> {
     pub map: &'a MapDef,
-    pub characters: &'a HashMap<String, NpcCard>,
+    pub characters: &'a HashMap<String, CharacterCard>,
     pub persona_name: &'a str,
 }
 
@@ -45,11 +47,11 @@ pub fn apply(
     kind: Kind,
 ) -> Result<RulesOutcome> {
     let is_event = kind == Kind::Event;
-    let previous_npc_ids: Vec<String> = state
+    let previous_character_ids: Vec<String> = state
         .scene
-        .npcs_in_area
+        .characters_present
         .iter()
-        .map(|npc| npc.id.clone())
+        .map(|character| character.id.clone())
         .collect();
 
     if !is_event {
@@ -62,7 +64,7 @@ pub fn apply(
     }
     assert_state_consistency(&state, world.map, world.characters)?;
 
-    state.scene.npcs_in_area = result
+    state.scene.characters_present = result
         .present
         .iter()
         .filter_map(|id| world.characters.get(id).cloned())
@@ -73,10 +75,10 @@ pub fn apply(
     } else {
         fired_trigger(&state, world)
     };
-    state.trigger_context = fired.clone();
+    state.event_record = fired.clone();
 
-    let events = NpcEventList::from_diff(&previous_npc_ids, &result.present);
-    apply_npc_events(&mut state, &events.events);
+    let events = CharacterTransitions::from_diff(&previous_character_ids, &result.present);
+    apply_character_transitions(&mut state, &events.events);
     assert_state_consistency(&state, world.map, world.characters)?;
 
     Ok(RulesOutcome { state, fired })
@@ -86,9 +88,9 @@ fn fired_trigger(state: &SwipeState, world: &GameWorld<'_>) -> Option<EventRecor
     evaluate_triggers(state, world.characters)
         .into_iter()
         .next()
-        .map(|(npc, trigger, index)| EventRecord {
+        .map(|(character, trigger, index)| EventRecord {
             trigger: TriggerRef {
-                npc_id: npc.id,
+                character_id: character.id,
                 trigger_idx: index,
                 trigger_name: trigger.narration.name.clone(),
                 trigger_repeat: trigger.repeat,
@@ -103,7 +105,7 @@ fn fired_trigger(state: &SwipeState, world: &GameWorld<'_>) -> Option<EventRecor
 fn movement(
     state: &mut SwipeState,
     destination: Option<&str>,
-    new_npc_ids: &[String],
+    new_character_ids: &[String],
     map: &MapDef,
 ) {
     let Some(destination) = destination else {
@@ -113,8 +115,8 @@ fn movement(
     let previous_room_id = state.movement.current_room_id.clone();
     attempt_movement(state, destination, map);
     if previous_room_id != state.movement.current_room_id {
-        for npc_id in new_npc_ids {
-            state.npc_encounter_log.set_currently_meeting(npc_id, true);
+        for character_id in new_character_ids {
+            state.encounters.set_currently_meeting(character_id, true);
         }
     }
 }
@@ -143,19 +145,19 @@ fn walk(state: &mut SwipeState, map: &MapDef, room_id: &str) -> Result<()> {
     Ok(())
 }
 
-fn apply_npc_events(state: &mut SwipeState, events: &[NpcEvent]) {
+fn apply_character_transitions(state: &mut SwipeState, events: &[CharacterTransition]) {
     for event in events {
         match event.event_type {
-            NpcTransitionType::Entered => {
+            CharacterTransitionType::Entered => {
                 state
-                    .npc_encounter_log
-                    .set_currently_meeting(&event.npc_id, true);
-                state.npc_encounter_log.increment_times_met(&event.npc_id);
+                    .encounters
+                    .set_currently_meeting(&event.character_id, true);
+                state.encounters.increment_times_met(&event.character_id);
             }
-            NpcTransitionType::Left => {
+            CharacterTransitionType::Left => {
                 state
-                    .npc_encounter_log
-                    .set_currently_meeting(&event.npc_id, false);
+                    .encounters
+                    .set_currently_meeting(&event.character_id, false);
             }
         }
     }
@@ -164,20 +166,20 @@ fn apply_npc_events(state: &mut SwipeState, events: &[NpcEvent]) {
 /// Each result carries the Trigger's index on its Character's Trigger list.
 fn evaluate_triggers(
     state: &SwipeState,
-    npcs: &HashMap<String, NpcCard>,
-) -> Vec<(NpcCard, Trigger, usize)> {
+    characters: &HashMap<String, CharacterCard>,
+) -> Vec<(CharacterCard, Trigger, usize)> {
     let current_room_id = &state.movement.current_room_id;
     let mut results = Vec::new();
 
-    for npc in npcs.values() {
-        for (index, trigger) in npc.triggers.iter().enumerate() {
+    for character in characters.values() {
+        for (index, trigger) in character.triggers.iter().enumerate() {
             if trigger
                 .room_id
                 .as_deref()
                 .is_some_and(|room_id| room_id != current_room_id)
             {
                 tracing::debug!(
-                    npc_id = %npc.id,
+                    character_id = %character.id,
                     trigger = %trigger.narration.name,
                     reason = "room_mismatch",
                     "Trigger skipped"
@@ -186,11 +188,11 @@ fn evaluate_triggers(
             }
 
             if !state
-                .npc_encounter_log
-                .check_condition(&npc.id, &trigger.requirement)
+                .encounters
+                .check_condition(&character.id, &trigger.requirement)
             {
                 tracing::debug!(
-                    npc_id = %npc.id,
+                    character_id = %character.id,
                     trigger = %trigger.narration.name,
                     reason = "condition_not_met",
                     "Trigger skipped"
@@ -198,9 +200,9 @@ fn evaluate_triggers(
                 continue;
             }
 
-            if !trigger.repeat && state.npc_encounter_log.is_trigger_fired(&npc.id, index) {
+            if !trigger.repeat && state.encounters.is_trigger_fired(&character.id, index) {
                 tracing::debug!(
-                    npc_id = %npc.id,
+                    character_id = %character.id,
                     trigger = %trigger.narration.name,
                     reason = "already_fired",
                     "Trigger skipped"
@@ -208,7 +210,7 @@ fn evaluate_triggers(
                 continue;
             }
 
-            results.push((npc.clone(), trigger.clone(), index));
+            results.push((character.clone(), trigger.clone(), index));
         }
     }
 
@@ -223,11 +225,11 @@ fn evaluate_triggers(
 pub(crate) fn assert_state_consistency(
     state: &SwipeState,
     map: &MapDef,
-    npcs: &HashMap<String, NpcCard>,
+    characters: &HashMap<String, CharacterCard>,
 ) -> Result<()> {
     assert_room_exists(state, map)?;
-    assert_npc_consistency(state, npcs)?;
-    assert_npc_encounter_log_consistency(state, npcs)?;
+    assert_character_consistency(state, characters)?;
+    assert_encounters_consistency(state, characters)?;
     Ok(())
 }
 
@@ -235,7 +237,7 @@ pub(crate) fn assert_state_consistency(
 pub(crate) fn assert_state_consistency(
     _state: &SwipeState,
     _map: &MapDef,
-    _npcs: &HashMap<String, NpcCard>,
+    _characters: &HashMap<String, CharacterCard>,
 ) -> Result<()> {
     Ok(())
 }
@@ -252,12 +254,15 @@ fn assert_room_exists(state: &SwipeState, map: &MapDef) -> Result<()> {
 }
 
 #[cfg(feature = "diagnostics")]
-fn assert_npc_consistency(state: &SwipeState, npcs: &HashMap<String, NpcCard>) -> Result<()> {
-    for npc in &state.scene.npcs_in_area {
-        if !npcs.contains_key(&npc.id) {
+fn assert_character_consistency(
+    state: &SwipeState,
+    characters: &HashMap<String, CharacterCard>,
+) -> Result<()> {
+    for character in &state.scene.characters_present {
+        if !characters.contains_key(&character.id) {
             return Err(EngineError::Internal(InternalError::new(format!(
-                "npcs_in_area contains NPC '{}' which is not in the npcs map",
-                npc.id
+                "characters_present contains Character '{}' which is not in the characters map",
+                character.id
             ))));
         }
     }
@@ -265,14 +270,14 @@ fn assert_npc_consistency(state: &SwipeState, npcs: &HashMap<String, NpcCard>) -
 }
 
 #[cfg(feature = "diagnostics")]
-fn assert_npc_encounter_log_consistency(
+fn assert_encounters_consistency(
     state: &SwipeState,
-    npcs: &HashMap<String, NpcCard>,
+    characters: &HashMap<String, CharacterCard>,
 ) -> Result<()> {
-    for npc_id in state.npc_encounter_log.npcs.keys() {
-        if !npcs.contains_key(npc_id) {
+    for character_id in state.encounters.characters.keys() {
+        if !characters.contains_key(character_id) {
             return Err(EngineError::Internal(InternalError::new(format!(
-                "npc_encounter_log references unknown NPC '{npc_id}'"
+                "encounters references unknown Character '{character_id}'"
             ))));
         }
     }

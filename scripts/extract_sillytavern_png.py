@@ -29,7 +29,7 @@ def extract_png(file_path, output_char_dir):
         name = cd.get("name", "Unknown")
         char_id = name.lower().replace(" ", "_")
 
-        npc_card = {
+        character_card = {
             "id": char_id,
             "name": name,
             "description": cd.get("description", "").replace("{{char}}", name),
@@ -41,7 +41,7 @@ def extract_png(file_path, output_char_dir):
 
         char_out = Path(output_char_dir) / f"{char_id}.json"
         with open(char_out, "w", encoding="utf-8") as f:
-            json.dump(npc_card, f, indent=4)
+            json.dump(character_card, f, indent=4)
         print(f"[{file_path.name}] Character saved to -> {char_out}")
 
         world_rules = []

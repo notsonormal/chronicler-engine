@@ -7,11 +7,11 @@ title: Options
 
 ## Overview
 
-Options are pre-written player inputs the engine offers while a game is idle. The offered set is held in the Game's dock record, apart from the story.
+Options are pre-written Actions that the engine offers while a Game is idle. The offered set is held in the Game's dock record, apart from the story.
 
 ## Where Options Come From
 
-The options agent generates the set. It is a named agent (`options`), and it runs at the Options hook. A Job runs the hook at exactly two gated sites:
+The options agent generates the set. It is a named agent (`options`), and it runs at the end-of-Job hook. A Job runs the hook at exactly two gated sites:
 
 1. **After a Narration** — at the end of a Job that saved a Narration.
 2. **On demand** — when the player enters the `/options` slash command.

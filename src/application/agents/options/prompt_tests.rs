@@ -1,11 +1,11 @@
 use crate::application::agents::options::types::OptionsPromptContext;
 use crate::application::agents::options::prompt::OptionsPromptBuilder;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
-use crate::test_support::fixtures::{default_story_row, TestMap, TestNpc, TestPersona};
+use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona};
 
 fn make_context<'a>(
     map: &'a crate::domain::model::map::MapDef,
-    npcs: &'a [crate::domain::model::character::NpcCard],
+    characters: &'a [crate::domain::model::character::CharacterCard],
     override_text: Option<String>,
 ) -> OptionsPromptContext<'a> {
     let room = map
@@ -13,7 +13,7 @@ fn make_context<'a>(
         .expect("single_room map has 'start'");
     OptionsPromptContext {
         room,
-        npcs_in_area: npcs,
+        characters_present: characters,
         recent_history: &[],
         player_name: "Julian",
         options_prompt_override: override_text,
@@ -21,15 +21,15 @@ fn make_context<'a>(
     }
 }
 
-fn make_room_npcs() -> Vec<crate::domain::model::character::NpcCard> {
-    vec![TestNpc::named("npc_1", "Carla")]
+fn make_room_characters() -> Vec<crate::domain::model::character::CharacterCard> {
+    vec![TestCharacter::named("character_1", "Carla")]
 }
 
 #[test]
 fn fallback_system_prompt_substitutes_macros() {
     let map = TestMap::single_room("start");
-    let npcs = make_room_npcs();
-    let (system, _user) = OptionsPromptBuilder::new(make_context(&map, &npcs, None)).build();
+    let characters = make_room_characters();
+    let (system, _user) = OptionsPromptBuilder::new(make_context(&map, &characters, None)).build();
 
     assert!(!system.contains("{{user}}"), "{{user}} must substitute");
     assert!(
@@ -44,10 +44,10 @@ fn fallback_system_prompt_substitutes_macros() {
 #[test]
 fn override_system_prompt_is_rendered_with_macros() {
     let map = TestMap::single_room("start");
-    let npcs = make_room_npcs();
+    let characters = make_room_characters();
     let (system, _user) = OptionsPromptBuilder::new(make_context(
         &map,
-        &npcs,
+        &characters,
         Some("Offer {{option_count}} bold moves for {{user}}.".to_string()),
     ))
     .build();
@@ -58,15 +58,15 @@ fn override_system_prompt_is_rendered_with_macros() {
 #[test]
 fn whitespace_only_override_falls_back() {
     let map = TestMap::single_room("start");
-    let npcs = make_room_npcs();
+    let characters = make_room_characters();
     let (system, _user) =
-        OptionsPromptBuilder::new(make_context(&map, &npcs, Some("   ".to_string()))).build();
+        OptionsPromptBuilder::new(make_context(&map, &characters, Some("   ".to_string()))).build();
 
     assert!(system.contains("<suggestion>"), "fallback prompt expected");
 }
 
 #[test]
-fn user_prompt_carries_room_npc_and_history_sections() {
+fn user_prompt_carries_room_character_and_history_sections() {
     let map = TestMap::single_room("start");
     let room = map.get_room_by_id("start").expect("room exists");
     let history = vec![
@@ -86,12 +86,12 @@ fn user_prompt_carries_room_npc_and_history_sections() {
             ..default_story_row(MessageType::System)
         },
     ];
-    let npcs = vec![TestNpc::named("npc_1", "Carla")];
+    let characters = vec![TestCharacter::named("character_1", "Carla")];
     let persona = TestPersona::named("Julian");
 
     let context = OptionsPromptContext {
         room,
-        npcs_in_area: &npcs,
+        characters_present: &characters,
         recent_history: &history,
         player_name: &persona.sheet.name,
         options_prompt_override: None,
@@ -101,7 +101,7 @@ fn user_prompt_carries_room_npc_and_history_sections() {
 
     assert!(user.contains("<CurrentRoom>"));
     assert!(user.contains("<Name>"));
-    assert!(user.contains("<NpcsInArea>"));
+    assert!(user.contains("<CharactersPresent>"));
     assert!(user.contains("Carla"));
     assert!(user.contains("<RecentHistory>"));
     assert!(user.contains("sender=\"Narrator\""));
@@ -111,13 +111,13 @@ fn user_prompt_carries_room_npc_and_history_sections() {
 }
 
 #[test]
-fn user_prompt_omits_npc_section_when_area_is_empty() {
+fn user_prompt_omits_character_section_when_area_is_empty() {
     let map = TestMap::single_room("start");
     let room = map.get_room_by_id("start").expect("room exists");
 
     let context = OptionsPromptContext {
         room,
-        npcs_in_area: &[],
+        characters_present: &[],
         recent_history: &[],
         player_name: "Julian",
         options_prompt_override: None,
@@ -125,5 +125,5 @@ fn user_prompt_omits_npc_section_when_area_is_empty() {
     };
     let (_system, user) = OptionsPromptBuilder::new(context).build();
 
-    assert!(!user.contains("<NpcsInArea>"));
+    assert!(!user.contains("<CharactersPresent>"));
 }

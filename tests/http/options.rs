@@ -20,7 +20,7 @@ use crate::support::app_wiring::{
 use crate::support::http_assertions::{defined_icons, referenced_icons, status_error_message};
 use crate::support::http_fixtures::{if_world, seed_offered_set, story_of};
 use crate::support::http_requests::{
-    fetch_body, fetch_generating_status, post_action, post_action_check, post_empty, post_form,
+    fetch_body, fetch_busy_status, post_action, post_action_check, post_empty, post_form,
     wait_for_jobs, wait_settled,
 };
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
@@ -64,8 +64,8 @@ fn message_count(state: &AppState) -> usize {
     story_of(state).len()
 }
 
-/// The dock's notice line, or `None` when the dock renders the offered set.
-async fn dock_notice(app: &axum::Router) -> Option<String> {
+/// The dock's Options failure line, or `None` when the dock renders the offered set.
+async fn dock_options_failure(app: &axum::Router) -> Option<String> {
     let dock = fetch_body(app, "/fragment/options-dock").await;
     dock.split("options-notice-line").nth(1).map(|rest| {
         let line = rest.split_once('>').map(|(_, after)| after).unwrap_or("");
@@ -131,16 +131,16 @@ async fn test_options_without_scene_history_errors_http() {
         "a rejected /options must render no options strip: {dock}"
     );
     assert_eq!(
-        dock_notice(&app).await,
+        dock_options_failure(&app).await,
         None,
-        "a rejected /options writes no notice: {dock}"
+        "a rejected /options writes no Options failure: {dock}"
     );
     assert!(current_options(&state).is_empty());
 }
 
 // [docs/specs/options.md] SCENARIO: 24.4
 #[tokio::test]
-async fn test_regenerate_replaces_set_without_history_http() {
+async fn test_new_options_replace_set_without_history_http() {
     let (app, state, _storage) = app_with_script(
         ScriptedModel::new()
             .turn("You look around.")
@@ -167,7 +167,7 @@ async fn test_regenerate_replaces_set_without_history_http() {
     assert!(dock.contains("Open the gate"), "set B second: {dock}");
     assert!(
         !dock.contains("Search the desk"),
-        "set A must be gone after regeneration: {dock}"
+        "set A must be gone after the new Options: {dock}"
     );
     assert_eq!(
         message_count(&state),
@@ -178,7 +178,7 @@ async fn test_regenerate_replaces_set_without_history_http() {
 
 // [docs/specs/options.md] SCENARIO: 24.5
 #[tokio::test]
-async fn test_failed_regeneration_keeps_prior_set_http() {
+async fn test_failed_options_run_keeps_prior_set_http() {
     let (app, state, _storage) = app_with_script(
         ScriptedModel::new()
             .turn("You look around.")
@@ -204,22 +204,22 @@ async fn test_failed_regeneration_keeps_prior_set_http() {
     assert_eq!(
         options.len(),
         3,
-        "the failed regeneration must keep the prior set"
+        "the failed Options run must keep the prior set"
     );
     assert!(options.contains(&"Search the desk".to_string()));
 
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         !dock.contains("options-strip"),
-        "the notice takes the strip's place: {dock}"
+        "the Options failure takes the strip's place: {dock}"
     );
     assert_eq!(
-        dock_notice(&app).await.as_deref(),
+        dock_options_failure(&app).await.as_deref(),
         Some("Options generation failed"),
         "the dock must name the failure: {dock}"
     );
 
-    let resp = post_empty(&app, "/status/reset-generating").await;
+    let resp = post_empty(&app, "/status/reset-busy").await;
     assert_eq!(resp.status(), axum::http::StatusCode::OK);
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
@@ -245,7 +245,7 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
     );
     seed_offered_set(&state, &["Inspect the ledger"]);
     assert_eq!(
-        dock_notice(&app).await,
+        dock_options_failure(&app).await,
         None,
         "only /options may report the unavailable agent"
     );
@@ -262,15 +262,15 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         !dock.contains("options-strip"),
-        "the notice takes the strip's place: {dock}"
+        "the Options failure takes the strip's place: {dock}"
     );
     assert_eq!(
-        dock_notice(&app).await.as_deref(),
+        dock_options_failure(&app).await.as_deref(),
         Some("Options agent is not available"),
         "the dock must name the unavailable agent: {dock}"
     );
 
-    let resp = post_empty(&app, "/status/reset-generating").await;
+    let resp = post_empty(&app, "/status/reset-busy").await;
     assert_eq!(resp.status(), axum::http::StatusCode::OK);
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
@@ -315,7 +315,7 @@ async fn test_always_on_generates_after_narration_turn_http() {
     );
 }
 
-// Set B is next in the mock response queue: a regeneration would overwrite set A with it.
+// Set B is next in the mock response queue: a new Options run would overwrite set A with it.
 // [docs/specs/options.md] SCENARIO: 24.15
 #[tokio::test]
 async fn test_impersonate_keeps_offered_set_http() {
@@ -410,7 +410,7 @@ async fn test_narration_turn_clears_offered_set_http() {
 
 // [docs/specs/options.md] SCENARIO: 24.17
 #[tokio::test]
-async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
+async fn test_failed_always_on_options_run_clears_set_and_reports_http() {
     // Zero-parse answers get one retry, so this needs two unparseable responses to fail.
     let (app, state, storage) = app_with_script(
         ScriptedModel::new()
@@ -444,15 +444,15 @@ async fn test_failed_always_on_regeneration_clears_set_and_reports_http() {
 
     assert!(
         current_options(&state).is_empty(),
-        "a failed regeneration must leave the offered set empty"
+        "a failed Options run must leave the offered set empty"
     );
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
         !dock.contains("options-strip"),
-        "a failed regeneration must render no options strip: {dock}"
+        "a failed Options run must render no options strip: {dock}"
     );
     assert_eq!(
-        dock_notice(&app).await.as_deref(),
+        dock_options_failure(&app).await.as_deref(),
         Some("Options generation failed"),
         "the dock must name the failure: {dock}"
     );
@@ -481,7 +481,7 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
 
     assert!(
         current_options(&state).is_empty(),
-        "the turn end must clear the offered set even when no agent can regenerate it"
+        "the turn end must clear the offered set even when no agent can make new Options"
     );
     let dock = fetch_body(&app, "/fragment/options-dock").await;
     assert!(
@@ -489,7 +489,7 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
         "with no agent the dock must render no options strip: {dock}"
     );
     assert_eq!(
-        dock_notice(&app).await.as_deref(),
+        dock_options_failure(&app).await.as_deref(),
         Some("Options agent is not available"),
         "the dock must name the unavailable agent once: {dock}"
     );
@@ -500,7 +500,7 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
 fn seed_world_with_a_firing_trigger(
     storage: &chronicler_engine::adapters::driven::storage::Storage,
 ) {
-    use chronicler_engine::domain::model::character::NpcCard;
+    use chronicler_engine::domain::model::character::CharacterCard;
     use chronicler_engine::domain::model::trigger::{
         ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
     };
@@ -509,8 +509,8 @@ fn seed_world_with_a_firing_trigger(
     let world_id = storage
         .seed_world(&always_on_world(), &TestMap::single_room("start"))
         .expect("seed always-on world");
-    let npc = NpcCard {
-        id: "npc_1".to_string(),
+    let character = CharacterCard {
+        id: "character_1".to_string(),
         sheet: TestPersona::standard().sheet,
         inventory: vec![],
         triggers: vec![Trigger {
@@ -528,7 +528,7 @@ fn seed_world_with_a_firing_trigger(
         relationships: vec![],
     };
     storage
-        .seed_character(world_id, &npc)
+        .seed_character(world_id, &character)
         .expect("seed the Character of the Trigger");
 }
 
@@ -538,14 +538,14 @@ async fn test_options_run_follows_a_failed_event_narration_http() {
     let (app, state, storage) = app_with_script(
         ScriptedModel::new()
             .narration("You examine the guard.")
-            .after_narration(analysis_report(&["npc_1"], None))
+            .after_narration(analysis_report(&["character_1"], None))
             .failed(Role::Trigger)
             .options(SET_A),
     );
     seed_world_with_a_firing_trigger(&storage);
     create_game(&app, "always_on_world").await;
 
-    let resp = post_action(&app, "examine the npc").await;
+    let resp = post_action(&app, "examine the character").await;
     assert!(resp.status().is_success());
     assert!(
         wait_settled(&state, 1000).await,
@@ -563,12 +563,12 @@ async fn test_options_run_follows_a_failed_event_narration_http() {
         "the dock must render the fresh set: {dock}"
     );
     assert_eq!(
-        dock_notice(&app).await,
+        dock_options_failure(&app).await,
         None,
-        "the Options run succeeded, so the dock shows no notice: {dock}"
+        "the Options run succeeded, so the dock shows no Options failure: {dock}"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The event narration failed."),
         "the failure line must name the failed event narration, got: {status}"
@@ -617,8 +617,12 @@ async fn options_after_state_save_failed() {
         "the Options run must follow the Narration the failed state update kept"
     );
     let dock = fetch_body(&app, "/fragment/options-dock").await;
-    assert_eq!(dock_notice(&app).await, None, "the run succeeded: {dock}");
-    let status = fetch_generating_status(&app).await;
+    assert_eq!(
+        dock_options_failure(&app).await,
+        None,
+        "the run succeeded: {dock}"
+    );
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The text was saved, but the game state could not be updated."),
         "the status shows the failure of the state update: {status}"
@@ -632,7 +636,7 @@ async fn options_after_event_text_save_failed() {
     let model = Arc::new(
         ScriptedModel::new()
             .narration("You examine the guard.")
-            .after_narration(analysis_report(&["npc_1"], None))
+            .after_narration(analysis_report(&["character_1"], None))
             .event_narration("The guard greets you.")
             .options(SET_A),
     );
@@ -647,7 +651,7 @@ async fn options_after_event_text_save_failed() {
     create_game(&app, "always_on_world").await;
 
     assert!(
-        post_action(&app, "examine the npc")
+        post_action(&app, "examine the character")
             .await
             .status()
             .is_success()
@@ -675,8 +679,12 @@ async fn options_after_event_text_save_failed() {
         "the Options run must follow the Narration that the failed event text save left"
     );
     let dock = fetch_body(&app, "/fragment/options-dock").await;
-    assert_eq!(dock_notice(&app).await, None, "the run succeeded: {dock}");
-    let status = fetch_generating_status(&app).await;
+    assert_eq!(
+        dock_options_failure(&app).await,
+        None,
+        "the run succeeded: {dock}"
+    );
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The event narration failed."),
         "the status names the failed event narration: {status}"
@@ -739,7 +747,7 @@ async fn test_options_work_in_if_mode_http() {
     assert!(dock.contains("Search the desk"), "{dock}");
 }
 
-// Set B is next in the mock response queue: a regeneration would overwrite set A with it.
+// Set B is next in the mock response queue: a new Options run would overwrite set A with it.
 // [docs/specs/options.md] SCENARIO: 24.19
 #[tokio::test]
 async fn test_mode_switch_keeps_offered_set_http() {

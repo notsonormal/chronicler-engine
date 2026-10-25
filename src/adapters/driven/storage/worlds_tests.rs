@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::domain::model::character::{CharacterSheet, NpcCard, PersonaCard};
+use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard};
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
@@ -155,8 +155,8 @@ fn world_bundle_for_assembles_all_four_pieces() {
     storage
         .seed_character(
             world_id,
-            &NpcCard {
-                id: "npc_alpha".to_string(),
+            &CharacterCard {
+                id: "character_alpha".to_string(),
                 sheet: CharacterSheet {
                     name: "Alpha".to_string(),
                     ..CharacterSheet::default()
@@ -170,8 +170,8 @@ fn world_bundle_for_assembles_all_four_pieces() {
     storage
         .seed_character(
             world_id,
-            &NpcCard {
-                id: "npc_beta".to_string(),
+            &CharacterCard {
+                id: "character_beta".to_string(),
                 sheet: CharacterSheet {
                     name: "Beta".to_string(),
                     ..CharacterSheet::default()
@@ -198,15 +198,15 @@ fn world_bundle_for_assembles_all_four_pieces() {
         world,
         map: map_arc,
         persona: persona_arc,
-        npcs,
+        characters,
     } = storage.world_bundle_for(game_id.0).unwrap();
 
     assert_eq!(world.key, "bundle_world");
     assert_eq!(map_arc.overworld.id, "overworld1");
     assert_eq!(persona_arc.sheet.name, "Bundle Persona");
-    assert_eq!(npcs.len(), 2);
-    assert!(npcs.contains_key("npc_alpha"));
-    assert!(npcs.contains_key("npc_beta"));
+    assert_eq!(characters.len(), 2);
+    assert!(characters.contains_key("character_alpha"));
+    assert!(characters.contains_key("character_beta"));
 }
 
 #[test]

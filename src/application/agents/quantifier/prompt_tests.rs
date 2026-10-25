@@ -1,27 +1,27 @@
 use std::collections::HashMap;
 
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::state::message_types::StoryRow;
 
 use super::prompt::QuantifierPromptBuilder;
-use crate::test_support::quantifier::{make_history, make_npc, make_room};
+use crate::test_support::quantifier::{make_history, make_character, make_room};
 use super::types::{QuantifierPromptContext, RoomInfo};
 
 #[test]
 fn test_quantifier_prompt_builder_basic() {
     let room = make_room();
-    let carla = make_npc("carla", "Carla");
-    let gabriella = make_npc("gabriella", "Gabriella");
-    let all_npcs = vec![carla.clone(), gabriella.clone()];
-    let previous_npcs = vec![carla];
+    let carla = make_character("carla", "Carla");
+    let gabriella = make_character("gabriella", "Gabriella");
+    let all_characters = vec![carla.clone(), gabriella.clone()];
+    let previous_characters = vec![carla];
     let history = make_history();
 
     let override_text = r#"You are a scene quantifier for a text adventure game.
-Your task is to determine which NPCs are present in the current room.
+Your task is to determine which Characters are present in the current room.
 
 Respond ONLY with a JSON object in this exact format:
-{"npcs_in_room": ["id1", "id2"]}
+{"characters_present": ["id1", "id2"]}
 
 How to determine movement:
 1. Read <CurrentRoom> — this is where the player is right now.
@@ -30,8 +30,8 @@ How to determine movement:
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -43,7 +43,7 @@ How to determine movement:
     let (system, user) = builder.build();
 
     assert!(system.contains("scene quantifier"));
-    assert!(system.contains("npcs_in_room"));
+    assert!(system.contains("characters_present"));
     assert!(system.contains("carla"));
     assert!(system.contains("gabriella"));
     assert!(system.contains("How to determine movement"));
@@ -60,16 +60,16 @@ How to determine movement:
 #[test]
 fn test_quantifier_prompt_builder_token_budget() {
     let room = make_room();
-    let carla = make_npc("carla", "Carla");
-    let gabriella = make_npc("gabriella", "Gabriella");
-    let all_npcs = vec![carla, gabriella];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let carla = make_character("carla", "Carla");
+    let gabriella = make_character("gabriella", "Gabriella");
+    let all_characters = vec![carla, gabriella];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history = make_history();
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -90,14 +90,14 @@ fn test_quantifier_prompt_builder_token_budget() {
 #[test]
 fn test_quantifier_prompt_builder_empty_history() {
     let room = make_room();
-    let all_npcs: Vec<NpcCard> = vec![];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let all_characters: Vec<CharacterCard> = vec![];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -126,8 +126,8 @@ fn test_quantifier_prompt_includes_navigation() {
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &[],
-        all_known_npcs: &[],
+        previous_characters_present: &[],
+        all_known_characters: &[],
         all_rooms: &[RoomInfo {
             id: "kitchen".to_string(),
             name: "Kitchen".to_string(),
@@ -146,16 +146,16 @@ fn test_quantifier_prompt_includes_navigation() {
 }
 
 #[test]
-fn test_quantifier_prompt_builder_empty_npcs() {
+fn test_quantifier_prompt_builder_empty_characters() {
     let room = make_room();
-    let all_npcs: Vec<NpcCard> = vec![];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let all_characters: Vec<CharacterCard> = vec![];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -166,14 +166,14 @@ fn test_quantifier_prompt_builder_empty_npcs() {
     let builder = QuantifierPromptBuilder::new(context);
     let (system, user) = builder.build();
 
-    assert!(system.contains("available_npc_ids"));
+    assert!(system.contains("available_character_ids"));
     assert!(user.contains("Hero"));
 }
 
 #[test]
 fn test_quantifier_prompt_builder_all_rooms() {
     let room = make_room();
-    let all_npcs = vec![make_npc("carla", "Carla")];
+    let all_characters = vec![make_character("carla", "Carla")];
     let all_rooms = vec![
         RoomInfo {
             id: "entrance".to_string(),
@@ -187,8 +187,8 @@ fn test_quantifier_prompt_builder_all_rooms() {
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &[],
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &[],
+        all_known_characters: &all_characters,
         all_rooms: &all_rooms,
         player_name: "Hero",
         recent_history: &[],
@@ -207,14 +207,14 @@ fn test_quantifier_prompt_builder_all_rooms() {
 #[test]
 fn test_quantifier_prompt_uses_latest_narration_tag() {
     let room = make_room();
-    let all_npcs: Vec<NpcCard> = vec![];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let all_characters: Vec<CharacterCard> = vec![];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,
@@ -238,14 +238,14 @@ fn test_quantifier_prompt_uses_latest_narration_tag() {
 #[test]
 fn test_quantifier_prompt_references_latest_narration_in_query() {
     let room = make_room();
-    let all_npcs: Vec<NpcCard> = vec![];
-    let previous_npcs: Vec<NpcCard> = vec![];
+    let all_characters: Vec<CharacterCard> = vec![];
+    let previous_characters: Vec<CharacterCard> = vec![];
     let history: Vec<StoryRow> = vec![];
 
     let context = QuantifierPromptContext {
         room: &room,
-        previous_room_npcs: &previous_npcs,
-        all_known_npcs: &all_npcs,
+        previous_characters_present: &previous_characters,
+        all_known_characters: &all_characters,
         all_rooms: &[],
         player_name: "Hero",
         recent_history: &history,

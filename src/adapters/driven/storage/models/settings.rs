@@ -4,12 +4,12 @@
 use crate::error::EngineError;
 use crate::domain::model::agent::AgentConfig;
 use crate::domain::model::settings::{
-    AppSettings, LlmProviderConfig, ModePresetRegistry, TextCheckSettings,
+    AppSettings, LlmConnection, ModePresetRegistry, TextCheckSettings,
 };
 
 pub struct DbSettings {
     pub id: i64,
-    pub connections: String, // JSON: Vec<LlmProviderConfig>
+    pub connections: String, // JSON: Vec<LlmConnection>
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     pub response_length: String,
@@ -39,7 +39,7 @@ impl DbSettings {
     }
 
     pub(crate) fn to_settings(&self) -> Result<AppSettings, EngineError> {
-        let connections: Vec<LlmProviderConfig> = serde_json::from_str(&self.connections)
+        let connections: Vec<LlmConnection> = serde_json::from_str(&self.connections)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize connections: {e}")))?;
         let text_check: TextCheckSettings = serde_json::from_str(&self.text_check)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize text_check: {e}")))?;

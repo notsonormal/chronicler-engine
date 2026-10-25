@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! Character sheet data and NPC card definitions
+//! Character sheet data and Character card definitions
 
 use serde::{Deserialize, Serialize};
 
@@ -58,7 +58,7 @@ pub struct PersonaCard {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct NpcCard {
+pub struct CharacterCard {
     pub id: String,
     #[serde(flatten)]
     pub sheet: CharacterSheet,

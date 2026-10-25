@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Game state and session management
+//! Game state and Game management
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,7 @@ pub struct Game {
     pub persona_key: String,
     pub persona_name: String,
     pub name: String,
-    /// Player-facing label; display names may collide, unlike the unique `name`.
+    /// The Display name the player sees; Display names may collide, unlike the unique `name`.
     pub display_name: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -171,7 +171,7 @@ pub struct NewGame {
 }
 
 impl NewGame {
-    /// The label written with the row. Every storage backend reads it, so the
+    /// The Display name written with the row. Every storage backend reads it, so the
     /// naming rule has one home.
     pub fn display_name(&self) -> String {
         default_display_name(&self.name)

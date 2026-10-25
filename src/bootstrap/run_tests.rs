@@ -112,7 +112,7 @@ fn test_restart_with_existing_game_does_not_duplicate_scenario() {
             description: "The beginning".to_string(),
             starting_room_id: "start".to_string(),
             text: "Welcome, traveller.".to_string(),
-            npcs: vec![],
+            characters_present: vec![],
         }],
         default_scenario_id: Some("intro".to_string()),
         ..Default::default()

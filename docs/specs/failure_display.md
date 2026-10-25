@@ -4,7 +4,7 @@ Endpoints:
 - `POST /action`
 - `GET /fragment/header`
 - `GET /fragment/visual-sidebar`
-- `GET /status/generating`
+- `GET /status/busy`
 
 ## Scenarios
 
@@ -77,7 +77,7 @@ And the response does not ask the client to swap nothing
 
 ```gherkin
 Given a Game whose last generation failed with a raw transport message
-When the client GET /status/generating
+When the client GET /status/busy
 Then the response carries one short user-facing line
 And the raw transport message is reachable only inside the response's disclosure
 ```
@@ -86,7 +86,7 @@ And the raw transport message is reachable only inside the response's disclosure
 
 ```gherkin
 Given a Game whose last generation failed because its active prompt preset is missing
-When the client GET /status/generating
+When the client GET /status/busy
 Then the response carries the missing-data line that names the preset, not the line for an unnamed failure
 And the raw text naming the missing preset is reachable only inside the response's disclosure
 ```
@@ -95,7 +95,7 @@ And the raw text naming the missing preset is reachable only inside the response
 
 ```gherkin
 Given a Game whose last generation failed because the model spent its whole token budget before writing an answer
-When the client GET /status/generating
+When the client GET /status/busy
 Then the response carries the spent-token-budget line, not the unreadable-answer line or the line for an unnamed failure
 And that line names the model's reasoning and only an action the dashboard offers
 And the raw text naming the completion and reasoning token counts is reachable only inside the response's disclosure
@@ -107,7 +107,7 @@ And the raw text naming the completion and reasoning token counts is reachable o
 Given a Game whose narrator call answers with empty text
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/generating
+And the client GET /status/busy
 Then the status response carries the empty-answer line, not the unreadable-answer line
 And the story log holds no Narration of that Action
 ```
@@ -119,7 +119,7 @@ Given a Game whose current state names a Character that the World does not hold
 And a narrator backend that answers the narration prompt
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/generating
+And the client GET /status/busy
 Then the status response carries the contradiction line
 And the story log holds that Action's Narration text
 And the raw internal message appears once, inside that response's disclosure
@@ -131,7 +131,7 @@ And the raw internal message appears once, inside that response's disclosure
 Given a running Job whose Narration call is held
 And the storage refuses the write of a Narration's text while the call is held
 When the call is released and the Job ends
-And the client GET /status/generating
+And the client GET /status/busy
 Then the status response carries the save-failed line, not the line for an unnamed failure
 And the raw storage error is reachable only inside the response's disclosure
 And the story log holds that Action's Input
@@ -144,7 +144,7 @@ And the story log holds no Narration of that Action
 Given a Game whose narration connection holds a context window too small for the system prompt and the fixed input budget
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/generating
+And the client GET /status/busy
 Then the status response carries the prompt-too-long line, not the line for an unnamed failure
 And the raw context-overflow message is reachable only inside the response's disclosure
 And the story log holds no Narration of that Action
@@ -156,7 +156,7 @@ And the story log holds no Narration of that Action
 Given a running Job whose Narration call is held
 And the Game's record becomes unreadable while the call is held
 When the call is released and the Job ends
-And the client GET /status/generating
+And the client GET /status/busy
 Then the status response carries the missing-data line that names the Game
 And the raw storage message is in the response's disclosure
 And the Quantifier is not asked
@@ -170,7 +170,7 @@ Given a Game whose Job reads the record of one row of the Examples table below
 And the read fails
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/generating
+And the client GET /status/busy
 Then the status response carries the missing-data line that names the record of that row
 And the status response does not carry the save-failed line
 And the raw storage error is reachable only inside the response's disclosure
@@ -192,7 +192,7 @@ When the client POST /action with command="look"
 Then the response is 500
 And the response carries the missing-data line that names the start state
 And the response does not carry the raw storage error
-When the client GET /status/generating
+When the client GET /status/busy
 Then the status response carries the same line
 And the raw storage error is reachable only inside the response's disclosure
 And the story log is unchanged
@@ -204,7 +204,7 @@ And the story log is unchanged
 Given a Game whose preset for the kind of one row of the Examples table below is not in the library
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/generating
+And the client GET /status/busy
 Then the status response carries the missing-data line that names the preset
 And the raw text naming the missing preset is reachable only inside the response's disclosure
 And the story log holds the Narrations of that row
@@ -223,7 +223,7 @@ Given a Game whose storage refuses the write of a state update
 And a narrator backend that answers the narration prompt
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/generating
+And the client GET /status/busy
 Then the status response carries the contradiction line, not the save-failed line
 And the raw storage error is reachable only inside the response's disclosure
 And the story log holds that Action's Narration text

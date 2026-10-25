@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
 use crate::domain::model::utils::name_is_available;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::error::{EngineError, Result};
 
 #[derive(Clone)]
@@ -37,7 +37,7 @@ impl SettingsService {
     /// two cards the user cannot tell apart must not exist.
     pub fn add_connection(
         &self,
-        connection: LlmProviderConfig,
+        connection: LlmConnection,
     ) -> std::result::Result<AppSettings, ApplicationError> {
         self.storage
             .update_settings(|settings| {
@@ -54,9 +54,9 @@ impl SettingsService {
         &self,
         id: &str,
         edit: F,
-    ) -> std::result::Result<(LlmProviderConfig, bool, bool), ApplicationError>
+    ) -> std::result::Result<(LlmConnection, bool, bool), ApplicationError>
     where
-        F: FnOnce(&mut LlmProviderConfig),
+        F: FnOnce(&mut LlmConnection),
     {
         self.storage
             .update_settings(|settings| {

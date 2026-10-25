@@ -29,7 +29,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `characters.rs` — Character storage backend operations
         - `core.rs` — Storage backend and core abstractions
         - `db.rs` — SQLite database connection pool
-        - `docks.rs` — The dock record reads: the offered set and the notice of one Game
+        - `docks.rs` — The dock record reads: the offered set and the Options failure of one Game
         - `games.rs` — Game storage operations
         - `llm_messages.rs` — LLM message storage
         - `mod.rs` — Storage layer and database access
@@ -159,7 +159,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
   - **application/**
     - `connection_test_service.rs` — Connection test service — one short provider call that records nothing.
     - `errors.rs` — ApplicationError — the error envelope of the application services.
-    - `llm_recorder.rs` — LLM call orchestrator - owns forensics save + postprocessing
+    - `llm_recorder.rs` — LLM call orchestrator - owns the LLM message save + postprocessing
     - `persona_catalogue.rs` — Persona catalogue — persona read-side orchestration at the application layer.
     - `prompt_preset_service.rs` — Prompt preset service — prompt preset persistence orchestration at the application layer.
     - `settings_service.rs` — Settings service — settings persistence orchestration at the application layer.
@@ -171,7 +171,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `trait_def.rs` — Agent hook traits: one trait per hook, each giving its own kind of result
       - **options/**
         - `agent.rs` — Options agent implementation.
-        - `mod.rs` — Options agent system — generates the pickable next-action option set.
+        - `mod.rs` — Options agent system — generates the Options to pick from.
         - `prompt.rs` — Options prompt construction
         - `types.rs` — Options agent type definitions
         - **utils/**
@@ -201,7 +201,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Game lifecycle orchestration and read-side queries.
       - `view_query.rs` — GameViewQuery — read-side queries that don't mutate game state.
     - **generation/**
-      - `gate.rs` — GameWriter and JobWriter — the writer rule and the guard: the one registry of the busy state, and the save units a Job writes through.
+      - `gate.rs` — GameWriter and JobWriter — the writer rule and the guard: the one registry of the busy state, and the transactions a Job writes through.
       - `job_tasks.rs` — The watch on the tasks a Job spawns, so a tier-1 test waits for a Job to end
       - `mod.rs` — The writer rule and the guard: the one registry of the busy state: one holder per busy Game.
     - **narration/**
@@ -237,13 +237,13 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **model/**
       - `action.rs` — Action enum and semantic command types (slash-command steering entry)
       - `agent.rs` — Agent definitions and behavior types
-      - `character.rs` — Character sheet data and NPC card definitions
-      - `dock.rs` — The dock record: the offered set and the one notice of a Game
-      - `game.rs` — Game state and session management
+      - `character.rs` — Character sheet data and Character card definitions
+      - `dock.rs` — The dock record: the offered set and the one Options failure of a Game
+      - `game.rs` — Game state and Game management
       - `generation.rs` — The order of one generation, and the plan rules that turn one request into a plan
       - `llm_backend.rs` — LLM backend provider types
-      - `llm_message.rs` — LLM call forensics record DTO
-      - `map.rs` — Map and location data structures
+      - `llm_message.rs` — LLM message DTO: the stored record of one model call
+      - `map.rs` — Map and Room data structures
       - `message.rs` — Message types and conversation history (Message, Swipe)
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
@@ -256,13 +256,13 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `trigger.rs` — Trigger conditions and event types
       - `world.rs` — World model definitions
       - **state/**
+        - `event_record.rs` — The Trigger reference of an event record, and the event record of a fired Trigger
         - `generation_status.rs` — Generation status enums: the step and the status are independent axes; the Job in `application/pipeline/` drives them.
         - `message_types.rs` — Message type and entry definitions
         - `mod.rs` — Game state representations (submodule declarations)
         - `movement.rs` — Player movement state
-        - `scene_state.rs` — Current scene NPCs
-        - `swipe_state.rs` — The game state of one Swipe: movement, scene and encounter log
-        - `trigger_context.rs` — The Trigger reference of an event record, and the event record of a fired Trigger
+        - `scene_state.rs` — The Characters present in one Swipe state
+        - `swipe_state.rs` — The game state of one Swipe: movement, the Characters present, encounters and the event record
       - **utils/**
         - `game_name.rs` — Game name generation with date-based disambiguation.
         - `game_rules.rs` — The game rules: movement, the Characters present and the Triggers, as a pure function of the Swipe state

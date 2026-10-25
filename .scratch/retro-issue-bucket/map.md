@@ -112,3 +112,4 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 - [82 — Lint the mechanical part of the recurring `docs/diataxis/` review findings](./issues/82-lint-recurring-diataxis-doc-findings.md)
 - [83 — Give the mutation check a script that restores by hash and runs on the final tree](./issues/83-mutation-check-script.md)
 - [84 — The strong-implementer re-ran narrow builds and the gate many times in one task](./issues/84-implementer-repeats-builds.md)
+- [85 — The comment finder flags comments that narrate a change](./issues/85-comment-finder-flags-change-narration.md)

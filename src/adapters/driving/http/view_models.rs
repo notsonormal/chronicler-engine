@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use crate::domain::model::dock::Notice;
+use crate::domain::model::dock::OptionsFailure;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{NarratorMode, ReasoningEffort};
@@ -248,30 +248,30 @@ impl From<&LlmMessage> for LlmMessageView {
 pub struct OptionsDockViewModel {
     pub options: Vec<String>,
     pub is_busy: bool,
-    pub notice: Option<DockNoticeView>,
+    pub failure: Option<OptionsFailureView>,
 }
 
 #[derive(Debug, Clone)]
-pub struct DockNoticeView {
+pub struct OptionsFailureView {
     pub reason: String,
     pub raw: String,
 }
 
 impl OptionsDockViewModel {
-    pub fn new(options: Vec<String>, is_busy: bool, notice: Option<Notice>) -> Self {
+    pub fn new(options: Vec<String>, is_busy: bool, failure: Option<OptionsFailure>) -> Self {
         Self {
             options,
             is_busy,
-            notice: notice.map(|notice| DockNoticeView {
-                reason: notice.reason,
-                raw: notice.raw,
+            failure: failure.map(|failure| OptionsFailureView {
+                reason: failure.reason,
+                raw: failure.raw,
             }),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct NpcPortraitView {
+pub struct CharacterPortraitView {
     pub image_path: String,
     pub name: String,
 }
@@ -281,14 +281,14 @@ pub struct VisualSidebarViewModel {
     pub room_has_image: bool,
     pub room_src: String,
     pub room_alt: String,
-    pub npcs: Vec<NpcPortraitView>,
+    pub characters: Vec<CharacterPortraitView>,
 }
 
 impl VisualSidebarViewModel {
     pub fn new(
         room_image_path: Option<String>,
         room_name: String,
-        npc_data: Vec<NpcPortraitView>,
+        character_data: Vec<CharacterPortraitView>,
     ) -> Self {
         let room_has_image = room_image_path.is_some();
         let room_src = room_image_path.unwrap_or_default();
@@ -297,7 +297,7 @@ impl VisualSidebarViewModel {
             room_has_image,
             room_src,
             room_alt: room_name,
-            npcs: npc_data,
+            characters: character_data,
         }
     }
 }

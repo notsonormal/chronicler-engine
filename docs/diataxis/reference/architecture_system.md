@@ -29,7 +29,7 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 `Storage` is a concrete adapter with a `Backend` enum (SQLite), wrapped by `BackendKind` (Direct / Test). Every game-scoped method takes the Game as its first argument. The active-Game pointer is not storage state. Application code may call `Storage` directly when the call is part of the persistence boundary. Architectural review owns the discipline for which files sit on the boundary.
 
-The record writes of a Game's story exist only on `Tx`, and only `GameWriter` opens a unit of them (see *Who Owns What*).
+The record writes of a Game's story exist only on `Tx`, and only `GameWriter` opens a transaction of them (see *Who Owns What*).
 
 ## Settings
 
@@ -45,7 +45,7 @@ Each part owns one thing and writes only what its row names.
 
 | Part | Owns | May write |
 |---|---|---|
-| `GameWriter` (`generation/gate.rs`) | The busy-state registry (one holder for each busy Game), the guard, and the units of record writes | Every record of a Game's story and the config columns of the Game record, through a save unit: accept, stop, edit, delete, swipe switch, config save, create, reset, delete of a Game |
+| `GameWriter` (`generation/gate.rs`) | The busy-state registry (one holder for each busy Game), the guard, and the transactions of record writes | Every record of a Game's story and the config columns of the Game record, through a transaction: accept, stop, edit, delete, swipe switch, config save, create, reset, delete of a Game |
 | `JobWriter` (`generation/gate.rs`) | One Job's right to write | For its own Job only, while the job entry of its Game's holder holds its id: the Input save, the text save, the state update, the failure line, the Options save and the step name |
 | `Job` (`pipeline/job.rs`) | The plan of one request, its generations and their steps | Nothing directly. It writes through its `JobWriter` and passes ids between steps. |
 | `Narrator` (`narration/narrator.rs`) | The assembly and the model call of one Narration | Nothing. It returns text. |
@@ -55,7 +55,7 @@ Each part owns one thing and writes only what its row names.
 | `GameViewQuery` | The read-side views and the status rule | Nothing |
 | `PromptPresetService` | The preset a Game uses for the Narrator and for each hook, and the rules of a preset edit and a preset delete | Preset rows, through `Storage` |
 | `Storage` | The records on disk, the backend mutex, and the read handles `stories()` and `docks()` | Its own tables. It writes a Game's story records only inside a `Tx`. |
-| `LlmCallRecorder` | The forensics record of each LLM call | `llm_messages` rows, through `SaveLlmMessageFn` |
+| `LlmCallRecorder` | The LLM message of each LLM call | `llm_messages` rows, through `SaveLlmMessageFn` |
 | HTTP handlers | Request parsing and response rendering | Nothing. They call `Job::start`, `AutoplayRun::start`, `GameWriter`, the catalogues and `PromptPresetService`. |
 
 A running Job reads the story and the Game, and the job id check guards each of its writes. Between steps, a Job passes ids and loads each record when its step starts.

@@ -4,7 +4,7 @@
 use std::{fs, path::Path};
 
 use crate::error::EngineError;
-use crate::domain::model::character::{NpcCard, PersonaCard};
+use crate::domain::model::character::{CharacterCard, PersonaCard};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::world::{WorldCard, WorldManifest};
 use crate::adapters::driven::storage::Storage;
@@ -145,15 +145,15 @@ fn process_world_dir(
         if path.extension().and_then(|s| s.to_str()) != Some("json") {
             continue;
         }
-        match read_json_file::<NpcCard>(&path) {
-            Ok(npc) => {
-                if !existing_chars.contains(&npc.id) {
-                    storage.seed_character(world_id, &npc)?;
-                    tracing::info!("Seeded character: {}", npc.id);
+        match read_json_file::<CharacterCard>(&path) {
+            Ok(character) => {
+                if !existing_chars.contains(&character.id) {
+                    storage.seed_character(world_id, &character)?;
+                    tracing::info!("Seeded character: {}", character.id);
                 }
             }
             Err(e) => {
-                tracing::warn!("Failed to parse NPC {}: {e}", path.display())
+                tracing::warn!("Failed to parse Character {}: {e}", path.display())
             }
         }
     }

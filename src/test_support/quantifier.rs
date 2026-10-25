@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::domain::model::character::{CharacterSheet, NpcCard};
+use crate::domain::model::character::{CharacterSheet, CharacterCard};
 use crate::domain::model::map::{Direction, Room};
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
 use crate::test_support::fixtures::default_story_row;
@@ -19,8 +19,8 @@ pub fn make_room() -> Room {
     }
 }
 
-pub fn make_npc(id: &str, name: &str) -> NpcCard {
-    NpcCard {
+pub fn make_character(id: &str, name: &str) -> CharacterCard {
+    CharacterCard {
         id: id.to_string(),
         sheet: CharacterSheet {
             name: name.to_string(),

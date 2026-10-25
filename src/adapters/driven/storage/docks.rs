@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! The dock record reads: the offered set and the notice of one Game
+//! The dock record reads: the offered set and the Options failure of one Game
 
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::domain::model::dock::DockRecord;
@@ -36,7 +36,7 @@ impl DockReads<'_> {
 
                     Ok(Some(DockRecord {
                         offered: serde_json::from_str(&row.0)?,
-                        notice: row.1.as_deref().map(serde_json::from_str).transpose()?,
+                        failure: row.1.as_deref().map(serde_json::from_str).transpose()?,
                     }))
                 }
             })

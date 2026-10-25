@@ -53,7 +53,7 @@ use crate::domain::model::settings::AppSettings;
 
     <div class="preset-section">
         <h2>Quantifier Prompts</h2>
-        <p class="preset-section-desc">These prompts guide the quantifier LLM that determines NPC presence and player movement.</p>
+        <p class="preset-section-desc">These prompts guide the quantifier LLM that determines which Characters are present and player movement.</p>
         {% for card in self.quantifier_cards() %}
         {{ card }}
         {% endfor %}
@@ -127,7 +127,7 @@ use crate::domain::model::settings::AppSettings;
 
     <div class="preset-section">
         <h2>Options Prompts</h2>
-        <p class="preset-section-desc">These prompts guide the options LLM that generates the pickable next-action suggestions. Activating one sets the settings-level default; a game that chose its own Options preset keeps it.</p>
+        <p class="preset-section-desc">These prompts guide the options LLM that generates the Options to pick from. Activating one sets the settings-level default; a game that chose its own Options preset keeps it.</p>
         {% for card in self.options_cards() %}
         {{ card }}
         {% endfor %}

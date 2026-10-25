@@ -77,7 +77,7 @@ fn test_starting_scenario_serde_roundtrip() {
         description: "Intro scenario".to_string(),
         starting_room_id: "front_gates".to_string(),
         text: "".to_string(),
-        npcs: vec![],
+        characters_present: vec![],
     };
 
     let json = serde_json::to_string(&scenario).unwrap();
@@ -111,4 +111,30 @@ fn test_world_manifest_deserializes_missing_top_level_starting_room_id() {
 
     let manifest: WorldManifest = serde_json::from_str(json).unwrap();
     assert_eq!(manifest.id, "test");
+}
+
+#[test]
+fn test_world_manifest_with_the_old_scenario_key_still_loads() {
+    let json = r#"{
+        "id": "old_world",
+        "name": "Old World",
+        "description": "A World file with the older key.",
+        "global_rules": [],
+        "scenarios": [{
+            "id": "intro",
+            "name": "Intro",
+            "description": "d",
+            "starting_room_id": "start",
+            "text": "t",
+            "npcs": ["carla"]
+        }]
+    }"#;
+
+    let manifest: WorldManifest = serde_json::from_str(json).unwrap();
+
+    assert_eq!(manifest.scenarios[0].characters_present, vec!["carla"]);
+    assert_eq!(
+        WorldCard::from(manifest).scenarios[0].characters_present,
+        vec!["carla"]
+    );
 }

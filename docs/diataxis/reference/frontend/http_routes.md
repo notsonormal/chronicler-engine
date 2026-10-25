@@ -17,7 +17,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/retrigger` | `retrigger_handler` |
 | POST | `/reset` | `reset_handler` |
 | GET | `/debug/state` | `debug_state_handler` |
-| GET | `/debug/is_generating` | `debug_is_generating_handler` |
+| GET | `/debug/is_busy` | `debug_is_busy_handler` |
 | GET | `/debug/backend` | `debug_backend_handler` |
 
 ## Action
@@ -50,8 +50,8 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | GET | `/fragment/visual-sidebar` | `visual_sidebar_fragment` |
 | GET | `/fragment/options-dock` | `options_dock_fragment` |
 | GET | `/fragment/character-headshots` | `character_headshots_fragment` |
-| GET | `/status/generating` | `generating_status_handler` |
-| POST | `/status/reset-generating` | `reset_generating_handler` |
+| GET | `/status/busy` | `busy_status_handler` |
+| POST | `/status/reset-busy` | `reset_busy_handler` |
 | GET | `/fragment/llm-messages` | `llm_messages_fragment` |
 
 ## Games

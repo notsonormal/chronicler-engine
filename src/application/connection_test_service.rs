@@ -4,7 +4,7 @@
 //! The test must not pass through `LlmCallRecorder`, which persists every
 //! attempt: a row would move the role's health and the failure banner, and a
 //! short probe can pass where a real call fails. The provider is built from
-//! the connection config instead, so the call leaves no forensic row.
+//! the LlmConnection instead, so the call leaves no LLM message.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -12,10 +12,10 @@ use std::time::Instant;
 use crate::application::errors::ApplicationError;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::settings_service::SettingsService;
-use crate::domain::model::settings::LlmProviderConfig;
+use crate::domain::model::settings::LlmConnection;
 use crate::error::{EngineError, LlmFailure};
 
-pub type ProviderFactory = Arc<dyn Fn(&LlmProviderConfig) -> Arc<dyn LlmProvider> + Send + Sync>;
+pub type ProviderFactory = Arc<dyn Fn(&LlmConnection) -> Arc<dyn LlmProvider> + Send + Sync>;
 
 /// The test's agent label. It is not a role, so the call never lands in
 /// `role_health`, which is keyed by the real agent names.
@@ -59,7 +59,7 @@ impl ConnectionTestService {
 
     pub fn test_connection(
         &self,
-        connection: &LlmProviderConfig,
+        connection: &LlmConnection,
     ) -> Result<ConnectionTestResult, ApplicationError> {
         connection.check_api_key_available()?;
         let provider = (self.provider_factory)(connection);

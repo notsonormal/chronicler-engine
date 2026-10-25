@@ -5,7 +5,7 @@ use askama::Template;
 
 use crate::application::games::view_query::RoleHealth;
 use crate::domain::model::agent::Role;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig, TextCheckMode};
+use crate::domain::model::settings::{AppSettings, LlmConnection, TextCheckMode};
 use crate::adapters::driving::http::builders::headers::{
     connections_degraded, connections_degraded_marker, role_health_cell, role_health_cell_id,
     role_label,
@@ -89,7 +89,7 @@ pub struct RoleRowView {
 pub struct SettingsTemplate {
     pub roles: Vec<RoleRowView>,
     pub degraded_marker: SafeHtml,
-    pub connections: Vec<LlmProviderConfig>,
+    pub connections: Vec<LlmConnection>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
     pub error: Option<SafeHtml>,
@@ -231,7 +231,7 @@ pub struct ConnectionFormTemplate {
 }
 
 impl ConnectionFormTemplate {
-    pub fn new(connection: Option<&LlmProviderConfig>) -> Self {
+    pub fn new(connection: Option<&LlmConnection>) -> Self {
         let provider = connection.map(|conn| match conn.provider {
             crate::domain::model::llm_backend::LlmBackendType::OpenRouter => "openrouter",
             crate::domain::model::llm_backend::LlmBackendType::DeepSeek => "deepseek",

@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/narrative/narration_system.md]
-//! LLM call forensics record DTO
+//! LLM message DTO: the stored record of one model call
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

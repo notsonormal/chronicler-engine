@@ -52,8 +52,8 @@ fn test_mock_complete_empty() {
 #[test]
 fn test_mock_complete_per_call_responses() {
     let backend = MockBackend::default().with_prompt_responses(vec![
-        r#"{"npcs_in_room": ["carla"], "movement": {"type": null}}"#.to_string(),
-        r#"{"npcs_in_room": [], "movement": {"type": "entering", "destination": "kitchen"}}"#
+        r#"{"characters_present": ["carla"], "movement": {"type": null}}"#.to_string(),
+        r#"{"characters_present": [], "movement": {"type": "entering", "destination": "kitchen"}}"#
             .to_string(),
     ]);
     let result1 = backend.complete("quantifier", "sys", "user", None);
@@ -190,7 +190,7 @@ fn test_mock_backend_builders_compose() {
 #[test]
 fn test_mock_options_canned_response_when_unseeded() {
     // The unseeded options branch is what browser/E2E runs exercise: the
-    // default mock must hand the options agent parseable suggestions.
+    // default mock must hand the options agent parseable Options.
     let backend = MockBackend::default();
     let result = backend.complete("options", "sys", "scene context", None);
     assert!(result.is_ok());

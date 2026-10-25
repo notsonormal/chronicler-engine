@@ -7,11 +7,11 @@ use askama::Template;
 
 use crate::adapters::driving::http::builders::headers::header_fragment_html;
 use crate::adapters::driving::http::templates::{
-    CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrativeLogTemplate, OptionsDockTemplate,
+    CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrationLogTemplate, OptionsDockTemplate,
     VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
-    NpcPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
+    CharacterPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
 use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::catalogue::GameCatalogue;
@@ -103,7 +103,7 @@ impl AppState {
             .map_err(|e| EngineError::Config(Self::render_error_context("story log", e)))?;
 
         let view_only = self.game_view_query.autoplay_holds(game_id);
-        NarrativeLogTemplate::new(&window.entries, window.retrigger_allowed, view_only)
+        NarrationLogTemplate::new(&window.entries, window.retrigger_allowed, view_only)
             .render()
             .map_err(|e| EngineError::Template(Self::render_error_context("story log", e)))
     }
@@ -114,17 +114,17 @@ impl AppState {
             .get_current_room_view(game_id)
             .map_err(|e| EngineError::Config(Self::render_error_context("visual sidebar", e)))?;
 
-        let npc_data = self
+        let character_data = self
             .game_view_query
-            .get_npc_headshots(game_id, true)
+            .get_character_headshots(game_id, true)
             .map_err(|e| EngineError::Config(Self::render_error_context("visual sidebar", e)))?;
 
-        let npc_portraits: Vec<NpcPortraitView> = npc_data
+        let character_portraits: Vec<CharacterPortraitView> = character_data
             .into_iter()
-            .map(|(image_path, name)| NpcPortraitView { image_path, name })
+            .map(|(image_path, name)| CharacterPortraitView { image_path, name })
             .collect();
 
-        let vm = VisualSidebarViewModel::new(image_path, room_name, npc_portraits);
+        let vm = VisualSidebarViewModel::new(image_path, room_name, character_portraits);
         let template = VisualSidebarTemplate::new(vm);
         template
             .render()
@@ -139,7 +139,7 @@ impl AppState {
         // The one registry, not a saved record, answers "is something generating?".
         let is_busy = self.game_view_query.is_busy(game_id);
 
-        let vm = OptionsDockViewModel::new(dock.offered, is_busy, dock.notice);
+        let vm = OptionsDockViewModel::new(dock.offered, is_busy, dock.failure);
         let template = OptionsDockTemplate::new(vm);
         template
             .render()
@@ -147,19 +147,19 @@ impl AppState {
     }
 
     pub fn render_character_headshots(&self, game_id: GameId) -> Result<String> {
-        let npc_data = self
+        let character_data = self
             .game_view_query
-            .get_npc_headshots(game_id, false)
+            .get_character_headshots(game_id, false)
             .map_err(|e| {
                 EngineError::Config(Self::render_error_context("character headshots", e))
             })?;
 
-        let npc_portraits: Vec<NpcPortraitView> = npc_data
+        let character_portraits: Vec<CharacterPortraitView> = character_data
             .into_iter()
-            .map(|(image_path, name)| NpcPortraitView { image_path, name })
+            .map(|(image_path, name)| CharacterPortraitView { image_path, name })
             .collect();
 
-        let template = CharacterHeadshotsTemplate::new(npc_portraits);
+        let template = CharacterHeadshotsTemplate::new(character_portraits);
         template.render().map_err(|e| {
             EngineError::Template(Self::render_error_context("character headshots", e))
         })

@@ -15,7 +15,7 @@ exemplar cannot state are inlined here.
 **Purpose.** Test an application collaborator through the production wiring.
 `TestAppBuilder` defaults to `empty_sqlite_storage()`: the production SQLite backend
 over `DbPool::new(":memory:")`. Pass an `Arc<Storage>` via `.storage(...)` when
-the test wires its own instance. Records persist through save units the way
+the test wires its own instance. Records persist through transactions the way
 they do in production, so a test can assert on the state a service left behind.
 
 **The builder.** `TestAppBuilder` (`src/test_support/test_app_builder.rs`).
@@ -34,7 +34,7 @@ Job collaborators with `make_test_job_deps` (`src/test_support/context.rs`).
 Either way the test scripts every model call a Job makes (Cross-cutting 7).
 
 **Observing state.** `state.game_view_query` is the read seam: `story_messages`
-for the whole story, `dock` for the offered set and the notice, `status` for
+for the whole story, `dock` for the offered set and the Options failure, `status` for
 the step or the failure line. Take the Game from the app the test built,
 through the shared `test_support::active_game_of(&state)` (it panics when no
 Game is active, which names a broken fixture). Injected `JobDeps` are rebound to

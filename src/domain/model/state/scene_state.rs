@@ -1,10 +1,12 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Current scene NPCs
+//! The Characters present in one Swipe state
 
 use serde::{Deserialize, Serialize};
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SceneState {
-    pub npcs_in_area: Vec<NpcCard>,
+    /// The stored key is `npcs_in_area`.
+    #[serde(rename = "npcs_in_area")]
+    pub characters_present: Vec<CharacterCard>,
 }

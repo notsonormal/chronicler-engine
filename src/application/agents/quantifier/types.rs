@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Quantifier type definitions
 
-use crate::domain::model::character::NpcCard;
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::Room;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::message_types::StoryRow;
@@ -10,11 +10,11 @@ use crate::domain::model::state::message_types::StoryRow;
 /// retry and the fallback read it, and the Quantifier result does not carry it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum QuantifierConfidence {
-    /// JSON parsed successfully and all NPC IDs are valid.
+    /// JSON parsed successfully and all Character IDs are valid.
     High,
-    /// Text fallback was used; some valid NPC IDs were found.
+    /// Text fallback was used; some valid Character IDs were found.
     Medium,
-    /// No valid NPC IDs could be extracted; fallback data should be used.
+    /// No valid Character IDs could be extracted; fallback data should be used.
     #[default]
     Low,
 }
@@ -27,7 +27,7 @@ impl QuantifierConfidence {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct QuantifierParseResult {
-    pub npc_ids: Vec<String>,
+    pub character_ids: Vec<String>,
     pub confidence: QuantifierConfidence,
 }
 
@@ -48,14 +48,14 @@ pub(crate) struct MovementParseResult {
 /// One parsed answer of the model: the Characters present and the movement.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct QuantifierReading {
-    pub npcs: QuantifierParseResult,
+    pub characters: QuantifierParseResult,
     pub movement: MovementParseResult,
 }
 
 impl QuantifierReading {
     pub(crate) fn into_result(self) -> QuantifierResult {
         QuantifierResult {
-            present: self.npcs.npc_ids,
+            present: self.characters.character_ids,
             destination: self.movement.destination,
         }
     }
@@ -68,8 +68,8 @@ pub struct RoomInfo {
 
 pub struct QuantifierPromptContext<'a> {
     pub room: &'a Room,
-    pub previous_room_npcs: &'a [NpcCard],
-    pub all_known_npcs: &'a [NpcCard],
+    pub previous_characters_present: &'a [CharacterCard],
+    pub all_known_characters: &'a [CharacterCard],
     pub all_rooms: &'a [RoomInfo],
     pub player_name: &'a str,
     pub recent_history: &'a [StoryRow],

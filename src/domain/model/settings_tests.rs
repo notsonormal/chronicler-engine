@@ -5,7 +5,7 @@ use std::str::FromStr;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::test_support::test_connection;
 use crate::domain::model::settings::{
-    AppSettings, LlmProviderConfig, ModePresetRegistry, NarrativePerspective, NarrativeTense,
+    AppSettings, LlmConnection, ModePresetRegistry, NarrativePerspective, NarrativeTense,
     NarratorMode, ReasoningEffort, TextCheckMode, TextCheckSettings,
 };
 
@@ -435,7 +435,7 @@ fn set_active_preset_adds_a_bundle_for_an_absent_mode() {
 
 #[test]
 fn connection_resolve_api_key() {
-    let conn = LlmProviderConfig {
+    let conn = LlmConnection {
         name: "Test".into(),
         model: "model".into(),
         api_key: Some("direct-key".into()),
@@ -446,7 +446,7 @@ fn connection_resolve_api_key() {
         Some("direct-key".into())
     );
 
-    let conn_no_key = LlmProviderConfig {
+    let conn_no_key = LlmConnection {
         api_key: None,
         ..conn
     };
@@ -461,7 +461,7 @@ fn connection_resolve_api_key() {
 
 #[test]
 fn resolve_api_key_blank_counts_as_absent() {
-    let base = LlmProviderConfig {
+    let base = LlmConnection {
         name: "Blank".into(),
         model: "model".into(),
         api_key: Some(String::new()),
@@ -469,7 +469,7 @@ fn resolve_api_key_blank_counts_as_absent() {
     };
     let env = |_: &str| Some("env-key".to_string());
     for blank in ["", "   ", "\t"] {
-        let conn = LlmProviderConfig {
+        let conn = LlmConnection {
             api_key: Some(blank.to_string()),
             ..base.clone()
         };
@@ -479,7 +479,7 @@ fn resolve_api_key_blank_counts_as_absent() {
             "blank stored key {blank:?} must not shadow the environment fallback"
         );
     }
-    let conn = LlmProviderConfig {
+    let conn = LlmConnection {
         api_key: None,
         ..base.clone()
     };
@@ -493,7 +493,7 @@ fn resolve_api_key_blank_counts_as_absent() {
 
 #[test]
 fn check_api_key_available() {
-    let keyless = LlmProviderConfig::new("or-1", "Narrator", LlmBackendType::OpenRouter);
+    let keyless = LlmConnection::new("or-1", "Narrator", LlmBackendType::OpenRouter);
 
     let error = keyless
         .check_api_key_available_with(|_| None)
@@ -508,7 +508,7 @@ fn check_api_key_available() {
         "the error must name the environment fallback, got: {message}"
     );
 
-    let keyed = LlmProviderConfig {
+    let keyed = LlmConnection {
         api_key: Some("sk-or-test".into()),
         ..keyless.clone()
     };
@@ -525,7 +525,7 @@ fn check_api_key_available() {
         LlmBackendType::Mock,
         LlmBackendType::DeepSeek,
     ] {
-        let conn = LlmProviderConfig::new("keyless", "Keyless", provider);
+        let conn = LlmConnection::new("keyless", "Keyless", provider);
         assert!(
             conn.check_api_key_available_with(|_| None).is_ok(),
             "{provider:?} needs no API key"
@@ -535,7 +535,7 @@ fn check_api_key_available() {
 
 #[test]
 fn connection_resolve_base_url() {
-    let conn = LlmProviderConfig {
+    let conn = LlmConnection {
         name: "Test".into(),
         model: "model".into(),
         base_url: Some("http://custom:11434".into()),
@@ -543,7 +543,7 @@ fn connection_resolve_base_url() {
     };
     assert_eq!(conn.resolve_base_url(), "http://custom:11434");
 
-    let conn_default = LlmProviderConfig {
+    let conn_default = LlmConnection {
         base_url: None,
         ..conn
     };
@@ -553,26 +553,26 @@ fn connection_resolve_base_url() {
 #[test]
 fn connection_resolve_max_context_tokens_defaults() {
     assert_eq!(
-        LlmProviderConfig::new("t", "T", LlmBackendType::Ollama).resolve_max_context_tokens(),
+        LlmConnection::new("t", "T", LlmBackendType::Ollama).resolve_max_context_tokens(),
         8192
     );
     assert_eq!(
-        LlmProviderConfig::new("t", "T", LlmBackendType::OpenRouter).resolve_max_context_tokens(),
+        LlmConnection::new("t", "T", LlmBackendType::OpenRouter).resolve_max_context_tokens(),
         32768
     );
     assert_eq!(
-        LlmProviderConfig::new("t", "T", LlmBackendType::DeepSeek).resolve_max_context_tokens(),
+        LlmConnection::new("t", "T", LlmBackendType::DeepSeek).resolve_max_context_tokens(),
         32768
     );
     assert_eq!(
-        LlmProviderConfig::new("t", "T", LlmBackendType::Mock).resolve_max_context_tokens(),
+        LlmConnection::new("t", "T", LlmBackendType::Mock).resolve_max_context_tokens(),
         4096
     );
 }
 
 #[test]
 fn connection_resolve_max_context_tokens_override() {
-    let mut conn = LlmProviderConfig::new("t", "T", LlmBackendType::Ollama);
+    let mut conn = LlmConnection::new("t", "T", LlmBackendType::Ollama);
     conn.max_context_tokens = Some(16384);
     assert_eq!(conn.resolve_max_context_tokens(), 16384);
 
@@ -613,7 +613,7 @@ fn reasoning_effort_from_str_unknown_errors() {
 #[test]
 fn connection_json_without_reasoning_effort_reads_as_none() {
     let json = r#"{"id":"c","name":"c","provider":"OpenRouter","model":"m"}"#;
-    let connection: LlmProviderConfig = serde_json::from_str(json).unwrap();
+    let connection: LlmConnection = serde_json::from_str(json).unwrap();
     assert_eq!(connection.reasoning_effort, None);
 }
 
@@ -621,7 +621,7 @@ fn connection_json_without_reasoning_effort_reads_as_none() {
 fn connection_json_with_reasoning_effort_reads_the_value() {
     let json =
         r#"{"id":"c","name":"c","provider":"OpenRouter","model":"m","reasoning_effort":"none"}"#;
-    let connection: LlmProviderConfig = serde_json::from_str(json).unwrap();
+    let connection: LlmConnection = serde_json::from_str(json).unwrap();
     assert_eq!(connection.reasoning_effort, Some(ReasoningEffort::Off));
 }
 
@@ -629,12 +629,12 @@ fn connection_json_with_reasoning_effort_reads_the_value() {
 fn connection_json_with_unknown_reasoning_effort_fails() {
     let json =
         r#"{"id":"c","name":"c","provider":"OpenRouter","model":"m","reasoning_effort":"turbo"}"#;
-    assert!(serde_json::from_str::<LlmProviderConfig>(json).is_err());
+    assert!(serde_json::from_str::<LlmConnection>(json).is_err());
 }
 
 #[test]
 fn connection_without_reasoning_effort_does_not_serialize_the_field() {
-    let connection = LlmProviderConfig::new("c", "c", LlmBackendType::OpenRouter);
+    let connection = LlmConnection::new("c", "c", LlmBackendType::OpenRouter);
     let json = serde_json::to_string(&connection).unwrap();
     assert!(!json.contains("reasoning_effort"), "{json}");
 }
@@ -674,4 +674,47 @@ fn seed_settings_turn_reasoning_off_for_deepseek_v4_flash() {
     for connection in flash {
         assert_eq!(connection.reasoning_effort, Some(ReasoningEffort::Off));
     }
+}
+
+#[test]
+fn settings_stored_with_every_connection_key_still_load() {
+    let json = r#"{
+        "connections": [{
+            "id": "stored",
+            "name": "Stored connection",
+            "provider": "Ollama",
+            "model": "a-model",
+            "api_key": "a-key",
+            "base_url": "http://localhost:11434/v1",
+            "single_user_message": true,
+            "max_tokens": 512,
+            "max_context_tokens": 8192,
+            "reasoning_effort": "low"
+        }],
+        "narration_connection_id": "stored",
+        "quantifier_connection_id": "stored"
+    }"#;
+
+    let settings: AppSettings = serde_json::from_str(json).expect("deserialize stored settings");
+
+    let connection = settings
+        .find_connection("stored")
+        .expect("the connection loads");
+    assert_eq!(connection.provider, LlmBackendType::Ollama);
+    assert_eq!(connection.model, "a-model");
+    assert_eq!(connection.api_key.as_deref(), Some("a-key"));
+    assert_eq!(
+        connection.base_url.as_deref(),
+        Some("http://localhost:11434/v1")
+    );
+    assert!(connection.single_user_message);
+    assert_eq!(connection.max_tokens, Some(512));
+    assert_eq!(connection.max_context_tokens, Some(8192));
+    assert_eq!(connection.reasoning_effort, Some(ReasoningEffort::Low));
+    let rewritten = serde_json::to_value(&settings).expect("serialize");
+    assert_eq!(
+        rewritten["connections"][0]["base_url"],
+        "http://localhost:11434/v1"
+    );
+    assert_eq!(rewritten["connections"][0]["api_key"], "a-key");
 }

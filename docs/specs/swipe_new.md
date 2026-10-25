@@ -59,7 +59,7 @@ Then the story log contains a Narration entry whose text reflects "sprint forwar
 #### Scenario 9.5: Main retry re-evaluates triggers
 
 ```gherkin
-Given a game state with an NPC whose trigger fires when the player is in "room2"
+Given a game state with a Character whose trigger fires when the player is in "room2"
 And a quantifier backend that returns no movement on the first action, then movement to "room2" on the retry prompt
 When the client sends POST /action (no trigger fires — player not in "room2")
 And the Game is no longer busy
@@ -124,7 +124,7 @@ Then the player is still in "room2" (an event retry applies no movement)
 
 ```gherkin
 Given a game state whose last message is a non-event Narration
-And a stored trigger context whose continuation narration failed
+And a stored event record whose continuation narration failed
 When the client sends POST /retrigger
 And the Game is no longer busy (the event narration is appended)
 And the client sends POST /swipe/new
@@ -142,14 +142,14 @@ And a Quantifier backend that leaves Gabriella out of the retry's continuation
 When the client sends POST /swipe/new
 And the Game is no longer busy
 Then Gabriella's encounter count is 0 (the first Swipe's encounter does not carry over)
-And the scene holds no Character
+And no Character is present
 And the event Narration has 2 swipes
 ```
 
-#### Scenario 10.6: An event retry after the later Action's Messages are deleted reuses its own trigger context
+#### Scenario 10.6: An event retry after the later Action's Messages are deleted reuses its own event record
 
 ```gherkin
-Given a game state whose event Narration carries the trigger context of the Trigger that fired it
+Given a game state whose event Narration carries the event record of the Trigger that fired it
 And a later Action that fires another Trigger and appends its own event Narration
 And the client deletes that later Action's Messages
 When the client sends POST /swipe/new
@@ -194,40 +194,40 @@ When the client sends POST /swipe/new
 Then the response is 400 Bad Request
 ```
 
-#### Scenario 11.5: Retry LLM failure sets Error
+#### Scenario 11.5: Retry LLM failure sets Failed
 
 ```gherkin
 Given a game state where the last message is a non-event Narration
 And a narrator backend that fails for the narration request
 When the client sends POST /swipe/new
 And the Game is no longer busy
-Then the generation status is Error
+Then the generation status is Failed
 And the original narration's swipes are unchanged (no new swipe appended)
 ```
 
-#### Scenario 11.6: Retry empty narration sets Error
+#### Scenario 11.6: Retry empty narration sets Failed
 
 ```gherkin
 Given a game state where the last message is a non-event Narration
 And a narrator backend that returns an empty string for the narration prompt
 When the client sends POST /swipe/new
 And the Game is no longer busy
-Then the generation status is Error, with a failure that contains "empty"
+Then the generation status is Failed, with a failure that contains "empty"
 And the original narration's swipes are unchanged (no new swipe appended)
 ```
 
-#### Scenario 11.7: Retry room not found sets Error
+#### Scenario 11.7: Retry room not found sets Failed
 
 ```gherkin
 Given a Game whose state before its last Narration names a room that is not on the map
 And the last Message is a non-event Narration
 When the client sends POST /swipe/new
 And the Game is no longer busy
-Then the generation status is Error, with a failure that names the invalid room
+Then the generation status is Failed, with a failure that names the invalid room
 And the original narration's swipes are unchanged (no new swipe appended)
 ```
 
-#### Scenario 11.8: Event retry trigger narration failure sets Error and preserves main narration
+#### Scenario 11.8: Event retry trigger narration failure sets Failed and preserves main narration
 
 ```gherkin
 Given a game state where the last message is an event Narration
@@ -295,11 +295,11 @@ And the generation status is Idle
 And the player is in "room2" (a re-impersonate runs the analysis)
 ```
 
-#### Scenario 22.2: User-regen retry generates a new Input swipe
+#### Scenario 22.2: Retry of a typed Input generates a new Input swipe
 
 ```gherkin
 Given a game state whose last message is an Input whose active swipe has no stored inputs
-And a narrator backend that returns "I sprint forward." for the user-regen prompt
+And a narrator backend that returns "I sprint forward." for the prompt of the Retry of a typed Input
 When the client sends POST /swipe/new
 And the Game is no longer busy
 Then the story log contains exactly one Input entry (the original message ID unchanged)
@@ -373,19 +373,19 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   error, never a step.
 - **I.2** Retry (`POST /swipe/new`) never adds a new message to
   the story log. It appends a swipe to an existing message. Re-impersonate
-  and user-regen retries append the new swipe to the existing Input message.
+  and Retry of a typed Input append the new swipe to the existing Input message.
 - **I.4** Retry never modifies the text of any prior swipe. Main
   retry uses the input's current active swipe text, which the user may
   have edited before clicking retry, but the retry itself does not
-  change it. Re-impersonate and user-regen retries generate a new
+  change it. Re-impersonate and Retry of a typed Input generate a new
   swipe without altering prior swipes.
 - **I.5** Each retry appends exactly one swipe. Repeated retries on the
   same message increment the swipe count by one each time.
 - **I.6** A retry moves the player nowhere except through the movement its
   own generation reports. A main retry and a re-impersonate retry apply the
   movement their generation reports. An event retry applies no movement, so
-  the player stays in the room that event narration reported. A user-regen
-  retry narrates the replacement message only.
+  the player stays in the room that event narration reported. Retry of a typed
+  Input narrates the replacement message only.
 - **I.7** A request whose start state is missing is a data-integrity
   violation: 500 and the failure line "The data for this request is
   missing: …", not a user error (400).

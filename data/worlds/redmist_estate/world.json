@@ -20,7 +20,7 @@
             "description": "Carla introduces herself as your bodyguard at the front gates",
             "starting_room_id": "front_gates",
             "text": "Standing tall and commanding, Carla approaches {{user}} with a piercing gaze. She extends her arm for a firm handshake. \"I'm Carla. I'll be your bodyguard both inside the Redmist Estate and wherever else you go. You'll notice me around frequently, so don't try to shake me off.\" She steps back, crossing her arms. \"I need you to understand that your safety is my top priority. Everything I do is to keep you safe. Let's work together to make sure nothing compromises that. Firstly, I'll ask to borrow your phone. It won't take long.\"",
-            "npcs": ["carla"]
+            "characters": ["carla"]
         }
     ]
 }

@@ -190,8 +190,8 @@ fn complete_propagates_provider_error_and_records_failure_row() {
         .complete("narrator", "system", "user", None)
         .unwrap_err();
 
-    // Error propagates (MockBackend uses Narrative error variant)
-    assert!(matches!(err, EngineError::Narrative(_)));
+    // Error propagates (MockBackend uses Narration error variant)
+    assert!(matches!(err, EngineError::Narration(_)));
 
     let saved = storage
         .list_latest_llm_messages(10)
@@ -275,7 +275,7 @@ fn complete_returns_provider_error_even_when_failure_save_fails() {
 
     let err = recorder.complete("narrator", "s", "u", None).unwrap_err();
     assert!(
-        matches!(err, EngineError::Narrative(_)),
+        matches!(err, EngineError::Narration(_)),
         "the provider error must survive a failed forensics write"
     );
 }

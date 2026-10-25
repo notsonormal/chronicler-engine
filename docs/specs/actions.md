@@ -35,12 +35,12 @@ And the Narration message's text is "It is a small wooden room."
 And the generation status is Idle
 ```
 
-#### Scenario 1.4: Action whose quantifier detects an NPC fires the trigger
+#### Scenario 1.4: Action whose quantifier detects a Character fires the trigger
 
 ```gherkin
-Given a game state with an NPC "npc_1" whose Trigger fires on the first meeting
-And the current room's NPCs include "npc_1"
-And a quantifier backend that responds with {"npcs_in_room": ["npc_1"]} for the quantifier prompt
+Given a game state with a Character "character_1" whose Trigger fires on the first meeting
+And the current room's Characters include "character_1"
+And a quantifier backend that responds with {"characters_present": ["character_1"]} for the quantifier prompt
 And a narrator backend that returns valid narration for both main and trigger prompts
 When the client POST /action with command="enter the shop"
 And the Game is no longer busy
@@ -61,25 +61,25 @@ And that Narration message's text is "The scene continues."
 And the generation status is Idle
 ```
 
-#### Scenario 1.6: Action trigger continuation re-runs the quantifier and detects newly-present NPCs
+#### Scenario 1.6: Action trigger continuation re-runs the quantifier and detects newly-present Characters
 
 ```gherkin
-Given a game state with an NPC "gabriella" present in the current room
+Given a game state with a Character "gabriella" present in the current room
 And a quantifier backend that returns [] for the first quantifier call then ["gabriella"] for the second
 And a narrator backend that returns valid narration for both main and trigger prompts
 When the client POST /action with command="enter shop"
 And the Game is no longer busy
-Then the scene's NPCs include "gabriella"
+Then the Characters present include "gabriella"
 And the player has met "gabriella" once
 And the player is currently meeting "gabriella"
 ```
 
-#### Scenario 1.7: NPC without triggers produces narration with no event header
+#### Scenario 1.7: Character without triggers produces narration with no event header
 
 ```gherkin
-Given a game state with an NPC "bartender" in the current room
-And the NPC has no triggers
-And a quantifier backend that returns {"npcs_in_room": ["bartender"]} for the quantifier prompt
+Given a game state with a Character "bartender" in the current room
+And the Character has no triggers
+And a quantifier backend that returns {"characters_present": ["bartender"]} for the quantifier prompt
 And a narrator backend that returns "The bartender nods." for the main narration prompt
 When the client POST /action with command="talk to bartender"
 And the Game is no longer busy
@@ -91,9 +91,9 @@ And the generation status is Idle
 #### Scenario 1.8: Repeat action against a one-shot trigger does not refire
 
 ```gherkin
-Given a game state with an NPC "shopkeeper" whose Trigger fires on the first meeting
-And the current room's NPCs include "shopkeeper"
-And a quantifier backend that returns {"npcs_in_room": ["shopkeeper"]} for every quantifier call
+Given a game state with a Character "shopkeeper" whose Trigger fires on the first meeting
+And the current room's Characters include "shopkeeper"
+And a quantifier backend that returns {"characters_present": ["shopkeeper"]} for every quantifier call
 And a narrator backend that returns valid narration for both main and trigger prompts
 When the client POST /action with command="talk to shopkeeper"
 And the Game is no longer busy
@@ -184,10 +184,10 @@ Then the generation status is an error whose text is non-empty
 #### Scenario 2.4: Trigger narration failure preserves the main narration and reports an error
 
 ```gherkin
-Given a game state with an NPC "npc_1" whose Trigger fires on the first meeting
-And a quantifier backend that returns {"npcs_in_room": ["npc_1"]}
+Given a game state with a Character "character_1" whose Trigger fires on the first meeting
+And a quantifier backend that returns {"characters_present": ["character_1"]}
 And a narrator backend that succeeds for the main prompt but fails for the trigger prompt
-When the client POST /action with command="examine the npc"
+When the client POST /action with command="examine the character"
 And the Game is no longer busy
 Then the generation status is an error whose text is "The event narration failed."
 And the status error's disclosure holds the failure line of the narrator call
@@ -195,16 +195,16 @@ And the story log gained no entry for the failure and still ends in the main Nar
 And the story-log fragment still offers the `.retrigger-btn` control on that Narration
 ```
 
-#### Scenario 2.5: A failed or unparseable quantifier answer still completes the action with the prior NPC set
+#### Scenario 2.5: A failed or unparseable quantifier answer still completes the action with the prior Character set
 
 ```gherkin
-Given a game state with an NPC "npc_1" in the current room
+Given a game state with a Character "character_1" in the current room
 And a narrator backend that returns a non-empty narration for any prompt
-And a quantifier backend that either fails every call or answers on both attempts with text that is not a room report and names no known NPC
+And a quantifier backend that either fails every call or answers on both attempts with text that is not a room report and names no known Character
 When the client POST /action with command="look"
 And the Game is no longer busy
 Then the generation status is Idle
-And the scene's NPCs still include "npc_1"
+And the Characters present still include "character_1"
 ```
 
 #### Scenario 2.6: An Action whose needed data is missing answers 500 with the missing-data line
@@ -215,7 +215,7 @@ When the client POST /action with command="look"
 Then the response is 500 Internal Server Error
 And the response carries the line "The data for this request is missing: the persona."
 And the story log gains no Message
-When the client GET /status/generating
+When the client GET /status/busy
 Then the status response carries the same line
 And the raw error text is reachable only inside that response's disclosure
 ```

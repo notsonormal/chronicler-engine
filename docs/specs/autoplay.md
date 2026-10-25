@@ -2,8 +2,8 @@
 
 Endpoints:
 - `POST /autoplay` (the start; form field `cycles`)
-- `POST /status/reset-generating` (the stop)
-- `GET /status/generating` (the progress)
+- `POST /status/reset-busy` (the stop)
+- `GET /status/busy` (the progress)
 
 An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one after the other: an `/impersonate` Job, then a Continue Job that answers the Input the first one wrote. The run holds its Game from its start to its end, also between two Jobs. A **cycle** ends when a Job of the run ends without a failure line and leaves the story on a Narration. So an Input is answered by a Continue Job, or by the event Narration of a Trigger that fires in the Job that wrote the Input. The **budget** is the number of cycles: it counts the answered Inputs of the run.
 
@@ -62,7 +62,7 @@ And the Game is not busy
 And no further Job of the run starts
 ```
 
-#### Scenario 41.5: A failed Options run writes its Notice and the run goes on
+#### Scenario 41.5: A failed Options run writes its Options failure and the run goes on
 
 ```gherkin
 Given a Game whose World has the always-on Options toggle
@@ -70,7 +70,7 @@ And an Options run that fails at the end of each Continue Job
 When the client POST /autoplay with cycles=2
 And the run ends
 Then the story log holds both cycles
-And the dock shows the Notice of the failed Options run
+And the dock shows the Options failure of the failed Options run
 And the Game is idle
 ```
 
@@ -78,7 +78,7 @@ And the Game is idle
 
 ```gherkin
 Given a run whose first Job is held at its narrator call
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 Then the stop answers "reset"
 And the Game is idle at once
 When the Job's model answer arrives after the stop
@@ -91,7 +91,7 @@ And the client can start a Job on the Game
 
 ```gherkin
 Given a run between its first Job and its second Job
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 Then the stop answers "reset"
 And the status poll answers "idle"
 When the run comes to its next Job
@@ -175,7 +175,7 @@ And the client POST /games/:id/presets with another system preset
 Then each response status is 200
 And each response body carries "Still thinking..."
 And the Game's config is as it was
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 And the run comes to its next Job
 And the client POST /games/:id/posture with another perspective and tense
 Then the Game's posture is the new one
@@ -193,10 +193,10 @@ When the Impersonate Job of the second cycle is at its narrator call
 Then the status poll answers "autoplay 2/2 narrating"
 
 Given a run between its first Job and its second Job
-When the client requests GET /status/generating, GET /debug/is_generating and GET /debug/state
+When the client requests GET /status/busy, GET /debug/is_busy and GET /debug/state
 Then the status poll answers "autoplay 1/2"
 And the debug response body is "true"
-And the debug state reports the Game as generating, with no step
+And the debug state reports the status "Busy", with no step
 ```
 
 #### Scenario 41.14: A run goes on when the client switches the active Game
@@ -265,7 +265,7 @@ Then every Edit, Delete, Previous swipe and Retry control carries the `disabled`
 And every option button carries the `disabled` attribute
 And the entries and their text are as before
 
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 And the client GET /fragment/story-log and GET /fragment/options-dock
 Then none of those controls carries the `disabled` attribute
 ```
@@ -291,7 +291,7 @@ Given a run that holds the Game before its first Job on the active Game
 When the client GET /fragment/games
 Then the Narrator Mode, Perspective, Tense and four preset selects of the active Game carry the `disabled` attribute
 
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 And the client GET /fragment/games
 Then none of those selects carries the `disabled` attribute
 ```
@@ -316,7 +316,7 @@ And a run that holds the Game before its first Job
 When the client GET /fragment/story-log
 Then the Retrigger control carries the `disabled` attribute
 
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 And the client GET /fragment/story-log
 Then the Retrigger control does not carry the `disabled` attribute
 
@@ -325,7 +325,7 @@ And a run that holds the Game before its first Job
 When the client GET /fragment/story-log
 Then the Next swipe control carries the `disabled` attribute
 
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 And the client GET /fragment/story-log
 Then the Next swipe control does not carry the `disabled` attribute
 ```

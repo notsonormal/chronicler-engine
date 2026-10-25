@@ -11,23 +11,23 @@ use crate::application::errors::ApplicationError;
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::application::settings_service::SettingsService;
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::error::{EngineError, LlmFailure};
 use crate::test_support::test_connection;
 
-fn mock_connection(id: &str, model: &str) -> LlmProviderConfig {
-    LlmProviderConfig {
+fn mock_connection(id: &str, model: &str) -> LlmConnection {
+    LlmConnection {
         model: model.to_string(),
         ..test_connection(id, LlmBackendType::Mock)
     }
 }
 
 fn passing_factory() -> ProviderFactory {
-    Arc::new(|_config: &LlmProviderConfig| Arc::new(MockBackend::new()) as Arc<dyn LlmProvider>)
+    Arc::new(|_config: &LlmConnection| Arc::new(MockBackend::new()) as Arc<dyn LlmProvider>)
 }
 
 fn failing_factory() -> ProviderFactory {
-    Arc::new(|_config: &LlmProviderConfig| {
+    Arc::new(|_config: &LlmConnection| {
         Arc::new(MockBackend::new().with_fail()) as Arc<dyn LlmProvider>
     })
 }
@@ -98,7 +98,7 @@ fn test_saved_connection_reports_the_provider_result() {
 
 #[test]
 fn test_saved_connection_loads_the_provider_from_its_config() {
-    let (service, _storage) = make_service(Arc::new(|config: &LlmProviderConfig| {
+    let (service, _storage) = make_service(Arc::new(|config: &LlmConnection| {
         assert_eq!(config.model, "mock-model-a");
         Arc::new(MockBackend::new().with_model("built-from-config")) as Arc<dyn LlmProvider>
     }));
@@ -124,7 +124,7 @@ fn test_unknown_connection_is_refused() {
 
 #[test]
 fn test_spent_token_budget_still_proves_the_provider_is_reachable() {
-    let (service, _storage) = make_service(Arc::new(|_config: &LlmProviderConfig| {
+    let (service, _storage) = make_service(Arc::new(|_config: &LlmConnection| {
         Arc::new(SpentBudgetProvider) as Arc<dyn LlmProvider>
     }));
 

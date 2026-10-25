@@ -2,7 +2,7 @@
 //! DeepSeek LLM provider
 
 use crate::error::EngineError;
-use crate::domain::model::settings::LlmProviderConfig;
+use crate::domain::model::settings::LlmConnection;
 
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
 
@@ -14,7 +14,7 @@ pub struct DeepSeekBackend {
 }
 
 impl DeepSeekBackend {
-    pub fn from_config(connection: &LlmProviderConfig) -> Self {
+    pub fn from_config(connection: &LlmConnection) -> Self {
         let api_key = connection.resolve_api_key().unwrap_or_default();
         Self {
             api_key,

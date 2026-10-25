@@ -25,7 +25,7 @@ Given a Game whose story holds no text (its opening Narration has none)
 When the client POST /action with command="/options"
 Then the response is 400 Bad Request
 And the response body names the missing scene ("No scene to generate options for yet")
-And GET /fragment/options-dock renders no options strip and no notice
+And GET /fragment/options-dock renders no options strip and no Options failure
 ```
 
 #### Scenario 24.18: /options with no options agent reports the agent is unavailable and keeps the set
@@ -34,15 +34,15 @@ And GET /fragment/options-dock renders no options strip and no notice
 Given a game with scene history, an offered set of set A, and no options agent
 When the client POST /action with command="/options"
 And the Game is no longer busy
-Then the dock shows the notice saying the options agent is not available
+Then the dock shows the Options failure saying the options agent is not available
 And the dock renders no options strip
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 Then the dock renders set A
 ```
 
 ### Using the offered set
 
-#### Scenario 24.4: Regenerating replaces the set and adds no history entries
+#### Scenario 24.4: New Options replace the set and add no history entries
 
 ```gherkin
 Given a game with scene history and an options agent whose first response yields set A and whose second yields set B
@@ -51,16 +51,16 @@ Then the dock renders set B after the second call and no longer renders set A
 And the story-log message count is unchanged by the two /options calls
 ```
 
-#### Scenario 24.5: A failed regeneration keeps the previous set and shows the notice in its place
+#### Scenario 24.5: A failed Options run keeps the previous set and shows the Options failure in its place
 
 ```gherkin
 Given the dock shows set A
 And the options agent's next responses fail to parse
 When the client POST /action with command="/options"
 And the Game is no longer busy
-Then the dock shows the notice naming the options-generation failure
+Then the dock shows the Options failure naming the failed Options run
 And the dock renders no options strip
-When the client POST /status/reset-generating
+When the client POST /status/reset-busy
 Then the dock renders set A
 ```
 
@@ -111,7 +111,7 @@ Then the offered set is empty
 And the dock renders no options strip
 ```
 
-#### Scenario 24.17: A failed always-on regeneration empties the offered set and reports the failure
+#### Scenario 24.17: A failed always-on Options run empties the offered set and reports the failure
 
 ```gherkin
 Given a world with the always-on toggle on and an options agent whose first response yields set A and whose later responses fail to parse
@@ -123,7 +123,7 @@ When the client POST /action with command="look" again
 And the Game is no longer busy
 Then the offered set is empty
 And the dock renders no options strip
-And the dock shows the notice naming the options generation failure
+And the dock shows the Options failure naming the failed Options run
 ```
 
 #### Scenario 24.20: With no options agent, an always-on narration message empties the offered set and reports the agent unavailable
@@ -134,7 +134,7 @@ When the client POST /action with command="look"
 And the Game is no longer busy
 Then the offered set is empty
 And the dock renders no options strip
-And the dock shows the notice saying the options agent is not available
+And the dock shows the Options failure saying the options agent is not available
 ```
 
 #### Scenario 24.22: An Options run follows a Narration whose event narration fails
@@ -143,10 +143,10 @@ And the dock shows the notice saying the options agent is not available
 Given a world with the always-on toggle on and an options agent
 And a Character whose Trigger fires on the next Action
 When the client POST /games creates a game from that world
-And the client POST /action with command="examine the npc"
+And the client POST /action with command="examine the character"
 And the Game is no longer busy
 Then the dock renders a fresh option set
-And the dock shows no notice
+And the dock shows no Options failure
 And the status names the event narration failure
 ```
 
@@ -159,7 +159,7 @@ When the client POST /games creates a game from that world
 And the client POST /action with command="look"
 And the Game is no longer busy
 Then the dock renders a fresh option set
-And the dock shows no notice
+And the dock shows no Options failure
 And the status carries the contradiction line
 ```
 
@@ -170,10 +170,10 @@ Given a world with the always-on toggle on and an options agent
 And a Character whose Trigger fires on the next Action
 And storage that refuses the write of a new Message once the Narration that fired the Trigger is saved
 When the client POST /games creates a game from that world
-And the client POST /action with command="examine the npc"
+And the client POST /action with command="examine the character"
 And the Game is no longer busy
 Then the dock renders a fresh option set
-And the dock shows no notice
+And the dock shows no Options failure
 And the status names the event narration failure
 And the raw text in the status disclosure holds the save-failed line
 ```

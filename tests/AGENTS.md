@@ -80,7 +80,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
-    - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite, the generating-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
+    - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite, the busy-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
     - `failure_display.rs` — HTTP E2E tests for the failure display, tagged against `docs/specs/failure_display.md`.
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
@@ -110,7 +110,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.
-      - `debug.rs` — HTTP integration tests for the debug endpoints: `/debug/state` returns the expected JSON shape and `/debug/is_generating` reflects the actual generation status.
+      - `debug.rs` — HTTP integration tests for the debug endpoints: `/debug/state` returns the expected JSON shape and `/debug/is_busy` reflects the actual busy state.
       - `fragment.rs` — HTTP integration tests for fragment rendering.
       - `games_fragment_handlers.rs` — HTTP E2E tests for the games list fragment (GET /fragment/games).
       - `index_handler.rs` — HTTP integration test for the dashboard index handler.

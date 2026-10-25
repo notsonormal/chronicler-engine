@@ -14,7 +14,7 @@ pub use super::wait::wait_for_element_children;
 use super::wait::wait_until_visible;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
-use super::wait::wait_for_status_generating;
+use super::wait::wait_for_status_busy;
 pub use super::wait::wait_for_story_log;
 
 pub async fn goto_with_connection_check(
@@ -262,8 +262,8 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
     // `/action/check` response swaps "Thinking..." into #status-display. Without
     // this wait, a subsequent `wait_for_status_ready` can return on the STALE
     // pre-action "Ready" (before the swap arrives) and race the test — see
-    // `wait_for_status_generating`.
-    wait_for_status_generating(page).await;
+    // `wait_for_status_busy`.
+    wait_for_status_busy(page).await;
 
     dismiss_text_check_if_present(page).await;
 }

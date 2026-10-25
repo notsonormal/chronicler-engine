@@ -408,7 +408,7 @@ body {
     box-sizing: border-box;
 }
 
-.image-container.npc-portrait {
+.image-container.character-portrait {
     width: 80px;
     min-height: 80px;
     overflow: hidden;
@@ -419,14 +419,14 @@ body {
     flex-direction: column;
 }
 
-.image-container.npc-portrait img {
+.image-container.character-portrait img {
     width: 80px;
     height: 80px;
     object-fit: cover;
     box-sizing: border-box;
 }
 
-.image-container.npc-portrait .image-label {
+.image-container.character-portrait .image-label {
     box-sizing: border-box;
     max-width: 100%;
     white-space: nowrap;
@@ -453,14 +453,14 @@ body {
     font-size: var(--font-size-small);
 }
 
-.npc-portrait-divider {
+.character-portrait-divider {
     width: 100%;
     height: 1px;
     background: var(--color-border);
     margin: var(--spacing-xs) 0;
 }
 
-.npc-portraits {
+.character-portraits {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
@@ -585,7 +585,7 @@ body {
     padding: 8px var(--spacing-md);
     cursor: pointer;
     height: var(--input-height);
-    /* The label grows to "Generating…" while a turn runs; the input must not narrow with it. */
+    /* The label grows to "Generating…" while a Job runs; the input must not narrow with it. */
     width: 150px;
     font-family: inherit;
     font-size: var(--font-size-base);
@@ -763,7 +763,7 @@ body {
     flex-shrink: 0;
 }
 
-/* The dock's notice stands where the offered set would, so the strip is not
+/* The dock's Options failure stands where the offered set would, so the strip is not
    rendered beside it. */
 .options-notice {
     display: flex;

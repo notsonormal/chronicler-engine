@@ -5,12 +5,12 @@
 use crate::adapters::driven::llm::providers::openrouter::OpenRouterBackend;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{LlmProviderConfig, ReasoningEffort};
+use crate::domain::model::settings::{LlmConnection, ReasoningEffort};
 use crate::test_support::chat_completions_mock::{ChatCompletionsMock, STUB_ANSWER};
 use crate::test_support::test_connection;
 
-fn connection_to(endpoint: &ChatCompletionsMock) -> LlmProviderConfig {
-    LlmProviderConfig {
+fn connection_to(endpoint: &ChatCompletionsMock) -> LlmConnection {
+    LlmConnection {
         model: "gpt-4o".into(),
         api_key: Some("sk-test".into()),
         base_url: Some(endpoint.base_url.clone()),
@@ -39,7 +39,7 @@ fn openrouter_complete_answers_with_the_completion_and_its_names() {
 #[test]
 fn openrouter_complete_sends_the_reasoning_effort_of_the_connection() {
     let endpoint = ChatCompletionsMock::start();
-    let backend = OpenRouterBackend::from_config(&LlmProviderConfig {
+    let backend = OpenRouterBackend::from_config(&LlmConnection {
         reasoning_effort: Some(ReasoningEffort::Low),
         ..connection_to(&endpoint)
     });

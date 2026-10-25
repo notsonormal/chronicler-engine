@@ -12,7 +12,7 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
 
     while start.elapsed() < timeout {
         if let Ok(resp) = client
-            .get(format!("http://127.0.0.1:{port}/status/generating"))
+            .get(format!("http://127.0.0.1:{port}/status/busy"))
             .send()
             .await
         {
@@ -25,9 +25,9 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
-    // Reset the generation flag after a timeout so a stuck flag does not hang the test.
+    // Reset the busy state after a timeout so a stuck Game does not hang the test.
     let _ = client
-        .post(format!("http://127.0.0.1:{port}/status/reset-generating"))
+        .post(format!("http://127.0.0.1:{port}/status/reset-busy"))
         .send()
         .await;
 
@@ -140,10 +140,10 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
 /// latter cannot return on the STALE pre-action "Ready" (a race where the
 /// `/action/check` "Thinking..." swap has not yet arrived). The 5s timeout
 /// comfortably covers the `/action/check` round-trip under parallel test load;
-/// the `/status/generating` poll that returns the generating/phase text fires
+/// the `/status/busy` poll that returns the generating/phase text fires
 /// within 5s of page load, so the status leaves "Ready" promptly once the
 /// action is acknowledged.
-pub async fn wait_for_status_generating(page: &playwright_rs::Page) {
+pub async fn wait_for_status_busy(page: &playwright_rs::Page) {
     let locator = page.locator("#status-display").await;
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_secs(5);
@@ -160,7 +160,7 @@ pub async fn wait_for_status_generating(page: &playwright_rs::Page) {
         }
         tracing::debug!("Final status-display='{text}'");
     }
-    capture_failure_state(page, "wait_for_status_generating").await;
+    capture_failure_state(page, "wait_for_status_busy").await;
     panic!(
         "Status never left Ready after action — the /action/check acknowledgement did not arrive"
     );

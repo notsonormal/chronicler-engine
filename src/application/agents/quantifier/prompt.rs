@@ -30,14 +30,14 @@ impl<'a> QuantifierPromptBuilder<'a> {
         if !prompt.is_empty() {
             prompt.push_str("\n\n");
         }
-        prompt.push_str("<available_npc_ids>\n");
-        for npc in self.context.all_known_npcs {
+        prompt.push_str("<available_character_ids>\n");
+        for character in self.context.all_known_characters {
             prompt.push_str(&format!(
-                "  <Npc id=\"{}\" name=\"{}\"/>\n",
-                npc.id, npc.sheet.name
+                "  <Character id=\"{}\" name=\"{}\"/>\n",
+                character.id, character.sheet.name
             ));
         }
-        prompt.push_str("</available_npc_ids>\n\n<available_rooms>\n");
+        prompt.push_str("</available_character_ids>\n\n<available_rooms>\n");
 
         for room in self.context.all_rooms {
             prompt.push_str(&format!(
@@ -67,15 +67,15 @@ impl<'a> QuantifierPromptBuilder<'a> {
 
         prompt.push_str("</CurrentRoom>\n\n");
 
-        if !self.context.previous_room_npcs.is_empty() {
-            prompt.push_str("<PreviousRoomNpcs>\n");
-            for npc in self.context.previous_room_npcs {
+        if !self.context.previous_characters_present.is_empty() {
+            prompt.push_str("<PreviousCharactersPresent>\n");
+            for character in self.context.previous_characters_present {
                 prompt.push_str(&format!(
-                    "  <Npc id=\"{}\" name=\"{}\">{}</Npc>\n",
-                    npc.id, npc.sheet.name, npc.sheet.description
+                    "  <Character id=\"{}\" name=\"{}\">{}</Character>\n",
+                    character.id, character.sheet.name, character.sheet.description
                 ));
             }
-            prompt.push_str("</PreviousRoomNpcs>\n\n");
+            prompt.push_str("</PreviousCharactersPresent>\n\n");
         }
 
         if !self.context.recent_history.is_empty() {
@@ -105,7 +105,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
 
         prompt.push_str(
             r#"Based on the context above, determine:
-- Which NPCs are present in the current room
+- Which Characters are present in the current room
 - Whether the player actually entered, left, or remained in place
 
 IMPORTANT: Base your decision ONLY on what happens in <LatestNarration>, not on what the player attempted in <RecentHistory>.

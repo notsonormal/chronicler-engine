@@ -103,7 +103,7 @@ And the story log still holds every Message of the Job
 Given a Game whose Job is held at the analysis call of a Narration
 When the client GET /fragment/story-log
 Then the rendered log holds the Narration's text
-And the client GET /status/generating answers "quantifying"
+And the client GET /status/busy answers "quantifying"
 ```
 
 #### Scenario 8.9: An edit of a Message that does not exist is refused
@@ -163,7 +163,7 @@ And no other .log-entry shows a room
 
 ```gherkin
 Given a Game whose last Message is an Impersonate Input
-And the state of that Input's Swipe holds a trigger context
+And the state of that Input's Swipe holds an event record
 When the client GET /fragment/story-log
 Then the last .log-entry carries the `.retrigger-btn` control
 And no other .log-entry carries it

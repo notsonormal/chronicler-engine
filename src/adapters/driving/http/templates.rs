@@ -7,7 +7,7 @@ use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::story_window::StoryWindowEntry;
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::view_models::{
-    LlmMessageView, StoryRowView, NpcPortraitView, OptionsDockViewModel, PreviewIssueView,
+    LlmMessageView, StoryRowView, CharacterPortraitView, OptionsDockViewModel, PreviewIssueView,
     VisualSidebarViewModel,
 };
 
@@ -25,12 +25,12 @@ pub struct HeaderTemplate {
     source = r##"{% macro disabled(on) %}{% if on %} disabled{% endif %}{% endmacro %}{% for entry in entries %}<div class="log-entry {{ entry.log_type }}{% if entry.room_header.is_some() %} location{% endif %}" id="entry-{{ entry.id }}" data-id="{{ entry.id }}" data-raw-text="{{ entry.raw_text | escape }}"><div class="message-header"><div class="message-info">{% if entry.room_header.is_some() %}<span class="location-header">{{ entry.room_header.as_ref().unwrap() }}</span><span class="location-timestamp">- {{ entry.timestamp }}</span>{% elif entry.event_header.is_some() %}<span class="event-header">{{ entry.event_header.as_ref().unwrap() }}</span><span class="event-timestamp">- {{ entry.timestamp }}</span>{% else %}<span class="timestamp">{{ entry.timestamp }}</span>{% endif %}</div><div class="message-actions"><button class="action-btn edit-btn" id="edit-entry-{{ entry.id }}" onclick="showEditForm({{ entry.id }})" title="Edit" aria-label="Edit"{{ disabled(view_only) }}><svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button>{% if loop.last && entries.len() > 1 %}<button class="action-btn delete-btn" onclick="deleteMessage()" title="Delete" aria-label="Delete"{{ disabled(view_only) }}><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>{% endif %}{% if loop.last && entry.show_retrigger %}<button class="action-btn retrigger-btn" onclick="submitRetrigger()" title="Retrigger Event" aria-label="Retrigger Event"{{ disabled(view_only) }}><svg class="icon" aria-hidden="true"><use href="#i-zap"/></svg></button>{% endif %}</div></div><span class="text">{{ entry.text }}</span>{% if loop.last && (entry.log_type == "narration" || entry.log_type == "input") %}<div class="swipe-controls"><button class="action-btn swipe-btn" {% if entry.prev_swipe_index.is_none() || view_only %}disabled{% else %}onclick="switchSwipe({{ entry.id }}, {{ entry.prev_swipe_index.unwrap() }})"{% endif %} title="Previous swipe" aria-label="Previous swipe"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button><span class="swipe-counter">{{ entry.active_swipe_index + 1 }} / {{ entry.swipe_count }}</span>{% if entry.next_swipe_index.is_some() %}<button class="action-btn swipe-btn" onclick="switchSwipe({{ entry.id }}, {{ entry.next_swipe_index.unwrap() }})" title="Next swipe" aria-label="Next swipe"{{ disabled(view_only) }}><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>{% else %}<button class="action-btn swipe-btn" onclick="submitNewSwipe()" title="Retry" aria-label="Retry"{{ disabled(view_only) }}><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"/></svg></button>{% endif %}</div>{% endif %}</div>{% endfor %}"##,
     ext = "html"
 )]
-pub struct NarrativeLogTemplate {
+pub struct NarrationLogTemplate {
     pub entries: Vec<StoryRowView>,
     pub view_only: bool,
 }
 
-impl NarrativeLogTemplate {
+impl NarrationLogTemplate {
     pub fn new(entries: &[StoryWindowEntry], retrigger_allowed: bool, view_only: bool) -> Self {
         let mut views: Vec<StoryRowView> = entries.iter().map(StoryRowView::from).collect();
         if let Some(last) = views.last_mut() {
@@ -45,7 +45,7 @@ impl NarrativeLogTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"<div id="visual-sidebar" class="location-header-bar">{% if vm.room_has_image %}<div class="image-container location-image"><img src="{{ vm.room_src }}" alt="{{ vm.room_alt }}" /></div>{% else %}<div class="image-container no-image"><div class="placeholder">No Location Image</div></div>{% endif %}</div><div class="npc-portrait-divider"></div><div class="npc-portraits">{% for npc in vm.npcs %}<div class="image-container npc-portrait"><img src="{{ npc.image_path }}" alt="{{ npc.name }}" /><div class="image-label" aria-hidden="true" title="{{ npc.name }}">{{ npc.name }}</div></div>{% endfor %}</div>"##,
+    source = r##"<div id="visual-sidebar" class="location-header-bar">{% if vm.room_has_image %}<div class="image-container location-image"><img src="{{ vm.room_src }}" alt="{{ vm.room_alt }}" /></div>{% else %}<div class="image-container no-image"><div class="placeholder">No Room Image</div></div>{% endif %}</div><div class="character-portrait-divider"></div><div class="character-portraits">{% for character in vm.characters %}<div class="image-container character-portrait"><img src="{{ character.image_path }}" alt="{{ character.name }}" /><div class="image-label" aria-hidden="true" title="{{ character.name }}">{{ character.name }}</div></div>{% endfor %}</div>"##,
     ext = "html"
 )]
 pub struct VisualSidebarTemplate {
@@ -60,23 +60,25 @@ impl VisualSidebarTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"{% for npc in npcs %}<div class="headshot" onclick="toggleVisualSidebar()"><img src="{{ npc.image_path }}" alt="{{ npc.name }}" /><div class="name">{{ npc.name }}</div></div>{% endfor %}"##,
+    source = r##"{% for character in characters %}<div class="headshot" onclick="toggleVisualSidebar()"><img src="{{ character.image_path }}" alt="{{ character.name }}" /><div class="name">{{ character.name }}</div></div>{% endfor %}"##,
     ext = "html"
 )]
 pub struct CharacterHeadshotsTemplate {
-    pub npcs: Vec<NpcPortraitView>,
+    pub characters: Vec<CharacterPortraitView>,
 }
 
 impl CharacterHeadshotsTemplate {
-    pub fn new(npc_data: Vec<NpcPortraitView>) -> Self {
-        Self { npcs: npc_data }
+    pub fn new(character_data: Vec<CharacterPortraitView>) -> Self {
+        Self {
+            characters: character_data,
+        }
     }
 }
 
 /// An empty set renders an empty body, keeping the action area's polling container alive.
 #[derive(Template)]
 #[template(
-    source = r##"{% if vm.notice.is_some() %}<div class="options-notice" role="status"><span class="options-notice-line">{{ vm.notice.as_ref().unwrap().reason }}</span><details class="options-notice-details"><summary>Details</summary><pre>{{ vm.notice.as_ref().unwrap().raw }}</pre></details></div>{% else %}{% if !vm.options.is_empty() %}<div class="options-strip"><div class="options-label"><span>options — pick one, or type your own</span><form class="options-regen-form" hx-post="/action/check" hx-target="#status-display" hx-swap="innerHTML" hx-sync="this:drop"><input type="hidden" name="command" value="/options" /><button type="submit" class="mini-btn" title="Regenerate options" aria-label="Regenerate options" hx-on::before-request="updateToThinking()" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"/></svg></button></form></div>{% for option in vm.options %}<div class="option-item"><button type="button" class="option-btn" onclick="useOption(this)" {% if vm.is_busy %}disabled{% endif %}>{{ option }}</button><button type="button" class="mini-btn" onclick="editOption(this)" title="Edit before send" aria-label="Edit before send" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></div>{% endfor %}</div>{% endif %}{% endif %}"##,
+    source = r##"{% if vm.failure.is_some() %}<div class="options-notice" role="status"><span class="options-notice-line">{{ vm.failure.as_ref().unwrap().reason }}</span><details class="options-notice-details"><summary>Details</summary><pre>{{ vm.failure.as_ref().unwrap().raw }}</pre></details></div>{% else %}{% if !vm.options.is_empty() %}<div class="options-strip"><div class="options-label"><span>options — pick one, or type your own</span><form class="options-regen-form" hx-post="/action/check" hx-target="#status-display" hx-swap="innerHTML" hx-sync="this:drop"><input type="hidden" name="command" value="/options" /><button type="submit" class="mini-btn" title="New options" aria-label="New options" hx-on::before-request="updateToThinking()" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"/></svg></button></form></div>{% for option in vm.options %}<div class="option-item"><button type="button" class="option-btn" onclick="useOption(this)" {% if vm.is_busy %}disabled{% endif %}>{{ option }}</button><button type="button" class="mini-btn" onclick="editOption(this)" title="Edit before send" aria-label="Edit before send" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></div>{% endfor %}</div>{% endif %}{% endif %}"##,
     ext = "html"
 )]
 pub struct OptionsDockTemplate {

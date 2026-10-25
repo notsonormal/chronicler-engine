@@ -14,6 +14,7 @@ pub struct StartingScenario {
     pub starting_room_id: String,
     #[serde(default)]
     pub text: String,
-    #[serde(default)]
-    pub npcs: Vec<String>,
+    /// The Characters present at the start. The World files key them `characters`; older ones use `npcs`.
+    #[serde(default, rename = "characters", alias = "npcs")]
+    pub characters_present: Vec<String>,
 }

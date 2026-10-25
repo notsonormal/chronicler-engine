@@ -19,8 +19,8 @@ fn minimal_data() -> TestData {
         world: Arc::new(TestWorld::minimal()),
         map: Arc::new(TestMap::single_room("start")),
         persona: Arc::new(TestPersona::standard()),
-        npcs: Vec::new(),
-        room_npcs: Vec::new(),
+        characters: Vec::new(),
+        room_characters: Vec::new(),
     }
 }
 
@@ -91,11 +91,11 @@ fn test_get_current_room_view_returns_typed_error_when_game_missing() {
 }
 
 #[test]
-fn test_get_npc_headshots_returns_typed_error_when_game_missing() {
+fn test_get_character_headshots_returns_typed_error_when_game_missing() {
     let app = minimal_app_no_game();
     let err = app
         .game_view_query
-        .get_npc_headshots(active_game_of(&app), true)
+        .get_character_headshots(active_game_of(&app), true)
         .unwrap_err();
     assert!(
         matches!(
@@ -107,21 +107,21 @@ fn test_get_npc_headshots_returns_typed_error_when_game_missing() {
 }
 
 #[test]
-fn test_get_npc_headshots_scene_only_empty() {
+fn test_get_character_headshots_scene_only_empty() {
     let app = minimal_app();
     let headshots = app
         .game_view_query
-        .get_npc_headshots(active_game_of(&app), true)
+        .get_character_headshots(active_game_of(&app), true)
         .unwrap();
     assert!(headshots.is_empty());
 }
 
 #[test]
-fn test_get_npc_headshots_all_empty() {
+fn test_get_character_headshots_all_empty() {
     let app = minimal_app();
     let headshots = app
         .game_view_query
-        .get_npc_headshots(active_game_of(&app), false)
+        .get_character_headshots(active_game_of(&app), false)
         .unwrap();
     assert!(headshots.is_empty());
 }

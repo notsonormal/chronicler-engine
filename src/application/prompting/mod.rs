@@ -10,4 +10,4 @@ pub mod types;
 pub mod utils;
 
 pub use assembler::{AssembledPrompt, PromptAssembler, PromptContext};
-pub use types::NpcContext;
+pub use types::CharacterContext;

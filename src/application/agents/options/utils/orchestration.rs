@@ -27,7 +27,7 @@ pub fn generate_options(
 
     let context = OptionsPromptContext {
         room: current_room,
-        npcs_in_area: world.present,
+        characters_present: world.present,
         recent_history: input.story,
         player_name: &world.persona.sheet.name,
         options_prompt_override: settings.preset.clone(),

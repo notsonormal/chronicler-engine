@@ -5,11 +5,11 @@ use std::sync::Arc;
 use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::wiring::{WiredApp, build_app_graph};
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::test_support::env_guard::ApiKeyEnvGuard;
 use crate::test_support::test_connection;
 
-fn settings_with(connection: LlmProviderConfig) -> AppSettings {
+fn settings_with(connection: LlmConnection) -> AppSettings {
     let mut settings = AppSettings::default();
     settings.connections = vec![connection];
     settings.narration_connection_id = settings.connections[0].id.clone();
@@ -19,15 +19,15 @@ fn settings_with(connection: LlmProviderConfig) -> AppSettings {
     settings
 }
 
-fn wired_app(connection: LlmProviderConfig, storage: Arc<Storage>) -> WiredApp {
+fn wired_app(connection: LlmConnection, storage: Arc<Storage>) -> WiredApp {
     storage
         .save_settings(&settings_with(connection))
         .expect("save_settings should succeed");
     build_app_graph(storage, None).expect("build_app_graph should succeed")
 }
 
-fn mock_connection() -> LlmProviderConfig {
-    LlmProviderConfig {
+fn mock_connection() -> LlmConnection {
+    LlmConnection {
         model: "mock-model".to_string(),
         ..test_connection("test-mock", LlmBackendType::Mock)
     }
@@ -73,7 +73,7 @@ fn mock_backend_recorder_persists_forensics_to_storage() {
 
 #[test]
 fn deepseek_path_returns_recorder() {
-    let connection = LlmProviderConfig {
+    let connection = LlmConnection {
         name: "Test DeepSeek".to_string(),
         model: "deepseek-chat".to_string(),
         api_key: Some("fake-key".to_string()),
@@ -90,7 +90,7 @@ fn deepseek_path_returns_recorder() {
 
 #[test]
 fn openrouter_path_returns_recorder() {
-    let connection = LlmProviderConfig {
+    let connection = LlmConnection {
         name: "Test OpenRouter".to_string(),
         model: "openrouter-model".to_string(),
         api_key: Some("fake-key".to_string()),
@@ -107,7 +107,7 @@ fn openrouter_path_returns_recorder() {
 
 #[test]
 fn ollama_path_returns_recorder() {
-    let connection = LlmProviderConfig {
+    let connection = LlmConnection {
         name: "Test Ollama".to_string(),
         model: "llama3".to_string(),
         base_url: Some("http://localhost:11434".to_string()),
@@ -127,7 +127,7 @@ fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
     // Errors defer to call time (e.g., when `complete()` runs). This test
     // documents that the public composition entry point preserves the
     // same deferred-error contract.
-    let connection = LlmProviderConfig {
+    let connection = LlmConnection {
         name: "Test DeepSeek Missing".to_string(),
         model: "deepseek-chat".to_string(),
         ..test_connection("test-deepseek-missing", LlmBackendType::DeepSeek)
@@ -156,7 +156,7 @@ fn openrouter_connection_without_key_reports_missing_api_key() {
     unsafe {
         std::env::remove_var("OPENROUTER_API_KEY");
     }
-    let connection = LlmProviderConfig {
+    let connection = LlmConnection {
         name: "Keyless OpenRouter".to_string(),
         model: "openrouter-model".to_string(),
         ..test_connection("test-openrouter-keyless", LlmBackendType::OpenRouter)

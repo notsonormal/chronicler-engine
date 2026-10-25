@@ -37,3 +37,17 @@ fn test_starting_scenario_missing_starting_room_id_defaults_to_start() {
     let scenario: StartingScenario = serde_json::from_str(json).unwrap();
     assert_eq!(scenario.starting_room_id, "start");
 }
+
+#[test]
+fn test_starting_scenario_serializes_its_characters_under_the_characters_key() {
+    let scenario = StartingScenario {
+        characters_present: vec!["carla".to_string()],
+        ..Default::default()
+    };
+
+    let value = serde_json::to_value(&scenario).unwrap();
+
+    assert_eq!(value["characters"], serde_json::json!(["carla"]));
+    assert!(value.get("characters_present").is_none());
+    assert!(value.get("npcs").is_none());
+}

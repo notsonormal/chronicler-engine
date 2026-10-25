@@ -11,16 +11,16 @@ use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder,
-    TestDataBuilder, TestMap, TestNpc,
+    TestDataBuilder, TestMap, TestCharacter,
 };
 
 use crate::support::app_wiring::{
-    app_after_an_impersonate_with_a_failed_event, app_with_a_triggered_npc,
+    app_after_an_impersonate_with_a_failed_event, app_with_a_triggered_character,
 };
 use crate::support::http_assertions::{assert_still_thinking, assert_story_log_ends_with_message};
 use crate::support::http_fixtures::{story_of, OFFERED_SET};
 use crate::support::http_requests::{
-    fetch_body, fetch_generating_status, post_action, post_empty, wait_settled,
+    fetch_body, fetch_busy_status, post_action, post_empty, wait_settled,
 };
 
 fn story_log_holds_event_narration(state: &AppState) -> bool {
@@ -33,15 +33,21 @@ fn story_log_holds_event_narration(state: &AppState) -> bool {
 #[tokio::test]
 async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
     // The Action's Trigger fires but its continuation fails, so the main Narration
-    // keeps the trigger context that makes Retrigger available.
-    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    // keeps the event record that makes Retrigger available.
+    let character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
     let model = ScriptedModel::new()
         .narration("Main narration")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .failed(Role::Trigger)
         .event_narration("The event fires again.")
-        .after_narration(analysis_report(&["npc_1"], None));
-    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
+        .after_narration(analysis_report(&["character_1"], None));
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::single_room("room_1"), character, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
@@ -70,7 +76,7 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
         "new message should have event_header"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "retrigger should finish in the Idle state"
     );
@@ -81,14 +87,20 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
 async fn test_retrigger_does_not_move_the_player_http() {
     // The Action moves into "room2"; the event's reconciliation then names
     // "room_1" as a tripwire, because a retrigger applies no movement.
-    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    let character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
     let model = ScriptedModel::new()
         .narration("You walk into the next room.")
-        .after_narration(analysis_report(&["npc_1"], Some("room2")))
+        .after_narration(analysis_report(&["character_1"], Some("room2")))
         .failed(Role::Trigger)
         .event_narration("The event fires again.")
         .after_narration(analysis_report(&[], Some("room_1")));
-    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::two_rooms("room_1", "room2"), character, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
@@ -123,19 +135,24 @@ async fn test_retrigger_does_not_move_the_player_http() {
 // [docs/specs/retrigger.md] SCENARIO: 13.3
 #[tokio::test]
 async fn test_retrigger_sends_the_rendered_direction_to_the_model_http() {
-    let mut npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
-    npc.triggers[0].narration.narration_prompt = "{{user}} notices the lamp.".to_string();
+    let mut character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
+    character.triggers[0].narration.narration_prompt = "{{user}} notices the lamp.".to_string();
     let model = Arc::new(
         ScriptedModel::new()
             .narration("Main narration")
-            .after_narration(analysis_report(&["npc_1"], None))
+            .after_narration(analysis_report(&["character_1"], None))
             .failed(Role::Trigger)
             .event_narration("The event fires again.")
-            .after_narration(analysis_report(&["npc_1"], None)),
+            .after_narration(analysis_report(&["character_1"], None)),
     );
     let data = TestDataBuilder::default_test()
         .map(TestMap::single_room("room_1"))
-        .npcs(vec![npc])
+        .characters(vec![character])
         .build();
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
@@ -205,13 +222,13 @@ async fn test_retrigger_on_an_impersonate_input_runs_http() {
         new_message.event_header().is_some(),
         "the new message is an event Narration"
     );
-    assert_eq!(fetch_generating_status(&app).await, "idle");
+    assert_eq!(fetch_busy_status(&app).await, "idle");
 }
 
 // [docs/specs/retrigger.md] SCENARIO: 14.1
 #[tokio::test]
-async fn test_retrigger_no_trigger_context_returns_400_http() {
-    // A fresh Game's opening Narration holds no trigger context.
+async fn test_retrigger_no_event_record_returns_400_http() {
+    // A fresh Game's opening Narration holds no event record.
     let (app, state) = TestAppBuilder::default_test().build_with_state();
     let before = story_of(&state);
 
@@ -219,7 +236,7 @@ async fn test_retrigger_no_trigger_context_returns_400_http() {
     assert_eq!(
         resp.status(),
         StatusCode::BAD_REQUEST,
-        "Retrigger with no trigger context should return bad request"
+        "Retrigger with no event record should return bad request"
     );
 
     assert!(
@@ -237,18 +254,24 @@ async fn test_retrigger_no_trigger_context_returns_400_http() {
 #[tokio::test]
 async fn test_retrigger_last_message_is_a_typed_input_returns_400_http() {
     // The first Action's Trigger fires and its continuation fails, so its Narration
-    // keeps the trigger context. The second Action's typed Input copies that state,
+    // keeps the event record. The second Action's typed Input copies that state,
     // and its own Narration is deleted: the story ends on a typed Input whose state
-    // holds a trigger context.
-    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    // holds an event record.
+    let character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
     let model = ScriptedModel::new()
         .narration("Main narration")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .failed(Role::Trigger)
         .narration("You look again.")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .failed(Role::Trigger);
-    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::single_room("room_1"), character, model);
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
         wait_settled(&state, 2000).await,
@@ -270,9 +293,9 @@ async fn test_retrigger_last_message_is_a_typed_input_returns_400_http() {
     assert!(
         last.swipes[last.active_swipe_index]
             .state
-            .trigger_context
+            .event_record
             .is_some(),
-        "the typed Input's state holds the trigger context"
+        "the typed Input's state holds the event record"
     );
     let story_log = fetch_body(&app, "/fragment/story-log").await;
     assert!(
@@ -296,13 +319,19 @@ async fn test_retrigger_last_message_is_a_typed_input_returns_400_http() {
 async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
     // The Action fires its Trigger and the event Narration lands, so the story ends
     // on an event Narration.
-    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    let character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
     let model = ScriptedModel::new()
         .narration("Main narration")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .event_narration("The event lands.")
-        .after_narration(analysis_report(&["npc_1"], None));
-    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
+        .after_narration(analysis_report(&["character_1"], None));
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::single_room("room_1"), character, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
@@ -330,16 +359,22 @@ async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
 
 // [docs/specs/retrigger.md] SCENARIO: 14.5
 #[tokio::test]
-async fn test_retrigger_trigger_narration_failure_sets_error_http() {
+async fn test_retrigger_trigger_narration_failure_sets_failed_http() {
     // The Action's Trigger fires but its continuation fails, leaving the trigger
     // context; the retrigger's continuation then fails too.
-    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    let character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
     let model = ScriptedModel::new()
         .narration("Main narration")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .failed(Role::Trigger)
         .failed(Role::Trigger);
-    let (app, state) = app_with_a_triggered_npc(TestMap::single_room("room_1"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::single_room("room_1"), character, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
@@ -354,7 +389,7 @@ async fn test_retrigger_trigger_narration_failure_sets_error_http() {
         "retrigger should complete (with error)"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The event narration failed."),
         "the failure line of a failed event narration, got: {status}"

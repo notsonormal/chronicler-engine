@@ -6,11 +6,11 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::errors::ApplicationError;
 use crate::application::settings_service::SettingsService;
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmProviderConfig};
+use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::test_support::test_connection;
 
-fn mock_connection(id: &str, name: &str) -> LlmProviderConfig {
-    LlmProviderConfig {
+fn mock_connection(id: &str, name: &str) -> LlmConnection {
+    LlmConnection {
         name: name.to_string(),
         model: "mock-model".to_string(),
         ..test_connection(id, LlmBackendType::Mock)

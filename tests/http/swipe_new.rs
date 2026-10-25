@@ -14,11 +14,13 @@ use chronicler_engine::test_support::{
     TestAppBuilder, TestDataBuilder, TestMap,
 };
 
-use crate::support::app_wiring::{app_with_a_triggered_npc, app_with_model, app_with_model_and_storage};
+use crate::support::app_wiring::{
+    app_with_a_triggered_character, app_with_model, app_with_model_and_storage,
+};
 use crate::support::http_assertions::{assert_still_thinking, status_error_message};
 use crate::support::http_fixtures::{break_start_room, room_header_of, story_of};
 use crate::support::http_requests::{
-    fetch_generating_status, post_action, post_empty, post_form, wait_settled,
+    fetch_busy_status, post_action, post_empty, post_form, wait_settled,
 };
 
 fn story_log_counts(state: &AppState) -> (usize, usize) {
@@ -37,12 +39,12 @@ fn newest_swipes(state: &AppState, message_type: MessageType) -> usize {
 
 async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u64) {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
     let storage = Arc::new(empty_sqlite_storage());
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![TestNpc::with_room_scoped_trigger(
+        .characters(vec![TestCharacter::with_room_scoped_trigger(
             "gabriella",
             "Gabriella",
             ComparisonOperator::Eq,
@@ -83,13 +85,13 @@ async fn app_with_an_event_that_meets_gabriella() -> (axum::Router, AppState, u6
     (app, state, event_id)
 }
 
-fn encounter_times_met(state: &AppState, npc_id: &str) -> u32 {
+fn encounter_times_met(state: &AppState, character_id: &str) -> u32 {
     state
         .game_view_query
         .get_debug_state(active_game_of(state))
         .expect("get_debug_state should succeed")
-        .npc_encounter_log
-        .get(npc_id)
+        .encounters
+        .get(character_id)
         .map(|encounter| encounter.times_met)
         .unwrap_or(0)
 }
@@ -126,7 +128,7 @@ async fn test_retry_replaces_narration_with_new_swipe_http() {
     assert_eq!(retried.swipes.len(), 2, "retry appended a swipe");
     assert_eq!(retried.text(), "Second.", "active swipe is the retry");
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "retry should finish in the Idle state"
     );
@@ -262,9 +264,9 @@ async fn test_retry_uses_edited_input_text_http() {
 #[tokio::test]
 async fn test_retry_reevaluates_triggers_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
-    let shopkeeper = TestNpc::with_room_scoped_trigger(
+    let shopkeeper = TestCharacter::with_room_scoped_trigger(
         "shopkeeper",
         "Shopkeeper Sarah",
         ComparisonOperator::Eq,
@@ -273,10 +275,10 @@ async fn test_retry_reevaluates_triggers_http() {
     );
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![shopkeeper])
+        .characters(vec![shopkeeper])
         .build();
-    // room_npcs defaults to ["npc_1"]; the shopkeeper is not in any room's
-    // NPC list (their trigger is room-gated), so no trigger fires on action 1.
+    // room_characters defaults to ["character_1"]; the shopkeeper is not in any room's
+    // Character list (their trigger is room-gated), so no trigger fires on action 1.
 
     // The retry's generation moves the player into room2, which fires the
     // room-gated trigger; the event's own reconciliation reports nobody new.
@@ -336,9 +338,9 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
         "retry should complete even with no movement"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
-        "status should not be Generating"
+        "status should not be Busy"
     );
 }
 
@@ -408,11 +410,11 @@ async fn test_retry_swipe_without_movement_shows_no_room_http() {
 #[tokio::test]
 async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
     // The Action moves into "room2" and meets Gabriella, whose room-scoped Trigger
     // fires, so the story ends on an event Narration.
-    let npc = TestNpc::with_room_scoped_trigger(
+    let character = TestCharacter::with_room_scoped_trigger(
         "gabriella",
         "Gabriella",
         ComparisonOperator::Eq,
@@ -426,7 +428,8 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
         .after_narration(analysis_report(&["gabriella"], None))
         .event_narration("The event happens again.")
         .after_narration(analysis_report(&[], None));
-    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::two_rooms("room_1", "room2"), character, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
@@ -470,7 +473,7 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
         "active swipe text should be the new retry narration, not the original"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "event retry should finish in the Idle state"
     );
@@ -480,12 +483,12 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
 #[tokio::test]
 async fn test_event_retry_does_not_move_the_player_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
     // The Action moves into "room2" and fires Gabriella's Trigger. The retry's own
     // analysis names "room_1" as a tripwire: an event generation applies no
     // movement, so a movement-applying pass would move the player back.
-    let npc = TestNpc::with_room_scoped_trigger(
+    let character = TestCharacter::with_room_scoped_trigger(
         "gabriella",
         "Gabriella",
         ComparisonOperator::Eq,
@@ -499,7 +502,8 @@ async fn test_event_retry_does_not_move_the_player_http() {
         .after_narration(analysis_report(&["gabriella"], None))
         .event_narration("The event happens again.")
         .after_narration(analysis_report(&[], Some("room_1")));
-    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::two_rooms("room_1", "room2"), character, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
@@ -536,20 +540,26 @@ async fn test_event_retry_does_not_move_the_player_http() {
 #[tokio::test]
 async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
     // The Action's Trigger fires, but its continuation fails: the main Narration
-    // keeps its trigger context, which is what makes Retrigger available.
-    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    // keeps its event record, which is what makes Retrigger available.
+    let character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
     let model = ScriptedModel::new()
         .narration("You look around.")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .failed(Role::Trigger)
         .event_narration("The event fires again.")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
         .event_narration("The event fires once more.")
-        .after_narration(analysis_report(&["npc_1"], None));
-    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+        .after_narration(analysis_report(&["character_1"], None));
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::two_rooms("room_1", "room2"), character, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
@@ -594,7 +604,7 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
         "new swipe should be the active swipe"
     );
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "event retry should finish in the Idle state"
     );
@@ -627,9 +637,9 @@ async fn test_event_retry_does_not_carry_the_previous_swipes_encounter_http() {
         .get_debug_state(active_game_of(&state))
         .expect("get_debug_state should succeed");
     assert!(
-        debug.npcs_in_area.is_empty(),
+        debug.characters_present.is_empty(),
         "Gabriella is not in the retry's scene, got {:?}",
-        debug.npcs_in_area
+        debug.characters_present
     );
     let messages = story_of(&state);
     let event = messages
@@ -641,23 +651,28 @@ async fn test_event_retry_does_not_carry_the_previous_swipes_encounter_http() {
         2,
         "event retry appends exactly one swipe"
     );
-    assert_eq!(fetch_generating_status(&app).await, "idle");
+    assert_eq!(fetch_busy_status(&app).await, "idle");
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 10.6
 #[tokio::test]
 async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
-    // Two Characters, each with its own Trigger: `npc_1`'s fires on the first
+    // Two Characters, each with its own Trigger: `character_1`'s fires on the first
     // Action, and Gabriella's room-scoped one fires when the later Action moves
     // the player into "room2".
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
-        .npcs(vec![
-            TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0),
-            TestNpc::with_room_scoped_trigger(
+        .characters(vec![
+            TestCharacter::with_times_met_trigger(
+                "character_1",
+                "Test Character",
+                ComparisonOperator::Eq,
+                0,
+            ),
+            TestCharacter::with_room_scoped_trigger(
                 "gabriella",
                 "Gabriella",
                 ComparisonOperator::Eq,
@@ -668,15 +683,15 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
         .build();
     let model = ScriptedModel::new()
         .narration("You look around.")
-        .after_narration(analysis_report(&["npc_1"], None))
-        .event_narration("The NPC steps out.")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], None))
+        .event_narration("The Character steps out.")
+        .after_narration(analysis_report(&["character_1"], None))
         .narration("You step into the next room.")
         .after_narration(analysis_report(&["gabriella"], Some("room2")))
         .event_narration("Gabriella steps out.")
         .after_narration(analysis_report(&["gabriella"], None))
-        .event_narration("The NPC steps out again.")
-        .after_narration(analysis_report(&["npc_1"], None));
+        .event_narration("The Character steps out again.")
+        .after_narration(analysis_report(&["character_1"], None));
     let (app, state) = TestAppBuilder::default_test()
         .data(data)
         .model(Arc::new(model))
@@ -693,8 +708,8 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
         .expect("the first turn's event narration");
     assert_eq!(
         first_event.event_header().map(str::to_string),
-        Some("Test NPC Introduction".to_string()),
-        "the first turn fires npc_1's Trigger"
+        Some("Test Character Introduction".to_string()),
+        "the first turn fires character_1's Trigger"
     );
     let seeded = first_event;
     let seeded_count = story_of(&state).len();
@@ -746,9 +761,9 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     assert_eq!(
         retried.event_header().map(str::to_string),
         Some(seeded_header),
-        "the retry reuses the event's own trigger context"
+        "the retry reuses the event's own event record"
     );
-    assert_eq!(fetch_generating_status(&app).await, "idle");
+    assert_eq!(fetch_busy_status(&app).await, "idle");
 }
 
 // [docs/specs/swipe_new.md] SCENARIO: 10.7
@@ -860,7 +875,7 @@ async fn test_retry_no_game_context_returns_400_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 11.5
 #[tokio::test]
-async fn test_retry_llm_failure_sets_error_http() {
+async fn test_retry_llm_failure_sets_failed_http() {
     let (app, state) = app_with_model(Arc::new(
         ScriptedModel::new()
             .turn("Original narration.")
@@ -882,7 +897,7 @@ async fn test_retry_llm_failure_sets_error_http() {
         "retry should complete (with error)"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     let message = status_error_message(&status);
     assert!(!message.is_empty(), "error message should be non-empty");
     assert_eq!(
@@ -894,7 +909,7 @@ async fn test_retry_llm_failure_sets_error_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 11.6
 #[tokio::test]
-async fn test_retry_empty_narration_sets_error_http() {
+async fn test_retry_empty_narration_sets_failed_http() {
     let (app, state) = app_with_model(Arc::new(
         ScriptedModel::new()
             .turn("Original narration.")
@@ -916,7 +931,7 @@ async fn test_retry_empty_narration_sets_error_http() {
         "retry should complete (with error)"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("empty"),
         "error message should mention 'empty', got: {status}"
@@ -930,7 +945,7 @@ async fn test_retry_empty_narration_sets_error_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 11.7
 #[tokio::test]
-async fn test_retry_room_not_found_sets_error_http() {
+async fn test_retry_room_not_found_sets_failed_http() {
     // The room resolves before the model call, so this retry makes none.
     let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
@@ -952,7 +967,7 @@ async fn test_retry_room_not_found_sets_error_http() {
         "retry should complete (with error)"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The room non_existent_room is not on the map."),
         "the failure names the invalid room, got: {status}"
@@ -973,20 +988,26 @@ async fn test_retry_room_not_found_sets_error_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 11.8
 #[tokio::test]
-async fn test_event_retry_trigger_narration_failure_sets_error_http() {
+async fn test_event_retry_trigger_narration_failure_sets_failed_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
-    // The Action fires npc_1's Trigger and its continuation lands; the retry's
+    // The Action fires character_1's Trigger and its continuation lands; the retry's
     // event narration then fails, so the event's reconciliation never runs.
-    let npc = TestNpc::with_times_met_trigger("npc_1", "Test NPC", ComparisonOperator::Eq, 0);
+    let character = TestCharacter::with_times_met_trigger(
+        "character_1",
+        "Test Character",
+        ComparisonOperator::Eq,
+        0,
+    );
     let model = ScriptedModel::new()
         .narration("The main narration.")
-        .after_narration(analysis_report(&["npc_1"], Some("room2")))
-        .event_narration("The NPC greets you.")
-        .after_narration(analysis_report(&["npc_1"], None))
+        .after_narration(analysis_report(&["character_1"], Some("room2")))
+        .event_narration("The Character greets you.")
+        .after_narration(analysis_report(&["character_1"], None))
         .failed(Role::Trigger);
-    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::two_rooms("room_1", "room2"), character, model);
 
     assert!(post_action(&app, "walk north").await.status().is_success());
     assert!(
@@ -1002,7 +1023,7 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
         "event retry should complete (with error)"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The event narration failed."),
         "the failure line of a failed event narration, got: {status}"
@@ -1032,8 +1053,8 @@ async fn test_event_retry_trigger_narration_failure_sets_error_http() {
     );
     assert_eq!(
         debug
-            .npc_encounter_log
-            .get("npc_1")
+            .encounters
+            .get("character_1")
             .and_then(|state| state.trigger_fired.get(&0))
             .copied(),
         Some(true),
@@ -1077,7 +1098,7 @@ async fn test_failed_retry_does_not_roll_the_movement_back_http() {
         "retry should complete (with error)"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         !status_error_message(&status).is_empty(),
         "failed retry should show an error, got: {status}"
@@ -1096,12 +1117,12 @@ async fn test_failed_retry_does_not_roll_the_movement_back_http() {
 #[tokio::test]
 async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
     use chronicler_engine::domain::model::trigger::ComparisonOperator;
-    use chronicler_engine::test_support::TestNpc;
+    use chronicler_engine::test_support::TestCharacter;
 
     // The Action stays in "room_1". The redo's narration lands and its analysis
     // moves the player into "room2", which fires the room-scoped Trigger, whose
     // narration then fails: the redo's own world is the one to keep.
-    let npc = TestNpc::with_room_scoped_trigger(
+    let character = TestCharacter::with_room_scoped_trigger(
         "shopkeeper",
         "Shopkeeper Sarah",
         ComparisonOperator::Eq,
@@ -1114,7 +1135,8 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
         .narration("You enter room2.")
         .after_narration(analysis_report(&[], Some("room2")))
         .failed(Role::Trigger);
-    let (app, state) = app_with_a_triggered_npc(TestMap::two_rooms("room_1", "room2"), npc, model);
+    let (app, state) =
+        app_with_a_triggered_character(TestMap::two_rooms("room_1", "room2"), character, model);
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(
@@ -1129,7 +1151,7 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
         "retry should complete (with error)"
     );
 
-    let status = fetch_generating_status(&app).await;
+    let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("The event narration failed."),
         "the failure line of a failed event narration, got: {status}"
@@ -1194,7 +1216,7 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 22.1
 #[tokio::test]
 async fn test_retry_re_impersonate_generates_input_swipe_http() {
-    // The player's own turn is an Impersonate Input; the redo runs the analysis,
+    // The player's own Message is an Impersonate Input; the redo runs the analysis,
     // which moves the player into "room2".
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
@@ -1227,7 +1249,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "retry should finish in the Idle state"
     );
@@ -1247,7 +1269,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
     assert_eq!(
         input.text(),
         "I look around cautiously.",
-        "active swipe is the regenerated impersonation"
+        "active swipe is the retried impersonation"
     );
     assert!(input.impersonated(), "new swipe remains an impersonation");
 
@@ -1285,7 +1307,7 @@ async fn test_retry_of_a_bare_impersonate_runs_http() {
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
-    assert_eq!(fetch_generating_status(&app).await, "idle");
+    assert_eq!(fetch_busy_status(&app).await, "idle");
     let messages = story_of(&state);
     let inputs: Vec<_> = messages
         .iter()
@@ -1305,9 +1327,9 @@ async fn test_retry_of_a_bare_impersonate_runs_http() {
 
 // [docs/specs/swipe_new.md] SCENARIO: 22.2
 #[tokio::test]
-async fn test_retry_user_regen_generates_input_swipe_http() {
+async fn test_retry_typed_input_generates_input_swipe_http() {
     // The Action's own Narration is deleted, so the story ends on its typed Input.
-    // A user-regen redo narrates only: it runs no analysis.
+    // A Retry of a typed Input narrates only: it runs no analysis.
     let data = TestDataBuilder::default_test().build();
     let model = ScriptedModel::new()
         .narration("You walk forward.")
@@ -1343,7 +1365,7 @@ async fn test_retry_user_regen_generates_input_swipe_http() {
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
     assert_eq!(
-        fetch_generating_status(&app).await,
+        fetch_busy_status(&app).await,
         "idle",
         "retry should finish in the Idle state"
     );
@@ -1363,7 +1385,7 @@ async fn test_retry_user_regen_generates_input_swipe_http() {
     assert_eq!(
         input.text(),
         "I sprint forward.",
-        "active swipe is the regenerated user message"
+        "active swipe is the retried Input"
     );
     let room_after = state
         .game_view_query
@@ -1426,7 +1448,7 @@ async fn test_retry_re_impersonate_preserves_record_http() {
 async fn test_retry_re_impersonate_uses_current_preset_content_http() {
     let app_storage = Arc::new(empty_sqlite_storage());
     // The recorder persists every call into the storage the app reads its
-    // forensics from; .storage() hands the builder that same instance, so the
+    // LLM messages from; .storage() hands the builder that same instance, so the
     // preset update below hits the wired storage, not an orphan.
     let (app, state, app_storage) = app_with_model_and_storage(
         Arc::clone(&app_storage),
