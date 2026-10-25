@@ -7,15 +7,6 @@ title: Architecture System
 
 The engine is organised as a hexagon.
 
-## Layer Structure
-
-- `crate::domain::model` — Pure data structures AND pure rule methods.
-- `crate::application` — Orchestration.
-- `crate::adapters::driven` — Outbound adapters (storage, LLM providers, text check).
-- `crate::adapters::driving` — Inbound adapters (HTTP, CLI).
-- `crate::bootstrap` — Composition root.
-- `crate::test_support` — Shared fixtures.
-
 ## Dependency Invariant
 
 - `domain/` + `application/` depend on port traits only.
@@ -27,17 +18,13 @@ Enforced by `[[deny-scope-dep]]` in `arch-lint.toml`.
 
 ## Storage Direct Access
 
-`Storage` is a concrete adapter with a `Backend` enum (SQLite), wrapped by `BackendKind` (Direct / Test). Every game-scoped method takes the Game as its first argument. The active-Game pointer is not storage state. Application code may call `Storage` directly when the call is part of the persistence boundary. Architectural review owns the discipline for which files sit on the boundary.
+`Storage` is a concrete adapter with no port trait. Application code may call `Storage` directly when the call is part of the persistence boundary. Architectural review owns the discipline for which files sit on the boundary.
 
 The record writes of a Game's story exist only on `Tx`, and only `GameWriter` opens a transaction of them (see *Who Owns What*).
 
 ## Settings
 
-The settings row is the read source for the whole engine. Every consumer resolves settings from storage at the point of use, so a connection or preset change takes effect on the next request without a restart. Bootstrap seeds the row once from `data/settings.json` when the database has no row yet; after that the file is never consulted. A connection reference that names no stored connection fails the operation that needs it instead of falling back to another backend.
-
-## AppState collaborators
-
-`AppState` is the handler-facing bundle that `bootstrap/wiring.rs` (`WiredApp`) builds and the Axum router receives. A handler calls the application layer directly, through the named collaborators of the bundle. The table in "Who Owns What" shows which part owns and writes each record.
+The settings row is the read source for the whole engine. Every consumer resolves settings from storage at the point of use, so a connection or preset change takes effect on the next request without a restart. A connection reference that names no stored connection fails the operation that needs it instead of falling back to another backend.
 
 ## Who Owns What
 

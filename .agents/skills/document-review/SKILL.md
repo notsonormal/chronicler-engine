@@ -54,14 +54,7 @@ Verdict per document: keep, rewrite, merge into another doc, or delete.
 
 ## 3. Sections and paragraphs
 
-Classify every section and paragraph in scope as KEEP or DELETE. For specs and agent docs, use the test in the Doc types table. For `docs/diataxis/`, first name the kind of fact the unit states, then look up where that kind of fact lives (`docs/AGENTS.md` §Where a fact lives):
-
-| The unit states… | It lives in |
-|---|---|
-| The purpose of a part, its name, or an invariant: an always-true relation between named parts — what owns what, what restores what, how many of a part exist, where a part shows | Diátaxis Reference |
-| Why the system is that way | Diátaxis Explanation |
-| An event rule ("when X, then Y") at feature level, or a property that every request to one route keeps | A spec scenario, spec section intro, or spec Properties section |
-| Fine-grained behaviour (a rule inside one part, such as how a function reads its input), edge cases, values, copy text, icons, markup, field lists, steps | The code and its tests |
+Classify every section and paragraph in scope as KEEP or DELETE. For specs and agent docs, use the test in the Doc types table. For `docs/diataxis/`, first name the kind of fact the unit states, then look up where that kind of fact lives (`docs/AGENTS.md` §Where a fact lives).
 
 KEEP a unit when its kind of fact lives in this doc's mode and no other doc on the same subject already states it. DELETE it when its kind of fact lives elsewhere, or when a doc on the same subject already states it. A Reference doc and its Explanation doc share a subject: the Reference doc states the fact, and the Explanation doc gives only the reason. A doc on another subject may restate a fact in one sentence when its reader needs it. A unit that mixes kinds keeps its Reference or Explanation part and loses the rest, values included.
 

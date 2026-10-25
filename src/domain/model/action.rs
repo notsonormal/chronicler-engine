@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/ai_steering.md]
+//! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! Action enum and semantic command types (slash-command steering entry)
 
 /// How the pipeline treats one submitted player input.

@@ -28,11 +28,9 @@ Per-doc check against `docs/AGENTS.md` `Writing Conventions` rules the validator
 
 Rules (check body prose against each anchor in `docs/AGENTS.md` `## Writing Conventions`):
 
-- **`No negative explaining`** — flag body-prose negation, tautological negative definitions, defensive scope disclaiming. Out-of-scope lists and Diagrams are the canonical home for scope statements (not findings); see the rule's carve-out.
-- **`Explanation unfolds; it does not justify`** — flag section titles phrased as `Why X?` or `Why X instead of Y?`; flag justification-tail framing in body prose (`the design pays that cost in exchange for X`, `the design holds this cost for Y`).
-- **`No code-indexer docs`** — mechanics leaks in body prose: bare impl-detail function names, `Type::method()` form when instance form names it, variant payload syntax, struct field dumps, Rust-type leaks, code syntax. Apply the seam-identifier grep test ("would a reader grep for the name to find the contract the prose is describing?") — full Keep/Drop list at this anchor in AGENTS.md.
-- **`Reference defers to source`** — flag column-level DDL, struct field lists, function signatures, migration version numbers, constants, caps restated in `reference/` prose when those are the authoritative source in code.
-- **`Register`** (nested under `#### Explanation`) — flag narrated reader experience, dramatic contrast framing, editorializing perspective, speculative color in `explanation/` prose.
+- **`No negative explaining`** — flag body-prose negation and defensive scope disclaiming. A diagram or an Out-of-scope list is the home for scope statements (not a finding).
+- **`#### Explanation`** — in `explanation/` prose, flag section titles phrased as `Why X?` or `Why X instead of Y?`, justification tails (`the design pays that cost in exchange for X`), narrated reader experience, staged contrast, editorializing and speculative color.
+- **`No code-indexer docs`** — flag mechanics leaks (apply the seam-identifier grep test in that section) and values restated in prose: column-level DDL, struct field lists, function signatures, migration version numbers, constants, caps.
 
 Completion: every in-scope file audited against each anchor; each finding carries the AGENTS.md §anchor.
 
@@ -58,13 +56,13 @@ Completion: every capability claim AND every schema claim verified against `src/
 
 Doc claims behavior X; code does Y. Extract behavioral claims, verify against `src/`, report contradictions with `file:line`. This phase is semantic verification of behavioral claims (mechanical link / ADR / plan-link checks owned by `validate_docs.py`).
 
-A claim that needs a qualifier to match the code ("when the provider reports them", "only on the narration path") restates the code. Expected: `remove`. Propose a qualified rewrite only when the claim carries an invariant or a frame that the code does not state (`docs/AGENTS.md` §Reference defers to source).
+A claim that needs a qualifier to match the code ("when the provider reports them", "only on the narration path") restates the code. Expected: `remove`. Propose a qualified rewrite only when the claim carries an invariant or a frame that the code does not state (`docs/AGENTS.md` §Where a fact lives).
 
 Completion: every behavioral claim verified against `src/`; contradictions reported with `FILE:LINE` (doc) and `src/file:line` (code).
 
 ## Phase 6 — Cross-Doc Drift
 
-Conditional phase: when ≥2 in-scope docs reference the same concept (layer count, enum name, struct field, phase number, status enum variant, INV-NNN identifier), verify all references agree. Common drift: layer counts (8 vs 7), enum variants, struct field names (direct vs accessor), INV-NNN guarantees. Report drift with both file refs.
+Conditional phase: when ≥2 in-scope docs reference the same concept (layer count, enum name, struct field, phase number, status enum variant), verify all references agree. Common drift: layer counts (8 vs 7), enum variants, struct field names (direct vs accessor). Report drift with both file refs.
 
 Skip if no concept is referenced by ≥2 docs AND no cross-tree citations exist.
 
@@ -72,7 +70,7 @@ Completion: every concept referenced by ≥2 in-scope docs verified to agree acr
 
 ## Phase 7 — Enum variant paraphrase
 
-Enum variant semantics live on the variant in `src/` as `///` rustdoc (or are self-documenting via `/// [TRIVIAL_ENUM]`). Flag any in-scope doc section that re-paraphrases variant semantics already stated on the enum, unless the doc adds a Data-Flow Claim or behavior-specific contract (e.g. "`PhaseError::Cancelled` is surfaced to the client as HTTP 499, with state rolled back" — the HTTP rollback is the contract, the variant definition is not). Variant listings in docs must be a pointer to source ("see `PhaseError` in `src/application/action_pipeline/phase_error.rs`") or omitted.
+Enum variant semantics live on the variant in `src/` as `///` rustdoc (or are self-documenting via `/// [TRIVIAL_ENUM]`). Flag any in-scope doc section that re-paraphrases variant semantics already stated on the enum, unless the doc adds a Data-Flow Claim or behavior-specific contract (the contract is what the client observes, not the variant definition). Variant listings in docs must be a pointer to source ("see `Step` in `src/domain/model/state/generation_status.rs`") or omitted.
 
 Completion: every enum variant re-paraphrase flagged with `FILE:LINE`; cite the source enum path.
 

@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/narrative/options.md]
+//! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Options output parsing — accepts both seeded prompt shapes.
 
 use once_cell::sync::Lazy;

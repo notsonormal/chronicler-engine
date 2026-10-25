@@ -11,7 +11,7 @@ It buys testability. Domain logic runs without an HTTP server, without SQLite, w
 
 It buys substitutability. Swapping OpenRouter for Ollama is a wiring change in `bootstrap/`. No application-layer code is edited. The four LLM impls exist because the seam makes them cheap; without the seam, every consumer would carry its own dispatch and the impls would fan out through the codebase.
 
-It costs a fixed amount of indirection. The application layer reaches LLM, storage, and text-check through port traits; the cost is one trait declaration per seam and one impl per backend. Where only one impl exists and the consumer is not in core (the engine's storage seam, before hexagonal formalised it), the trait is rejected as phantom — the rule says you only pay for indirection where the substitution is the point.
+It costs a fixed amount of indirection. The application layer reaches LLM, storage, and text-check through port traits; the cost is one trait declaration per seam and one impl per backend. Where only one impl exists and the consumer is not in core (the storage seam), the trait is rejected as phantom — the rule says you only pay for indirection where the substitution is the point.
 
 ## The shape
 
@@ -70,18 +70,14 @@ The engine deploys as one process against one SQLite file. The busy-state regist
 
 ## Architectural commitments
 
-A small set of guarantees follow from the shape above. Each is machine-checked or relied on directly by the code; see `## Document References` for the formal enumeration and test references. The architectural intent, in one line each:
+Two guarantees follow from the shape above and the deployment contract:
 
-- Domain purity — domain code has no `tokio`, no I/O, no HTTP types. Tested without a runtime.
-- Single-process deployment — one engine, one database; the busy-state registry is process-local.
+- Domain purity — domain code has no `tokio`, no I/O, no HTTP types, so it is tested without a runtime.
 - Tokio-only concurrency — `spawn_blocking` for synchronous services; no `std::thread::spawn` anywhere in `src/`.
-- Lock-poison recovery — every `Mutex` site recovers via `into_inner()`; a panic does not corrupt the lock.
-- Restart safety — the busy mark lives in memory, and each transaction lands whole, so a restart leaves every Game idle and no record half-written.
-- One Job per Game — a second request for a busy Game is refused with "Still thinking...", matching single-player semantics.
 
 ## Document References
 
-- [`../reference/architecture_system.md`](../reference/architecture_system.md) — layer structure; dependency invariant; the port traits; the storage direct-access carve-out.
-- [`../reference/storage.md`](../reference/storage.md) — SQLite schema and the eleven tables.
+- [`../reference/architecture_system.md`](../reference/architecture_system.md) — dependency invariant; what each part owns; the storage direct-access carve-out.
+- [`../reference/storage.md`](../reference/storage.md) — SQLite schema and its tables.
 - [`./rust_idioms.md`](./rust_idioms.md) — concrete services + `spawn_blocking` + settings-sharing shape that the hexagonal frame sits inside.
 - [`../reference/coding_standards/guardrails.md`](../reference/coding_standards/guardrails.md) — static guardrails (clippy, arch-lint, syn-based convention tests).

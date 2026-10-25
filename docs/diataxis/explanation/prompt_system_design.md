@@ -17,15 +17,11 @@ The prompt carries two Character blocks. `<KnownCharacters>` is a condensed rost
 
 Full cards carry the detail — description, personality, scenario, relationships — the model needs to write for a Character the player is currently interacting with. Condensed cards carry enough identity and motivation that the model can reference off-screen characters or write introduction scenes when they walk in. The two tiers serve different needs: full detail for Characters the model is writing for right now, condensed identity for Characters that need to remain available.
 
-The design pays for two render paths and a presence-marker computation. Off-screen awareness lives at the condensed tier; full-card detail is reserved for the Characters the player is interacting with.
-
 ## Prose constraints placed at the end of the user message
 
 The `<writing_style>` and `<output_format>` sections are rendered after `<ConversationHistory>` and before `<PlayerInput>` in the user message, rather than with the instruction sections in the system half.
 
 LLMs exhibit strong recency bias: content closer to the generation point carries more weight. Placing prose constraints and structural rules at the end of the context window — after all story data but immediately before the point where the model generates — benefits from that recency. The same content in the system message at the top of the prompt carries less weight.
-
-The assembler holds the two sections as a single splice string and renders them between history and player input.
 
 ## XML sections as content labels
 

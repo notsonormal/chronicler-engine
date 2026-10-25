@@ -16,9 +16,7 @@ A Game plays in one of two narrator modes:
 
 The mode is chosen on the World and inherited by every Game created from it. A Game can switch mode later.
 
-## The Agency Rule
-
-The two modes differ in one core rule, the Agency Rule, carried inside the mode's system preset.
+The two modes differ in one rule, the Agency Rule. The system preset of the mode carries it. Steering and Options are the same in both modes.
 
 ## Posture
 
@@ -34,7 +32,3 @@ Two mechanisms decide which prompt presets a mode uses:
 | Allowed modes | Which modes may *select* a preset at all | Each preset carries its own `allowed_modes` list |
 
 Allowed modes gate selection surfaces only — the preset picker and activation. The narrate path uses the preset ids a Game already stores as they are.
-
-## Steering Neutrality
-
-Steering is mode-agnostic.

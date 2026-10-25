@@ -77,7 +77,7 @@ A statement that SQLite refuses gives `EngineError::Database`. Its `context` nam
 
 ## Tables
 
-The schema has 11 tables, organized into three logical clusters:
+The tables form three logical clusters:
 
 1. **Game state** — the story and the dock of a Game, rooted at `games`.
 2. **World catalogue** — the static world definitions and Characters, rooted at `worlds`.
@@ -86,9 +86,9 @@ The schema has 11 tables, organized into three logical clusters:
 ### Game state cluster
 
 - **`games`** — top-level Game record. It holds the failure line of the Game.
-- **`messages`** — the story of a Game in order. Each row is one Message, written by a transaction. There is exactly one story per game.
-- **`message_swipes`** — the Swipes of a Message. A Swipe holds the text, the stored inputs of its generation (so a Retry of that Swipe re-applies the same steering), the maker and its Swipe state.
-- **`game_docks`** — the dock record of a Game: the offered set and the Options failure.
+- **`messages`** — the story of a Game in order. There is exactly one story per game.
+- **`message_swipes`** — the Swipes of a Message. A Retry of a Swipe re-applies the steering that the Swipe stores.
+- **`game_docks`** — the dock record of a Game.
 
 ### World catalogue cluster
 
@@ -139,15 +139,6 @@ Several relationships between clusters are **not** SQL foreign keys. Integrity f
 
 - **`games.world_key → worlds.key`** (game state → world catalogue) — pins the world a game was created with.
 - **`games.persona_key → personas.key`** (game state → world catalogue) — pins the persona a game was created with.
-
-## Messages
-
-The story has two pieces: `Message` and `Swipe`.
-
-- **`Message`** — one item of a Game's story. It holds the kind and the active Swipe.
-- **`Swipe`** — one text of a `Message`. The content fields live on the Swipe.
-
-Persistence mirrors this split: identity fields live on `messages`, and content fields live on `message_swipes`.
 
 ## Document References
 

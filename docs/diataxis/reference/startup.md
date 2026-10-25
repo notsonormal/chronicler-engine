@@ -7,15 +7,6 @@ title: Startup and Bootstrap
 
 Bootstrap resolves the seed-data location, completes file seeding, initializes the first game state from database-backed world data, and only then starts the HTTP server. The file-to-database boundary is the central startup contract: file reads belong to seeding, and runtime reads use the database.
 
-## Data Path Resolution
-
-The engine resolves the `data/` directory in this priority order:
-
-1. A `data/` directory alongside the executable.
-2. `./data` under the current working directory.
-
-The first available directory is the seed source for the run.
-
 ## Two-Phase Bootstrap
 
 Bootstrap has two phases with a strict boundary:
@@ -42,30 +33,9 @@ A World with no Game gets one through
 
 Every Game is idle after a start. The holders of the busy state live in memory.
 
-The loader calls `default_scenario()` for the active world and reads that scenario's `starting_room_id` for the initial room. When no scenarios exist, the initial room id falls back to `"start"`.
-
-## Server Startup
-
-The HTTP server binds the address from `--host` (default `0.0.0.0`) on the port from `--port` (default `3000`). The default accepts connections on every network interface, so a server in a container can be reached through a published or forwarded port. Pass `--host 127.0.0.1` to accept connections from the local machine only.
-
-The HTTP server does not start until bootstrap has completed, including seeding and initial game-state initialization.
-
-## Settings
-
-Bootstrap seeds the settings row from `data/settings.json` when the database has no row. From then on the engine reads settings from the database.
-
 ## Schema Files
 
-The engine reads seed data from JSON files under `data/` during bootstrap. The file shapes are defined by the JSON Schema files under `data/schemas/`.
-
-| Schema file | Defines |
-|---|---|
-| `data/schemas/character.schema.json` | Shared `CharacterSheet` shape that both `PersonaCard` and `CharacterCard` flatten. |
-| `data/schemas/world.schema.json` | `WorldManifest` on-disk world shape. |
-| `data/schemas/map.schema.json` | `MapDef` world map shape. |
-| `data/schemas/settings.schema.json` | `AppSettings` engine settings file shape. |
-
-The schema files are authoritative for seed-file fields and validation.
+The JSON Schema files under `data/schemas/` are authoritative for seed-file fields and validation.
 
 ## Invariants Outside the Schemas
 
@@ -79,17 +49,9 @@ The schema files are authoritative for seed-file fields and validation.
 
 `WorldManifest.map_file` and `WorldManifest.characters_dir` are file pointers used during seeding. Conversion to `WorldCard` strips those pointers, so the runtime world card carries no filesystem locations.
 
-### Persona and Character cards
-
-`PersonaCard` carries the shared character data. `triggers` and `relationships` belong to `CharacterCard` and are Character-only concerns.
-
-### Trigger requirements
-
-`Trigger.requirement` carries an `operator` and a `threshold`. The operator vocabulary is `Eq`, `Lt`, and `Gte`; runtime evaluation occurs in the trigger evaluation step.
-
 ## Document References
 
 - [Storage design](../explanation/storage_design.md) — current-understanding rationale for the bootstrap flow, seed ordering, and seed files as templates.
-- [Storage](./storage.md) — seeding contract, storage-layer invariants, eleven-table schema, and entity persistence (worlds, personas, messages).
+- [Storage](./storage.md) — seeding contract, storage-layer invariants, schema, and entity persistence (worlds, personas, messages).
 - [Game Flow](./game_flow.md) — the Job, runtime trigger evaluation, and event handling.
 - [Agent System](./narrative/agent_system.md) — quantifier-agent processing.

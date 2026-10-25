@@ -31,6 +31,8 @@ pub struct Args {
     #[arg(long, default_value = "3000")]
     pub port: u16,
 
+    // All interfaces, so a server in a container is reachable through a published
+    // or forwarded port. `--host 127.0.0.1` limits it to the local machine.
     #[arg(long, default_value = "0.0.0.0")]
     pub host: IpAddr,
 }

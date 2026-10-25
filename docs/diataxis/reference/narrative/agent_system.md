@@ -39,9 +39,12 @@ record.
 The wiring binds each agent to its recorder at startup, from the Agent's type.
 That binding decides the agent's connection.
 
-## Character Transitions
+## Options
 
-The game rules derive Character enter and leave transitions by comparing the Characters present before the generation with the `QuantifierResult`.
+Options are pre-written Actions that the engine offers while a Game is idle.
+The offered set of the Options agent lives in the Game's dock record, apart from
+the story. The always-on toggle is a setting of the Game, inherited from its
+World at creation. One agent and one offered set serve both narrator modes.
 
 ## Document References
 

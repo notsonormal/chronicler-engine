@@ -46,7 +46,7 @@ No saved record holds the holder, the step or the progress. A restart loses ever
 
 ## The Writer Rule
 
-`GameWriter` in `application/generation/gate.rs` is the only code that opens a transaction. It holds every write to a Game's story records, dock record and failure line: accept, stop, edit, delete, swipe switch, config save, create, reset and delete of a Game. A running Job writes through its own `JobWriter`. `GameCatalogue` owns the config rules: the posture, the mode and the preset selections. It writes the config columns of the Game through `GameWriter`.
+`GameWriter` in `application/generation/gate.rs` is the only code that opens a transaction. A running Job writes through its own `JobWriter`. The Architecture System reference lists what each part may write.
 
 - `accept` reads the end of the story and asks `JobPlan::for_request` for the plan. It then checks that the records the plan names exist: the Game, the Persona and the start state.
 - Each save method of a `JobWriter` checks, in one hold of the registry, that the job entry of the Game's holder still holds the Job's id. When the check fails, the save is refused and the Job ends with no further write.
@@ -86,11 +86,11 @@ flowchart TD
 
 One rule picks the failure line of a part. `accept` and the Job use the same rule.
 
-- A read that fails, or finds no row, gives the missing-data line: "The data for this request is missing: <record>." `Record` names each record. The raw error is in the disclosure. A missing preset of the Narrator or of a hook gives this line, with the record `Preset`.
-- A write that fails gives "The new text could not be saved."
+- A read that fails, or finds no row, gives the missing-data line. The line names the record (`Record`), and the raw error is in the disclosure. A missing preset of the Narrator or of a hook gives this line too.
+- A write that fails gives the save-failure line.
 - A failed state update gives the contradiction line. A state that the game rules refuse gives the same line.
 - A failed model call or prompt assembly gives the line of its error class.
-- A failed event generation gives "The event narration failed." The line of the failure under it is in the raw text.
+- A failed event generation gives the event-failure line. The line of the failure under it is in the raw text.
 
 ## Status
 
@@ -122,7 +122,7 @@ The room is one fact: the room of the Swipe state. `SwipeState::room` finds it: 
 
 The story log shows the **story window**: the newest Messages of the Game, oldest first. `GameViewQuery::story_window` reads the entries and the end-of-story facts in one storage read, so a Job cannot save a Message between them. The facts include whether a Retrigger is allowed. The last entry of the window is the last Message of the story, and the last-entry controls act on it.
 
-The story log derives the room name that a Message shows from the Swipe state of its active Swipe. A Message shows its room name when that name differs from the room name of the Message before it. The oldest Message of the window always shows its room name. Two rooms with one name count as one room name.
+The story log derives the room name that a Message shows from the Swipe state of its active Swipe.
 
 ## Create and Reset
 
@@ -147,7 +147,7 @@ The event generation starts from the Swipe state that the state update saved. It
 
 ## Game Rules
 
-`game_rules::apply` in `domain/model/utils/game_rules.rs` holds the game rules. The Job calls it once per generation. It returns the new Swipe state and the event record of a fired Trigger. The storage adapter builds the `GameWorld`.
+`game_rules::apply` in `domain/model/utils/game_rules.rs` holds the game rules. The Job calls it once per generation. It returns the new Swipe state and the event record of a fired Trigger.
 
 ## Retry Flow
 
@@ -163,14 +163,7 @@ Movement is a branch of the game rules:
 
 Dynamic rooms travel with the Swipe state.
 
-## Text-Check Branch
-
-Text checking branches before Action dispatch and uses the `TextChecker` port with the in-process `HarperTextChecker` adapter.
-
-The text check never blocks an Action: a checker failure sends the original Action.
-
-Only player command text enters the checker.
-
 ## Document References
 
 - [`./storage.md`](./storage.md) — the records and transactions that the Job writes.
+- [`./architecture_system.md`](./architecture_system.md) — what each part owns and may write.
