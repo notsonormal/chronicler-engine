@@ -1,4 +1,4 @@
-//! Shared stub-browser helpers: the check runner, page probes, node reads and the on-demand poll trigger used by more than one stub test module.
+//! Shared stub-browser helpers: the check runner, page probes, node reads and the on-demand region load used by more than one stub test module.
 
 use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};
@@ -104,15 +104,14 @@ fn print_summary(reports: &[CheckReport]) {
 /// say is due and holds no later load that would replace what the test does
 /// next. `htmx.ajax` with the element as its `source` then issues that
 /// element's own request: the element's `hx-get` path, its `hx-target`, its
-/// `hx-swap` (`morph:innerHTML` included), its `hx-sync`, its `hx-on::`
-/// handlers and the response's out-of-band swaps all take the same path a load
-/// of the loop takes.
+/// `hx-swap` (`morph:innerHTML` included), its `hx-sync` and its `hx-on::`
+/// handlers all take the same path a load of the loop takes.
 ///
 /// htmx queues a request behind one already in flight on the same element and
 /// fires `htmx:afterRequest` for the earlier one first. So the helper waits
 /// until the element is idle, fires, and then waits for `htmx:afterRequest`
 /// carrying its own `xhr`. htmx fires that event after the swap is applied and
-/// also for a refused poll that swaps nothing.
+/// also for a refused load that swaps nothing.
 ///
 /// The request goes out whatever the region holds, and the hold still applies
 /// to its swap, so the helper also runs where an edit holds the region.

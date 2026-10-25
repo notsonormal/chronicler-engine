@@ -77,7 +77,7 @@ async fn test_options_use_click_submits_rendered_option_text() {
             click_and_settle(&page, first_option_btn, "#status-display").await;
             wait_for_status_ready(&page).await;
 
-            // `#story-log` polls, so the readiness gates are the settle gate
+            // `#story-log` is a live region, so the readiness gates are the settle gate
             // above plus `wait_for_status_ready`.
             wait_for_element_children(&page, "#story-log .log-entry.input", 1).await;
             let newest_input: String = page

@@ -71,9 +71,9 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `prompt_presets.rs` — Stub-browser tests for the Prompt Presets panel: the keyboard-focus landing after a preset card delete and when an editor opens. Tagged against `docs/specs/browser_prompt_presets.md`.
       - `settings.rs` — Stub-browser tests for the Settings panel: the client-side sub-tabs and the shared connection form page. Tagged against `docs/specs/browser_settings.md`.
       - `slash_menu.rs` — Stub-browser tests for the slash menu: the client-side command palette rendered from the shipped shell's `input` listener. Tagged against `docs/specs/browser_slash_menu.md`.
-      - `story_log.rs` — Stub-browser tests for the story log's poll: the morph that keeps selection, focus, scroll position and the surviving entries. Tagged against `docs/specs/browser_story_log.md`.
+      - `story_log.rs` — Stub-browser tests for the story log's load: the morph that keeps selection, focus, scroll position and the surviving entries. Tagged against `docs/specs/browser_story_log.md`.
       - `story_log_edit.rs` — Stub-browser tests for the story log's edit flow: edit mode, the entry locks and the failure slots. Tagged against `docs/specs/browser_story_log.md`.
-      - `support.rs` — Shared stub-browser helpers: the check runner, page probes, node reads and the on-demand poll trigger used by more than one stub test module.
+      - `support.rs` — Shared stub-browser helpers: the check runner, page probes, node reads and the on-demand region load used by more than one stub test module.
       - `swipes.rs` — Stub-browser test for switching swipes: the client's restore handling and the dock it leaves behind.
       - `worlds.rs` — Stub-browser tests for the Worlds panel: the keyboard-focus landing after a world row delete. Tagged against `docs/specs/browser_worlds.md`.
 - **helpers/**

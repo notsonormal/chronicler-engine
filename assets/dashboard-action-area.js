@@ -260,9 +260,10 @@ document.body.addEventListener("htmx:beforeSwap", function (evt) {
   if (xhr && isBusyAnswer(xhr.responseText)) evt.detail.shouldSwap = false;
 });
 
-// The status display answers one element whose `data-status` holds the state:
-// the action area reads it and writes nothing into the region.
-function onStatusPoll() {
+// The status display answers one element whose `data-status` holds the state.
+// After each load of the display, the action area reads it and writes nothing into
+// the region.
+function readStatusDisplay() {
   if (sendPending && pendingLoadStarted) endPending();
   applyStatusDisplay();
 }

@@ -56,8 +56,9 @@ async fn create_game(app: &axum::Router, world_key: &str) {
 fn current_options(state: &AppState) -> Vec<String> {
     state
         .game_view_query
-        .get_current_options(active_game_of(state))
-        .expect("get_current_options should succeed")
+        .dock(active_game_of(state))
+        .expect("dock should succeed")
+        .offered
 }
 
 fn message_count(state: &AppState) -> usize {

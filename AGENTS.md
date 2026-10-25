@@ -1,7 +1,7 @@
 # Chronicler Engine Knowledge Base
 
 ## Overview
-Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
+Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
 
 ## Structure
 <!-- AUTO-STRUCTURE START -->

@@ -216,7 +216,7 @@ a `tests/browser/` file outside `stub/`; a line that ends in
 `// settle-guard-exempt: <why>` is exempt).
 
 Wait on an htmx-settle helper or a DOM condition. `networkidle` never
-settles: the dashboard pollers keep the network busy, so it is banned at
+settles: the page asks `GET /changes` every 1 s, so it is banned at
 every tier. **Check:** review-only.
 
 ## SCENARIO tags

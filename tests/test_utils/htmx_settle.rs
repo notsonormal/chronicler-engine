@@ -5,7 +5,7 @@
 // element is *visible* can dispatch `change` before the listener exists, and
 // the interaction is silently lost: zero POSTs, no error. Waiting for the
 // registering swap to settle closes that race; scoping the wait to the
-// interaction's own target stops the dashboard's self-polling regions from
+// interaction's own target stops a load of another live region from
 // satisfying it early.
 //
 // playwright-rs 0.9.0 has no `wait_for_function`, so readiness is polled over
@@ -276,7 +276,7 @@ pub async fn click_and_settle(page: &Page, selector: &str, swap_target: &str) ->
 /// `swap_target` to settle.
 ///
 /// Waiting for the interaction's *own* target proves the round-trip completed;
-/// waiting for any settle would be satisfied by a poller.
+/// waiting for any settle would be satisfied by a load of another live region.
 pub async fn select_option_and_settle(
     page: &Page,
     selector: &str,

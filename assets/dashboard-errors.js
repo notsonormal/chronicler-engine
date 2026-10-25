@@ -162,20 +162,17 @@ function throwServerDetail(response) {
   });
 }
 
-// A server that answered is reachable, so only a failed poll or a failed load of
-// a live region marks the engine unreachable.
-function isPollRequest(elt) {
-  if (!elt || !elt.getAttribute) return false;
-  if (elt.hasAttribute("data-live")) return true;
-  const trigger = elt.getAttribute("hx-trigger") || "";
-  return trigger.includes("every");
+// A server that answered is reachable, so only a failed load of a live region
+// marks the engine unreachable.
+function isRegionLoad(elt) {
+  return !!elt && !!elt.hasAttribute && elt.hasAttribute("data-live");
 }
 
 document.body.addEventListener("htmx:responseError", function (evt) {
   const slot = inlineErrorSlotFor(evt.detail.elt, true);
   if (slot) {
     reportSlotFailure(slot, evt.detail.xhr);
-  } else if (isPollRequest(evt.detail.elt)) {
+  } else if (isRegionLoad(evt.detail.elt)) {
     markUnreachable();
   }
 });
@@ -197,45 +194,14 @@ document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);
 
 // The open state lives in `hidden` and the position `style` of the popover, and
 // in `aria-expanded` of the toggle. Each lists its attributes in `data-keep`, so a
-// load of the region keeps them. A node that a load replaces takes the server's
-// state, and this record puts it back.
-let openErrorDetails = null;
-
+// load of the region keeps them.
 function closeErrorPopover(popover) {
   if (!popover) return;
   popover.hidden = true;
-  if (openErrorDetails && openErrorDetails.popoverId === popover.id) {
-    openErrorDetails = null;
-  }
   const toggle = document.querySelector(
     '.error-details-toggle[aria-controls="' + popover.id + '"]',
   );
   if (toggle) toggle.setAttribute("aria-expanded", "false");
-}
-
-function rememberOpenErrorDetails(popover, toggle) {
-  openErrorDetails = {
-    popoverId: popover.id,
-    hadFocus: document.activeElement === toggle,
-  };
-}
-
-function restoreOpenErrorDetails() {
-  if (!openErrorDetails) return;
-  const popover = document.getElementById(openErrorDetails.popoverId);
-  const toggle = document.querySelector(
-    '.error-details-toggle[aria-controls="' + openErrorDetails.popoverId + '"]',
-  );
-  if (!popover || !toggle) {
-    openErrorDetails = null;
-    return;
-  }
-  popover.hidden = false;
-  toggle.setAttribute("aria-expanded", "true");
-  const focusFell =
-    !document.activeElement || document.activeElement === document.body;
-  if (openErrorDetails.hadFocus && focusFell) toggle.focus();
-  positionErrorPopover(popover, toggle);
 }
 
 function closeAllErrorPopovers() {
@@ -269,7 +235,6 @@ document.addEventListener("click", function (evt) {
       toggle.setAttribute("aria-expanded", String(open));
       if (open) {
         positionErrorPopover(popover, toggle);
-        rememberOpenErrorDetails(popover, toggle);
       } else {
         closeErrorPopover(popover);
       }
@@ -285,7 +250,3 @@ document.addEventListener("keydown", function (evt) {
 
 window.addEventListener("resize", closeAllErrorPopovers);
 window.addEventListener("scroll", closeAllErrorPopovers, true);
-
-// `afterSettle` fires on the final DOM after out-of-band processing, so the restore runs on both events.
-document.body.addEventListener("htmx:afterSwap", restoreOpenErrorDetails);
-document.body.addEventListener("htmx:afterSettle", restoreOpenErrorDetails);

@@ -32,16 +32,16 @@ Each part owns one thing and writes only what its row names.
 
 | Part | Owns | May write |
 |---|---|---|
-| `GameWriter` (`generation/gate.rs`) | The busy-state registry (one holder for each busy Game), the guard, and the transactions of record writes | Every record of a Game's story and the config columns of the Game record, through a transaction: accept, stop, edit, delete, swipe switch, config save, create, reset, delete of a Game |
+| `GameWriter` (`generation/gate.rs`) | The busy-state registry (one holder for each busy Game, and the busy-state number that it raises through `Storage`), the guard, and the transactions of record writes | Every record of a Game's story and the config columns of the Game record, through a transaction: accept, stop, edit, delete, swipe switch, config save, create, reset, delete of a Game |
 | `JobWriter` (`generation/gate.rs`) | One Job's right to write | For its own Job only, while the job entry of its Game's holder holds its id: the Input save, the text save, the state update, the failure line, the Options save and the step name |
 | `Job` (`pipeline/job.rs`) | The plan of one request, its generations and their steps | Nothing directly. It writes through its `JobWriter` and passes ids between steps. |
 | `Narrator` (`narration/narrator.rs`) | The assembly and the model call of one Narration | Nothing. It returns text. |
 | `AgentRunner` and the Agents | The hooks and the value each hook returns | Nothing. An Agent returns values. |
 | `AutoplayRun` (`autoplay/driver.rs`) | One Autoplay run: its budget, its cycles and its cycle rule | Its holder and its progress only, through `GameWriter`. Its Jobs write through their own `JobWriter`. |
 | `GameCatalogue` | The lifecycle of Games, and `ActiveGame` | `ActiveGame`, and the display name of the Game record. The config columns, create, reset and delete go through `GameWriter`. |
-| `GameViewQuery` | The read-side views and the status rule | Nothing |
+| `GameViewQuery` | The read-side views, the status rule, and the read of the change counters for `GET /changes` | Nothing |
 | `PromptPresetService` | The preset a Game uses for the Narrator and for each hook, and the rules of a preset edit and a preset delete | Preset rows, through `Storage` |
-| `Storage` | The records on disk, the backend mutex, and the read handles `stories()` and `docks()` | Its own tables. It writes a Game's story records only inside a `Tx`. |
+| `Storage` | The records on disk, the backend mutex, the change counters, and the read handles `stories()` and `docks()` | Its own tables. It writes a Game's story records only inside a `Tx`. It raises a change counter after a successful call or commit. |
 | `LlmCallRecorder` | The LLM message of each LLM call | `llm_messages` rows, through `SaveLlmMessageFn` |
 | HTTP handlers | Request parsing and response rendering | Nothing. They call `Job::start`, `AutoplayRun::start`, `GameWriter`, the catalogues and `PromptPresetService`. |
 
@@ -55,7 +55,7 @@ An inherent `impl` of a type lives in the file that defines the type, or in a fo
 
 ## Deployment Contract
 
-- **HTTP port** — binds a single HTTP port (configurable); serves dashboard + action + polling endpoints. TLS termination and reverse proxying are workspace-operator concerns.
+- **HTTP port** — binds a single HTTP port (configurable); serves the dashboard, the fragment and action endpoints, and `GET /changes`, which the page asks every second. TLS termination and reverse proxying are workspace-operator concerns.
 - **SQLite database** — one file per instance (e.g. `chronicler_3000.db`); auto-created on first access.
 - **File system** — reads JSON seeds from `data/`; writes the SQLite database file. Prompt presets and settings are database rows.
 - **Outbound LLM calls** — HTTPS to the configured backend (OpenRouter / DeepSeek / Ollama); endpoint URL configurable.

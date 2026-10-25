@@ -198,10 +198,6 @@ impl GameViewQuery {
         self.storage.stories().messages(game_id).map_err(Into::into)
     }
 
-    pub fn get_current_options(&self, game_id: GameId) -> Result<Vec<String>, ApplicationError> {
-        Ok(self.dock(game_id)?.offered)
-    }
-
     pub fn dock(&self, game_id: GameId) -> Result<DockRecord, ApplicationError> {
         Ok(self.storage.docks().get(game_id)?.unwrap_or_default())
     }

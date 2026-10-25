@@ -12,7 +12,7 @@ use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
 use crate::application::generation::gate::Busy;
 use crate::domain::model::change::ChangeVersions;
-use crate::domain::model::state::generation_status::{GenerationFailure, Record};
+use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 
 pub async fn header_fragment(
     State(state): State<AppState>,
@@ -122,14 +122,24 @@ fn status_element(state: &str, class: &str, label: &str) -> String {
     )
 }
 
+/// The text the status display shows while a Job is at this step.
+fn step_label(step: &Step) -> &'static str {
+    match step {
+        Step::Narrating => "Generating narration...",
+        Step::Quantifying => "Quantifying...",
+        Step::GeneratingEvent => "Generating event...",
+        Step::Options => "Generating options...",
+    }
+}
+
 pub fn busy_answer(busy: &Busy) -> String {
     match busy {
-        Busy::Job(step) => status_element("thinking", "thinking", step.label()),
+        Busy::Job(step) => status_element("thinking", "thinking", step_label(step)),
         Busy::Autoplay { progress, step } => {
             let mut label = format!("Autoplay: cycle {}/{}", progress.cycle(), progress.budget);
             if let Some(step) = step {
                 label.push(' ');
-                label.push_str(step.label());
+                label.push_str(step_label(step));
             }
             status_element("autoplay", "thinking autoplay", &label)
         }

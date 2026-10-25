@@ -234,15 +234,3 @@ pub enum Step {
     /// Options LLM producing the Options to pick from.
     Options,
 }
-
-impl Step {
-    /// The text the status display shows while a Job is at this step.
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::Narrating => "Generating narration...",
-            Self::Quantifying => "Quantifying...",
-            Self::GeneratingEvent => "Generating event...",
-            Self::Options => "Generating options...",
-        }
-    }
-}

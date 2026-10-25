@@ -1035,7 +1035,7 @@ pub struct StubSwipeHandle {
 }
 
 impl StubSwipeHandle {
-    /// The log's 2s poll renders the new shape on a later cycle.
+    /// The next load of the log renders the new shape.
     pub fn set_two_swipes(&self) {
         self.state
             .two_swipes
@@ -1325,7 +1325,7 @@ fn story_log_entries_with_extra_oldest() -> Vec<StoryRow> {
         0,
         StoryRow {
             id: 3,
-            text: "An older turn the poll will drop.".to_string(),
+            text: "An older turn the next load will drop.".to_string(),
             message_type: MessageType::Narration,
             timestamp: Utc.with_ymd_and_hms(2026, 1, 1, 19, 6, 0).unwrap(),
             ..default_story_row(MessageType::Narration)

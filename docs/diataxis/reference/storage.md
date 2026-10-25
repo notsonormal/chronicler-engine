@@ -53,6 +53,15 @@ One `Storage::transaction` call runs one **transaction**: a group of record writ
 
 A transaction lands **whole, or not at all**. A closure that fails and a closure that panics both roll the transaction back.
 
+## Change Counters
+
+`Storage` owns one `ChangeCounters`: a server id, made when `Storage` is built, and one number for each kind of data. `ChangeKind` names the eight kinds: story, Options, busy state, games, worlds, settings, prompt presets and LLM messages. Story, Options and busy state are counted for each Game. The other five are engine-wide. `ChangeVersions` is one snapshot of all numbers. `GET /changes` answers it for the active Game, and the live regions of the dashboard load when it moves (see the Dashboard reference).
+
+- **A number rises only after its data is committed.** `Storage` raises the kinds of a `StorageCall` after the call returns `Ok`, while the backend mutex is still held. A transaction raises the kinds of its `TxWrite`s once, after the commit. A read, a failed call and a rolled-back transaction raise nothing.
+- **Two exhaustive maps give the kinds.** One maps each `StorageCall` to its kinds, and one maps each `TxWrite` to its kinds. Neither has a wildcard arm, so a new call or write does not compile until it names its kinds.
+- **The busy registry raises busy state through `Storage`.** It raises it when the busy value of a Game changes. It raises games when the set of Games that an Autoplay run holds changes.
+- **A Game that the server deletes or replaces loses its per-Game numbers.**
+
 ## The Newest Game of a World
 
 `Storage::newest_game_of_world` answers the Game a boot picks up for a World.
@@ -145,3 +154,4 @@ Several relationships between clusters are **not** SQL foreign keys. Integrity f
 - [Storage design](../explanation/storage_design.md) — why the storage layer is shaped this way.
 - [Game Flow](./game_flow.md) — the Job that writes these records, and the writer rule.
 - [Startup and Bootstrap](./startup.md) — the bootstrap seeding that writes the first rows.
+- [Dashboard](./frontend/dashboard.md) — the live regions that load when a change counter moves.

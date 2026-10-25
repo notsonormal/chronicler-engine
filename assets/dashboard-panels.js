@@ -1,25 +1,22 @@
-// Panel chrome: the tab bar, the Settings sub-tabs, the LLM Messages expansion toggle, the swap focus restore, the editor focus and the world posture status clear.
+// Panel chrome: the tab bar, the Settings sub-tabs, the LLM Messages expansion toggle, the focus after a preset card swap, the editor focus and the world posture status clear.
 
 // htmx restores focus only to an id that survives the swap, so a control
-// replaced by a different one (Edit to form, Cancel to list) needs this
+// replaced by a different one (Edit to form, Cancel to card) needs this
 // fallback. A panel is a live region: its load keeps what it does not change, and
 // the focus rule of dashboard-live.js moves focus when a load removes the focused
-// node. A preset card is the one element that a view change still replaces.
-const FOCUS_SWAP_TARGETS = ".preset-card";
+// node. A preset card is the one element that a view change still replaces: its
+// Edit, View and Cancel swap the card that holds the control.
+const PRESET_CARD = ".preset-card";
 const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";
 // A form field is the better landing spot: an Edit that opens a form should put
 // the caret in its first field, not on the back link above it.
 const FOCUSABLE_FIELD = "input:not([type=hidden]), select, textarea";
-// A Delete removes the row its control sits in; the story log plans its own
-// landing spot in dashboard-story-log.js.
-const FOCUS_ROW = ".preset-card, .world-item";
-const FOCUS_ROW_PANEL = ".prompt-presets-panel, .worlds-panel";
-// A refused action can answer 200 with an error fragment standing in for the row,
-// card or panel it replaced: that message is the landing spot, not a neighbour.
+// A refused Edit or View answers 200 with an error fragment standing in for the
+// card it replaced: that message is the landing spot.
 const FOCUS_ERROR = ".error-message";
-// The element a swap took focus from, with the swap target whose settle may claim
-// focus for it: htmx reports both events for one request, and `detail.target` is
-// the resolved swap target in `htmx:beforeSwap` and stays that element in
+// The element a card swap took focus from, with the card that was the swap
+// target: htmx reports both events for one request, and `detail.target` is the
+// resolved swap target in `htmx:beforeSwap` and stays that element in
 // `htmx:afterSettle` (whose `detail.elt` is the swapped-in replacement).
 let focusBeforeSwap = null;
 
@@ -52,55 +49,18 @@ function focusErrorFragment(target) {
   return document.activeElement === error;
 }
 
-// A preset section's add form sits between its cards, so the landing spot is the
-// next card in the container.
-function focusAfterRemovedRow(row) {
-  const cards = Array.from(row.parentElement.children).filter((child) =>
-    child.matches(FOCUS_ROW),
-  );
-  const position = cards.indexOf(row);
-  return (
-    focusInto(cards[position + 1]) ||
-    focusInto(cards[position - 1]) ||
-    focusInto(row.closest(FOCUS_ROW_PANEL))
-  );
-}
-
-// A swap that inserts a panel, a card, or the error fragment that stands in for
-// one takes focus from `htmx:afterSettle`, so a row with no such replacement is
-// the one whose landing spot has to be claimed while the row is still there.
-function insertsFocusTarget(response) {
-  const fragment = document.createElement("template");
-  fragment.innerHTML = response || "";
-  return !!fragment.content.querySelector(`${FOCUS_SWAP_TARGETS}, ${FOCUS_ERROR}`);
-}
-
-// A swap whose target is the row itself takes the row out; a rename or a reset
-// form inside a row leaves it in place. That removal needs focus to move before
-// the swap: a `swap:0.3s` delete removes the row after htmx:afterRequest has
-// already been handled, and a swap that inserts nothing fires no afterSettle.
-//
-// Only a swap that can take the focused control's row or panel away records a
-// landing spot: a poll's swap target is neither, so its 2–5 s cycle cannot
-// overwrite the element a delete saved while the delete's settle delay runs.
 document.body.addEventListener("htmx:beforeSwap", function (evt) {
   const target = evt.detail.elt;
   if (!target || !target.matches || !evt.detail.shouldSwap) return;
-  if (!target.matches(FOCUS_SWAP_TARGETS) && !target.closest(FOCUS_ROW)) return;
-  const element = document.activeElement;
-  focusBeforeSwap = { element, target };
-  const row = element && element.closest && element.closest(FOCUS_ROW);
-  if (!row || target !== row) return;
-  if (insertsFocusTarget(evt.detail.serverResponse)) return;
-  focusAfterRemovedRow(row);
+  if (!target.matches(PRESET_CARD)) return;
+  focusBeforeSwap = { element: document.activeElement, target };
 });
 
 document.body.addEventListener("htmx:afterSettle", function (evt) {
   const saved = focusBeforeSwap;
-  // A poll can settle inside a `swap:0.3s` delete's delay, and that settle
-  // carries its own target: only the swap that saved the element may claim or
-  // clear it, or the delete's landing spot is lost and focus falls to `body`.
-  // Scenario 29.5 dispatches that poll settle on purpose.
+  // A region load can settle between the card swap and its own settle, and that
+  // settle carries its own target: only the swap that saved the element may
+  // claim or clear it.
   if (!saved || !evt.detail || evt.detail.target !== saved.target) return;
   focusBeforeSwap = null;
   const element = saved.element;
@@ -108,15 +68,9 @@ document.body.addEventListener("htmx:afterSettle", function (evt) {
   if (document.activeElement && document.activeElement !== document.body) return;
   const target = evt.detail.elt;
   if (!target || !target.matches) return;
-  if (target.matches(FOCUS_SWAP_TARGETS)) {
+  if (target.matches(PRESET_CARD)) {
     focusInto(target);
-    return;
-  }
-  // The row the control sat in came back as an error fragment: focus the message
-  // there, so the refusal is read where the control was, not on a neighbour. Only
-  // a row or an error fragment may take focus this way, so an unrelated poll's
-  // fragment cannot.
-  if (target.matches(FOCUS_ROW) || target.matches(FOCUS_ERROR)) {
+  } else if (target.matches(FOCUS_ERROR)) {
     focusErrorFragment(target);
   }
 });

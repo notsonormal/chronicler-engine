@@ -1,4 +1,4 @@
-//! Stub-browser tests for the story log's poll: the morph that keeps selection, focus, scroll position and the surviving entries. Tagged against `docs/specs/browser_story_log.md`.
+//! Stub-browser tests for the story log's load: the morph that keeps selection, focus, scroll position and the surviving entries. Tagged against `docs/specs/browser_story_log.md`.
 
 use std::time::Duration;
 
