@@ -256,16 +256,13 @@ pub fn check_scripts_use_action_fetch(path: &str, script: &str) -> Vec<Violation
 }
 
 /// Checks one handler file of the HTTP adapter. A handler answers its own element
-/// and never steers the answer into a region, so no `HX-Retarget` header may name
-/// a region element. (A handler that answers `HX-Refresh` waits for stage 3, which
-/// moves the page reloads onto the change numbers.)
-pub fn check_handlers_retarget_no_region(
-    path: &str,
-    source: &str,
-    regions: &[String],
-) -> Vec<Violation> {
+/// and never steers the answer: no `HX-Retarget` header may name a region element,
+/// and no handler may answer `HX-Refresh`. A region shows what its own load renders,
+/// and a new active Game or a changed number loads it, so no page reload is needed.
+pub fn check_handler_headers(path: &str, source: &str, regions: &[String]) -> Vec<Violation> {
     let retarget = Regex::new(r#"HX-Retarget"([^;]*)"#).expect("retarget pattern");
-    retarget
+    let refresh = Regex::new(r#"(?i)"HX-Refresh""#).expect("refresh pattern");
+    let mut violations: Vec<Violation> = retarget
         .captures_iter(source)
         .filter(|capture| names_a_region(&capture[1], regions))
         .map(|capture| {
@@ -275,5 +272,13 @@ pub fn check_handlers_retarget_no_region(
                 "a handler answers `HX-Retarget` into a region element. A region shows what its own load renders.",
             )
         })
-        .collect()
+        .collect();
+    violations.extend(refresh.find_iter(source).map(|found| {
+        Violation::error(
+            path,
+            line_of(source, found.start()),
+            "a handler answers `HX-Refresh`. The change numbers load the regions that show the data: a page reload is never needed.",
+        )
+    }));
+    violations
 }

@@ -2,9 +2,7 @@
 
 use axum::http::StatusCode;
 
-use crate::adapters::driving::http::utils::response::{
-    bad_request, html_escape, internal_error, ok, ok_refresh,
-};
+use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error, ok};
 use crate::adapters::driving::http::utils::error::render_error;
 use crate::test_support::body_text;
 
@@ -13,19 +11,6 @@ async fn ok_returns_200_with_body() {
     let resp = ok("hello");
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(body_text(resp).await, "hello");
-}
-
-#[tokio::test]
-async fn ok_refresh_sets_hx_refresh_header_and_empty_body() {
-    let resp = ok_refresh();
-    assert_eq!(resp.status(), StatusCode::OK);
-    assert_eq!(
-        resp.headers()
-            .get("HX-Refresh")
-            .map(|v| v.to_str().unwrap()),
-        Some("true")
-    );
-    assert_eq!(body_text(resp).await, "");
 }
 
 #[tokio::test]

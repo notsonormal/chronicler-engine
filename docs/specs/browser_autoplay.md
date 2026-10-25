@@ -42,13 +42,15 @@ And the command input, the Send button and #autoplay-btn are visible and enabled
 Given a Game whose story log holds an Input and a Narration after the opening Narration
 And a run that holds the Game, and its first Job waits for the model
 Then the Edit, Delete and Retry controls of the story log are disabled
-And the Narrator Mode, Perspective, Tense and preset selects of the Games panel are disabled
+When the client opens the Games tab
+Then the Narrator Mode, Perspective, Tense and preset selects of the Games panel are disabled
 
-When the client presses #stop-btn
+When the client goes back to the Game tab and presses #stop-btn
 Then the status display shows "Ready"
 And the command input and the Send button are visible and enabled
 And the Edit, Delete and Retry controls of the story log are enabled
-And the Narrator Mode, Perspective, Tense and preset selects of the Games panel are enabled
+When the client opens the Games tab
+Then the Narrator Mode, Perspective, Tense and preset selects of the Games panel are enabled
 ```
 
 #### Scenario 42.4: The Games list marks a Game that a run holds, without a reload

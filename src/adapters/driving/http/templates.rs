@@ -145,13 +145,13 @@ impl TextCheckPreviewTemplate {
     source = r##"<div class="llm-message-list" id="llm-message-list">
 {% for msg in messages %}
 <div class="llm-message-card" id="llm-msg-{{ msg.id }}">
-    <button type="button" class="llm-message-header" id="llm-msg-header-{{ msg.id }}" aria-expanded="false" aria-controls="llm-msg-body-{{ msg.id }}" onclick="toggleLlmMessage(this)">
+    <button type="button" class="llm-message-header" id="llm-msg-header-{{ msg.id }}" aria-expanded="false" data-keep="aria-expanded" aria-controls="llm-msg-body-{{ msg.id }}" onclick="toggleLlmMessage(this)">
         <span class="llm-message-agent">{{ msg.agent_name }}</span>
         <span class="llm-message-model">{{ msg.backend_name }} / {{ msg.model_name }}</span>
         <span class="llm-message-time">{{ msg.timestamp }}</span>
         {% if msg.error_message.is_some() %}<span class="llm-message-error">ERROR</span>{% endif %}
     </button>
-    <div class="llm-message-body" id="llm-msg-body-{{ msg.id }}">
+    <div class="llm-message-body" id="llm-msg-body-{{ msg.id }}" hidden data-keep="hidden">
         {% if msg.error_message.is_some() %}
         <div class="llm-message-failure">
             <span class="llm-message-failure-label">Failure</span>
@@ -161,19 +161,19 @@ impl TextCheckPreviewTemplate {
         {% if !msg.system_prompt_preview.is_empty() || !msg.user_prompt_preview.is_empty() || !msg.parsed_response_preview.is_empty() %}
         <div class="llm-message-prompts">
             {% if !msg.system_prompt_preview.is_empty() %}
-            <details class="llm-message-prompt-details">
+            <details class="llm-message-prompt-details" data-keep="open">
                 <summary>System</summary>
                 <pre class="llm-message-prompt-pre">{{ msg.system_prompt_preview }}</pre>
             </details>
             {% endif %}
             {% if !msg.user_prompt_preview.is_empty() %}
-            <details class="llm-message-prompt-details">
+            <details class="llm-message-prompt-details" data-keep="open">
                 <summary>User</summary>
                 <pre class="llm-message-prompt-pre">{{ msg.user_prompt_preview }}</pre>
             </details>
             {% endif %}
             {% if !msg.parsed_response_preview.is_empty() %}
-            <details class="llm-message-prompt-details" open>
+            <details class="llm-message-prompt-details" data-keep="open" open>
                 <summary>Response</summary>
                 <pre class="llm-message-prompt-pre">{{ msg.parsed_response_preview }}</pre>
             </details>
@@ -183,13 +183,13 @@ impl TextCheckPreviewTemplate {
         {% if !msg.raw_request_json.is_empty() || !msg.raw_response_json.is_empty() %}
         <div class="llm-message-raw">
             {% if !msg.raw_request_json.is_empty() %}
-            <details>
+            <details data-keep="open">
                 <summary>Raw Request JSON</summary>
                 <pre>{{ msg.raw_request_json }}</pre>
             </details>
             {% endif %}
             {% if !msg.raw_response_json.is_empty() %}
-            <details>
+            <details data-keep="open">
                 <summary>Raw Response JSON</summary>
                 <pre>{{ msg.raw_response_json }}</pre>
             </details>

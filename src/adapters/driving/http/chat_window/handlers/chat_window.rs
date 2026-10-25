@@ -10,7 +10,7 @@ use axum::{
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::action_error_response;
-use crate::adapters::driving::http::utils::response::{ok, ok_refresh};
+use crate::adapters::driving::http::utils::response::ok;
 use crate::domain::model::generation::JobRequest;
 use crate::application::pipeline::job::Job;
 use crate::domain::model::game::GameId;
@@ -24,7 +24,7 @@ pub async fn reset_handler(
     CurrentGame(game_id): CurrentGame,
 ) -> Response<Body> {
     match state.game_catalogue.reset(game_id) {
-        Ok(()) => ok_refresh(),
+        Ok(()) => ok(""),
         Err(e) => action_error_response(e, "Failed to reset"),
     }
 }

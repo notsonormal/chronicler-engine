@@ -1,10 +1,11 @@
-// The live regions: the ask loop, the record and state of each region, the hold of an edit, the data-keep rule and the focus rule after a removal.
+// The live regions: the ask loop, the record and state of each region, the hold of an edit and the rule that ends it, the hidden-section rule, the data-keep rule and the focus rule after a removal.
 
 // A live region is an element with `data-live`, a space-separated list of the
 // kinds of data it shows. The kinds are the names of the numbers of
 // `GET /changes`. The page asks while it is visible. A region loads when a
-// number of one of its kinds differs from the number it last loaded, and no
-// region loads while the player edits in it.
+// number of one of its kinds differs from the number it last loaded. No region
+// loads while the player edits in it, and a region in a hidden dashboard
+// section waits until the player opens the section.
 
 const LIVE_ASK_INTERVAL_MS = 1000;
 
@@ -80,6 +81,88 @@ function regionHoldsEdit(region) {
   );
 }
 
+// A region in a section that is not the active one waits: the header is outside
+// every section, so it is never hidden.
+function sectionIsHidden(region) {
+  const section = region.closest(".tab-content");
+  return !!section && !section.classList.contains("active");
+}
+
+// The fields that an edit covers: the control itself, or the fields of a form
+// or of an editor root.
+function editFieldsOf(element) {
+  if (element.matches("input, textarea, select")) return [element];
+  return Array.from(element.querySelectorAll("input, textarea, select"));
+}
+
+const FIELD_WITHOUT_VALUE = "input[type=hidden], input[type=button], input[type=submit]";
+
+// The saved value is the rendered value now, so the field is no longer changed.
+function settleField(field) {
+  if (field.matches("input[type=checkbox], input[type=radio]")) {
+    field.defaultChecked = field.checked;
+  } else if (field.tagName === "SELECT") {
+    Array.from(field.options).forEach((option) => {
+      option.defaultSelected = option.selected;
+    });
+  } else if (!field.matches(FIELD_WITHOUT_VALUE)) {
+    field.defaultValue = field.value;
+  }
+}
+
+// A control that saves on change goes back to the value the server rendered,
+// so a value that was not saved does not stay on screen or hold the region.
+function restoreRenderedValue(field) {
+  if (field.matches("input[type=checkbox], input[type=radio]")) {
+    field.checked = field.defaultChecked;
+  } else if (field.tagName === "SELECT") {
+    const rendered = Array.from(field.options).findIndex(
+      (option) => option.defaultSelected,
+    );
+    field.selectedIndex = rendered < 0 ? 0 : rendered;
+  } else if (!field.matches(FIELD_WITHOUT_VALUE)) {
+    field.value = field.defaultValue;
+  }
+}
+
+// The one rule that ends an edit after a save went through. `element` is the
+// form or the control that saved, or a field inside an editor. Each field of it
+// takes its current value as its rendered value, the editor root that holds the
+// region (`data-work`) lets go, and the disclosure that holds only this form
+// closes: it marks itself with `data-close-on-save`.
+function endEdit(element) {
+  editFieldsOf(element).forEach(settleField);
+  const root = element.closest("[data-work]");
+  if (root) root.removeAttribute("data-work");
+  const disclosure = element.closest("details[data-close-on-save]");
+  if (disclosure) disclosure.open = false;
+}
+
+function isSavingControl(element) {
+  return element.tagName === "FORM" || element.matches("input, textarea, select");
+}
+
+// What happens to the edit of a form or control in a region when its request
+// ends. A save that went through ends the edit. A save that failed or was
+// refused keeps the edit of a form, and puts a control that saves on change
+// back to its rendered value (D2), so the error in its slot is not a lie about
+// what the page shows.
+function settleSave(evt) {
+  const element = evt.detail && evt.detail.elt;
+  if (!element || !element.closest || !element.closest("[data-live]")) return;
+  if (!isSavingControl(element)) return;
+  const refused = answeredBusy(evt);
+  if (evt.detail.successful && !refused) {
+    endEdit(element);
+    return;
+  }
+  if (element.tagName === "FORM") return;
+  restoreRenderedValue(element);
+  if (refused) {
+    reportBusyRefusal(inlineErrorSlotFor(element, true), "the change was not saved");
+  }
+}
+
 function settleLoad(region, record) {
   record.loading = false;
   record.pending = null;
@@ -129,6 +212,10 @@ async function runAsk() {
   document.querySelectorAll("[data-live]").forEach((region) => {
     if (liveRecordOf(region).loading) return;
     if (!regionIsDue(region, answer)) return;
+    if (sectionIsHidden(region)) {
+      setLiveState(region, "stale");
+      return;
+    }
     if (regionHoldsEdit(region)) {
       setLiveState(region, "held");
       return;
@@ -218,6 +305,12 @@ function liveWorkEnded() {
   return askNow();
 }
 
+// A section that opens shows its regions: the page asks, and each region of the
+// section that is due loads.
+function liveSectionOpened() {
+  return askNow();
+}
+
 liveTimer = setInterval(liveTick, LIVE_ASK_INTERVAL_MS);
 
 // The first ask of the page finds no record, so it loads every region. It waits
@@ -283,8 +376,9 @@ document.body.addEventListener("htmx:afterSwap", function (evt) {
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   const region = evt.detail && evt.detail.elt;
   // Every other request that ends is an action, or a view change that may
-  // follow one: the page asks at once.
+  // follow one: the edit of a saved form ends, and the page asks at once.
   if (!isLiveRegion(region)) {
+    settleSave(evt);
     askNow();
     return;
   }
@@ -310,6 +404,25 @@ Idiomorph.defaults.callbacks.beforeAttributeUpdated = function (
 ) {
   const keep = node.getAttribute ? node.getAttribute("data-keep") : null;
   if (keep && keep.split(/\s+/).includes(attributeName)) return false;
+};
+
+// An inline error slot that shows an error is view state: a load neither
+// rewrites it nor removes it. The next save that goes through clears it.
+function showsInlineError(node) {
+  return (
+    !!node &&
+    node.nodeType === 1 &&
+    node.hasAttribute("data-error-slot") &&
+    !node.hidden
+  );
+}
+
+Idiomorph.defaults.callbacks.beforeNodeMorphed = function (oldNode) {
+  if (showsInlineError(oldNode)) return false;
+};
+
+Idiomorph.defaults.callbacks.beforeNodeRemoved = function (node) {
+  if (showsInlineError(node)) return false;
 };
 
 const LIVE_FOCUSABLE =

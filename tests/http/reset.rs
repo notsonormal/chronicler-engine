@@ -5,11 +5,13 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::{empty_sqlite_storage, ScriptedModel};
+use chronicler_engine::test_support::{active_game_of, empty_sqlite_storage, ScriptedModel};
 use chronicler_engine::TestAppBuilder;
 
 use crate::support::http_fixtures::story_of;
-use crate::support::http_requests::{post_action, post_empty, response_body, wait_settled};
+use crate::support::http_requests::{
+    assert_answers_nothing, post_action, post_empty, response_body, wait_settled,
+};
 
 // [docs/specs/reset.md] SCENARIO: 7.1
 #[tokio::test]
@@ -100,5 +102,21 @@ async fn test_reset_with_no_active_game_answers_400_http() {
     assert!(
         body.contains("No active game"),
         "the refusal names the missing Game, got: {body}"
+    );
+}
+
+// [docs/specs/reset.md] SCENARIO: 7.5
+#[tokio::test]
+async fn test_reset_answers_nothing_and_makes_a_new_game_active_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let before = active_game_of(&state);
+
+    let response = post_empty(&app, "/reset").await;
+    assert_answers_nothing(response).await;
+
+    assert_ne!(
+        active_game_of(&state),
+        before,
+        "the reset makes a new Game active"
     );
 }

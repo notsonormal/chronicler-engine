@@ -146,11 +146,15 @@ async fn test_while_a_run_holds_the_game_the_story_changing_controls_are_disable
                 story_controls_all(&page, true).await
             })
             .await;
+            // The Games panel is in a section that is hidden, so it loads when
+            // the section opens, and renders what the run holds by then.
+            open_games_tab(&page).await;
             wait_for(
                 "the Games panel renders its config controls disabled",
                 || async { config_selects_all(&page, true).await },
             )
             .await;
+            show_tab(&page, "game").await;
 
             click_and_settle(&page, "#stop-btn", "#status-display")
                 .await
@@ -163,6 +167,7 @@ async fn test_while_a_run_holds_the_game_the_story_changing_controls_are_disable
                 story_controls_all(&page, false).await
             })
             .await;
+            show_tab(&page, "games").await;
             wait_for(
                 "the Games panel renders its config controls enabled",
                 || async { config_selects_all(&page, false).await },

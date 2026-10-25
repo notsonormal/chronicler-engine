@@ -19,6 +19,9 @@ use chrono::{TimeZone, Utc};
 use chronicler_engine::adapters::driving::http::utils::response::BUSY_STATUS;
 use chronicler_engine::adapters::driving::http::builders::headers::header_fragment_html;
 use chronicler_engine::adapters::driving::http::builders::presets::preset_edit_form_html;
+use chronicler_engine::adapters::driving::http::games::templates::games::{
+    GamePostureTemplate, GameRowView, GamesPanelTemplate, PersonaRowView,
+};
 use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate,
 };
@@ -29,14 +32,16 @@ use chronicler_engine::adapters::driving::http::utils::error::render_error;
 use chronicler_engine::application::generation::gate::{AutoplayProgress, Busy};
 use chronicler_engine::application::games::view_query::RoleHealth;
 use chronicler_engine::domain::model::agent::Role;
+use chronicler_engine::domain::model::game::Game;
 use chronicler_engine::domain::model::llm_message::LlmMessage;
 use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
 use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection, NarratorMode};
+use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind, Step,
 };
 use chronicler_engine::domain::model::state::message_types::{StoryRow, MessageType};
-use chronicler_engine::test_support::default_story_row;
+use chronicler_engine::test_support::{default_story_row, TestPromptPreset};
 
 use super::server::{get_config_port, release_port_lock};
 use super::CONFIG_PATH;
@@ -46,7 +51,6 @@ const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
 const FIXTURE_PROMPT_PRESETS: &str = include_str!("stub_fixtures/prompt_presets.html");
 const FIXTURE_WORLDS: &str = include_str!("stub_fixtures/worlds.html");
-const FIXTURE_GAMES: &str = include_str!("stub_fixtures/games.html");
 
 fn header_html(degraded: bool) -> String {
     let roles = if degraded {
@@ -99,26 +103,97 @@ fn default_story_log_entries() -> Vec<StoryRow> {
     ]
 }
 
-fn llm_messages_html() -> String {
+/// The LLM messages the stub shows, newest first: each carries prompts and raw
+/// JSON, so the card holds every kind of disclosure the real panel renders.
+fn llm_messages_html(count: usize) -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::LlmMessagesTemplate;
 
-    let messages = vec![LlmMessage {
-        id: 1,
-        agent_name: "narrator".to_string(),
-        backend_name: "Mock".to_string(),
-        model_name: "mock".to_string(),
-        system_prompt: String::new(),
-        user_prompt: String::new(),
-        raw_request_json: String::new(),
-        raw_response_json: String::new(),
-        parsed_response: "canned narration".to_string(),
-        error_message: None,
-        created_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
-    }];
+    let messages: Vec<LlmMessage> = (1..=count as u64)
+        .rev()
+        .map(|id| LlmMessage {
+            id: id as i64,
+            agent_name: "narrator".to_string(),
+            backend_name: "Mock".to_string(),
+            model_name: "mock".to_string(),
+            system_prompt: "the system prompt".to_string(),
+            user_prompt: "the user prompt".to_string(),
+            raw_request_json: "{\"request\":true}".to_string(),
+            raw_response_json: "{\"response\":true}".to_string(),
+            parsed_response: "canned narration".to_string(),
+            error_message: None,
+            created_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, id as u32).unwrap(),
+        })
+        .collect();
     LlmMessagesTemplate::new(&messages)
         .render()
         .expect("render LLM messages")
+}
+
+/// The Games panel, rendered by the engine's own template over the games the
+/// stub holds: the active Game, and the saved Games that no delete removed.
+fn games_html(games: &StubGames) -> String {
+    use askama::Template;
+
+    let preset = |id: &str| TestPromptPreset::system(id, "Default");
+    let game = Game {
+        id: 1,
+        persona_name: "Test Player".to_string(),
+        narrator_mode: NarratorMode::Novel,
+        active_system_prompt_preset_id: "system_default".to_string(),
+        active_quantifier_prompt_preset_id: "quantifier_default".to_string(),
+        active_impersonate_prompt_preset_id: "impersonate_default".to_string(),
+        active_options_prompt_preset_id: "options_default".to_string(),
+        ..Game::default()
+    };
+    let posture = GamePostureTemplate::from_game(
+        &game,
+        &[preset("system_default")],
+        &[preset("quantifier_default")],
+        &[preset("impersonate_default")],
+        &[TestPromptPreset::options("options_default", "Default")],
+        false,
+    )
+    .render()
+    .expect("render the posture controls");
+    let row = |id: u64, display_name: &str| GameRowView {
+        id,
+        display_name: display_name.to_string(),
+        world_name: "Test Realm".to_string(),
+        persona_name: "Test Player".to_string(),
+        run_held: false,
+    };
+    let world = |key: &str, name: &str, description: &str| WorldCard {
+        key: key.to_string(),
+        name: name.to_string(),
+        description: description.to_string(),
+        ..WorldCard::default()
+    };
+    GamesPanelTemplate {
+        active_game: Some(row(1, &games.active_name)),
+        saved_games: games
+            .saved
+            .iter()
+            .map(|(id, name)| row(*id, name))
+            .collect(),
+        worlds: vec![
+            world("redmist_estate", "Redmist Estate", "A coastal estate."),
+            world("test", "Test Realm", "A small testing kingdom for UI tests"),
+        ],
+        personas: vec![
+            PersonaRowView {
+                key: "julian".to_string(),
+                name: "Julian".to_string(),
+            },
+            PersonaRowView {
+                key: "test_player".to_string(),
+                name: "Test Player".to_string(),
+            },
+        ],
+        posture_html: posture,
+    }
+    .render()
+    .expect("render the Games panel")
 }
 
 fn settings_html() -> String {
@@ -257,6 +332,29 @@ struct StubState {
     loads_failing: std::sync::atomic::AtomicBool,
     story_log_delay_ms: std::sync::atomic::AtomicU64,
     options_failed: std::sync::atomic::AtomicBool,
+    games: std::sync::Mutex<StubGames>,
+    llm_message_count: std::sync::atomic::AtomicUsize,
+}
+
+/// The Games the stub lists: a rename changes a name and a delete removes a saved
+/// Game, and each moves the `games` number, as the engine does.
+struct StubGames {
+    active_name: String,
+    saved: Vec<(u64, String)>,
+    rename_failing: bool,
+}
+
+impl StubGames {
+    fn new() -> Self {
+        Self {
+            active_name: "Test Realm_2026-09-17_1".to_string(),
+            saved: vec![
+                (2, "Test Realm — 17 Sep 2026 (2)".to_string()),
+                (3, "Test Realm — 17 Sep 2026 (3)".to_string()),
+            ],
+            rename_failing: false,
+        }
+    }
 }
 
 /// What `GET /changes` answers. A test moves a number through `StubChangesHandle`; the
@@ -377,6 +475,8 @@ impl StubServer {
             loads_failing: std::sync::atomic::AtomicBool::new(false),
             story_log_delay_ms: std::sync::atomic::AtomicU64::new(0),
             options_failed: std::sync::atomic::AtomicBool::new(false),
+            games: std::sync::Mutex::new(StubGames::new()),
+            llm_message_count: std::sync::atomic::AtomicUsize::new(1),
         });
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
@@ -460,6 +560,18 @@ impl StubServer {
 
     pub fn changes_handle(&self) -> StubChangesHandle {
         StubChangesHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    pub fn games_handle(&self) -> StubGamesHandle {
+        StubGamesHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    pub fn llm_handle(&self) -> StubLlmHandle {
+        StubLlmHandle {
             state: Arc::clone(&self.state),
         }
     }
@@ -564,6 +676,51 @@ impl StubChangesHandle {
         self.state
             .story_log_delay_ms
             .store(millis, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// The Games the stub lists.
+#[derive(Clone)]
+pub struct StubGamesHandle {
+    state: Arc<StubState>,
+}
+
+impl StubGamesHandle {
+    /// A rename answers a 500 until this is turned off.
+    pub fn set_rename_failing(&self, failing: bool) {
+        self.state
+            .games
+            .lock()
+            .expect("stub games lock poisoned")
+            .rename_failing = failing;
+    }
+
+    /// The names of the saved Games the panel lists now, in order.
+    pub fn saved_names(&self) -> Vec<String> {
+        self.state
+            .games
+            .lock()
+            .expect("stub games lock poisoned")
+            .saved
+            .iter()
+            .map(|(_, name)| name.clone())
+            .collect()
+    }
+}
+
+/// The LLM messages the stub lists.
+#[derive(Clone)]
+pub struct StubLlmHandle {
+    state: Arc<StubState>,
+}
+
+impl StubLlmHandle {
+    /// A new LLM message is recorded: the next load of the panel lists it first.
+    pub fn record_message(&self) {
+        self.state
+            .llm_message_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.state.bump(&["llm"]);
     }
 }
 
@@ -686,8 +843,8 @@ impl StubFailureHandle {
             .store(failing, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// These tab panels fetch once per page load, so arming this has no effect
-    /// until the next reload.
+    /// The Worlds and Games panels load once per page load, the Games panel when
+    /// its section opens, so arming this has no effect on a panel that has loaded.
     pub fn set_panel_loads_failing(&self, failing: bool) {
         self.state
             .panel_loads_failing
@@ -832,10 +989,8 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/games/:id/posture", post(failing_posture_save))
         // The real delete answers an empty body, so htmx removes the row the
         // control sits in.
-        .route(
-            "/games/:id/delete",
-            post(|| async { (StatusCode::OK, "").into_response() }),
-        )
+        .route("/games/:id/delete", post(delete_game))
+        .route("/games/:id/rename", post(rename_game))
         .route("/history/:id", post(save_message))
         // Scenario 16.34 drives /reset from the games row: a 500 here fills that
         // row's own error slot rather than the panel's.
@@ -861,10 +1016,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             get(|| async { Html(FIXTURE_VISUAL_SIDEBAR) }),
         )
         .route("/fragment/options-dock", get(options_dock_fragment))
-        .route(
-            "/fragment/llm-messages",
-            get(|| async { Html(llm_messages_html()) }),
-        )
+        .route("/fragment/llm-messages", get(llm_messages_fragment))
         .route(
             "/fragment/settings",
             get(|| async { Html(settings_html()) }),
@@ -889,7 +1041,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             get(preset_edit_form_fragment),
         )
         .route("/fragment/worlds", get(|| async { Html(FIXTURE_WORLDS) }))
-        .route("/fragment/games", get(|| async { Html(FIXTURE_GAMES) }))
+        .route("/fragment/games", get(games_fragment))
         .nest_service("/assets", tower_http::services::ServeDir::new("assets"))
         .nest_service("/data", tower_http::services::ServeDir::new("data"))
         .layer(axum::middleware::from_fn_with_state(
@@ -897,6 +1049,60 @@ fn stub_router(state: Arc<StubState>) -> Router {
             fail_polls_middleware,
         ))
         .with_state(state)
+}
+
+async fn games_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    let games = state.games.lock().expect("stub games lock poisoned");
+    Html(games_html(&games))
+}
+
+async fn llm_messages_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    let count = state
+        .llm_message_count
+        .load(std::sync::atomic::Ordering::SeqCst);
+    Html(llm_messages_html(count))
+}
+
+/// The real delete answers nothing: the next load of the panel no longer lists the
+/// row.
+async fn delete_game(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> Response<Body> {
+    state
+        .games
+        .lock()
+        .expect("stub games lock poisoned")
+        .saved
+        .retain(|(saved, _)| *saved != id);
+    state.bump(&["games"]);
+    (StatusCode::OK, "").into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct RenameForm {
+    display_name: String,
+}
+
+/// The real rename answers nothing and moves `games`.
+async fn rename_game(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+    Form(form): Form<RenameForm>,
+) -> Response<Body> {
+    {
+        let mut games = state.games.lock().expect("stub games lock poisoned");
+        if games.rename_failing {
+            return client_failure("Stub rename failure");
+        }
+        if id == 1 {
+            games.active_name = form.display_name;
+        } else if let Some((_, name)) = games.saved.iter_mut().find(|(saved, _)| *saved == id) {
+            *name = form.display_name;
+        }
+    }
+    state.bump(&["games"]);
+    (StatusCode::OK, "").into_response()
 }
 
 async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String> {

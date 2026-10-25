@@ -140,3 +140,47 @@ async fn test_games_fragment_lists_other_saved_games_http() {
         "the Saved Games section must not list the active game: {saved_section}"
     );
 }
+
+// [docs/specs/games.md] SCENARIO: 20.13
+#[tokio::test]
+async fn test_games_fragment_is_the_panel_content_with_stable_row_ids_http() {
+    let (state, storage) = TestAppBuilder::default_test().build_service_with_storage();
+    let active = state
+        .game_catalogue
+        .active_game()
+        .expect("the active game must load")
+        .expect("the fixture seeds an active game");
+    let second = chronicler_engine::test_support::seed_game_row(
+        &storage,
+        &chronicler_engine::test_support::test_new_game(
+            &active.world_name,
+            &active.world_key,
+            &active.persona_key,
+            &active.persona_name,
+            "Second Game",
+        ),
+    )
+    .0;
+
+    let app = build_router(state);
+    let html = fetch_body(&app, "/fragment/games").await;
+
+    assert!(
+        !html.contains("games-panel"),
+        "the fragment is the content of the panel, and repeats no games-panel element: {html}"
+    );
+    for id in [active.id, second] {
+        assert!(
+            html.contains(&format!(r#"id="game-row-{id}""#)),
+            "the row of game {id} must carry its stable id: {html}"
+        );
+    }
+    let disclosures = html.matches(r#"<details class="game-rename""#).count();
+    assert_eq!(disclosures, 2, "each Game row renders a rename disclosure");
+    assert_eq!(
+        html.matches(r#"<details class="game-rename" data-keep="open" data-close-on-save>"#)
+            .count(),
+        2,
+        "each rename disclosure lists its open state in data-keep and closes on save: {html}"
+    );
+}

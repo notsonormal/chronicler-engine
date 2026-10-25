@@ -5,11 +5,11 @@ use tower::util::ServiceExt;
 
 use chronicler_engine::TestAppBuilder;
 
-use crate::support::http_requests::{fetch_body, response_body};
+use crate::support::http_requests::{assert_answers_nothing, fetch_body, response_body};
 
 // [docs/specs/games.md] SCENARIO: 17.4
 #[tokio::test]
-async fn test_rename_game_updates_display_name_in_header_and_fragment() {
+async fn test_rename_game_answers_nothing_and_updates_display_name_in_header_and_fragment() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
     let active = state
         .game_catalogue
@@ -25,12 +25,7 @@ async fn test_rename_game_updates_display_name_in_header_and_fragment() {
         .body(Body::from("display_name=The+Long+Road"))
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("HX-Refresh").unwrap(),
-        "true",
-        "rename must refresh so the header and Games tab re-render"
-    );
+    assert_answers_nothing(response).await;
 
     let renamed = state
         .game_catalogue

@@ -35,7 +35,7 @@ async fn test_switch_game_ok() {
 }
 
 #[tokio::test]
-async fn test_switch_game_mode_handler_retargets_and_nudges() {
+async fn test_switch_game_mode_handler_answers_nothing_and_nudges() {
     let state = TestAppBuilder::default_test().build_service();
     state
         .game_catalogue
@@ -55,10 +55,7 @@ async fn test_switch_game_mode_handler_retargets_and_nudges() {
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8_lossy(&body);
-    assert!(
-        body.contains("posture-override"),
-        "mode switch must re-render the override fragment"
-    );
+    assert!(body.is_empty(), "a saved mode answers nothing: {body}");
 
     let game = state.game_catalogue.active_game().unwrap().unwrap();
     assert_eq!(game.narrator_mode, NarratorMode::InteractiveFiction);
@@ -83,6 +80,7 @@ async fn test_switch_game_mode_handler_invalid_mode_returns_error_span() {
         }),
     )
     .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8_lossy(&body);
     assert!(body.contains("Unknown narrator mode"));

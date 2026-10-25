@@ -69,7 +69,7 @@ async fn check_deleting_a_saved_game_keeps_keyboard_focus_in_the_panel(
     .await;
     assert!(removed, "the last delete must remove the final row");
     assert!(
-        wait_until_focused(&page, ".games-panel :focus", Duration::from_secs(5)).await,
+        wait_until_focused(&page, ".games-panel", Duration::from_secs(5)).await,
         "deleting the last saved game must leave focus inside the Games panel"
     );
 }

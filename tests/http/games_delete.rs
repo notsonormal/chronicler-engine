@@ -10,7 +10,7 @@ use chronicler_engine::TestAppBuilder;
 
 use crate::support::app_wiring::two_game_app;
 use crate::support::http_fixtures::seeded_storage_with_initial_game;
-use crate::support::http_requests::{fetch_body, response_body};
+use crate::support::http_requests::{assert_answers_nothing, fetch_body};
 
 // [docs/specs/games.md] SCENARIO: 19.1
 #[tokio::test]
@@ -81,20 +81,19 @@ async fn test_delete_game_handler_unknown_id_is_idempotent() {
     );
 }
 
-async fn delete_game_body(app: &axum::Router, id: u64) -> String {
+async fn delete_game_answering_nothing(app: &axum::Router, id: u64) {
     let req = Request::builder()
         .uri(format!("/games/{id}/delete"))
         .method(http::Method::POST)
         .body(Body::empty())
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    response_body(response).await
+    assert_answers_nothing(response).await;
 }
 
 // [docs/specs/games.md] SCENARIO: 19.4
 #[tokio::test]
-async fn test_delete_game_handler_last_saved_game_answers_with_the_empty_state() {
+async fn test_delete_game_answers_nothing_and_the_panel_shows_the_empty_state_after_the_last() {
     let (app, state, _storage, _other_id) = two_game_app();
 
     let active_id = active_game_of(&state);
@@ -113,21 +112,21 @@ async fn test_delete_game_handler_last_saved_game_answers_with_the_empty_state()
         "the fixture plus one created game must leave two saved games"
     );
 
-    let body = delete_game_body(&app, saved_ids[0]).await;
+    delete_game_answering_nothing(&app, saved_ids[0]).await;
+    let panel = fetch_body(&app, "/fragment/games").await;
     assert!(
-        !body.contains("No other saved games."),
-        "a delete that leaves a saved game must answer with an empty body: {body:?}"
+        panel.contains(&format!("data-id=\"{}\"", saved_ids[1])),
+        "the panel must still list the saved game that was not deleted: {panel}"
+    );
+    assert!(
+        !panel.contains("No other saved games."),
+        "a panel that lists a saved game shows no empty state: {panel}"
     );
 
-    let body = delete_game_body(&app, saved_ids[1]).await;
-    assert!(
-        body.contains("No other saved games."),
-        "the last saved game's delete must answer with the list's empty state: {body}"
-    );
-
+    delete_game_answering_nothing(&app, saved_ids[1]).await;
     let panel = fetch_body(&app, "/fragment/games").await;
     assert!(
         panel.contains("No other saved games."),
-        "the panel's empty state and the delete's answer must be the same line: {panel}"
+        "the panel must show the empty state once the last saved game is gone: {panel}"
     );
 }

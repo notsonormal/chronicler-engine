@@ -21,15 +21,6 @@ pub fn ok(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::OK, body)
 }
 
-#[allow(clippy::expect_used)]
-pub fn ok_refresh() -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("HX-Refresh", "true")
-        .body(Body::empty())
-        .expect("static response body is valid")
-}
-
 pub fn bad_request(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::BAD_REQUEST, body)
 }

@@ -105,23 +105,8 @@ function focusCommandInput() {
 
 let previewWasOpen = false;
 
-// The Games panel renders the run mark, so a run's start or end refetches it.
-// `null` is the unread baseline. The panel is not a live region yet; this goes
-// when the panel lists its kinds in `data-live`.
-let runWasHeld = null;
-
-function refreshGamesPanelOnRunChange() {
-  const held = statusIsAutoplay();
-  const changed = runWasHeld !== null && held !== runWasHeld;
-  runWasHeld = held;
-  if (!changed) return;
-  const panel = document.querySelector("#games-tab > .games-panel");
-  if (panel) htmx.trigger(panel, "refresh");
-}
-
 function syncActionState() {
   applyActionState(deriveActionState());
-  refreshGamesPanelOnRunChange();
   const open = previewIsOpen();
   if (open && !previewWasOpen) {
     focusCorrectedTextarea();

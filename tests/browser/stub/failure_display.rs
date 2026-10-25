@@ -253,6 +253,7 @@ async fn check_failed_non_poll_action_does_not_raise_unreachable_banner(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
+    open_games_tab(&page).await;
     wait_for_element_children(&page, "#game-posture-controls select", 1).await;
     let stashed = page
         .evaluate::<(), bool>(
@@ -1027,8 +1028,9 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
     }
 }
 
-// The two load-only tab panels fetch once per page load, so this test arms the
-// stub and reloads rather than waiting for a poll cycle.
+// The two tab panels load once per page load, the Games panel when its section
+// opens, so this test arms the stub and reloads rather than waiting for a load
+// that no number would start.
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.33
 async fn check_failed_panel_load_reports_inside_the_panel(
     page: playwright_rs::Page,

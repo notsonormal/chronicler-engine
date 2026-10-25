@@ -31,3 +31,16 @@ Then GET /fragment/llm-messages shows two entries for the narrator
 And the first entry carries the backend's failure text
 And the second entry carries the second narration
 ```
+
+#### Scenario 33.3: The LLM Messages fragment renders each message collapsed, with its view state listed in data-keep
+
+```gherkin
+Given an active Game with one recorded LLM attempt
+When the client GET /fragment/llm-messages
+Then the response status is "200 OK"
+And the body does not hold an element with the class "llm-messages-panel"
+And the attempt's card has the id "llm-msg-{id}"
+And the attempt's header reports aria-expanded="false" and lists "aria-expanded" in `data-keep`
+And the attempt's body is `hidden` and lists "hidden" in `data-keep`
+And each prompt `details` lists "open" in `data-keep`
+```

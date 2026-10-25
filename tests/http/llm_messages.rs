@@ -123,3 +123,45 @@ async fn test_failed_attempt_survives_a_later_success_http() {
         "the second narration must render: {panel}"
     );
 }
+
+// [docs/specs/llm_messages.md] SCENARIO: 33.3
+#[tokio::test]
+async fn test_llm_messages_fragment_renders_collapsed_cards_with_their_view_state_kept_http() {
+    let (app, state, _storage) = app_with_script(ScriptedModel::new().failed(Role::Narrator));
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(wait_settled(&state, 1000).await, "action should complete");
+    let id = state
+        .game_view_query
+        .list_latest_llm_messages(50)
+        .expect("list_latest_llm_messages should succeed")
+        .first()
+        .expect("the attempt is recorded")
+        .id;
+
+    let panel = fetch_body(&app, "/fragment/llm-messages").await;
+
+    assert!(
+        !panel.contains("llm-messages-panel"),
+        "the fragment is the content of the panel, and repeats no llm-messages-panel element: {panel}"
+    );
+    assert!(
+        panel.contains(&format!(r#"id="llm-msg-{id}""#)),
+        "the card must carry its stable id: {panel}"
+    );
+    assert!(
+        panel.contains(r#"aria-expanded="false" data-keep="aria-expanded""#),
+        "the header must report collapsed and list aria-expanded in data-keep: {panel}"
+    );
+    assert!(
+        panel.contains(&format!(
+            r#"id="llm-msg-body-{id}" hidden data-keep="hidden""#
+        )),
+        "the body must be hidden and list hidden in data-keep: {panel}"
+    );
+    assert!(
+        !panel.contains("<details>")
+            && !panel.contains(r#"<details class="llm-message-prompt-details">"#),
+        "each disclosure must list its open state in data-keep: {panel}"
+    );
+}

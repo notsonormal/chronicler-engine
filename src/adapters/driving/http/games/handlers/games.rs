@@ -21,10 +21,9 @@ use crate::adapters::driving::http::games::templates::games::{
 };
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::fragment::{render_failure_response, render_response};
-use crate::adapters::driving::http::utils::error::{action_error_response, render_error};
-use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
+use crate::adapters::driving::http::utils::error::action_error_response;
+use crate::adapters::driving::http::utils::response::{internal_error, ok};
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
-use crate::adapters::driving::http::view_models::SafeHtml;
 
 pub async fn list_games_fragment(
     State(state): State<AppState>,
@@ -73,7 +72,6 @@ pub async fn list_games_fragment(
         worlds,
         personas,
         posture_html,
-        saved_games_empty: SafeHtml::new(GamesPanelTemplate::saved_games_empty_html()),
     };
 
     render_response(&template)
@@ -113,12 +111,12 @@ pub async fn create_game_handler(
     state
         .game_catalogue
         .create_game(&form.world_key, &form.persona_key)?;
-    Ok(ok_refresh())
+    Ok(ok(""))
 }
 
 pub async fn switch_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
     match state.game_catalogue.switch_game(id) {
-        Ok(()) => ok_refresh(),
+        Ok(()) => ok(""),
         Err(e) => action_error_response(e, "Failed to switch game"),
     }
 }
@@ -134,29 +132,15 @@ pub async fn rename_game_handler(
     Form(form): Form<RenameGameForm>,
 ) -> Result<Response, ApplicationError> {
     state.game_catalogue.rename_game(id, &form.display_name)?;
-    Ok(ok_refresh())
+    Ok(ok(""))
 }
 
 pub async fn delete_game_handler(
     State(state): State<AppState>,
-    current: Option<CurrentGame>,
     Path(id): Path<u64>,
 ) -> Result<Response, ApplicationError> {
     state.game_catalogue.delete_game(id)?;
-    Ok(ok(remaining_saved_games_empty_state(&state, current)))
-}
-
-/// The list's own empty state only renders with the whole panel, so a delete that
-/// empties the list answers with this instead.
-fn remaining_saved_games_empty_state(state: &AppState, current: Option<CurrentGame>) -> String {
-    let Ok((_, saved_games)) = current_and_saved_games(state, current) else {
-        return String::new();
-    };
-    if saved_games.is_empty() {
-        GamesPanelTemplate::saved_games_empty_html()
-    } else {
-        String::new()
-    }
+    Ok(ok(""))
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -188,7 +172,7 @@ pub async fn switch_game_mode_handler(
         Ok(mode) => state.game_catalogue.switch_mode(id, mode),
         Err(e) => Err(ApplicationError::validation(e)),
     };
-    render_posture_result(&state, game)
+    config_save_result(game)
 }
 
 pub async fn update_game_posture_handler(
@@ -202,7 +186,7 @@ pub async fn update_game_posture_handler(
         (Ok(perspective), Ok(tense)) => state.game_catalogue.set_posture(id, perspective, tense),
         (Err(e), _) | (_, Err(e)) => Err(ApplicationError::validation(e)),
     };
-    render_posture_result(&state, result)
+    config_save_result(result)
 }
 
 pub async fn update_game_presets_handler(
@@ -219,20 +203,17 @@ pub async fn update_game_presets_handler(
             form.options_preset_id,
         ),
     );
-    render_posture_result(&state, result)
+    config_save_result(result)
 }
 
-/// Validation failures answer with an error fragment at 200 (house style); storage
-/// failures stay 500s so htmx leaves the page alone.
-fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError>) -> Response {
+/// A saved config answers nothing: the Games panel loads the new value. A refusal
+/// or a failure answers a non-2xx error fragment, which the control reports in its
+/// own slot.
+fn config_save_result(result: Result<Game, ApplicationError>) -> Response {
     match result {
-        Ok(game) => match posture_controls_html(state, &game) {
-            Ok(html) => ok(html),
-            Err(e) => render_failure_response(&e),
-        },
+        Ok(_) => ok(""),
         Err(ApplicationError::Refused(refusal)) => refusal.into_response(),
-        Err(e) if e.is_user_displayable() => ok(render_error(&e.to_string())),
-        Err(e) => internal_error(render_error(&e.to_string())),
+        Err(e) => action_error_response(e, "Failed to save the setting"),
     }
 }
 

@@ -140,18 +140,19 @@ async fn make_regions_current(page: &playwright_rs::Page) {
     .expect("the stub page makes its live regions current");
 }
 
-/// A hidden panel's load swap lands before any test arms a baseline, so the wait
-/// goes through `await_panel_ready`, which searches the whole recorded target
-/// list.
+/// A panel that is not a live region loads at page load, and a live region in a
+/// hidden section loads when the section opens. Either swap is on the recorded
+/// target list by the time `await_panel_ready` reads it, because that wait
+/// searches the whole list, so the wait follows the click for both kinds.
 async fn open_tab(page: &playwright_rs::Page, tab: &str, gate_target: &str) {
-    await_panel_ready(page, gate_target)
-        .await
-        .expect_settled(tab);
     page.locator(&format!(r#"[data-tab="{tab}"]"#))
         .await
         .click(None)
         .await
         .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
+    await_panel_ready(page, gate_target)
+        .await
+        .expect_settled(tab);
 }
 
 pub async fn open_worlds_tab(page: &playwright_rs::Page) {

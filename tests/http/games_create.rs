@@ -13,6 +13,7 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::http_fixtures::story_of;
+use crate::support::http_requests::assert_answers_nothing;
 
 // [docs/specs/games.md] SCENARIO: 17.1
 #[tokio::test]
@@ -67,12 +68,7 @@ async fn test_create_game_handler() {
         )))
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("HX-Refresh").unwrap(),
-        "true",
-        "Should return HX-Refresh header"
-    );
+    assert_answers_nothing(response).await;
 
     assert_ne!(
         active_game_of(&state),

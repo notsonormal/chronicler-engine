@@ -1,7 +1,7 @@
 //! Tests for the live-region guardrail.
 
 use crate::live_regions::{
-    check_handlers_retarget_no_region, check_live_regions_in_shell, check_scripts_use_action_fetch,
+    check_handler_headers, check_live_regions_in_shell, check_scripts_use_action_fetch,
     check_scripts_write_no_region, region_names,
 };
 
@@ -194,7 +194,7 @@ fn test_scripts_use_action_fetch_accepts_the_wrapper_and_a_comment() {
 fn test_handlers_retarget_no_region_rejects_a_retarget_into_a_region() {
     let source =
         r##"response.headers_mut().insert("HX-Retarget", HeaderValue::from_static("#header"));"##;
-    let violations = check_handlers_retarget_no_region("src/x.rs", source, &regions());
+    let violations = check_handler_headers("src/x.rs", source, &regions());
     assert_eq!(violations.len(), 1);
     assert!(violations[0].message.contains("HX-Retarget"));
 }
@@ -202,5 +202,19 @@ fn test_handlers_retarget_no_region_rejects_a_retarget_into_a_region() {
 #[test]
 fn test_handlers_retarget_no_region_accepts_a_retarget_to_another_element() {
     let source = r##"response.headers_mut().insert("HX-Retarget", HeaderValue::from_static("#action-preview"));"##;
-    assert!(check_handlers_retarget_no_region("src/x.rs", source, &regions()).is_empty());
+    assert!(check_handler_headers("src/x.rs", source, &regions()).is_empty());
+}
+
+#[test]
+fn test_handler_headers_rejects_a_refresh_header() {
+    let source = r#"Response::builder().header("HX-Refresh", "true").body(Body::empty())"#;
+    let violations = check_handler_headers("src/x.rs", source, &regions());
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("HX-Refresh"));
+}
+
+#[test]
+fn test_handler_headers_accepts_a_comment_free_handler_without_refresh() {
+    let source = r#"ok("")"#;
+    assert!(check_handler_headers("src/x.rs", source, &regions()).is_empty());
 }

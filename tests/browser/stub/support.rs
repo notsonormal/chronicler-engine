@@ -167,6 +167,21 @@ pub(super) async fn poll_now(page: &playwright_rs::Page, selector: &str) {
     );
 }
 
+/// Stops the page's own timer, so only the asks a check makes load a region.
+pub(super) async fn stop_page_timer(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>("() => window.chroniclerLive.stopTimer()", None)
+        .await
+        .expect("the page stops its timer");
+}
+
+/// One ask of the page, which returns when every load that the ask started has
+/// settled.
+pub(super) async fn ask_page_once(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>("() => window.chroniclerLive.askOnce()", None)
+        .await
+        .expect("the page runs one ask");
+}
+
 /// Focus lands only at the end of a swap.
 pub(super) async fn wait_until_focused(
     page: &playwright_rs::Page,

@@ -15,13 +15,13 @@ async fn test_games_posture_change_reaches_server() {
         |page, _port| async move {
             open_games_tab(&page).await;
 
-            // The posture selects auto-save to `#game-posture-controls` with
-            // `hx-swap="outerHTML"`, so the fragment is its own swap target.
+            // The save answers nothing: the games number moves, and the Games
+            // panel is the region whose load shows the saved value.
             select_option_and_settle(
                 &page,
                 r#"#game-posture-controls select[name="narrative_tense"]"#,
                 "present",
-                "#game-posture-controls",
+                ".games-panel",
             )
             .await;
 
@@ -61,8 +61,14 @@ async fn test_games_posture_change_keeps_focus_on_the_select() {
 
             let selector = r#"#game-posture-controls select[name="narrative_tense"]"#;
             page.locator(selector).await.focus().await.unwrap();
+            page.evaluate::<String, ()>(
+                r#"(selector) => { window.__tenseSelect = document.querySelector(selector); }"#,
+                Some(&selector.to_string()),
+            )
+            .await
+            .unwrap();
 
-            select_option_and_settle(&page, selector, "present", "#game-posture-controls").await;
+            select_option_and_settle(&page, selector, "present", ".games-panel").await;
 
             let kept = wait_for_condition_async(
                 std::time::Duration::from_secs(2),
@@ -71,7 +77,8 @@ async fn test_games_posture_change_keeps_focus_on_the_select() {
                     page.evaluate::<String, bool>(
                         r#"(selector) => {
                             const el = document.querySelector(selector);
-                            return !!el && document.activeElement === el;
+                            return !!el && el === window.__tenseSelect
+                                && el.value === 'present' && document.activeElement === el;
                         }"#,
                         Some(&selector.to_string()),
                     )
@@ -82,7 +89,7 @@ async fn test_games_posture_change_keeps_focus_on_the_select() {
             .await;
             assert!(
                 kept,
-                "the posture select must keep focus across the outerHTML swap"
+                "the posture select must stay the same element, showing the saved value, with focus, across the Games panel load"
             );
         },
     )

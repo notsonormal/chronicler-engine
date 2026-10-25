@@ -4,9 +4,23 @@ Endpoint: browser DOM.
 
 The dashboard shows server data in **live regions**. A live region is an element with a `data-live` attribute. The attribute lists the kinds of data the region shows. The kinds are the names of the numbers of `GET /changes` (`docs/specs/changes.md`): `story`, `options`, `busy`, `games`, `worlds`, `settings`, `presets` and `llm`.
 
-The page asks `GET /changes` while it is visible. A region loads its own fragment when a number of one of its kinds differs from the number that the region last loaded. A region keeps what its load does not change. A region that holds an edit waits, and loads once when the edit ends. The region reports its state in `data-live-state`: `current`, `loading`, `held` or `due`.
+The page asks `GET /changes` while it is visible. A region loads its own fragment when a number of one of its kinds differs from the number that the region last loaded. A region keeps what its load does not change. A region that holds an edit waits, and loads once when the edit ends. A region in a hidden dashboard section does not load: it waits, and loads once when the player opens the section. The region reports its state in `data-live-state`: `current`, `loading`, `held`, `stale` or `due`.
 
-The Game tab regions of this spec are `#header` (`games`, `settings`, `llm`), `#story-log` (`story`, `busy`, `worlds`), `.visual-sidebar` (`story`, `worlds`), `#options-dock` (`options`, `busy`) and `#status-display` (`busy`).
+The header is outside every section, so it is always visible. The Game tab is a section too, and it is hidden while the player is on another section.
+
+The regions of this spec:
+
+| Region | Section | Kinds in `data-live` |
+|---|---|---|
+| `#header` | none | `games`, `settings`, `llm` |
+| `#story-log` | Game | `story`, `busy`, `worlds` |
+| `.visual-sidebar` | Game | `story`, `worlds` |
+| `#options-dock` | Game | `options`, `busy` |
+| `#status-display` | Game | `busy` |
+| `.games-panel` | Games | `games`, `worlds`, `presets` |
+| `.llm-messages-panel` | LLM Messages | `llm` |
+
+The scenarios start on the Game tab. A scenario that does not open another section sees the regions of the Game tab and the header load, and the regions of the other sections stay `stale`.
 
 Each scenario asks the page once, through the page function that runs one ask and returns when every load of that ask has settled. The timer of the page does not run in these scenarios.
 
@@ -17,9 +31,9 @@ Each scenario asks the page once, through the page function that runs one ask an
 ```gherkin
 Given the dashboard is loaded and every region is current
 When the number of one kind moves, and the page asks
-Then each region whose data-live lists that kind loads its fragment once
+Then each region whose data-live lists that kind, and that is not in a hidden section, loads its fragment once
 And each other region does not load
-And the kind `presets` loads no region of the Game tab
+And the kind `presets` loads no region of the Game tab and no region of the header
 ```
 
 #### Scenario 44.2: An unchanged answer loads nothing
@@ -36,7 +50,8 @@ And every region reports data-live-state "current"
 ```gherkin
 Given the dashboard is loaded and every region is current
 When the answer carries a different `server` and the page asks
-Then every region loads its fragment once
+Then every region that is not in a hidden section loads its fragment once
+And each region in a hidden section reports data-live-state "stale"
 ```
 
 #### Scenario 44.4: A new active Game loads every region
@@ -44,7 +59,8 @@ Then every region loads its fragment once
 ```gherkin
 Given the dashboard is loaded and every region is current
 When the answer carries a different `game` and the page asks
-Then every region loads its fragment once
+Then every region that is not in a hidden section loads its fragment once
+And each region in a hidden section reports data-live-state "stale"
 ```
 
 #### Scenario 44.5: A failed ask shows the Unreachable banner, and a good ask clears it
@@ -128,12 +144,13 @@ When a load of #story-log no longer holds that entry
 Then the focus is on a control in the entry that is now the newest
 ```
 
-#### Scenario 44.13: A load keeps the engaged state of each Game tab region
+#### Scenario 44.13: A load keeps the engaged state of each region
 
 ```gherkin
-Given each of #header, #story-log, .visual-sidebar, #options-dock and #status-display
+Given each region of the table above, with its section open
 And every interactive control of the region is in its engaged state:
-  an open edit with typed text and focus, a focused Option, an open Details disclosure, a text selection
+  an open edit with typed text and focus, a focused Option, an open Details disclosure, a text selection,
+  an open rename form with typed text, a chosen option of a select, an expanded LLM message
 When each kind that the region lists moves, one kind at a time, and the page asks
 Then each node, value, open state, selection and focus of the engaged state is as it was
 When every edit of the region ends
@@ -146,8 +163,9 @@ Then the region loads exactly once, and it reports data-live-state "current"
 Given the dashboard shell is served and no number moves
 When the page starts
 Then the page asks once without waiting for the timer
-And each region loads its fragment exactly once
-And each region reports data-live-state "current"
+And each region of the header and the Game tab loads its fragment exactly once
+And each of those regions reports data-live-state "current"
+And each region of another section does not load, and reports data-live-state "stale"
 ```
 
 #### Scenario 44.15: An action asks at once when its request ends
@@ -161,4 +179,67 @@ And each region that lists a kind the action moved loads its fragment
 When a script action ends, for example the Delete control of the story log
 Then the page sends GET /changes at once
 And the story log loads its fragment and no longer shows the deleted entry
+```
+
+#### Scenario 44.16: A region in a hidden section does not load, and the section loads it once when it opens
+
+```gherkin
+Given the dashboard is loaded on the Game tab and every region of the Game tab is current
+And .games-panel and .llm-messages-panel have not loaded
+When the number of `games` moves, and the page asks
+Then #header loads its fragment once
+And .games-panel does not load
+And .games-panel reports data-live-state "stale"
+When the number of `llm` moves, and the page asks
+Then .llm-messages-panel does not load, and it reports data-live-state "stale"
+When the client opens the Games tab
+Then .games-panel loads its fragment exactly once
+And .games-panel reports data-live-state "current"
+And each region of the Game tab reports data-live-state "current"
+When the number of `story` moves, and the page asks
+Then #story-log does not load, and it reports data-live-state "stale"
+When the client opens the Game tab
+Then #story-log loads its fragment exactly once
+```
+
+#### Scenario 44.17: A successful save ends the edit of its form, and a disclosure marked data-close-on-save closes
+
+```gherkin
+Given .games-panel is open and current
+And the rename form of a saved Game is open inside its `details` marked `data-close-on-save`, with a changed name
+Then .games-panel reports data-live-state "held"
+When the client presses Save and the engine answers 200
+Then the name field is no longer a changed field: its default value is its current value
+And the `details` is closed
+And .games-panel loads its fragment exactly once, and it reports data-live-state "current"
+```
+
+#### Scenario 44.18: A save that fails keeps the edit open, and a control that saves on change goes back to its rendered value
+
+```gherkin
+Given .games-panel is open and current
+And the rename form of a saved Game is open, with a changed name
+When the client presses Save and the engine answers 500
+Then the form's own error slot shows the failure
+And the name field keeps the changed name
+And the `details` is still open
+And .games-panel reports data-live-state "held"
+
+Given the Tense select of #game-posture-controls shows "past"
+When the client changes it to "present", and the engine answers 500
+Then the Tense select shows "past" again
+And the error slot of #game-posture-controls shows the failure
+And .games-panel does not report data-live-state "held"
+```
+
+#### Scenario 44.19: A load keeps an inline error that is showing
+
+```gherkin
+Given .games-panel is open and current
+And a failed action shows an error in an inline error slot inside .games-panel
+When the number of `games` moves, and the page asks
+Then .games-panel loads its fragment
+And the inline error slot still shows the same error
+When the same action succeeds
+Then the inline error slot is empty and hidden
 ```

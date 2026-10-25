@@ -1,19 +1,19 @@
-// Panel chrome: the tab bar, the Settings sub-tabs, the LLM Messages expansion state, the swap focus restore and the world posture status clear.
+// Panel chrome: the tab bar, the Settings sub-tabs, the LLM Messages expansion toggle, the swap focus restore and the world posture status clear.
 
 // htmx restores focus only to an id that survives the swap, so a control
 // replaced by a different one (Edit to form, Cancel to list) needs this
 // fallback. Every panel swapped as a whole is listed, so a panel rewrite cannot
 // silently drop out of the restore.
 const FOCUS_SWAP_TARGETS =
-  ".worlds-panel, .prompt-presets-panel, .preset-card, .settings-panel, .games-panel";
+  ".worlds-panel, .prompt-presets-panel, .preset-card, .settings-panel";
 const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";
 // A form field is the better landing spot: an Edit that opens a form should put
 // the caret in its first field, not on the back link above it.
 const FOCUSABLE_FIELD = "input:not([type=hidden]), select, textarea";
 // A Delete removes the row its control sits in; the story log plans its own
 // landing spot in dashboard-story-log.js.
-const FOCUS_ROW = ".game-item, .preset-card, .world-item";
-const FOCUS_ROW_PANEL = ".games-panel, .prompt-presets-panel, .worlds-panel";
+const FOCUS_ROW = ".preset-card, .world-item";
+const FOCUS_ROW_PANEL = ".prompt-presets-panel, .worlds-panel";
 // A refused action can answer 200 with an error fragment standing in for the row,
 // card or panel it replaced: that message is the landing spot, not a neighbour.
 const FOCUS_ERROR = ".error-message";
@@ -127,8 +127,8 @@ function clearPostureStatus() {
   if (status) status.innerHTML = "";
 }
 
-// Tab state is client-only, and several actions reload the page (a rename, a
-// game switch, a new game), so the active tab is remembered for the reload.
+// Tab state is client-only, so the active tab is remembered for a reload of the
+// page.
 const ACTIVE_TAB_KEY = "chronicle.activeTab";
 
 function activateTab(btn) {
@@ -141,7 +141,10 @@ function activateTab(btn) {
     .forEach((c) => c.classList.remove("active"));
   btn.classList.add("active");
   const panel = document.getElementById(btn.dataset.tab + "-tab");
-  if (panel) panel.classList.add("active");
+  if (panel) {
+    panel.classList.add("active");
+    liveSectionOpened(panel);
+  }
 }
 
 function rememberActiveTab(tab) {
@@ -195,60 +198,13 @@ document.addEventListener("DOMContentLoaded", function () {
     if (target) target.classList.add("active");
   });
 
-  // htmx polls re-render the panel, so expansion state lives in JS.
-  const expandedLlmMessages = new Set();
-  let llmOriginalTrigger = null;
-
-  function pauseLlmPolling() {
-    const panel = document.querySelector(".llm-messages-panel");
-    if (panel) {
-      llmOriginalTrigger = panel.getAttribute("hx-trigger");
-      panel.setAttribute("hx-trigger", "none");
-      htmx.process(panel);
-    }
-  }
-
-  function resumeLlmPolling() {
-    const panel = document.querySelector(".llm-messages-panel");
-    if (panel && llmOriginalTrigger) {
-      panel.setAttribute("hx-trigger", llmOriginalTrigger);
-      htmx.process(panel);
-      llmOriginalTrigger = null;
-    }
-  }
-
+  // The header holds the open state in aria-expanded and the body in hidden. A
+  // load keeps both (data-keep), so a new LLM message never closes a row.
   window.toggleLlmMessage = function (header) {
-    const card = header.closest(".llm-message-card");
-    if (card) {
-      const expanded = card.classList.toggle("expanded");
-      header.setAttribute("aria-expanded", String(expanded));
-      const msgId = card.id;
-      if (msgId) {
-        if (expanded) {
-          expandedLlmMessages.add(msgId);
-          pauseLlmPolling();
-        } else {
-          expandedLlmMessages.delete(msgId);
-          if (expandedLlmMessages.size === 0) {
-            resumeLlmPolling();
-          }
-        }
-      }
-    }
+    const body = document.getElementById(header.getAttribute("aria-controls"));
+    if (!body) return;
+    const expanded = header.getAttribute("aria-expanded") !== "true";
+    header.setAttribute("aria-expanded", String(expanded));
+    body.hidden = !expanded;
   };
-
-  window.restoreLlmExpandedState = function () {
-    expandedLlmMessages.forEach(function (msgId) {
-      const card = document.getElementById(msgId);
-      if (card) {
-        card.classList.add("expanded");
-        const header = card.querySelector(".llm-message-header");
-        if (header) header.setAttribute("aria-expanded", "true");
-      } else {
-        expandedLlmMessages.delete(msgId);
-      }
-    });
-  };
-
-
 });

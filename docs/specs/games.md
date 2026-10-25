@@ -10,13 +10,15 @@ Endpoints:
 
 ### Create
 
-#### Scenario 17.1: Creating a game with valid world and persona returns success and refreshes
+#### Scenario 17.1: Creating a game with valid world and persona answers nothing and makes the new Game active
 
 ```gherkin
 Given a seeded world with key "test" and a persona with key "test_player"
 When the client POST /games with "world_key=test&persona_key=test_player"
 Then the response status is "200 OK"
-And the response has an "HX-Refresh: true" header
+And the response body is empty
+And the response has no "HX-Refresh" header
+And the new Game is the active Game
 And the new Game's story log holds its opening Narration
 ```
 
@@ -40,13 +42,15 @@ And the response body mentions "Persona not found"
 
 ### Switch
 
-#### Scenario 18.1: Switching to an existing game returns success and refreshes
+#### Scenario 18.1: Switching to an existing game answers nothing and makes that Game active
 
 ```gherkin
 Given two created games with ids "id1" and "id2", where "id2" is the active game
 When the client POST /games/{id1}/switch
 Then the response status is "200 OK"
-And the response has an "HX-Refresh: true" header
+And the response body is empty
+And the response has no "HX-Refresh" header
+And the active game is "id1"
 ```
 
 #### Scenario 18.2: Switching to an unknown game id returns 400
@@ -105,28 +109,31 @@ When the client POST /games/99999999/delete
 Then the response status is "200 OK"
 ```
 
-#### Scenario 19.4: Deleting the last saved game answers with the list's empty state
+#### Scenario 19.4: A delete answers nothing, and the Games list shows the empty state once the last saved game is gone
 
 ```gherkin
-Given two created games with ids "id1" (active) and "id2"
+Given three created games, one of them active, and two saved games "id2" and "id3"
 When the client POST /games/{id2}/delete
 Then the response status is "200 OK"
-And the response body renders the Saved Games empty state
-Given a third created game with id "id3"
+And the response body is empty
+And a GET /fragment/games lists "id3" and shows no empty state
+
 When the client POST /games/{id3}/delete
 Then the response status is "200 OK"
 And the response body is empty
+And a GET /fragment/games renders the Saved Games empty state
 ```
 
 ### Rename
 
-#### Scenario 17.4: Renaming a game sets its display name, shown in the header and the Games tab
+#### Scenario 17.4: Renaming a game answers nothing and sets its display name, shown in the header and the Games tab
 
 ```gherkin
 Given a seeded world with key "test" and an active game
 When the client POST /games/{active_id}/rename with display_name="The Long Road"
 Then the response status is "200 OK"
-And the response has an "HX-Refresh: true" header
+And the response body is empty
+And the response has no "HX-Refresh" header
 And the active game's display name is "The Long Road"
 And the active game's stable name is unchanged
 And a GET /fragment/header renders "The Long Road" as the game name
@@ -174,16 +181,16 @@ Then the response status is "500 INTERNAL_SERVER_ERROR"
 And the response body is an error fragment naming the storage failure
 ```
 
-#### Scenario 20.7: A perspective or tense auto-save re-renders the fragment with the new value selected
+#### Scenario 20.7: A perspective or tense auto-save answers nothing and the fragment renders the new value selected
 
 ```gherkin
 Given #game-posture-controls is rendered for the active game
 When the client POST /games/{game_id}/posture with narrative_perspective="third" and narrative_tense="present"
 Then the response status is "200 OK"
-And the response body contains id="game-posture-controls" (the re-rendered fragment)
-And the narrative_tense select renders "present" selected
-And the narrative_perspective select renders "third" selected
+And the response body is empty
 And game_catalogue.current_game() reports tense "present" and perspective "third"
+And a GET /fragment/games renders the narrative_tense select with "present" selected
+And it renders the narrative_perspective select with "third" selected
 ```
 
 #### Scenario 20.8: The games fragment renders the posture controls for the active game
@@ -206,8 +213,9 @@ And the selects auto-save to /games/{active_game_id}/mode, /posture, and /preset
 Given #game-posture-controls is rendered for the active game
 When the client POST /games/{game_id}/presets with options_preset_id set to a different Options preset
 Then the response status is "200 OK"
-And the response body re-renders id="game-posture-controls" with that Options preset selected
+And the response body is empty
 And the active game's Options preset is the chosen one
+And a GET /fragment/games renders the Options select with that Options preset selected
 ```
 
 #### Scenario 20.9: The games fragment lists only the games other than the active one
@@ -228,4 +236,25 @@ When the client GET /fragment/games
 Then the response status is "200 OK"
 And the Saved Games section lists the second game
 And the Saved Games section does not list the active game
+```
+
+#### Scenario 20.12: A config auto-save with a value the engine rejects answers 400 with the reason
+
+```gherkin
+Given #game-posture-controls is rendered for the active game
+When the client POST /games/{game_id}/mode with narrator_mode="no_such_mode"
+Then the response status is "400 BAD_REQUEST"
+And the response body is an error fragment naming the rejected value
+And the active game's Narrator Mode is unchanged
+```
+
+#### Scenario 20.13: The games fragment is the content of the Games panel, with a stable id on every Game row
+
+```gherkin
+Given a seeded world with key "test", an active game, and a second saved game
+When the client GET /fragment/games
+Then the response status is "200 OK"
+And the body does not hold an element with the class "games-panel"
+And the active game row and the row of the second game each carry the id "game-row-{game_id}"
+And each rename disclosure lists its open state in `data-keep` and carries `data-close-on-save`
 ```

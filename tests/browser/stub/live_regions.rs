@@ -10,39 +10,66 @@ use chronicler_engine::domain::model::state::generation_status::GenerationFailur
 use super::support::{read_banner, StubRunner};
 use super::*;
 
-/// A live region of the Game tab: the selector of its element, the path it
-/// loads, and the kinds its `data-live` lists.
+/// A live region: the selector of its element, the path it loads, the kinds its
+/// `data-live` lists, and the `data-tab` of its section (empty for the header,
+/// which is outside every section).
 struct Region {
     selector: &'static str,
     path: &'static str,
     kinds: &'static [&'static str],
+    section: &'static str,
 }
 
-const REGIONS: [Region; 5] = [
+impl Region {
+    /// The checks start on the Game tab: the header and the Game tab regions are
+    /// visible, and the regions of the other sections are hidden.
+    fn starts_visible(&self) -> bool {
+        self.section.is_empty() || self.section == "game"
+    }
+}
+
+const REGIONS: [Region; 7] = [
     Region {
         selector: "#header",
         path: "/fragment/header",
         kinds: &["games", "settings", "llm"],
+        section: "",
     },
     Region {
         selector: "#story-log",
         path: "/fragment/story-log",
         kinds: &["story", "busy", "worlds"],
+        section: "game",
     },
     Region {
         selector: ".visual-sidebar",
         path: "/fragment/visual-sidebar",
         kinds: &["story", "worlds"],
+        section: "game",
     },
     Region {
         selector: "#options-dock",
         path: "/fragment/options-dock",
         kinds: &["options", "busy"],
+        section: "game",
     },
     Region {
         selector: "#status-display",
         path: "/status/busy",
         kinds: &["busy"],
+        section: "game",
+    },
+    Region {
+        selector: ".games-panel",
+        path: "/fragment/games",
+        kinds: &["games", "worlds", "presets"],
+        section: "games",
+    },
+    Region {
+        selector: ".llm-messages-panel",
+        path: "/fragment/llm-messages",
+        kinds: &["llm"],
+        section: "llm-messages",
     },
 ];
 
@@ -51,6 +78,24 @@ const ALL_KINDS: [&str; 8] = [
 ];
 
 const STORY_LOG: usize = 1;
+const GAMES_PANEL: usize = 5;
+const LLM_PANEL: usize = 6;
+
+/// The loads a moved `kind` starts on the Game tab: each visible region that lists it.
+fn expected_loads(kind: &str) -> Vec<usize> {
+    REGIONS
+        .iter()
+        .map(|region| usize::from(region.starts_visible() && region.kinds.contains(&kind)))
+        .collect()
+}
+
+/// One load of each region that is visible on the Game tab.
+fn one_load_of_each_visible_region() -> Vec<usize> {
+    REGIONS
+        .iter()
+        .map(|region| usize::from(region.starts_visible()))
+        .collect()
+}
 
 fn region_loads(changes: &StubChangesHandle) -> Vec<usize> {
     REGIONS
@@ -103,10 +148,15 @@ async fn start_current(page: &playwright_rs::Page) {
         .expect("the page stops its timer");
     ask_once(page).await;
     for region in &REGIONS {
+        let expected = if region.starts_visible() {
+            "current"
+        } else {
+            "stale"
+        };
         assert_eq!(
             live_state(page, region.selector).await,
-            "current",
-            "{} must be current after the first ask",
+            expected,
+            "{} must be {expected} after the first ask",
             region.selector
         );
     }
@@ -124,13 +174,18 @@ async fn check_at_page_start_each_region_loads_exactly_once(
         .await
         .expect("the page stops its timer");
     for region in &REGIONS {
+        let (loads, state) = if region.starts_visible() {
+            (1, "current")
+        } else {
+            (0, "stale")
+        };
         assert_eq!(
             changes.loads(region.path),
-            1,
-            "{} must load exactly once at page start",
+            loads,
+            "{} must load {loads} times at page start",
             region.selector
         );
-        assert_eq!(live_state(&page, region.selector).await, "current");
+        assert_eq!(live_state(&page, region.selector).await, state);
     }
 }
 
@@ -206,13 +261,10 @@ async fn check_a_moved_number_loads_the_regions_that_list_its_kind(
         changes.bump(kind);
         ask_once(&page).await;
         let moved = loads_since(&changes, &before);
-        let expected: Vec<usize> = REGIONS
-            .iter()
-            .map(|region| usize::from(region.kinds.contains(&kind)))
-            .collect();
         assert_eq!(
-            moved, expected,
-            "loads of [header, story log, sidebar, dock, status] after `{kind}` moved"
+            moved,
+            expected_loads(kind),
+            "loads of [header, story log, sidebar, dock, status, games, llm] after `{kind}` moved"
         );
     }
 }
@@ -227,7 +279,7 @@ async fn check_an_unchanged_answer_loads_nothing(page: playwright_rs::Page, stub
     ask_once(&page).await;
     assert_eq!(changes.asks(), asks + 1, "the page must ask once");
     assert_eq!(loads_since(&changes, &before), vec![0; REGIONS.len()]);
-    for region in &REGIONS {
+    for region in REGIONS.iter().filter(|region| region.starts_visible()) {
         assert_eq!(live_state(&page, region.selector).await, "current");
     }
 }
@@ -240,7 +292,11 @@ async fn check_a_new_server_id_loads_every_region(page: playwright_rs::Page, stu
     let before = region_loads(&changes);
     changes.set_server("stub-server-2");
     ask_once(&page).await;
-    assert_eq!(loads_since(&changes, &before), vec![1; REGIONS.len()]);
+    assert_eq!(
+        loads_since(&changes, &before),
+        one_load_of_each_visible_region()
+    );
+    assert_eq!(live_state(&page, ".games-panel").await, "stale");
 }
 
 // [docs/specs/browser_live_regions.md] SCENARIO: 44.4
@@ -251,7 +307,11 @@ async fn check_a_new_active_game_loads_every_region(page: playwright_rs::Page, s
     let before = region_loads(&changes);
     changes.set_game(Some(2));
     ask_once(&page).await;
-    assert_eq!(loads_since(&changes, &before), vec![1; REGIONS.len()]);
+    assert_eq!(
+        loads_since(&changes, &before),
+        one_load_of_each_visible_region()
+    );
+    assert_eq!(live_state(&page, ".llm-messages-panel").await, "stale");
 }
 
 // [docs/specs/browser_live_regions.md] SCENARIO: 44.5
@@ -382,7 +442,7 @@ async fn check_a_page_that_becomes_visible_asks_at_once(
     );
     assert_eq!(
         loads_since(&changes, &before),
-        vec![0, 0, 0, 1, 0],
+        vec![0, 0, 0, 1, 0, 0, 0],
         "only the dock lists `options`"
     );
 }
@@ -680,8 +740,51 @@ const STATUS_ENGAGED: Engaged = Engaged {
     end: None,
 };
 
+const LLM_ENGAGED: Engaged = Engaged {
+    region: LLM_PANEL,
+    engage: r#"() => {
+        document.querySelector('.llm-message-header').click();
+        const system = document.querySelector('.llm-message-prompt-details');
+        system.open = true;
+        window.__llmHeader = document.querySelector('.llm-message-header');
+        window.__llmSystem = system;
+        return window.__llmHeader.getAttribute('aria-expanded') === 'true' ? '' : 'the row did not expand';
+    }"#,
+    check: r#"() => {
+        const header = document.querySelector('.llm-message-header');
+        const system = document.querySelector('.llm-message-prompt-details');
+        if (header !== window.__llmHeader) return 'the header is a new element';
+        if (system !== window.__llmSystem) return 'the System disclosure is a new element';
+        if (header.getAttribute('aria-expanded') !== 'true') return 'the row collapsed';
+        if (document.querySelector('.llm-message-body').hidden) return 'the body is hidden';
+        return system.open ? '' : 'the System disclosure closed';
+    }"#,
+    end: None,
+};
+
+/// The scripts of one engaged state are built from the scripts of the single
+/// scenarios, so each state is defined once.
+fn leak(text: String) -> &'static str {
+    Box::leak(text.into_boxed_str())
+}
+
+fn games_engaged() -> Engaged {
+    Engaged {
+        region: GAMES_PANEL,
+        engage: leak(format!(
+            "() => {{ const problem = ({OPEN_RENAME})(); return problem || ({CHOOSE_NEW_GAME})(); }}"
+        )),
+        check: leak(format!(
+            "() => ({RENAME_IS_INTACT})() || ({NEW_GAME_IS_INTACT})()"
+        )),
+        end: Some(leak(format!(
+            "async () => {{ await ({REVERT_NEW_GAME})(); return await ({SAVE_RENAME})(); }}"
+        ))),
+    }
+}
+
 // [docs/specs/browser_live_regions.md] SCENARIO: 44.13
-async fn check_a_load_keeps_the_engaged_state_of_each_game_tab_region(
+async fn check_a_load_keeps_the_engaged_state_of_each_region(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -703,6 +806,379 @@ async fn check_a_load_keeps_the_engaged_state_of_each_game_tab_region(
     ));
     ask_once(&page).await;
     assert_engaged_state_survives(&page, &changes, &STATUS_ENGAGED).await;
+
+    open_section(&page, "games", ".games-panel").await;
+    assert_engaged_state_survives(&page, &changes, &games_engaged()).await;
+
+    open_section(&page, "llm-messages", ".llm-messages-panel").await;
+    assert_engaged_state_survives(&page, &changes, &LLM_ENGAGED).await;
+}
+
+/// Opens a dashboard section the way the player does, and waits until every
+/// load that the opening started has settled, and until htmx has processed the
+/// content of the region of that section: htmx attaches the listeners of new
+/// controls at the end of the settle task, so a click before it is lost.
+async fn open_section(page: &playwright_rs::Page, tab: &str, region: &str) {
+    page.locator(&format!(r#"[data-tab="{tab}"]"#))
+        .await
+        .click(None)
+        .await
+        .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
+    settle(page).await;
+    await_panel_ready(page, region).await.expect_settled(tab);
+}
+
+const OPEN_RENAME: &str = r#"() => {
+    const details = document.querySelector('#game-row-2 .game-rename');
+    details.open = true;
+    const input = details.querySelector('input[name="display_name"]');
+    input.value = 'A typed name';
+    input.focus();
+    window.__renameDetails = details;
+    window.__renameInput = input;
+    return document.activeElement === input ? '' : 'the name field has no focus';
+}"#;
+
+const RENAME_IS_INTACT: &str = r#"() => {
+    const details = document.querySelector('#game-row-2 .game-rename');
+    const input = details ? details.querySelector('input[name="display_name"]') : null;
+    if (details !== window.__renameDetails) return 'the rename form is a new element';
+    if (!details.open) return 'the rename form closed';
+    if (input !== window.__renameInput) return 'the name field is a new element';
+    if (input.value !== 'A typed name') return 'the typed name changed: ' + input.value;
+    if (document.activeElement !== input) return 'the name field lost focus';
+    return '';
+}"#;
+
+/// Presses Save in the rename form of the saved Game, and returns once the
+/// request has ended and every ask and load that followed has settled. The wait
+/// for a macrotask lets the page's own `afterRequest` listener run first: it sits
+/// on the body, and this listener sits on the form.
+const SAVE_RENAME: &str = r#"async () => {
+    const form = document.querySelector('#game-row-2 .game-rename form');
+    const ended = new Promise((resolve) =>
+        form.addEventListener('htmx:afterRequest', resolve, { once: true }));
+    form.querySelector('button[type=submit]').click();
+    await ended;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await window.chroniclerLive.settle();
+    return '';
+}"#;
+
+const CHOOSE_NEW_GAME: &str = r#"() => {
+    const world = document.getElementById('new-game-world');
+    const persona = document.getElementById('new-game-persona');
+    world.value = 'test';
+    persona.value = 'test_player';
+    window.__newGameWorld = world;
+    window.__newGamePersona = persona;
+    return world.value === 'test' && persona.value === 'test_player' ? '' : 'the choice did not take';
+}"#;
+
+const NEW_GAME_IS_INTACT: &str = r#"() => {
+    const world = document.getElementById('new-game-world');
+    const persona = document.getElementById('new-game-persona');
+    if (world !== window.__newGameWorld) return 'the World select is a new element';
+    if (persona !== window.__newGamePersona) return 'the Persona select is a new element';
+    if (world.value !== 'test') return 'the World choice changed: ' + world.value;
+    if (persona.value !== 'test_player') return 'the Persona choice changed: ' + persona.value;
+    return '';
+}"#;
+
+const REVERT_NEW_GAME: &str = r#"async () => {
+    document.getElementById('new-game-world').selectedIndex = 0;
+    document.getElementById('new-game-persona').selectedIndex = 0;
+    await window.chroniclerLive.askOnce();
+    return '';
+}"#;
+
+/// Bumps each kind of the Games panel, one at a time, and asks after each: the
+/// panel waits, because the player works in it.
+async fn assert_games_panel_holds_through_each_kind(
+    page: &playwright_rs::Page,
+    changes: &StubChangesHandle,
+    check: &str,
+) {
+    let before = changes.loads("/fragment/games");
+    for kind in REGIONS[GAMES_PANEL].kinds {
+        changes.bump(kind);
+        ask_once(page).await;
+        assert_eq!(eval_string(page, check).await, "", "after `{kind}` moved");
+    }
+    assert_eq!(
+        changes.loads("/fragment/games"),
+        before,
+        "a held panel must not load"
+    );
+    assert_eq!(live_state(page, ".games-panel").await, "held");
+}
+
+// [docs/specs/browser_games.md] SCENARIO: 27.4
+async fn check_an_open_rename_form_keeps_its_text_and_focus_through_a_load_of_each_kind(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+    assert_eq!(live_state(&page, ".games-panel").await, "current");
+
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    assert_games_panel_holds_through_each_kind(&page, &changes, RENAME_IS_INTACT).await;
+}
+
+// [docs/specs/browser_games.md] SCENARIO: 27.5
+async fn check_ending_the_rename_edit_loads_the_games_panel_once(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    assert_games_panel_holds_through_each_kind(&page, &changes, RENAME_IS_INTACT).await;
+
+    let before = changes.loads("/fragment/games");
+    assert_eq!(eval_string(&page, SAVE_RENAME).await, "");
+    assert_eq!(
+        changes.loads("/fragment/games"),
+        before + 1,
+        "ending the edit must load the panel exactly once"
+    );
+    assert_eq!(live_state(&page, ".games-panel").await, "current");
+    let shown = page
+        .locator("#game-row-2 .game-name")
+        .await
+        .inner_text()
+        .await
+        .unwrap();
+    assert_eq!(shown, "A typed name", "the load shows the renamed Game");
+}
+
+// [docs/specs/browser_games.md] SCENARIO: 27.6
+async fn check_the_new_game_selects_keep_the_players_choice_through_a_load(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, CHOOSE_NEW_GAME).await, "");
+    let before = changes.loads("/fragment/games");
+    for kind in ["games", "worlds"] {
+        changes.bump(kind);
+        ask_once(&page).await;
+        assert_eq!(
+            eval_string(&page, NEW_GAME_IS_INTACT).await,
+            "",
+            "after `{kind}` moved"
+        );
+    }
+    assert_eq!(
+        changes.loads("/fragment/games"),
+        before,
+        "a held panel must not load"
+    );
+    assert_eq!(live_state(&page, ".games-panel").await, "held");
+}
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.16
+async fn check_a_region_in_a_hidden_section_waits_and_the_section_loads_it_once(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    assert_eq!(changes.loads("/fragment/games"), 0);
+    assert_eq!(changes.loads("/fragment/llm-messages"), 0);
+
+    let header = changes.loads("/fragment/header");
+    changes.bump("games");
+    ask_once(&page).await;
+    assert_eq!(changes.loads("/fragment/header"), header + 1);
+    assert_eq!(changes.loads("/fragment/games"), 0, "a hidden region waits");
+    assert_eq!(live_state(&page, ".games-panel").await, "stale");
+
+    changes.bump("llm");
+    ask_once(&page).await;
+    assert_eq!(changes.loads("/fragment/llm-messages"), 0);
+    assert_eq!(live_state(&page, ".llm-messages-panel").await, "stale");
+
+    open_section(&page, "games", ".games-panel").await;
+    assert_eq!(
+        changes.loads("/fragment/games"),
+        1,
+        "opening the section loads its region exactly once"
+    );
+    assert_eq!(live_state(&page, ".games-panel").await, "current");
+    for region in REGIONS.iter().filter(|region| region.section == "game") {
+        assert_eq!(live_state(&page, region.selector).await, "current");
+    }
+
+    // The Game tab is a section too: it is hidden now.
+    let story = changes.loads("/fragment/story-log");
+    changes.bump("story");
+    ask_once(&page).await;
+    assert_eq!(changes.loads("/fragment/story-log"), story);
+    assert_eq!(live_state(&page, "#story-log").await, "stale");
+    open_section(&page, "game", "#story-log").await;
+    assert_eq!(changes.loads("/fragment/story-log"), story + 1);
+    assert_eq!(live_state(&page, "#story-log").await, "current");
+}
+
+const WATCH_RENAME_SAVE: &str = r#"() => {
+    const details = document.querySelector('#game-row-2 .game-rename');
+    const input = details.querySelector('input[name="display_name"]');
+    window.__afterSave = null;
+    // Registered after the page's own listener on the body, so it reads what
+    // the end-of-edit rule left, before any load of the panel arrives.
+    document.body.addEventListener('htmx:afterRequest', (evt) => {
+        if (!evt.detail.elt || evt.detail.elt.tagName !== 'FORM') return;
+        window.__afterSave = {
+            changed: input.value !== input.defaultValue,
+            open: details.open,
+        };
+    });
+    return '';
+}"#;
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.17
+async fn check_a_successful_save_ends_the_edit_and_a_marked_disclosure_closes(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    eval_string(&page, WATCH_RENAME_SAVE).await;
+    changes.bump("worlds");
+    ask_once(&page).await;
+    assert_eq!(live_state(&page, ".games-panel").await, "held");
+
+    let before = changes.loads("/fragment/games");
+    assert_eq!(eval_string(&page, SAVE_RENAME).await, "");
+    let after_save = eval_string(
+        &page,
+        "() => { const s = window.__afterSave; return s ? JSON.stringify(s) : 'the save never ended'; }",
+    )
+    .await;
+    assert_eq!(
+        after_save, r#"{"changed":false,"open":false}"#,
+        "when the save ended, the name was no longer a changed field and the disclosure was closed"
+    );
+    assert_eq!(changes.loads("/fragment/games"), before + 1);
+    assert_eq!(live_state(&page, ".games-panel").await, "current");
+}
+
+const TYPE_TENSE: &str = r#"async () => {
+    const select = document.querySelector('#game-posture-controls select[name="narrative_tense"]');
+    const ended = new Promise((resolve) =>
+        select.addEventListener('htmx:afterRequest', resolve, { once: true }));
+    select.value = 'present';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await ended;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return select.value;
+}"#;
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.18
+async fn check_a_failed_save_keeps_the_edit_and_a_failed_auto_save_goes_back(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    stub.games_handle().set_rename_failing(true);
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    changes.bump("worlds");
+    ask_once(&page).await;
+    assert_eq!(eval_string(&page, SAVE_RENAME).await, "");
+    let (shown, line, raw) =
+        read_error_disclosure(&page, "#game-row-2 .game-rename form [data-error-slot]").await;
+    assert!(shown, "a failed save must report in the form's own slot");
+    assert!(line.contains("action failed"), "got {line:?}");
+    assert!(raw.contains("Stub rename failure"), "got {raw:?}");
+    assert_eq!(
+        eval_string(&page, RENAME_IS_INTACT).await,
+        "",
+        "the form stays open and keeps the typed name"
+    );
+    ask_once(&page).await;
+    assert_eq!(live_state(&page, ".games-panel").await, "held");
+
+    // The save of a select that fails goes back to the rendered value.
+    stub.games_handle().set_rename_failing(false);
+    eval_string(
+        &page,
+        "() => { const input = window.__renameInput; input.value = input.defaultValue; return ''; }",
+    )
+    .await;
+    assert_eq!(
+        eval_string(&page, TYPE_TENSE).await,
+        "past",
+        "the Tense select must show the rendered value again"
+    );
+    let (shown, line, _) =
+        read_error_disclosure(&page, "#game-posture-controls [data-error-slot]").await;
+    assert!(shown && line.contains("action failed"), "got {line:?}");
+    ask_once(&page).await;
+    assert_eq!(
+        live_state(&page, ".games-panel").await,
+        "current",
+        "a select that went back is no changed field, so it holds nothing"
+    );
+}
+
+const PRESS_SAVE_UNCHANGED: &str = r#"async () => {
+    const details = document.querySelector('#game-row-2 .game-rename');
+    details.open = true;
+    const form = details.querySelector('form');
+    const ended = new Promise((resolve) =>
+        form.addEventListener('htmx:afterRequest', resolve, { once: true }));
+    form.querySelector('button[type=submit]').click();
+    await ended;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await window.chroniclerLive.settle();
+    return '';
+}"#;
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.19
+async fn check_a_load_keeps_an_inline_error_that_is_showing(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    let slot = "#game-row-2 .game-rename form [data-error-slot]";
+    stub.games_handle().set_rename_failing(true);
+    assert_eq!(eval_string(&page, PRESS_SAVE_UNCHANGED).await, "");
+    let (shown, _, raw) = read_error_disclosure(&page, slot).await;
+    assert!(shown, "the failed save must report in the form's slot");
+
+    let before = changes.loads("/fragment/games");
+    changes.bump("games");
+    ask_once(&page).await;
+    assert_eq!(
+        changes.loads("/fragment/games"),
+        before + 1,
+        "the unchanged form holds nothing, so the panel loads"
+    );
+    let (still_shown, _, still_raw) = read_error_disclosure(&page, slot).await;
+    assert!(still_shown, "a load must keep the error that is showing");
+    assert_eq!(still_raw, raw);
+
+    stub.games_handle().set_rename_failing(false);
+    assert_eq!(eval_string(&page, PRESS_SAVE_UNCHANGED).await, "");
+    let (shown, _, _) = read_error_disclosure(&page, slot).await;
+    assert!(!shown, "a save that goes through clears the error");
 }
 
 #[tokio::test]
@@ -771,9 +1247,45 @@ async fn run_live_regions_checks() {
         )
         .await;
     runner
+        .run(outcome, check_a_load_keeps_the_engaged_state_of_each_region)
+        .await;
+    runner
         .run(
             outcome,
-            check_a_load_keeps_the_engaged_state_of_each_game_tab_region,
+            check_a_region_in_a_hidden_section_waits_and_the_section_loads_it_once,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_a_successful_save_ends_the_edit_and_a_marked_disclosure_closes,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_a_failed_save_keeps_the_edit_and_a_failed_auto_save_goes_back,
+        )
+        .await;
+    runner
+        .run(outcome, check_a_load_keeps_an_inline_error_that_is_showing)
+        .await;
+    runner
+        .run(
+            outcome,
+            check_an_open_rename_form_keeps_its_text_and_focus_through_a_load_of_each_kind,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_ending_the_rename_edit_loads_the_games_panel_once,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_the_new_game_selects_keep_the_players_choice_through_a_load,
         )
         .await;
     runner.finish().await;

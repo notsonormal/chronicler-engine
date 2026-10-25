@@ -500,14 +500,17 @@ fn guardrails_scripts_use_action_fetch() {
 }
 
 #[test]
-fn guardrails_handlers_retarget_no_region() {
+fn guardrails_handler_headers() {
     let regions = shell_regions();
     let errors: Vec<Violation> = src_snapshot()
         .iter()
         .filter(|file| file.path.starts_with("adapters/driving/http/"))
-        .flat_map(|file| check_handlers_retarget_no_region(&file.path, &file.content, &regions))
+        .flat_map(|file| check_handler_headers(&file.path, &file.content, &regions))
         .collect();
-    assert_violations(&errors, "handlers retarget no region element");
+    assert_violations(
+        &errors,
+        "handlers steer no answer: no region retarget, no page refresh",
+    );
 }
 
 #[test]

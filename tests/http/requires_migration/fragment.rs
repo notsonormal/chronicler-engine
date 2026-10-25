@@ -584,10 +584,9 @@ async fn test_create_game_with_world_key() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("HX-Refresh").unwrap(),
-        "true",
-        "Should return HX-Refresh header"
+    assert!(
+        response.headers().get("HX-Refresh").is_none(),
+        "a create must not reload the page"
     );
 
     let games = storage.list_games().unwrap();
@@ -699,11 +698,9 @@ async fn test_reset_handler_success() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let hx_refresh = response.headers().get("HX-Refresh");
-    assert_eq!(
-        hx_refresh,
-        Some(&axum::http::HeaderValue::from_static("true")),
-        "Reset should trigger HX-Refresh"
+    assert!(
+        response.headers().get("HX-Refresh").is_none(),
+        "a reset must not reload the page"
     );
 }
 
