@@ -203,7 +203,7 @@ written into the task:
 - Give it the viewport sequence (**desktop first**: 1280x800 — the launcher's
   default — then 768, then 375) and the priority scale. The old agent's P0–P3
   went with it, so name the dashboard review's P1–P3
-  (`.scratch/dashboard-ui-review/review-2026-09-29.md`).
+  (`.scratch/_closed/dashboard-ui-review/review-2026-09-29.md`).
 - For a standing sweep role instead of writing the method into a prompt each
   time, add a role file under `.pi/agents/`.
 

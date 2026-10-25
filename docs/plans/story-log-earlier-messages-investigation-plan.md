@@ -6,7 +6,7 @@
 
 ## Origin
 
-[Decide what the story log shows past 50 Messages](../../.scratch/rust-rebuild-build/issues/23-story-log-past-50-messages.md) (ticket 23 of the map "build the Rust rebuild") chose option A (owner, 2026-10-20): the story log shows the newest 50 Messages. That fix makes the Messages before the window unreachable from the dashboard. The owner asked for this plan to find the long-term answer. This plan is not part of the rebuild map.
+[Decide what the story log shows past 50 Messages](../../.scratch/_closed/rust-rebuild-build/issues/23-story-log-past-50-messages.md) (ticket 23 of the map "build the Rust rebuild") chose option A (owner, 2026-10-20): the story log shows the newest 50 Messages. That fix makes the Messages before the window unreachable from the dashboard. The owner asked for this plan to find the long-term answer. This plan is not part of the rebuild map.
 
 ## Current state (known, 2026-10-20)
 

@@ -70,7 +70,7 @@ Verified the tooling facts against the current tree (read-only). Findings, most 
 
 **13. Sibling effort maps are in-repo context — sweep `.scratch/*/` before asking the human.**
 - **Principle:** `.scratch/<effort>/` holds one map per effort, plus `assets/`. A defect or behaviour question raised in one map is often already recorded as a ticket or Out-of-scope line in a sibling map; resolving a ticket should include a grep of the other effort directories.
-- **Evidence:** 10-06 18:15 the user had to point at it — "Can you read through .scratch/architecture-deepening. I feel like this might be an issue raised here, although I could be wrong" — and the agent confirmed "The user's instinct is right: the architecture-deepening map's candidate A / ticket 09 … is the ticket where this behaviour question lives". The peer session a minute later pointed at the same record ("already recorded on the agent-workflow map… points at architecture-deepening ticket 10").
+- **Evidence:** 10-06 18:15 the user had to point at it — "Can you read through .scratch/_closed/architecture-deepening. I feel like this might be an issue raised here, although I could be wrong" — and the agent confirmed "The user's instinct is right: the architecture-deepening map's candidate A / ticket 09 … is the ticket where this behaviour question lives". The peer session a minute later pointed at the same record ("already recorded on the agent-workflow map… points at architecture-deepening ticket 10").
 - **Routing:** `.agents/skills/wayfinder/SKILL.md` step 3 ("zoom as needed") — extend from "related or closed ticket" to sibling effort directories.
 
 No files were modified; all checks were reads or `git log`-equivalent inspection.

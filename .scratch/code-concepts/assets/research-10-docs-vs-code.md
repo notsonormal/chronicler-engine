@@ -140,8 +140,8 @@ Each item is a question. Both sides carry evidence. I opened every code file nam
 
 **2.9. The guardrail doc takes its rule numbers from `.scratch`. Do the numbers exist there?**
 
-- Docs: "`.scratch/turn-state-model/assets/sketch-25-new-design.md` §6.2 — the design rule numbers the four table-driven walkers enforce" (`reference/coding_standards/guardrails.md:114`). The generated table uses rules 1, 2, 3, 6, 7, 13 and 18 (`:65-71`). `docs/AGENTS.md` exempts plans from the doc rules.
-- Code and plans (read): the file exists and is tracked. Its §6.2 table has rules 1–15 (`sketch-25-new-design.md:617-640`). Rule 18 is not in it. Rule 18 comes from `.scratch/platform-choice/issues/06-research-race-tests-for-guard.md:28` and ticket 12 of the same map. The status line of the sketch says that ticket 24 replaced its rules 8, 11 and 13 (`sketch-25-new-design.md:7`). `tests/infrastructure/guardrails/walker_rows.rs:11-104` carries the rule numbers in comments. `sketch-25-new-design.md:752` says "The final code does not keep the numbers".
+- Docs: "`.scratch/_closed/turn-state-model/assets/sketch-25-new-design.md` §6.2 — the design rule numbers the four table-driven walkers enforce" (`reference/coding_standards/guardrails.md:114`). The generated table uses rules 1, 2, 3, 6, 7, 13 and 18 (`:65-71`). `docs/AGENTS.md` exempts plans from the doc rules.
+- Code and plans (read): the file exists and is tracked. Its §6.2 table has rules 1–15 (`sketch-25-new-design.md:617-640`). Rule 18 is not in it. Rule 18 comes from `.scratch/_closed/platform-choice/issues/06-research-race-tests-for-guard.md:28` and ticket 12 of the same map. The status line of the sketch says that ticket 24 replaced its rules 8, 11 and 13 (`sketch-25-new-design.md:7`). `tests/infrastructure/guardrails/walker_rows.rs:11-104` carries the rule numbers in comments. `sketch-25-new-design.md:752` says "The final code does not keep the numbers".
 - What the code shows: the numbers in the code and the doc come from two plan trees. The doc names one of them.
 - Label: known.
 

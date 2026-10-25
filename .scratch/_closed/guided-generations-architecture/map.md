@@ -44,7 +44,7 @@ shapes, not code. Writing the accepted refactors is the next effort
   deepened module needs a term not in `CONTEXT.md`, add it via
   `/domain-modeling` during the grilling.
 - **Relationship to the general architecture map.** A separate effort,
-  `.scratch/architecture-deepening/` (7 candidates, general/main-branch
+  `.scratch/_closed/architecture-deepening/` (7 candidates, general/main-branch
   architecture, all open), exists. It is **untouched** by this effort. Two of
   its tickets (04 ActionPipeline turn-lifecycle, 06 PromptAssembler helpers)
   touch related areas but ask *different questions* — general file-slicing and
@@ -146,7 +146,7 @@ shapes, not code. Writing the accepted refactors is the next effort
   shapes. Writing the refactor code is the next effort (pre-merge execution),
   reached only after the destination is met.
 - **The general architecture map's candidates.** The 7 candidates in
-  `.scratch/architecture-deepening/` belong to a separate effort (general
+  `.scratch/_closed/architecture-deepening/` belong to a separate effort (general
   main-branch architecture). This map does not resolve, supersede, or close
   them.
 - **The voice source of truth.** Whether posture is world-current or

@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-22
 **Status:** Draft — open questions (see "Open questions"). Do not implement until each question has an answer.
-**Source:** the retro of the phase-2 parallel run (tickets 02–06 of `.scratch/dashboard-ui-review-phase2/`), and the brainstorm that followed it.
+**Source:** the retro of the phase-2 parallel run (tickets 02–06 of `.scratch/_closed/dashboard-ui-review-phase2/`), and the brainstorm that followed it.
 
 ## Summary
 

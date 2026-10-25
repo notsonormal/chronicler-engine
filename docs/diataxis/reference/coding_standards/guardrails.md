@@ -113,4 +113,4 @@ Coverage is measured via `cargo-llvm-cov` with file-level exclusions configured 
 
 - [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Architectural commitments](../../explanation/architecture.md#architectural-commitments) lists the guarantees the static guardrails enforce.
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — the order in which the game rules apply a Quantifier result, which the game-rules tests observe.
-- `.scratch/turn-state-model/assets/sketch-25-new-design.md` §6.2 — the design rule numbers the four table-driven walkers enforce.
+- `.scratch/_closed/turn-state-model/assets/sketch-25-new-design.md` §6.2 — the design rule numbers the four table-driven walkers enforce.

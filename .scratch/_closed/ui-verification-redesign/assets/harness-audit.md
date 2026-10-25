@@ -7,7 +7,7 @@ Sources: [browser-tier-inventory.md](./browser-tier-inventory.md),
 [flake-investigation-2026-09-13.md](./flake-investigation-2026-09-13.md),
 `tests/STRATEGY.md`, the eight files under `tests/browser/`, the harness under
 `tests/test_utils/`, the resolved prior-art tickets in
-`.scratch/test-strategy-execution/` (07, 08, 14, 15), a route inventory of
+`.scratch/_closed/test-strategy-execution/` (07, 08, 14, 15), a route inventory of
 `src/adapters/driving/http/builders/router.rs`, and a readiness-hook inventory
 of `src/adapters/driving/http/` plus `assets/index.html`.
 
@@ -169,7 +169,7 @@ Absent — the raw material ticket 04 will find missing:
 
 ## 4. Prior art, re-read through the robustness lens
 
-`.scratch/test-strategy-execution/issues/07-browser-tier-design.md` settled
+`.scratch/_closed/test-strategy-execution/issues/07-browser-tier-design.md` settled
 placement: `behaviour.rs` (6 specced) + `invariants.rs` (7 exempt), and 17
 move-down tests. 08 executed the moves; 14 grilled missing tests and graduated
 the responsive-layout + error-toast tests.

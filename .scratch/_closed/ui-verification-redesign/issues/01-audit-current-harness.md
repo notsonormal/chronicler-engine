@@ -32,7 +32,7 @@ into 6 different "flaky tests".
 
 Two further things to inventory while auditing:
 
-1. **Prior art.** Read `.scratch/test-strategy-execution/issues/07-browser-tier-design.md`
+1. **Prior art.** Read `.scratch/_closed/test-strategy-execution/issues/07-browser-tier-design.md`
    (Answer section), `08-browser-tier-execution.md`, and
    `14-browser-missing-tests.md`. Tier placement was already grilled out
    (13 keep / 17 move-down; behaviour.rs specced + invariants.rs exempt). Do not

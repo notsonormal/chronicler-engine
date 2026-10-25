@@ -11,7 +11,7 @@ Write the asset in the shape that the map's Notes give (Concepts, Meeting points
 
 Dig the concepts out of the code. You get no list of concepts: do not open `assets/research-01-lens.md` or the other research assets. Read the code, and find the shapes that it repeats and the choices that it makes. Give each one the name that software-engineering books and well-known essays give it (a principle, an architecture style, a design style, a pattern or an idiom), and its opposite. When no such name fits, put the shape under Shapes with no name.
 
-The Job, the writer rule and the Agents were rebuilt recently (`.scratch/rust-rebuild-build/`). Where old and new shapes sit side by side, record both and say which commit or plan explains it, if one does.
+The Job, the writer rule and the Agents were rebuilt recently (`.scratch/_closed/rust-rebuild-build/`). Where old and new shapes sit side by side, record both and say which commit or plan explains it, if one does.
 
 ## Done when
 

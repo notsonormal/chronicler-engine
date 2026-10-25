@@ -26,3 +26,5 @@ Should the repo give the mutation check one tool?
 ## Comments
 
 - 2026-10-25, audit: the user deferred this ticket. Do not implement it yet; it stays open.
+
+- 2026-10-25 — `crap-mutation-pilot` closed; its ticket 03 (scope a `cargo-mutants` pilot) is folded in here as one more option: run `cargo-mutants` on the changed functions. Evidence: [`crap-mutation-pilot` ticket 01](../../_closed/crap-mutation-pilot/issues/01-research-cc-coverage-sources.md).
