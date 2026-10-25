@@ -1,6 +1,6 @@
 # CRAP reporting and mutation-testing pilot
 
-Status: **closed 2026-10-25, not built.** Tickets 02, 04 and 05 are `wontfix`. Ticket 03 is folded into retro-issue-bucket ticket 83.
+Status: **closed 2026-10-25, not built.** Tickets 02, 04 and 05 are `wontfix`. Ticket 03 is folded into retro-issue-bucket ticket 83, which moved to the [`unclebob-quality-tools`](../../unclebob-quality-tools/map.md) map (ticket 03 there).
 
 ## Destination
 

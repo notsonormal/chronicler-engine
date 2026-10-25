@@ -37,6 +37,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **44 — comment pass applies an in-file rename or gate.** `chronicler-comment-fixer` KEEP test: a rename or a visibility or `cfg` gate in the judged file is made and reported as a rewrite; only a cross-file change or a design call raises a reshape flag.
 - **52 — comment pass lists deleted reasons.** The `chronicler-comment-fixer` output format has a `DELETED REASONS` section: each deleted comment that states a why, in full, with the KEEP part it fails.
 - **57 — docs step after the code steps.** In both after-plan skills, the docs step runs after the steps that change code and before the comment pass and the full build. A fix pass after the reviews is not covered.
+- **83 — moved out (2026-10-25).** The mutation-check script question moved to the [`unclebob-quality-tools`](../unclebob-quality-tools/map.md) map; its evidence is in that map's ticket 03. The file is deleted.
 - **25 — `tdd` trigger.** The description also fires when an agent adds, strengthens or de-tautologizes tests.
 - **74 — `build_slot.py --status` gives one verdict.** A free slot prints only `Build slot: free.`; the stale-holder note is gone from the free branch. The held branch is unchanged.
 - **76 — the wait helpers are in the test index.** The `http_requests.rs` module summary names `wait_idle`, `wait_settled` and `wait_for_jobs`, so `tests/AGENTS.md` lists them.
@@ -126,4 +127,3 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 
 - [23 — Make the mutation check unconditional for state-repair tests and fixtures](./issues/23-unconditional-mutation-check.md)
 - [35 — Lint a spec scenario's shape and vocabulary](./issues/35-lint-spec-scenario-shape.md)
-- [83 — Give the mutation check a script that restores by hash and runs on the final tree](./issues/83-mutation-check-script.md)

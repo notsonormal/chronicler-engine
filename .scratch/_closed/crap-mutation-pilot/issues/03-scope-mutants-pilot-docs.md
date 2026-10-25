@@ -27,3 +27,4 @@ A short scope decision: chosen pilot target(s), wrapper-or-document verdict, and
 ## Comments
 
 - 2026-10-25 — wontfix. Folded into `.scratch/retro-issue-bucket/issues/83-mutation-check-script.md`, which asks the same mutation-tool question. Ticket 01 of this map holds the evidence.
+- 2026-10-25 — ticket 83 moved to `.scratch/unclebob-quality-tools/issues/03-research-mutation-engines.md`; the original file is deleted.
