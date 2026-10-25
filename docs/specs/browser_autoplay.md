@@ -70,7 +70,7 @@ Given a Job or a run holds the Game, so each story write answers "Still thinking
 When the client opens the editor of a story-log entry, types a new text and presses Save
 Then the story log's error slot shows a line that names the busy Game
 And the editor is still open and holds the typed text
-And the story-log poll stays paused
+And the story log stays held while the editor is open
 
 When the client presses the Previous swipe control
 Then the story log's error slot shows a line that names the busy Game

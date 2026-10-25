@@ -144,9 +144,11 @@ function throwServerDetail(response) {
   });
 }
 
-// A server that answered is reachable, so only a failed poll marks the engine unreachable.
+// A server that answered is reachable, so only a failed poll or a failed load of
+// a live region marks the engine unreachable.
 function isPollRequest(elt) {
   if (!elt || !elt.getAttribute) return false;
+  if (elt.hasAttribute("data-live")) return true;
   const trigger = elt.getAttribute("hx-trigger") || "";
   return trigger.includes("every");
 }

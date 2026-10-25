@@ -124,17 +124,14 @@ async fn check_a_save_refused_for_a_held_game_keeps_the_editor_open(
         "Text typed before the run started",
         "the editor keeps the player's text"
     );
-    let trigger: String = page
-        .evaluate::<(), String>(
-            "(() => document.getElementById('story-log').getAttribute('hx-trigger') || '')()",
+    let held: bool = page
+        .evaluate::<(), bool>(
+            "(() => !!document.querySelector('#story-log [data-work]'))()",
             None,
         )
         .await
         .unwrap();
-    assert_eq!(
-        trigger, "none",
-        "the story-log poll stays paused while the editor is open"
-    );
+    assert!(held, "the story log stays held while the editor is open");
 }
 
 // [docs/specs/browser_autoplay.md] SCENARIO: 42.5

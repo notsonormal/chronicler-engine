@@ -97,16 +97,16 @@ fn print_summary(reports: &[CheckReport]) {
     eprintln!("  {total:>7.3}s  total (shared browser)");
 }
 
-/// Fire a polled container's own htmx request now, instead of waiting out its
-/// `every Ns` timer, and return once htmx has handled the response.
+/// Fire a region's own htmx request now, whether or not a number of its kinds
+/// moved, and return once htmx has handled the response.
 ///
-/// htmx 1.9 runs a poll by calling the same request handler its `load` trigger
-/// calls: `load` is an immediate call and `every` is a `setTimeout`, so neither
-/// registers a DOM listener and no event re-fires them. `htmx.ajax` with the
-/// element as its `source` issues that element's own request instead: the
-/// element's `hx-get` path, its `hx-target`, its `hx-swap` (`morph:innerHTML`
-/// included), its `hx-sync`, its `hx-on::` handlers and the response's
-/// out-of-band swaps all take the same path the timer would have taken.
+/// The page asks first, so the loop has already loaded what the stub's numbers
+/// say is due and holds no later load that would replace what the test does
+/// next. `htmx.ajax` with the element as its `source` then issues that
+/// element's own request: the element's `hx-get` path, its `hx-target`, its
+/// `hx-swap` (`morph:innerHTML` included), its `hx-sync`, its `hx-on::`
+/// handlers and the response's out-of-band swaps all take the same path a load
+/// of the loop takes.
 ///
 /// htmx queues a request behind one already in flight on the same element and
 /// fires `htmx:afterRequest` for the earlier one first. So the helper waits
@@ -114,10 +114,12 @@ fn print_summary(reports: &[CheckReport]) {
 /// carrying its own `xhr`. htmx fires that event after the swap is applied and
 /// also for a refused poll that swaps nothing.
 ///
-/// The request goes out whatever the container's `hx-trigger` currently says,
-/// so a test that asserts a *paused* poll (the story log during an edit) must
-/// not call this.
+/// The request goes out whatever the region holds, and the hold still applies
+/// to its swap, so the helper also runs where an edit holds the region.
 pub(super) async fn poll_now(page: &playwright_rs::Page, selector: &str) {
+    page.evaluate::<(), ()>("() => window.chroniclerLive.askOnce()", None)
+        .await
+        .expect("the page asks before the forced load");
     let fired = page
         .evaluate::<String, String>(
             r#"async (selector) => {

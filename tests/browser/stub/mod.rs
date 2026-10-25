@@ -10,6 +10,7 @@ mod failure_display;
 mod form_failures;
 mod games;
 mod layout;
+mod live_regions;
 mod llm_messages;
 mod options;
 mod prompt_presets;

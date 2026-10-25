@@ -385,7 +385,7 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
                                 const now = document.querySelector('#status-display .error-details-toggle');
                                 const popover = document.getElementById('status-error-popover');
                                 return !!now
-                                    && now !== window.__statusToggleBefore
+                                    && now === window.__statusToggleBefore
                                     && !!popover
                                     && popover.classList.contains('open');
                             }"#,
@@ -396,7 +396,7 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
                     },
                 )
                 .await,
-                "a poll that replaced the disclosure must not collapse it"
+                "a load must keep the disclosure and not collapse it"
             );
     assert!(
         active_element_is(&page, "#status-display .error-details-toggle").await,

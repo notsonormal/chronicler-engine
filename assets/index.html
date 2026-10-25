@@ -76,9 +76,10 @@
       <div
         class="header"
         id="header"
+        data-live="games settings llm"
         hx-get="/fragment/header"
-        hx-trigger="load, every 5s"
-        hx-swap="innerHTML"
+        hx-trigger="load, refresh"
+        hx-swap="morph:innerHTML"
       ></div>
     </div>
     <div id="failure-banner" class="failure-banner" role="status" hidden>
@@ -101,22 +102,26 @@
           id="story-log"
           tabindex="0"
           aria-label="Story log"
+          data-live="story busy worlds"
           hx-get="/fragment/story-log"
-          hx-trigger="load, every 2s, refresh"
+          hx-trigger="load, refresh"
           hx-swap="morph:innerHTML"
         ></div>
         <div
           class="visual-sidebar"
+          data-live="story worlds"
           hx-get="/fragment/visual-sidebar"
-          hx-trigger="load, every 5s"
+          hx-trigger="load, refresh"
+          hx-swap="morph:innerHTML"
         ></div>
       </div>
 
       <div
         id="options-dock"
+        data-live="options busy"
         hx-get="/fragment/options-dock"
-        hx-trigger="load, every 2s"
-        hx-swap="innerHTML"
+        hx-trigger="load, refresh"
+        hx-swap="morph:innerHTML"
       ></div>
       <div class="action-area" id="action-area">
         <div id="action-preview" class="action-preview"></div>
@@ -175,16 +180,17 @@
           id="stop-btn"
           hx-post="/status/reset-busy"
           hx-swap="none"
-          hx-on::after-request="pollStatusNow()"
+          hx-on::after-request="chroniclerLive.askNow()"
         >
           <svg class="icon" aria-hidden="true"><use href="#i-x" /></svg> Stop
         </button>
         <div
           class="status ready"
           id="status-display"
+          data-live="busy"
           hx-get="/status/busy"
-          hx-trigger="load, every 5s, statuspoll"
-          hx-swap="innerHTML"
+          hx-trigger="load, refresh"
+          hx-swap="morph:innerHTML"
           hx-on::after-swap="onStatusPoll(this)"
         >
           <span class="status ready">Ready</span>
@@ -196,14 +202,14 @@
         role="status"
         aria-live="polite"
       ></div>
-      <!-- Outside the polled log, so a poll cannot drop a failure the log reported. -->
+      <!-- Outside the live log, so a load cannot drop a failure the log reported. -->
       <div
         id="story-log-error"
         class="story-log-error"
         data-error-slot="story-log"
         hidden
       ></div>
-      <!-- Separate regions so a poll does not re-announce unchanged content every cycle. -->
+      <!-- Separate regions so a load does not re-announce unchanged content. -->
       <div
         id="narration-announcer"
         class="visually-hidden"
@@ -268,9 +274,10 @@
     </main>
 
 
-    <script src="/assets/dashboard-errors.js?v=1"></script>
-    <script src="/assets/dashboard-action-area.js?v=3"></script>
-    <script src="/assets/dashboard-story-log.js?v=2"></script>
+    <script src="/assets/dashboard-errors.js?v=2"></script>
+    <script src="/assets/dashboard-live.js?v=1"></script>
+    <script src="/assets/dashboard-action-area.js?v=4"></script>
+    <script src="/assets/dashboard-story-log.js?v=3"></script>
     <script src="/assets/dashboard-slash-menu.js?v=1"></script>
     <script src="/assets/dashboard-panels.js?v=1"></script>
   </body>

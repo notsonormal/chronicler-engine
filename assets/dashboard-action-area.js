@@ -70,24 +70,23 @@ function focusCommandInput() {
 
 let previewWasOpen = false;
 
-// The server renders the run mark and the disabled controls, so a run's start or
-// end refetches those regions. `null` is the unread baseline.
+// The Games panel renders the run mark, so a run's start or end refetches it.
+// `null` is the unread baseline. The panel is not a live region yet; this goes
+// when the panel lists its kinds in `data-live`.
 let runWasHeld = null;
 
-function refreshRunRegionsOnRunChange() {
+function refreshGamesPanelOnRunChange() {
   const held = statusIsAutoplay();
   const changed = runWasHeld !== null && held !== runWasHeld;
   runWasHeld = held;
   if (!changed) return;
-  ["#games-tab > .games-panel", "#story-log"].forEach((selector) => {
-    const region = document.querySelector(selector);
-    if (region) htmx.trigger(region, "refresh");
-  });
+  const panel = document.querySelector("#games-tab > .games-panel");
+  if (panel) htmx.trigger(panel, "refresh");
 }
 
 function syncActionState() {
   applyActionState(deriveActionState());
-  refreshRunRegionsOnRunChange();
+  refreshGamesPanelOnRunChange();
   const open = previewIsOpen();
   if (open && !previewWasOpen) {
     focusCorrectedTextarea();
@@ -250,12 +249,23 @@ function autoplayLabel(match) {
   return step ? progress + " " + step : progress;
 }
 
-function pollStatusNow() {
-  htmx.trigger("#status-display", "statuspoll");
-}
+// The morph swap reads the elements of an answer only, so a bare-text answer
+// ("idle", a step name) would empty the display. Until /status/busy renders its
+// own element (the status display rewrite), the bare text gets one here.
+document.body.addEventListener("htmx:beforeSwap", function (evt) {
+  const target = evt.detail && evt.detail.target;
+  if (!target || target.id !== "status-display" || evt.detail.elt !== target) {
+    return;
+  }
+  const body = evt.detail.serverResponse;
+  if (body && !body.trimStart().startsWith("<")) {
+    evt.detail.serverResponse =
+      '<span class="status-answer">' + escapeHtml(body) + "</span>";
+  }
+});
 
 function onAutoplayAfterRequest(event) {
-  if (requestSucceeded(event)) pollStatusNow();
+  if (requestSucceeded(event)) chroniclerLive.askNow();
 }
 
 // /status/busy returns a bare phase name, an autoplay progress answer or

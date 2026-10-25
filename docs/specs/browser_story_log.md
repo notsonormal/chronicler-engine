@@ -22,15 +22,15 @@ Then #edit-textarea is removed from the DOM
 And .log-entry .text inner text is restored to the original
 ```
 
-#### Scenario 30.3: Edit textarea persists across polling cycles
+#### Scenario 30.3: Edit textarea persists while the story log is due
 
 ```gherkin
 Given edit mode is active (#edit-textarea visible)
-When 3 seconds elapse (client-side polling cycles run)
-Then #edit-textarea remains in the DOM (polling does not destroy edit state)
+When the story number moves and 3 seconds elapse (the page asks, and the story log is due)
+Then #edit-textarea remains in the DOM (the story log holds its load while the edit is open)
 ```
 
-#### Scenario 30.4: A failed save restores the entry and resumes polling
+#### Scenario 30.4: A failed save restores the entry and ends the hold
 
 ```gherkin
 Given edit mode is active (#edit-textarea visible) on a .log-entry
@@ -41,7 +41,7 @@ And its Details disclosure holds the raw server text
 And #edit-textarea is removed from the DOM
 And .log-entry .text inner text is restored to the original
 And the entry's pre-edit action controls are available again
-And #story-log resumes polling
+And #story-log no longer holds an edit
 ```
 
 #### Scenario 30.5: A failed retry clears the pending status and re-enables Send
@@ -69,12 +69,13 @@ And #edit-textarea grows to fit the entry text up to the 50vh cap, scrolling int
 ```gherkin
 Given edit mode is active (#edit-textarea visible)
 And the textarea text has been modified
+And the story number moved during the edit
 When the client presses Escape in #edit-textarea
 Then #edit-textarea is removed from the DOM
 And .log-entry .text inner text is restored to the original
 And the entry's pre-edit action controls are available again
 And the entry's edit button has focus
-And the edit button still has focus after the resumed polling cycle
+And the edit button still has focus after the load that the end of the edit allows
 ```
 
 #### Scenario 30.8: Ctrl+Enter saves the edit
@@ -168,14 +169,14 @@ When the client saves the edit and the save request fails
 Then every other entry's .edit-btn is enabled again
 ```
 
-#### Scenario 30.17: A successful save holds the edit lock until the poll re-renders
+#### Scenario 30.17: A successful save holds the edit lock until the load re-renders
 
 ```gherkin
 Given edit mode is active on one entry
 And every other entry's .edit-btn is disabled
 When the client saves the edit and the save request succeeds
 Then the other entries' .edit-btn stays disabled while the entry still shows its editor
-And the resumed poll re-renders the log and enables every .edit-btn
+And the load that follows the save re-renders the log and enables every .edit-btn
 ```
 
 #### Scenario 30.18: A failed delete reports in the story log's error slot

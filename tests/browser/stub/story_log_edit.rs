@@ -8,14 +8,11 @@ use std::time::Duration;
 use super::*;
 use super::support::{StubRunner, install_story_poll_counter, poll_now, story_poll_count};
 
-/// `pausePolling` writes "none"; `resumePolling` restores the shell's original
-/// trigger.
-async fn story_log_trigger(page: &playwright_rs::Page) -> String {
-    page.evaluate::<(), String>(
-        r#"(() => {
-            const el = document.getElementById('story-log');
-            return el ? (el.getAttribute('hx-trigger') || '') : '';
-        })()"#,
+/// An open editor carries `data-work`, and the live loop holds a region that
+/// holds one.
+async fn story_log_holds_an_edit(page: &playwright_rs::Page) -> bool {
+    page.evaluate::<(), bool>(
+        "(() => !!document.querySelector('#story-log [data-work]'))()",
         None,
     )
     .await
@@ -97,10 +94,10 @@ async fn check_edit_cancel_restores_original(page: playwright_rs::Page, _stub: S
     );
 }
 
-// The stub's 2s poll would replace `#story-log`'s innerHTML and destroy the
-// textarea, so only a working pause lets the textarea persist.
+// A moved story number makes the log due on every ask, and a load would
+// destroy the textarea, so only a working hold lets the textarea persist.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.3
-async fn check_polling_pauses_during_edit(page: playwright_rs::Page, _stub: StubServer) {
+async fn check_an_open_edit_holds_the_story_log(page: playwright_rs::Page, stub: StubServer) {
     page.evaluate::<(), bool>(
         r#"(() => {
                 const btn = document.querySelector('.edit-btn');
@@ -114,17 +111,19 @@ async fn check_polling_pauses_during_edit(page: playwright_rs::Page, _stub: Stub
 
     wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
+    stub.changes_handle().bump("story");
     let persisted = wait_for_element_persist(&page, "#edit-textarea", Duration::from_secs(3)).await;
     assert!(
         persisted,
-        "Edit textarea should persist during polling pause"
+        "Edit textarea should persist while the story log is held"
     );
+    assert!(story_log_holds_an_edit(&page).await);
 }
 
 // The stub answers the save with a 500, so the shipped save click exercises the
 // recovery path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.4
-async fn check_failed_save_restores_entry_and_resumes_polling(
+async fn check_failed_save_restores_entry_and_releases_the_hold(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -138,10 +137,9 @@ async fn check_failed_save_restores_entry_and_resumes_polling(
         .unwrap();
     wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
-    assert_eq!(
-        story_log_trigger(&page).await,
-        "none",
-        "edit mode should pause story-log polling"
+    assert!(
+        story_log_holds_an_edit(&page).await,
+        "edit mode should hold the story log"
     );
 
     page.locator("#edit-textarea")
@@ -204,14 +202,9 @@ async fn check_failed_save_restores_entry_and_resumes_polling(
         "the entry's pre-edit action controls, including an enabled Retry, should be available again after a failed save"
     );
 
-    let trigger = story_log_trigger(&page).await;
-    assert_ne!(
-        trigger, "none",
-        "story-log polling should resume after a failed save"
-    );
     assert!(
-        trigger.contains("every 2s"),
-        "resumed poll trigger should be the shell's original, got {trigger:?}"
+        !story_log_holds_an_edit(&page).await,
+        "the story log should no longer be held after a failed save"
     );
 }
 
@@ -334,7 +327,7 @@ async fn check_edit_textarea_fits_content_and_takes_focus(
 }
 
 // [docs/specs/browser_story_log.md] SCENARIO: 30.7
-async fn check_escape_cancels_edit(page: playwright_rs::Page, _stub: StubServer) {
+async fn check_escape_cancels_edit(page: playwright_rs::Page, stub: StubServer) {
     install_story_poll_counter(&page).await;
     let original_text = narration_text(&page).await;
     assert!(!original_text.is_empty(), "Should have original text");
@@ -345,6 +338,8 @@ async fn check_escape_cancels_edit(page: playwright_rs::Page, _stub: StubServer)
         .fill("Modified text that Escape abandons", None)
         .await
         .unwrap();
+    // A number moved during the edit is what the log loads once the edit ends.
+    stub.changes_handle().bump("story");
     textarea.press("Escape", None).await.unwrap();
 
     wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
@@ -386,7 +381,7 @@ async fn check_escape_cancels_edit(page: playwright_rs::Page, _stub: StubServer)
         || async { story_poll_count(&page).await >= 1.0 },
     )
     .await;
-    assert!(polled, "the resumed poll never ran after Escape");
+    assert!(polled, "the held load never ran after Escape");
     assert!(
         wait_for_condition_async(
             Duration::from_millis(1000),
@@ -404,7 +399,7 @@ async fn check_escape_cancels_edit(page: playwright_rs::Page, _stub: StubServer)
             },
         )
         .await,
-        "the resumed poll must keep focus on the entry's edit button"
+        "the load after the edit must keep focus on the entry's edit button"
     );
 }
 
@@ -440,7 +435,10 @@ async fn check_keyboard_save_shortcuts_submit_edit(page: playwright_rs::Page, _s
     }
 
     let requests: Vec<String> = page
-        .evaluate::<(), Vec<String>>("(() => window.__saveRequests)()", None)
+        .evaluate::<(), Vec<String>>(
+            "(() => window.__saveRequests.filter((url) => url.startsWith('/history/')))()",
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -484,7 +482,7 @@ async fn check_edit_locks_entry_controls_and_cancel_restores_them(
         "the edit control should be replaced while editing"
     );
 
-    // Read in the same tick: the resumed poll is async, so this observes
+    // Read in the same tick: the load that follows is async, so this observes
     // `revertEdit`'s synchronous restoration.
     let (edit_back, retry_enabled): (bool, bool) = page
         .evaluate::<(), (bool, bool)>(
@@ -638,7 +636,7 @@ async fn check_edit_locks_the_other_entries_edit_controls(
         "the other entries' Edit controls must be disabled during an edit"
     );
 
-    // Read in the same tick: the resumed poll is async.
+    // Read in the same tick: the load that follows is async.
     let unlocked = page
         .evaluate::<(), bool>(
             r#"(() => {
@@ -767,7 +765,7 @@ async fn check_successful_save_holds_the_edit_lock_until_the_poll(
     .await;
     assert!(
         rerendered,
-        "the resumed poll must re-render the log and re-enable the Edit controls"
+        "the load after the save must re-render the log and re-enable the Edit controls"
     );
 
     let early_unlock = page
@@ -776,7 +774,7 @@ async fn check_successful_save_holds_the_edit_lock_until_the_poll(
         .unwrap();
     assert!(
         !early_unlock,
-        "a successful save must hold the edit lock until the poll re-renders the log"
+        "a successful save must hold the edit lock until the load re-renders the log"
     );
 }
 
@@ -958,7 +956,10 @@ async fn run_story_log_edit_mode_checks() {
         )
         .await;
     runner
-        .run(StubActionOutcome::Pending, check_polling_pauses_during_edit)
+        .run(
+            StubActionOutcome::Pending,
+            check_an_open_edit_holds_the_story_log,
+        )
         .await;
     runner
         .run(
@@ -996,7 +997,7 @@ async fn run_story_log_edit_failure_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_save_restores_entry_and_resumes_polling,
+            check_failed_save_restores_entry_and_releases_the_hold,
         )
         .await;
     runner

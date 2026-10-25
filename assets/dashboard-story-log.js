@@ -23,29 +23,6 @@ function showStoryLogError(message, rawText) {
 }
 
 let editState = null;
-let originalTrigger = null;
-
-function pausePolling() {
-  const storyLog = document.getElementById("story-log");
-  if (storyLog) {
-    // A second pause would overwrite the saved trigger with "none", so the
-    // poll would never resume.
-    if (originalTrigger === null) {
-      originalTrigger = storyLog.getAttribute("hx-trigger");
-    }
-    storyLog.setAttribute("hx-trigger", "none");
-    htmx.process(storyLog);
-  }
-}
-
-function resumePolling() {
-  const storyLog = document.getElementById("story-log");
-  if (storyLog && originalTrigger) {
-    storyLog.setAttribute("hx-trigger", originalTrigger);
-    htmx.process(storyLog);
-    originalTrigger = null;
-  }
-}
 
 function autoResizeTextarea(textarea) {
   textarea.style.height = "auto";
@@ -112,13 +89,17 @@ function showEditForm(id) {
       });
     }
 
+    // The open editor holds the story log: a load waits until the edit ends.
+    entry.setAttribute("data-work", "");
     lockOtherEditButtons();
-    pausePolling();
     textarea.focus();
   }
 }
 
 function clearEditState() {
+  document
+    .querySelectorAll("#story-log [data-work]")
+    .forEach((root) => root.removeAttribute("data-work"));
   editState = null;
 }
 
@@ -145,7 +126,7 @@ function cancelEdit() {
   if (editState === null) return;
   const entryId = editState.id;
   revertEdit();
-  resumePolling();
+  liveWorkEnded();
   const entry = document.querySelector(`[data-id="${entryId}"]`);
   const editBtn = entry ? entry.querySelector(".edit-btn") : null;
   if (editBtn) editBtn.focus();
@@ -188,8 +169,11 @@ function submitEdit() {
         editKeptOpen = true;
         return;
       }
-      // The lock stays until the resumed poll replaces the entry's
+      // The saved text is the rendered text now, so the textarea is no longer
+      // a changed field. The lock stays until the load replaces the entry's
       // controls, so a second editor cannot open on a stale textarea.
+      const saved = document.getElementById("edit-textarea");
+      if (saved) saved.defaultValue = saved.value;
       clearEditState();
     })
     .catch((err) => {
@@ -198,7 +182,7 @@ function submitEdit() {
       showStoryLogError("Failed to save the message.", err.message);
     })
     .finally(() => {
-      if (!editKeptOpen) resumePolling();
+      if (!editKeptOpen) liveWorkEnded();
     });
 }
 
@@ -344,7 +328,7 @@ function followStoryLogBottom(log) {
 
 document.body.addEventListener("htmx:beforeSwap", function (evt) {
   const target = evt.detail && evt.detail.target;
-  if (!target || target.id !== "story-log") return;
+  if (!target || target.id !== "story-log" || !evt.detail.shouldSwap) return;
   storyLogSwapStart = {
     atBottom: storyLogIsAtBottom(target),
     entries: storyLogEntryCount(target),
@@ -356,7 +340,7 @@ document.body.addEventListener("htmx:afterSwap", function (evt) {
   storyLogSwapStart = null;
   const target = evt.detail && (evt.detail.target || evt.detail.elt);
   if (!start || !target || target.id !== "story-log") return;
-  // An open edit owns the log's position, and the poll is paused for it.
+  // An open edit owns the log's position, and the log does not load while it is open.
   if (editState !== null) return;
   if (!start.atBottom) return;
   if (storyLogEntryCount(target) <= start.entries) return;

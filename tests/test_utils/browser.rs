@@ -122,8 +122,22 @@ impl SharedBrowser {
             .await
             .unwrap_or_else(|e| panic!("navigate to stub at {url}: {e}"));
         wait_for_story_log(&page).await;
+        make_regions_current(&page).await;
         page
     }
+}
+
+/// The load that htmx runs at page load carries no record, so the first ask of
+/// the page loads every region a second time. A stub test starts after that
+/// ask: only a number the test moves can load a region afterwards, and a state
+/// the test writes into a region is not replaced by a late first ask.
+async fn make_regions_current(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        "async () => { await window.chroniclerLive.settle(); await window.chroniclerLive.askOnce(); }",
+        None,
+    )
+    .await
+    .expect("the stub page makes its live regions current");
 }
 
 /// A hidden panel's load swap lands before any test arms a baseline, so the wait

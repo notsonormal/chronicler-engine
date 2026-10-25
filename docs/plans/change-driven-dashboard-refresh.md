@@ -1,7 +1,7 @@
 # Plan: Change-driven dashboard refresh
 
 **Date:** 2026-10-25
-**Status:** In progress. The design was decided with the owner, reviewed against the code, and the two decisions from the review are made (D1, D2). Stage 1 is built (not yet committed); stages 2–4 are not started.
+**Status:** In progress. The design was decided with the owner, reviewed against the code, and the two decisions from the review are made (D1, D2). Stages 1 and 2a are built and committed on `wf/change-driven-dashboard-refresh`; stages 2b–4 are not started.
 **Goal:** One architecture for how the dashboard shows server data. Data flows one way: an action saves data, and the regions that show the data load it. A region loads only when its data changed, keeps what the load does not change, and waits while the player edits in it. One table, one load path and one test cover every region. A missed load or a destroyed form fails a test. It does not depend on timing.
 
 This plan replaces `docs/plans/games-panel-rename-form-survives-the-poll.md`, which was never committed. It closes `.scratch/autoplay-follow-ups/issues/04-rename-form-survives-the-games-panel-poll.md` at the end of stage 3.
@@ -109,7 +109,7 @@ What the four statements cover:
 
 ### 1. Data kinds and the browser's table
 
-The browser's table is the `data-live` attribute on each region element in `assets/index.html`. It lists the kinds of data the region shows, so one look at a region tells which changes load it. A guardrail test parses `index.html` (§8).
+The browser's table is the `data-live` attribute on each region element in `assets/index.html`. It lists the kinds of data the region shows, so one look at a region tells which changes load it. Its tokens are the field names of the `/changes` answer: `story`, `options`, `busy`, `games`, `worlds`, `settings`, `presets`, `llm`. A guardrail test parses `index.html` (§8).
 
 | Region | `data-live` (kinds) | Renders |
 |---|---|---|
@@ -220,7 +220,7 @@ the page becomes visible      → ask at once
 
 - The per-region record handles held, stale and failed loads with one comparison. A load is never lost, because a region's record moves only when its load succeeds.
 - Each region shows its state in a `data-live-state` attribute (`current`, `loading`, `held`, `stale`, `due`). A developer sees in the DOM inspector why a region did not load, and tests can assert the state.
-- Every region element keeps its `hx-get` and has `hx-trigger="load, refresh"` and `hx-swap="morph:innerHTML"`. No region has an `every` trigger. `<body hx-ext="morph">` already enables morph.
+- Every region element keeps its `hx-get` and has `hx-trigger="refresh"` and `hx-swap="morph:innerHTML"`. No region has a `load` or an `every` trigger. The first ask after page start finds no record, so it loads every region. Only the loop starts a region load, so every load has a record (correction after stage 2a: a `load` trigger loaded each region a second time, because a load that no ask started has no numbers to record). `<body hx-ext="morph">` already enables morph.
 - `markUnreachable` and `clearUnreachable` (`dashboard-errors.js`) already exist. The loop calls them because its ask is a `fetch`, not an htmx request.
 - **The region element is never replaced.** A fragment's root does not repeat the region's own element or class. Today every panel fragment does repeat it (`<div class="games-panel">` inside `<div class="games-panel">`). `dashboard-ui-review` ticket 01 fixed the same fault, but for the story log only.
 - **Morph needs stable ids** on repeated items, so that it matches a row to the same row.
@@ -292,7 +292,7 @@ Today's actions that change, from `rg 'hx-target' src/adapters/driving/http asse
 The guardrails are one test file in the `guardrails` binary. They fail when:
 
 - an element in `assets/index.html` has an `every` trigger;
-- an element with `hx-get` in `index.html` has no `data-live`, or lacks `hx-trigger="load, refresh"`, or lacks `hx-swap="morph:innerHTML"`;
+- an element with `hx-get` in `index.html` has no `data-live`, or lacks `hx-trigger="refresh"`, or lacks `hx-swap="morph:innerHTML"`;
 - a `data-live` attribute lists an unknown kind;
 - a template in `src/adapters/driving/http/` or `index.html` has an `hx-target` that names a region element (a selector in the `data-live` set), or swaps a region element with `outerHTML`;
 - a template has `hx-swap-oob`;
@@ -418,7 +418,7 @@ Each stage ends with `python build.py` green. During a stage, use `python build.
    - `/changes` in what `set_polls_failing` fails.
 
    Add a test helper for one deterministic ask. The loop exposes one function for a single ask, which returns when every load that the ask started has settled.
-5. Add `assets/dashboard-live.js` (`?v=1`), the `data-keep` callback, the hold, the focus rule, and `data-live`, `hx-trigger="load, refresh"` and morph on the Game-tab regions and the header. In this stage, the header keeps its out-of-band swaps, so its `data-live` is "games, settings, LLM messages" until stage 3.
+5. Add `assets/dashboard-live.js` (`?v=1`), the `data-keep` callback, the hold, the focus rule, and `data-live`, `hx-trigger="refresh"` and morph on the Game-tab regions and the header. In this stage, the header keeps its out-of-band swaps, so its `data-live` is "games, settings, LLM messages" until stage 3.
 6. Remove from the Game tab and the header:
    - their timers;
    - the story-log poll pause (`pausePolling`, `resumePolling`);

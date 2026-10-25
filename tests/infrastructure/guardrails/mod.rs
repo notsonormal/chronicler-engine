@@ -4,6 +4,7 @@ pub mod enums;
 pub mod free_fn;
 pub mod inherent_impl;
 pub mod layers;
+pub mod live_regions;
 pub mod location;
 pub mod nesting;
 pub mod structure;
@@ -17,6 +18,7 @@ pub use inherent_impl::*;
 pub use enums::*;
 pub use free_fn::*;
 pub use layers::*;
+pub use live_regions::*;
 pub use nesting::*;
 pub use structure::*;
 pub use style::*;
@@ -31,6 +33,9 @@ mod inherent_impl_tests;
 
 #[cfg(test)]
 mod free_fn_tests;
+
+#[cfg(test)]
+mod live_regions_tests;
 
 #[cfg(test)]
 mod location_tests;
@@ -436,6 +441,14 @@ fn guardrails_browser_interactions_use_htmx_settle() {
         "browser interactions use the htmx settle counter",
         check_browser_interactions_use_htmx_settle,
     );
+}
+
+#[test]
+fn guardrails_live_regions_in_shell() {
+    let path = "assets/index.html";
+    let content = std::fs::read_to_string(path).unwrap();
+    let errors = check_live_regions_in_shell(path, &content);
+    assert_violations(&errors, "live regions in the dashboard shell");
 }
 
 #[test]

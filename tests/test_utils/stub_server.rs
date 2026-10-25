@@ -157,17 +157,22 @@ const CANNED_OPTIONS: [&str; 3] = [
 
 const CANNED_OPTIONS_ALT: [&str; 2] = ["Search the cellar", "Call for the innkeeper"];
 
-fn options_dock_html(alternate: bool) -> String {
+fn options_dock_html(alternate: bool, failed: bool) -> String {
     use askama::Template;
     use chronicler_engine::adapters::driving::http::templates::OptionsDockTemplate;
     use chronicler_engine::adapters::driving::http::view_models::OptionsDockViewModel;
+    use chronicler_engine::domain::model::dock::OptionsFailure;
 
     let options: Vec<String> = if alternate {
         CANNED_OPTIONS_ALT.iter().map(|o| o.to_string()).collect()
     } else {
         CANNED_OPTIONS.iter().map(|o| o.to_string()).collect()
     };
-    let vm = OptionsDockViewModel::new(options, false, None);
+    let failure = failed.then(|| OptionsFailure {
+        reason: "The model gave no usable Options.".to_string(),
+        raw: "stub raw Options answer".to_string(),
+    });
+    let vm = OptionsDockViewModel::new(options, false, failure);
     OptionsDockTemplate::new(vm)
         .render()
         .expect("render options dock")
@@ -237,6 +242,87 @@ struct StubState {
     row_deletes_succeed: std::sync::atomic::AtomicBool,
     world_delete_refused: std::sync::atomic::AtomicBool,
     preset_card_refused: std::sync::atomic::AtomicBool,
+    changes: std::sync::Mutex<StubChanges>,
+    change_asks: std::sync::atomic::AtomicUsize,
+    fragment_loads: std::sync::Mutex<HashMap<String, usize>>,
+    loads_failing: std::sync::atomic::AtomicBool,
+    story_log_delay_ms: std::sync::atomic::AtomicU64,
+    options_failed: std::sync::atomic::AtomicBool,
+}
+
+/// What `GET /changes` answers. A test moves a number through `StubChangesHandle`; the
+/// setters of the other handles move the number of the data they change, so a
+/// test that changes stub data still reaches the region without naming a number.
+#[derive(Debug, Clone)]
+struct StubChanges {
+    server: String,
+    game: Option<u64>,
+    story: u64,
+    options: u64,
+    busy: u64,
+    games: u64,
+    worlds: u64,
+    settings: u64,
+    presets: u64,
+    llm: u64,
+}
+
+impl StubChanges {
+    fn new() -> Self {
+        Self {
+            server: "stub-server-1".to_string(),
+            game: Some(1),
+            story: 1,
+            options: 1,
+            busy: 1,
+            games: 1,
+            worlds: 1,
+            settings: 1,
+            presets: 1,
+            llm: 1,
+        }
+    }
+
+    fn number_mut(&mut self, kind: &str) -> &mut u64 {
+        match kind {
+            "story" => &mut self.story,
+            "options" => &mut self.options,
+            "busy" => &mut self.busy,
+            "games" => &mut self.games,
+            "worlds" => &mut self.worlds,
+            "settings" => &mut self.settings,
+            "presets" => &mut self.presets,
+            "llm" => &mut self.llm,
+            other => panic!("the stub has no change number named {other:?}"),
+        }
+    }
+
+    fn answer(&self) -> serde_json::Value {
+        let mut answer = serde_json::json!({
+            "server": self.server,
+            "game": self.game,
+            "games": self.games,
+            "worlds": self.worlds,
+            "settings": self.settings,
+            "presets": self.presets,
+            "llm": self.llm,
+        });
+        if self.game.is_some() {
+            answer["story"] = self.story.into();
+            answer["options"] = self.options.into();
+            answer["busy"] = self.busy.into();
+        }
+        answer
+    }
+}
+
+impl StubState {
+    fn bump(&self, kinds: &[&str]) {
+        let mut changes = self.changes.lock().expect("stub changes lock poisoned");
+        for kind in kinds {
+            *changes.number_mut(kind) += 1;
+        }
+    }
 }
 
 pub struct StubServer {
@@ -276,6 +362,12 @@ impl StubServer {
             row_deletes_succeed: std::sync::atomic::AtomicBool::new(false),
             world_delete_refused: std::sync::atomic::AtomicBool::new(false),
             preset_card_refused: std::sync::atomic::AtomicBool::new(false),
+            changes: std::sync::Mutex::new(StubChanges::new()),
+            change_asks: std::sync::atomic::AtomicUsize::new(0),
+            fragment_loads: std::sync::Mutex::new(HashMap::new()),
+            loads_failing: std::sync::atomic::AtomicBool::new(false),
+            story_log_delay_ms: std::sync::atomic::AtomicU64::new(0),
+            options_failed: std::sync::atomic::AtomicBool::new(false),
         });
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
@@ -357,6 +449,12 @@ impl StubServer {
         }
     }
 
+    pub fn changes_handle(&self) -> StubChangesHandle {
+        StubChangesHandle {
+            state: Arc::clone(&self.state),
+        }
+    }
+
     pub fn row_delete_handle(&self) -> StubRowDeleteHandle {
         StubRowDeleteHandle {
             state: Arc::clone(&self.state),
@@ -396,6 +494,70 @@ impl StubLifecycleHandle {
     }
 }
 
+/// The numbers of `GET /changes`, and what the page asked and loaded.
+#[derive(Clone)]
+pub struct StubChangesHandle {
+    state: Arc<StubState>,
+}
+
+impl StubChangesHandle {
+    /// Moves the number of one kind: `story`, `options`, `busy`, `games`,
+    /// `worlds`, `settings`, `presets` or `llm`.
+    pub fn bump(&self, kind: &str) {
+        self.state.bump(&[kind]);
+    }
+
+    pub fn set_server(&self, server: &str) {
+        self.state
+            .changes
+            .lock()
+            .expect("stub changes lock poisoned")
+            .server = server.to_string();
+    }
+
+    pub fn set_game(&self, game: Option<u64>) {
+        self.state
+            .changes
+            .lock()
+            .expect("stub changes lock poisoned")
+            .game = game;
+    }
+
+    /// The `GET /changes` requests the stub answered or failed.
+    pub fn asks(&self) -> usize {
+        self.state
+            .change_asks
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// The requests the stub received for a fragment path or `/status/busy`,
+    /// failed ones included.
+    pub fn loads(&self, path: &str) -> usize {
+        self.state
+            .fragment_loads
+            .lock()
+            .expect("stub load counts lock poisoned")
+            .get(path)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Fails every fragment and `/status/busy` request with a 500 and leaves
+    /// `GET /changes` working, so a region load fails after a good ask.
+    pub fn set_loads_failing(&self, failing: bool) {
+        self.state
+            .loads_failing
+            .store(failing, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Holds the story-log answer back, so a load is in flight for a while.
+    pub fn set_story_log_delay_ms(&self, millis: u64) {
+        self.state
+            .story_log_delay_ms
+            .store(millis, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[derive(Clone)]
 pub struct StubStoryLogHandle {
     state: Arc<StubState>,
@@ -406,6 +568,7 @@ impl StubStoryLogHandle {
         self.state
             .extra_oldest
             .store(present, std::sync::atomic::Ordering::SeqCst);
+        self.state.bump(&["story"]);
     }
 
     pub fn append_narration(&self, text: &str) {
@@ -414,6 +577,15 @@ impl StubStoryLogHandle {
             .newest_narration
             .lock()
             .expect("stub narration lock poisoned") = Some(text.to_string());
+        self.state.bump(&["story", "games"]);
+    }
+
+    /// The newest entry is gone from the next story-log answer.
+    pub fn remove_newest(&self) {
+        self.state
+            .deleted
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.state.bump(&["story"]);
     }
 }
 
@@ -427,6 +599,16 @@ impl StubOptionsHandle {
         self.state
             .dock_options_alt
             .store(alternate, std::sync::atomic::Ordering::SeqCst);
+        self.state.bump(&["options"]);
+    }
+
+    /// The dock shows an Options failure with its Details disclosure instead of
+    /// the offered set.
+    pub fn set_failure(&self, failed: bool) {
+        self.state
+            .options_failed
+            .store(failed, std::sync::atomic::Ordering::SeqCst);
+        self.state.bump(&["options"]);
     }
 }
 
@@ -486,6 +668,7 @@ impl StubFailureHandle {
         self.state
             .header_degraded
             .store(degraded, std::sync::atomic::Ordering::SeqCst);
+        self.state.bump(&["llm"]);
     }
 
     pub fn set_polls_failing(&self, failing: bool) {
@@ -520,6 +703,7 @@ impl StubSwipeHandle {
         self.state
             .two_swipes
             .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.state.bump(&["story"]);
     }
 
     pub fn set_switch_failing(&self) {
@@ -538,6 +722,7 @@ impl StubStatusHandle {
     /// The status display polls every 5s, so a change lands on a later cycle.
     pub fn set(&self, status: StubStatus) {
         *self.state.status.lock().expect("stub status lock poisoned") = status;
+        self.state.bump(&["busy"]);
     }
 }
 
@@ -660,6 +845,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         // log shapes and the dock drop a switch test observes.
         .route("/message/:id/swipe/:index", post(switch_swipe))
         .route("/status/busy", get(status_busy))
+        .route("/changes", get(changes_answer))
         .route("/fragment/header", get(header_fragment))
         .route("/fragment/story-log", get(story_log_fragment))
         .route(
@@ -760,6 +946,22 @@ async fn fail_polls_middleware(
 ) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     let path = request.uri().path().to_string();
+    let is_load = path.starts_with("/fragment/") || path == "/status/busy";
+    if is_load {
+        *state
+            .fragment_loads
+            .lock()
+            .expect("stub load counts lock poisoned")
+            .entry(path.clone())
+            .or_insert(0) += 1;
+    }
+    if path == "/changes" {
+        state.change_asks.fetch_add(1, SeqCst);
+    }
+    let delay_ms = state.story_log_delay_ms.load(SeqCst);
+    if path == "/fragment/story-log" && delay_ms > 0 {
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+    }
     let is_panel_load = path == "/fragment/worlds" || path == "/fragment/games";
     if is_panel_load && state.panel_loads_failing.load(SeqCst) {
         return (
@@ -769,8 +971,9 @@ async fn fail_polls_middleware(
         )
             .into_response();
     }
-    let is_poll = path.starts_with("/fragment/") || path == "/status/busy";
-    if is_poll && state.polls_failing.load(SeqCst) {
+    let is_poll = is_load || path == "/changes";
+    let failing = state.polls_failing.load(SeqCst) || (is_load && state.loads_failing.load(SeqCst));
+    if is_poll && failing {
         let mut response = (
             StatusCode::INTERNAL_SERVER_ERROR,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
@@ -821,13 +1024,26 @@ async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     }
     state.switched.store(true, SeqCst);
     state.dock_options_live.store(false, SeqCst);
+    state.bump(&["story", "options"]);
     Html(story_log_html(&restored_swipe_entries())).into_response()
+}
+
+async fn changes_answer(State(state): State<Arc<StubState>>) -> axum::Json<serde_json::Value> {
+    let answer = state
+        .changes
+        .lock()
+        .expect("stub changes lock poisoned")
+        .answer();
+    axum::Json(answer)
 }
 
 async fn options_dock_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.dock_options_live.load(SeqCst) {
-        Html(options_dock_html(state.dock_options_alt.load(SeqCst)))
+        Html(options_dock_html(
+            state.dock_options_alt.load(SeqCst),
+            state.options_failed.load(SeqCst),
+        ))
     } else {
         Html(String::new())
     }
@@ -1014,6 +1230,7 @@ async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
         .save_succeeds
         .load(std::sync::atomic::Ordering::SeqCst)
     {
+        state.bump(&["story"]);
         (StatusCode::OK, "").into_response()
     } else {
         client_failure("Stub save failure")
@@ -1029,6 +1246,7 @@ async fn delete_message(State(state): State<Arc<StubState>>) -> Response<Body> {
         return client_failure("Stub delete failure");
     }
     state.deleted.store(true, SeqCst);
+    state.bump(&["story"]);
     (StatusCode::OK, "").into_response()
 }
 
