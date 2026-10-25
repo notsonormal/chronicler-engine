@@ -308,7 +308,11 @@ fn always_on_world() -> WorldCard {
 // [docs/specs/autoplay.md] SCENARIO: 41.6
 #[tokio::test]
 async fn test_a_stop_during_a_job_of_a_run_ends_the_run() {
-    let model = Arc::new(ScriptedModel::new().turn(LATE_ANSWER).turn(FIRST_NARRATION));
+    let model = Arc::new(
+        ScriptedModel::new()
+            .narration(LATE_ANSWER)
+            .turn(FIRST_NARRATION),
+    );
     let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
@@ -516,7 +520,7 @@ async fn test_a_bad_budget_answers_400_also_on_a_busy_game() {
 // [docs/specs/autoplay.md] SCENARIO: 41.9
 #[tokio::test]
 async fn test_a_budget_of_the_maximum_starts_a_run() {
-    let model = Arc::new(ScriptedModel::new().turn(LATE_ANSWER));
+    let model = Arc::new(ScriptedModel::new().narration(LATE_ANSWER));
     let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
@@ -546,7 +550,7 @@ async fn test_a_budget_of_the_maximum_starts_a_run() {
 // [docs/specs/autoplay.md] SCENARIO: 41.10
 #[tokio::test]
 async fn test_a_start_with_no_cycles_field_runs_with_a_budget_of_ten() {
-    let model = Arc::new(ScriptedModel::new().turn(LATE_ANSWER));
+    let model = Arc::new(ScriptedModel::new().narration(LATE_ANSWER));
     let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
@@ -832,7 +836,7 @@ async fn test_a_run_goes_on_when_the_client_switches_the_active_game() {
 // [docs/specs/autoplay.md] SCENARIO: 41.15
 #[tokio::test]
 async fn test_a_reset_of_the_game_ends_its_run() {
-    let model = Arc::new(ScriptedModel::new().turn(LATE_ANSWER));
+    let model = Arc::new(ScriptedModel::new().narration(LATE_ANSWER));
     let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let before = active_game_of(&state);
@@ -866,7 +870,7 @@ async fn test_a_reset_of_the_game_ends_its_run() {
 // [docs/specs/autoplay.md] SCENARIO: 41.16
 #[tokio::test]
 async fn test_a_delete_of_the_game_ends_its_run() {
-    let model = Arc::new(ScriptedModel::new().turn(LATE_ANSWER));
+    let model = Arc::new(ScriptedModel::new().narration(LATE_ANSWER));
     let hold = model.hold(Role::Narrator);
     let (app, state, storage) = app_with_script(Arc::clone(&model));
     let game_a = active_game_of(&state);

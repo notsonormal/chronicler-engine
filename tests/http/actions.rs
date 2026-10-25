@@ -361,12 +361,11 @@ async fn test_trigger_continuation_reruns_quantifier_detects_new_character_http(
 // [docs/specs/actions.md] SCENARIO: 2.1
 #[tokio::test]
 async fn test_nonexistent_room_sets_failed_status_http() {
-    // The room lookup fails before the analysis call, so this script omits the
-    // analysis.
+    // The room lookup fails before the first model call, so the script is empty.
     let storage = Arc::new(empty_sqlite_storage());
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .model(Arc::new(ScriptedModel::new().narration("You look around.")))
+        .model(Arc::new(ScriptedModel::new()))
         .build_with_state();
     break_start_room(&storage, active_game_of(&state), "non_existent_room");
 
@@ -1123,7 +1122,7 @@ async fn test_missing_persona_answers_500_with_the_missing_data_line_http() {
     );
     let (app, state) = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
-        .model(Arc::new(ScriptedModel::new().turn("You look around.")))
+        .model(Arc::new(ScriptedModel::new()))
         .build_with_state();
     let before = story_of(&state).len();
 

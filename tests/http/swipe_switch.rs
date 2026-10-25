@@ -75,7 +75,6 @@ async fn test_switch_swipe_leaves_the_game_idle_http() {
 async fn test_switch_swipe_drops_the_offered_option_set_http() {
     let (app, state, _storage) = app_with_script(
         ScriptedModel::new()
-            .options(OFFERED_SET)
             .turn("You look around.")
             .options(OFFERED_SET)
             .turn("You look around again.")

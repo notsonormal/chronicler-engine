@@ -111,9 +111,21 @@ pub fn app_with_a_triggered_character(
 }
 
 /// A Game whose `/impersonate` fired a Trigger and whose event Narration failed, so
-/// the Impersonate Input holds the event record. The model holds the replies of
-/// one Retrigger.
+/// the Impersonate Input holds the event record. The model holds no reply for a
+/// Retrigger.
 pub async fn app_after_an_impersonate_with_a_failed_event() -> (axum::Router, AppState) {
+    impersonated_app_with_a_failed_event(false).await
+}
+
+/// The Game of `app_after_an_impersonate_with_a_failed_event`, with the replies of
+/// one Retrigger scripted.
+pub async fn app_ready_to_retrigger_after_a_failed_event() -> (axum::Router, AppState) {
+    impersonated_app_with_a_failed_event(true).await
+}
+
+async fn impersonated_app_with_a_failed_event(
+    scripts_a_retrigger: bool,
+) -> (axum::Router, AppState) {
     let character = TestCharacter::with_times_met_trigger(
         "character_1",
         "Test Character",
@@ -123,9 +135,14 @@ pub async fn app_after_an_impersonate_with_a_failed_event() -> (axum::Router, Ap
     let model = ScriptedModel::new()
         .narration("I say hello.")
         .after_narration(analysis_report(&["character_1"], None))
-        .failed(Role::Trigger)
-        .event_narration("The event fires again.")
-        .after_narration(analysis_report(&["character_1"], None));
+        .failed(Role::Trigger);
+    let model = if scripts_a_retrigger {
+        model
+            .event_narration("The event fires again.")
+            .after_narration(analysis_report(&["character_1"], None))
+    } else {
+        model
+    };
     let (app, state) =
         app_with_a_triggered_character(TestMap::single_room("room_1"), character, model);
 

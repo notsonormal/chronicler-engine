@@ -15,7 +15,7 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::app_wiring::{
-    app_after_an_impersonate_with_a_failed_event, app_with_a_triggered_character,
+    app_ready_to_retrigger_after_a_failed_event, app_with_a_triggered_character,
 };
 use crate::support::http_assertions::{assert_still_thinking, assert_story_log_ends_with_message};
 use crate::support::http_fixtures::{story_of, OFFERED_SET};
@@ -200,7 +200,7 @@ async fn test_retrigger_sends_the_rendered_direction_to_the_model_http() {
 // [docs/specs/retrigger.md] SCENARIO: 13.4
 #[tokio::test]
 async fn test_retrigger_on_an_impersonate_input_runs_http() {
-    let (app, state) = app_after_an_impersonate_with_a_failed_event().await;
+    let (app, state) = app_ready_to_retrigger_after_a_failed_event().await;
     let before = story_of(&state).len();
 
     let resp = post_empty(&app, "/retrigger").await;

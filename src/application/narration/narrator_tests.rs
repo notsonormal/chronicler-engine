@@ -761,7 +761,7 @@ fn test_the_relationships_block_renders_the_present_characters_name() {
 fn test_a_prompt_that_cannot_fit_the_window_fails() {
     let fixture = Fixture::new();
     let case = fixture.narration(&fixture.history, "I look around.");
-    let model = Arc::new(ScriptedModel::new().narration("Narration."));
+    let model = Arc::new(ScriptedModel::new());
     let tight = TokenBudget {
         max_context_tokens: 512,
         max_tokens: Some(256),

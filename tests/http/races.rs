@@ -195,7 +195,6 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
     let model = Arc::new(
         ScriptedModel::new()
             .narration(STOPPED_NARRATION)
-            .after_narration(analysis_report(&[], None))
             .narration(NEXT_NARRATION)
             .after_narration(analysis_report(&[], None)),
     );
@@ -255,7 +254,7 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
 // [docs/specs/reset.md] SCENARIO: 7.3
 #[tokio::test]
 async fn test_reset_while_job_runs_keeps_only_the_new_game_opening() {
-    let model = Arc::new(ScriptedModel::new().turn("The stopped narration."));
+    let model = Arc::new(ScriptedModel::new().narration("The stopped narration."));
     let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let before = active_game_of(&state);
@@ -584,6 +583,18 @@ fn triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
         .after_narration(analysis_report(&["character_1"], None))
 }
 
+/// `triggered_script` for a Job that a stop can end before its later calls.
+fn stoppable_triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
+    ScriptedModel::new()
+        .narration(narration)
+        .after_narration(analysis_report(&["character_1"], None))
+        .optional()
+        .event_narration(event_narration)
+        .optional()
+        .after_narration(analysis_report(&["character_1"], None))
+        .optional()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum JobKind {
     /// A free-text Action: an Input save, then a Narration generation. A row
@@ -744,13 +755,15 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
         JobKind::Narration { fires_trigger } => {
             let model = Arc::new(
                 if fires_trigger {
-                    triggered_script(SCRIPTED_NARRATION, SCRIPTED_NARRATION)
+                    stoppable_triggered_script(SCRIPTED_NARRATION, SCRIPTED_NARRATION)
                 } else {
                     ScriptedModel::new()
                         .narration(SCRIPTED_NARRATION)
                         .after_narration(analysis_report(&[], Some(MOVED_ROOM)))
+                        .optional()
                 }
-                .options(OFFERED_SET),
+                .options(OFFERED_SET)
+                .optional(),
             );
             let hold = model.hold(row.held);
             let (app, state, storage) = app_with_script(Arc::clone(&model));
@@ -773,7 +786,8 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             let model = Arc::new(
                 ScriptedModel::new()
                     .narration(SCRIPTED_NARRATION)
-                    .after_narration(analysis_report(&[], Some(MOVED_ROOM))),
+                    .after_narration(analysis_report(&[], Some(MOVED_ROOM)))
+                    .optional(),
             );
             let hold = model.hold(row.held);
             let (app, state, storage) = app_with_script(Arc::clone(&model));
@@ -797,7 +811,9 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             let model = Arc::new(
                 ScriptedModel::new()
                     .turn(SCRIPTED_NARRATION)
-                    .turn(SCRIPTED_NARRATION),
+                    .narration(SCRIPTED_NARRATION)
+                    .after_narration(analysis_report(&[], None))
+                    .optional(),
             );
             let (app, state, _storage) = app_with_script(Arc::clone(&model));
             let game = active_game_of(&state);
@@ -824,7 +840,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
         }
         JobKind::EventNarration | JobKind::EventNarrationAnalysis => {
             let data = trigger_world();
-            let model = Arc::new(triggered_script(SCRIPTED_NARRATION, EVENT_TEXT));
+            let model = Arc::new(stoppable_triggered_script(SCRIPTED_NARRATION, EVENT_TEXT));
             // The Job's first analysis call comes before its event Narration, so
             // the hold of the event's own analysis call waits behind a hold of
             // that first one.

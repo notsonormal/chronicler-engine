@@ -323,7 +323,6 @@ async fn test_impersonate_keeps_offered_set_http() {
         ScriptedModel::new()
             .turn("You look around.")
             .options(SET_A)
-            .options(SET_B)
             .narration("You say hello.")
             .after_narration(analysis_report(&[], None)),
     );
@@ -751,12 +750,8 @@ async fn test_options_work_in_if_mode_http() {
 // [docs/specs/options.md] SCENARIO: 24.19
 #[tokio::test]
 async fn test_mode_switch_keeps_offered_set_http() {
-    let (app, state, _storage) = app_with_script(
-        ScriptedModel::new()
-            .turn("You look around.")
-            .options(SET_A)
-            .options(SET_B),
-    );
+    let (app, state, _storage) =
+        app_with_script(ScriptedModel::new().turn("You look around.").options(SET_A));
     let game_id = active_game_of(&state);
     let starting_mode = state
         .game_catalogue

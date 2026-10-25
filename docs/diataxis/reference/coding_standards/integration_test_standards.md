@@ -225,7 +225,8 @@ The decision rule:
 
 A tier-1 test scripts every model call its Job makes. `ScriptedModel`
 (`src/test_support/scripted_model.rs`) is a strict, holdable `LlmProvider`: it
-holds one entry per call and fails the test on a call the test did not script.
+holds one entry per call and fails the test on a call the test did not script,
+and on a scripted entry that no call used.
 Entries are keyed by role (`ModelRole`), so a test declares `.narration("…")`,
 `.event_narration("…")`, `.analysis(analysis_report(&[], Some("room2")))`,
 `.options(set_a)` and the shorthand `.turn("…")` (a narration and the analysis
@@ -246,6 +247,11 @@ over `configured_runner_without(recorder, "options")`, passed to
 A stray call fails the test three ways: the fake answers the caller with an
 error naming the role, `wait_settled` asserts no recorded attempt carries that
 failure, and the fake panics when it drops with a stray call on record.
+
+A scripted entry that no call used fails the test when the fake drops. The
+failure names each unused entry by role and by its position in the script of that
+role. A test marks an entry that a stop or a cancel can keep a call from taking
+with `.optional()` after it; there is no switch for the whole script.
 
 `ScriptedModel::hold(role)` returns a `ModelHold` that keeps the next call of
 that role until `release()`; the hold also releases with the handle, so a

@@ -175,8 +175,7 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
         .model(Arc::new(
             ScriptedModel::new()
                 .turn("You examine the room.")
-                .narration("The room is empty.")
-                .after_narration(analysis_report(&[], None)),
+                .narration("The room is empty."),
         ))
         .build_with_state();
 

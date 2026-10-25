@@ -18,7 +18,7 @@ use chronicler_engine::error::EngineError;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::test_support::{
-    configured_runner, test_connection, ScriptedModel, TestAppBuilder,
+    analysis_report, configured_runner, test_connection, ScriptedModel, TestAppBuilder,
 };
 use chronicler_engine::test_support::{empty_sqlite_storage, set_game_config_row};
 
@@ -479,7 +479,7 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
 async fn test_save_failure_clamps_with_the_save_line_and_saves_no_narration() {
     let _guard = SettingsTestGuard::new();
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
-    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let model = Arc::new(ScriptedModel::new().narration("You look around."));
     let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_model_and_storage(
         Arc::new(storage),
@@ -561,7 +561,7 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
     };
     let (app, state, _storage) = app_with_model_and_storage(
         Arc::new(empty_sqlite_storage()),
-        Arc::new(ScriptedModel::new().turn("You look around.")),
+        Arc::new(ScriptedModel::new()),
         settings,
         configured_runner,
     );
@@ -605,7 +605,7 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
 async fn preset_game_read_fails() {
     let _guard = SettingsTestGuard::new();
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
-    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let model = Arc::new(ScriptedModel::new().narration("You look around."));
     let hold = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_model_and_storage(
         Arc::new(storage),
@@ -668,7 +668,12 @@ async fn preset_game_read_fails() {
 async fn status_after_a_read_fails_behind_a_call(call: StorageCall, held: Role) -> (String, usize) {
     let _guard = SettingsTestGuard::new();
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
-    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let script = ScriptedModel::new().narration("You look around.");
+    let model = Arc::new(if held == Role::Quantifier {
+        script.after_narration(analysis_report(&[], None))
+    } else {
+        script
+    });
     let hold = model.hold(held);
     let (app, state, _storage) = app_with_model_and_storage(
         Arc::new(storage),
@@ -746,7 +751,7 @@ async fn job_read_names_record_world() {
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
     let (app, state, _storage) = app_with_model_and_storage(
         Arc::new(storage),
-        Arc::new(ScriptedModel::new().turn("You look around.")),
+        Arc::new(ScriptedModel::new()),
         AppSettings::default(),
         configured_runner,
     );
@@ -790,7 +795,7 @@ async fn job_read_names_record_accept_start_state() {
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
     let (app, state, _storage) = app_with_model_and_storage(
         Arc::new(storage),
-        Arc::new(ScriptedModel::new().turn("You look around.")),
+        Arc::new(ScriptedModel::new()),
         AppSettings::default(),
         configured_runner,
     );
@@ -860,7 +865,12 @@ async fn job_read_names_record_preset() {
         (PresetType::Quantifier, 2, false),
     ] {
         let storage = Arc::new(empty_sqlite_storage());
-        let model = Arc::new(ScriptedModel::new().turn("You look around."));
+        let script = ScriptedModel::new();
+        let model = Arc::new(if preset_type == PresetType::System {
+            script
+        } else {
+            script.narration("You look around.")
+        });
         let (app, state, storage) = app_with_model_and_storage(
             storage,
             Arc::clone(&model),

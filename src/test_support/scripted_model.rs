@@ -2,7 +2,8 @@
 //!
 //! A call the test did not script fails the test: the fake answers it with an
 //! error, records it in its stray-call list, and panics when it drops with one
-//! on record.
+//! on record. A scripted reply that no call used fails the test too, when the
+//! fake drops.
 //!
 //! `MockBackend` stays the lenient runtime provider of `LlmBackendType::Mock`.
 #![allow(clippy::expect_used)]
@@ -51,9 +52,20 @@ enum Reply {
     Failed,
 }
 
+/// One scripted reply with its place in the script of its role.
+struct Scripted {
+    position: usize,
+    reply: Reply,
+    /// Whether the test lets the reply stay unused.
+    optional: bool,
+}
+
 #[derive(Default)]
 struct Inner {
-    replies: HashMap<Role, VecDeque<Reply>>,
+    replies: HashMap<Role, VecDeque<Scripted>>,
+    scripted: HashMap<Role, usize>,
+    /// The role of the reply pushed last, which `optional` marks.
+    last_pushed: Option<Role>,
     calls: Vec<ModelCall>,
     stray: Vec<Role>,
 }
@@ -121,10 +133,40 @@ impl ScriptedModel {
         self
     }
 
+    /// Lets the reply scripted last stay unused. For a reply that a stop or a
+    /// cancel can keep a call from taking.
+    #[must_use]
+    pub fn optional(self) -> Self {
+        {
+            // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned script lock is a broken test"
+            let mut inner = self.inner.lock().expect("scripted model script lock");
+            let role = inner
+                .last_pushed
+                // arch-lint: allow(no-unwrap-expect) reason="test fake: `optional` with no reply scripted is a broken test"
+                .expect("ScriptedModel: `optional` follows a scripted reply");
+            if let Some(last) = inner
+                .replies
+                .get_mut(&role)
+                .and_then(|replies| replies.back_mut())
+            {
+                last.optional = true;
+            }
+        }
+        self
+    }
+
     fn push(&self, role: Role, reply: Reply) {
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned script lock is a broken test"
         let mut inner = self.inner.lock().expect("scripted model script lock");
-        inner.replies.entry(role).or_default().push_back(reply);
+        let count = inner.scripted.entry(role).or_default();
+        let position = *count;
+        *count += 1;
+        inner.last_pushed = Some(role);
+        inner.replies.entry(role).or_default().push_back(Scripted {
+            position,
+            reply,
+            optional: false,
+        });
     }
 
     pub fn calls(&self) -> Vec<ModelCall> {
@@ -135,6 +177,39 @@ impl ScriptedModel {
 
     pub fn assert_no_unscripted_calls(&self) {
         assert_no_strays(&self.inner);
+    }
+
+    pub fn assert_no_unused_replies(&self) {
+        // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned script lock is a broken test"
+        let inner = self.inner.lock().expect("scripted model unused lock");
+        let mut unused = inner
+            .replies
+            .iter()
+            .flat_map(|(role, replies)| {
+                replies
+                    .iter()
+                    .filter(|scripted| !scripted.optional)
+                    .map(move |scripted| {
+                        let kind = match &scripted.reply {
+                            Reply::Text(text) if text.is_empty() => "empty",
+                            Reply::Text(_) => "text",
+                            Reply::Failed => "failed",
+                        };
+                        (role.agent_name(), scripted.position, kind)
+                    })
+            })
+            .collect::<Vec<_>>();
+        unused.sort_unstable();
+        let seen = inner
+            .calls
+            .iter()
+            .map(|call| call.role.agent_name())
+            .collect::<Vec<_>>();
+        assert!(
+            unused.is_empty(),
+            "ScriptedModel: no call used {} scripted repl(ies), as (role, position in the script of the role, kind): {unused:?}; its calls: {seen:?}",
+            unused.len()
+        );
     }
 
     /// Holds the next `role` call until the returned hold releases it; calls the
@@ -192,7 +267,7 @@ impl ScriptedModel {
             .get_mut(&call.role)
             .and_then(VecDeque::pop_front);
         match reply {
-            Some(reply) => Ok(reply),
+            Some(scripted) => Ok(scripted.reply),
             None => {
                 inner.stray.push(call.role);
                 let seen = inner
@@ -256,13 +331,15 @@ impl LlmProvider for ScriptedModel {
     }
 }
 
-/// A test that leaves a stray call on record fails when the fake drops, the way
-/// a panic inside the call itself would fail it — that panic dies in the
-/// blocking thread the Job runs on.
+/// A test fails when the fake drops with a stray call on record, the way a panic
+/// inside the call itself would fail it — that panic dies in the blocking thread
+/// the Job runs on. It fails too when a scripted reply stays unused, unless the
+/// test marked that reply `optional`.
 impl Drop for ScriptedModel {
     fn drop(&mut self) {
         if !std::thread::panicking() {
             self.assert_no_unscripted_calls();
+            self.assert_no_unused_replies();
         }
     }
 }

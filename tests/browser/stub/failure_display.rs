@@ -768,7 +768,7 @@ async fn read_status_state(page: &playwright_rs::Page) -> StatusState {
             document.body.appendChild(probe);
             const paletteError = getComputedStyle(probe).color;
             probe.remove();
-            // MEASURE_CLAMPED_TEXT
+            __MEASURE_CLAMPED_TEXT__
             const measured = clampedText(display);
             let readable = false;
             if (measured) {
@@ -784,7 +784,7 @@ async fn read_status_state(page: &playwright_rs::Page) -> StatusState {
                 fits: readable,
             };
         }"#
-    .replace("// MEASURE_CLAMPED_TEXT", MEASURE_CLAMPED_TEXT);
+    .replace("__MEASURE_CLAMPED_TEXT__", MEASURE_CLAMPED_TEXT);
     page.evaluate::<(), StatusState>(script.as_str(), None)
         .await
         .unwrap()
@@ -792,8 +792,7 @@ async fn read_status_state(page: &playwright_rs::Page) -> StatusState {
 
 /// Measuring the clamp's own box misses the lines it cuts, so the height the
 /// sentence needs has to come off that same element — it keeps the width and font
-/// an offscreen copy would only approximate. Each probe injects this definition by
-/// replacing its own `// MEASURE_CLAMPED_TEXT` line, so that marker is code.
+/// an offscreen copy would only approximate.
 const MEASURE_CLAMPED_TEXT: &str = r#"
             const clampedText = (display) => {
                 const text = display.querySelector('.error-disclosure-text');
@@ -904,7 +903,7 @@ struct ClampedLine {
 async fn read_clamped_line(page: &playwright_rs::Page) -> ClampedLine {
     let script = r#"() => {
             const display = document.getElementById('status-display');
-            // MEASURE_CLAMPED_TEXT
+            __MEASURE_CLAMPED_TEXT__
             const measured = clampedText(display);
             if (!measured) {
                 return {
@@ -927,7 +926,7 @@ async fn read_clamped_line(page: &playwright_rs::Page) -> ClampedLine {
                 overhang: measured.overhang,
             };
         }"#
-    .replace("// MEASURE_CLAMPED_TEXT", MEASURE_CLAMPED_TEXT);
+    .replace("__MEASURE_CLAMPED_TEXT__", MEASURE_CLAMPED_TEXT);
     page.evaluate::<(), ClampedLine>(script.as_str(), None)
         .await
         .unwrap()
