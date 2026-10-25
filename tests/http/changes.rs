@@ -53,7 +53,6 @@ async fn fetch_changes(app: &axum::Router) -> Value {
     serde_json::from_str(&response_body(response).await).expect("the answer is a JSON object")
 }
 
-/// The kinds among `kinds` whose numbers differ between the two snapshots, sorted.
 fn moved_among(kinds: &[&'static str], before: &Value, after: &Value) -> Vec<&'static str> {
     let mut moved: Vec<&'static str> = kinds
         .iter()
@@ -84,7 +83,6 @@ fn assert_moved(before: &Value, after: &Value, expected: &[&str], label: &str) {
     assert_moved_among(&KINDS, before, after, expected, label);
 }
 
-/// Sends one save and checks the numbers that moved, for each of them.
 async fn assert_save_moves(
     app: &axum::Router,
     uri: &str,

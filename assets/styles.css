@@ -703,7 +703,6 @@ body {
     overflow: hidden;
 }
 
-/* The action area's own state takes the status column while it shows. */
 #action-status:empty {
     display: none;
 }
@@ -972,9 +971,7 @@ body {
     display: none;
 }
 
-/* An editor slot holds the editor that a view change loaded into it. A slot with
-   no editor takes no space. While it holds one, the list of its panel is hidden,
-   so the panel looks as it did when the editor replaced the whole panel. */
+/* A slot with no editor takes no space. While it holds one, the list of its panel is hidden. */
 .editor-slot:empty {
     display: none;
 }
@@ -983,8 +980,6 @@ body {
     display: none;
 }
 
-/* The "Saved" line of an auto-save control is view state: the browser sets
-   data-saved after a save that went through. */
 .saved-flag[data-saved]::before {
     content: "Saved";
 }

@@ -278,7 +278,6 @@ pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
         status.is_success(),
         "seed_system_preset('{name}') returned {status}: {body}"
     );
-    // A saved preset answers nothing; the panel shows it.
     assert!(
         body.is_empty(),
         "seed_system_preset('{name}') must answer nothing: {body}"
@@ -297,7 +296,6 @@ pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
     );
 }
 
-/// The duplicate button is the anchor of a card's slice.
 fn preset_card_rendered(body: &str, name: &str) -> bool {
     let title_anchor = format!(r#"<span class="card-title">{name}</span>"#);
     preset_card_html_slice(body, &title_anchor).is_some_and(|card| {

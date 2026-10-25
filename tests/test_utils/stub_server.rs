@@ -58,7 +58,6 @@ const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
 
-/// The one role health the stub knows: a degraded Quantifier, or none.
 fn stub_roles(degraded: bool) -> Vec<RoleHealth> {
     if degraded {
         vec![RoleHealth {
@@ -806,7 +805,6 @@ impl StubChangesHandle {
             .game = game;
     }
 
-    /// The `GET /changes` requests the stub answered or failed.
     pub fn asks(&self) -> usize {
         self.state
             .change_asks
@@ -841,14 +839,12 @@ impl StubChangesHandle {
     }
 }
 
-/// The Games the stub lists.
 #[derive(Clone)]
 pub struct StubGamesHandle {
     state: Arc<StubState>,
 }
 
 impl StubGamesHandle {
-    /// A rename answers a 500 until this is turned off.
     pub fn set_rename_failing(&self, failing: bool) {
         self.state
             .games
@@ -857,7 +853,6 @@ impl StubGamesHandle {
             .rename_failing = failing;
     }
 
-    /// The names of the saved Games the panel lists now, in order.
     pub fn saved_names(&self) -> Vec<String> {
         self.state
             .games
@@ -870,7 +865,6 @@ impl StubGamesHandle {
     }
 }
 
-/// The LLM messages the stub lists.
 #[derive(Clone)]
 pub struct StubLlmHandle {
     state: Arc<StubState>,
@@ -908,7 +902,6 @@ impl StubStoryLogHandle {
         self.state.bump(&["story", "games"]);
     }
 
-    /// The newest entry is gone from the next story-log answer.
     pub fn remove_newest(&self) {
         self.state
             .deleted
@@ -930,8 +923,6 @@ impl StubOptionsHandle {
         self.state.bump(&["options"]);
     }
 
-    /// The dock shows an Options failure with its Details disclosure instead of
-    /// the offered set.
     pub fn set_failure(&self, failed: bool) {
         self.state
             .options_failed
@@ -1013,7 +1004,6 @@ impl StubFailureHandle {
             .store(failing, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// A World posture auto-save answers a 400 refusal until this is turned off.
     pub fn set_world_posture_failing(&self, failing: bool) {
         self.state
             .worlds
@@ -1035,7 +1025,6 @@ pub struct StubSwipeHandle {
 }
 
 impl StubSwipeHandle {
-    /// The next load of the log renders the new shape.
     pub fn set_two_swipes(&self) {
         self.state
             .two_swipes
@@ -1624,7 +1613,6 @@ async fn presets_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     Html(presets_html(&presets))
 }
 
-/// A card's Cancel loads the card back in place of its editor.
 async fn preset_card_fragment(
     State(state): State<Arc<StubState>>,
     axum::extract::Path(id): axum::extract::Path<String>,

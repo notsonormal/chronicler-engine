@@ -63,8 +63,7 @@ async fn check_deleting_a_world_keeps_keyboard_focus_in_the_panel(
 }
 
 // A refused delete (the world still has games) answers a 400 error fragment,
-// which the world's own row reports in its inline slot. The row stays, with its
-// controls, and focus stays on the Delete control.
+// which the world's own row reports in its inline slot.
 // [docs/specs/browser_worlds.md] SCENARIO: 29.5
 async fn check_a_refused_world_delete_reports_in_its_row_and_keeps_focus(
     page: playwright_rs::Page,

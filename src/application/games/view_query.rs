@@ -218,8 +218,7 @@ impl GameViewQuery {
         )
     }
 
-    /// The change numbers of this moment, with the per-Game numbers of `game`. It reads
-    /// memory only.
+    /// Reads memory only.
     pub fn change_versions(&self, game: Option<GameId>) -> ChangeVersions {
         self.storage.changes().versions(game)
     }

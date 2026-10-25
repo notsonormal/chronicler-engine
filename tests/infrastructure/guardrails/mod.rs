@@ -513,7 +513,6 @@ fn guardrails_handler_headers() {
     );
 }
 
-/// The templates: the sources of the HTTP adapter (tests excluded) and the shell.
 fn template_sources() -> Vec<(String, String)> {
     let mut sources: Vec<(String, String)> = src_snapshot()
         .iter()

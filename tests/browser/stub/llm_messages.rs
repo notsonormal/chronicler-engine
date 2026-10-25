@@ -14,8 +14,7 @@ use std::time::Duration;
 use super::support::{ask_once, stop_page_timer, StubRunner};
 use super::*;
 
-/// Open the LLM Messages tab. The section loads its region when it opens, so the
-/// wait is for the card the load renders.
+/// The section loads its region when it opens, so the wait is for the card the load renders.
 async fn open_llm_messages_tab(page: &playwright_rs::Page) {
     page.locator(r#"[data-tab="llm-messages"]"#)
         .await
@@ -92,7 +91,6 @@ async fn stash_nodes(page: &playwright_rs::Page) {
     .unwrap();
 }
 
-/// The number of `llm` moves and the page asks: the panel loads once.
 async fn load_the_panel(page: &playwright_rs::Page, stub: &StubServer) {
     let changes = stub.changes_handle();
     let before = changes.loads("/fragment/llm-messages");

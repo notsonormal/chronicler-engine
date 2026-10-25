@@ -9,7 +9,6 @@
 
 const LIVE_ASK_INTERVAL_MS = 1000;
 
-// Fields that hold no value of the player.
 const FIELD_WITHOUT_VALUE = "input[type=hidden], input[type=button], input[type=submit]";
 
 // The region's own record: the numbers of its kinds at its last good load (null
@@ -82,21 +81,17 @@ function regionHoldsEdit(region) {
   );
 }
 
-// A region in a section that is not the active one waits: the header is outside
-// every section, so it is never hidden.
+// The header is outside every section, so it is never hidden.
 function sectionIsHidden(region) {
   const section = region.closest(".tab-content");
   return !!section && !section.classList.contains("active");
 }
 
-// The fields that an edit covers: the control itself, or the fields of a form
-// or of an editor root.
 function editFieldsOf(element) {
   if (element.matches("input, textarea, select")) return [element];
   return Array.from(element.querySelectorAll("input, textarea, select"));
 }
 
-// The saved value is the rendered value now, so the field is no longer changed.
 function settleField(field) {
   if (field.matches("input[type=checkbox], input[type=radio]")) {
     field.defaultChecked = field.checked;
@@ -109,8 +104,7 @@ function settleField(field) {
   }
 }
 
-// A control that saves on change goes back to the value the server rendered,
-// so a value that was not saved does not stay on screen or hold the region.
+// A value that was not saved must not stay on screen or hold the region.
 function restoreRenderedValue(field) {
   if (field.matches("input[type=checkbox], input[type=radio]")) {
     field.checked = field.defaultChecked;
@@ -125,14 +119,9 @@ function restoreRenderedValue(field) {
 }
 
 // The one rule that ends an edit after a save went through. `element` is the
-// form or the control that saved. Each field of it takes its current value as
-// its rendered value, so it is no longer changed. A form that creates something
-// (`data-reset-on-save`) goes back to the empty form that the server rendered.
-//
-// Only a form ends the edit of its editor: the editor root that holds the region
-// (`data-work`) lets go, and the disclosure that holds only this form closes (it
-// marks itself with `data-close-on-save`). A control that saves on change, such
-// as the World posture, leaves the editor open: the player is still editing.
+// form or the control that saved. Only a form ends the edit of its editor: a
+// control that saves on change, such as the World posture, leaves the editor
+// open because the player is still editing.
 function endEdit(element) {
   if (element.matches("form[data-reset-on-save]")) {
     element.reset();
@@ -146,10 +135,8 @@ function endEdit(element) {
   if (disclosure) disclosure.open = false;
 }
 
-// The "Saved" line of an auto-save control is view state: the browser shows it
-// after a save that went through, through an attribute that a load keeps
-// (`data-saved` in the `data-keep` of the status element), and removes it after a
-// save that did not.
+// The "Saved" line is view state: `data-saved` is in the `data-keep` of the
+// status element, so a load keeps it.
 function flagSaved(element, saved) {
   const id = element.getAttribute("data-saved-flag");
   const flag = id ? document.getElementById(id) : null;
@@ -162,11 +149,9 @@ function isSavingControl(element) {
   return element.tagName === "FORM" || element.matches("input, textarea, select");
 }
 
-// What happens to the edit of a form or control in a region when its request
-// ends. A save that went through ends the edit. A save that failed or was
-// refused keeps the edit of a form, and puts a control that saves on change
-// back to its rendered value (D2), so the error in its slot is not a lie about
-// what the page shows.
+// A save that failed or was refused keeps the edit of a form, but puts a control
+// that saves on change back to its rendered value, so the error in its slot does
+// not contradict what the page shows.
 function settleSave(evt) {
   const element = evt.detail && evt.detail.elt;
   if (!element || !element.closest || !element.closest("[data-live]")) return;
@@ -346,8 +331,8 @@ document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible") askNow();
 });
 
-// A region's own load: each one the loop starts with `refresh`, and the one a
-// caller starts through `htmx.ajax` with the region as its source.
+// A load that the loop did not start (an `htmx.ajax` call with the region as its
+// source) begins its record here.
 document.body.addEventListener("htmx:beforeRequest", function (evt) {
   const region = evt.detail && evt.detail.elt;
   if (!isLiveRegion(region)) return;
@@ -438,8 +423,7 @@ Idiomorph.defaults.callbacks.beforeNodeRemoved = function (node) {
 const LIVE_FOCUSABLE =
   "input:not([type=hidden]), select, textarea, button, a[href], [tabindex]";
 
-// The row is the nearest ancestor of the focused node that has an id or a
-// `data-id`, so morph keeps it by identity.
+// Morph keeps a row with an id or a `data-id` by identity.
 function rowOfFocused(focused, region) {
   let node = focused.parentElement;
   while (node && node !== region) {
@@ -506,6 +490,6 @@ document.addEventListener("click", function (evt) {
     region.focus();
   }
   editorOpener = null;
-  // The editor held its region. The page asks, and the region loads what it waited for.
+  // The editor held its region, so the region may load what it waited for.
   askNow();
 });

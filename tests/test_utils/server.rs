@@ -334,7 +334,6 @@ async fn add_connection(
         "adding the {name} connection returned {}",
         resp.status()
     );
-    // A saved connection answers nothing; the panel shows it.
     let body = reqwest::Client::new()
         .get(format!("http://127.0.0.1:{port}/fragment/settings"))
         .send()

@@ -12,9 +12,8 @@ use chronicler_engine::domain::model::state::generation_status::GenerationFailur
 use super::support::{ask_once, read_banner, stop_page_timer, StubRunner};
 use super::*;
 
-/// A live region: the selector of its element, the path it loads, the kinds its
-/// `data-live` lists, and the `data-tab` of its section (empty for the header,
-/// which is outside every section).
+/// `section` is the `data-tab` of the region's section; the header is outside every
+/// section, so its `section` is empty.
 struct Region {
     selector: &'static str,
     path: &'static str,
@@ -23,8 +22,6 @@ struct Region {
 }
 
 impl Region {
-    /// The checks start on the Game tab: the header and the Game tab regions are
-    /// visible, and the regions of the other sections are hidden.
     fn starts_visible(&self) -> bool {
         self.section.is_empty() || self.section == "game"
     }
@@ -111,7 +108,6 @@ const SETTINGS_PANEL: usize = 8;
 const PRESETS_PANEL: usize = 9;
 const WORLDS_PANEL: usize = 10;
 
-/// The loads a moved `kind` starts on the Game tab: each visible region that lists it.
 fn expected_loads(kind: &str) -> Vec<usize> {
     REGIONS
         .iter()
@@ -119,7 +115,6 @@ fn expected_loads(kind: &str) -> Vec<usize> {
         .collect()
 }
 
-/// One load of each region that is visible on the Game tab.
 fn one_load_of_each_visible_region() -> Vec<usize> {
     REGIONS
         .iter()
@@ -163,9 +158,8 @@ async fn live_state(page: &playwright_rs::Page, selector: &str) -> String {
     .unwrap()
 }
 
-/// Stops the timer, then asks once so that every region is current under the
-/// numbers the stub holds now. The first ask of the page already loaded each
-/// region once, so this ask loads none.
+/// The first ask of the page already loaded each region once, so the ask here
+/// loads none: it only makes every region current under the numbers the stub holds.
 async fn start_current(page: &playwright_rs::Page) {
     stop_page_timer(page).await;
     ask_once(page).await;
@@ -1352,7 +1346,6 @@ async fn check_a_failed_save_keeps_the_edit_and_a_failed_auto_save_goes_back(
     ask_once(&page).await;
     assert_eq!(live_state(&page, ".games-panel").await, "held");
 
-    // The save of a select that fails goes back to the rendered value.
     stub.games_handle().set_rename_failing(false);
     eval_string(
         &page,

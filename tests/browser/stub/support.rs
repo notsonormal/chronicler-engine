@@ -171,8 +171,6 @@ pub(super) async fn stop_page_timer(page: &playwright_rs::Page) {
         .expect("the page stops its timer");
 }
 
-/// One ask of the page, which returns when every load that the ask started has
-/// settled.
 pub(super) async fn ask_once(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>("() => window.chroniclerLive.askOnce()", None)
         .await

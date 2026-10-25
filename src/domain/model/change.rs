@@ -18,7 +18,6 @@ pub enum ChangeKind {
     LlmMessages,
 }
 
-/// The numbers of the kinds that count per Game.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct GameVersions {
     pub story: u64,
@@ -33,7 +32,6 @@ pub struct GameVersions {
 pub struct ChangeVersions {
     /// One id for each server process: a restart changes it.
     pub server: String,
-    /// The Game the per-Game numbers belong to.
     pub game: Option<u64>,
     /// Present together with `game`.
     #[serde(flatten)]

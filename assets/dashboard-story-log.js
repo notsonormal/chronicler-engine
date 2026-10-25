@@ -163,10 +163,8 @@ function submitEdit() {
         editKeptOpen = true;
         return;
       }
-      // The saved text is the rendered text now: the end-of-edit rule makes the
-      // textarea no longer a changed field and lets the entry go. The lock stays
-      // until the load replaces the entry's controls, so a second editor cannot
-      // open on a stale textarea.
+      // The lock stays until the load replaces the entry's controls, so a second
+      // editor cannot open on a stale textarea.
       const saved = document.getElementById("edit-textarea");
       if (saved) endEdit(saved);
       clearEditState();

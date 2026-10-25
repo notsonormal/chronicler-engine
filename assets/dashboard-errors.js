@@ -184,7 +184,7 @@ document.body.addEventListener("htmx:sendError", function (evt) {
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   if (!evt.detail.successful) return;
   clearUnreachable();
-  // The refused action reports its own message in this slot.
+  // A refused action keeps its own message in this slot.
   if (answeredBusy(evt)) return;
   clearInlineError(inlineErrorSlotFor(evt.detail.elt));
   clearUnreachableSlots();

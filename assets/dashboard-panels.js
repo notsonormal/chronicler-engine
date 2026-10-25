@@ -4,7 +4,7 @@
 // replaced by a different one (Edit to form, Cancel to card) needs this
 // fallback. A panel is a live region: its load keeps what it does not change, and
 // the focus rule of dashboard-live.js moves focus when a load removes the focused
-// node. A preset card is the one element that a view change still replaces: its
+// node. A preset card is the one element that a view change replaces: its
 // Edit, View and Cancel swap the card that holds the control.
 const PRESET_CARD = ".preset-card";
 const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";

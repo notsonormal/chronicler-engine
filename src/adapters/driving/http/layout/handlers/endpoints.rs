@@ -122,7 +122,6 @@ fn status_element(state: &str, class: &str, label: &str) -> String {
     )
 }
 
-/// The text the status display shows while a Job is at this step.
 fn step_label(step: &Step) -> &'static str {
     match step {
         Step::Narrating => "Generating narration...",
@@ -146,7 +145,6 @@ pub fn busy_answer(busy: &Busy) -> String {
     }
 }
 
-/// The failure line stays a server-rendered error disclosure.
 pub fn failure_answer(failure: &GenerationFailure) -> String {
     let disclosure = error_disclosure(
         "status-error-popover",

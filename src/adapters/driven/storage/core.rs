@@ -119,8 +119,7 @@ impl Storage {
         }
     }
 
-    /// The numbers that say which kinds of data changed. Storage raises them itself; the
-    /// busy registry raises the busy state.
+    /// Storage raises the numbers itself; the busy registry raises the busy state.
     pub fn changes(&self) -> &ChangeCounters {
         &self.changes
     }

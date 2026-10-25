@@ -35,8 +35,7 @@ impl ChangeCounters {
         }
     }
 
-    /// The numbers of this moment. A Game with no raise yet reads as zeros, and the read
-    /// makes no entry. The per-Game numbers belong to `game`, or are absent with none.
+    /// A Game with no raise yet reads as zeros, and the read makes no entry.
     pub fn versions(&self, game: Option<GameId>) -> ChangeVersions {
         let numbers = self.numbers();
         ChangeVersions {
@@ -51,7 +50,6 @@ impl ChangeCounters {
         }
     }
 
-    /// Raises each kind once. A kind that counts per Game goes up for `game`.
     pub fn raise(&self, game: Option<GameId>, kinds: &[ChangeKind]) {
         let mut numbers = self.numbers();
         for &kind in kinds {
@@ -93,9 +91,7 @@ impl ChangeCounters {
         self.numbers.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// The kinds that a successful storage call raises. A read raises none, and a
-    /// transaction raises its own kinds at its commit, so a new call has no kinds until
-    /// this map names them.
+    /// A read raises none, and a transaction raises its own kinds at its commit.
     #[deny(clippy::wildcard_enum_match_arm)]
     pub(crate) fn kinds_of_call(call: StorageCall) -> &'static [ChangeKind] {
         match call {
@@ -140,7 +136,6 @@ impl ChangeCounters {
         }
     }
 
-    /// The kinds that one write of a transaction raises, at the commit of the transaction.
     /// A new or a removed Message also raises the Games list, which orders the Games by
     /// their newest Message.
     #[deny(clippy::wildcard_enum_match_arm)]

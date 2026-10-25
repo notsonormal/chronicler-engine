@@ -31,7 +31,6 @@ function endPending() {
   syncActionState();
 }
 
-// The machine state of the status display: `data-status` of the answer.
 function statusShows(state) {
   const statusDisplay = document.getElementById("status-display");
   return !!(
@@ -260,9 +259,6 @@ document.body.addEventListener("htmx:beforeSwap", function (evt) {
   if (xhr && isBusyAnswer(xhr.responseText)) evt.detail.shouldSwap = false;
 });
 
-// The status display answers one element whose `data-status` holds the state.
-// After each load of the display, the action area reads it and writes nothing into
-// the region.
 function readStatusDisplay() {
   if (sendPending && pendingLoadStarted) endPending();
   applyStatusDisplay();
