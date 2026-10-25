@@ -246,7 +246,6 @@ class TestRealRouter(unittest.TestCase):
         if not router_path.exists():
             self.skipTest(f"router.rs not found: {router_path}")
 
-        # Late import: keep import order clean.
         sys.path.insert(
             0,
             str(REPO_ROOT / "scripts"),
@@ -326,7 +325,6 @@ class TestWriter(unittest.TestCase):
             self.assertEqual(out_path.read_text(encoding="utf-8"), rendered)
 
     def test_stdout_flag_does_not_write_file(self) -> None:
-        # --stdout returns 0 without writing a file.
         import io
 
         captured = io.StringIO()

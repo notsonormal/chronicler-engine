@@ -227,7 +227,6 @@ async fn test_delete_removes_entry_from_fragment_http() {
     );
 }
 
-/// The `.log-entry` blocks of the fragment, as the Message id and the markup of each.
 fn log_entries(body: &str) -> Vec<(u64, &str)> {
     body.split(r#"<div class="log-entry"#)
         .skip(1)

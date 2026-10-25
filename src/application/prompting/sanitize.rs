@@ -4,7 +4,6 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-/// Strip leaked thinking/reasoning artifacts from LLM output.
 #[allow(clippy::expect_used)]
 pub fn sanitize_llm_output(text: &str) -> String {
     static RE_LEADING_CHANNEL: Lazy<Regex> =

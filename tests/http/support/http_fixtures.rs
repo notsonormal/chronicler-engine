@@ -65,7 +65,6 @@ pub async fn create_game_from(
     created_game
 }
 
-/// The room name the story log shows on a Message, read through the story window.
 pub fn room_header_of(state: &AppState, message: u64) -> Option<String> {
     state
         .game_view_query

@@ -18,7 +18,6 @@ use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::story_window::{StoryWindow, StoryWindowEntry};
 use crate::error::EngineError;
 
-/// How many of the newest Messages the story log shows.
 const STORY_WINDOW_SIZE: usize = 50;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

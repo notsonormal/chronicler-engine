@@ -36,7 +36,6 @@ fn failed_fragment_response(message: &str) -> Response<Body> {
     response
 }
 
-/// A failed render gives an error fragment.
 pub fn render_or_error_fragment(template: &impl Template) -> String {
     template.render().unwrap_or_else(|e| {
         tracing::error!("template render failed: {e}");

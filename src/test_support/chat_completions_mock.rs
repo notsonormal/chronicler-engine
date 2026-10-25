@@ -12,17 +12,14 @@ use std::time::Duration;
 const STREAM_TIMEOUT: Duration = Duration::from_secs(5);
 const BODY_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// The text of the fixed completion the endpoint answers with.
 pub const STUB_ANSWER: &str = "stub answer";
 
 pub struct ChatCompletionsMock {
-    /// The `base_url` a connection points at to reach the endpoint.
     pub base_url: String,
     received_body: mpsc::Receiver<String>,
 }
 
 impl ChatCompletionsMock {
-    /// Binds the endpoint and serves one request on a background thread.
     pub fn start() -> Self {
         let (listener, base_url) = bind_local_port();
         let (sender, received_body) = mpsc::channel();

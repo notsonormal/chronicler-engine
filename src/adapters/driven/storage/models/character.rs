@@ -5,7 +5,6 @@ use crate::error::EngineError;
 use crate::domain::model::character::{CharacterSheet, CharacterCard, Relationship};
 use crate::domain::model::trigger::Trigger;
 
-/// Database row for `characters` table (CharacterCard).
 pub struct DbCharacter {
     pub id: i64,
     pub key: String,

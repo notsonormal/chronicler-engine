@@ -17,7 +17,6 @@ mod tests {
         std::env::var("OPENROUTER_API_KEY").is_ok()
     }
 
-    /// Fetch the LLM Messages fragment with retries until messages appear or timeout.
     async fn verify_llm_messages_logged(port: u16) {
         let client = reqwest::Client::new();
         let start = std::time::Instant::now();
@@ -69,7 +68,6 @@ mod tests {
         let _ = browser.close().await;
     }
 
-    /// Smoke test: verify a single command reaches the real LLM and completes.
     #[ignore = "slow: requires OPENROUTER_API_KEY"]
     #[tokio::test]
     async fn test_real_llm_smoke() {
@@ -95,8 +93,6 @@ mod tests {
         .await;
     }
 
-    /// Multi-step stability: verify the server remains healthy after two sequential
-    /// real LLM calls.
     #[ignore = "slow: requires OPENROUTER_API_KEY"]
     #[tokio::test]
     async fn test_real_llm_multi_step_stability() {

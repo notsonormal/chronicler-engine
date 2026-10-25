@@ -18,7 +18,6 @@ async fn read_swipe_counter(page: &playwright_rs::Page) -> String {
     .unwrap_or_default()
 }
 
-/// Poll the story log's swipe counter until it reads `expected`.
 async fn wait_for_swipe_counter(page: &playwright_rs::Page, expected: &str) {
     let matched = wait_for_condition_async(
         Duration::from_secs(10),
@@ -40,7 +39,6 @@ async fn option_item_count(page: &playwright_rs::Page) -> usize {
         .len()
 }
 
-/// Poll the dock until it renders exactly `expected` `.option-item` rows.
 async fn wait_for_option_items(page: &playwright_rs::Page, expected: usize) {
     let matched = wait_for_condition_async(
         Duration::from_secs(10),

@@ -166,7 +166,6 @@ impl Fixture {
             .collect()
     }
 
-    /// A Narration whose Input is `user_message`.
     fn narration<'a>(
         &'a self,
         history: &'a [StoryRow],
@@ -211,7 +210,6 @@ impl Fixture {
 
 const TYPED_INPUT: &str = "I try the door.";
 
-/// One generation with the values its narration reads.
 struct NarrationCase<'a> {
     generation: Generation,
     values: NarrationValues<'a>,

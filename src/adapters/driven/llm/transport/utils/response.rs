@@ -126,13 +126,11 @@ pub fn handle_response(
         "[LLM][req:{req_id}] Response status: {status} (headers after {:.2}s)",
         header_time.as_secs_f64()
     );
-    // Log response headers for debugging
     tracing::debug!(
         "[LLM][req:{req_id}] Response headers: {:?}",
         response.headers()
     );
     if !status.is_success() {
-        // Include the response body so the error message is actionable
         let error_body = response.text().unwrap_or_default();
         tracing::error!(
             "[LLM][req:{req_id}] Non-success HTTP status: {status}. Body: {error_body}"

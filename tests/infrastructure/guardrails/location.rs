@@ -86,10 +86,8 @@ pub fn check_test_file_pairing(path: &str) -> Vec<Violation> {
 pub fn check_test_file_location(path: &str, _content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    // Naming
     violations.extend(check_test_file_naming(path));
 
-    // Pairing
     violations.extend(check_test_file_pairing(path));
 
     violations

@@ -37,8 +37,6 @@ pub const HTMX_SETTLE_INIT_SCRIPT: &str = r#"(() => {
   });
 })();"#;
 
-/// One settled element as htmx reported it in `htmx:afterSettle`'s
-/// `detail.elt`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleTarget {
     pub id: String,
@@ -47,8 +45,6 @@ pub struct SettleTarget {
 }
 
 impl SettleTarget {
-    /// Render the target for logs: `#id` when it has one, else
-    /// `tag.class1.class2`.
     pub fn describe(&self) -> String {
         if !self.id.is_empty() {
             return format!("#{}", self.id);
@@ -60,8 +56,6 @@ impl SettleTarget {
         format!("{}.{}", self.tag, cls.join("."))
     }
 
-    /// True when this settle belongs to the element the caller named by
-    /// simple selector: `#id`, `.class`, or a bare tag name.
     pub fn matches_selector(&self, selector: &str) -> bool {
         if let Some(id) = selector.strip_prefix('#') {
             return self.id == id;
@@ -73,13 +67,10 @@ impl SettleTarget {
     }
 }
 
-/// A settle-gate reading: how many swaps have settled, and which elements htmx
-/// reported as settled.
 #[derive(Debug, Clone)]
 pub struct SettleSnapshot {
-    /// Number of `htmx:afterSettle` events observed since page load.
     pub count: u64,
-    /// Settle targets in event order, newest last (capped at 64).
+    /// Newest last, capped at 64.
     pub targets: Vec<SettleTarget>,
 }
 
@@ -91,7 +82,6 @@ pub async fn install_htmx_settle(page: &Page) {
         .expect("add_init_script for the htmx settle counter");
 }
 
-/// Read the current counter state; `None` when the counter was never installed.
 async fn read_htmx_settle(page: &Page) -> Option<SettleSnapshot> {
     let raw = page
         .evaluate_value(
@@ -132,7 +122,6 @@ async fn read_htmx_settle(page: &Page) -> Option<SettleSnapshot> {
     })
 }
 
-/// Read the counter immediately before an interaction and return its baseline.
 async fn arm_htmx_settle(page: &Page) -> u64 {
     read_htmx_settle(page)
         .await
@@ -143,8 +132,6 @@ async fn arm_htmx_settle(page: &Page) -> u64 {
         .count
 }
 
-/// Read the settle targets in `scope`, oldest first. `None` when the settle
-/// counter was never installed.
 async fn settle_targets(page: &Page, scope: &SettleScope) -> Option<Vec<SettleTarget>> {
     let snapshot = read_htmx_settle(page).await?;
     let targets = match scope {
@@ -188,17 +175,11 @@ async fn poll_settles(
     }
 }
 
-/// Result of a gated interaction: whether the named swap settled, every settle
-/// observed in the waited-for scope, and the subset matching the named element.
 #[derive(Debug, Clone)]
 pub struct SettleOutcome {
-    /// The element the caller waited for, as a simple selector.
     pub expected: String,
-    /// True when a settle matching `expected` landed in the scope.
     pub settled: bool,
-    /// Every settle target observed in the scope, oldest first.
     pub all_targets: Vec<SettleTarget>,
-    /// The settle targets matching `expected`, oldest first.
     pub matching_targets: Vec<SettleTarget>,
 }
 
@@ -243,8 +224,6 @@ impl SettleOutcome {
         );
     }
 
-    /// One line for the run log: which element was waited for, whether it
-    /// settled, and what else settled meanwhile.
     pub fn log_line(&self, interaction: &str) -> String {
         let all = self
             .all_targets
@@ -273,7 +252,6 @@ enum SettleScope {
     Since(u64),
 }
 
-/// Wait for a settle matching `selector` in `scope`, and report the outcome.
 pub async fn await_panel_ready(page: &Page, selector: &str) -> SettleOutcome {
     SettleOutcome::from_poll(
         selector,
@@ -281,8 +259,6 @@ pub async fn await_panel_ready(page: &Page, selector: &str) -> SettleOutcome {
     )
 }
 
-/// Click `selector`, then wait for the swap targeting `swap_target` to settle.
-/// Baseline read immediately before the click.
 pub async fn click_and_settle(page: &Page, selector: &str, swap_target: &str) -> SettleOutcome {
     let baseline = arm_htmx_settle(page).await;
     page.locator(selector)
@@ -322,8 +298,6 @@ pub async fn select_option_and_settle(
     outcome
 }
 
-/// Read the settles in the baseline scope, wait for the named target, and
-/// report the outcome.
 async fn finish_settle(page: &Page, baseline: u64, swap_target: &str) -> SettleOutcome {
     SettleOutcome::from_poll(
         swap_target,

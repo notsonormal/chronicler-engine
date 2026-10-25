@@ -4,7 +4,6 @@
 use crate::error::EngineError;
 use crate::domain::model::character::{CharacterSheet, PersonaCard};
 
-/// Database row for `personas` table (PersonaCard).
 pub struct DbPersona {
     pub id: i64,
     pub key: String,

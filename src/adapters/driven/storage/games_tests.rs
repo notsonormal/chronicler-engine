@@ -1,7 +1,6 @@
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::sqlite_storage;
 
-/// The Game row these reads need, written whole into either backend.
 fn seed_game(storage: &Storage, world_name: &str, world_key: &str, name: &str) -> u64 {
     crate::test_support::seed_game_row(
         storage,

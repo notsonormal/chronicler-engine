@@ -101,7 +101,6 @@ fn fired_trigger(state: &SwipeState, world: &GameWorld<'_>) -> Option<EventRecor
         })
 }
 
-/// No destination moves nobody.
 fn movement(
     state: &mut SwipeState,
     destination: Option<&str>,

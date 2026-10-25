@@ -92,13 +92,13 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | file length | Enforces a maximum of 2000 non-blank lines per file. | `tests/infrastructure/guardrails/structure.rs:309` |
 | test module header | Test files must have a single-line `//!` summary on the first non-blank line: | `tests/infrastructure/guardrails/structure.rs:333` |
 | import ordering | Enforces import ordering: std/core/alloc, then external crates, then crate/super/self. | `tests/infrastructure/guardrails/style.rs:9` |
-| long comment runs | Warns when five or more countable comment lines appear consecutively. | `tests/infrastructure/guardrails/style.rs:132` |
-| template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:173` |
-| separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:253` |
-| single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:268` |
+| long comment runs | Warns when five or more countable comment lines appear consecutively. | `tests/infrastructure/guardrails/style.rs:125` |
+| template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:166` |
+| separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:245` |
+| single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:260` |
 | no ignored tests | Rejects every `#[ignore]`d fn, also through `cfg_attr`; the caller exempts `tests/llm/`. | `tests/infrastructure/guardrails/test_hygiene.rs:12` |
 | sleep has reason | Rejects a `sleep(..)` call in a test that has no `//` comment on the line above it. | `tests/infrastructure/guardrails/test_hygiene.rs:37` |
-| unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:181` |
+| unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:180` |
 | banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:168` |
 | call site rows | Runs the call-site table: only what a row allows may call its callees. | `tests/infrastructure/guardrails/walkers.rs:395` |
 | type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:427` |

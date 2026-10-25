@@ -108,7 +108,6 @@ impl<'ast> Visit<'ast> for NestingVisitor<'_> {
     fn visit_expr_match(&mut self, node: &'ast ExprMatch) {
         let line = node.match_token.span.start().line;
         self.enter(line, "match", |s| {
-            // The match itself counts once; arm bodies re-enter visit_expr_* naturally.
             syn::visit::visit_expr_match(s, node);
         });
     }
@@ -255,7 +254,6 @@ fn f(x: Option<i32>) -> i32 {
 
     #[test]
     fn check_nesting_depth_nested_closure_counts_as_level() {
-        // function body → closure (depth 1) → if (depth 2). No violation.
         let src = r#"
 fn f() {
     let c = || {
@@ -300,7 +298,6 @@ fn f() {
 
     #[test]
     fn check_nesting_depth_function_item_entry_does_not_count() {
-        // Five sibling functions, each with one if. None should interact; no violation.
         let src = r#"
 fn a() { if true { let _ = 1; } }
 fn b() { if true { let _ = 1; } }
@@ -314,7 +311,6 @@ fn e() { if true { let _ = 1; } }
 
     #[test]
     fn check_nesting_depth_expressions_block_and_try_do_not_count() {
-        // `{ ... }` blocks and `?` operator must not count toward depth.
         let src = r#"
 fn f(x: Option<i32>) -> i32 {
     let a = { let _y = 1; _y + 1 };
@@ -334,7 +330,6 @@ fn f(x: Option<i32>) -> i32 {
 
     #[test]
     fn check_nesting_depth_async_block_counts_as_level() {
-        // function body → async block (depth 1) → if (depth 2). No violation.
         let src = r#"
 fn f() {
     let _f = async {
@@ -353,7 +348,6 @@ fn f() {
 
     #[test]
     fn check_nesting_depth_impl_method_starts_at_zero() {
-        // A 3-deep if chain inside an impl method must not violate.
         let src = r#"
 impl Foo {
     pub fn bar(&self) {

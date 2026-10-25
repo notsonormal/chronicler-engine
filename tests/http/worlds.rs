@@ -25,7 +25,6 @@ fn posture_world() -> WorldCard {
     }
 }
 
-/// A default app with `posture_world` seeded and one room.
 fn posture_world_app() -> (
     axum::Router,
     chronicler_engine::adapters::driving::http::AppState,

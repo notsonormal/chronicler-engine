@@ -20,12 +20,9 @@ pub fn check_import_ordering(path: &str, content: &str) -> Vec<Violation> {
             continue;
         }
         if !trimmed.starts_with("use ") {
-            // Blank lines and comments are allowed between use statements
             if trimmed.is_empty() || trimmed.starts_with("//") {
                 continue;
             }
-            // If we hit non-use, non-comment, non-empty line, stop checking imports
-            // (imports should be grouped at the top)
             if last_group > 0 {
                 break;
             }
@@ -107,19 +104,15 @@ fn is_countable_comment(line: &str) -> bool {
     if !line.starts_with("//") {
         return false;
     }
-    // Exclude visual dividers (4+ slashes)
     if line.starts_with("////") {
         return false;
     }
-    // Exclude doc anchors
     if line.starts_with("// [DOC:") {
         return false;
     }
-    // Exclude separator comments // === ... ===
     if line.starts_with("// ===") || line.starts_with("//===") {
         return false;
     }
-    // Exclude empty comments
     let after_slashes = if line.starts_with("///") || line.starts_with("//!") {
         &line[3..]
     } else {
@@ -209,7 +202,6 @@ impl<'ast> Visit<'ast> for SingleLetterVisitor<'_> {
         if let Some(ident) = get_local_ident(node) {
             let name = ident.to_string();
             if name.len() == 1 && name.chars().next().unwrap().is_ascii_lowercase() {
-                // Allow in small functions
                 if self.fn_stmt_count <= 10 {
                     return;
                 }

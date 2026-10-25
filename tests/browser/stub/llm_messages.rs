@@ -25,8 +25,6 @@ async fn open_llm_messages_tab(page: &playwright_rs::Page) {
     wait_until_visible(page, ".llm-message-card", Duration::from_millis(2000)).await;
 }
 
-/// The card's expanded class and the header's `aria-expanded`, read together so
-/// the pair can be asserted as one state.
 async fn llm_header_state(page: &playwright_rs::Page) -> (bool, String) {
     page.evaluate::<(), (bool, String)>(
         r#"(() => {
@@ -43,7 +41,6 @@ async fn llm_header_state(page: &playwright_rs::Page) -> (bool, String) {
     .unwrap()
 }
 
-/// Poll until the row reports `expanded` in both places it exposes it.
 async fn wait_for_row_state(
     page: &playwright_rs::Page,
     want_expanded: bool,
@@ -64,7 +61,6 @@ async fn wait_for_row_state(
     .await
 }
 
-/// Poll until the row's body reaches the wanted visibility.
 async fn wait_for_body(page: &playwright_rs::Page, visible: bool) -> bool {
     wait_for_condition_async(
         Duration::from_millis(2000),
@@ -81,8 +77,6 @@ async fn wait_for_body(page: &playwright_rs::Page, visible: bool) -> bool {
     .await
 }
 
-/// Stash the current header node, so a later read can prove the panel swap
-/// replaced it.
 async fn stash_header_node(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"() => { window.__llmHeaderBefore = document.querySelector('.llm-message-header'); }"#,
@@ -92,7 +86,6 @@ async fn stash_header_node(page: &playwright_rs::Page) {
     .unwrap();
 }
 
-/// Wait until the panel swap has replaced the stashed header node.
 async fn wait_for_header_replacement(page: &playwright_rs::Page) {
     let replaced = wait_for_condition_async(
         Duration::from_millis(2000),

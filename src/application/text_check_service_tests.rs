@@ -8,7 +8,6 @@ use crate::application::text_check_service::TextCheckService;
 use crate::domain::model::settings::TextCheckMode;
 use crate::error::EngineError;
 
-/// Records call count and last mode; returns queued responses in order.
 struct StubChecker {
     responses: Mutex<VecDeque<Result<Option<CheckResult>, EngineError>>>,
     call_count: Mutex<usize>,

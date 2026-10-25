@@ -471,7 +471,6 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
     let preset = preset_with_modes("if-only", vec![NarratorMode::InteractiveFiction]);
     let app_state = make_test_app_state_with_preset(preset);
 
-    // No mode param resolves to Novel.
     let response = activate_preset_handler(
         axum::extract::State(app_state.clone()),
         axum::extract::Path("if-only".to_string()),

@@ -24,14 +24,12 @@ pub(crate) struct MovementJson {
     destination: Option<String>,
 }
 
-/// Extract Character IDs from a quantifier response using JSON-first then text fallback.
 pub(crate) fn extract_characters(
     response: &str,
     known_character_ids: &[String],
 ) -> QuantifierParseResult {
     let trimmed = response.trim();
 
-    // Strategy 1: Try JSON parse
     if let Ok((character_ids, _movement)) = try_parse_json_full(trimmed) {
         let valid_ids: Vec<String> = character_ids
             .into_iter()
@@ -46,7 +44,6 @@ pub(crate) fn extract_characters(
         };
     }
 
-    // Strategy 2: Text fallback - match known Character IDs in the response
     let text_ids = extract_character_ids_from_text(trimmed, known_character_ids);
 
     if !text_ids.is_empty() {
@@ -56,7 +53,6 @@ pub(crate) fn extract_characters(
         };
     }
 
-    // Strategy 3: No valid IDs found
     QuantifierParseResult {
         character_ids: Vec::new(),
         confidence: QuantifierConfidence::Low,
@@ -66,7 +62,6 @@ pub(crate) fn extract_characters(
 pub(crate) fn try_parse_json_full(
     response: &str,
 ) -> Result<(Vec<String>, Option<MovementJson>), String> {
-    // Try direct JSON parse first
     match serde_json::from_str::<QuantifierJsonResponse>(response) {
         Ok(parsed) => {
             tracing::debug!(
@@ -80,7 +75,6 @@ pub(crate) fn try_parse_json_full(
             tracing::debug!("[Quantifier] Direct JSON parse failed: {}", e);
         }
     }
-    // Try extracting JSON from markdown code fences (```json ... ```)
     if let Some(json_content) = extract_json_from_code_fence(response) {
         match serde_json::from_str::<QuantifierJsonResponse>(&json_content) {
             Ok(parsed) => {
@@ -96,7 +90,6 @@ pub(crate) fn try_parse_json_full(
             }
         }
     }
-    // Try finding JSON object in the response
     if let Some(start) = response.find('{') {
         if let Some(end) = response.rfind('}') {
             let json_str = &response[start..=end];

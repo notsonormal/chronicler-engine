@@ -13,7 +13,6 @@ pub struct Relationship {
 }
 
 impl Relationship {
-    /// Returns the dynamic text if set, otherwise falls back to static text.
     pub fn display_text(&self) -> &str {
         if self.dynamic.is_empty() {
             &self.static_text

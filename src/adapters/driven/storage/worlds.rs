@@ -33,7 +33,6 @@ pub struct WorldBundle {
 }
 
 impl WorldBundle {
-    /// What the Game rules read of the World.
     pub fn game_world(&self) -> GameWorld<'_> {
         GameWorld {
             map: &self.map,

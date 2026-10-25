@@ -166,7 +166,6 @@ pub fn port_in_use(port: u16) -> bool {
 }
 
 pub fn kill_existing_server(port: u16) {
-    // Only kill if we manage the server (to avoid killing other test instances)
     if !SERVER_MANAGED.load(Ordering::SeqCst) {
         return;
     }
@@ -437,7 +436,6 @@ pub fn get_available_port(min: u16, max: u16) -> Result<u16, String> {
             match TcpListener::bind(format!("127.0.0.1:{port}")) {
                 Ok(listener) => {
                     drop(listener);
-                    // Write PID to lock file for debugging stale locks
                     let _ = std::fs::write(&lock_path, format!("{}", std::process::id()));
                     return Ok(port);
                 }
@@ -550,7 +548,6 @@ impl TestServer {
         let db_path = std::path::PathBuf::from(&target_dir)
             .join("debug")
             .join(format!("chronicler_{port}.db"));
-        // Remove stale database BEFORE starting server so we don't inherit old state.
         Self::cleanup_stale_db(port, &db_path);
         let (mut child, _db_path, stdout_buf, stderr_buf) =
             start_server_with_env(port, world, persona);
@@ -613,7 +610,6 @@ impl Drop for TestServer {
         let _ = take_port_pid(self.port);
         SERVER_MANAGED.store(false, Ordering::SeqCst);
         release_port_lock(self.port);
-        // Delete the SQLite database so the next test on this port starts clean.
         if self.db_path.exists() {
             let _ = std::fs::remove_file(&self.db_path);
         }

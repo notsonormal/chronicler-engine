@@ -122,7 +122,6 @@ class TestDiataxisValidator(unittest.TestCase):
         self.assertEqual(rules, ["FRONTMATTER_INVALID_ARC52"])
 
     def test_reference_clean(self) -> None:
-        # Reference doc without procedural markers + correct front-matter: zero violations.
         rules = _run_check(
             self._make_tmp(),
             "---\ndiataxis: reference\ntitle: Foo\n---\n# Body\n\n"
@@ -131,7 +130,6 @@ class TestDiataxisValidator(unittest.TestCase):
         self.assertEqual(rules, [])
 
     def test_all_clean(self) -> None:
-        # Bare-minimum clean doc: front-matter valid, mode reference, body neutral.
         rules = _run_check(
             self._make_tmp(),
             "---\ndiataxis: reference\ntitle: Foo\n---\n# Body\n\n"
@@ -330,7 +328,6 @@ class TestDocAnchors(unittest.TestCase):
     """Fixtures A-L exercising the DOC anchor rules."""
 
     def test_fixture_a_valid_full_path_anchor(self) -> None:
-        # Fixture A: valid docs/.../storage.md anchor → 0 violations.
         fix = _AnchorFixture()
         fix.write_storage_md()
         path = fix.write_src_file(
@@ -340,7 +337,6 @@ class TestDocAnchors(unittest.TestCase):
         self.assertEqual(fix.scan(path), [])
 
     def test_fixture_b_bogus_target_missing(self) -> None:
-        # Fixture B: target file doesn't exist → BROKEN_DOC_ANCHOR (target-missing).
         fix = _AnchorFixture()
         path = fix.write_src_file(
             "src/foo.rs",
@@ -350,7 +346,6 @@ class TestDocAnchors(unittest.TestCase):
         self.assertEqual(rules, {"BROKEN_DOC_ANCHOR"})
 
     def test_fixture_d_non_doc_comment_line_still_detected(self) -> None:
-        # Fixture D: `// [DOC: ...]` (no `!`) with short-form target still fires.
         fix = _AnchorFixture()
         path = fix.write_src_file(
             "src/foo.rs",
@@ -360,7 +355,6 @@ class TestDocAnchors(unittest.TestCase):
         self.assertEqual(rules, {"BROKEN_DOC_ANCHOR"})
 
     def test_fixture_e_plain_path_form_parsed_normally(self) -> None:
-        # Fixture E: a non-section-suffix form is detected and parsed.
         fix = _AnchorFixture()
         path = fix.write_src_file(
             "src/foo.rs",
@@ -370,7 +364,6 @@ class TestDocAnchors(unittest.TestCase):
         self.assertEqual(rules, {"BROKEN_DOC_ANCHOR"})
 
     def test_fixture_f_test_support_anchor_forbidden(self) -> None:
-        # Fixture F: src/test_support/x.rs with [DOC:] → TEST_SUPPORT_ANCHOR_FORBIDDEN.
         fix = _AnchorFixture()
         path = fix.write_test_support_file(
             "x.rs",
@@ -380,20 +373,17 @@ class TestDocAnchors(unittest.TestCase):
         self.assertEqual(rules, {"TEST_SUPPORT_ANCHOR_FORBIDDEN"})
 
     def test_fixture_g_test_support_clean_summary(self) -> None:
-        # Fixture G: src/test_support/x.rs no anchor + non-empty //! line 1 → 0.
         fix = _AnchorFixture()
         path = fix.write_test_support_file("x.rs", "//! Test helper summary.\n")
         self.assertEqual(fix.scan(path), [])
 
     def test_fixture_h_test_support_empty_summary_required(self) -> None:
-        # Fixture H: src/test_support/x.rs with empty //! line 1 → TEST_SUPPORT_SUMMARY_REQUIRED.
         fix = _AnchorFixture()
         path = fix.write_test_support_file("x.rs", "//!\n")
         rules = {v.rule for v in fix.scan(path)}
         self.assertEqual(rules, {"TEST_SUPPORT_SUMMARY_REQUIRED"})
 
     def test_fixture_i_tests_file_anchor_forbidden(self) -> None:
-        # Fixture I: tests/x.rs with [DOC:] → TEST_FILES_ANCHOR_FORBIDDEN.
         fix = _AnchorFixture()
         path = fix.engine / "tests" / "x.rs"
         path.write_text(
@@ -410,7 +400,6 @@ class TestDocAnchors(unittest.TestCase):
             vd.parse_args(["--no-anchors"])
 
     def test_fixture_k_violation_message_has_lineno_and_path(self) -> None:
-        # Fixture K: violation message includes line number + path.
         fix = _AnchorFixture()
         path = fix.write_src_file(
             "src/foo.rs",

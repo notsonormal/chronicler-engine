@@ -26,8 +26,6 @@ impl MockBackend {
         Self::default()
     }
 
-    /// Keeps the connection this mock stands in for visible in logs, LLM messages,
-    /// and the debug endpoint.
     pub fn with_model(mut self, model: &str) -> Self {
         self.model = Some(model.to_string());
         self

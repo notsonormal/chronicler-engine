@@ -89,7 +89,6 @@ pub async fn wait_until_visible(page: &playwright_rs::Page, selector: &str, time
     }
 }
 
-/// Wait for an element to become hidden or detached.
 pub async fn wait_until_hidden(page: &playwright_rs::Page, selector: &str, timeout: Duration) {
     let locator = page.locator(selector).await;
     let timeout_ms = timeout.as_millis() as f64;
@@ -122,7 +121,6 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
             _ => sleep(Duration::from_millis(200)).await,
         }
     }
-    // One final check — the locator may have just updated
     if let Ok(text) = locator.inner_text().await {
         if text.contains("Ready") {
             return;
@@ -217,8 +215,6 @@ async fn has_error_disclosure(page: &playwright_rs::Page) -> bool {
     .unwrap_or(false)
 }
 
-/// Wait for an element to persist (exist continuously) for a duration
-/// Useful for verifying UI state survives polling cycles or time-based operations
 pub async fn wait_for_element_persist(
     page: &playwright_rs::Page,
     selector: &str,
@@ -236,16 +232,13 @@ pub async fn wait_for_element_persist(
         if count > 0 {
             exists_count += 1;
         } else {
-            return false; // Element disappeared during wait
+            return false;
         }
     }
 
-    // Element must exist in all checks
     exists_count == check_count
 }
 
-/// Generic async condition wait
-/// Polls the condition until it returns true or timeout expires
 pub async fn wait_for_condition_async<F, Fut>(
     timeout: Duration,
     poll_interval: Duration,

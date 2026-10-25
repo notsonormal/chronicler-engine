@@ -88,7 +88,6 @@ fn test_sqlite_global_cap_prunes_oldest() {
 
     let list = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(list.len(), 50);
-    // Should be ordered oldest-first (newest-last) due to reverse() in list_latest
     assert_eq!(list[0].model_name, "model-5");
     assert_eq!(list[49].model_name, "model-54");
 }

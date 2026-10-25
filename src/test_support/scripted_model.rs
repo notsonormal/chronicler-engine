@@ -52,11 +52,9 @@ enum Reply {
     Failed,
 }
 
-/// One scripted reply with its place in the script of its role.
 struct Scripted {
     position: usize,
     reply: Reply,
-    /// Whether the test lets the reply stay unused.
     optional: bool,
 }
 

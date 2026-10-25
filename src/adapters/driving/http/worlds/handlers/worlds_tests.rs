@@ -140,7 +140,6 @@ async fn test_world_posture_omitted_field_keeps_stored_value() {
 
 #[test]
 fn test_world_form_options_always_on_checkbox_grammar() {
-    // Checked checkbox: the body carries an explicit value="true".
     let checked = "key=w&name=N&description=D&global_rules=&map_json={}&scenarios_json=[]&options_always_on=true";
     let form: WorldForm = serde_urlencoded::from_str(checked).unwrap();
     assert!(form.options_always_on);
@@ -186,7 +185,6 @@ async fn test_update_world_handler_flips_options_always_on_from_form() {
         .expect("world should exist");
     assert!(!world.options_always_on);
 
-    // Checked save flips it on.
     update_world_handler(
         axum::extract::State(state.clone()),
         axum::extract::Path("toggle_world".to_string()),

@@ -123,10 +123,6 @@ fn ollama_path_returns_recorder() {
 
 #[test]
 fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
-    // `from_config()` does not fail on missing fields at construction.
-    // Errors defer to call time (e.g., when `complete()` runs). This test
-    // documents that the public composition entry point preserves the
-    // same deferred-error contract.
     let connection = LlmConnection {
         name: "Test DeepSeek Missing".to_string(),
         model: "deepseek-chat".to_string(),

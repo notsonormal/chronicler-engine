@@ -10,7 +10,6 @@ fn test_db_creates_empty_games_table() {
     let exists: Result<String, _> = stmt.query_row([], |row| row.get(0));
     assert!(exists.is_ok(), "games table should exist");
 
-    // The server auto-creates a game via `resolve_game_id` using the `--persona` CLI flag.
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
         .unwrap();

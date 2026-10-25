@@ -55,17 +55,14 @@ fn complete_happy_path_calls_provider_and_persists_forensics() {
         .complete("narrator", "system prompt", "user prompt", None)
         .expect("complete should succeed");
 
-    // Provider was called and returned text
     assert!(!result.text.is_empty());
 
-    // Forensics persisted exactly one message
     let saved = storage
         .list_latest_llm_messages(10)
         .expect("list should not error")
         .pop()
         .expect("message should be saved");
 
-    // Message has correct metadata
     assert_eq!(saved.agent_name, "narrator");
     assert_eq!(saved.backend_name, "Mock");
     assert_eq!(saved.model_name, "mock");
@@ -86,7 +83,6 @@ fn complete_strips_thought_tags_from_parsed_response() {
         .complete("narrator", "system", "user", None)
         .expect("complete should succeed");
 
-    // Sanitized result text should NOT contain the thought tag
     assert!(!result.text.contains("<thought>"));
     assert!(result.text.contains("Hello, user!"));
 
@@ -190,7 +186,6 @@ fn complete_propagates_provider_error_and_records_failure_row() {
         .complete("narrator", "system", "user", None)
         .unwrap_err();
 
-    // Error propagates (MockBackend uses Narration error variant)
     assert!(matches!(err, EngineError::Narration(_)));
 
     let saved = storage
@@ -290,7 +285,6 @@ fn complete_propagates_closure_save_error() {
         .complete("narrator", "system", "user", None)
         .unwrap_err();
 
-    // Error propagates from the save-fn closure
     assert!(matches!(err, EngineError::Io(_)));
     assert!(err.to_string().contains("disk full"));
 }
@@ -308,7 +302,6 @@ fn provider_accessor_returns_injected_provider() {
 
 #[test]
 fn recorder_with_configurable_mock_backend() {
-    // Verify that various MockBackend configurations work through the recorder
     let mocking_empty = Arc::new(MockBackend::new().with_empty_response());
     let storage = Arc::new(Storage::new_in_memory());
     let recorder = make_test_recorder_with_storage(mocking_empty, Arc::clone(&storage));

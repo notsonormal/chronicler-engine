@@ -40,7 +40,6 @@ impl LlmCallRecorder {
         (self.resolve)()
     }
 
-    /// One log label, or a placeholder when the connection cannot be resolved.
     pub fn provider_label(&self) -> String {
         match self.provider() {
             Ok(provider) => format!("{} {}", provider.name(), provider.model()),

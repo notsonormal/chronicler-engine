@@ -11,7 +11,6 @@ use crate::application::ports::text_checker::{CheckResult, IssueKind, TextChecke
 use crate::domain::model::settings::TextCheckMode;
 use crate::error::EngineError;
 
-/// Stub checker that returns a fixed response.
 struct StubCheckerA;
 
 impl TextChecker for StubCheckerA {
@@ -29,7 +28,6 @@ impl TextChecker for StubCheckerA {
     }
 }
 
-/// Stub checker that returns a different fixed response.
 struct StubCheckerB;
 
 impl TextChecker for StubCheckerB {
@@ -47,7 +45,6 @@ impl TextChecker for StubCheckerB {
     }
 }
 
-/// Stub checker that returns None.
 struct StubCheckerNone;
 
 impl TextChecker for StubCheckerNone {
@@ -63,7 +60,6 @@ impl TextChecker for StubCheckerNone {
 
 #[test]
 fn trait_dispatch_between_impls() {
-    // Verify that `dyn TextChecker` dispatches to the correct impl.
     let checker_a: Arc<dyn TextChecker> = Arc::new(StubCheckerA);
     let checker_b: Arc<dyn TextChecker> = Arc::new(StubCheckerB);
     let checker_none: Arc<dyn TextChecker> = Arc::new(StubCheckerNone);

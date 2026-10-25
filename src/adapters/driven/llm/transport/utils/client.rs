@@ -49,14 +49,11 @@ pub fn call_chat_completions(
         reasoning_effort.map_or("provider default", |effort| effort.as_str())
     );
 
-    // Build request payload (pure function)
     let (payload, raw_request_json) = build_request_payload(request);
-    // Configure HTTP request (pure function)
     let url = format!("{base_url}/chat/completions");
     let http_request = configure_request(&client, &url, &payload, api_key, title);
     tracing::info!("[LLM][req:{req_id}] Sending request to {url}");
     let res = http_request.send();
-    // Handle response (delegates to extracted function)
     match res {
         Ok(response) => handle_response(
             response,

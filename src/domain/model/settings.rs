@@ -169,7 +169,6 @@ impl ModePresetBundle {
         }
     }
 
-    /// The writable form of [`Self::slot`].
     pub fn slot_mut(&mut self, preset_type: PresetType) -> Option<&mut String> {
         match preset_type {
             PresetType::System => Some(&mut self.system_prompt_preset_id),
@@ -204,7 +203,6 @@ impl ModePresetRegistry {
             .unwrap_or_else(|| settings_defaults::default_bundle_for_mode(mode))
     }
 
-    /// Insert or replace the entry for `bundle.mode`.
     pub fn set_bundle(&mut self, bundle: ModePresetBundle) {
         match self.0.iter_mut().find(|b| b.mode == bundle.mode) {
             Some(slot) => *slot = bundle,
@@ -212,7 +210,6 @@ impl ModePresetRegistry {
         }
     }
 
-    /// Whether any mode's bundle defaults to the preset `id`.
     pub fn references(&self, id: &str) -> bool {
         self.0.iter().any(|b| {
             b.system_prompt_preset_id == id
@@ -379,8 +376,6 @@ impl LlmConnection {
         self.resolve_api_key_with(|name| std::env::var(name).ok())
     }
 
-    /// `resolve_api_key` with the environment read given as a function, so the
-    /// rule it follows is a pure function of the two values.
     pub fn resolve_api_key_with(&self, lookup: impl Fn(&str) -> Option<String>) -> Option<String> {
         let non_blank = |key: String| (!key.trim().is_empty()).then_some(key);
         self.api_key.clone().and_then(non_blank).or_else(|| {
@@ -395,7 +390,6 @@ impl LlmConnection {
         self.check_api_key_available_with(|name| std::env::var(name).ok())
     }
 
-    /// `check_api_key_available` with the environment read given as a function.
     pub fn check_api_key_available_with(
         &self,
         lookup: impl Fn(&str) -> Option<String>,
@@ -543,7 +537,6 @@ impl AppSettings {
         self.find_connection(&self.quantifier_connection_id)
     }
 
-    /// The narration connection, or an error naming the missing id.
     pub fn narration_connection(&self) -> crate::error::Result<LlmConnection> {
         self.get_narration_connection().cloned().ok_or_else(|| {
             EngineError::Config(format!(
@@ -553,7 +546,6 @@ impl AppSettings {
         })
     }
 
-    /// The quantifier connection, or an error naming the missing id.
     pub fn quantifier_connection(&self) -> crate::error::Result<LlmConnection> {
         self.get_quantifier_connection().cloned().ok_or_else(|| {
             EngineError::Config(format!(

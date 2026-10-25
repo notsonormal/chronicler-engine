@@ -106,16 +106,8 @@ from typing import NamedTuple
 
 import yaml
 
-# ---------------------------------------------------------------------------
-# Severities.
-# ---------------------------------------------------------------------------
-
 ERROR = "error"  # fails build.
 WARNING = "warning"  # does not fail unless --strict.
-
-# ---------------------------------------------------------------------------
-# Shared markdown regexes (same shape as validate_docs.py).
-# ---------------------------------------------------------------------------
 
 # Markdown link: [text](target). Capture group 1 = target.
 # Excludes images (leading !).
@@ -191,23 +183,11 @@ ROUTE_FAMILY_FOLLOWERS = ("\u2026", "...", "*", "<")
 # Paths whose existence we never check (network, mail, in-page anchors).
 URI_SCHEMES = ("http://", "https://", "mailto:")
 
-# ---------------------------------------------------------------------------
-# Diátaxis front-matter vocabulary.
-# ---------------------------------------------------------------------------
-
 VALID_DIATAXIS_MODES: frozenset[str] = frozenset(
     {"tutorial", "how-to", "reference", "explanation"}
 )
 
 VALID_ARC52_SECTIONS: frozenset[str] = frozenset({"§3", "§5", "§7", "§10"})
-
-# ---------------------------------------------------------------------------
-# Heuristic patterns for the simple mode-vs-content check (warn-only).
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# File / directory classification.
-# ---------------------------------------------------------------------------
 
 # Files exempt from all checks regardless of tree.
 EXCLUDED_FILE_NAMES: set[str] = {
@@ -249,11 +229,6 @@ STANDARD_DIR_NAMES: set[str] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Result types.
-# ---------------------------------------------------------------------------
-
-
 class Violation(NamedTuple):
     severity: str
     rule: str
@@ -290,11 +265,6 @@ class FrontmatterResult(NamedTuple):
     error: str | None
     error_kind: str | None
     body_offset: int
-
-
-# ---------------------------------------------------------------------------
-# Helpers.
-# ---------------------------------------------------------------------------
 
 
 def relative_to(path: Path, root: Path) -> Path | None:
@@ -368,7 +338,6 @@ def collect_markdown_files(targets: list[Path], docs_root: Path) -> list[Path]:
                     continue
                 files.add(md_file)
             continue
-        # Fallback: treat as glob pattern.
         for md_file in docs_root.glob(target.as_posix()):
             if md_file.is_file():
                 rel = relative_to(md_file, docs_root)
@@ -388,11 +357,6 @@ def read_text(report: FileReport) -> str | None:
             Violation(ERROR, "READ_ERROR", f"Could not read file: {exc}")
         )
         return None
-
-
-# ---------------------------------------------------------------------------
-# Front-matter extraction.
-# ---------------------------------------------------------------------------
 
 
 def parse_frontmatter(text: str) -> FrontmatterResult:
@@ -491,11 +455,6 @@ def body_text(text: str, fm: FrontmatterResult) -> str:
     """Return the markdown body (lines after the front-matter)."""
     lines = text.splitlines()
     return "\n".join(lines[fm.body_offset:])
-
-
-# ---------------------------------------------------------------------------
-# Existing checks (link / ADR / plan / body references).
-# ---------------------------------------------------------------------------
 
 
 def check_markdown_links(report: FileReport, docs_root: Path) -> None:
@@ -667,7 +626,6 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
         if in_fence:
             continue
 
-        # Stage 1: markdown-link form `[text](path.md)`.
         for match in MARKDOWN_LINK.finditer(line):
             target = match.group(1).strip()
             target_path_only = target.split(" ", 1)[0].split("#", 1)[0]
@@ -700,7 +658,6 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
             # same conceptual issue; skip the secondary forms.
             continue
 
-        # Stage 2: backtick form `` `path.md` ``.
         for match in BACKTICK_SPAN.finditer(line):
             inner = match.group(1).strip()
             if not _is_md_path_in_backticks(inner):
@@ -756,11 +713,6 @@ def check_standard_body_references(report: FileReport, docs_root: Path) -> None:
                         f"the file.",
                     )
                 )
-
-
-# ---------------------------------------------------------------------------
-# Diátaxis front-matter checks.
-# ---------------------------------------------------------------------------
 
 
 def check_line_citations(report: FileReport, docs_root: Path) -> None:
@@ -899,7 +851,6 @@ def check_diataxis_frontmatter(report: FileReport) -> None:
 
     parsed = fm.parsed
 
-    # Required keys.
     for required in ("diataxis", "title"):
         if required not in parsed:
             report.violations.append(
@@ -910,7 +861,6 @@ def check_diataxis_frontmatter(report: FileReport) -> None:
                 )
             )
 
-    # Mode vocabulary check (only if `diataxis:` is present and scalar-ish).
     if "diataxis" in parsed:
         mode_value = parsed["diataxis"]
         if not isinstance(mode_value, str):
@@ -933,10 +883,8 @@ def check_diataxis_frontmatter(report: FileReport) -> None:
                 )
             )
 
-    # arc52 check (only if present).
     if "arc52" in parsed:
         arc52_value = parsed["arc52"]
-        # Must be a list of strings drawn from VALID_ARC52_SECTIONS.
         if not isinstance(arc52_value, list):
             report.violations.append(
                 Violation(
@@ -961,15 +909,6 @@ def check_diataxis_frontmatter(report: FileReport) -> None:
                         f"{bad}. Valid sections: {valid}.",
                     )
                 )
-
-        # FRONTMATTER_ARC52_OUT_OF_PLACE used to live here: `arc52:` on a
-        # non-architecture doc was warned. Removed because the architecture
-        # doc moved to `explanation/architecture.md` (flat, no subfolder).
-
-
-# ---------------------------------------------------------------------------
-# DOC anchor checks.
-# ---------------------------------------------------------------------------
 
 
 def check_doc_anchors(report: FileReport, path: Path, engine_root: Path) -> None:
@@ -1082,11 +1021,6 @@ def check_test_support_rules(report: FileReport, path: Path, engine_root: Path) 
                 )
 
 
-# ---------------------------------------------------------------------------
-# Route check.
-# ---------------------------------------------------------------------------
-
-
 def load_route_table(engine_root: Path) -> list[list[str]] | None:
     """Return the routes of the generated table as segment lists, or None if absent."""
     table_path = engine_root / ROUTES_DOC
@@ -1190,11 +1124,6 @@ def scan_routes(files: list[Path], engine_root: Path) -> list[FileReport]:
     return reports
 
 
-# ---------------------------------------------------------------------------
-# Scanning and rendering.
-# ---------------------------------------------------------------------------
-
-
 def scan_file(
     path: Path,
     engine_root: Path,
@@ -1270,11 +1199,6 @@ def render_reports(
     lines.append(f"Scanned {len(reports)} file(s)")
     lines.append(f"Summary: {summary}")
     return "\n".join(lines), error_count, warning_count, files_with_violations
-
-
-# ---------------------------------------------------------------------------
-# CLI.
-# ---------------------------------------------------------------------------
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

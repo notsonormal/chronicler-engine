@@ -22,7 +22,6 @@ pub struct LlmCallResult {
 }
 
 impl LlmCallResult {
-    /// Build forensic message from result + original prompts.
     /// Prompts are not echoed in the transport result — caller supplies them.
     pub fn to_message(&self, system_prompt: &str, user_prompt: &str) -> LlmMessage {
         LlmMessage {

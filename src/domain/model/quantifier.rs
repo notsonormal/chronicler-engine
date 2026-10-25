@@ -25,7 +25,6 @@ pub struct CharacterTransition {
     pub event_type: CharacterTransitionType,
 }
 
-/// The Character transitions between two sets of Character ids.
 #[derive(Debug, Clone, Default)]
 pub struct CharacterTransitions {
     pub events: Vec<CharacterTransition>,

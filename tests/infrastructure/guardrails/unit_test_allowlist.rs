@@ -90,7 +90,6 @@ pub const SEAM_CONTRACT_FILES: &[&str] = &[
     "adapters/driven/llm/providers/ollama_tests.rs",
     "adapters/driven/llm/providers/openrouter_tests.rs",
     "adapters/driven/llm/transport/utils/request_tests.rs",
-    // Each Agent is a box behind the LLM port, so its test file declares its cases.
     "application/agents/options/agent_tests.rs",
     "application/agents/quantifier/agent_tests.rs",
     "application/narration/narrator_tests.rs",

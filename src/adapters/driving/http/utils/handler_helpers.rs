@@ -3,7 +3,6 @@
 
 use uuid::Uuid;
 
-/// Empty string → `None`; otherwise `Some(value.to_string())`.
 pub(crate) fn opt_string(value: &str) -> Option<String> {
     if value.is_empty() {
         None

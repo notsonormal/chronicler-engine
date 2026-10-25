@@ -116,7 +116,6 @@ impl Storage {
         })
     }
 
-    /// How many Games hold the preset in any of its preset slots.
     pub fn count_games_using_preset(&self, preset_id: &str) -> Result<usize, EngineError> {
         self.with_backend_mut(
             StorageCall::CountGamesUsingPreset,

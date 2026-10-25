@@ -59,7 +59,6 @@ def extract_images(file_path: Path, output_dir: Path) -> str | None:
         main_img.save(full_path)
         print(f"[{file_path.name}] Full image saved to -> {full_path}")
 
-        # Top 40% as portrait crop
         w, h = main_img.size
         crop_height = int(h * 0.4)
         cropped = main_img.crop((0, 0, w, crop_height))

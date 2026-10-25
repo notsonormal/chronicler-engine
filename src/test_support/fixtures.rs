@@ -563,7 +563,6 @@ pub fn default_story_row(message_type: MessageType) -> StoryRow {
     }
 }
 
-/// The entries of a story window that show no room header.
 pub fn window_entries(rows: &[StoryRow]) -> Vec<StoryWindowEntry> {
     rows.iter()
         .map(|row| StoryWindowEntry {

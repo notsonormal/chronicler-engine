@@ -84,7 +84,6 @@ async fn test_confirm_preview_leaves_form_ready_and_usable() {
         TEST_WORLD,
         TEST_PERSONA,
         |page, port| async move {
-            // Enable the real text check so a misspelling is intercepted.
             let client = reqwest::Client::new();
             let resp = client
                 .post(format!("http://127.0.0.1:{port}/settings/text-check"))

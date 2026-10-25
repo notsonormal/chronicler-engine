@@ -13,8 +13,6 @@ use crate::support::app_wiring::app_with_script;
 use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
 use crate::support::http_requests::{fetch_body, post_action, post_empty, response_body, wait_settled};
 
-/// The first swipe switch the rendered log offers, as `(message id, target
-/// index)`.
 fn first_switch_target(log_fragment: &str) -> (u64, usize) {
     let marker = "switchSwipe(";
     let start = log_fragment

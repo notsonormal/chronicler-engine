@@ -23,7 +23,6 @@ const ENTRY_COLUMN_COUNT: usize = 8;
 const ENTRY_FROM: &str = "FROM messages m \
      LEFT JOIN message_swipes s ON s.message_id = m.id AND s.swipe_index = m.active_swipe_index";
 
-/// The window read: its entries oldest first, each with its active Swipe state.
 pub struct StoryWindowRead {
     pub entries: Vec<(StoryRow, SwipeState)>,
     pub retrigger_allowed: bool,
@@ -127,8 +126,6 @@ impl StoryReads<'_> {
             })
     }
 
-    /// The active Swipe of a Message of this Game, or none when the Game holds no
-    /// such Message.
     pub fn active_swipe(&self, game: GameId, message: u64) -> Result<Option<SwipeAt>, EngineError> {
         self.storage
             .with_backend_mut(StorageCall::StoriesActiveSwipe, |backend| match backend {
@@ -150,8 +147,6 @@ impl StoryReads<'_> {
             })
     }
 
-    /// Whether any Message of the story holds text: `/options` needs something to
-    /// work from. One `EXISTS` query, and no Swipe state.
     pub fn has_text(&self, game: GameId) -> Result<bool, EngineError> {
         self.storage
             .with_backend_mut(StorageCall::StoriesHasText, |backend| match backend {

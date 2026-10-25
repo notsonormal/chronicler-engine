@@ -66,8 +66,6 @@ async fn test_games_fragment_renders_posture_controls_http() {
         "the preset pickers must auto-save to this game: {html}"
     );
 
-    // The failure path is asserted in `games::handlers::games_tests`; this is
-    // the healthy one.
     assert!(
         !html.contains("Presets unavailable"),
         "the preset pickers must render without a load error: {html}"

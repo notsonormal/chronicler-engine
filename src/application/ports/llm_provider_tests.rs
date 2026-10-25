@@ -6,7 +6,6 @@ fn test_merge_single_user_message_format() {
     assert!(merged.starts_with("[SYSTEM]\n"));
     assert!(merged.contains("system content"));
     assert!(merged.contains("user content"));
-    // System content should come before user content
     let system_pos = merged.find("system content").unwrap();
     let user_pos = merged.find("user content").unwrap();
     assert!(system_pos < user_pos);

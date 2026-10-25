@@ -144,8 +144,6 @@ fn test_is_steering_false_for_free_action() {
     assert!(!Action::FreeAction(String::new()).is_steering());
     assert!(!Action::FreeAction("/shrug".to_string()).is_steering());
     assert!(!Action::FreeAction("look around".to_string()).is_steering());
-    // Options is an engine command, not steering — new Options must
-    // never be treated as the player steering the narrator.
     assert!(!Action::Options.is_steering());
 }
 

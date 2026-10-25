@@ -50,7 +50,6 @@ impl TemplateVars {
         }
     }
 
-    /// Substitute the known `{{...}}` placeholders in author-controlled text.
     pub fn render(&self, text: &str) -> String {
         text.replace("{{user}}", &self.user)
             .replace("{{persona_description}}", &self.persona_description)

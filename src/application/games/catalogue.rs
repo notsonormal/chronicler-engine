@@ -55,7 +55,6 @@ impl GameCatalogue {
         let request =
             self.new_game_request(&world_with_map, &player, world_key, persona_key, name)?;
 
-        // One create unit: the Game, its empty dock record and the opening Narration.
         let new_id = self.game_writer.create(&request)?;
         // The pointer moves only once the unit landed, so a failed create leaves the
         // previous Game active.

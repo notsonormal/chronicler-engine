@@ -31,7 +31,6 @@ const PATH_EXEMPT_PATHS: &[&str] = &[
 pub fn check_free_fn_location(path: &str, content: &str) -> Vec<Violation> {
     let mut violations = Vec::new();
 
-    // Test files are exempt — unit tests under src/ follow the `*_tests.rs` convention.
     if path.ends_with("_tests.rs") {
         return violations;
     }
@@ -57,7 +56,6 @@ pub fn check_free_fn_location(path: &str, content: &str) -> Vec<Violation> {
         return violations;
     }
 
-    // Parse with syn and flag every top-level free fn (any visibility, sync or async).
     let Ok(ast) = syn::parse_file(content) else {
         return violations; // let cargo's own compile step surface syntax errors
     };

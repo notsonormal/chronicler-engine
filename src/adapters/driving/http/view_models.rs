@@ -60,7 +60,6 @@ impl SelectOptionView {
         .collect()
     }
 
-    /// "Provider default" (the empty value) first, then every effort in order.
     pub fn reasoning_efforts(selected: Option<ReasoningEffort>) -> Vec<Self> {
         std::iter::once(Self {
             value: String::new(),
@@ -75,7 +74,6 @@ impl SelectOptionView {
         .collect()
     }
 
-    /// The label of one effort's option on the connection form.
     fn reasoning_effort_label(effort: ReasoningEffort) -> &'static str {
         match effort {
             ReasoningEffort::Off => "None (reasoning off)",

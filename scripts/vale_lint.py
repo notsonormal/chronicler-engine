@@ -43,8 +43,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# --- Scope (mirrors validate_docs.py) ----------------------------------------
-
 ENGINE_ROOT = Path(__file__).resolve().parent.parent
 DOCS_ROOT = ENGINE_ROOT / "docs"
 VALE_INI = ENGINE_ROOT / ".vale.ini"
@@ -60,8 +58,6 @@ EXCLUDED_FILE_NAMES: set[str] = {
     "README.md",
 }
 
-
-# --- Scope filtering ---------------------------------------------------------
 
 
 def is_in_scope(md_file: Path) -> bool:
@@ -110,8 +106,6 @@ def collect_targets(paths: list[Path]) -> list[Path]:
         print(f"WARNING: path not found: {target}", file=sys.stderr)
     return sorted(files)
 
-
-# --- Vale invocation ---------------------------------------------------------
 
 
 def find_vale() -> str | None:
@@ -230,12 +224,10 @@ def main() -> int:
         )
         return 2
 
-    # Validate config exists.
     if not VALE_INI.exists():
         print(f"ERROR: Vale config missing: {VALE_INI}", file=sys.stderr)
         return 2
 
-    # Determine target paths.
     if args.paths:
         targets = collect_targets(args.paths)
         # Normalize: if user passed a path that resolved to nothing, fail loud.
@@ -246,7 +238,6 @@ def main() -> int:
             )
             return 3
     else:
-        # Default: all STANDARD docs.
         targets = collect_targets([DOCS_ROOT])
 
     if not args.quiet:

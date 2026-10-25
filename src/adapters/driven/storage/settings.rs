@@ -37,7 +37,6 @@ impl Storage {
         }
     }
 
-    /// Write the singleton settings row into an already-locked backend.
     fn write_settings(
         backend: &mut Backend,
         settings: &AppSettings,
