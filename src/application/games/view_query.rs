@@ -9,6 +9,7 @@ use crate::application::debug::DebugStateView;
 use crate::application::errors::ApplicationError;
 use crate::application::generation::gate::{Busy, GameWriter};
 use crate::domain::model::agent::Role;
+use crate::domain::model::change::ChangeVersions;
 use crate::domain::model::dock::DockRecord;
 use crate::domain::model::game::GameId;
 use crate::domain::model::llm_message::LlmMessage;
@@ -219,6 +220,12 @@ impl GameViewQuery {
                 None => Status::Idle,
             },
         )
+    }
+
+    /// The change numbers of this moment, with the per-Game numbers of `game`. It reads
+    /// memory only.
+    pub fn change_versions(&self, game: Option<GameId>) -> ChangeVersions {
+        self.storage.changes().versions(game)
     }
 
     pub fn is_busy(&self, game_id: GameId) -> bool {

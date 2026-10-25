@@ -50,6 +50,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | GET | `/fragment/visual-sidebar` | `visual_sidebar_fragment` |
 | GET | `/fragment/options-dock` | `options_dock_fragment` |
 | GET | `/fragment/character-headshots` | `character_headshots_fragment` |
+| GET | `/changes` | `changes_handler` |
 | GET | `/status/busy` | `busy_status_handler` |
 | POST | `/status/reset-busy` | `reset_busy_handler` |
 | GET | `/fragment/llm-messages` | `llm_messages_fragment` |

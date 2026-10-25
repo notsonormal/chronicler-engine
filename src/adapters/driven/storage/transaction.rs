@@ -1,9 +1,11 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! The transaction: one unit of record writes that lands whole
 
+use crate::adapters::driven::storage::changes::ChangeCounters;
 use crate::adapters::driven::storage::core::WriteOverrides;
 use crate::adapters::driven::storage::utils::require_message_of_game;
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
+use crate::domain::model::change::ChangeKind;
 use crate::domain::model::dock::{DockRecord, OptionsFailure};
 use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::message::{Message, Swipe, SwipeAt};
@@ -51,6 +53,8 @@ pub struct Tx<'a> {
     conn: rusqlite::Transaction<'a>,
     writes: WriteOverrides,
     game: GameId,
+    /// The kinds of the writes that succeeded, each once.
+    changed: Vec<ChangeKind>,
 }
 
 impl<'a> Tx<'a> {
@@ -59,7 +63,12 @@ impl<'a> Tx<'a> {
         writes: WriteOverrides,
         game: GameId,
     ) -> Self {
-        Self { conn, writes, game }
+        Self {
+            conn,
+            writes,
+            game,
+            changed: Vec::new(),
+        }
     }
 
     /// The row lands before the `Tx` exists, so the unit's writes already know the
@@ -105,6 +114,7 @@ impl<'a> Tx<'a> {
                 rusqlite::params![self.game.0 as i64],
             )
             .db_context("Failed to delete game")?;
+        self.wrote(TxWrite::DeleteGame);
         Ok(())
     }
 
@@ -124,6 +134,7 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to insert message")?;
+        self.wrote(TxWrite::InsertMessage);
         Ok(self.conn.last_insert_rowid() as u64)
     }
 
@@ -136,6 +147,7 @@ impl<'a> Tx<'a> {
                 rusqlite::params![at.swipe as i64, at.message as i64],
             )
             .db_context("Failed to set the active swipe")?;
+        self.wrote(TxWrite::SetActiveSwipe);
         Ok(())
     }
 
@@ -149,6 +161,7 @@ impl<'a> Tx<'a> {
                 rusqlite::params![message as i64],
             )
             .db_context("Failed to delete message")?;
+        self.wrote(TxWrite::DeleteMessage);
         Ok(())
     }
 
@@ -172,6 +185,7 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to insert swipe")?;
+        self.wrote(TxWrite::InsertSwipe);
         Ok(())
     }
 
@@ -184,6 +198,7 @@ impl<'a> Tx<'a> {
                 rusqlite::params![text, at.message as i64, at.swipe as i64],
             )
             .db_context("Failed to set the swipe text")?;
+        self.wrote(TxWrite::SetSwipeText);
         Ok(())
     }
 
@@ -200,6 +215,7 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to set the swipe state")?;
+        self.wrote(TxWrite::SetSwipeState);
         Ok(())
     }
 
@@ -217,6 +233,7 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to set the failure line")?;
+        self.wrote(TxWrite::SetGameFailure);
         Ok(())
     }
 
@@ -265,12 +282,15 @@ impl<'a> Tx<'a> {
         if affected == 0 {
             return Err(EngineError::GameNotFound(self.game.0));
         }
+        self.wrote(TxWrite::SetGameConfig);
         Ok(())
     }
 
     pub fn put_dock(&mut self, record: &DockRecord) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::PutDock)?;
-        self.write_dock(record)
+        self.write_dock(record)?;
+        self.wrote(TxWrite::PutDock);
+        Ok(())
     }
 
     /// Replaces the Options failure and keeps the offered set the row holds.
@@ -283,6 +303,7 @@ impl<'a> Tx<'a> {
                 rusqlite::params![self.game.0 as i64, serde_json::to_string(failure)?],
             )
             .db_context("Failed to write the Options failure")?;
+        self.wrote(TxWrite::PutOptionsFailure);
         Ok(())
     }
 
@@ -290,7 +311,9 @@ impl<'a> Tx<'a> {
     /// record.
     pub fn clear_dock(&mut self) -> Result<(), EngineError> {
         self.writes.fail_if_injected(TxWrite::ClearDock)?;
-        self.write_dock(&DockRecord::default())
+        self.write_dock(&DockRecord::default())?;
+        self.wrote(TxWrite::ClearDock);
+        Ok(())
     }
 
     fn write_dock(&mut self, record: &DockRecord) -> Result<(), EngineError> {
@@ -312,10 +335,20 @@ impl<'a> Tx<'a> {
         Ok(())
     }
 
-    fn commit(self) -> Result<(), EngineError> {
+    fn wrote(&mut self, write: TxWrite) {
+        for &kind in ChangeCounters::kinds_of_write(write) {
+            if !self.changed.contains(&kind) {
+                self.changed.push(kind);
+            }
+        }
+    }
+
+    /// The kinds the unit raises: the writes that succeeded, once the commit has landed.
+    fn commit(self) -> Result<Vec<ChangeKind>, EngineError> {
         self.conn
             .commit()
-            .db_context("Failed to commit transaction")
+            .db_context("Failed to commit transaction")?;
+        Ok(self.changed)
     }
 }
 
@@ -369,8 +402,12 @@ impl Storage {
                     }
                 };
                 let mut tx = Tx::new(unit, writes, game);
+                if matches!(unit_game, UnitGame::New(_)) {
+                    tx.wrote(TxWrite::InsertGame);
+                }
                 let value = f(game, &mut tx)?;
-                tx.commit()?;
+                let changed = tx.commit()?;
+                self.changes().raise(Some(game), &changed);
                 Ok(value)
             }
         })

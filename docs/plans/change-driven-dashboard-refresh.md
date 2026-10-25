@@ -1,7 +1,7 @@
 # Plan: Change-driven dashboard refresh
 
 **Date:** 2026-10-25
-**Status:** Draft. The design was decided with the owner, reviewed against the code, and the two decisions from the review are made (D1, D2). Not started.
+**Status:** In progress. The design was decided with the owner, reviewed against the code, and the two decisions from the review are made (D1, D2). Stage 1 is built (not yet committed); stages 2–4 are not started.
 **Goal:** One architecture for how the dashboard shows server data. Data flows one way: an action saves data, and the regions that show the data load it. A region loads only when its data changed, keeps what the load does not change, and waits while the player edits in it. One table, one load path and one test cover every region. A missed load or a destroyed form fails a test. It does not depend on timing.
 
 This plan replaces `docs/plans/games-panel-rename-form-survives-the-poll.md`, which was never committed. It closes `.scratch/autoplay-follow-ups/issues/04-rename-form-survives-the-games-panel-poll.md` at the end of stage 3.
@@ -143,8 +143,8 @@ The banner and the Settings role-health cells load on the same raise of "LLM mes
 - `src/domain/model/change.rs` (new): `ChangeKind` (the eight kinds) and `ChangeVersions` (one snapshot of the numbers, `Serialize`). Plain data, so the server can use `ChangeVersions` without importing storage.
 - `src/adapters/driven/storage/changes.rs` (new): `ChangeCounters`. It holds:
   - a server id, a `uuid::Uuid::new_v4()` made at construction (the `uuid` crate is already a dependency);
-  - one `AtomicU64` for each engine-wide kind;
-  - a `Mutex<HashMap<GameId, …>>` with the three per-Game numbers. A deleted Game's entry is dropped.
+  - every number under one `Mutex`: the engine-wide numbers, and a `HashMap<GameId, …>` with the three per-Game numbers. The storage guardrail (`tests/infrastructure/guardrails/walker_rows.rs`) bans `Atomic*` types in the storage adapter, and one lock lets a snapshot read all numbers together. The counter lock is always the innermost lock: a raise takes no other lock.
+  - `GameWriter::delete` and `replace` drop a deleted Game's entry after their hold returns. A drop inside the transaction would not work, because the hold's own busy raise would make the entry again.
 
   It also holds the two exhaustive maps, `StorageCall → kinds` and `TxWrite → kinds`. Each map is one `match` with no `_` arm and `#[deny(clippy::wildcard_enum_match_arm)]`. So a new variant does not compile until it names its kinds (Q6).
 - `Storage` gets the field `changes: ChangeCounters`. `new_sqlite` builds it, and `with_overrides` carries it over. `Storage::changes()` gives read and raise access to the application.
@@ -168,7 +168,7 @@ There are three raise points:
      - `InsertSwipe`, `SetSwipeText`, `SetSwipeState` and `SetActiveSwipe` map to story;
      - `PutDock`, `PutOptionsFailure` and `ClearDock` map to Options;
      - `SetGameFailure` maps to busy state;
-     - `InsertGame`, `DeleteGame` and `SetGameConfig` map to games.
+     - `InsertGame`, `DeleteGame` and `SetGameConfig` map to games. The Game row of a create lands before the `Tx` exists, so `run_transaction` records `InsertGame` itself on the create path.
    - After `tx.commit()` returns `Ok`, the transaction raises the recorded kinds once, for its Game. A rolled-back transaction raises nothing.
 3. **The busy state: `BusyRegistry::hold`** (`src/application/generation/gate.rs`). This is the only code that takes the busy lock.
    - Before and after the closure, derive the `Busy` value of each held Game. `Busy` already derives `PartialEq`. For each Game whose value changed, raise busy state. This drops the repeated `step()` calls that keep the same value.

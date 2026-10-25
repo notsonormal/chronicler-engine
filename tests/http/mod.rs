@@ -7,6 +7,7 @@ pub use test_utils::TEST_PERSONA;
 
 mod actions;
 mod autoplay;
+mod changes;
 mod dashboard;
 mod failure_display;
 mod games_config;

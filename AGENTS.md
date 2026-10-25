@@ -26,6 +26,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `request.rs` — LLM request building
             - `response.rs` — LLM response parsing
       - **storage/**
+        - `changes.rs` — The change counters: one number for each kind of data, raised after the data is committed
         - `characters.rs` — Character storage backend operations
         - `core.rs` — Storage backend and core abstractions
         - `db.rs` — SQLite database connection pool
@@ -237,6 +238,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **model/**
       - `action.rs` — Action enum and semantic command types (slash-command steering entry)
       - `agent.rs` — Agent definitions and behavior types
+      - `change.rs` — The change kinds the server counts, and one snapshot of their numbers
       - `character.rs` — Character sheet data and Character card definitions
       - `dock.rs` — The dock record: the offered set and the one Options failure of a Game
       - `game.rs` — Game state and Game management

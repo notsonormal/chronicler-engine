@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! GameWriter and JobWriter — the writer rule and the guard: the one registry of the busy state, and the transactions a Job writes through.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -11,6 +11,7 @@ use crate::domain::model::character::CharacterCard;
 use crate::domain::model::dock::{DockRecord, OptionsFailure};
 use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::agent::Kind;
+use crate::domain::model::change::ChangeKind;
 use crate::domain::model::generation::{
     GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanRefusal, Place, StoryEnd,
 };
@@ -150,6 +151,16 @@ impl Holder {
     fn is_autoplay_run(&self, id: AutoplayRunId) -> bool {
         matches!(self, Self::Autoplay { run, .. } if *run == id)
     }
+
+    fn busy(&self) -> Busy {
+        match self {
+            Self::Job(entry) => Busy::Job(entry.step.clone()),
+            Self::Autoplay { progress, job, .. } => Busy::Autoplay {
+                progress: *progress,
+                step: job.as_ref().map(|entry| entry.step.clone()),
+            },
+        }
+    }
 }
 
 /// Absent means idle.
@@ -170,6 +181,10 @@ impl BusyRegistry {
 
     /// A writer's check and its transactions happen in one critical section, and the lock
     /// order stays the guard, then the backend mutex, then the connection mutex.
+    ///
+    /// The busy state is memory only, so this is the one place that sees it change. The
+    /// `Busy` of each Game before and after `f` decide the raise, and a step that keeps
+    /// its value raises nothing.
     fn hold<T>(&self, storage: &Arc<Storage>, f: impl FnOnce(&mut Holders, &TxOpener) -> T) -> T {
         let opener = TxOpener {
             storage: Arc::clone(storage),
@@ -179,7 +194,45 @@ impl BusyRegistry {
             .busy
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        f(&mut busy, &opener)
+        let before = Self::busy_of_each(&busy);
+        let result = f(&mut busy, &opener);
+        let after = Self::busy_of_each(&busy);
+        Self::raise_busy_changes(storage, &before, &after);
+        result
+    }
+
+    fn busy_of_each(holders: &Holders) -> HashMap<GameId, (Busy, bool)> {
+        holders
+            .iter()
+            .map(|(game, holder)| {
+                let is_run = matches!(holder, Holder::Autoplay { .. });
+                (*game, (holder.busy(), is_run))
+            })
+            .collect()
+    }
+
+    /// The busy state of each Game whose `Busy` changed, and the Games list when the set
+    /// of Games that a run holds changed: the list marks those Games.
+    fn raise_busy_changes(
+        storage: &Storage,
+        before: &HashMap<GameId, (Busy, bool)>,
+        after: &HashMap<GameId, (Busy, bool)>,
+    ) {
+        let changes = storage.changes();
+        for game in before.keys().chain(after.keys()).collect::<HashSet<_>>() {
+            if before.get(game).map(|held| &held.0) != after.get(game).map(|held| &held.0) {
+                changes.raise(Some(*game), &[ChangeKind::BusyState]);
+            }
+        }
+        let run_games = |held: &HashMap<GameId, (Busy, bool)>| -> HashSet<GameId> {
+            held.iter()
+                .filter(|(_, (_, is_run))| *is_run)
+                .map(|(game, _)| *game)
+                .collect()
+        };
+        if run_games(before) != run_games(after) {
+            changes.raise(None, &[ChangeKind::Games]);
+        }
     }
 }
 
@@ -459,15 +512,7 @@ impl GameWriter {
     }
 
     pub fn busy(&self, game: GameId) -> Option<Busy> {
-        self.hold(|holders, _opener| {
-            holders.get(&game).map(|holder| match holder {
-                Holder::Job(entry) => Busy::Job(entry.step.clone()),
-                Holder::Autoplay { progress, job, .. } => Busy::Autoplay {
-                    progress: *progress,
-                    step: job.as_ref().map(|entry| entry.step.clone()),
-                },
-            })
-        })
+        self.hold(|holders, _opener| holders.get(&game).map(Holder::busy))
     }
 
     pub fn stop(&self, game: GameId) -> Result<(), EngineError> {
@@ -561,6 +606,7 @@ impl GameWriter {
             opener.open(old, |tx| tx.delete_game())?;
             Ok(new_id)
         })
+        .inspect(|_| self.storage.changes().forget_game(old))
     }
 
     /// One hold: the Game's holder ends under the same guard as its rows, so the
@@ -570,6 +616,7 @@ impl GameWriter {
             holders.remove(&game);
             opener.open(game, |tx| tx.delete_game())
         })
+        .inspect(|()| self.storage.changes().forget_game(game))
     }
 
     fn create_in_tx(

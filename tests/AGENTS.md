@@ -80,6 +80,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
+    - `changes.rs` — HTTP E2E tests for the change numbers (`GET /changes`): which numbers each save path moves, and which numbers a read, a failed save and a rolled-back transaction leave as they were. Tagged against `docs/specs/changes.md`.
     - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite, the busy-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
     - `failure_display.rs` — HTTP E2E tests for the failure display, tagged against `docs/specs/failure_display.md`.
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
@@ -153,6 +154,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `flow_llm_tests.rs` — LLM-driven flow tests: exercises real LLM provider flows end-to-end (ignored by default; run with `python build.py --llm-only`).
     - `mod.rs` — LLM test binary: real LLM provider flows (ignored by default; run with `python build.py --llm-only`).
 - **storage/**
+    - `changes.rs` — The storage seam of the change counters: what a committed transaction, a rolled-back transaction, a storage call, a failed call and a read do to the numbers.
     - `llm_message_storage.rs` — Integration tests for LLM message persistence: save/list, error-message preservation, global-cap pruning, and pagination across a real SQLite-backed `Storage`.
     - `mod.rs` — Driven-adapter storage seam tests: repositories exercised against a real SQLite-backed `Storage`.
     - `preset_storage.rs` — Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset

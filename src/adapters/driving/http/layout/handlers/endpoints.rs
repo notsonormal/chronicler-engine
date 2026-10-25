@@ -2,7 +2,7 @@
 //! Fragment endpoints
 
 use axum::body::Body;
-use axum::{extract::State, response::Html, response::Response};
+use axum::{extract::State, response::Html, response::Response, Json};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
@@ -10,6 +10,7 @@ use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
 use crate::application::generation::gate::Busy;
+use crate::domain::model::change::ChangeVersions;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record};
 
 pub async fn header_fragment(
@@ -65,6 +66,17 @@ pub async fn character_headshots_fragment(
 
 pub async fn llm_messages_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(&state, |s| s.render_llm_messages(), "llm_messages_fragment")
+}
+
+pub async fn changes_handler(
+    State(state): State<AppState>,
+    current: Option<CurrentGame>,
+) -> Json<ChangeVersions> {
+    Json(
+        state
+            .game_view_query
+            .change_versions(current.map(|CurrentGame(game_id)| game_id)),
+    )
 }
 
 pub async fn busy_status_handler(

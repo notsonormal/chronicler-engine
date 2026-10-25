@@ -6,6 +6,7 @@ use std::sync::Mutex;
 #[cfg(feature = "testing")]
 use std::sync::Arc;
 
+use crate::adapters::driven::storage::changes::ChangeCounters;
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::transaction::TxWrite;
 use crate::domain::model::game::GameId;
@@ -15,6 +16,7 @@ use super::test_support::{TestFailureHandle, TestOverride};
 
 pub struct Storage {
     backend: Mutex<BackendKind>,
+    changes: ChangeCounters,
 }
 
 /// [TRIVIAL_ENUM]
@@ -113,7 +115,14 @@ impl Storage {
     pub fn new_sqlite(pool: DbPool) -> Self {
         Self {
             backend: Mutex::new(BackendKind::Direct(Backend::Sqlite { pool })),
+            changes: ChangeCounters::new(),
         }
+    }
+
+    /// The numbers that say which kinds of data changed. Storage raises them itself; the
+    /// busy registry raises the busy state.
+    pub fn changes(&self) -> &ChangeCounters {
+        &self.changes
     }
 
     /// A SQLite `:memory:` database, migrated like a file database.
@@ -170,6 +179,7 @@ impl Storage {
         overrides: Arc<Mutex<HashMap<StorageCall, TestOverride>>>,
         writes: Arc<Mutex<HashMap<TxWrite, TestOverride>>>,
     ) -> Self {
+        let changes = self.changes;
         let backend = match self.backend.into_inner() {
             Ok(b) => b,
             Err(poisoned) => poisoned.into_inner(),
@@ -190,6 +200,7 @@ impl Storage {
                 overrides,
                 writes,
             }),
+            changes,
         }
     }
 
@@ -213,7 +224,7 @@ impl Storage {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
-        match &mut *backend {
+        let result = match &mut *backend {
             BackendKind::Direct(inner) => f(inner, WriteOverrides::Direct),
             #[cfg(feature = "testing")]
             BackendKind::Test {
@@ -230,7 +241,14 @@ impl Storage {
                 }
                 f(base.as_mut(), WriteOverrides::Test(Arc::clone(writes)))
             }
+        };
+        // Raised while the backend lock is held: a load that reads the committed data
+        // waits for the lock, so it never sees a raised number with the old data.
+        if result.is_ok() {
+            self.changes
+                .raise(None, ChangeCounters::kinds_of_call(call));
         }
+        result
     }
 }
 

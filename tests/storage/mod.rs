@@ -9,6 +9,7 @@ mod fixtures;
 #[path = "../helpers/storage_ext.rs"]
 mod storage_ext;
 
+mod changes;
 mod llm_message_storage;
 mod preset_storage;
 mod story_storage;

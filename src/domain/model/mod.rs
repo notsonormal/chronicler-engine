@@ -3,6 +3,7 @@
 
 pub mod action;
 pub mod agent;
+pub mod change;
 pub mod character;
 pub mod dock;
 pub mod game;

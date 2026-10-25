@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! Storage layer and database access
 
+pub mod changes;
 pub mod characters;
 pub mod core;
 pub mod db;
