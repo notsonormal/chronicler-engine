@@ -1,7 +1,7 @@
 # Plan: Change-driven dashboard refresh
 
 **Date:** 2026-10-25
-**Status:** In progress. The design was decided with the owner, reviewed against the code, and the two decisions from the review are made (D1, D2). Stages 1–3 are built and committed on `wf/change-driven-dashboard-refresh`; stage 4 is in progress.
+**Status:** Done (archived). All four stages are built on `wf/change-driven-dashboard-refresh`. The "Outcome" section at the end lists every difference from this plan.
 **Goal:** One architecture for how the dashboard shows server data. Data flows one way: an action saves data, and the regions that show the data load it. A region loads only when its data changed, keeps what the load does not change, and waits while the player edits in it. One table, one load path and one test cover every region. A missed load or a destroyed form fails a test. It does not depend on timing.
 
 This plan replaces `docs/plans/games-panel-rename-form-survives-the-poll.md`, which was never committed. It closes `.scratch/autoplay-follow-ups/issues/04-rename-form-survives-the-games-panel-poll.md` at the end of stage 3.
@@ -504,3 +504,31 @@ Each stage ends with `python build.py` green. During a stage, use `python build.
 - A JS framework or a JS build step. The browser side stays htmx 1.9.10, idiomorph and plain scripts.
 - A visual redesign. The editors keep their look, and the panels keep their layout.
 - The dead `/fragment/character-headshots` route and its template (`inventory.md`). File a separate ticket.
+
+## Outcome (2026-10-25)
+
+Built in six commits on `wf/change-driven-dashboard-refresh`: stage 1 (`cc60662e`), 2a (`b1daa1ef`), 2b (`cfc92819`), 3a (`782ca8e5`), 3b (`38593c79`), 4 (`af91b6b8`). Ticket 04 closed in `4dbeed72`. Every item of "Done when" holds.
+
+Differences from the plan, each with its reason:
+
+| Area | Plan | Built | Reason |
+|---|---|---|---|
+| Counters | `AtomicU64` per kind | One `Mutex` over all numbers | A storage guardrail bans `Atomic*` in the storage adapter; one lock also gives a consistent snapshot. |
+| Triggers | `load, refresh` | `refresh` only; the first ask loads every region | A `load` that no ask started has no numbers to record, so each region loaded twice at page start. |
+| Preview confirm | Unchanged | Answers nothing; `add_status_swap_headers` removed | Its answer carried `HX-Retarget: #status-display`, a write into a region the plan had missed. |
+| Options regenerate form | Not listed | Swaps nothing; refusal in its own slot | It targeted `#status-display` with `innerHTML`. |
+| Busy refusal | Inline slot | Still a 200 with the `status wait` markup, which the client reads and reports in the action's slot; never shown | The specs pin that answer widely. |
+| Retry and Retrigger failure | Action area | `#story-log-error` | The failure belongs to the story log action. |
+| Action area state | Own element | `#action-status`, which shows only "Thinking..." until the first status load after a send | The other states already had their own place. |
+| Inline errors | Not in the plan | A load keeps an inline error slot that shows an error | Without it, any load would erase a D2 error within a second. |
+| End of an edit | One rule | `endEdit` and `settleSave`; only a form releases `data-work`; markers `data-close-on-save`, `data-reset-on-save`, `data-autosave`, `data-saved-flag`, `data-refusal-what`, `data-opens-editor`, `data-close-editor` | An auto-save control is not a form and must not close the editor around it. The markers make each behaviour explicit instead of guessed. |
+| Row ids | `data-id` is enough | `id` on every row (`game-row-{id}`, `preset-card-{id}`, ...) | Idiomorph matches nodes by `id` only. |
+| Hidden section | Loads its stale regions | Opening a section asks at once | One path: the ask decides which regions are due. |
+| Rejected values | 200 with an error fragment | 400 (config values, World posture, World delete refusal, unknown connection edit) | A 2xx answer would be taken as a save. |
+| Status labels | Not specified | Rendered by the server in `layout/handlers/endpoints.rs`; `Step::label` removed from the domain | Presentation does not belong in the domain model. |
+| LLM message cards | `data-keep` on the card | The `.expanded` class is gone; `aria-expanded` and `hidden` carry the state | A class that the server also sets cannot be kept. |
+| Kept focus code | Remove | `.preset-card` focus code in `dashboard-panels.js` stays | Preset Edit, View and Cancel still swap their own card, and htmx restores focus only by id. |
+| Fade | Delete fade | Gone | Accepted risk. |
+
+Measured: a morph of the LLM Messages panel with 50 messages takes 26–61 ms per load (UI pass, `tmp/ui-pass/`).
+
