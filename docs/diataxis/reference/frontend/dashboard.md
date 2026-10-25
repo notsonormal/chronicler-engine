@@ -100,7 +100,7 @@ The Worlds editor and the connection editor open into an editor slot of their re
 
 ## Failures and Health
 
-A failure shows where its scope is. A failed form or control shows the failure in its own inline slot. A generation failure shows in the status display as a short sentence that names only an action the dashboard offers. The status display draws that sentence in full, and the raw error text stays behind its Details control. A failure that affects the whole engine shows in the failure banner. A change ask or a region load that gets no usable answer is an engine failure.
+A failure shows where its scope is. A failed form or control shows the failure in its own inline slot. A generation failure shows in the status display as a short sentence that names only an action the dashboard offers. The status display draws that sentence in full, and the raw error text stays behind its Details control. A failure that affects the whole engine shows in the failure banner. A failed load of the Settings, Prompt Presets, Worlds or Games panel shows its error in the panel, and the panel keeps its content. A change ask, or a failed load of any other region, is an engine failure. In both cases the region stays due, and the next ask loads it again.
 
 Four health states describe the engine's roles and the engine itself:
 
