@@ -1,8 +1,9 @@
-//! Shared test utilities re-exported across all test binaries: `browser`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
+//! Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
 
 #![allow(dead_code)]
 
 pub mod browser;
+pub mod convergence;
 pub mod html;
 pub mod htmx_settle;
 pub mod live_region_table;
@@ -13,6 +14,8 @@ pub mod wait;
 
 #[allow(unused_imports)]
 pub use browser::*;
+#[allow(unused_imports)]
+pub use convergence::*;
 #[allow(unused_imports)]
 pub use html::*;
 #[allow(unused_imports)]

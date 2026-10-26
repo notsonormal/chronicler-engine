@@ -17,7 +17,8 @@ async fn run_layout() {
         .run(StubActionOutcome::Pending, check_no_horizontal_overflow)
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the check appends its own entry to the story log by script",
             StubActionOutcome::Pending,
             check_log_entry_text_wraps_within_bubble,
         )
@@ -68,7 +69,8 @@ async fn run_layout() {
         )
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the check writes its own markup into the status display by script",
             StubActionOutcome::Pending,
             check_a_long_status_sentence_clamps_with_a_visible_cut,
         )

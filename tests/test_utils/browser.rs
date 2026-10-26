@@ -5,6 +5,7 @@ use std::time::Duration;
 use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
 
+use super::convergence::assert_screen_converged;
 use super::htmx_settle::{await_panel_ready, click_and_settle, install_htmx_settle};
 use super::html::preset_card_html_slice;
 use super::server::{buffer_text, get_config_port, registered_server_logs, tail_lines, TestServer};
@@ -75,6 +76,8 @@ async fn close_chrome(playwright: &playwright_rs::Playwright, browser: &playwrig
     let _ = playwright.shutdown().await;
 }
 
+/// After the test, the page must converge: each visible live region equals a
+/// fresh GET of its route.
 pub async fn with_test_page<F, Fut>(config_path: &str, world: &str, persona: &str, test_fn: F)
 where
     F: FnOnce(playwright_rs::Page, u16) -> Fut,
@@ -90,7 +93,8 @@ where
         .await
         .expect("Failed to connect to server");
 
-    test_fn(page, port).await;
+    test_fn(page.clone(), port).await;
+    assert_screen_converged(&page).await;
 
     close_chrome(&playwright, &browser).await;
 }

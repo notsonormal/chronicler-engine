@@ -31,8 +31,34 @@ impl StubRunner {
         }
     }
 
+    /// After the check, the page must converge: each visible live region equals
+    /// a fresh GET of its route.
     pub(super) async fn run<Fut>(
         &mut self,
+        outcome: StubActionOutcome,
+        check: impl FnOnce(playwright_rs::Page, StubServer) -> Fut,
+    ) where
+        Fut: std::future::Future<Output = ()>,
+    {
+        self.run_checked(true, outcome, check).await;
+    }
+
+    /// For a check that leaves the page in a state that no fresh render can match
+    /// on purpose, such as an engine that is unreachable. `reason` names that state.
+    pub(super) async fn run_without_convergence<Fut>(
+        &mut self,
+        _reason: &'static str,
+        outcome: StubActionOutcome,
+        check: impl FnOnce(playwright_rs::Page, StubServer) -> Fut,
+    ) where
+        Fut: std::future::Future<Output = ()>,
+    {
+        self.run_checked(false, outcome, check).await;
+    }
+
+    async fn run_checked<Fut>(
+        &mut self,
+        converges: bool,
         outcome: StubActionOutcome,
         check: impl FnOnce(playwright_rs::Page, StubServer) -> Fut,
     ) where
@@ -43,9 +69,14 @@ impl StubRunner {
         let stub = StubServer::start(outcome).await;
         let page = self.browser.open_page(&stub).await;
 
-        let result = AssertUnwindSafe(check(page.clone(), stub))
-            .catch_unwind()
-            .await;
+        let result = AssertUnwindSafe(async {
+            check(page.clone(), stub.lent()).await;
+            if converges {
+                assert_screen_converged(&page).await;
+            }
+        })
+        .catch_unwind()
+        .await;
         let _ = page.close().await;
 
         self.reports.push(CheckReport {

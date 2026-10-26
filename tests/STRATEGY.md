@@ -24,7 +24,7 @@ checks outside the tier model.
 | `tests/infrastructure/` | architecture | — | source tree | `arch-lint.toml` layer rules |
 | `tests/infrastructure/guardrails/` | guardrails | — | source tree | source and test structure rules |
 | `tests/helpers/` | support for driven-adapter | — | — | storage fixtures shared by the `storage` binary |
-| `tests/test_utils/` | support for the `http`, `browser`, `storage`, `bootstrap` and `llm` binaries | — | — | server, browser, htmx-settle and wait helpers; the stub server |
+| `tests/test_utils/` | support for the `http`, `browser`, `storage`, `bootstrap` and `llm` binaries | — | — | server, browser, htmx-settle, convergence and wait helpers; the stub server |
 | `tests/test_utils/stub_fixtures/` | support for tier 2 | — | — | canned fragments the stub server serves |
 
 A `#[tokio::test]` with fakes is a unit test.
@@ -218,6 +218,23 @@ a `tests/browser/` file outside `stub/`; a line that ends in
 Wait on an htmx-settle helper or a DOM condition. `networkidle` never
 settles: the page asks `GET /changes` every 1 s, so it is banned at
 every tier. **Check:** review-only.
+
+### Convergence check
+
+Every stub check and every tier-3 check ends with the convergence check
+(`assert_screen_converged`, `tests/test_utils/convergence.rs`).
+`StubRunner::run` and `with_test_page` run it after the check, before the page
+closes. The check waits until the page is quiet. Then it compares each visible
+live region with a fresh GET of its own route, and it fails with the region,
+the route and a short diff.
+
+The allow list in `tests/test_utils/convergence.rs` holds the mismatches that a
+later stage of the dashboard plan removes. Each row has a reason and the stage
+that removes it. The list only shrinks.
+
+A check that leaves the page unable to match a fresh render on purpose, for
+example with a stopped server, uses `StubRunner::run_without_convergence` and
+gives the reason. Use it for no other case. **Check:** review-only.
 
 ## SCENARIO tags
 

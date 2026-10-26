@@ -212,10 +212,10 @@ fn games_html(games: &StubGames) -> String {
     .expect("render the Games panel")
 }
 
-fn settings_html(degraded: bool) -> String {
+fn settings_html(settings: &AppSettings, degraded: bool) -> String {
     use askama::Template;
 
-    SettingsTemplate::from_settings(&AppSettings::default(), &stub_roles(degraded))
+    SettingsTemplate::from_settings(settings, &stub_roles(degraded))
         .render()
         .expect("render settings")
 }
@@ -488,6 +488,7 @@ struct StubState {
     world_delete_refused: std::sync::atomic::AtomicBool,
     preset_card_refused: std::sync::atomic::AtomicBool,
     changes: std::sync::Mutex<StubChanges>,
+    settings: std::sync::Mutex<AppSettings>,
     change_asks: std::sync::atomic::AtomicUsize,
     fragment_loads: std::sync::Mutex<HashMap<String, usize>>,
     loads_failing: std::sync::atomic::AtomicBool,
@@ -604,6 +605,7 @@ pub struct StubServer {
     addr: SocketAddr,
     shutdown: Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     state: Arc<StubState>,
+    owns_server: bool,
 }
 
 impl StubServer {
@@ -638,6 +640,7 @@ impl StubServer {
             world_delete_refused: std::sync::atomic::AtomicBool::new(false),
             preset_card_refused: std::sync::atomic::AtomicBool::new(false),
             changes: std::sync::Mutex::new(StubChanges::new()),
+            settings: std::sync::Mutex::new(AppSettings::default()),
             change_asks: std::sync::atomic::AtomicUsize::new(0),
             fragment_loads: std::sync::Mutex::new(HashMap::new()),
             loads_failing: std::sync::atomic::AtomicBool::new(false),
@@ -657,6 +660,18 @@ impl StubServer {
             addr,
             shutdown: Arc::new(std::sync::Mutex::new(Some(tx))),
             state,
+            owns_server: true,
+        }
+    }
+
+    /// A second value for the same server that does not stop it when dropped, so
+    /// the runner can still read the page after a check has consumed its value.
+    pub(crate) fn lent(&self) -> StubServer {
+        Self {
+            addr: self.addr,
+            shutdown: Arc::clone(&self.shutdown),
+            state: Arc::clone(&self.state),
+            owns_server: false,
         }
     }
 
@@ -1089,6 +1104,9 @@ impl StubRetriggerHandle {
 
 impl Drop for StubServer {
     fn drop(&mut self) {
+        if !self.owns_server {
+            return;
+        }
         let sender = self
             .shutdown
             .lock()
@@ -1141,11 +1159,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/connections/:id/edit",
             post(|| async { client_refusal("Unknown LLM backend 'bogus_provider'") }),
         )
-        // A saved role change answers nothing, the way the engine answers it.
-        .route(
-            "/connections/set-quantifier",
-            post(|| async { (StatusCode::OK, "").into_response() }),
-        )
+        .route("/connections/set-quantifier", post(set_quantifier))
         .route(
             "/prompt-presets",
             post(|| async { client_refusal("Invalid preset type") }),
@@ -1160,10 +1174,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/worlds", post(save_world))
         .route("/worlds/:key", post(save_world))
         .route("/worlds/:key/posture", post(save_world_posture))
-        .route(
-            "/settings/text-check",
-            post(|| async { (StatusCode::OK, "").into_response() }),
-        )
+        .route("/settings/text-check", post(save_text_check))
         .route("/games/:id/posture", post(failing_posture_save))
         // The real delete answers an empty body, so htmx removes the row the
         // control sits in.
@@ -1400,7 +1411,49 @@ async fn failure_banner_fragment(State(state): State<Arc<StubState>>) -> Html<St
 
 async fn settings_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     use std::sync::atomic::Ordering::SeqCst;
-    Html(settings_html(state.header_degraded.load(SeqCst)))
+    let settings = state.settings.lock().expect("stub settings lock poisoned");
+    Html(settings_html(&settings, state.header_degraded.load(SeqCst)))
+}
+
+/// A saved role change answers nothing, the way the engine answers it, and keeps
+/// the value, so the next render of Settings shows it.
+async fn set_quantifier(
+    State(state): State<Arc<StubState>>,
+    Form(form): Form<HashMap<String, String>>,
+) -> Response<Body> {
+    if let Some(id) = form.get("connection_id") {
+        state
+            .settings
+            .lock()
+            .expect("stub settings lock poisoned")
+            .quantifier_connection_id = id.clone();
+    }
+    state.bump(&[ChangeKind::SETTINGS]);
+    (StatusCode::OK, "").into_response()
+}
+
+async fn save_text_check(
+    State(state): State<Arc<StubState>>,
+    Form(form): Form<HashMap<String, String>>,
+) -> Response<Body> {
+    use chronicler_engine::domain::model::settings::TextCheckMode;
+    let mode = match form.get("check_mode").map(String::as_str) {
+        Some("spell") => Some(TextCheckMode::Spell),
+        Some("grammar") => Some(TextCheckMode::Grammar),
+        Some("spell_grammar") => Some(TextCheckMode::SpellGrammar),
+        Some("disabled") => Some(TextCheckMode::Disabled),
+        _ => None,
+    };
+    if let Some(mode) = mode {
+        state
+            .settings
+            .lock()
+            .expect("stub settings lock poisoned")
+            .text_check
+            .mode = mode;
+    }
+    state.bump(&[ChangeKind::SETTINGS]);
+    (StatusCode::OK, "").into_response()
 }
 
 fn swipe_script_entries(text: &str, active_swipe_index: usize) -> Vec<StoryRow> {

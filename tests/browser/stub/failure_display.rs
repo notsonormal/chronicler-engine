@@ -808,15 +808,12 @@ const MEASURE_CLAMPED_TEXT: &str = r#"
                     clientWidth: text.clientWidth,
                     overhang: box.right - display.getBoundingClientRect().right,
                 };
-                text.style.display = 'block';
-                text.style.overflow = 'visible';
-                text.style.maxHeight = 'none';
-                text.style.webkitLineClamp = 'none';
+                text.setAttribute(
+                    'style',
+                    'display: block; overflow: visible; max-height: none; -webkit-line-clamp: none;',
+                );
                 measured.neededHeight = text.getBoundingClientRect().height;
-                text.style.display = '';
-                text.style.overflow = '';
-                text.style.maxHeight = '';
-                text.style.webkitLineClamp = '';
+                text.removeAttribute('style');
                 return measured;
             };
 "#;
@@ -1269,13 +1266,15 @@ async fn run_failure_display_slot_checks() {
         )
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the engine stays stopped",
             StubActionOutcome::Pending,
             check_dead_engine_renders_inline_error_for_pending_action,
         )
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the engine stays stopped",
             StubActionOutcome::Pending,
             check_failed_confirm_reports_on_the_command_form_slot,
         )
@@ -1305,7 +1304,8 @@ async fn run_failure_display_slot_checks() {
         )
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the panel loads keep failing",
             StubActionOutcome::Pending,
             check_failed_panel_load_reports_inside_the_panel,
         )
@@ -1317,7 +1317,8 @@ async fn run_failure_display_slot_checks() {
         )
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the engine stays stopped",
             StubActionOutcome::Pending,
             check_dead_engine_keeps_the_typed_command,
         )
