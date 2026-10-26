@@ -117,14 +117,14 @@ async fn check_a_save_refused_for_a_held_game_keeps_the_editor_open(
         "Text typed before the run started",
         "the editor keeps the player's text"
     );
-    let held: bool = page
+    let editing: bool = page
         .evaluate::<(), bool>(
-            "(() => !!document.querySelector('#story-log [data-work]'))()",
+            "(() => !!document.querySelector('#story-log .log-entry[data-editing]'))()",
             None,
         )
         .await
         .unwrap();
-    assert!(held, "the story log stays held while the editor is open");
+    assert!(editing, "the entry stays in edit while the editor is open");
 }
 
 // [docs/specs/browser_autoplay.md] SCENARIO: 42.5

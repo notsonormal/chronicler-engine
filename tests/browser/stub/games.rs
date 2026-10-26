@@ -34,11 +34,11 @@ async fn check_deleting_a_saved_game_keeps_keyboard_focus_in_the_panel(
     assert!(
         wait_until_focused(
             &page,
-            ".games-list .game-item .game-actions > button.btn-primary",
+            ".games-list .game-item .game-actions > button.btn-cyan",
             Duration::from_secs(5),
         )
         .await,
-        "deleting a saved game must move focus to the surviving row's Switch control"
+        "deleting a saved game must move focus to the first control of the surviving row, its Rename control"
     );
     let rows_after_first_delete = page
         .query_selector_all(".games-list .game-item")

@@ -1,6 +1,8 @@
 # Feature Spec: Games
 
 Endpoints:
+- `GET /fragment/games/new`
+- `GET /fragment/games/:id/rename`
 - `POST /games`
 - `POST /games/:id/switch`
 - `POST /games/:id/rename`
@@ -256,6 +258,50 @@ When the client GET /fragment/games
 Then the response status is "200 OK"
 And the body does not hold an element with the class "games-panel"
 And the active game row and the row of the second game each carry the id "game-row-{game_id}"
-And each rename disclosure lists its open state in `data-keep` and carries `data-close-on-save`
-And the New Game form is inside a disclosure with the class "new-game-add", which lists its open state in `data-keep`, carries `data-close-on-save`, and has a summary "New Game"
+And each Game row has a Rename control that loads `/fragment/games/{game_id}/rename` into `#edit-dialog-body`
+And the fragment has a New Game control that loads `/fragment/games/new` into `#edit-dialog-body`
+And the fragment holds no form that waits for a Save and no disclosure
+```
+
+#### Scenario 20.37: The Rename form is a dialog fragment with the Game's display name
+
+```gherkin
+Given a seeded Game with the display name "The Long Road"
+When the client GET /fragment/games/{game_id}/rename
+Then the response status is "200 OK"
+And the body is a dialog form (`data-dialog-form`) with the title `edit-dialog-title`
+And the body has a form that posts to /games/{game_id}/rename
+And the form has a display_name field holding "The Long Road"
+And the form has an error slot and a Cancel control that closes the dialog
+```
+
+#### Scenario 20.38: The Rename form of an unknown Game is refused
+
+```gherkin
+Given a fresh app state
+When the client GET /fragment/games/9999/rename
+Then the response status is "400 BAD_REQUEST"
+And the body is an error fragment that names the missing Game
+```
+
+#### Scenario 20.39: The New Game form lists the Worlds and the Personas
+
+```gherkin
+Given a seeded world with key "test" and a persona with key "test_player"
+When the client GET /fragment/games/new
+Then the response status is "200 OK"
+And the body is a dialog form (`data-dialog-form`) with the title `edit-dialog-title`
+And the body has a form that posts to /games
+And the form has a World select with the option "test" and a Persona select with the option "test_player"
+And the form has an error slot and a Cancel control that closes the dialog
+```
+
+#### Scenario 20.40: The New Game form has no form when no World exists
+
+```gherkin
+Given a fresh app state with no World
+When the client GET /fragment/games/new
+Then the response status is "200 OK"
+And the body says that no World is available
+And the body has no form
 ```

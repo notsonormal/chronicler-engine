@@ -32,6 +32,7 @@ const INLINE_ERROR_CONTAINERS =
   "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, .worlds-panel, .games-panel, .settings-panel, .prompt-presets-panel";
 
 let generatedErrorSlots = 0;
+const GENERATED_SLOT_PREFIX = "generated-";
 
 function inlineErrorSlotFor(elt, create) {
   if (!elt || !elt.closest) return null;
@@ -41,7 +42,7 @@ function inlineErrorSlotFor(elt, create) {
   if (existing || !create) return existing;
   const slot = document.createElement("div");
   slot.className = "inline-error-slot";
-  slot.dataset.errorSlot = "generated-" + ++generatedErrorSlots;
+  slot.dataset.errorSlot = GENERATED_SLOT_PREFIX + ++generatedErrorSlots;
   slot.hidden = true;
   container.appendChild(slot);
   return slot;
@@ -54,8 +55,14 @@ function renderInlineError(slot, message, rawText) {
   slot.hidden = false;
 }
 
+// A slot that the script made has no twin in the server's render, so clearing it
+// removes it, and the region shows the same markup as a fresh load.
 function clearInlineError(slot) {
   if (!slot) return;
+  if ((slot.dataset.errorSlot || "").startsWith(GENERATED_SLOT_PREFIX)) {
+    slot.remove();
+    return;
+  }
   slot.innerHTML = "";
   slot.hidden = true;
 }

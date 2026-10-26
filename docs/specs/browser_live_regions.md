@@ -4,7 +4,7 @@ Endpoint: browser DOM.
 
 The dashboard shows server data in **live regions**. A live region is an element with a `data-live` attribute. The attribute lists the kinds of data the region shows. The kinds are the names of the numbers of `GET /changes` (`docs/specs/changes.md`): `story`, `options`, `busy`, `games`, `worlds`, `settings`, `presets` and `llm`.
 
-The page asks `GET /changes` while it is visible. A region loads its own fragment when a number of one of its kinds differs from the number that the region last loaded. A region keeps what its load does not change. A region that holds an edit waits, and loads once when the edit ends. A disclosure that closes without a save discards its edit, so it ends the edit. A region in a hidden dashboard section does not load: it waits, and loads once when the player opens the section. The region reports its state in `data-live-state`: `current`, `loading`, `held`, `stale` or `due`.
+The page asks `GET /changes` while it is visible. A region loads its own fragment when a number of one of its kinds differs from the number that the region last loaded. A region keeps what its load does not change. A load skips the one element that holds unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight. No region holds a draft: a form that waits for a Save is in the edit dialog, outside every region. A region in a hidden dashboard section does not load: it waits, and loads once when the player opens the section. The region reports its state in `data-live-state`: `current`, `loading`, `stale` or `due`.
 
 The header is outside every section, so it is always visible. The Game tab is a section too, and it is hidden while the player is on another section.
 
@@ -102,28 +102,29 @@ Then the page sends GET /changes without waiting for the timer
 And each region that lists the moved kind loads its fragment
 ```
 
-#### Scenario 44.9: An edit holds its region, which loads once when the edit ends
+#### Scenario 44.9: A load skips the entry in edit and shows the rest of the log
 
 ```gherkin
 Given an edit is open in #story-log with typed text, and the textarea has focus
+And the log has a new narration entry
 When the number of `story` moves three times, and the page asks after each move
-Then #story-log does not load
-And #story-log reports data-live-state "held"
-And the textarea is the same element, with the typed text and focus
-When the edit ends
-Then #story-log loads exactly once
+Then #story-log loads once for each move
 And #story-log reports data-live-state "current"
+And the textarea is the same element, with the typed text and focus
+And the new narration entry shows in the log
+When the edit ends
+Then #story-log reports data-live-state "current", and the textarea is gone
 ```
 
-#### Scenario 44.10: A load that was in flight when an edit began does not replace the edit
+#### Scenario 44.10: A load that was in flight when an edit began skips the entry in edit
 
 ```gherkin
-Given a load of #story-log is in flight
+Given a load of #story-log is in flight, and its answer holds a new narration entry
 When an edit opens in #story-log before the answer arrives
 And the answer arrives
-Then the answer is not swapped in
+Then the answer is swapped in around the entry in edit
 And the textarea is the same element, with its text and focus
-And #story-log reports data-live-state "held"
+And #story-log reports data-live-state "current"
 ```
 
 #### Scenario 44.11: A disclosure that lists its open state in data-keep stays open through a load
@@ -150,13 +151,11 @@ Then the focus is on a control in the entry that is now the newest
 Given each region of the table above, with its section open
 And every interactive control of the region is in its engaged state:
   an open edit with typed text and focus, a focused Option, an open Details disclosure, a text selection,
-  an open rename form with typed text, a chosen option of a select, an expanded LLM message,
-  an open error Details popover in the failure banner, the chosen Settings sub-tab,
-  a preset card in edit, an open World editor, each with typed text and focus
+  an expanded LLM message, an open error Details popover in the failure banner,
+  the chosen Settings sub-tab, each with typed text and focus where it has any
 When each kind that the region lists moves, one kind at a time, and the page asks
-Then each node, value, open state, selection and focus of the engaged state is as it was
-When every edit of the region ends
-Then the region loads exactly once, and it reports data-live-state "current"
+Then the region loads once for each kind, and it reports data-live-state "current"
+And each node, value, open state, selection and focus of the engaged state is as it was
 ```
 
 #### Scenario 44.14: At page start each region loads exactly once
@@ -204,35 +203,23 @@ When the client opens the Game tab
 Then #story-log loads its fragment exactly once
 ```
 
-#### Scenario 44.17: A successful save ends the edit of its form, and a disclosure marked data-close-on-save closes
+#### Scenario 44.17: A save that fails keeps the dialog open with its typed values
 
 ```gherkin
-Given .games-panel is open and current
-And the rename form of a saved Game is open inside its `details` marked `data-close-on-save`, with a changed name
-Then .games-panel reports data-live-state "held"
-When the client presses Save and the engine answers 200
-Then the name field is no longer a changed field: its default value is its current value
-And the `details` is closed
-And the name field still shows the saved name, because the close that follows a save discards nothing
-And .games-panel loads its fragment exactly once, and it reports data-live-state "current"
-```
-
-#### Scenario 44.18: A save that fails keeps the edit open, and a control that saves on change goes back to its rendered value
-
-```gherkin
-Given .games-panel is open and current
-And the rename form of a saved Game is open, with a changed name
+Given the rename form of a saved Game is open in the edit dialog, with a changed name
 When the client presses Save and the engine answers 500
 Then the form's own error slot shows the failure
-And the name field keeps the changed name
-And the `details` is still open
-And .games-panel reports data-live-state "held"
+And the dialog is still open with the same form, the changed name and focus
+```
 
+#### Scenario 44.18: A control that saves on change goes back to its rendered value when the save fails
+
+```gherkin
 Given the Tense select of #game-posture-controls shows "past"
 When the client changes it to "present", and the engine answers 500
 Then the Tense select shows "past" again
 And the error slot of #game-posture-controls shows the failure
-And .games-panel does not report data-live-state "held"
+And .games-panel reports data-live-state "current"
 ```
 
 #### Scenario 44.19: A load keeps an inline error that is showing
@@ -247,31 +234,28 @@ When the same action succeeds
 Then the inline error slot is empty and hidden
 ```
 
-#### Scenario 44.20: A preset card in edit survives the Activate of another card
+#### Scenario 44.20: A preset form in the dialog survives a Prompt Presets load, and Cancel sends no request
 
 ```gherkin
 Given .prompt-presets-panel is open and current
-And a preset card is in edit, with a changed name and focus in the name field
-When the client presses Set Active on another preset card, and the engine answers 200
-Then the page asks at once
-And the card in edit is the same element, with its changed name
-And .prompt-presets-panel reports data-live-state "held" and has not loaded
-When the client cancels the edit
-Then .prompt-presets-panel loads exactly once, and it reports data-live-state "current"
-And the other card shows its Active badge
+And the edit form of a preset is open in the edit dialog, with a changed name and focus in the name field
+When the number of `presets` moves, and the page asks
+Then .prompt-presets-panel loads its fragment exactly once, and it reports data-live-state "current"
+And the form is the same element, with its changed name and focus
+When the client cancels the dialog
+Then Cancel sent no request
 ```
 
-#### Scenario 44.21: A World editor survives a Game rename that raises games
+#### Scenario 44.21: A World form in the dialog survives a Game rename that raises games
 
 ```gherkin
 Given .worlds-panel is open and current
-And the World editor is open in #world-editor, with a changed name and focus
+And the World edit form is open in the edit dialog, with a changed name and focus
 When a Game is renamed, so the number of `games` moves, and the page asks
-Then the editor is the same element, with its changed name
-And .worlds-panel reports data-live-state "held" and has not loaded
-When the client closes the editor with Cancel
-Then .worlds-panel loads exactly once, and it reports data-live-state "current"
-And #world-editor is empty
+Then the form is the same element, with its changed name and focus
+And .worlds-panel loads its fragment exactly once, and it reports data-live-state "current"
+When the client cancels the dialog
+Then the dialog is closed
 ```
 
 #### Scenario 44.22: A connection form in the dialog survives a Settings load, and Cancel sends no request
@@ -285,27 +269,6 @@ And the form is the same element, with its typed name and focus
 When the client cancels the dialog
 Then Cancel sent no request
 And the Text Check sub-tab is still the chosen one
-```
-
-#### Scenario 44.23: A disclosure closed without a save discards its edit, and its region loads at once
-
-```gherkin
-Given .games-panel is open and current
-And the rename form of a saved Game is open, with a changed name
-And the number of `worlds` moved, and the page asked
-And .games-panel reports data-live-state "held"
-When the client closes the `details` without pressing Save
-Then the name field shows the rendered name again
-And the page asks at once, without waiting for its timer
-And .games-panel loads its fragment exactly once, and it reports data-live-state "current"
-
-Given .prompt-presets-panel is open and current
-And an Add form of a preset type is open, with a typed name
-And the number of `presets` moved, and the page asked
-And .prompt-presets-panel reports data-live-state "held"
-When the client closes the Add form without pressing Add Preset
-Then the name field is empty again
-And .prompt-presets-panel loads its fragment exactly once, and it reports data-live-state "current"
 ```
 
 #### Scenario 44.24: A load skips a select whose request is in flight

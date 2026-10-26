@@ -24,14 +24,8 @@ pub struct PersonaRowView {
 #[derive(Template)]
 #[template(
     source = r##"
-{% macro run_badge(held) %}{% if held %}<span class="run-badge" title="An Autoplay run holds this game"><svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"/></svg> Autoplay</span>{% endif %}{% endmacro %}
-{% macro rename_form(id, display_name) %}<details class="game-rename" data-keep="open" data-close-on-save>
-                    <summary>Rename</summary>
-                    <form hx-post="/games/{{ id }}/rename" hx-swap="none">
-                        <input type="text" name="display_name" value="{{ display_name }}" required maxlength="120" aria-label="Game display name">
-                        <button type="submit" class="btn-primary">Save</button>
-                    </form>
-                </details>{% endmacro %}
+{% macro run_badge(run_held) %}{% if run_held %}<span class="run-badge" title="An Autoplay run holds this game"><svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"/></svg> Autoplay</span>{% endif %}{% endmacro %}
+{% macro rename_button(id) %}<button type="button" class="btn-cyan" hx-get="/fragment/games/{{ id }}/rename" hx-target="#edit-dialog-body" hx-swap="innerHTML">Rename</button>{% endmacro %}
 <div class="games-section">
     <h2>Active Game</h2>
     {% match active_game %}
@@ -43,7 +37,7 @@ pub struct PersonaRowView {
             <span class="persona-badge">{{ game.persona_name }}</span>{{ run_badge(game.run_held) }}
         </div>
         <div class="game-actions">
-            {{ rename_form(game.id, game.display_name) }}
+            {{ rename_button(game.id) }}
             <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game" aria-label="Reset game"><svg class="icon" aria-hidden="true"><use href="#i-rotate-ccw"/></svg></button>
         </div>
     </div>
@@ -58,35 +52,7 @@ pub struct PersonaRowView {
     <h2>New Game</h2>
     <div class="games-empty">No worlds available. Create a world first.</div>
     {% else %}
-    <details class="new-game-add" data-keep="open" data-close-on-save>
-        <summary class="btn-cyan new-game-toggle">New Game</summary>
-        <form class="new-game-form" hx-post="/games" hx-swap="none" data-reset-on-save>
-            <div class="form-row">
-                <label for="new-game-world">World</label>
-                <select id="new-game-world" name="world_key" required>
-                    {% for world in worlds %}
-                    <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-row">
-                {% if personas.is_empty() %}
-                <div class="games-empty">No personas available. Create a persona first.</div>
-                {% else %}
-                <label for="new-game-persona">Persona</label>
-                <select id="new-game-persona" name="persona_key" required>
-                    {% for p in personas %}
-                    <option value="{{ p.key }}">{{ p.name }}</option>
-                    {% endfor %}
-                </select>
-                {% endif %}
-            </div>
-            <div class="form-row">
-                <button type="submit" class="btn-primary"
-                    {% if personas.is_empty() %}disabled{% endif %}>Start New Game</button>
-            </div>
-        </form>
-    </details>
+    <button type="button" class="btn-cyan" hx-get="/fragment/games/new" hx-target="#edit-dialog-body" hx-swap="innerHTML">New Game</button>
     {% endif %}
 </div>
 
@@ -102,7 +68,7 @@ pub struct PersonaRowView {
             <span class="world-badge">{{ game.world_name }}</span>
             <span class="persona-badge">{{ game.persona_name }}</span>{{ run_badge(game.run_held) }}
             <div class="game-actions">
-                {{ rename_form(game.id, game.display_name) }}
+                {{ rename_button(game.id) }}
                 <button class="btn-primary" hx-post="/games/{{ game.id }}/switch" hx-swap="none">Switch</button>
                 <button class="btn-danger" hx-post="/games/{{ game.id }}/delete" hx-swap="none" hx-confirm="Delete this game? This cannot be undone.">Delete</button>
             </div>
@@ -121,6 +87,78 @@ pub struct GamesPanelTemplate {
     pub personas: Vec<PersonaRowView>,
     /// Rendered before the panel, because the preset load behind it can fail on its own.
     pub posture_html: String,
+}
+
+/// The dialog form that renames one Game.
+#[derive(Template)]
+#[template(
+    source = r##"
+<div class="game-rename-form" data-dialog-form>
+    <h2 id="edit-dialog-title">Rename game</h2>
+    <form hx-post="/games/{{ id }}/rename" hx-swap="none" data-refusal-what="the game was not renamed">
+        <input type="text" name="display_name" value="{{ display_name }}" required maxlength="120" aria-label="Game display name">
+        <div class="inline-error-slot" data-error-slot="game-rename" hidden></div>
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" class="btn-cyan" data-close-dialog>Cancel</button>
+        </div>
+    </form>
+</div>
+"##,
+    ext = "html"
+)]
+pub struct GameRenameFormTemplate {
+    pub id: u64,
+    pub display_name: String,
+}
+
+/// The dialog form that starts a new Game from a World and a Persona.
+#[derive(Template)]
+#[template(
+    source = r##"
+<div class="new-game-form-dialog" data-dialog-form>
+    <h2 id="edit-dialog-title">New Game</h2>
+    {% if worlds.is_empty() %}
+    <div class="games-empty">No worlds available. Create a world first.</div>
+    <div class="form-actions">
+        <button type="button" class="btn-cyan" data-close-dialog>Close</button>
+    </div>
+    {% else %}
+    <form class="new-game-form" hx-post="/games" hx-swap="none" data-refusal-what="the game was not started">
+        <div class="form-row">
+            <label for="new-game-world">World</label>
+            <select id="new-game-world" name="world_key" required>
+                {% for world in worlds %}
+                <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-row">
+            {% if personas.is_empty() %}
+            <div class="games-empty">No personas available. Create a persona first.</div>
+            {% else %}
+            <label for="new-game-persona">Persona</label>
+            <select id="new-game-persona" name="persona_key" required>
+                {% for p in personas %}
+                <option value="{{ p.key }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+        </div>
+        <div class="inline-error-slot" data-error-slot="new-game" hidden></div>
+        <div class="form-actions">
+            <button type="submit" class="btn-primary"{% if personas.is_empty() %} disabled{% endif %}>Start New Game</button>
+            <button type="button" class="btn-cyan" data-close-dialog>Cancel</button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+"##,
+    ext = "html"
+)]
+pub struct NewGameFormTemplate {
+    pub worlds: Vec<WorldCard>,
+    pub personas: Vec<PersonaRowView>,
 }
 
 #[derive(Template)]

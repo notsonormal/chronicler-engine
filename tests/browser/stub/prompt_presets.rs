@@ -1,4 +1,4 @@
-//! Stub-browser tests for the Prompt Presets panel: the keyboard-focus landing after a preset card delete and when an editor opens. Tagged against `docs/specs/browser_prompt_presets.md`.
+//! Stub-browser tests for the Prompt Presets panel: the keyboard-focus landing after a preset card delete and when an editor opens, and the report of a refused editor. Tagged against `docs/specs/browser_prompt_presets.md`.
 
 use std::time::Duration;
 
@@ -48,7 +48,7 @@ async fn check_opening_a_preset_editor_moves_focus_straight_into_the_form(
 
     assert!(
         wait_until_focused(&page, "input#edit-name-custom_ref", Duration::from_secs(5)).await,
-        "opening the editor must land focus in the new card's Name field"
+        "opening the editor must land focus in the dialog's Name field"
     );
     assert_eq!(
         focus_landings(&page).await,
@@ -56,7 +56,7 @@ async fn check_opening_a_preset_editor_moves_focus_straight_into_the_form(
             "/fragment/prompt-presets/custom_ref/edit".to_string(),
             "edit-name-custom_ref".to_string(),
         ],
-        "the editor must claim focus once, with no neighbouring card in between"
+        "the editor must claim focus once, with no other control in between"
     );
 }
 
@@ -117,10 +117,10 @@ async fn check_deleting_a_preset_card_keeps_keyboard_focus_on_a_card(
     );
 }
 
-// A card's Edit load refused with a 200 whose body stands in for the card
-// (a default preset) leaves the message where the card was, so focus lands on it.
+// A card's Edit load that the engine refuses (a default preset) opens no dialog:
+// the card's own slot holds the refusal and the Edit control keeps focus.
 // [docs/specs/browser_prompt_presets.md] SCENARIO: 28.5
-async fn check_a_refused_card_load_lands_focus_on_its_message(
+async fn check_a_refused_editor_reports_in_the_cards_slot_and_keeps_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -129,35 +129,84 @@ async fn check_a_refused_card_load_lands_focus_on_its_message(
 
     let cards = ".prompt-presets-panel .preset-section .preset-card";
     let cards_before = page
-        .query_selector_all(cards)
+        .evaluate::<(), bool>(
+            r#"() => {
+                window.__cards = Array.from(document.querySelectorAll('.prompt-presets-panel .preset-section .preset-card'));
+                return window.__cards.length > 1;
+            }"#,
+            None,
+        )
         .await
-        .expect("count the preset cards the fixture shows")
-        .len();
-    let refusal = ".prompt-presets-panel .preset-section .error-message";
+        .unwrap();
+    assert!(cards_before, "the fixture shows several preset cards");
     let edit = r#"button[hx-get="/fragment/prompt-presets/custom_ref/edit"]"#;
     page.locator(edit).await.focus().await.unwrap();
     page.locator(edit).await.click(None).await.unwrap();
 
-    wait_until_visible(&page, refusal, Duration::from_secs(5)).await;
-    assert_eq!(
-        page.query_selector_all(cards)
-            .await
-            .unwrap_or_default()
-            .len(),
-        cards_before - 1,
-        "the refusal must replace the card it could not open, not remove it"
-    );
-    assert_eq!(
-        page.query_selector_all(r#"button[hx-get="/fragment/prompt-presets/custom_two/edit"]"#)
-            .await
-            .unwrap_or_default()
-            .len(),
-        1,
-        "the cards beside the refusal keep their controls"
-    );
+    let slot = r#"#preset-card-custom_ref [data-error-slot="preset-custom_ref"]"#;
+    wait_until_visible(&page, slot, Duration::from_secs(5)).await;
+    let (visible, _, raw) = read_error_disclosure(&page, slot).await;
+    assert!(visible, "the refusal shows in the card's own slot");
     assert!(
-        wait_until_focused(&page, refusal, Duration::from_secs(5)).await,
-        "a refused card load must land focus on the refusal message, not on a neighbouring card"
+        raw.contains("Cannot edit default presets"),
+        "the slot carries the refusal, got {raw:?}"
+    );
+    let dialog_open = page
+        .evaluate::<(), bool>("() => document.getElementById('edit-dialog').open", None)
+        .await
+        .unwrap();
+    assert!(!dialog_open, "a refused editor opens no dialog");
+    let same_cards = page
+        .evaluate::<String, bool>(
+            r#"(selector) => {
+                const now = Array.from(document.querySelectorAll(selector));
+                return now.length === window.__cards.length
+                    && now.every((card, index) => card === window.__cards[index]);
+            }"#,
+            Some(&cards.to_string()),
+        )
+        .await
+        .unwrap();
+    assert!(same_cards, "every card stays in place, as the same element");
+    assert!(
+        wait_until_focused(&page, edit, Duration::from_secs(5)).await,
+        "a refused editor must leave focus on its Edit control"
+    );
+}
+
+// [docs/specs/browser_prompt_presets.md] SCENARIO: 28.6
+async fn check_the_view_of_a_default_preset_opens_in_the_dialog_and_close_returns_focus(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_prompt_presets_tab(&page).await;
+
+    let view = r#"button[hx-get="/fragment/prompt-presets/system_if_default/view"]"#;
+    page.locator(view).await.focus().await.unwrap();
+    page.locator(view).await.click(None).await.unwrap();
+
+    wait_until_visible(&page, "#edit-dialog .view-form", Duration::from_secs(5)).await;
+    let (open, writable_fields): (bool, usize) = page
+        .evaluate::<(), (bool, usize)>(
+            r#"() => [
+                document.getElementById('edit-dialog').open,
+                document.querySelectorAll('#edit-dialog textarea:not([disabled]), #edit-dialog input:not([readonly])').length,
+            ]"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(open, "the View opens the dialog");
+    assert_eq!(writable_fields, 0, "the view form is read-only");
+
+    page.locator("#edit-dialog [data-close-dialog]")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    assert!(
+        wait_until_focused(&page, view, Duration::from_secs(5)).await,
+        "closing the dialog returns focus to the View control"
     );
 }
 
@@ -179,7 +228,13 @@ async fn run_prompt_preset_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_refused_card_load_lands_focus_on_its_message,
+            check_a_refused_editor_reports_in_the_cards_slot_and_keeps_focus,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_the_view_of_a_default_preset_opens_in_the_dialog_and_close_returns_focus,
         )
         .await;
     runner.finish().await;

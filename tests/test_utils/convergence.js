@@ -1,5 +1,5 @@
 // The body of the convergence check, run inside the page by `convergence.rs`: it waits until the page is quiet, then compares each visible live region with a fresh GET of its own route.
-async ({ timeoutMs, heldEditors, tolerableDiffs }) => {
+async ({ timeoutMs }) => {
   const HTMX_CLASSES = ["htmx-request", "htmx-settling", "htmx-swapping", "htmx-added"];
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const quote = (text) => JSON.stringify(text.length > 70 ? text.slice(0, 70) + "…" : text);
@@ -52,9 +52,10 @@ async ({ timeoutMs, heldEditors, tolerableDiffs }) => {
     return reasons;
   }
 
-  // A load keeps these two kinds of state (`Idiomorph.defaults.callbacks` in
-  // dashboard-live.js): the attributes that the element's `data-keep` names, and
-  // an inline error slot that shows an error.
+  // A load keeps these three kinds of state (`Idiomorph.defaults.callbacks` in
+  // dashboard-live.js): the attributes that the element's `data-keep` names, an
+  // inline error slot that shows an error, and a story-log entry in edit
+  // (`data-editing`), which it skips.
   const showsInlineError = (node) =>
     node.nodeType === 1 && node.hasAttribute("data-error-slot") && !node.hidden;
 
@@ -80,7 +81,13 @@ async ({ timeoutMs, heldEditors, tolerableDiffs }) => {
     return node.nodeType === 3 ? "text " + quote(node.nodeValue) : "node type " + node.nodeType;
   }
 
+  const isBeingEdited = (node) => node.nodeType === 1 && node.hasAttribute("data-editing");
+
   function comparableChildren(liveKids, freshKids) {
+    for (const entry of liveKids.filter(isBeingEdited)) {
+      freshKids = freshKids.filter((node) => node.nodeType !== 1 || node.id !== entry.id);
+    }
+    liveKids = liveKids.filter((node) => !isBeingEdited(node));
     for (const slot of liveKids.filter(showsInlineError)) {
       const name = slot.getAttribute("data-error-slot");
       const at = freshKids.findIndex(
@@ -142,22 +149,6 @@ async ({ timeoutMs, heldEditors, tolerableDiffs }) => {
     );
   }
 
-  // The causes of a hold, by the rule of `regionHoldsEdit` in dashboard-live.js:
-  // each `[data-work]` element and each field whose value differs from the one
-  // the server rendered (`fieldIsDirty`).
-  function holdCauses(region) {
-    const fields = Array.from(region.querySelectorAll("input, textarea, select")).filter(fieldIsDirty);
-    return [...region.querySelectorAll("[data-work]"), ...fields];
-  }
-
-  // A held region is tolerated only when every cause of its hold is inside an
-  // editor that the row of the allow list names. Returns the first cause outside
-  // one, or null.
-  function causeOutsideEditors(region, editors) {
-    const allowed = Array.from(region.querySelectorAll(editors));
-    return holdCauses(region).find((cause) => !allowed.some((editor) => editor.contains(cause))) || null;
-  }
-
   async function diffRegion(region) {
     const route = region.getAttribute("hx-get");
     const response = await fetch(route, { cache: "no-store", headers: { "HX-Request": "true" } });
@@ -176,51 +167,20 @@ async ({ timeoutMs, heldEditors, tolerableDiffs }) => {
   const deadline = Date.now() + timeoutMs;
   let notQuiet = [];
   let blocking = [];
-  let tolerated = [];
   for (;;) {
-    // A load does not replace a region that holds an edit (`regionHoldsEdit`), so
-    // such a region differs from the server by design, but only while the
-    // editor that its row names is the cause.
-    const all = visibleRegions();
-    const held = [];
-    const heldOutside = [];
-    for (const region of all) {
-      const row = heldEditors.find((entry) => entry.route === region.getAttribute("hx-get"));
-      if (!row || !regionHoldsEdit(region)) continue;
-      const cause = causeOutsideEditors(region, row.editors);
-      if (cause) {
-        heldOutside.push({
-          region: regionName(region),
-          route: region.getAttribute("hx-get"),
-          diff: "held by " + quote(cause.cloneNode(false).outerHTML) + " outside the allowed editor " + row.editors,
-        });
-      } else {
-        held.push(region);
-      }
-    }
-    const regions = all.filter((region) => !held.includes(region) && !heldOutside.some((entry) => entry.region === regionName(region)));
+    const regions = visibleRegions();
     notQuiet = await reasonsNotQuiet(regions);
-    blocking = [...heldOutside];
-    tolerated = held.map((region) => ({
-      region: regionName(region),
-      route: region.getAttribute("hx-get"),
-      diff: "the region holds an open edit",
-    }));
+    blocking = [];
     if (notQuiet.length === 0) {
       for (const region of regions) {
         const diff = await diffRegion(region);
         if (!diff) continue;
-        const route = region.getAttribute("hx-get");
-        const entry = { region: regionName(region), route, diff };
-        const tolerable = tolerableDiffs.some(
-          (row) => row.route === route && diff.includes(row.contains),
-        );
-        (tolerable ? tolerated : blocking).push(entry);
+        blocking.push({ region: regionName(region), route: region.getAttribute("hx-get"), diff });
       }
-      if (blocking.length === 0) return JSON.stringify({ ok: true, notQuiet, blocking, tolerated });
+      if (blocking.length === 0) return JSON.stringify({ ok: true, notQuiet, blocking });
     }
     if (Date.now() > deadline) {
-      return JSON.stringify({ ok: false, notQuiet, blocking, tolerated });
+      return JSON.stringify({ ok: false, notQuiet, blocking });
     }
     await sleep(100);
   }

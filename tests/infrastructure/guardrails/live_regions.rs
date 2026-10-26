@@ -475,44 +475,19 @@ pub fn check_no_out_of_band_swaps(path: &str, content: &str) -> Vec<Violation> {
         .collect()
 }
 
-/// A template file of the HTTP adapter that still renders a draft control without
-/// a form marker, with the reason, and the stage of the plan that removes the row.
-/// A row with no stage is a field-builder file: its literals hold no `<form`, and
-/// the screen sweep checks where its fields render. The list only shrinks: a row
-/// whose file renders no such control any more fails the guardrail.
+/// A field-builder file of the HTTP adapter that renders a draft control without
+/// a form marker, with the reason. Its literals hold no `<form`, and the screen
+/// sweep checks where its fields render. A row whose file renders no such control
+/// any more fails the guardrail.
 pub struct DraftControlException {
     pub path: &'static str,
     pub reason: &'static str,
-    pub removed_in_stage: Option<u8>,
 }
 
-pub const DRAFT_CONTROL_EXCEPTIONS: &[DraftControlException] = &[
-    DraftControlException {
-        path: "adapters/driving/http/games/templates/games.rs",
-        reason: "the Rename and New Game forms are still inside the Games panel",
-        removed_in_stage: Some(3),
-    },
-    DraftControlException {
-        path: "adapters/driving/http/prompt_presets/templates/prompt_presets.rs",
-        reason: "the preset Add forms are still inside the Prompt Presets panel",
-        removed_in_stage: Some(3),
-    },
-    DraftControlException {
-        path: "adapters/driving/http/builders/presets.rs",
-        reason: "the preset Edit form still replaces its card inside the Prompt Presets panel",
-        removed_in_stage: Some(3),
-    },
-    DraftControlException {
-        path: "adapters/driving/http/worlds/templates/worlds.rs",
-        reason: "the World editor is still inside the Worlds panel",
-        removed_in_stage: Some(3),
-    },
-    DraftControlException {
-        path: "adapters/driving/http/builders/forms.rs",
-        reason: "the field builder: its literals hold no form, and the screen sweep checks where the fields render",
-        removed_in_stage: None,
-    },
-];
+pub const DRAFT_CONTROL_EXCEPTIONS: &[DraftControlException] = &[DraftControlException {
+    path: "adapters/driving/http/builders/forms.rs",
+    reason: "the field builder: its literals hold no form, and the screen sweep checks where the fields render",
+}];
 
 /// The markers that say a literal renders outside every region: a form of the edit
 /// dialog, and a form of the shell (the text-check preview).
@@ -638,7 +613,7 @@ pub fn check_dialog_fragments_carry_the_title(path: &str, source: &str) -> Vec<V
 
 /// Checks the exceptions of the draft-control rule against the files they name: a
 /// row whose file no longer renders a draft control outside a form marker is stale,
-/// and a permanent row (no stage) names a file whose literals hold no `<form`.
+/// and a row names a file whose literals hold no `<form`.
 pub fn check_draft_control_exceptions_are_used(
     files: &[(String, String)],
     exceptions: &[DraftControlException],
@@ -659,19 +634,17 @@ pub fn check_draft_control_exceptions_are_used(
                 ),
             ));
         }
-        if row.removed_in_stage.is_none() {
-            let holds_form = sources().any(|(_, source)| {
-                raw_string_literals(source)
-                    .iter()
-                    .any(|(_, literal)| literal.contains("<form"))
-            });
-            if holds_form {
-                violations.push(Violation::error(
-                    row.path,
-                    1,
-                    "a permanent exception names a file whose literals hold a `<form`: only a field builder may stay without a form marker",
-                ));
-            }
+        let holds_form = sources().any(|(_, source)| {
+            raw_string_literals(source)
+                .iter()
+                .any(|(_, literal)| literal.contains("<form"))
+        });
+        if holds_form {
+            violations.push(Violation::error(
+                row.path,
+                1,
+                "an exception names a file whose literals hold a `<form`: only a field builder may stay without a form marker",
+            ));
         }
     }
     violations

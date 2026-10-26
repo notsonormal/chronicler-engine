@@ -2,7 +2,7 @@
 
 Endpoints:
 - `GET /fragment/prompt-presets`
-- `GET /fragment/prompt-presets/{id}`
+- `GET /fragment/prompt-presets/new?type={type}`
 - `GET /fragment/prompt-presets/{id}/edit`
 - `GET /fragment/prompt-presets/{id}/view`
 - `POST /prompt-presets`
@@ -14,10 +14,11 @@ Endpoints:
 The Prompt Presets panel is a live region of the prompt presets, settings and
 games kinds. Its fragment carries no root element of its own, and each preset
 card carries a stable id (`preset-card-{id}`), so a load keeps the cards it does
-not change. An editor or a read-only view of a card (`edit-form`, `view-form`)
-carries the same id as the card and holds the panel (`data-work`) until the edit
-ends. Each Add form lives in a disclosure that a load keeps open (`data-keep`),
-and that closes when its save goes through.
+not change. The panel holds no form that waits for a Save. The Add control of each
+type, and the Edit and View controls of a card, load a form into the edit dialog
+(`#edit-dialog-body`). The root of each such form (`data-dialog-form`) carries the
+title of the dialog (`edit-dialog-title`). A form fragment that cannot open answers a
+non-2xx error fragment, which the control that asked shows in its own slot.
 
 A create, an update, a delete, a duplicate and an activate answer nothing on
 success: an empty 200. A refusal answers a 400 error fragment, and a failure a
@@ -39,52 +40,43 @@ And the body contains an "System Prompts" heading
 And the body contains an "Quantifier Prompts" heading
 And the body contains one preset-card per seeded system preset (with a stable id, name and "Default" badge)
 And the body contains one preset-card per seeded quantifier preset (with name and "Default" badge)
-And the body contains an "Add System Prompt Preset" toggle
-And the body contains an "Add Quantifier Prompt Preset" toggle
-And the system add-form contains inputs named name, role, instructions, writing_style, output_format
-And the system add-form contains a hidden input named preset_type with value "system"
-And the quantifier add-form contains inputs named name, role, instructions, output_format
-And the quantifier add-form contains a hidden input named preset_type with value "quantifier"
+And the body contains an "Add System Prompt Preset" control
+And the body contains an "Add Quantifier Prompt Preset" control
 And the body contains an "Impersonate Prompts" heading
-And the body contains an "Add Impersonate Prompt Preset" toggle
-And the impersonate add-form contains inputs named name, role, instructions, writing_style, output_format
-And the impersonate add-form contains a hidden input named preset_type with value "impersonate"
+And the body contains an "Add Impersonate Prompt Preset" control
+And the body holds no form and no textarea
 ```
 
-#### Scenario 21.28: Each Add form is a closed disclosure
+#### Scenario 21.28: Each Add control opens the dialog
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/prompt-presets
 Then the response is 200
-And each category's Add form is collapsed until the user opens it
-And each Add form's disclosure lists its open state in data-keep, and closes when its save goes through
+And each category has an Add control that loads `/fragment/prompt-presets/new?type={type}` into `#edit-dialog-body`
+And the panel holds no disclosure
 ```
 
-### GET /fragment/prompt-presets/{id} — single card
-
-#### Scenario 21.2: Single card returns the preset
-
-```gherkin
-Given a fresh app state with a seeded non-default system preset named "My System"
-When the client GET /fragment/prompt-presets/{id} for that preset's id
-Then the response is 200
-And the response body contains "<div class=\"preset-card"
-And the body contains the preset name "My System"
-And the body contains a "Set Active (Novel)" button (the preset is not active for the Novel bundle)
-And the body contains a "Set Active (Interactive Fiction)" button (the preset is not active for the Interactive Fiction bundle)
-And the body contains an "Edit" button
-And the body contains a "Delete" button
-And the body contains a "Duplicate" button
-```
-
-#### Scenario 21.3: Single card for a nonexistent preset returns an error fragment
+#### Scenario 21.42: The Add form is a dialog fragment for its type
 
 ```gherkin
 Given a fresh app state
-When the client GET /fragment/prompt-presets/does-not-exist
+When the client GET /fragment/prompt-presets/new?type={type} for each of system, quantifier, impersonate and options
 Then the response is 200
-And the response body is `<div class="error-message">Preset not found</div>`
+And the body is a dialog form (`data-dialog-form`) with the title `edit-dialog-title`
+And the form posts to /prompt-presets and carries a hidden input named preset_type with that type
+And the form has inputs named name, role, instructions and output_format
+And the form has an input named writing_style for every type except quantifier
+And the form has an error slot for that type and a Cancel control that closes the dialog
+```
+
+#### Scenario 21.43: The Add form of an unknown type is refused
+
+```gherkin
+Given a fresh app state
+When the client GET /fragment/prompt-presets/new?type=bogus
+Then the response is a 400
+And the response body is `<div class="error-message">Invalid preset type</div>`
 ```
 
 ### GET /fragment/prompt-presets/{id}/edit — edit form
@@ -95,30 +87,30 @@ And the response body is `<div class="error-message">Preset not found</div>`
 Given a fresh app state with a seeded non-default system preset named "Editable"
 When the client GET /fragment/prompt-presets/{id}/edit for that preset's id
 Then the response is 200
-And the response body contains a `preset-card edit-form` root with the card's stable id, which holds the panel (data-work)
+And the response body contains a `preset-form edit-form` root that is a dialog form (`data-dialog-form`), with the title `edit-dialog-title` "Edit {name}"
 And the body contains a form posting to /prompt-presets/{id}
 And the body contains a hidden input named preset_type with value "system"
 And the body contains a name input whose value is "Editable"
 And the body contains textarea inputs named role, instructions, writing_style, output_format
 And the body contains a "Save" button
-And the body contains a "Cancel" button
+And the body contains a "Cancel" button that closes the dialog
 ```
 
-#### Scenario 21.5: Edit form for a nonexistent preset returns an error fragment
+#### Scenario 21.5: Edit form for a nonexistent preset is refused
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/prompt-presets/does-not-exist/edit
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
-#### Scenario 21.6: Edit form for a default preset returns an error fragment
+#### Scenario 21.6: Edit form for a default preset is refused
 
 ```gherkin
 Given a fresh app state with a seeded default system preset
 When the client GET /fragment/prompt-presets/{default_id}/edit
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Cannot edit default presets</div>`
 ```
 
@@ -130,18 +122,18 @@ And the response body is `<div class="error-message">Cannot edit default presets
 Given a fresh app state with a seeded default system preset named "Viewer"
 When the client GET /fragment/prompt-presets/{id}/view for that preset's id
 Then the response is 200
-And the response body contains a `preset-card view-form` root with the card's stable id, which holds the panel (data-work)
+And the response body contains a `preset-form view-form` root that is a dialog form (`data-dialog-form`), with the title `edit-dialog-title` "View {name}"
 And the body contains the preset name "Viewer"
 And the body contains read-only fields for Role, Instructions, Writing Style, Output Format
-And the body contains a "Close" button
+And the body contains a "Close" button that closes the dialog
 ```
 
-#### Scenario 21.8: View form for a nonexistent preset returns an error fragment
+#### Scenario 21.8: View form for a nonexistent preset is refused
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/prompt-presets/does-not-exist/view
-Then the response is 200
+Then the response is a 400
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
@@ -208,7 +200,7 @@ enumerated as separate scenarios; this one covers the shape.
 Given a fresh app state with a seeded non-default system preset named "Before"
 When the client POST /prompt-presets/{id} with name="After" and instructions="Updated text." and preset_type="system"
 Then the response is a 200 with an empty body
-And a following GET /fragment/prompt-presets/{id} contains the new name "After"
+And a following GET /fragment/prompt-presets lists the card of that preset with the new name "After"
 And it does not contain the old name "Before"
 And it preserves the stored allowed modes (the form omitted them)
 ```
@@ -407,7 +399,7 @@ And the client GET /fragment/prompt-presets/{copy_id}/edit
 Then the edit form renders the allowed_mode_novel and allowed_mode_if checkboxes checked
 When the client POST /prompt-presets/{copy_id} with allowed_mode_novel and allowed_mode_if both set
 Then the response is a 200 with an empty body
-And a following GET /fragment/prompt-presets/{copy_id} contains a "Set Active (Interactive Fiction)" button
+And a following GET /fragment/prompt-presets has the copy's card with a "Set Active (Interactive Fiction)" button
 And it contains a "Set Active (Novel)" button
 And storage reports the copy's allowed_modes as ["novel", "interactive_fiction"]
 ```
@@ -447,7 +439,7 @@ And a following GET /fragment/prompt-presets contains a Quantifier preset named 
 Given a fresh app state with a System preset named "Alpha"
 When the client POST /prompt-presets/{id} for that preset with the same name "Alpha" and changed instructions
 Then the response is a 200 with an empty body
-And a following GET /fragment/prompt-presets/{id} contains a preset card named "Alpha" and no error
+And a following GET /fragment/prompt-presets lists a preset card named "Alpha" and no error
 ```
 
 #### Scenario 21.33: Duplicating the same preset twice yields two distinct copies

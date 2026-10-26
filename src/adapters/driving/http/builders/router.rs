@@ -117,6 +117,14 @@ pub fn build_router(app_state: AppState) -> Router {
         )
         .route("/fragment/games", get(games::handlers::list_games_fragment))
         .route(
+            "/fragment/games/new",
+            get(games::handlers::new_game_form_handler),
+        )
+        .route(
+            "/fragment/games/:id/rename",
+            get(games::handlers::rename_game_form_handler),
+        )
+        .route(
             "/fragment/worlds",
             get(worlds::handlers::list_worlds_fragment),
         )
@@ -191,8 +199,8 @@ pub fn build_router(app_state: AppState) -> Router {
             post(prompt_presets::handlers::save_preset_handler),
         )
         .route(
-            "/fragment/prompt-presets/:id",
-            get(prompt_presets::handlers::preset_card_handler),
+            "/fragment/prompt-presets/new",
+            get(prompt_presets::handlers::new_preset_form_handler),
         )
         .route(
             "/fragment/prompt-presets/:id/edit",

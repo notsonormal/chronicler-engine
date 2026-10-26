@@ -1,4 +1,4 @@
-// The story log: edit mode, its entry locks, the swipe/retry/delete requests, the follow-new-entries scroll and its own error slot.
+// The story log: edit mode, its entry lock, the swipe/retry/delete requests, the follow-new-entries scroll and its own error slot.
 
 const noticeClearTimers = new WeakMap();
 
@@ -32,21 +32,44 @@ function autoResizeTextarea(textarea) {
   textarea.style.height = textarea.scrollHeight + border + "px";
 }
 
-function lockOtherEditButtons() {
-  document.querySelectorAll("#story-log .edit-btn").forEach((btn) => {
-    btn.disabled = true;
-  });
+// While an entry is in edit, the root of the story log carries
+// `data-editing-entry`. CSS shows the Edit buttons and the swipe controls as
+// disabled, and the click guard below stops a keyboard activation. A load morphs
+// only the children of the root, so the lock survives every load. It ends after
+// the load that follows a saved edit, so the saved entry's controls stay locked
+// until the entry shows the saved text.
+function storyLogRoot() {
+  return document.getElementById("story-log");
 }
 
-function unlockEditButtons() {
-  document.querySelectorAll("#story-log .edit-btn").forEach((btn) => {
-    btn.disabled = false;
-  });
+function lockEditing() {
+  const root = storyLogRoot();
+  if (root) root.setAttribute("data-editing-entry", "");
 }
+
+function unlockEditing() {
+  const root = storyLogRoot();
+  if (root) root.removeAttribute("data-editing-entry");
+}
+
+document.addEventListener(
+  "click",
+  function (evt) {
+    const target = evt.target;
+    if (!(target instanceof Element)) return;
+    const locked = target.closest(
+      "#story-log[data-editing-entry] :is(.edit-btn, .swipe-controls .action-btn)",
+    );
+    if (!locked) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+  },
+  true,
+);
 
 function showEditForm(id) {
   if (editState !== null) return;
-  editState = { id: id, text: null, actions: null, swipeControls: null };
+  editState = { id: id, text: null, actions: null };
   const entry = document.querySelector(`[data-id="${id}"]`);
   if (entry) {
     const textSpan = entry.querySelector(".text");
@@ -81,26 +104,19 @@ function showEditForm(id) {
       editState.actions = actionsContainer.innerHTML;
       actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save" aria-label="Save"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel" aria-label="Cancel"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>`;
     }
-    const swipeControls = entry.querySelector(".swipe-controls");
-    if (swipeControls) {
-      editState.swipeControls = swipeControls.innerHTML;
-      swipeControls.querySelectorAll(".action-btn").forEach((btn) => {
-        btn.disabled = true;
-      });
-    }
-
-    // The open editor holds the story log: a load waits until the edit ends.
-    entry.setAttribute("data-work", "");
-    lockOtherEditButtons();
+    // A load skips the entry in edit, so new narration shows around the draft.
+    entry.setAttribute("data-editing", "");
+    lockEditing();
     textarea.focus();
   }
 }
 
 function clearEditState() {
   document
-    .querySelectorAll("#story-log [data-work]")
-    .forEach((root) => root.removeAttribute("data-work"));
+    .querySelectorAll("#story-log [data-editing]")
+    .forEach((entry) => entry.removeAttribute("data-editing"));
   editState = null;
+  loadRegionAgain(storyLogRoot());
 }
 
 function revertEdit() {
@@ -113,13 +129,9 @@ function revertEdit() {
     if (actionsContainer && editState.actions !== null) {
       actionsContainer.innerHTML = editState.actions;
     }
-    const swipeControls = entry.querySelector(".swipe-controls");
-    if (swipeControls && editState.swipeControls !== null) {
-      swipeControls.innerHTML = editState.swipeControls;
-    }
   }
   clearEditState();
-  unlockEditButtons();
+  unlockEditing();
 }
 
 function cancelEdit() {
@@ -165,9 +177,8 @@ function submitEdit() {
       }
       // The lock stays until the load replaces the entry's controls, so a second
       // editor cannot open on a stale textarea.
-      const saved = document.getElementById("edit-textarea");
-      if (saved) endEdit(saved);
       clearEditState();
+      chroniclerLive.settle().then(unlockEditing);
     })
     .catch((err) => {
       console.error("Failed to save message:", err);
@@ -340,7 +351,7 @@ document.body.addEventListener("htmx:afterSwap", function (evt) {
   storyLogSwapStart = null;
   const target = evt.detail && (evt.detail.target || evt.detail.elt);
   if (!start || !target || target.id !== "story-log") return;
-  // An open edit owns the log's position, and the log does not load while it is open.
+  // An open edit owns the log's position.
   if (editState !== null) return;
   if (!start.atBottom) return;
   if (storyLogEntryCount(target) <= start.entries) return;

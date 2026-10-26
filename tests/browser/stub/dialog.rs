@@ -246,6 +246,103 @@ async fn check_escape_closes_an_open_error_detail_before_it_closes_the_dialog(
     wait_until_dialog_closed(&page, "a second Escape closes the dialog").await;
 }
 
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.52
+async fn check_the_open_dialog_is_centred_in_the_viewport(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_settings(&page).await;
+    click_and_settle(&page, ADD_BUTTON, "#edit-dialog-body").await;
+    assert!(dialog_is_open(&page).await, "Add opens the dialog");
+
+    let (left_gap, right_gap, top_gap, bottom_gap): (f64, f64, f64, f64) = page
+        .evaluate::<(), (f64, f64, f64, f64)>(
+            r#"() => {
+                const rect = document.getElementById('edit-dialog').getBoundingClientRect();
+                return [rect.left, window.innerWidth - rect.right, rect.top, window.innerHeight - rect.bottom];
+            }"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(
+        (left_gap - right_gap).abs() <= 1.0,
+        "the dialog is horizontally centred: left gap {left_gap}, right gap {right_gap}"
+    );
+    assert!(
+        (top_gap - bottom_gap).abs() <= 1.0 && top_gap > 0.0,
+        "the dialog is vertically centred, off the top edge: top gap {top_gap}, bottom gap {bottom_gap}"
+    );
+}
+
+const PRESET_EDIT_REQUEST: &str = r#"button[hx-get="/fragment/prompt-presets/custom_ref/edit"]"#;
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.51
+async fn check_closing_the_dialog_focuses_the_control_with_the_openers_request_after_a_load_rewrote_its_card(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    page.locator(r#"[data-tab="prompt-presets"]"#)
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_visible(&page, "#preset-card-custom_ref", DIALOG_WAIT).await;
+
+    page.locator(PRESET_EDIT_REQUEST)
+        .await
+        .focus()
+        .await
+        .unwrap();
+    click_and_settle(&page, PRESET_EDIT_REQUEST, "#edit-dialog-body").await;
+    assert!(dialog_is_open(&page).await, "Edit opens the dialog");
+    page.evaluate::<(), ()>(
+        "() => { window.__openerNode = document.querySelector('button[hx-get=\"/fragment/prompt-presets/custom_ref/edit\"]'); }",
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Set Active leaves the card with one activate button fewer, so the load
+    // morphs the buttons of the card in place: the node that opened the dialog is
+    // another control afterwards.
+    let loads = changes.loads("/fragment/prompt-presets");
+    page.evaluate::<(), ()>(
+        "() => { fetch('/prompt-presets/custom_ref/activate?mode=novel', { method: 'POST' }); }",
+        None,
+    )
+    .await
+    .unwrap();
+    let rewritten = wait_for_condition_async(DIALOG_WAIT, Duration::from_millis(25), || async {
+        changes.loads("/fragment/prompt-presets") > loads
+            && page
+                .evaluate::<(), bool>(
+                    "() => window.__openerNode.isConnected && window.__openerNode.getAttribute('hx-get') !== '/fragment/prompt-presets/custom_ref/edit'",
+                    None,
+                )
+                .await
+                .unwrap_or(false)
+    })
+    .await;
+    assert!(
+        rewritten,
+        "a load of the panel rewrites the node that opened the dialog into another control"
+    );
+
+    page.locator("#edit-dialog [data-close-dialog]")
+        .await
+        .first()
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_dialog_closed(&page, "Cancel must close the dialog").await;
+    assert!(
+        wait_until_focused(&page, PRESET_EDIT_REQUEST, Duration::from_secs(2)).await,
+        "focus goes to the control that sends the opener's request, not to the node that was rewritten"
+    );
+}
+
 #[tokio::test]
 async fn run_dialog_checks() {
     let mut runner = StubRunner::launch().await;
@@ -277,6 +374,18 @@ async fn run_dialog_checks() {
         .run(
             StubActionOutcome::Pending,
             check_escape_closes_an_open_error_detail_before_it_closes_the_dialog,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_closing_the_dialog_focuses_the_control_with_the_openers_request_after_a_load_rewrote_its_card,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_the_open_dialog_is_centred_in_the_viewport,
         )
         .await;
     runner.finish().await;

@@ -17,13 +17,16 @@ use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, Narra
 use crate::error::EngineError;
 
 use crate::adapters::driving::http::games::templates::games::{
-    GamePostureTemplate, GamesPanelTemplate, PersonaRowView,
+    GamePostureTemplate, GameRenameFormTemplate, GamesPanelTemplate, NewGameFormTemplate,
+    PersonaRowView,
 };
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::fragment::{
     failed_fragment_response, render_failure_response, render_response,
 };
-use crate::adapters::driving::http::utils::error::action_error_response;
+use crate::adapters::driving::http::utils::error::{
+    action_error_response, action_failure_response, action_refusal_response,
+};
 use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
 
@@ -56,7 +59,21 @@ pub async fn list_games_fragment(
         Err(e) => return failed_fragment_response(&format!("Failed to list worlds: {e}")),
     };
 
-    let personas: Vec<PersonaRowView> = match state.persona_catalogue.list_personas() {
+    let personas = persona_rows(&state);
+
+    let template = GamesPanelTemplate {
+        active_game,
+        saved_games,
+        worlds,
+        personas,
+        posture_html,
+    };
+
+    render_response(&template)
+}
+
+fn persona_rows(state: &AppState) -> Vec<PersonaRowView> {
+    match state.persona_catalogue.list_personas() {
         Ok(p) => p,
         Err(e) => {
             tracing::warn!("Failed to load personas: {e}");
@@ -68,17 +85,37 @@ pub async fn list_games_fragment(
         key: p.key,
         name: p.sheet.name,
     })
-    .collect();
+    .collect()
+}
 
-    let template = GamesPanelTemplate {
-        active_game,
-        saved_games,
-        worlds,
-        personas,
-        posture_html,
+/// The Rename form opens in the dialog. A Game that is gone, or a list that
+/// cannot be read, opens no dialog: the Rename control reports it in its own slot.
+pub async fn rename_game_form_handler(
+    State(state): State<AppState>,
+    Path(id): Path<u64>,
+) -> Response<axum::body::Body> {
+    let games = match state.game_catalogue.list_games() {
+        Ok(games) => games,
+        Err(e) => return action_failure_response(format!("Failed to list games: {e}")),
     };
+    match games.into_iter().find(|game| game.id == id) {
+        Some(game) => render_response(&GameRenameFormTemplate {
+            id: game.id,
+            display_name: game.display_name,
+        }),
+        None => action_refusal_response("Game not found"),
+    }
+}
 
-    render_response(&template)
+pub async fn new_game_form_handler(State(state): State<AppState>) -> Response<axum::body::Body> {
+    let worlds = match state.world_catalogue.list_worlds() {
+        Ok(worlds) => worlds,
+        Err(e) => return action_failure_response(format!("Failed to list worlds: {e}")),
+    };
+    render_response(&NewGameFormTemplate {
+        worlds,
+        personas: persona_rows(&state),
+    })
 }
 
 fn current_and_saved_games(

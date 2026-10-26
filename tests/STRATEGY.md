@@ -228,9 +228,9 @@ closes. The check waits until the page is quiet. Then it compares each visible
 live region with a fresh GET of its own route, and it fails with the region,
 the route and a short diff.
 
-The allow list in `tests/test_utils/convergence.rs` holds the mismatches that a
-later stage of the dashboard plan removes. Each row has a reason and the stage
-that removes it. The list only shrinks.
+The comparison drops what a load keeps or skips by design: the attributes that
+`data-keep` names, the htmx classes, a showing inline error slot, and the story-log
+entry in edit (`data-editing`). It has no allow list.
 
 A check that leaves the page unable to match a fresh render on purpose, for
 example with a stopped server, uses `StubRunner::run_without_convergence` and

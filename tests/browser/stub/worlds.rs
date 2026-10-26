@@ -117,6 +117,56 @@ async fn check_a_refused_world_delete_reports_in_its_row_and_keeps_focus(
     );
 }
 
+// [docs/specs/browser_worlds.md] SCENARIO: 29.6
+async fn check_a_world_posture_save_leaves_the_dialog_open_with_the_draft(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_worlds_tab(&page).await;
+    let edit = r#"#world-test button[hx-get$="/edit"]"#;
+    click_and_settle(&page, edit, "#edit-dialog-body").await;
+
+    let drafted: bool = page
+        .evaluate::<(), bool>(
+            r#"() => {
+                const input = document.querySelector('#edit-dialog input[name="name"]');
+                if (!input) return false;
+                input.value = 'A typed world name';
+                window.__worldForm = document.getElementById('world-form-container');
+                window.__worldInput = input;
+                return true;
+            }"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(drafted, "the World form opens in the dialog");
+
+    let saved: String = page
+        .evaluate::<(), String>(
+            r#"async () => {
+                const select = document.querySelector('#edit-dialog select[name="narrative_tense"]');
+                const ended = new Promise((resolve) =>
+                    select.addEventListener('htmx:afterRequest', resolve, { once: true }));
+                select.value = 'present';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                await ended;
+                await window.chroniclerLive.settle();
+                const dialog = document.getElementById('edit-dialog');
+                const input = document.querySelector('#edit-dialog input[name="name"]');
+                if (!dialog.open) return 'the posture save closed the dialog';
+                if (document.getElementById('world-form-container') !== window.__worldForm) return 'the form is a new element';
+                if (input !== window.__worldInput || input.value !== 'A typed world name') return 'the typed name did not survive';
+                return document.getElementById('world-posture-status').hasAttribute('data-saved')
+                    ? '' : 'the Saved flag does not show';
+            }"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(saved, "");
+}
+
 #[tokio::test]
 async fn run_world_checks() {
     let mut runner = StubRunner::launch().await;
@@ -130,6 +180,12 @@ async fn run_world_checks() {
         .run(
             StubActionOutcome::Pending,
             check_a_refused_world_delete_reports_in_its_row_and_keeps_focus,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_world_posture_save_leaves_the_dialog_open_with_the_draft,
         )
         .await;
     runner.finish().await;

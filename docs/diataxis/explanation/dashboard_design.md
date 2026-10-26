@@ -39,15 +39,16 @@ The numbers are counters, not dates. A counter cannot repeat within a millisecon
 
 Data flows one way: an action saves data, and the regions that show the data load it. A region has one path in, its own load. So two answers cannot write the same region in different shapes, and a region cannot lag behind another region that an action wrote directly. An action answers nothing on success, and its error appears in its own form. This costs one extra round trip after each action: the ask that follows it.
 
-### View state survives a load, and an edit holds its region
+### View state survives a load, and a draft stays out of the regions
 
 A change can arrive while the player works. A load must neither destroy what the player does nor wait forever.
 
 - A load morphs the region, so a node that the new fragment keeps stays the same node, with its focus, selection and scroll position.
-- View state, such as an open disclosure, an expanded LLM message or the active Settings sub-tab, lives in attributes that the server never sets. An element lists them in `data-keep`, and the load keeps them. The alternative was a region that waits while any disclosure is open. That region would show no new LLM message while a card is open, and an open error popover would hold the status display.
-- An edit holds the region. A region with an open editor or a changed field waits, and loads once when the edit ends. A control that saves on change goes back to its rendered value when its save fails. If it kept the value, that value would be an edit, and one failed save would stop the whole panel from updating with nothing on the screen to say why. A disclosure that holds a form follows the same reasoning: a closed disclosure hides its fields, but the browser keeps their values, so a draft that the player closed would hold the panel with nothing on the screen to say so. Closing it discards the draft.
+- View state, such as an open Details disclosure, an expanded LLM message or the active Settings sub-tab, lives in attributes that the server never sets. An element lists them in `data-keep`, and the load keeps them. The alternative was a region that waits while any disclosure is open. That region would show no new LLM message while a card is open, and an open error popover would hold the status display.
+- A form that waits for a Save opens in one modal dialog outside every region, so no load meets a draft. The alternative was to hold the whole region while a form inside it holds a draft, but one stuck draft then stops a whole panel from updating. Closing the dialog discards the form.
+- Two elements still hold unsaved input inside a region: a story-log entry in edit, and a control whose request is in flight. A load skips each one and shows the rest of the region. The player can edit a message while a Job runs, and the new narration arrives around the draft. The entry catches up with the engine when the edit ends.
 
-The tradeoff is that a held region shows older data while the edit lasts. The `data-live-state` of the region says so.
+The tradeoff is the dialog: it takes the player out of the list for the time of the edit, and it shows the data as it was when the form opened.
 
 ## Palette
 

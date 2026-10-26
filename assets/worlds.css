@@ -8,10 +8,6 @@
     margin: 0 auto;
 }
 
-.worlds-panel:has(#world-editor > *) > :not(#world-editor) {
-    display: none;
-}
-
 .worlds-panel .btn-new-world {
     align-self: flex-start;
     margin-bottom: var(--spacing-md);
@@ -74,6 +70,13 @@
     border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: var(--spacing-md);
+}
+
+#edit-dialog .world-form-container {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
 }
 
 .world-form-container .posture-group {

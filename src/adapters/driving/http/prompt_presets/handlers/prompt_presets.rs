@@ -10,26 +10,19 @@ use crate::domain::model::utils::settings_defaults;
 use crate::application::errors::ApplicationError;
 use crate::application::prompt_preset_service::PresetEdit;
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::builders::presets::{
-    preset_card_html, preset_edit_form_html, preset_view_form_html,
-};
+use crate::adapters::driving::http::builders::presets::{preset_edit_form_html, preset_view_form_html};
 use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response,
-    error_fragment_response,
 };
 use crate::adapters::driving::http::utils::fragment::{
-    failed_fragment_response, render_or_error_fragment,
+    failed_fragment_response, render_or_error_fragment, render_response,
 };
 use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
 use crate::adapters::driving::http::utils::response::ok;
 
-use crate::adapters::driving::http::prompt_presets::templates::prompt_presets::PromptPresetsTemplate;
-
-/// The one response a single-card endpoint returns, so an edit-refreshed card is
-/// byte-identical to the same card in the panel.
-fn card_response(preset: &PromptPreset, settings: &AppSettings) -> Response<Body> {
-    Html(preset_card_html(preset, settings)).into_response()
-}
+use crate::adapters::driving::http::prompt_presets::templates::prompt_presets::{
+    PresetAddFormTemplate, PromptPresetsTemplate,
+};
 
 fn presets_template(app_state: &AppState, settings: &AppSettings) -> PromptPresetsTemplate {
     let system_presets = app_state
@@ -58,15 +51,15 @@ fn presets_template(app_state: &AppState, settings: &AppSettings) -> PromptPrese
     }
 }
 
-/// The two load macros differ only in their status: a 200 body lands inside
-/// the region a GET fragment loads, while a non-2xx leaves a POST handler's
-/// region in place for the client's inline error slot.
+/// The dialog forms open only on a 2xx answer: a missing preset or a failed
+/// read answers a non-2xx error, and the control that asked reports it in its own
+/// slot.
 macro_rules! require_preset {
     ($storage:expr, $id:expr) => {
         match $storage.get_preset($id) {
             Ok(Some(p)) => p,
-            Ok(None) => return error_fragment_response("Preset not found"),
-            Err(e) => return error_fragment_response(format!("Load failed: {e}")),
+            Ok(None) => return action_refusal_response("Preset not found"),
+            Err(e) => return action_failure_response(format!("Load failed: {e}")),
         }
     };
 }
@@ -81,19 +74,6 @@ macro_rules! require_preset_action {
     };
 }
 
-pub async fn preset_card_handler(
-    State(app_state): State<AppState>,
-    axum::extract::Path(id): axum::extract::Path<String>,
-) -> Response<Body> {
-    let preset = require_preset!(app_state.prompt_preset_service, &id);
-
-    let settings = match app_state.settings() {
-        Ok(s) => s,
-        Err(e) => return error_fragment_response(format!("Load failed: {e}")),
-    };
-    card_response(&preset, &settings)
-}
-
 pub async fn view_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -101,6 +81,21 @@ pub async fn view_preset_form_handler(
     let preset = require_preset!(app_state.prompt_preset_service, &id);
 
     Html(preset_view_form_html(&preset)).into_response()
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct NewPresetQuery {
+    #[serde(rename = "type")]
+    pub preset_type: String,
+}
+
+pub async fn new_preset_form_handler(
+    axum::extract::Query(query): axum::extract::Query<NewPresetQuery>,
+) -> Response<Body> {
+    match PresetType::try_from(query.preset_type.as_str()) {
+        Ok(preset_type) => render_response(&PresetAddFormTemplate::for_type(preset_type)),
+        Err(_) => action_refusal_response("Invalid preset type"),
+    }
 }
 
 pub async fn panel_handler(State(app_state): State<AppState>) -> Response<Body> {
@@ -201,8 +196,8 @@ pub async fn edit_preset_form_handler(
         Ok(preset) => {
             Html(preset_edit_form_html(&preset, preset.preset_type.as_str())).into_response()
         }
-        Err(ApplicationError::Validation(message)) => error_fragment_response(message),
-        Err(e) => error_fragment_response(format!("Load failed: {e}")),
+        Err(ApplicationError::Validation(message)) => action_refusal_response(message),
+        Err(e) => action_failure_response(format!("Load failed: {e}")),
     }
 }
 

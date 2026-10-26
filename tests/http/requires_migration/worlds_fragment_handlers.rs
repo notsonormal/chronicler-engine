@@ -38,8 +38,8 @@ async fn test_list_worlds_fragment_returns_html() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains(r#"id="world-editor""#),
-        "Expected the empty editor slot in response: {body_str}"
+        body_str.contains(r##"hx-target="#edit-dialog-body""##),
+        "Expected the controls that open the dialog in response: {body_str}"
     );
     assert!(
         !body_str.contains("worlds-panel"),
@@ -72,7 +72,7 @@ async fn test_new_world_form_handler_returns_form() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("world-form-container") && body_str.contains("data-work"),
+        body_str.contains("world-form-container") && body_str.contains("data-dialog-form"),
         "Expected world-form-container in response: {body_str}"
     );
     assert!(

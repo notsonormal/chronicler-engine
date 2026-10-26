@@ -10,9 +10,9 @@ Endpoints:
 - `POST /worlds/:key/delete`
 
 The Worlds panel is a live region of the worlds and games kinds. Its fragment
-carries no root element of its own, and it carries an empty editor slot
-(`#world-editor`). The World editor opens into that slot, and its root holds the
-panel (`data-work`) until the edit ends. A World save answers nothing on success:
+carries no root element of its own. The World editor opens in the edit dialog
+(`#edit-dialog-body`): the Create and Edit controls load it, and its root
+(`data-dialog-form`) carries the title of the dialog. A World save answers nothing on success:
 an empty 200. A refusal answers a 400 error fragment, and a failure a 500 error
 fragment. The control that saved reports the error in its own slot. The saved
 World reaches the screen when the panel loads.
@@ -93,8 +93,8 @@ And the narrator_mode, narrative_perspective, and narrative_tense selects are re
 And the narrator_mode select renders "interactive_fiction" selected
 And the narrative_perspective select renders "second" selected
 And the narrative_tense select renders "past" selected
-And the editor root holds its panel (data-work), and carries no hx-target
-And the body contains the #world-posture-status flag, which a load keeps (data-keep), and the posture group's own error slot
+And the editor root is a dialog form (`data-dialog-form`) with the title `edit-dialog-title`, and carries no hx-target
+And the body contains the #world-posture-status flag and the posture group's own error slot
 And the posture selects auto-save to /worlds/posture_world/posture
 ```
 
@@ -129,7 +129,8 @@ And the body carries the error fragment naming the storage failure
 Given a seeded World with exactly one game
 When the client GET /fragment/worlds
 Then the response status is "200 OK"
-And the body holds an empty editor slot, and no root element of its own
+And the body holds no editor slot and no root element of its own
+And the Create World control and each World's Edit control target `#edit-dialog-body`
 And the World's row carries a stable id
 And the World's card shows "1 game" and not "1 games"
 When a second game is created in that World

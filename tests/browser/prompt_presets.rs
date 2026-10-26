@@ -5,8 +5,8 @@ use std::time::Duration;
 use super::*;
 
 /// The browser-only question: do the Duplicate click's panel swap, the Edit
-/// button's in-place card swap, and the Save form posting the ticked mode flags
-/// to the card's own route all work through real clicks. The request chain is
+/// button's load of the form into the dialog, and the Save form posting the ticked
+/// mode flags to the card's own route all work through real clicks. The request chain is
 /// covered at HTTP (`tests/http/prompt_presets.rs` SCENARIO 21.27).
 ///
 /// Seeding goes through the engine's own HTTP API (`seed_system_preset`): the
@@ -57,14 +57,12 @@ async fn test_preset_duplicate_edit_save_click_chain() {
                 "the duplicated copy must start with only the Novel mode enabled, got: {copy_html_before}"
             );
 
-            // The replacement card is titled "Edit <name>", so `copy_card` no
-            // longer matches it — scope the form fields to
-            // `.preset-card.edit-form`, of which only one exists at a time.
+            // The form opens in the dialog, which holds one form at a time.
             open_preset_editor(&page, &copy_card).await;
 
             // Tick IF: the post-reload assertion proves the save *added* a mode
             // rather than re-rendering one the copy already carried.
-            let edit_form = ".preset-card.edit-form";
+            let edit_form = "#edit-dialog .edit-form";
             page.locator(&format!(r#"{edit_form} input[name="allowed_mode_if"]"#))
                 .await
                 .set_checked(true, None) // settle-guard-exempt: the mode checkboxes carry no hx attribute — the form posts only via the settle-gated Save click.
@@ -72,7 +70,7 @@ async fn test_preset_duplicate_edit_save_click_chain() {
                 .expect("tick the IF mode flag");
 
             let save_selector = format!("{edit_form} button:has-text('Save')");
-            // Save answers nothing: the edit ends, and the panel loads the card.
+            // Save answers nothing: the dialog closes, and the panel loads the card.
             click_and_settle(&page, &save_selector, ".prompt-presets-panel").await;
 
             // Reload before asserting: a fragment edit that only re-rendered

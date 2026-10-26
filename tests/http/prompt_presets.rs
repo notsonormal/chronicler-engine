@@ -63,6 +63,12 @@ async fn panel_after(app: &axum::Router, response: axum::response::Response) -> 
     fetch_body(app, "/fragment/prompt-presets").await
 }
 
+/// One preset's card as the panel renders it.
+async fn card_in_panel(app: &axum::Router, preset_id: &str) -> String {
+    let panel = fetch_body(app, "/fragment/prompt-presets").await;
+    preset_card_slice(&panel, preset_id).to_string()
+}
+
 fn extract_first_preset_id(body: &str) -> String {
     let delete_marker = "/delete\"";
     let delete_pos = body
@@ -105,7 +111,6 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     );
     assert!(body.contains("<h2>System Prompts</h2>"));
     assert!(body.contains("<h2>Quantifier Prompts</h2>"));
-    assert!(body.contains("preset-add-toggle"));
     assert!(body.contains("Add System Prompt Preset"));
     assert!(body.contains("Add Quantifier Prompt Preset"));
     // Default test fixture seeds one default system preset; the spec assumes a
@@ -116,59 +121,33 @@ async fn test_prompt_presets_panel_renders_full_surface() {
         "a card carries a stable id, so a load keeps it: {body}"
     );
     assert!(body.contains("Default"));
-    assert!(body.contains(r#"<input type="hidden" name="preset_type" value="system" />"#));
-    assert!(body.contains(r#"<input type="hidden" name="preset_type" value="quantifier" />"#));
     assert!(body.contains("<h2>Impersonate Prompts</h2>"));
     assert!(body.contains("Add Impersonate Prompt Preset"));
-    let impersonate_marker = r#"<input type="hidden" name="preset_type" value="impersonate" />"#;
-    let impersonate_start = body
-        .find(impersonate_marker)
-        .expect("impersonate add-form must render");
-    let impersonate_form = &body[impersonate_start..];
-    let impersonate_form = &impersonate_form[..impersonate_form
-        .find("</form>")
-        .expect("impersonate add-form must close")];
-    for field in [
-        "name",
-        "role",
-        "instructions",
-        "writing_style",
-        "output_format",
-    ] {
-        assert!(
-            impersonate_form.contains(&format!(r#"name="{field}""#)),
-            "impersonate add-form must contain input `{field}`: {impersonate_form}"
-        );
-    }
     assert!(
-        body.contains(r#"data-error-slot="preset-add-system""#)
-            && body.contains(r#"data-error-slot="preset-add-options""#),
-        "each Add form must carry the inline error slot the client renders into"
+        !body.contains("<form") && !body.contains("<textarea"),
+        "the panel holds no form that waits for a Save: {body}"
     );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.28
 #[tokio::test]
-async fn test_prompt_presets_add_forms_collapsed_by_default() {
+async fn test_prompt_presets_add_controls_open_the_dialog() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = fetch_body(&app, "/fragment/prompt-presets").await;
 
-    assert_eq!(
-        body.matches(r#"<details class="preset-add" data-keep="open" data-close-on-save>"#)
-            .count(),
-        4,
-        "each category's add form must be a closed disclosure that a load keeps open"
-    );
+    for preset_type in ["system", "quantifier", "impersonate", "options"] {
+        assert!(
+            body.contains(&format!(
+                r##"hx-get="/fragment/prompt-presets/new?type={preset_type}" hx-target="#edit-dialog-body""##
+            )),
+            "the {preset_type} section must have an Add control that opens the dialog: {body}"
+        );
+    }
     assert!(
-        !body.contains(" open>"),
-        "the add forms must be closed by default"
+        !body.contains("<details"),
+        "the panel holds no disclosure: {body}"
     );
     assert!(body.contains("Add System Prompt Preset"));
     assert!(body.contains("Add Quantifier Prompt Preset"));
@@ -176,52 +155,75 @@ async fn test_prompt_presets_add_forms_collapsed_by_default() {
     assert!(body.contains("Add Options Prompt Preset"));
 }
 
-// [docs/specs/prompt_presets.md] SCENARIO: 21.2
+// [docs/specs/prompt_presets.md] SCENARIO: 21.42
 #[tokio::test]
-async fn test_prompt_preset_single_card_renders() {
+async fn test_prompt_preset_add_form_is_a_dialog_fragment_for_its_type() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let create_response = post_form(
-        &app,
-        "/prompt-presets",
-        "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
-    )
-    .await;
-    assert_eq!(create_response.status(), StatusCode::OK);
-    let panel = panel_after(&app, create_response).await;
-    let preset_id = extract_first_preset_id(&panel);
-
-    let response = app
-        .oneshot(get_request(&format!(
-            "/fragment/prompt-presets/{preset_id}"
-        )))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="preset-card""#));
-    assert!(body.contains(&format!(r#"id="preset-card-{preset_id}""#)));
-    assert!(body.contains("My System Prompt"));
-    assert!(body.contains("Set Active"));
-    assert!(body.contains("Edit"));
-    assert!(body.contains("Delete"));
-    assert!(body.contains("Duplicate"));
+    for (preset_type, has_writing_style) in [
+        ("system", true),
+        ("quantifier", false),
+        ("impersonate", true),
+        ("options", true),
+    ] {
+        let body = fetch_body(
+            &app,
+            &format!("/fragment/prompt-presets/new?type={preset_type}"),
+        )
+        .await;
+        assert!(
+            body.contains("data-dialog-form") && body.contains(r#"id="edit-dialog-title""#),
+            "the {preset_type} form is a dialog form with the title that names the dialog: {body}"
+        );
+        assert!(
+            body.contains(r#"hx-post="/prompt-presets""#),
+            "the {preset_type} form posts to the create route: {body}"
+        );
+        assert!(
+            body.contains(&format!(
+                r#"<input type="hidden" name="preset_type" value="{preset_type}" />"#
+            )),
+            "the {preset_type} form carries its type: {body}"
+        );
+        for field in ["name", "role", "instructions", "output_format"] {
+            assert!(
+                body.contains(&format!(r#"name="{field}""#)),
+                "the {preset_type} form must contain `{field}`: {body}"
+            );
+        }
+        assert_eq!(
+            body.contains(r#"name="writing_style""#),
+            has_writing_style,
+            "only the Quantifier form has no Writing Style: {body}"
+        );
+        assert!(
+            body.contains(&format!(r#"data-error-slot="preset-add-{preset_type}""#)),
+            "the {preset_type} form carries the inline error slot: {body}"
+        );
+        assert!(
+            body.contains("data-close-dialog"),
+            "the {preset_type} form has a Cancel control that closes the dialog: {body}"
+        );
+    }
 }
 
-// [docs/specs/prompt_presets.md] SCENARIO: 21.3
+// [docs/specs/prompt_presets.md] SCENARIO: 21.43
 #[tokio::test]
-async fn test_prompt_preset_single_card_missing_returns_error() {
+async fn test_prompt_preset_add_form_of_an_unknown_type_is_refused() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let response = app
-        .oneshot(get_request("/fragment/prompt-presets/does-not-exist"))
+        .oneshot(get_request("/fragment/prompt-presets/new?type=bogus"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">Invalid preset type</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.4
@@ -248,10 +250,9 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(
-        body.contains(&format!(
-            r#"<div class="preset-card edit-form" id="preset-card-{preset_id}" data-work>"#
-        )),
-        "the editor keeps the card's id and holds the panel: {body}"
+        body.contains(r#"<div class="preset-form edit-form" data-dialog-form>"#)
+            && body.contains(r#"<h2 id="edit-dialog-title">Edit Editable</h2>"#),
+        "the editor is a dialog form with the title that names the dialog: {body}"
     );
     assert!(body.contains(&format!(r#"hx-post="/prompt-presets/{preset_id}""#)));
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="system" />"#));
@@ -261,7 +262,10 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
     assert!(body.contains(r#"name="writing_style""#));
     assert!(body.contains(r#"name="output_format""#));
     assert!(body.contains("Save"));
-    assert!(body.contains("Cancel"));
+    assert!(
+        body.contains("Cancel") && body.contains("data-close-dialog"),
+        "Cancel closes the dialog: {body}"
+    );
     assert!(
         body.contains(&format!(r#"data-error-slot="preset-edit-{preset_id}""#)),
         "the edit form must carry the inline error slot the client renders into"
@@ -278,7 +282,7 @@ async fn test_prompt_preset_edit_form_missing_returns_error() {
         .oneshot(get_request("/fragment/prompt-presets/does-not-exist/edit"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
@@ -293,7 +297,7 @@ async fn test_prompt_preset_edit_form_default_returns_error() {
         .oneshot(get_request("/fragment/prompt-presets/system_default/edit"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(
         body,
@@ -314,17 +318,19 @@ async fn test_prompt_preset_view_form_renders_for_default() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(
-        body.contains(
-            r#"<div class="preset-card view-form" id="preset-card-system_default" data-work>"#
-        ),
-        "the view keeps the card's id and holds the panel: {body}"
+        body.contains(r#"<div class="preset-form view-form" data-dialog-form>"#)
+            && body.contains(r#"<h2 id="edit-dialog-title">View Default Test System</h2>"#),
+        "the view is a dialog form with the title that names the dialog: {body}"
     );
     assert!(body.contains("Default Test System"));
     assert!(body.contains("Role"));
     assert!(body.contains("Instructions"));
     assert!(body.contains("Writing Style"));
     assert!(body.contains("Output Format"));
-    assert!(body.contains("Close"));
+    assert!(
+        body.contains("Close") && body.contains("data-close-dialog"),
+        "Close closes the dialog: {body}"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.8
@@ -337,7 +343,7 @@ async fn test_prompt_preset_view_form_missing_returns_error() {
         .oneshot(get_request("/fragment/prompt-presets/does-not-exist/view"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
@@ -458,7 +464,7 @@ async fn test_update_preset_renders_card_with_new_name() {
     )
     .await;
     assert_answers_nothing(response).await;
-    let body = fetch_body(&app, &format!("/fragment/prompt-presets/{preset_id}")).await;
+    let body = card_in_panel(&app, &preset_id).await;
     assert!(body.contains(r#"<div class="preset-card""#));
     assert!(body.contains("After"));
     assert!(!body.contains("Before"));
@@ -1082,7 +1088,7 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
     assert_eq!(edit_form.status(), StatusCode::OK);
     let form = body_text(edit_form).await;
     assert!(
-        form.contains(r#"class="preset-card edit-form""#),
+        form.contains(r#"class="preset-form edit-form""#),
         "the edit form must render for the copy: {form}"
     );
     assert!(
@@ -1102,7 +1108,7 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
     )
     .await;
     assert_answers_nothing(saved).await;
-    let card = fetch_body(&app, &format!("/fragment/prompt-presets/{copy_id}")).await;
+    let card = card_in_panel(&app, &copy_id).await;
     assert!(
         card.contains("Set Active (Interactive Fiction)"),
         "the saved card must offer Set Active (Interactive Fiction): {card}"
@@ -1237,7 +1243,7 @@ async fn test_update_preset_keeps_its_own_name() {
     )
     .await;
     assert_answers_nothing(response).await;
-    let body = fetch_body(&app, &format!("/fragment/prompt-presets/{preset_id}")).await;
+    let body = fetch_body(&app, "/fragment/prompt-presets").await;
     let card = preset_card_html_slice(&body, "Alpha").expect("the updated card must render");
     assert!(
         card.contains("<span class=\"card-title\">Alpha</span>"),
@@ -1368,7 +1374,7 @@ async fn test_prompt_presets_panel_renders_options_section() {
 
     assert!(body.contains("<h2>Options Prompts</h2>"));
     assert!(body.contains("Add Options Prompt Preset"));
-    assert!(body.contains(r#"name="preset_type" value="options""#));
+    assert!(body.contains(r##"hx-get="/fragment/prompt-presets/new?type=options""##));
     assert!(body.contains("Custom Options"));
 
     let card = preset_card_slice(&body, "options_custom");

@@ -6,8 +6,8 @@ use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::NarratorMode;
 use crate::adapters::driving::http::prompt_presets::handlers::{
     ActivateQuery, PresetForm, activate_preset_handler, delete_preset_handler,
-    duplicate_preset_handler, edit_preset_form_handler, preset_card_handler, save_preset_handler,
-    update_preset_handler, view_preset_form_handler,
+    duplicate_preset_handler, edit_preset_form_handler, save_preset_handler, update_preset_handler,
+    view_preset_form_handler,
 };
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::TestPromptPreset;
@@ -29,40 +29,6 @@ fn make_test_app_state_with_storage(
         crate::bootstrap::wiring::build_app_graph_for_tests(Arc::clone(&storage), None, None)
             .expect("build_app_graph_for_tests should succeed");
     crate::adapters::driving::http::AppState::from_wired(wired)
-}
-
-#[tokio::test]
-async fn test_preset_card_handler_returns_card() {
-    let preset = PromptPreset {
-        id: "card-test".into(),
-        name: "Card Test".into(),
-        instructions: Some("Test.".into()),
-        preset_type: PresetType::System,
-        ..Default::default()
-    };
-    let app_state = make_test_app_state_with_preset(preset.clone());
-    let response = preset_card_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("card-test".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Card Test"));
-    assert!(body.contains("Set Active (Novel)</button>"));
-    assert!(body.contains("Set Active (Interactive Fiction)</button>"));
-}
-
-#[tokio::test]
-async fn test_preset_card_handler_not_found() {
-    let app_state =
-        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
-    let response = preset_card_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("missing".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Preset not found"));
 }
 
 #[tokio::test]
@@ -534,82 +500,6 @@ async fn test_activate_with_mode_param_writes_that_modes_slot() {
             .system_prompt_preset_id,
         "system_default",
         "novel slot must stay untouched"
-    );
-}
-
-#[tokio::test]
-async fn test_card_badges_active_quantifier_default_for_novel() {
-    let mut preset = crate::test_support::TestPromptPreset::system("q-active", "Quant");
-    preset.preset_type = PresetType::Quantifier;
-    let app_state = make_test_app_state_with_preset(preset);
-
-    let response = activate_preset_handler(
-        axum::extract::State(app_state.clone()),
-        axum::extract::Path("q-active".to_string()),
-        axum::extract::Query(ActivateQuery::default()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(
-        !body.contains("error-message"),
-        "activation should succeed: {body}"
-    );
-
-    // The Novel bundle's quantifier slot holds this preset, so the card must badge
-    // it and suppress the Set Active (Novel) action.
-    let card = preset_card_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("q-active".to_string()),
-    )
-    .await;
-    let card_body = body_text(card).await;
-    assert!(
-        card_body.contains(r#"badge primary">Active · Novel</span>"#),
-        "active quantifier default must badge Active · Novel: {card_body}"
-    );
-    assert!(
-        !card_body.contains("Set Active (Novel)</button>"),
-        "active quantifier default must not offer Set Active (Novel): {card_body}"
-    );
-}
-
-#[tokio::test]
-async fn test_card_badges_active_impersonate_default_for_if() {
-    let mut preset = crate::test_support::TestPromptPreset::system("imp-active", "Imp");
-    preset.preset_type = PresetType::Impersonate;
-    let app_state = make_test_app_state_with_preset(preset);
-
-    let response = activate_preset_handler(
-        axum::extract::State(app_state.clone()),
-        axum::extract::Path("imp-active".to_string()),
-        axum::extract::Query(ActivateQuery {
-            mode: Some("interactive_fiction".to_string()),
-        }),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(
-        !body.contains("error-message"),
-        "activation should succeed: {body}"
-    );
-
-    let card = preset_card_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("imp-active".to_string()),
-    )
-    .await;
-    let card_body = body_text(card).await;
-    assert!(
-        card_body.contains(r#"badge primary">Active · Interactive Fiction</span>"#),
-        "active impersonate default must badge Active · Interactive Fiction: {card_body}"
-    );
-    assert!(
-        !card_body.contains(r#"badge primary">Active · Novel</span>"#),
-        "IF-only activation must not badge Novel: {card_body}"
-    );
-    assert!(
-        !card_body.contains("Set Active (Interactive Fiction)</button>"),
-        "active impersonate default must not offer Set Active (Interactive Fiction): {card_body}"
     );
 }
 

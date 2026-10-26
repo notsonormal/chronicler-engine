@@ -68,6 +68,8 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/games/:id/posture` | `update_game_posture_handler` |
 | POST | `/games/:id/presets` | `update_game_presets_handler` |
 | GET | `/fragment/games` | `list_games_fragment` |
+| GET | `/fragment/games/new` | `new_game_form_handler` |
+| GET | `/fragment/games/:id/rename` | `rename_game_form_handler` |
 
 ## Worlds
 
@@ -103,7 +105,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 |--------|------|---------|
 | GET | `/fragment/prompt-presets` | `panel_handler` |
 | POST | `/prompt-presets` | `save_preset_handler` |
-| GET | `/fragment/prompt-presets/:id` | `preset_card_handler` |
+| GET | `/fragment/prompt-presets/new` | `new_preset_form_handler` |
 | GET | `/fragment/prompt-presets/:id/edit` | `edit_preset_form_handler` |
 | GET | `/fragment/prompt-presets/:id/view` | `view_preset_form_handler` |
 | POST | `/prompt-presets/:id` | `update_preset_handler` |

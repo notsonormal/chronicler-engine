@@ -234,26 +234,26 @@ And that short line quotes the server's own explanation of the refusal
 And the raw server text is reachable in that error's disclosure
 ```
 
-#### Scenario 16.30: A failed preset add keeps the panel and renders the failure inline
+#### Scenario 16.30: A failed preset add keeps its dialog and renders the failure inline
 
 ```gherkin
-Given the Prompt Presets panel is showing a category's Add form, opened
-And the panel is the same node as before the submission
+Given the edit dialog is open with a preset Add form
+And the form is the same node as before the submission
 When the client submits the Add form and the server refuses it
-Then the Prompt Presets panel is still in the document with its preset cards
+Then the edit dialog is still open with the same form and its typed text
 And the Add form shows an inline error naming the failure
 And the raw server text is reachable in that error's disclosure
 ```
 
-#### Scenario 16.31: A failed preset edit keeps its card and renders the failure inline
+#### Scenario 16.31: A failed preset edit keeps its dialog and renders the failure inline
 
 ```gherkin
 Given the Prompt Presets panel shows a non-default preset card
-And the client has opened that card's edit form
+And the client has opened that card's edit form in the edit dialog
 And the edit form is the same node as before the submission
 When the client submits the edit form and the server fails the save
-Then the edit form's card is still in the document
-And the card shows an inline error naming the failure
+Then the edit dialog is still open with the same form
+And the form shows an inline error naming the failure
 And the raw server text is reachable in that error's disclosure
 ```
 
@@ -477,4 +477,23 @@ Then the error detail is closed
 And the edit dialog is still open, and the field keeps the typed value
 When the client presses Escape again
 Then the edit dialog is closed
+```
+
+#### Scenario 16.51: Closing the dialog focuses the control that sends the opener's request
+
+```gherkin
+Given the edit dialog is open, and a Prompt Presets card control opened it
+And a load of the panel has rewritten that control in place into another control
+When the client activates Cancel
+Then the edit dialog is closed
+And focus is on the control of the panel that sends the request of the control that opened the dialog
+```
+
+#### Scenario 16.52: The open dialog is centred in the viewport
+
+```gherkin
+Given the dashboard is loaded
+When a swap into the dialog body opens the dialog
+Then the dialog is centred horizontally in the viewport
+And the dialog is centred vertically, with its top edge below the top of the viewport
 ```

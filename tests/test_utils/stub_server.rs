@@ -25,14 +25,17 @@ use chronicler_engine::adapters::driving::http::builders::headers::{
     failure_banner_html, header_fragment_html,
 };
 use chronicler_engine::adapters::driving::http::builders::presets::{
-    preset_edit_form_html, PresetCardTemplate,
+    preset_edit_form_html, preset_view_form_html,
 };
-use chronicler_engine::adapters::driving::http::prompt_presets::templates::PromptPresetsTemplate;
+use chronicler_engine::adapters::driving::http::prompt_presets::templates::{
+    PresetAddFormTemplate, PromptPresetsTemplate,
+};
 use chronicler_engine::adapters::driving::http::worlds::templates::worlds::{
     WorldFormTemplate, WorldsPanelTemplate,
 };
 use chronicler_engine::adapters::driving::http::games::templates::games::{
-    GamePostureTemplate, GameRowView, GamesPanelTemplate, PersonaRowView,
+    GamePostureTemplate, GameRenameFormTemplate, GameRowView, GamesPanelTemplate,
+    NewGameFormTemplate, PersonaRowView,
 };
 use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, ConnectionTestDialogTemplate, ConnectionTestResultTemplate,
@@ -180,12 +183,6 @@ fn games_html(games: &StubGames) -> String {
         persona_name: "Test Player".to_string(),
         run_held: false,
     };
-    let world = |key: &str, name: &str, description: &str| WorldCard {
-        key: key.to_string(),
-        name: name.to_string(),
-        description: description.to_string(),
-        ..WorldCard::default()
-    };
     GamesPanelTemplate {
         active_game: Some(row(1, &games.active_name)),
         saved_games: games
@@ -193,24 +190,38 @@ fn games_html(games: &StubGames) -> String {
             .iter()
             .map(|(id, name)| row(*id, name))
             .collect(),
-        worlds: vec![
-            world("redmist_estate", "Redmist Estate", "A coastal estate."),
-            world("test", "Test Realm", "A small testing kingdom for UI tests"),
-        ],
-        personas: vec![
-            PersonaRowView {
-                key: "julian".to_string(),
-                name: "Julian".to_string(),
-            },
-            PersonaRowView {
-                key: "test_player".to_string(),
-                name: "Test Player".to_string(),
-            },
-        ],
+        worlds: new_game_worlds(),
+        personas: new_game_personas(),
         posture_html: posture,
     }
     .render()
     .expect("render the Games panel")
+}
+
+fn new_game_worlds() -> Vec<WorldCard> {
+    let world = |key: &str, name: &str, description: &str| WorldCard {
+        key: key.to_string(),
+        name: name.to_string(),
+        description: description.to_string(),
+        ..WorldCard::default()
+    };
+    vec![
+        world("redmist_estate", "Redmist Estate", "A coastal estate."),
+        world("test", "Test Realm", "A small testing kingdom for UI tests"),
+    ]
+}
+
+fn new_game_personas() -> Vec<PersonaRowView> {
+    vec![
+        PersonaRowView {
+            key: "julian".to_string(),
+            name: "Julian".to_string(),
+        },
+        PersonaRowView {
+            key: "test_player".to_string(),
+            name: "Test Player".to_string(),
+        },
+    ]
 }
 
 fn settings_html(settings: &AppSettings, degraded: bool) -> String {
@@ -524,6 +535,7 @@ struct StubGames {
     active_name: String,
     saved: Vec<(u64, String)>,
     rename_failing: bool,
+    posture_saves_succeed: bool,
 }
 
 impl StubGames {
@@ -535,6 +547,7 @@ impl StubGames {
                 (3, "Test Realm — 17 Sep 2026 (3)".to_string()),
             ],
             rename_failing: false,
+            posture_saves_succeed: false,
         }
     }
 }
@@ -892,6 +905,16 @@ pub struct StubGamesHandle {
 }
 
 impl StubGamesHandle {
+    /// The Game posture save fails until armed, so the tests that drive a failed
+    /// save keep their outcome.
+    pub fn set_posture_saves_succeed(&self, succeeds: bool) {
+        self.state
+            .games
+            .lock()
+            .expect("stub games lock poisoned")
+            .posture_saves_succeed = succeeds;
+    }
+
     pub fn set_rename_failing(&self, failing: bool) {
         self.state
             .games
@@ -1231,7 +1254,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/worlds/:key", post(save_world))
         .route("/worlds/:key/posture", post(save_world_posture))
         .route("/settings/text-check", post(save_text_check))
-        .route("/games/:id/posture", post(failing_posture_save))
+        .route("/games/:id/posture", post(game_posture_save))
         // The real delete answers an empty body, so htmx removes the row the
         // control sits in.
         .route("/games/:id/delete", post(delete_game))
@@ -1276,10 +1299,17 @@ fn stub_router(state: Arc<StubState>) -> Router {
             }),
         )
         .route("/fragment/prompt-presets", get(presets_fragment))
-        .route("/fragment/prompt-presets/:id", get(preset_card_fragment))
+        .route(
+            "/fragment/prompt-presets/new",
+            get(preset_add_form_fragment),
+        )
         .route(
             "/fragment/prompt-presets/:id/edit",
             get(preset_edit_form_fragment),
+        )
+        .route(
+            "/fragment/prompt-presets/:id/view",
+            get(preset_view_form_fragment),
         )
         .route("/fragment/worlds", get(worlds_fragment))
         .route(
@@ -1288,6 +1318,8 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route("/worlds/:key/edit", get(edit_world_form_fragment))
         .route("/fragment/games", get(games_fragment))
+        .route("/fragment/games/new", get(new_game_form_fragment))
+        .route("/fragment/games/:id/rename", get(rename_game_form_fragment))
         .nest_service("/assets", tower_http::services::ServeDir::new("assets"))
         .nest_service("/data", tower_http::services::ServeDir::new("data"))
         .layer(axum::middleware::from_fn_with_state(
@@ -1300,6 +1332,46 @@ fn stub_router(state: Arc<StubState>) -> Router {
 async fn games_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     let games = state.games.lock().expect("stub games lock poisoned");
     Html(games_html(&games))
+}
+
+async fn new_game_form_fragment() -> Html<String> {
+    use askama::Template;
+
+    Html(
+        NewGameFormTemplate {
+            worlds: new_game_worlds(),
+            personas: new_game_personas(),
+        }
+        .render()
+        .expect("render the New Game form"),
+    )
+}
+
+async fn rename_game_form_fragment(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> Response<Body> {
+    use askama::Template;
+
+    let games = state.games.lock().expect("stub games lock poisoned");
+    let display_name = if id == 1 {
+        Some(games.active_name.clone())
+    } else {
+        games
+            .saved
+            .iter()
+            .find(|(saved, _)| *saved == id)
+            .map(|(_, name)| name.clone())
+    };
+    match display_name {
+        Some(display_name) => Html(
+            GameRenameFormTemplate { id, display_name }
+                .render()
+                .expect("render the Rename form"),
+        )
+        .into_response(),
+        None => client_refusal("Game not found"),
+    }
 }
 
 async fn llm_messages_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
@@ -1723,7 +1795,15 @@ async fn action_confirm(
     }
 }
 
-async fn failing_posture_save() -> Response<Body> {
+async fn game_posture_save(State(state): State<Arc<StubState>>) -> Response<Body> {
+    if state
+        .games
+        .lock()
+        .expect("stub games lock poisoned")
+        .posture_saves_succeed
+    {
+        return (StatusCode::OK, "").into_response();
+    }
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
@@ -1777,23 +1857,6 @@ async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body>
 async fn presets_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     let presets = state.presets.lock().expect("stub presets lock poisoned");
     Html(presets_html(&presets))
-}
-
-async fn preset_card_fragment(
-    State(state): State<Arc<StubState>>,
-    axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
-    use askama::Template;
-
-    let presets = state.presets.lock().expect("stub presets lock poisoned");
-    let Some(preset) = presets.find(&id) else {
-        return Html(render_error("Preset not found"));
-    };
-    Html(
-        PresetCardTemplate::from_settings(&preset, &presets.settings())
-            .render()
-            .expect("render the preset card"),
-    )
 }
 
 /// The real preset delete answers nothing for a delete that went through: the
@@ -1863,20 +1926,52 @@ async fn duplicate_preset(
     (StatusCode::OK, "").into_response()
 }
 
-/// The card's Edit control: the engine answers a default preset's edit with a
-/// 200 error fragment in place of the card.
+/// The Add control of a preset type.
+async fn preset_add_form_fragment(
+    axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
+) -> Response<Body> {
+    let preset_type = query
+        .get("type")
+        .and_then(|value| PresetType::try_from(value.as_str()).ok());
+    match preset_type {
+        Some(preset_type) => {
+            use askama::Template;
+            Html(
+                PresetAddFormTemplate::for_type(preset_type)
+                    .render()
+                    .expect("render the preset Add form"),
+            )
+            .into_response()
+        }
+        None => client_refusal("Invalid preset type"),
+    }
+}
+
+/// The card's Edit control: the engine refuses the edit of a default preset with
+/// a non-2xx answer, and the card reports it in its own slot.
 async fn preset_edit_form_fragment(
     State(state): State<Arc<StubState>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.preset_card_refused.load(SeqCst) {
-        return Html("<div class=\"error-message\">Cannot edit default presets</div>".to_string());
+        return client_refusal("Cannot edit default presets");
     }
     let presets = state.presets.lock().expect("stub presets lock poisoned");
     match presets.find(&id) {
-        Some(preset) => Html(preset_edit_form_html(&preset, "system")),
-        None => Html(render_error("Preset not found")),
+        Some(preset) => Html(preset_edit_form_html(&preset, "system")).into_response(),
+        None => client_refusal("Preset not found"),
+    }
+}
+
+async fn preset_view_form_fragment(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response<Body> {
+    let presets = state.presets.lock().expect("stub presets lock poisoned");
+    match presets.find(&id) {
+        Some(preset) => Html(preset_view_form_html(&preset)).into_response(),
+        None => client_refusal("Preset not found"),
     }
 }
 

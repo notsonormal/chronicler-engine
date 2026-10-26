@@ -412,14 +412,16 @@ fn test_check_draft_controls_judges_a_control_after_an_autosave_form_by_its_own_
 fn test_check_draft_control_exceptions_flags_a_stale_row() {
     let exceptions = [DraftControlException {
         path: "a.rs",
-        reason: "a form that moved",
-        removed_in_stage: Some(3),
+        reason: "a field builder",
     }];
     let clean = vec![(
         "a.rs".to_string(),
         r##"r#"<div data-dialog-form><input type="text"></div>"#"##.to_string(),
     )];
-    let still_needed = vec![("a.rs".to_string(), REGION_WITH_A_TEST_FORM.to_string())];
+    let still_needed = vec![(
+        "a.rs".to_string(),
+        r##"r#"<div class="form-group"><textarea name="a"></textarea></div>"#"##.to_string(),
+    )];
 
     assert_eq!(
         check_draft_control_exceptions_are_used(&clean, &exceptions).len(),
@@ -488,11 +490,10 @@ fn test_check_dialog_fragments_carry_the_title() {
 }
 
 #[test]
-fn test_check_draft_control_exceptions_flags_a_permanent_row_whose_file_holds_a_form() {
+fn test_check_draft_control_exceptions_flags_a_row_whose_file_holds_a_form() {
     let permanent = [DraftControlException {
         path: "a.rs",
         reason: "a field builder",
-        removed_in_stage: None,
     }];
     let builder = vec![(
         "a.rs".to_string(),
@@ -506,5 +507,5 @@ fn test_check_draft_control_exceptions_flags_a_permanent_row_whose_file_holds_a_
     assert!(check_draft_control_exceptions_are_used(&builder, &permanent).is_empty());
     let violations = check_draft_control_exceptions_are_used(&with_form, &permanent);
     assert_eq!(violations.len(), 1, "{violations:?}");
-    assert!(violations[0].message.contains("permanent"));
+    assert!(violations[0].message.contains("field builder"));
 }

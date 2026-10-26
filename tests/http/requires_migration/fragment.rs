@@ -531,36 +531,6 @@ async fn test_list_games_fragment_shows_world_badge() {
 }
 
 #[tokio::test]
-async fn test_list_games_fragment_shows_new_game_form() {
-    let storage = Arc::new(empty_sqlite_storage());
-    let world_a = chronicler_engine::test_support::TestWorld::minimal();
-    let map_a = chronicler_engine::test_support::TestMap::single_room("start");
-    storage.seed_world(&world_a, &map_a).unwrap();
-    let player = chronicler_engine::test_support::TestPersona::standard();
-    storage.seed_persona(&player.key, &player).unwrap();
-
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
-    assert!(
-        html.contains("<select") && html.contains("world_key"),
-        "Should render world picker select element: {html}"
-    );
-}
-
-#[tokio::test]
 async fn test_create_game_with_world_key() {
     let storage = Arc::new(empty_sqlite_storage());
     let world_a = chronicler_engine::test_support::TestWorld::minimal();

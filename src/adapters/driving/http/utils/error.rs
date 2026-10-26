@@ -2,7 +2,7 @@
 //! Error rendering helpers for HTTP fragments.
 
 use axum::body::Body;
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::Response;
 
 use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error};
 use crate::application::errors::ApplicationError;
@@ -35,10 +35,6 @@ pub fn error_disclosure(popover_id: &str, message: &str, detail_html: &str) -> S
 
 pub fn raw_error_detail(raw: &str) -> String {
     format!("<pre class=\"error-detail-raw\">{}</pre>", html_escape(raw))
-}
-
-pub(crate) fn error_fragment_response(message: impl std::fmt::Display) -> Response<Body> {
-    Html(error_fragment(message)).into_response()
 }
 
 fn classify_error(error: ApplicationError, prefix: &str) -> Result<String, String> {

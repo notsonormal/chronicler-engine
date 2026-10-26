@@ -1,11 +1,14 @@
 //! HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.
 
+use axum::{body::Body, http::Request, http::StatusCode};
+use tower::util::ServiceExt;
+
 use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::test_support::TestAppBuilder;
 
 use crate::support::http_assertions::assert_option_selected;
-use crate::support::http_requests::fetch_body;
+use crate::support::http_requests::{fetch_body, response_body};
 use crate::test_utils::panel_section_html_slice;
 
 // The fragment is a plain server render, so a GET observes the rendered
@@ -175,23 +178,118 @@ async fn test_games_fragment_is_the_panel_content_with_stable_row_ids_http() {
             "the row of game {id} must carry its stable id: {html}"
         );
     }
-    let disclosures = html.matches(r#"<details class="game-rename""#).count();
-    assert_eq!(disclosures, 2, "each Game row renders a rename disclosure");
-    assert_eq!(
-        html.matches(r#"<details class="game-rename" data-keep="open" data-close-on-save>"#)
-            .count(),
-        2,
-        "each rename disclosure lists its open state in data-keep and closes on save: {html}"
-    );
-    let new_game = html
-        .find(r#"<details class="new-game-add" data-keep="open" data-close-on-save>"#)
-        .map(|start| &html[start..])
-        .expect("the New Game form must sit in a disclosure that closes on save");
-    let (disclosure, _) = new_game
-        .split_once("</details>")
-        .expect("the New Game disclosure must close");
+    for id in [active.id, second] {
+        assert!(
+            html.contains(&format!(
+                r##"hx-get="/fragment/games/{id}/rename" hx-target="#edit-dialog-body""##
+            )),
+            "the row of game {id} must have a Rename control that opens the dialog: {html}"
+        );
+    }
     assert!(
-        disclosure.contains(">New Game</summary>") && disclosure.contains(r#"id="new-game-world""#),
-        "the disclosure must have the summary New Game and hold the form: {disclosure}"
+        html.contains(r##"hx-get="/fragment/games/new" hx-target="#edit-dialog-body""##),
+        "the fragment must have a New Game control that opens the dialog: {html}"
     );
+    assert!(
+        !html.contains("<details")
+            && !html.contains(r#"name="display_name""#)
+            && !html.contains(r#"id="new-game-world""#),
+        "the fragment must hold no disclosure and no form that waits for a Save: {html}"
+    );
+}
+
+// [docs/specs/games.md] SCENARIO: 20.37
+#[tokio::test]
+async fn test_rename_form_is_a_dialog_fragment_with_the_display_name() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let game_id = active_game_of(&state);
+    state
+        .game_catalogue
+        .rename_game(game_id.0, "The Long Road")
+        .expect("rename the seeded game");
+
+    let html = fetch_body(&app, &format!("/fragment/games/{}/rename", game_id.0)).await;
+
+    assert!(
+        html.contains("data-dialog-form") && html.contains(r#"id="edit-dialog-title""#),
+        "the form is a dialog form with the title that names the dialog: {html}"
+    );
+    assert!(
+        html.contains(&format!(r#"hx-post="/games/{}/rename""#, game_id.0)),
+        "the form posts to the rename route: {html}"
+    );
+    assert!(
+        html.contains(r#"name="display_name" value="The Long Road""#),
+        "the field holds the display name: {html}"
+    );
+    assert!(
+        html.contains("data-error-slot=") && html.contains("data-close-dialog"),
+        "the form has an error slot and a Cancel control that closes the dialog: {html}"
+    );
+}
+
+// [docs/specs/games.md] SCENARIO: 20.38
+#[tokio::test]
+async fn test_rename_form_of_an_unknown_game_is_refused() {
+    let app = TestAppBuilder::default_app();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/fragment/games/9999/rename")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = response_body(response).await;
+    assert!(
+        body.contains("error-message") && body.contains("Game not found"),
+        "the refusal names the missing Game: {body}"
+    );
+}
+
+// [docs/specs/games.md] SCENARIO: 20.39
+#[tokio::test]
+async fn test_new_game_form_lists_the_worlds_and_the_personas() {
+    let app = TestAppBuilder::default_app();
+
+    let html = fetch_body(&app, "/fragment/games/new").await;
+
+    assert!(
+        html.contains("data-dialog-form") && html.contains(r#"id="edit-dialog-title""#),
+        "the form is a dialog form with the title that names the dialog: {html}"
+    );
+    assert!(
+        html.contains(r#"hx-post="/games""#),
+        "the form posts to the create route: {html}"
+    );
+    assert!(
+        html.contains(r#"<option value="test""#),
+        "the World select lists the seeded World: {html}"
+    );
+    assert!(
+        html.contains(r#"<option value="test_player""#),
+        "the Persona select lists the seeded Persona: {html}"
+    );
+    assert!(
+        html.contains("data-error-slot=") && html.contains("data-close-dialog"),
+        "the form has an error slot and a Cancel control that closes the dialog: {html}"
+    );
+}
+
+// [docs/specs/games.md] SCENARIO: 20.40
+#[tokio::test]
+async fn test_new_game_form_has_no_form_when_no_world_exists() {
+    let app = TestAppBuilder::default_test().skip_seeding(true).build();
+
+    let html = fetch_body(&app, "/fragment/games/new").await;
+
+    assert!(
+        html.contains("No worlds available"),
+        "the body says that no World is available: {html}"
+    );
+    assert!(!html.contains("<form"), "the body has no form: {html}");
 }

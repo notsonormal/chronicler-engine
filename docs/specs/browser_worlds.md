@@ -7,20 +7,20 @@ Endpoint: browser DOM.
 #### Scenario 29.2: Changing a world posture select reaches the server
 
 ```gherkin
-Given the world edit form is open with #world-posture-status rendered
+Given the world edit form is open in the edit dialog with #world-posture-status rendered
 When the client changes the Tense select to "present"
 Then the browser POSTs /worlds/test/posture with the posture group
 And #world-posture-status shows the text "Saved"
 And after a reload the re-opened edit form shows "present" selected
 ```
 
-#### Scenario 29.3: Cancelling the world edit keeps focus in the panel
+#### Scenario 29.3: Cancelling the world edit closes the dialog and returns focus to the panel
 
 ```gherkin
-Given the world edit form is open
+Given the world edit form is open in the edit dialog
 And the Cancel control has focus
 When the client activates Cancel
-Then the editor slot is empty and the worlds panel shows the world list again
+Then the edit dialog is closed
 And Cancel sent no request
 And focus is on a control inside the worlds panel
 ```
@@ -47,4 +47,13 @@ When the client confirms a delete the engine refuses because the world still has
 Then that row's own inline slot holds the refusal message
 And both rows stay in place, as the same elements
 And the Delete control keeps focus
+```
+
+#### Scenario 29.6: A world posture save leaves the dialog open with the draft
+
+```gherkin
+Given the world edit form is open in the edit dialog, with a changed name
+When the client changes the Tense select and the engine accepts the save
+Then #world-posture-status shows the text "Saved"
+And the edit dialog is still open with the same form and the changed name
 ```

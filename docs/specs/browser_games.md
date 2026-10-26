@@ -33,55 +33,54 @@ Given the Games tab shows more than one saved game
 And a saved game's Delete control has keyboard focus
 When the client confirms the delete
 Then that game's row is gone from the saved-games list
-And the row that took its place holds keyboard focus on its Switch control
+And the row that took its place holds keyboard focus on its first control, the Rename control
 When the client deletes the last saved game and confirms
 Then no saved-game row remains
 And keyboard focus is inside the Games panel, or on the panel itself when no control is left in it
 ```
 
-#### Scenario 27.4: An open rename form keeps its typed text and focus through a load of each kind the Games panel lists
+#### Scenario 27.4: An open rename dialog keeps its typed text and focus through a load of each kind the Games panel lists
 
 ```gherkin
-Given the Games tab is open and the rename form of a saved Game is open, with a typed name and focus in its name field
+Given the Games tab is open and the rename form of a saved Game is open in the edit dialog, with a typed name and focus in its name field
 When the number of `games` moves, and the page asks
 And the number of `worlds` moves, and the page asks
 And the number of `presets` moves, and the page asks
-Then the Games panel does not load
-And the Games panel reports data-live-state "held"
-And the rename form is the same element, it is open, and its name field is the same element, with the typed name and focus
+Then the Games panel loads once for each move, and it reports data-live-state "current"
+And the dialog is open, the rename form is the same element, and its name field is the same element, with the typed name and focus
 ```
 
-#### Scenario 27.5: Ending the rename edit loads the Games panel once
+#### Scenario 27.5: Saving the rename dialog closes it, and the Games panel shows the name
 
 ```gherkin
-Given the Games tab is open and the rename form of a saved Game is open, with a typed name
-And each kind that the Games panel lists moved while the form was open
+Given the Games tab is open and the rename form of a saved Game is open in the edit dialog, with a typed name
 When the client presses Save and the engine answers 200
-Then the Games panel loads exactly once
-And the Games panel reports data-live-state "current"
+Then the dialog is closed
+And the Games panel loads exactly once, and it reports data-live-state "current"
+And the Game's row shows the new name
 ```
 
-#### Scenario 27.6: The New Game form's World and Persona selects keep the player's choice through a load
+#### Scenario 27.6: The New Game dialog's World and Persona selects keep the player's choice through a load
 
 ```gherkin
 Given the Games tab is open
-And the New Game disclosure is open
+And the New Game form is open in the edit dialog
 And the client chose a World and a Persona other than the first ones in the New Game form
 When the number of `games` moves, and the page asks
 And the number of `worlds` moves, and the page asks
-Then the Games panel does not load, and it reports data-live-state "held"
-And the New Game disclosure is the same element, and it is open
-And the World select and the Persona select are the same elements, and show the chosen options
+And the number of `presets` moves, and the page asks
+Then the Games panel loads once for each move, and it reports data-live-state "current"
+And the dialog is open, and the World select and the Persona select are the same elements, and show the chosen options
 ```
 
-#### Scenario 27.7: Closing the New Game form discards the choice, and the Games panel loads
+#### Scenario 27.7: Cancelling the New Game dialog discards the choice
 
 ```gherkin
 Given the Games tab is open
-And the New Game disclosure is open
+And the New Game form is open in the edit dialog
 And the client chose a World and a Persona other than the first ones in the New Game form
-And the number of `worlds` moved, and the page asked, so the Games panel reports data-live-state "held"
-When the client closes the New Game disclosure without starting a Game
-Then the World select and the Persona select show their first options again
-And the Games panel loads exactly once, and it reports data-live-state "current"
+When the client cancels the dialog
+Then the dialog is closed, and its body is empty
+When the client opens the New Game form again
+Then the World select and the Persona select show their first options
 ```

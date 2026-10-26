@@ -5,133 +5,154 @@ use askama::Template;
 
 use crate::adapters::driving::http::builders::forms::{textarea_field, textarea_field_readonly};
 use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
-use crate::adapters::driving::http::utils::response::html_escape;
 use crate::adapters::driving::http::view_models::SafeHtml;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{AppSettings, NarratorMode};
 
-pub(crate) fn preset_view_form_html(preset: &PromptPreset) -> String {
-    let id = html_escape(&preset.id);
-    let name = html_escape(&preset.name);
-
-    let role_field = textarea_field_readonly("Role", preset.role.as_deref(), 4);
-    let instructions_field =
-        textarea_field_readonly("Instructions", preset.instructions.as_deref(), 10);
-    let writing_style_field =
-        textarea_field_readonly("Writing Style", preset.writing_style.as_deref(), 4);
-    let output_format_field =
-        textarea_field_readonly("Output Format", preset.output_format.as_deref(), 6);
-
-    format!(
-        r#"<div class="preset-card view-form" id="preset-card-{id}" data-work>
-    <div class="card-header">
-        <span class="card-title">View {name}</span>
-    </div>
+/// The dialog that shows a default preset read-only.
+#[derive(Template)]
+#[template(
+    source = r##"<div class="preset-form view-form" data-dialog-form>
+    <h2 id="edit-dialog-title">View {{ name }}</h2>
     <div class="form-group">
         <label>Name</label>
-        <input type="text" value="{name}" readonly />
+        <input type="text" value="{{ name }}" readonly />
     </div>
-    {role_field}
-    {instructions_field}
-    {writing_style_field}
-    {output_format_field}
+    {{ role_field }}
+    {{ instructions_field }}
+    {{ writing_style_field }}
+    {{ output_format_field }}
     <div class="form-actions">
-        <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Close</button>
+        <button type="button" class="btn-cyan" data-close-dialog>Close</button>
     </div>
-</div>"#,
-    )
+</div>"##,
+    ext = "html"
+)]
+struct PresetViewFormTemplate {
+    name: String,
+    role_field: SafeHtml,
+    instructions_field: SafeHtml,
+    writing_style_field: SafeHtml,
+    output_format_field: SafeHtml,
+}
+
+pub fn preset_view_form_html(preset: &PromptPreset) -> String {
+    render_or_error_fragment(&PresetViewFormTemplate {
+        name: preset.name.clone(),
+        role_field: SafeHtml::new(textarea_field_readonly("Role", preset.role.as_deref(), 4)),
+        instructions_field: SafeHtml::new(textarea_field_readonly(
+            "Instructions",
+            preset.instructions.as_deref(),
+            10,
+        )),
+        writing_style_field: SafeHtml::new(textarea_field_readonly(
+            "Writing Style",
+            preset.writing_style.as_deref(),
+            4,
+        )),
+        output_format_field: SafeHtml::new(textarea_field_readonly(
+            "Output Format",
+            preset.output_format.as_deref(),
+            6,
+        )),
+    })
+}
+
+/// The dialog form that edits a custom preset. An Options preset serves both
+/// modes, so it has no Allowed Modes.
+#[derive(Template)]
+#[template(
+    source = r##"<div class="preset-form edit-form" data-dialog-form>
+    <h2 id="edit-dialog-title">Edit {{ name }}</h2>
+    <form hx-post="/prompt-presets/{{ id }}" hx-swap="none" data-refusal-what="the preset was not saved">
+        <input type="hidden" name="preset_type" value="{{ preset_type }}" />
+        <div class="form-group">
+            <label for="edit-name-{{ id }}">Name</label>
+            <input type="text" id="edit-name-{{ id }}" name="name" value="{{ name }}" required />
+        </div>
+        {{ role_field }}
+        {{ instructions_field }}
+        {{ writing_style_field }}
+        {{ output_format_field }}
+        {% if shows_allowed_modes %}
+        <div class="form-group">
+            <label>Allowed Modes</label>
+            <label class="checkbox-label"><input type="checkbox" name="allowed_mode_novel" value="true"{% if novel_checked %} checked{% endif %} /> {{ novel_label }}</label>
+            <label class="checkbox-label"><input type="checkbox" name="allowed_mode_if" value="true"{% if interactive_fiction_checked %} checked{% endif %} /> {{ interactive_fiction_label }}</label>
+        </div>
+        {% endif %}
+        <div class="inline-error-slot" data-error-slot="preset-edit-{{ id }}" hidden></div>
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" class="btn-cyan" data-close-dialog>Cancel</button>
+        </div>
+    </form>
+</div>"##,
+    ext = "html"
+)]
+struct PresetEditFormTemplate {
+    id: String,
+    name: String,
+    preset_type: String,
+    role_field: SafeHtml,
+    instructions_field: SafeHtml,
+    writing_style_field: SafeHtml,
+    output_format_field: SafeHtml,
+    shows_allowed_modes: bool,
+    novel_checked: bool,
+    interactive_fiction_checked: bool,
+    novel_label: &'static str,
+    interactive_fiction_label: &'static str,
 }
 
 pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String {
-    let id = html_escape(&preset.id);
-    let name = html_escape(&preset.name);
-    let preset_type_escaped = html_escape(preset_type);
-
-    let role_field = textarea_field(
-        &format!("edit-role-{}", preset.id),
-        "Role",
-        "role",
-        preset.role.as_deref(),
-        4,
-    );
-    let instructions_field = textarea_field(
-        &format!("edit-instructions-{}", preset.id),
-        "Instructions",
-        "instructions",
-        preset.instructions.as_deref(),
-        10,
-    );
-    let writing_style_field = textarea_field(
-        &format!("edit-style-{}", preset.id),
-        "Writing Style",
-        "writing_style",
-        preset.writing_style.as_deref(),
-        4,
-    );
-    let output_format_field = textarea_field(
-        &format!("edit-output-{}", preset.id),
-        "Output Format",
-        "output_format",
-        preset.output_format.as_deref(),
-        6,
-    );
-
-    let novel_checked = if preset.allows_novel() {
-        " checked"
-    } else {
-        ""
+    let field = |label_id: &str, label: &str, name: &str, value: &Option<String>, rows: usize| {
+        SafeHtml::new(textarea_field(
+            &format!("{label_id}-{}", preset.id),
+            label,
+            name,
+            value.as_deref(),
+            rows,
+        ))
     };
-    let if_checked = if preset.allows_interactive_fiction() {
-        " checked"
-    } else {
-        ""
-    };
-
-    let novel_label = NarratorMode::Novel.display_label();
-    let interactive_fiction_label = NarratorMode::InteractiveFiction.display_label();
-
-    let modes_block = if preset.preset_type == PresetType::Options {
-        String::new()
-    } else {
-        format!(
-            r#"<div class="form-group">
-            <label>Allowed Modes</label>
-            <label class="checkbox-label"><input type="checkbox" name="allowed_mode_novel" value="true"{novel_checked} /> {novel_label}</label>
-            <label class="checkbox-label"><input type="checkbox" name="allowed_mode_if" value="true"{if_checked} /> {interactive_fiction_label}</label>
-        </div>"#
-        )
-    };
-
-    format!(
-        r#"<div class="preset-card edit-form" id="preset-card-{id}" data-work>
-    <div class="card-header">
-        <span class="card-title">Edit {name}</span>
-    </div>
-    <form hx-post="/prompt-presets/{id}" hx-swap="none">
-        <input type="hidden" name="preset_type" value="{preset_type_escaped}" />
-        <div class="form-group">
-            <label for="edit-name-{id}">Name</label>
-            <input type="text" id="edit-name-{id}" name="name" value="{name}" required />
-        </div>
-        {role_field}
-        {instructions_field}
-        {writing_style_field}
-        {output_format_field}
-        {modes_block}
-        <div class="inline-error-slot" data-error-slot="preset-edit-{id}" hidden></div>
-        <div class="form-actions">
-            <button type="submit" class="btn-primary">Save</button>
-            <button type="button" hx-get="/fragment/prompt-presets/{id}" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Cancel</button>
-        </div>
-    </form>
-</div>"#,
-    )
+    render_or_error_fragment(&PresetEditFormTemplate {
+        id: preset.id.clone(),
+        name: preset.name.clone(),
+        preset_type: preset_type.to_string(),
+        role_field: field("edit-role", "Role", "role", &preset.role, 4),
+        instructions_field: field(
+            "edit-instructions",
+            "Instructions",
+            "instructions",
+            &preset.instructions,
+            10,
+        ),
+        writing_style_field: field(
+            "edit-style",
+            "Writing Style",
+            "writing_style",
+            &preset.writing_style,
+            4,
+        ),
+        output_format_field: field(
+            "edit-output",
+            "Output Format",
+            "output_format",
+            &preset.output_format,
+            6,
+        ),
+        shows_allowed_modes: preset.preset_type != PresetType::Options,
+        novel_checked: preset.allows_novel(),
+        interactive_fiction_checked: preset.allows_interactive_fiction(),
+        novel_label: NarratorMode::Novel.display_label(),
+        interactive_fiction_label: NarratorMode::InteractiveFiction.display_label(),
+    })
 }
 
 /// `preview` arrives pre-truncated: newlines flattened, a cut marked with an ellipsis.
 #[derive(Template)]
 #[template(
-    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if !self.active_badges.is_empty() %} active{% endif %}" id="preset-card-{{ preset.id }}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% for badge in self.active_badges %}<span class="badge primary">{{ badge }}</span>{% endfor %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% for button in self.activate_buttons %}<button hx-post="/prompt-presets/{{ preset.id }}/activate{{ button.mode_query }}" hx-swap="none" class="btn-primary">{{ button.label }}</button>{% endfor %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="closest .preset-card" hx-swap="outerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-swap="none" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-swap="none" class="btn-cyan">Duplicate</button></div></div>"##,
+    source = r##"<div class="preset-card{% if preset.is_default %} default{% endif %}{% if !self.active_badges.is_empty() %} active{% endif %}" id="preset-card-{{ preset.id }}"><div class="card-header"><span class="card-title">{{ preset.name }}</span><div class="card-badges">{% if preset.is_default %}<span class="badge">Default</span>{% endif %}{% for badge in self.active_badges %}<span class="badge primary">{{ badge }}</span>{% endfor %}</div></div><div class="card-details preset-preview">{{ preview }}</div><div class="inline-error-slot" data-error-slot="preset-{{ preset.id }}" hidden></div><div class="card-actions">{% for button in self.activate_buttons %}<button hx-post="/prompt-presets/{{ preset.id }}/activate{{ button.mode_query }}" hx-swap="none" class="btn-primary">{{ button.label }}</button>{% endfor %}{% if preset.is_default %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/view" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">View</button>{% else %}<button hx-get="/fragment/prompt-presets/{{ preset.id }}/edit" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">Edit</button><button hx-post="/prompt-presets/{{ preset.id }}/delete" hx-confirm="Delete this preset?" hx-swap="none" class="btn-danger">Delete</button>{% endif %}<button hx-post="/prompt-presets/{{ preset.id }}/duplicate" hx-swap="none" class="btn-cyan">Duplicate</button></div></div>"##,
     ext = "html"
 )]
 pub struct PresetCardTemplate {

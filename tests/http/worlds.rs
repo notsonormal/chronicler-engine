@@ -296,17 +296,16 @@ async fn test_world_edit_form_renders_posture_selects_http() {
     assert_option_selected(&html, "past", "the stored Past tense must render selected");
 
     assert!(
-        html.contains(r#"saved-flag" data-keep="data-saved""#)
-            && html.contains(r#"id="world-posture-status""#),
-        "the posture status flag must be rendered, and kept through a load: {html}"
+        html.contains(r#"id="world-posture-status""#),
+        "the posture status flag must be rendered: {html}"
     );
     assert!(
         html.contains(r#"data-error-slot="world-posture""#),
         "the posture group must carry its own error slot: {html}"
     );
     assert!(
-        html.contains("data-work"),
-        "the editor holds its panel until the edit ends: {html}"
+        html.contains("data-dialog-form") && html.contains(r#"<h2 id="edit-dialog-title">"#),
+        "the editor is a dialog form with the title that names the dialog: {html}"
     );
     // The slot a failed create or update reports into, so the client keeps the
     // panel the failure describes.
@@ -339,8 +338,13 @@ async fn test_worlds_fragment_pluralises_game_count_http() {
         "a World row carries a stable id, so a load keeps the row: {html}"
     );
     assert!(
-        html.contains(r#"<div class="editor-slot" id="world-editor"></div>"#),
-        "the list renders the editor slot empty: {html}"
+        html.contains(r##"hx-get="/fragment/worlds/new" hx-target="#edit-dialog-body""##)
+            && html.contains(r##"hx-get="/worlds/test/edit" hx-target="#edit-dialog-body""##),
+        "the Create and Edit controls open the dialog: {html}"
+    );
+    assert!(
+        !html.contains("world-editor") && !html.contains("editor-slot"),
+        "the list renders no editor slot: {html}"
     );
     assert!(
         !html.contains("worlds-panel"),

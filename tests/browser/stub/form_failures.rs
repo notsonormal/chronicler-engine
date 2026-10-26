@@ -150,33 +150,29 @@ async fn check_failed_connection_edit_keeps_the_form_and_renders_inline(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.30
-async fn check_failed_preset_add_keeps_the_panel_and_renders_inline(
+async fn check_failed_preset_add_keeps_the_dialog_and_renders_inline(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
     open_prompt_presets_tab(&page).await;
 
-    let opened = page
-        .evaluate::<(), bool>(
-            r#"() => {
-                    window.__presetPanelBefore = document.querySelector('.prompt-presets-panel');
-                    const details = document.querySelector('.preset-add');
-                    if (!details) return false;
-                    details.open = true;
-                    return true;
-                }"#,
-            None,
-        )
-        .await
-        .unwrap();
-    assert!(
-        opened,
-        "the Prompt Presets panel with an Add form should be loaded"
-    );
+    click_and_settle(
+        &page,
+        r#"button[hx-get="/fragment/prompt-presets/new?type=system"]"#,
+        "#edit-dialog-body",
+    )
+    .await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .preset-add-form",
+        Duration::from_secs(5),
+    )
+    .await;
 
     page.evaluate::<(), ()>(
         r#"() => {
-                const form = document.querySelector('.preset-add form');
+                window.__presetFormBefore = document.querySelector('#edit-dialog .preset-add-form form');
+                const form = window.__presetFormBefore;
                 form.querySelector('input[name="name"]').value = 'Bad Type';
                 form.requestSubmit();
             }"#,
@@ -185,7 +181,7 @@ async fn check_failed_preset_add_keeps_the_panel_and_renders_inline(
     .await
     .unwrap();
 
-    let slot = r#".preset-add form [data-error-slot="preset-add-system"]"#;
+    let slot = r#"#edit-dialog form [data-error-slot="preset-add-system"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
         "a refused preset add should render into the form's inline slot"
@@ -200,10 +196,10 @@ async fn check_failed_preset_add_keeps_the_panel_and_renders_inline(
     let kept = page
         .evaluate::<(), bool>(
             r#"() => {
-                    const now = document.querySelector('.prompt-presets-panel');
-                    return !!now
-                        && now === window.__presetPanelBefore
-                        && !!now.querySelector('.preset-card');
+                    const now = document.querySelector('#edit-dialog .preset-add-form form');
+                    return document.getElementById('edit-dialog').open
+                        && now === window.__presetFormBefore
+                        && now.querySelector('input[name="name"]').value === 'Bad Type';
                 }"#,
             None,
         )
@@ -211,12 +207,12 @@ async fn check_failed_preset_add_keeps_the_panel_and_renders_inline(
         .unwrap();
     assert!(
         kept,
-        "a refused preset add must leave the panel and its cards in place"
+        "a refused preset add must leave the dialog open with the same form and its typed text"
     );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.31
-async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
+async fn check_failed_preset_edit_keeps_the_dialog_and_renders_inline(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -224,14 +220,14 @@ async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
 
     let edit_selector =
         r#".preset-card:has(.card-title:text-is("My Custom Prompt")) button:has-text('Edit')"#;
-    click_and_settle(&page, edit_selector, ".preset-card").await;
-    wait_until_visible(&page, ".preset-card.edit-form", Duration::from_secs(5)).await;
+    click_and_settle(&page, edit_selector, "#edit-dialog-body").await;
+    wait_until_visible(&page, "#edit-dialog .edit-form", Duration::from_secs(5)).await;
 
     let stashed = page
         .evaluate::<(), bool>(
             r#"() => {
-                    window.__presetCardBefore = document.querySelector('.preset-card.edit-form');
-                    return !!window.__presetCardBefore;
+                    window.__presetFormBefore = document.querySelector('#edit-dialog .edit-form form');
+                    return !!window.__presetFormBefore;
                 }"#,
             None,
         )
@@ -240,16 +236,16 @@ async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
     assert!(stashed, "the preset edit form should be loaded");
 
     page.evaluate::<(), ()>(
-        r#"() => document.querySelector('.preset-card.edit-form form').requestSubmit()"#,
+        r#"() => document.querySelector('#edit-dialog .edit-form form').requestSubmit()"#,
         None,
     )
     .await
     .unwrap();
 
-    let slot = r#"[data-error-slot="preset-edit-custom_ref"]"#;
+    let slot = r#"#edit-dialog [data-error-slot="preset-edit-custom_ref"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
-        "a failed preset edit should render into the card's inline slot"
+        "a failed preset edit should render into the form's inline slot"
     );
     let (visible, _, raw) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
@@ -261,8 +257,9 @@ async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
     let kept = page
         .evaluate::<(), bool>(
             r#"() => {
-                    const now = document.querySelector('.preset-card.edit-form');
-                    return !!now && now === window.__presetCardBefore;
+                    const now = document.querySelector('#edit-dialog .edit-form form');
+                    return document.getElementById('edit-dialog').open
+                        && now === window.__presetFormBefore;
                 }"#,
             None,
         )
@@ -270,7 +267,7 @@ async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
         .unwrap();
     assert!(
         kept,
-        "a failed preset edit must leave the card and its edited values in place"
+        "a failed preset edit must leave the dialog open with the same form"
     );
 }
 
@@ -352,13 +349,13 @@ async fn run_form_failures_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_preset_add_keeps_the_panel_and_renders_inline,
+            check_failed_preset_add_keeps_the_dialog_and_renders_inline,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_preset_edit_keeps_the_card_and_renders_inline,
+            check_failed_preset_edit_keeps_the_dialog_and_renders_inline,
         )
         .await;
     runner

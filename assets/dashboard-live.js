@@ -1,12 +1,12 @@
-// The live regions: the ask loop, the record and state of each region, the hold of an edit and the rule that ends it, the hidden-section rule, the data-keep rule and the focus rule after a removal.
+// The live regions: the ask loop, the record and state of each region, the hidden-section rule, the load rules (data-keep, an inline error, a control in flight, a story-log entry in edit) and the focus rule after a removal.
 
 // A live region is an element with `data-live`, a space-separated list of the
 // kinds of data it shows. The kinds are the names of the numbers of
 // `GET /changes`. The page asks while it is visible. A region loads when a
-// number of one of its kinds differs from the number it last loaded. No region
-// loads while the player edits in it, and a region in a hidden dashboard
-// section waits until the player opens the section. A disclosure that closes
-// without a save discards its edit.
+// number of one of its kinds differs from the number it last loaded. A region in
+// a hidden dashboard section waits until the player opens the section. No region
+// holds a draft: a form that waits for a Save is in the edit dialog, and a load
+// skips the one element that holds unsaved input.
 
 const LIVE_ASK_INTERVAL_MS = 1000;
 
@@ -34,7 +34,6 @@ function liveRecordOf(region) {
       loading: false,
       requested: false,
       swapped: false,
-      held: false,
       skippedInFlight: false,
       focusPlan: null,
       waiters: [],
@@ -56,31 +55,6 @@ function regionIsDue(region, answer) {
   const numbers = liveRecordOf(region).numbers;
   if (!numbers) return true;
   return liveKinds(region).some((kind) => numbers[kind] !== answer[kind]);
-}
-
-// An edit is the root of an open editor (`data-work`) or a field the player
-// changed: its value or choice differs from the one the server rendered.
-function fieldIsDirty(field) {
-  if (field.matches("input[type=checkbox], input[type=radio]")) {
-    return field.checked !== field.defaultChecked;
-  }
-  if (field.matches(FIELD_WITHOUT_VALUE)) return false;
-  if (field.tagName === "SELECT") {
-    const options = Array.from(field.options);
-    if (field.multiple) {
-      return options.some((option) => option.selected !== option.defaultSelected);
-    }
-    const rendered = options.findIndex((option) => option.defaultSelected);
-    return field.selectedIndex !== (rendered < 0 ? 0 : rendered);
-  }
-  return field.value !== field.defaultValue;
-}
-
-function regionHoldsEdit(region) {
-  if (region.querySelector("[data-work]")) return true;
-  return Array.from(region.querySelectorAll("input, textarea, select")).some(
-    fieldIsDirty,
-  );
 }
 
 // The header is outside every section, so it is never hidden.
@@ -106,7 +80,7 @@ function settleField(field) {
   }
 }
 
-// A value that was not saved must not stay on screen or hold the region.
+// A value that was not saved must not stay on screen.
 function restoreRenderedValue(field) {
   if (field.matches("input[type=checkbox], input[type=radio]")) {
     field.checked = field.defaultChecked;
@@ -120,39 +94,11 @@ function restoreRenderedValue(field) {
   }
 }
 
-// The one rule that ends an edit after a save went through. `element` is the
-// form or the control that saved. Only a form ends the edit of its editor: a
-// control that saves on change, such as the World posture, leaves the editor
-// open because the player is still editing.
-function endEdit(element) {
-  if (element.matches("form[data-reset-on-save]")) {
-    element.reset();
-  } else {
-    editFieldsOf(element).forEach(settleField);
-  }
-  if (element.tagName !== "FORM") return;
-  const root = element.closest("[data-work]");
-  if (root) root.removeAttribute("data-work");
-  const disclosure = element.closest("details[data-close-on-save]");
-  if (disclosure) disclosure.open = false;
+// A save that went through makes the saved values the rendered ones, so a later
+// failed save puts the control back to what the engine accepted.
+function settleSavedFields(element) {
+  editFieldsOf(element).forEach(settleField);
 }
-
-// A disclosure that holds a form is the edit. When it closes without a save, the
-// edit is discarded: each form in it goes back to its rendered values, so the
-// region it held is free, and the page asks at once. A close after a save changes
-// nothing, because `endEdit` has already made the saved values the rendered ones.
-// `toggle` does not bubble, so the listener captures it on the document.
-document.addEventListener(
-  "toggle",
-  function (evt) {
-    const disclosure = evt.target;
-    if (!(disclosure instanceof HTMLDetailsElement) || disclosure.open) return;
-    if (!disclosure.closest("[data-live]")) return;
-    disclosure.querySelectorAll("form").forEach((form) => form.reset());
-    askNow();
-  },
-  true,
-);
 
 // The "Saved" line is view state: `data-saved` is in the `data-keep` of the
 // status element, so a load keeps it.
@@ -180,7 +126,7 @@ function settleSave(evt) {
   const saved = evt.detail.successful && !refused;
   flagSaved(element, saved);
   if (saved) {
-    endEdit(element);
+    settleSavedFields(element);
     return;
   }
   // A form that saves on change (`data-autosave`) is a control: its fields go
@@ -196,7 +142,6 @@ function settleSave(evt) {
 function beginLoad(region, record, answer) {
   record.loading = true;
   record.swapped = false;
-  record.held = false;
   record.skippedInFlight = false;
   record.pending = answer;
   setLiveState(region, "loading");
@@ -249,10 +194,6 @@ async function runAsk() {
     if (!regionIsDue(region, answer)) return;
     if (sectionIsHidden(region)) {
       setLiveState(region, "stale");
-      return;
-    }
-    if (regionHoldsEdit(region)) {
-      setLiveState(region, "held");
       return;
     }
     loads.push(startLoad(region, answer));
@@ -368,14 +309,7 @@ document.body.addEventListener("htmx:beforeSwap", function (evt) {
   const region = evt.detail && evt.detail.target;
   if (!isLiveRegion(region) || evt.detail.elt !== region) return;
   if (!evt.detail.shouldSwap) return;
-  const record = liveRecordOf(region);
-  if (regionHoldsEdit(region)) {
-    evt.detail.shouldSwap = false;
-    record.held = true;
-    setLiveState(region, "held");
-    return;
-  }
-  record.focusPlan = planFocusAfterLoad(region);
+  liveRecordOf(region).focusPlan = planFocusAfterLoad(region);
 });
 
 document.body.addEventListener("htmx:afterSwap", function (evt) {
@@ -387,8 +321,8 @@ document.body.addEventListener("htmx:afterSwap", function (evt) {
   record.focusPlan = null;
 });
 
-// The record of a region moves only when its load swapped, so a held, a failed
-// and a refused load leave the region due.
+// The record of a region moves only when its load swapped, so a failed and a
+// refused load leave the region due.
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   const region = evt.detail && evt.detail.elt;
   // Every other request that ends is an action, or a view change that may
@@ -399,14 +333,15 @@ document.body.addEventListener("htmx:afterRequest", function (evt) {
     return;
   }
   const record = liveRecordOf(region);
-  // A load that skipped a control in flight shows what the control held, not
+  // A load that skipped a control in flight shows what the control showed, not
   // what the engine rendered, so it must not stand for the numbers it saw.
+  // A load that skipped the entry in edit counts as current: the entry shows
+  // the draft until the edit ends, and `loadRegionAgain` then makes the region
+  // due.
   const staleBySkip = record.swapped && record.skippedInFlight;
   if (record.swapped && !staleBySkip) {
     record.numbers = record.pending;
     setLiveState(region, "current");
-  } else if (record.held) {
-    setLiveState(region, "held");
   } else {
     setLiveState(region, "due");
   }
@@ -462,6 +397,12 @@ function requestIsInFlight(node) {
   return !!node && node.nodeType === 1 && requestsInFlight.has(node);
 }
 
+// The entry that a load skipped shows the draft, not the engine's render. When
+// the edit ends, the region forgets its numbers, so the next ask loads it.
+function loadRegionAgain(region) {
+  if (region) liveRecordOf(region).numbers = null;
+}
+
 function regionHasRequestInFlight(region) {
   return Array.from(requestsInFlight.keys()).some(
     (element) => element !== region && region.contains(element),
@@ -473,7 +414,15 @@ function noteSkippedInFlight(node) {
   if (region && region !== node) liveRecordOf(region).skippedInFlight = true;
 }
 
+// A story-log entry in edit holds the text that the player is typing. A load
+// skips it, and the skip counts as current: the engine's render of the entry
+// is not wanted until the edit ends.
+function isBeingEdited(node) {
+  return !!node && node.nodeType === 1 && node.hasAttribute("data-editing");
+}
+
 function loadKeeps(node) {
+  if (isBeingEdited(node)) return true;
   if (requestIsInFlight(node)) {
     noteSkippedInFlight(node);
     return true;
@@ -535,30 +484,3 @@ function applyFocusPlan(region, plan) {
   if (!region.hasAttribute("tabindex")) region.setAttribute("tabindex", "-1");
   region.focus();
 }
-
-// An editor slot (`.editor-slot`) holds the editor that a view change loaded into
-// it. Cancel closes the editor in the browser and sends no request: the slot is
-// empty, as every load renders it, and the region that the editor held may load.
-let editorOpener = null;
-
-document.addEventListener("click", function (evt) {
-  const target = evt.target;
-  if (!(target instanceof Element)) return;
-  const opener = target.closest("[data-opens-editor]");
-  if (opener) editorOpener = opener;
-  const cancel = target.closest("[data-close-editor]");
-  if (!cancel) return;
-  const slot = cancel.closest(".editor-slot");
-  if (!slot) return;
-  const region = slot.closest("[data-live]");
-  slot.replaceChildren();
-  if (region && editorOpener && editorOpener.isConnected && region.contains(editorOpener)) {
-    editorOpener.focus();
-  } else if (region) {
-    if (!region.hasAttribute("tabindex")) region.setAttribute("tabindex", "-1");
-    region.focus();
-  }
-  editorOpener = null;
-  // The editor held its region, so the region may load what it waited for.
-  askNow();
-});

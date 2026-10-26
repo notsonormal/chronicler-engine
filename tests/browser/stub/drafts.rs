@@ -108,12 +108,6 @@ async fn check_a_load_skips_a_select_whose_request_is_in_flight(
         "the engine has not seen the save, so it still renders the old value"
     );
 
-    // The hold of a region with a dirty field keeps the region from loading at
-    // all while the save is in flight, so it is switched off: this check is about
-    // what a load that does run does to a control whose request is in flight.
-    page.evaluate::<(), ()>("() => { window.regionHoldsEdit = () => false; }", None)
-        .await
-        .unwrap();
     let loads_before = changes.loads("/fragment/settings");
     changes.bump(ChangeKind::SETTINGS);
     wait_for_a_settings_load_after(&page, &changes, loads_before, "due").await;
@@ -176,11 +170,6 @@ async fn check_a_load_that_skipped_a_select_in_flight_leaves_the_region_due(
     } else {
         "openrouter-euryale"
     };
-    // The hold of a region with a dirty field would keep the panel from loading
-    // while the save is in flight: it is switched off, as in 44.24.
-    page.evaluate::<(), ()>("() => { window.regionHoldsEdit = () => false; }", None)
-        .await
-        .unwrap();
     let loads_before = changes.loads("/fragment/settings");
 
     page.locator(QUANTIFIER_SELECT)
@@ -201,12 +190,6 @@ async fn check_a_load_that_skipped_a_select_in_flight_leaves_the_region_due(
     save.release_role_save_answer();
 
     let shown = wait_for_select_value(&page, &server_value).await;
-    let dbg = page.evaluate::<(), String>("() => document.querySelector('.settings-panel').dataset.liveState + ' ' + document.getElementById('role-select-quantifier').className", None).await.unwrap();
-    eprintln!(
-        "DEBUG {dbg} loads {} before {}",
-        changes.loads("/fragment/settings"),
-        loads_before
-    );
     assert_eq!(
         shown, server_value,
         "after the save ended, the panel loaded again and set the select to the engine's value"
@@ -232,55 +215,11 @@ const TABS: [&str; 6] = [
     "llm-messages",
 ];
 
-/// A form that waits for a Save and still sits in a region: the selector of its
-/// root, why it is still there, and the stage of the plan that moves it into the
-/// dialog. The list only shrinks, and it is empty after that stage.
-struct DraftFormInRegion {
-    selector: &'static str,
-    reason: &'static str,
-    moved_in_stage: u8,
-}
-
-const DRAFT_FORMS_STILL_IN_A_REGION: &[DraftFormInRegion] = &[
-    DraftFormInRegion {
-        selector: ".game-rename",
-        reason: "the Rename form of a Game is still inside the Games panel",
-        moved_in_stage: 3,
-    },
-    DraftFormInRegion {
-        selector: ".new-game-add",
-        reason: "the New Game form is still inside the Games panel",
-        moved_in_stage: 3,
-    },
-    DraftFormInRegion {
-        selector: ".preset-add",
-        reason: "the Add forms of a preset category are still inside the Prompt Presets panel",
-        moved_in_stage: 3,
-    },
-    DraftFormInRegion {
-        selector: ".preset-card.edit-form",
-        reason: "a preset card in edit still replaces its card inside the Prompt Presets panel",
-        moved_in_stage: 3,
-    },
-    DraftFormInRegion {
-        selector: "#world-editor",
-        reason: "the World editor is still inside the Worlds panel",
-        moved_in_stage: 3,
-    },
-];
-
 // [docs/specs/browser_live_regions.md] SCENARIO: 44.26
 async fn check_no_region_of_any_tab_holds_a_draft_control(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
-    for row in DRAFT_FORMS_STILL_IN_A_REGION {
-        assert!(
-            !row.reason.is_empty() && row.moved_in_stage > 0,
-            "each allowed form names its reason and the stage that moves it: {}",
-            row.selector
-        );
-    }
     for tab in TABS {
         page.locator(&format!(r#"[data-tab="{tab}"]"#))
             .await
@@ -302,28 +241,19 @@ async fn check_no_region_of_any_tab_holds_a_draft_control(
         .await;
         assert!(loaded, "the regions of the {tab} tab load");
 
-        let arguments = serde_json::json!({
-            "tab": tab,
-            "allowed": DRAFT_FORMS_STILL_IN_A_REGION
-                .iter()
-                .map(|row| row.selector)
-                .collect::<Vec<_>>(),
-        });
         let drafts: Vec<String> = page
-            .evaluate::<serde_json::Value, Vec<String>>(
-                r#"({ tab, allowed }) => {
+            .evaluate::<String, Vec<String>>(
+                r#"(tab) => {
                     const controls = 'input:not([type=hidden]):not([type=button]):not([type=submit]), textarea, select';
                     const savesOnChange = (control) =>
                         control.matches('[hx-trigger="change"]') || !!control.closest('form[hx-trigger="change"]');
-                    const allow = allowed.join(', ');
                     return Array.from(document.querySelectorAll('#' + tab + '-tab [data-live]'))
                         .flatMap((region) => Array.from(region.querySelectorAll(controls)))
                         .filter((control) => !savesOnChange(control))
                         .filter((control) => !control.disabled && !control.readOnly)
-                        .filter((control) => !control.closest(allow))
                         .map((control) => control.outerHTML.slice(0, 120));
                 }"#,
-                Some(&arguments),
+                Some(&tab.to_string()),
             )
             .await
             .unwrap();
