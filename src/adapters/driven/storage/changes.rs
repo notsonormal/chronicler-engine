@@ -11,7 +11,8 @@ use crate::domain::model::change::{
 };
 use crate::domain::model::game::GameId;
 
-/// One lock holds every number, so a snapshot reads them together.
+/// One lock holds every number, so a snapshot reads them together. Each of the two
+/// inner raise functions adds to `revision`, so no raise path skips it.
 #[derive(Default)]
 struct Numbers {
     games: u64,
@@ -19,11 +20,13 @@ struct Numbers {
     settings: u64,
     prompt_presets: u64,
     llm_messages: u64,
+    revision: u64,
     per_game: HashMap<GameId, GameVersions>,
 }
 
 impl Numbers {
     fn raise_game(&mut self, game: GameId, kind: GameKind) {
+        self.revision += 1;
         let of_game = self.per_game.entry(game).or_default();
         match kind {
             GameKind::Story => of_game.story += 1,
@@ -33,6 +36,7 @@ impl Numbers {
     }
 
     fn raise_engine(&mut self, kind: EngineKind) {
+        self.revision += 1;
         match kind {
             EngineKind::Games => self.games += 1,
             EngineKind::Worlds => self.worlds += 1,
@@ -72,6 +76,7 @@ impl ChangeCounters {
             settings: numbers.settings,
             prompt_presets: numbers.prompt_presets,
             llm_messages: numbers.llm_messages,
+            revision: numbers.revision,
         }
     }
 

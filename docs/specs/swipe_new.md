@@ -270,12 +270,12 @@ And the player is in "room2" (the state that the retry's analysis saved)
 
 ### Concurrency
 
-#### Scenario 12.1: Retry while a generation is already in flight returns "Still thinking..."
+#### Scenario 12.1: Retry while a generation is already in flight answers 409 "Still thinking..."
 
 ```gherkin
 Given a Game whose Job is running
 When the client sends POST /swipe/new
-Then the response is 200 with a "Still thinking..." status string
+Then the response is 409 with the "Still thinking..." line
 And no Swipe is added
 ```
 
@@ -391,7 +391,7 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   violation: 500 and the failure line "The data for this request is
   missing: …", not a user error (400).
 - **I.8** Retry rejects concurrent generation the same way `POST /action`
-  does: 200 with a `"Still thinking..."` status, no generation started.
+  does: 409 with the `"Still thinking..."` line, no generation started.
 - **I.9** A failed retry that appended no Swipe leaves the room, the
   encounters and the fired triggers as the click found them. A failed retry
   that appended a Swipe keeps the state that its analysis saved.

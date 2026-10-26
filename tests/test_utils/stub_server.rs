@@ -16,7 +16,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use chrono::{TimeZone, Utc};
 
-use chronicler_engine::adapters::driving::http::utils::response::BUSY_STATUS;
+use chronicler_engine::application::generation::gate::Refusal;
 use chronicler_engine::domain::model::change::{
     ActiveGameVersions, ChangeKind, ChangeVersions, EngineKind, GameKind, GameVersions,
 };
@@ -60,6 +60,7 @@ use chronicler_engine::domain::model::state::message_types::{StoryRow, MessageTy
 use chronicler_engine::test_support::{default_story_row, TestPromptPreset};
 
 use super::server::{get_config_port, release_port_lock};
+use super::stub_action_layers::StubActionLayers;
 use super::CONFIG_PATH;
 
 const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
@@ -469,7 +470,7 @@ pub enum StubActionOutcome {
     /// engine's own error render naming the command, so the disclosure's raw
     /// text is the server's response rather than the input echoed back.
     Error,
-    /// A 200 that refuses the command: the engine answers the wait status
+    /// A 409 that refuses the command: the engine answers its busy refusal
     /// because a generation is already in flight.
     Refused,
 }
@@ -513,6 +514,7 @@ struct StubState {
     role_save_answers_held: std::sync::atomic::AtomicBool,
     role_save_answer_permits: tokio::sync::Semaphore,
     story_writes_refused_as_busy: std::sync::atomic::AtomicBool,
+    action_layers: StubActionLayers,
     delete_succeeds: std::sync::atomic::AtomicBool,
     deleted: std::sync::atomic::AtomicBool,
     header_degraded: std::sync::atomic::AtomicBool,
@@ -586,12 +588,14 @@ impl StubChanges {
                 settings: 1,
                 prompt_presets: 1,
                 llm_messages: 1,
+                revision: 1,
             },
         }
     }
 
     fn bump(&mut self, kind: ChangeKind) {
         let versions = &mut self.versions;
+        versions.revision += 1;
         match kind {
             ChangeKind::Game(kind) => {
                 let game = versions
@@ -673,6 +677,7 @@ impl StubServer {
             role_save_answers_held: std::sync::atomic::AtomicBool::new(false),
             role_save_answer_permits: tokio::sync::Semaphore::new(0),
             story_writes_refused_as_busy: std::sync::atomic::AtomicBool::new(false),
+            action_layers: StubActionLayers::default(),
             delete_succeeds: std::sync::atomic::AtomicBool::new(false),
             deleted: std::sync::atomic::AtomicBool::new(false),
             header_degraded: std::sync::atomic::AtomicBool::new(false),
@@ -869,6 +874,17 @@ impl StubChangesHandle {
             .lock()
             .expect("stub changes lock poisoned")
             .set_game(game);
+    }
+
+    /// The `X-Chronicler-Game` header of each `POST` to `path`, in arrival order.
+    pub fn game_headers(&self, path: &str) -> Vec<Option<String>> {
+        self.state.action_layers.game_headers(path)
+    }
+
+    /// Makes the action routes treat `game` as the active Game while `GET /changes`
+    /// still names the old one: the page that has not asked since a switch.
+    pub fn set_game_of_actions(&self, game: u64) {
+        self.state.action_layers.set_game_of_actions(game);
     }
 
     pub fn asks(&self) -> usize {
@@ -1273,6 +1289,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         // control sits in.
         .route("/games/:id/delete", post(delete_game))
         .route("/games/:id/rename", post(rename_game))
+        .route("/games/:id/switch", post(switch_game))
         .route("/history/:id", post(save_message))
         // Scenario 16.34 drives /reset from the games row: a 500 here fills that
         // row's own error slot rather than the panel's.
@@ -1344,7 +1361,25 @@ fn stub_router(state: Arc<StubState>) -> Router {
             Arc::clone(&state),
             count_and_fail_reads_middleware,
         ))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            action_answers_middleware,
+        ))
         .with_state(state)
+}
+
+/// The switch makes the Game active for `GET /changes`, as the engine does.
+async fn switch_game(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> Response<Body> {
+    state
+        .changes
+        .lock()
+        .expect("stub changes lock poisoned")
+        .set_game(Some(id));
+    state.bump(&[ChangeKind::GAMES]);
+    (StatusCode::OK, "").into_response()
 }
 
 async fn games_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
@@ -1527,6 +1562,24 @@ const PANEL_LOAD_PATHS: [&str; 4] = [
     "/fragment/prompt-presets",
 ];
 
+async fn action_answers_middleware(
+    State(state): State<Arc<StubState>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response<Body> {
+    let read_changes = || {
+        let changes = state.changes.lock().expect("stub changes lock poisoned");
+        (
+            changes.versions.stamp(),
+            changes.versions.game.map(|game| game.id.0),
+        )
+    };
+    state
+        .action_layers
+        .answer(request, next, read_changes)
+        .await
+}
+
 async fn count_and_fail_reads_middleware(
     State(state): State<Arc<StubState>>,
     request: axum::extract::Request,
@@ -1640,13 +1693,18 @@ async fn test_connection_form() -> Html<String> {
     Html(connection_test_result_html("typed-model"))
 }
 
+/// The engine's own busy refusal: `409`, the wait line and `X-Refusal: busy`.
+fn busy_refusal() -> Response<Body> {
+    Refusal::StillThinking.into_response()
+}
+
 /// A connection save refuses the typed provider until a test arms it.
 async fn save_connection(State(state): State<Arc<StubState>>) -> Response<Body> {
     if state
         .connection_saves_refused_as_busy
         .load(std::sync::atomic::Ordering::SeqCst)
     {
-        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+        return busy_refusal();
     }
     if state
         .connection_saves_succeed
@@ -1705,7 +1763,7 @@ fn restored_swipe_entries() -> Vec<StoryRow> {
 async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.story_writes_refused_as_busy.load(SeqCst) {
-        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+        return busy_refusal();
     }
     if state.switch_fails.load(SeqCst) {
         return client_failure("Stub swipe switch failure");
@@ -1769,12 +1827,7 @@ async fn action_check(
     }
     match state.action_outcome {
         StubActionOutcome::Pending => dispatched(&state),
-        StubActionOutcome::Refused => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            BUSY_STATUS,
-        )
-            .into_response(),
+        StubActionOutcome::Refused => busy_refusal(),
         StubActionOutcome::Error => action_failure(command),
     }
 }
@@ -1826,7 +1879,7 @@ async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
 }
 
 /// An error outcome answers the 500 a failing engine action produces, so a test
-/// can drive a refused confirm. A refused outcome answers the wait status.
+/// can drive a refused confirm. A refused outcome answers the busy refusal.
 async fn action_confirm(
     State(state): State<Arc<StubState>>,
     Form(form): Form<HashMap<String, String>>,
@@ -1834,12 +1887,7 @@ async fn action_confirm(
     let command = form.get("command").map(String::as_str).unwrap_or_default();
     match state.action_outcome {
         StubActionOutcome::Error => action_failure(command),
-        StubActionOutcome::Refused => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            BUSY_STATUS,
-        )
-            .into_response(),
+        StubActionOutcome::Refused => busy_refusal(),
         StubActionOutcome::Pending => dispatched(&state),
     }
 }
@@ -1868,7 +1916,7 @@ async fn retry_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
         .story_writes_refused_as_busy
         .load(std::sync::atomic::Ordering::SeqCst)
     {
-        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+        return busy_refusal();
     }
     client_failure("Stub retry failure")
 }
@@ -1886,12 +1934,7 @@ async fn start_autoplay(State(state): State<Arc<StubState>>) -> Response<Body> {
             state.bump(&[ChangeKind::BUSY_STATE]);
             (StatusCode::OK, "").into_response()
         }
-        StubActionOutcome::Refused => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            BUSY_STATUS,
-        )
-            .into_response(),
+        StubActionOutcome::Refused => busy_refusal(),
         StubActionOutcome::Error => client_failure("Stub autoplay failure"),
     }
 }
@@ -2106,7 +2149,7 @@ async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
         .story_writes_refused_as_busy
         .load(std::sync::atomic::Ordering::SeqCst)
     {
-        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+        return busy_refusal();
     }
     if state
         .save_succeeds
@@ -2122,7 +2165,7 @@ async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
 async fn delete_message(State(state): State<Arc<StubState>>) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.story_writes_refused_as_busy.load(SeqCst) {
-        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+        return busy_refusal();
     }
     if !state.delete_succeeds.load(SeqCst) {
         return client_failure("Stub delete failure");

@@ -67,7 +67,7 @@ Then no item carries a `.run-badge`
 #### Scenario 42.5: A story write that the busy Game refuses keeps the client's work and shows the busy message
 
 ```gherkin
-Given a Job or a run holds the Game, so each story write answers "Still thinking..."
+Given a Job or a run holds the Game, so each story write answers 409 "Still thinking..."
 
 When the client opens the editor of a story-log entry, types a new text and presses Save
 Then the story log's error slot shows a line that names the busy Game
@@ -86,7 +86,7 @@ And the story log still shows every entry it showed
 #### Scenario 42.6: A start that the busy Game refuses reports in the Autoplay form's slot
 
 ```gherkin
-Given a Job or a run holds the Game, so POST /autoplay answers "Still thinking..."
+Given a Job or a run holds the Game, so POST /autoplay answers 409 "Still thinking..."
 When the client presses #autoplay-btn
 Then the Autoplay form's own inline error slot says that the Game is busy
 And its Details disclosure holds the engine's answer
@@ -97,7 +97,7 @@ And #action-status is empty
 #### Scenario 42.7: A retry that the busy Game refuses reports in the story log's error slot
 
 ```gherkin
-Given a Job or a run holds the Game, so POST /swipe/new answers "Still thinking..."
+Given a Job or a run holds the Game, so POST /swipe/new answers 409 "Still thinking..."
 When the client presses the Retry control
 Then the story log's error slot shows a line that names the busy Game
 And #action-status is empty

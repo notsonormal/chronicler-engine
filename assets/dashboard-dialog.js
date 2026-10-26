@@ -122,7 +122,7 @@ document.addEventListener("click", function (evt) {
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   const form = evt.detail && evt.detail.elt;
   if (!form || form.tagName !== "FORM" || !editDialog.contains(form)) return;
-  if (!evt.detail.successful || answeredBusy(evt)) return;
+  if (!evt.detail.successful) return;
   editDialog.close();
 });
 

@@ -8,7 +8,8 @@ use chronicler_engine::domain::model::state::generation_status::Step;
 
 use super::*;
 use super::support::{
-    StubRunner, active_element_is, assert_busy_refusal, load_now, read_banner, read_command_input,
+    StubRunner, accept_delete_confirmation, active_element_is, assert_busy_refusal, load_now,
+    read_banner, read_command_input, stop_page_timer,
 };
 
 async fn stash_action_area_nodes(page: &playwright_rs::Page) {
@@ -656,6 +657,294 @@ async fn check_the_action_area_shows_its_own_state_until_the_status_display_show
     assert!(disabled, "Send stays locked while the Job runs");
 }
 
+async fn wait_until_page_shows_game(page: &playwright_rs::Page, game: &str) {
+    let shown = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async move {
+            page.evaluate::<(), String>("() => document.documentElement.dataset.game || ''", None)
+                .await
+                .unwrap()
+                == game
+        },
+    )
+    .await;
+    assert!(shown, "the page records the Game it shows: {game}");
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.53
+async fn check_each_action_carries_the_game_the_page_shows(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    fill_command_input(&page, "look around").await;
+    page.evaluate::<(), ()>(
+        r#"() => document.getElementById('command-form').requestSubmit()"#,
+        None,
+    )
+    .await
+    .unwrap();
+    let sent = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            !stub
+                .changes_handle()
+                .game_headers("/action/check")
+                .is_empty()
+        },
+    )
+    .await;
+    assert!(sent, "the command reaches the engine");
+    assert_eq!(
+        stub.changes_handle().game_headers("/action/check"),
+        vec![Some("1".to_string())],
+        "the command names the Game the page shows"
+    );
+
+    stub.save_handle().set_delete_succeeds(true);
+    accept_delete_confirmation(&page).await;
+    let delete = "#story-log .log-entry:last-child .delete-btn";
+    page.locator(delete).await.click(None).await.unwrap();
+    let sent = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            !stub
+                .changes_handle()
+                .game_headers("/history/delete")
+                .is_empty()
+        },
+    )
+    .await;
+    assert!(sent, "the delete reaches the engine");
+    assert_eq!(
+        stub.changes_handle().game_headers("/history/delete"),
+        vec![Some("1".to_string())],
+        "a request that a script sends names the Game the page shows"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.54
+async fn check_a_send_for_a_game_that_is_no_longer_active_keeps_the_typed_command(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    stub.changes_handle().set_game_of_actions(2);
+    fill_command_input(&page, "look around").await;
+    page.evaluate::<(), ()>(
+        r#"() => document.getElementById('command-form').requestSubmit()"#,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let slot = r#"#command-form [data-error-slot="action"]"#;
+    wait_for_error_disclosure(
+        &page,
+        slot,
+        "the refused send reports in the command form's slot",
+    )
+    .await;
+    let (_, line, _) = read_error_disclosure(&page, slot).await;
+    assert!(
+        line.contains("The active Game changed"),
+        "the line says the Game changed, got {line:?}"
+    );
+    assert_eq!(
+        read_command_input(&page).await,
+        "look around",
+        "a refused send keeps the text the player typed"
+    );
+    let preview_children: f64 = page
+        .evaluate::<(), f64>(
+            "(() => document.getElementById('action-preview').children.length)()",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview_children, 0.0, "a refusal opens no preview");
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.55
+async fn check_an_edit_saved_for_a_game_that_is_no_longer_active_stays_open(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    page.locator(".log-entry.narration .edit-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
+    page.locator("#edit-textarea")
+        .await
+        .fill("Text typed before the switch", None)
+        .await
+        .unwrap();
+    stub.changes_handle().set_game_of_actions(2);
+    page.locator(".log-entry.narration .save-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    wait_for_error_disclosure(
+        &page,
+        "#story-log-error",
+        "the refused save reports in the story log",
+    )
+    .await;
+    let (_, line, _) = read_error_disclosure(&page, "#story-log-error").await;
+    assert!(
+        line.contains("The active Game changed"),
+        "the line says the Game changed, got {line:?}"
+    );
+    assert_eq!(
+        page.locator("#edit-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "Text typed before the switch",
+        "the editor keeps the player's text"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.56
+async fn check_the_page_names_a_game_only_when_every_visible_region_shows_it(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    stop_page_timer(&page).await;
+    stub.changes_handle().set_story_log_delay_ms(800);
+    stub.changes_handle().set_game(Some(2));
+
+    let shown_while_loading: String = page
+        .evaluate::<(), String>(
+            r#"async () => {
+                window.chroniclerLive.askOnce();
+                await new Promise((resolve) => setTimeout(resolve, 300));
+                await window.chroniclerLive.tick();
+                return document.documentElement.dataset.game || '';
+            }"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        shown_while_loading, "1",
+        "a second ask finds the story log still loading, so the page names no new Game yet"
+    );
+
+    wait_until_page_shows_game(&page, "2").await;
+    stub.changes_handle().set_story_log_delay_ms(0);
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.57
+async fn check_a_switch_sent_from_this_page_clears_the_game_until_the_next_ask(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    page.locator(r#"[data-tab="games"]"#)
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    let switch = r#"button[hx-post="/games/2/switch"]"#;
+    wait_until_visible(&page, switch, Duration::from_secs(5)).await;
+    stop_page_timer(&page).await;
+
+    let seen: (String, bool) = page
+        .evaluate::<(), (String, bool)>(
+            r#"async () => {
+                let seen = null;
+                document.body.addEventListener('htmx:afterRequest', () => {
+                    if (seen) return;
+                    seen = document.documentElement.dataset.game || '';
+                    actionFetch('/retrigger', { method: 'POST' }).catch(() => {});
+                }, { once: true });
+                document.querySelector('button[hx-post="/games/2/switch"]').click();
+                while (seen === null) await new Promise((resolve) => setTimeout(resolve, 5));
+                return [seen, true];
+            }"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        seen.0, "",
+        "the switch answer removed the Game the page named"
+    );
+    assert_eq!(
+        stub.changes_handle().game_headers("/retrigger"),
+        vec![None],
+        "a send before the next ask carries no Game header, so it meets no false refusal"
+    );
+    wait_until_page_shows_game(&page, "2").await;
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.58
+async fn check_a_stop_for_a_game_that_is_no_longer_active_reports_in_the_command_form_slot(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    stub.status_handle().set(StubStatus::Autoplay {
+        done: 1,
+        budget: 10,
+        step: None,
+    });
+    load_now(&page, "#status-display").await;
+    wait_until_visible(&page, "#stop-btn", Duration::from_secs(5)).await;
+    stub.changes_handle().set_game_of_actions(2);
+    page.locator("#stop-btn").await.click(None).await.unwrap();
+
+    let slot = r#"#command-form [data-error-slot="action"]"#;
+    wait_for_error_disclosure(
+        &page,
+        slot,
+        "the refused Stop reports in the command form's slot",
+    )
+    .await;
+    let (_, line, _) = read_error_disclosure(&page, slot).await;
+    assert!(
+        line.contains("The active Game changed") && line.contains("the run was not stopped"),
+        "the line says what was refused and why, got {line:?}"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.59
+async fn check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_game_row(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    accept_delete_confirmation(&page).await;
+    page.locator(r#"[data-tab="games"]"#)
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    let reset = ".game-item.active .btn-reset-small";
+    wait_until_visible(&page, reset, Duration::from_secs(5)).await;
+    stub.changes_handle().set_game_of_actions(2);
+    page.locator(reset).await.click(None).await.unwrap();
+
+    let slot = ".game-item.active > [data-error-slot]";
+    wait_for_error_disclosure(&page, slot, "the refused Reset reports in its game row").await;
+    let (_, line, _) = read_error_disclosure(&page, slot).await;
+    assert!(
+        line.contains("The active Game changed") && line.contains("the game was not reset"),
+        "the line says what was refused and why, got {line:?}"
+    );
+}
+
 #[tokio::test]
 async fn run_dashboard_action_area_checks() {
     let mut runner = StubRunner::launch().await;
@@ -711,6 +1000,48 @@ async fn run_dashboard_action_area_checks() {
         .run(
             StubActionOutcome::Refused,
             check_refused_concurrent_send_keeps_the_command_and_reports_in_the_form_slot,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_each_action_carries_the_game_the_page_shows,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_send_for_a_game_that_is_no_longer_active_keeps_the_typed_command,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_an_edit_saved_for_a_game_that_is_no_longer_active_stays_open,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_the_page_names_a_game_only_when_every_visible_region_shows_it,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_switch_sent_from_this_page_clears_the_game_until_the_next_ask,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_stop_for_a_game_that_is_no_longer_active_reports_in_the_command_form_slot,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_game_row,
         )
         .await;
     runner.finish().await;

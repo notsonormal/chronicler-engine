@@ -13,7 +13,7 @@ The Worlds panel is a live region of the worlds and games kinds. Its fragment
 carries no root element of its own. A World row shows a shortened description. The World editor opens in the edit dialog
 (`#edit-dialog-body`): the Create and Edit controls load it, and its root
 (`data-dialog-form`) carries the title of the dialog. A World save answers nothing on success:
-an empty 200. A refusal answers a 400 error fragment, and a failure a 500 error
+an empty 200. An invalid value answers a 400 error fragment, and a failure a 500 error
 fragment. The control that saved reports the error in its own slot. The saved
 World reaches the screen when the panel loads.
 

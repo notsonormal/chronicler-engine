@@ -30,7 +30,7 @@ Then the dock renders no options strip
 Given a Game whose Message has two Swipes
 And a Job of that Game held at its narrator call
 When the client POST /message/:id/swipe/:index for the other Swipe of that Message
-Then the response is 200 carrying the "Still thinking..." status
+Then the response is 409 carrying the "Still thinking..." line
 And the active Swipe of that Message does not change
 ```
 

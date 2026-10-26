@@ -738,15 +738,15 @@ async fn test_switch_swipe_handler_concurrent() {
 
     assert_eq!(
         response.status(),
-        StatusCode::OK,
-        "a swipe switch while the Game is busy is a wait answer, not a failure"
+        StatusCode::CONFLICT,
+        "a swipe switch while the Game is busy is refused with 409"
     );
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();
     assert!(
         String::from_utf8_lossy(&body).contains("Still thinking..."),
-        "the answer carries the wait status"
+        "the answer carries the busy refusal line"
     );
 
     hold.release();

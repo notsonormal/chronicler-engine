@@ -24,7 +24,7 @@ use crate::error::EngineError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Refusal {
-    /// The Game is busy: `200` "Still thinking...".
+    /// The Game is busy: `409` "Still thinking...".
     StillThinking,
     /// The request itself is wrong: `400`, with the reason line.
     BadRequest(String),

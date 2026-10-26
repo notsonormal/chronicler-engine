@@ -13,6 +13,7 @@ The server keeps one number for each **kind of data**. A number only goes up. It
 | `game` | The id of the active Game, or `null` with no active Game. |
 | `story`, `options`, `busy` | The numbers of the active Game: its story, its Options, and its busy state with its failure line. The answer holds no per-Game number with no active Game. |
 | `games`, `worlds`, `settings`, `presets`, `llm` | The numbers of the Games list, the Worlds, the settings, the prompt presets and the LLM messages. They count the whole engine. |
+| `revision` | One number for the whole engine. Every raise of any number above raises it, so it goes up when any kind of data changes, in any Game. |
 
 What raises each number:
 
@@ -26,6 +27,8 @@ What raises each number:
 | `settings` | A save of the settings: a Connection, a Role, the text check, or an active prompt preset. |
 | `presets` | A new, an edited or a removed prompt preset. |
 | `llm` | A new LLM message. |
+
+The `revision` goes up with every raise of a number, and by nothing else. A read, and a save that commits nothing, leave it as it was. A new server process starts its count again, so a client compares the `revision` together with the `server` id.
 
 A new or a removed Message raises `games` because the Games list is ordered by the newest Message of each Game.
 
@@ -42,14 +45,14 @@ Then the response status is 200
 And the response body is a JSON object
 And its `server` is a non-empty string
 And its `game` is the id of the active Game
-And its `story`, `options`, `busy`, `games`, `worlds`, `settings`, `presets` and `llm` are whole numbers
+And its `story`, `options`, `busy`, `games`, `worlds`, `settings`, `presets`, `llm` and `revision` are whole numbers
 
 Given no active Game
 When the client GET /changes
 Then the response status is 200
 And its `game` is null
 And the response holds no `story`, `options` or `busy`
-And its `games`, `worlds`, `settings`, `presets` and `llm` are whole numbers
+And its `games`, `worlds`, `settings`, `presets`, `llm` and `revision` are whole numbers
 ```
 
 #### Scenario 43.2: The server id is the same in every answer of one server, and differs between two servers
@@ -239,3 +242,20 @@ When the client saves one of these, each on a fresh server:
 Then the response status is 200
 And exactly the numbers of its row moved
 ```
+
+#### Scenario 43.16: The revision goes up with every number that moves, and stays when none moves
+
+```gherkin
+Given an active Game
+When the client GET /changes twice with no save between the two requests
+Then the `revision` of the two answers is the same
+
+When the client saves one of these in turn, reading GET /changes before and after each:
+| Save                                          |
+| POST /games/:id/rename with a new name        |
+| POST /reset                                   |
+| POST /connections/add                         |
+Then the `revision` after each save is greater than the `revision` before it
+```
+
+Every other scenario of this chapter that names the numbers a step moved also holds the `revision` to the same step: it goes up when the step moved a number, and stays when it moved none. So a failed save (Scenario 43.9) leaves it as it was.

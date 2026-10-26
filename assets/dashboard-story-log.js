@@ -144,12 +144,14 @@ function cancelEdit() {
   if (editBtn) editBtn.focus();
 }
 
-// A 200 can still refuse a story write: a Job or an Autoplay run holds the Game.
-// True when the body is the busy answer; the story-log error then says what the
-// refused action was (`refusedWhat`, for example "the edit was not saved").
-function reportedBusy(body, refusedWhat) {
-  if (!isBusyAnswer(body)) return false;
-  reportBusyRefusal(storyLogErrorSlot(), refusedWhat);
+// The engine refuses a story write with 409: a Job or an Autoplay run holds the
+// Game, or the page shows a Game that is no longer active. True when the response
+// is a refusal; the story-log error then says what the refused action was
+// (`refusedWhat`, for example "the edit was not saved").
+function reportedRefusal(response, refusedWhat) {
+  const refusal = refusalOfResponse(response);
+  if (!refusal) return false;
+  reportRefusal(storyLogErrorSlot(), refusedWhat, refusal);
   return true;
 }
 
@@ -167,14 +169,11 @@ function submitEdit() {
     body: formData,
   })
     .then((response) => {
-      if (!response.ok) return throwServerDetail(response);
-      return response.text();
-    })
-    .then((body) => {
-      if (reportedBusy(body, "the edit was not saved")) {
+      if (reportedRefusal(response, "the edit was not saved")) {
         editKeptOpen = true;
         return;
       }
+      if (!response.ok) return throwServerDetail(response);
       // The lock stays until the load replaces the entry's controls, so a second
       // editor cannot open on a stale textarea.
       clearEditState();
@@ -198,11 +197,11 @@ function submitGenerationRequest(url, failureMessage, refusedWhat) {
   updateToThinking();
   actionFetch(url, { method: "POST" })
     .then((response) => {
+      if (reportedRefusal(response, refusedWhat)) {
+        endPending();
+        return;
+      }
       if (!response.ok) return throwServerDetail(response);
-      return response.text();
-    })
-    .then((body) => {
-      if (reportedBusy(body, refusedWhat)) endPending();
     })
     .catch((err) => {
       console.error(`${failureMessage}:`, err);
@@ -243,13 +242,8 @@ function switchSwipe(messageId, index) {
   clearInlineError(storyLogErrorSlot());
   actionFetch(`/message/${messageId}/swipe/${index}`, { method: "POST" })
     .then((response) => {
+      if (reportedRefusal(response, "the swipe was not switched")) return;
       if (!response.ok) return throwServerDetail(response);
-      return response.text();
-    })
-    .then((body) => {
-      if (reportedBusy(body, "the swipe was not switched")) {
-        return;
-      }
       // The story log loads the restored Swipe, so the restore is announced
       // once that load has settled.
       return chroniclerLive.settle().then(announceSwipeRestore);
@@ -277,13 +271,9 @@ function deleteMessage() {
   clearInlineError(storyLogErrorSlot());
   actionFetch("/history/delete", { method: "POST" })
     .then((response) => {
+      if (reportedRefusal(response, "the message was not deleted")) return;
       if (!response.ok) return throwServerDetail(response);
-      return response.text().then((body) => {
-        if (reportedBusy(body, "the message was not deleted")) {
-          return;
-        }
-        return chroniclerLive.settle().then(focusAfterLogDelete);
-      });
+      return chroniclerLive.settle().then(focusAfterLogDelete);
     })
     .catch((err) => {
       console.error("Delete failed:", err);

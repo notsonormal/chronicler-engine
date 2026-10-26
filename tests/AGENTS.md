@@ -100,6 +100,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `races.rs` — HTTP E2E tests for the write path while a Job runs: the races (actions.md 3.4, 3.5; options.md 24.21), the stop at each model call (dashboard.md 39.4, 39.5), the reset (reset.md 7.3), the Job of another Game (games.md 18.4), the edit, delete and swipe switch (story_log.md 8.7; swipe_switch.md 36.3), and the preset an event Narration uses (actions.md 6.4).
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).
     - `retrigger.rs` — HTTP E2E tests for the retrigger endpoint (POST /retrigger).
+    - `screen.rs` — HTTP E2E tests for what every action answer carries: the `X-Revision` stamp, the busy refusal as `409`, and the Game header that a page sends with a Game-bound action. Tagged against `docs/specs/screen.md`.
     - `settings.rs` — HTTP E2E tests for the settings endpoints: sub-tabs, role rows, and the text-check auto-save.
     - `settings_connection_form.rs` — HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test actions take.
     - `story_log.rs` — HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
@@ -172,9 +173,10 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `html.rs` — HTML slicing helpers for panel markup — locate a region by a stable anchor string.
     - `htmx_settle.rs` — htmx settle harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
     - `live_region_table.rs` — The live regions of the dashboard shell, as the stub-browser tests list them: the selector, the fragment path, the kinds of change that load it, and its section. The guardrails check the table against `assets/index.html`.
-    - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
+    - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `server`, `settings_guard`, `stub_action_layers`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.
     - `settings_guard.rs` — `SettingsTestGuard` — serializes tests that mutate global settings state via a process-wide `Mutex`.
+    - `stub_action_layers.rs` — What the engine's two action layers do, for the stub server: record the Game header of each `POST`, refuse a Game-bound one that names another Game, and stamp the answer with `X-Revision`.
     - `stub_server.rs` — Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
     - `wait.rs` — Polling helpers: `wait_for_llm_idle`, `wait_for_status_ready`, and `wait_for_element_children` — retry-based waits used by browser and HTTP tests.
 <!-- AUTO-STRUCTURE-TESTS END -->

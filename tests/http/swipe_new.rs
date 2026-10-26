@@ -1182,7 +1182,7 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
     );
 
     let resp = post_empty(&app, "/swipe/new").await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
     let body = axum::body::to_bytes(resp.into_body(), 16384)
         .await
         .expect("read body");

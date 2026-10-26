@@ -23,6 +23,7 @@ mod prompt_presets;
 mod races;
 mod reset;
 mod retrigger;
+mod screen;
 mod settings;
 mod settings_connection_form;
 mod story_log;

@@ -27,7 +27,7 @@ fragment carries no root element of its own. The connection forms and the
 result of a connection Test open in the edit dialog, outside the panel, so a
 load of the panel never meets them.
 
-A save answers nothing on success: an empty 200. A refusal answers a 400 error
+A save answers nothing on success: an empty 200. An invalid value answers a 400 error
 fragment, and a failure a 500 error fragment. The control that saved reports the
 error in its own slot. The change reaches the screen when the panel loads.
 

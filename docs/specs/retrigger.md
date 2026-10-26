@@ -111,12 +111,12 @@ Then the response is 400 Bad Request
 
 ### Concurrency
 
-#### Scenario 15.1: Retrigger while a generation is already in flight returns "Still thinking..."
+#### Scenario 15.1: Retrigger while a generation is already in flight answers 409 "Still thinking..."
 
 ```gherkin
 Given a Game whose Job is running
 When the client sends POST /retrigger
-Then the response is 200 with a "Still thinking..." status string
+Then the response is 409 with the "Still thinking..." line
 And no event Narration is added
 ```
 
@@ -133,7 +133,7 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   violation: 500 and the failure line "The data for this request is
   missing: …", not a user error (400).
 - **I.8** Retrigger rejects concurrent generation the same way an Action
-  does: 200 with a `"Still thinking..."` status, no generation started.
+  does: 409 with the `"Still thinking..."` line, no generation started.
 - **I.9** A failed event Narration leaves the event record of the last
   Narration in place. Retrigger stays available as a recovery path after
   the failure, with no new Action.

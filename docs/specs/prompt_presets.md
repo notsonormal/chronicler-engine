@@ -21,7 +21,7 @@ title of the dialog (`edit-dialog-title`). A form fragment that cannot open answ
 non-2xx error fragment, which the control that asked shows in its own slot.
 
 A create, an update, a delete, a duplicate and an activate answer nothing on
-success: an empty 200. A refusal answers a 400 error fragment, and a failure a
+success: an empty 200. An invalid value answers a 400 error fragment, and a failure a
 500 error fragment. The control that saved reports the error in its own slot.
 The change reaches the screen when the panel loads.
 

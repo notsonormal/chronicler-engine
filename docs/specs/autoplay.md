@@ -100,18 +100,18 @@ And no further Job of the run starts
 And the client can start a Job on the Game
 ```
 
-#### Scenario 41.8: A start on a busy Game, or on a Game that a run holds, answers "Still thinking..."
+#### Scenario 41.8: A start on a busy Game, or on a Game that a run holds, answers 409 "Still thinking..."
 
 ```gherkin
 Given a Game whose Job is held at its narrator call
 When the client POST /autoplay with cycles=1
-Then the response status is 200
+Then the response status is 409
 And the response body carries "Still thinking..."
 And no run holds the Game after that Job ends
 
 Given a Game that a run holds
 When the client POST /autoplay with cycles=1
-Then the response status is 200
+Then the response status is 409
 And the response body carries "Still thinking..."
 And the first run goes on with its own budget
 ```
@@ -159,7 +159,7 @@ And the client POST /swipe/new
 And the client switches to the other Swipe of the last Message
 And the client POST /history/:id with a new text
 And the client POST /history/delete
-Then each response status is 200
+Then each response status is 409
 And each response body carries "Still thinking..."
 And the story log is as it was when the pause began
 ```
@@ -172,7 +172,7 @@ And a run between its first Job and its second Job
 When the client POST /games/:id/mode with the other mode
 And the client POST /games/:id/posture with another perspective and tense
 And the client POST /games/:id/presets with another system preset
-Then each response status is 200
+Then each response status is 409
 And each response body carries "Still thinking..."
 And the Game's config is as it was
 When the client POST /status/reset-busy
@@ -241,7 +241,7 @@ And the client started a run B on the same Game, whose first Job is held at its 
 When the model answer of run A arrives
 And run A ends
 Then the status display answers with the progress of run B
-And a typed action answers "Still thinking..."
+And a typed action answers 409 with "Still thinking..."
 When the model answer of run B arrives
 And run B ends
 Then the story log holds the Messages of run B's budget

@@ -3,11 +3,9 @@
 
 use axum::{body::Body, http::StatusCode, response::Response};
 
-/// The answer of a write that the busy Game refuses. `dashboard-errors.js` keys the
-/// refusal on the `status wait` class in this markup and reports it in the slot of
-/// the refused action; the markup itself is never shown. The stub server answers a
-/// refused Action with it.
-pub const BUSY_STATUS: &str = "<span class=\"status wait\">Still thinking...</span>";
+/// The header that names why a `409` refused a request. The client finds a refusal by
+/// its status and reads this header only to choose the words of its report.
+pub const REFUSAL_HEADER: &str = "x-refusal";
 
 #[allow(clippy::expect_used)]
 fn status_response(status: StatusCode, body: impl Into<String>) -> Response<Body> {
@@ -23,6 +21,16 @@ pub fn ok(body: impl Into<String>) -> Response<Body> {
 
 pub fn bad_request(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::BAD_REQUEST, body)
+}
+
+/// A request the engine refused and did nothing for. `kind` is the value of
+/// `REFUSAL_HEADER`.
+pub fn refused(kind: &'static str, body: impl Into<String>) -> Response<Body> {
+    let mut response = status_response(StatusCode::CONFLICT, body);
+    response
+        .headers_mut()
+        .insert(REFUSAL_HEADER, axum::http::HeaderValue::from_static(kind));
+    response
 }
 
 pub fn not_found(body: impl Into<String>) -> Response<Body> {

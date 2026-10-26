@@ -92,7 +92,7 @@ And every icon in the response is hidden from assistive technology
 Given a Game whose Job is held at its narrator call
 When the client POST /history/:id with a new text
 And the client POST /history/delete
-Then each response is 200 carrying the "Still thinking..." status
+Then each response is 409 carrying the "Still thinking..." line
 And the Message the client tried to edit keeps the text it had
 And the story log still holds every Message of the Job
 ```

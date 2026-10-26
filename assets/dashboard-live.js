@@ -122,8 +122,8 @@ function settleSave(evt) {
   if (!element || !element.closest) return;
   if (!element.closest("[data-live], #edit-dialog")) return;
   if (!isSavingControl(element)) return;
-  const refused = answeredBusy(evt);
-  const saved = evt.detail.successful && !refused;
+  const refusal = answeredRefused(evt);
+  const saved = evt.detail.successful && !refusal;
   flagSaved(element, saved);
   if (saved) {
     settleSavedFields(element);
@@ -133,9 +133,9 @@ function settleSave(evt) {
   // back to the rendered values. Any other form keeps the player's edit.
   if (element.tagName !== "FORM") restoreRenderedValue(element);
   else if (element.hasAttribute("data-autosave")) editFieldsOf(element).forEach(restoreRenderedValue);
-  if (refused) {
+  if (refusal) {
     const what = element.getAttribute("data-refusal-what") || "the change was not saved";
-    reportBusyRefusal(inlineErrorSlotFor(element, true), what);
+    reportRefusal(inlineErrorSlotFor(element, true), what, refusal);
   }
 }
 
@@ -153,6 +153,7 @@ function settleLoad(record) {
   const waiters = record.waiters;
   record.waiters = [];
   waiters.forEach((resolve) => resolve());
+  recordShownGame();
 }
 
 function startLoad(region, answer) {
@@ -204,6 +205,7 @@ async function runAsk() {
     (region) => region.dataset.liveState === "due",
   );
   if (!failing) clearUnreachable();
+  Promise.all(loads).then(recordShownGame);
   return loads;
 }
 
@@ -232,10 +234,56 @@ function askNow() {
   return run;
 }
 
+// The Game the page shows, for the Game header of an action. The page records the
+// Game of the last answer only when every visible region shows that answer: none is
+// loading, due or behind it. A hidden region does not block, because the player
+// does not see it. A page that has not recorded a Game names none, and its action
+// acts on the active Game.
+const GAME_HEADER = "X-Chronicler-Game";
+
+function visibleRegionsShow(answer) {
+  return Array.from(document.querySelectorAll("[data-live]")).every((region) => {
+    if (sectionIsHidden(region)) return true;
+    return (
+      !liveRecordOf(region).loading &&
+      region.dataset.liveState !== "due" &&
+      !regionIsDue(region, answer)
+    );
+  });
+}
+
+function recordShownGame() {
+  if (!lastAnswer || !visibleRegionsShow(lastAnswer)) return;
+  document.documentElement.dataset.game =
+    lastAnswer.game === null ? "" : String(lastAnswer.game);
+}
+
+// A create, a switch or a Reset that this tab sent makes the shown Game stale at
+// once, so the page names none until the next ask has loaded the new Game: the
+// next send acts on the active Game and meets no false refusal.
+const GAME_CHANGING_ROUTES = [/^\/games$/, /^\/games\/[^/]+\/switch$/, /^\/reset$/];
+
+function forgetShownGameAfterGameChange(evt) {
+  const path = evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
+  if (!evt.detail.successful || !path) return;
+  const route = path.split("?")[0];
+  if (GAME_CHANGING_ROUTES.some((pattern) => pattern.test(route))) {
+    delete document.documentElement.dataset.game;
+  }
+}
+
+document.body.addEventListener("htmx:configRequest", function (evt) {
+  const game = document.documentElement.dataset.game;
+  if (game && evt.detail.verb !== "get") evt.detail.headers[GAME_HEADER] = game;
+});
+
 // The one way a script sends an action: the page asks as soon as the request
 // ends, so the result shows without waiting for the next ask of the timer.
 function actionFetch(url, init) {
-  return fetch(url, init).finally(() => {
+  const headers = new Headers((init && init.headers) || {});
+  const game = document.documentElement.dataset.game;
+  if (game) headers.set(GAME_HEADER, game);
+  return fetch(url, { ...init, headers }).finally(() => {
     askNow();
   });
 }
@@ -329,6 +377,7 @@ document.body.addEventListener("htmx:afterRequest", function (evt) {
   // follow one: the edit of a saved form ends, and the page asks at once.
   if (!isLiveRegion(region)) {
     settleSave(evt);
+    forgetShownGameAfterGameChange(evt);
     askNow();
     return;
   }

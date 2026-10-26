@@ -11,11 +11,11 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/` | `index_handler` |
 | POST | `/swipe/new` | `retry_handler` |
 | POST | `/message/:id/swipe/:index` | `switch_swipe_handler` |
 | POST | `/retrigger` | `retrigger_handler` |
 | POST | `/reset` | `reset_handler` |
+| GET | `/` | `index_handler` |
 | GET | `/debug/state` | `debug_state_handler` |
 | GET | `/debug/is_busy` | `debug_is_busy_handler` |
 | GET | `/debug/backend` | `debug_backend_handler` |
@@ -45,6 +45,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
+| POST | `/status/reset-busy` | `reset_busy_handler` |
 | GET | `/fragment/header` | `header_fragment` |
 | GET | `/fragment/failure-banner` | `failure_banner_fragment` |
 | GET | `/fragment/story-log` | `story_log_fragment` |
@@ -53,7 +54,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | GET | `/fragment/character-headshots` | `character_headshots_fragment` |
 | GET | `/changes` | `changes_handler` |
 | GET | `/status/busy` | `busy_status_handler` |
-| POST | `/status/reset-busy` | `reset_busy_handler` |
 | GET | `/fragment/llm-messages` | `llm_messages_fragment` |
 | GET | `/fragment/llm-messages/:id` | `llm_message_record_fragment` |
 

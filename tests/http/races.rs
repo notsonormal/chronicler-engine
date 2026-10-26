@@ -48,7 +48,7 @@ async fn test_action_while_job_runs_is_refused_http() {
     );
 
     let refused = post_action(&app, "listen").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     let body = response_body(refused).await;
     assert_still_thinking(&body);
     assert_eq!(
@@ -90,11 +90,8 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
     let click = |app: axum::Router, barrier: Arc<Barrier>| async move {
         barrier.wait().await;
         let resp = post_action(&app, "look").await;
-        assert!(
-            resp.status().is_success(),
-            "an accepted Action and a refused one both answer 200"
-        );
-        response_body(resp).await
+        let status = resp.status();
+        (status, response_body(resp).await)
     };
     let first = tokio::spawn(click(app.clone(), Arc::clone(&barrier)));
     let second = tokio::spawn(click(app.clone(), Arc::clone(&barrier)));
@@ -105,9 +102,20 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
 
     let refused = bodies
         .iter()
-        .filter(|body| body.contains(STILL_THINKING))
+        .filter(|(_, body)| body.contains(STILL_THINKING))
         .count();
     assert_eq!(refused, 1, "exactly one click is refused: {bodies:?}");
+    for (status, body) in &bodies {
+        let expected = if body.contains(STILL_THINKING) {
+            StatusCode::CONFLICT
+        } else {
+            StatusCode::OK
+        };
+        assert_eq!(
+            *status, expected,
+            "the refused click answers 409 and the accepted one 2xx: {bodies:?}"
+        );
+    }
     assert!(
         hold.wait_started(1000),
         "the accepted click's narration call should reach the model"
@@ -155,7 +163,7 @@ async fn test_options_while_job_runs_is_refused_http() {
     );
 
     let refused = post_action(&app, "/options").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     let body = response_body(refused).await;
     assert_still_thinking(&body);
 
@@ -321,12 +329,12 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
     let target = before.last().expect("the Job saved its Input").id;
 
     let edit = post_form(&app, &format!("/history/{target}"), "text=An+edited+text").await;
-    assert_eq!(edit.status(), StatusCode::OK);
+    assert_eq!(edit.status(), StatusCode::CONFLICT);
     let edit_body = response_body(edit).await;
     assert_still_thinking(&edit_body);
 
     let delete = post_empty(&app, "/history/delete").await;
-    assert_eq!(delete.status(), StatusCode::OK);
+    assert_eq!(delete.status(), StatusCode::CONFLICT);
     let delete_body = response_body(delete).await;
     assert_still_thinking(&delete_body);
 
@@ -389,7 +397,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
     );
 
     let resp = post_empty(&app, &format!("/message/{}/swipe/{target}", narration.id)).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
     let body = response_body(resp).await;
     assert_still_thinking(&body);
 

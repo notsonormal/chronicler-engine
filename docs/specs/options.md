@@ -216,7 +216,7 @@ Then the offered set still holds set A
 ```gherkin
 Given a Game with scene history whose Job is running, held inside its narrator call
 When a client POST /action with command="/options"
-Then the response is 200 carrying the "Still thinking..." status
+Then the response is 409 carrying the "Still thinking..." line
 And the offered set is unchanged
 And GET /fragment/options-dock renders no options strip
 ```

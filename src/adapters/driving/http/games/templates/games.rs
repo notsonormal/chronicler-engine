@@ -38,7 +38,7 @@ pub struct PersonaRowView {
         </div>
         <div class="game-actions">
             {{ rename_button(game.id) }}
-            <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game" aria-label="Reset game"><svg class="icon" aria-hidden="true"><use href="#i-rotate-ccw"/></svg></button>
+            <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" data-refusal-what="the game was not reset" title="Reset game" aria-label="Reset game"><svg class="icon" aria-hidden="true"><use href="#i-rotate-ccw"/></svg></button>
         </div>
     </div>
     {{ posture_html|safe }}

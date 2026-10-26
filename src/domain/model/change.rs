@@ -144,9 +144,17 @@ pub struct ChangeVersions {
     pub settings: u64,
     pub prompt_presets: u64,
     pub llm_messages: u64,
+    /// One number for the whole engine: every raise of any number raises it.
+    pub revision: u64,
 }
 
 impl ChangeVersions {
+    /// `<server>:<revision>`: the stamp that an action answer carries and a client
+    /// compares by value.
+    pub fn stamp(&self) -> String {
+        format!("{}:{}", self.server, self.revision)
+    }
+
     pub fn engine_number(&self, kind: EngineKind) -> u64 {
         match kind {
             EngineKind::Games => self.games,
@@ -180,6 +188,7 @@ impl Serialize for ChangeVersions {
         for kind in EngineKind::ALL {
             answer.serialize_entry(kind.token(), &self.engine_number(kind))?;
         }
+        answer.serialize_entry("revision", &self.revision)?;
         answer.end()
     }
 }

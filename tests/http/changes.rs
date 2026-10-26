@@ -86,6 +86,29 @@ fn assert_moved_among(
 
 fn assert_moved(before: &Value, after: &Value, expected: &[&str], label: &str) {
     assert_moved_among(&kinds(), before, after, expected, label);
+    assert_revision_follows(before, after, !expected.is_empty(), label);
+}
+
+/// The revision goes up when a number moved and stays when none did.
+fn assert_revision_follows(before: &Value, after: &Value, a_number_moved: bool, label: &str) {
+    let (before_revision, after_revision) = (revision_of(before), revision_of(after));
+    if a_number_moved {
+        assert!(
+            after_revision > before_revision,
+            "{label}: a number moved, so the revision went up: {before} to {after}"
+        );
+    } else {
+        assert_eq!(
+            before_revision, after_revision,
+            "{label}: no number moved, so the revision stayed: {before} to {after}"
+        );
+    }
+}
+
+fn revision_of(answer: &Value) -> u64 {
+    answer["revision"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("the answer holds a whole-number revision: {answer}"))
 }
 
 async fn assert_save_moves(
@@ -129,6 +152,10 @@ async fn test_changes_answer_holds_the_server_id_the_game_and_a_number_for_each_
             "the number of {kind} is a whole number: {answer}"
         );
     }
+    assert!(
+        answer["revision"].is_u64(),
+        "the revision is a whole number: {answer}"
+    );
 
     let app = TestAppBuilder::default_test()
         .storage(Arc::new(empty_sqlite_storage()))
@@ -152,6 +179,10 @@ async fn test_changes_answer_holds_the_server_id_the_game_and_a_number_for_each_
             "the number of {kind} is a whole number: {answer}"
         );
     }
+    assert!(
+        answer["revision"].is_u64(),
+        "the revision is a whole number with no active Game: {answer}"
+    );
 }
 
 // [docs/specs/changes.md] SCENARIO: 43.2
@@ -759,5 +790,42 @@ async fn test_a_save_of_the_story_log_moves_the_story_and_a_delete_also_the_game
             ),
         };
         assert_save_moves(&app, &uri, body, moves, row).await;
+    }
+}
+
+// [docs/specs/changes.md] SCENARIO: 43.16
+#[tokio::test]
+async fn test_the_revision_goes_up_with_every_number_that_moves_and_stays_with_none() {
+    let _guard = SettingsTestGuard::new();
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let active = active_game_of(&state).0;
+
+    let first = fetch_changes(&app).await;
+    let second = fetch_changes(&app).await;
+    assert_revision_follows(&first, &second, false, "two reads");
+
+    let mut before = second;
+    for (label, uri, body) in [
+        (
+            "a rename",
+            format!("/games/{active}/rename"),
+            "display_name=Renamed".to_string(),
+        ),
+        ("a reset", "/reset".to_string(), String::new()),
+        (
+            "a Connection",
+            "/connections/add".to_string(),
+            connection_form("Alpha", "alpha-model"),
+        ),
+    ] {
+        let response = post_form(&app, &uri, &body).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "{label}: the save answers 200"
+        );
+        let after = fetch_changes(&app).await;
+        assert_revision_follows(&before, &after, true, label);
+        before = after;
     }
 }

@@ -2,7 +2,7 @@
 //! HTTP router composition.
 
 use axum::{
-    Router,
+    Router, middleware,
     routing::{get, post},
 };
 use tower_http::services::ServeDir;
@@ -17,11 +17,14 @@ use crate::adapters::driving::http::history;
 use crate::adapters::driving::http::layout;
 use crate::adapters::driving::http::prompt_presets;
 use crate::adapters::driving::http::settings;
+use crate::adapters::driving::http::utils::action_layers::{refuse_stale_game, stamp_action_answers};
 use crate::adapters::driving::http::worlds;
 
-pub fn build_router(app_state: AppState) -> Router {
+/// The routes whose handler acts on the active Game. One layer checks the Game
+/// header of the page for all of them, before any handler runs, `Option<CurrentGame>`
+/// handlers included.
+fn game_bound_routes(app_state: AppState) -> Router<AppState> {
     Router::new()
-        .route("/", get(chat_window::handlers::index_handler))
         .route("/swipe/new", post(chat_window::handlers::retry_handler))
         .route(
             "/message/:id/swipe/:index",
@@ -29,15 +32,6 @@ pub fn build_router(app_state: AppState) -> Router {
         )
         .route("/retrigger", post(chat_window::handlers::retrigger_handler))
         .route("/reset", post(chat_window::handlers::reset_handler))
-        .route("/debug/state", get(debug::handlers::debug_state_handler))
-        .route(
-            "/debug/is_busy",
-            get(debug::handlers::debug_is_busy_handler),
-        )
-        .route(
-            "/debug/backend",
-            get(debug::handlers::debug_backend_handler),
-        )
         .route("/action", post(action::handlers::action_handler))
         .route(
             "/action/check",
@@ -58,6 +52,26 @@ pub fn build_router(app_state: AppState) -> Router {
         .route(
             "/history/delete",
             post(history::handlers::delete_history_handler),
+        )
+        .route(
+            "/status/reset-busy",
+            post(layout::handlers::reset_busy_handler),
+        )
+        .route_layer(middleware::from_fn_with_state(app_state, refuse_stale_game))
+}
+
+pub fn build_router(app_state: AppState) -> Router {
+    Router::new()
+        .merge(game_bound_routes(app_state.clone()))
+        .route("/", get(chat_window::handlers::index_handler))
+        .route("/debug/state", get(debug::handlers::debug_state_handler))
+        .route(
+            "/debug/is_busy",
+            get(debug::handlers::debug_is_busy_handler),
+        )
+        .route(
+            "/debug/backend",
+            get(debug::handlers::debug_backend_handler),
         )
         .route("/fragment/header", get(layout::handlers::header_fragment))
         .route(
@@ -82,10 +96,6 @@ pub fn build_router(app_state: AppState) -> Router {
         )
         .route("/changes", get(layout::handlers::changes_handler))
         .route("/status/busy", get(layout::handlers::busy_status_handler))
-        .route(
-            "/status/reset-busy",
-            post(layout::handlers::reset_busy_handler),
-        )
         .route(
             "/fragment/llm-messages",
             get(layout::handlers::llm_messages_fragment),
@@ -233,6 +243,10 @@ pub fn build_router(app_state: AppState) -> Router {
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            stamp_action_answers,
+        ))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(app_state)
 }

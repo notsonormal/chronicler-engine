@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
 use super::utils::error::render_error;
-use super::utils::response::BUSY_STATUS;
+use super::utils::response::refused;
 
 use crate::application::errors::ApplicationError;
 use crate::application::generation::gate::Refusal;
@@ -31,7 +31,9 @@ impl IntoResponse for ApplicationError {
 impl IntoResponse for Refusal {
     fn into_response(self) -> Response {
         match self {
-            Refusal::StillThinking => (StatusCode::OK, BUSY_STATUS.to_string()).into_response(),
+            Refusal::StillThinking => {
+                refused("busy", render_error(&Refusal::StillThinking.line())).into_response()
+            }
             Refusal::BadRequest(message) => {
                 (StatusCode::BAD_REQUEST, render_error(&message)).into_response()
             }

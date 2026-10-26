@@ -497,3 +497,81 @@ When a swap into the dialog body opens the dialog
 Then the dialog is centred horizontally in the viewport
 And the dialog is centred vertically, with its top edge below the top of the viewport
 ```
+
+#### Scenario 16.53: Each action carries the Game that the page shows
+
+```gherkin
+Given the dashboard has loaded the Game that GET /changes names
+When the client submits a command
+Then the request carries the header X-Chronicler-Game with the id of that Game
+
+When the client deletes the last message of the story log and confirms
+Then that request carries the header X-Chronicler-Game with the same id
+```
+
+#### Scenario 16.54: A send for a Game that is no longer active keeps the typed command and reports in the command form's slot
+
+```gherkin
+Given the dashboard shows the active Game
+And the engine switched the active Game, and the page has not asked since
+When the client submits a command
+Then the engine refuses the command with 409 and "The active Game changed"
+And the command form's own inline error slot says that the active Game changed
+And the command input still holds the typed command
+And no preview is open
+```
+
+#### Scenario 16.55: An edit saved for a Game that is no longer active stays open
+
+```gherkin
+Given the dashboard shows the active Game and an entry of the story log is in edit with typed text
+And the engine switched the active Game, and the page has not asked since
+When the client presses Save
+Then the engine refuses the save with 409 and "The active Game changed"
+And the story log's error slot says that the active Game changed
+And the editor is still open and holds the typed text
+```
+
+#### Scenario 16.56: The page names a Game only when every visible region shows it
+
+```gherkin
+Given the dashboard shows Game 1
+And the engine switched the active Game to Game 2
+And the story log, a visible region, is still loading the answer of an earlier ask
+When a later ask finds the story log loading
+Then the page still names Game 1
+When the story log load ends
+Then the page names Game 2
+```
+
+#### Scenario 16.57: A switch that this page sent clears the Game that the page names, until the next ask
+
+```gherkin
+Given the dashboard shows Game 1 and the Games panel lists a second saved Game
+When the client presses Switch for the second Game and the engine accepts it
+Then the page names no Game until the next ask has loaded its regions
+And a send in that window carries no X-Chronicler-Game header
+And after the ask the page names the second Game
+```
+
+A create and a Reset that this page sent do the same.
+
+#### Scenario 16.58: A Stop for a Game that is no longer active reports in the command form's slot
+
+```gherkin
+Given an Autoplay run holds the Game and Stop shows
+And the engine switched the active Game, and the page has not asked since
+When the client presses Stop
+Then the engine refuses it with 409 and "The active Game changed"
+And the command form's own inline error slot says that the run was not stopped because the active Game changed
+```
+
+#### Scenario 16.59: A Reset for a Game that is no longer active reports in the game row
+
+```gherkin
+Given the Games panel shows the active Game row
+And the engine switched the active Game, and the page has not asked since
+When the client confirms that row's Reset
+Then the engine refuses it with 409 and "The active Game changed"
+And the game row's own inline error slot says that the game was not reset because the active Game changed
+```

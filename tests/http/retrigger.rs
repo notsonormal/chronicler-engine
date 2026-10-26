@@ -480,7 +480,7 @@ async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::CONFLICT);
     let body = axum::body::to_bytes(response.into_body(), 16384)
         .await
         .expect("read body");

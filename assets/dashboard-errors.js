@@ -143,22 +143,37 @@ function reportSlotFailure(slot, xhr) {
   slot.dataset.unreachable = "true";
 }
 
-// A write that the busy Game refuses answers 200 with the wait status, so the
-// answer is not an error to htmx. It writes nothing, and the refused action
-// says so in its own slot.
-const BUSY_REFUSAL_DETAIL = "Still thinking...";
+// A refusal answers 409: the engine took nothing and wrote nothing, and the refused
+// action says so in its own slot. The client finds a refusal by the status. The
+// `X-Refusal` header only chooses the words of the report: a busy Game, or a page
+// that shows a Game that is no longer active.
+const REFUSED_STATUS = 409;
+const REFUSAL_REPORTS = {
+  busy: { reason: "The Game is busy", detail: "Still thinking..." },
+  "game-changed": {
+    reason: "The active Game changed",
+    detail: "The page showed a Game that is no longer active.",
+  },
+};
 
-function isBusyAnswer(body) {
-  return typeof body === "string" && body.includes('class="status wait"');
+function refusalOf(status, kind) {
+  if (status !== REFUSED_STATUS) return null;
+  return kind === "game-changed" ? "game-changed" : "busy";
 }
 
-function answeredBusy(event) {
+function refusalOfResponse(response) {
+  return refusalOf(response.status, response.headers.get("X-Refusal"));
+}
+
+// The kind of refusal an htmx request got, or null when the engine took it.
+function answeredRefused(event) {
   const xhr = event && event.detail ? event.detail.xhr : null;
-  return !!xhr && isBusyAnswer(xhr.responseText);
+  return xhr ? refusalOf(xhr.status, xhr.getResponseHeader("X-Refusal")) : null;
 }
 
-function reportBusyRefusal(slot, refusedWhat) {
-  renderInlineError(slot, "The Game is busy, so " + refusedWhat + ".", BUSY_REFUSAL_DETAIL);
+function reportRefusal(slot, refusedWhat, refusal) {
+  const report = REFUSAL_REPORTS[refusal];
+  renderInlineError(slot, report.reason + ", so " + refusedWhat + ".", report.detail);
 }
 
 function throwServerDetail(response) {
@@ -175,7 +190,26 @@ function isRegionLoad(elt) {
   return !!elt && !!elt.hasAttribute && elt.hasAttribute("data-live");
 }
 
+// A button that sends its own request has no reporter besides this one: Stop,
+// Reset, and the row buttons. It reports in the inline slot of its container; a
+// button outside every container (Stop) reports in the command form's slot, where
+// the action area reports its own refusals. A form and a saving control report for
+// themselves.
+function reportRefusalOfButton(button, refusal) {
+  if (!button || button.tagName !== "BUTTON") return;
+  const slot =
+    inlineErrorSlotFor(button, true) ||
+    document.querySelector('#command-form [data-error-slot="action"]');
+  const what = button.getAttribute("data-refusal-what") || "the action was not done";
+  reportRefusal(slot, what, refusal);
+}
+
 document.body.addEventListener("htmx:responseError", function (evt) {
+  const refusal = answeredRefused(evt);
+  if (refusal) {
+    reportRefusalOfButton(evt.detail.elt, refusal);
+    return;
+  }
   const slot = inlineErrorSlotFor(evt.detail.elt, true);
   if (slot) {
     reportSlotFailure(slot, evt.detail.xhr);
@@ -189,10 +223,13 @@ document.body.addEventListener("htmx:sendError", function (evt) {
 });
 
 document.body.addEventListener("htmx:afterRequest", function (evt) {
+  // A refused action keeps its own message in this slot.
+  if (answeredRefused(evt)) {
+    clearUnreachable();
+    return;
+  }
   if (!evt.detail.successful) return;
   clearUnreachable();
-  // A refused action keeps its own message in this slot.
-  if (answeredBusy(evt)) return;
   clearInlineError(inlineErrorSlotFor(evt.detail.elt));
   clearUnreachableSlots();
 });

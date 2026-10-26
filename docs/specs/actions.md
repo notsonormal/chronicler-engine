@@ -238,7 +238,7 @@ And within 2 s, the generation status is no longer Generating
 ```gherkin
 Given a Game whose Job is running, held inside its narrator call
 When a client POST /action with command="listen"
-Then the response is 200 carrying the "Still thinking..." status
+Then the response is 409 carrying the "Still thinking..." line
 And the story log gained no player-input message for "listen"
 And the story log gained no Narration message for "listen"
 ```
@@ -248,7 +248,7 @@ And the story log gained no Narration message for "listen"
 ```gherkin
 Given a Game that is idle
 When two clients POST /action with command="look" at the same moment
-Then one Action is accepted and the other is refused with the "Still thinking..." status
+Then one Action is accepted and the other is refused with 409 and the "Still thinking..." line
 And the story log holds exactly one player-input message for "look"
 And the story log holds the opening Narration and exactly one Narration of that Action
 ```

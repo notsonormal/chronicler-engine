@@ -55,16 +55,28 @@ pub async fn post_form(
     uri: &str,
     body: &str,
 ) -> axum::response::Response<Body> {
-    let req = Request::builder()
-        .uri(uri)
-        .method(Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from(body.to_string()))
-        .unwrap();
-    app.clone().oneshot(req).await.unwrap()
+    post_form_with_headers(app, uri, body, &[]).await
+}
+
+/// A form POST that also carries the given request headers, such as the Game
+/// header of a page.
+pub async fn post_form_with_headers(
+    app: &axum::Router,
+    uri: &str,
+    body: &str,
+    headers: &[(&str, &str)],
+) -> axum::response::Response<Body> {
+    let mut request = Request::builder().uri(uri).method(Method::POST).header(
+        http::header::CONTENT_TYPE,
+        "application/x-www-form-urlencoded",
+    );
+    for (name, value) in headers {
+        request = request.header(*name, *value);
+    }
+    app.clone()
+        .oneshot(request.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
 }
 
 pub async fn post_action(app: &axum::Router, command: &str) -> axum::response::Response<Body> {

@@ -18,6 +18,8 @@ Four statements hold for every region and every action:
 3. **A region load keeps what it does not change.** Every region loads its own fragment and morphs it into place. A kept node keeps its focus, selection, scroll position and view state. A load skips an element that holds unsaved input. A load that removes the focused node moves focus to the nearest row that survives, or else to the region.
 4. **The browser owns view state, and the server owns data.**
 
+Every action answer carries `X-Revision`, the stamp `<server>:<revision>` of the engine after the action. A refusal answers `409`: the engine took nothing and wrote nothing. An invalid value answers `400`. `X-Refusal` names the kind of a `409`, a busy Game or a page that shows a Game that is no longer active. Once the page has recorded the Game it shows (`data-game`), it sends `X-Chronicler-Game` with each action, and a route layer refuses a Game-bound action that names another Game than the active Game. The page records a Game only when every visible region shows it, and drops it after a create, a switch or a Reset that it sent itself.
+
 The shell owns only client state:
 
 - the active tab;
@@ -86,7 +88,8 @@ The edit dialog is one modal dialog of the shell (`#edit-dialog`), outside every
 | `data-autosave` | On a form that saves on change: a failed save returns its fields to the rendered values. |
 | `data-saved-flag` | On a saving control: the id of the element that shows "Saved" after a save that went through. That element has the class `saved-flag`, which draws the text. |
 | `data-saved` | On that element: the "Saved" state. A load keeps it. |
-| `data-refusal-what` | On a saving form: the words that finish "The Game is busy, so …" when the busy Game refuses the save. |
+| `data-refusal-what` | On a saving form or a button that sends its own request: the words that finish the refusal line ("…, so …") when the engine refuses the request with `409`. |
+| `data-game` | On `<html>`: the id of the Game that the visible regions show. It is absent until the page has recorded a Game. |
 | `data-dialog-form` | On the root of a fragment that opens in the edit dialog. |
 | `data-shell-form` | On the root of a form that the shell renders outside every region, such as the text-check preview. |
 | `data-close-dialog` | On a Cancel or Close control in the edit dialog: it closes the dialog with no request. |

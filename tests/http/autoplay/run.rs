@@ -407,7 +407,7 @@ async fn test_a_start_on_a_busy_game_answers_still_thinking() {
     );
 
     let refused = start_autoplay(&app, "cycles=1").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     assert_still_thinking(&response_body(refused).await);
 
     hold.release();
@@ -442,7 +442,7 @@ async fn test_a_start_on_a_game_that_a_run_holds_answers_still_thinking() {
     );
 
     let refused = start_autoplay(&app, "cycles=5").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     assert_still_thinking(&response_body(refused).await);
 
     hold.release();
@@ -615,7 +615,7 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
         post_empty(&app, "/history/delete").await,
     ];
     for response in writes {
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::CONFLICT);
         assert_still_thinking(&response_body(response).await);
     }
 
@@ -690,7 +690,7 @@ async fn test_while_a_run_holds_the_game_the_config_writes_are_refused_and_the_c
         .await,
     ];
     for response in refused {
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::CONFLICT);
         assert_still_thinking(&response_body(response).await);
     }
     let during = state
@@ -963,7 +963,7 @@ async fn test_the_end_of_a_stopped_run_does_not_release_the_run_that_started_aft
     )
     .await;
     let refused = post_action(&app, "look").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     assert_still_thinking(&response_body(refused).await);
 
     hold_b.release();

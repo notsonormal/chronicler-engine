@@ -252,13 +252,6 @@ document.body.addEventListener("htmx:beforeRequest", function (evt) {
   }
 });
 
-// A write that the busy Game refuses answers 200 with the wait status. It
-// swaps nothing, and the refused action reports in its own slot.
-document.body.addEventListener("htmx:beforeSwap", function (evt) {
-  const xhr = evt.detail && evt.detail.xhr;
-  if (xhr && isBusyAnswer(xhr.responseText)) evt.detail.shouldSwap = false;
-});
-
 function readStatusDisplay() {
   if (sendPending && pendingLoadStarted) endPending();
   applyStatusDisplay();
@@ -299,9 +292,10 @@ function commandFormSlot() {
 
 function onCommandAfterRequest(event) {
   checkInFlight = false;
-  if (answeredBusy(event)) {
+  const refusal = answeredRefused(event);
+  if (refusal) {
     // The engine did not take the command, so the input keeps it.
-    reportBusyRefusal(commandFormSlot(), "the command was not sent");
+    reportRefusal(commandFormSlot(), "the command was not sent", refusal);
   } else if (requestSucceeded(event) && !previewIsOpen()) {
     // The preview keeps the flagged command for editing, and a dispatched
     // command has been consumed, so clear the input.
@@ -313,8 +307,9 @@ function onCommandAfterRequest(event) {
 
 // Both of the preview's send controls post a command the engine consumes.
 function onPreviewSendAfterRequest(event) {
-  if (answeredBusy(event)) {
-    reportBusyRefusal(commandFormSlot(), "the command was not sent");
+  const refusal = answeredRefused(event);
+  if (refusal) {
+    reportRefusal(commandFormSlot(), "the command was not sent", refusal);
   } else if (requestSucceeded(event)) {
     clearCommandInput();
     beginPending();
@@ -327,10 +322,12 @@ function onPreviewSendAfterRequest(event) {
 // The Autoplay start takes the budget and answers nothing. A refusal reports in
 // the form's own slot, and the run shows in the status display.
 function onAutoplayAfterRequest(event) {
-  if (answeredBusy(event)) {
-    reportBusyRefusal(
+  const refusal = answeredRefused(event);
+  if (refusal) {
+    reportRefusal(
       document.querySelector('#autoplay-form [data-error-slot="autoplay"]'),
       "the run did not start",
+      refusal,
     );
   } else if (requestSucceeded(event)) {
     beginPending();
