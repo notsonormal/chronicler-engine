@@ -1,4 +1,4 @@
-//! The convergence check: once the page is quiet, each visible live region equals a fresh GET of its own route, apart from the story-log entry in edit. The stub and the full-stack browser tests run it at the end of each check.
+//! The convergence check: once the page is quiet, each visible part equals a fresh `GET /screen` of that part, apart from the story-log entry in edit; the parts of a closed tab are empty; and each part element has the attributes of the shell. The stub and the full-stack browser tests run it at the end of each check.
 
 use std::time::Duration;
 
@@ -9,8 +9,8 @@ const CONVERGENCE_TIMEOUT: Duration = Duration::from_secs(10);
 const CONVERGENCE_SCRIPT: &str = include_str!("convergence.js");
 
 #[derive(Deserialize)]
-struct RegionMismatch {
-    region: String,
+struct PartMismatch {
+    part: String,
     route: String,
     diff: String,
 }
@@ -20,12 +20,12 @@ struct ConvergenceReport {
     ok: bool,
     #[serde(rename = "notQuiet")]
     not_quiet: Vec<String>,
-    blocking: Vec<RegionMismatch>,
+    blocking: Vec<PartMismatch>,
 }
 
-/// Waits until the page is quiet, then fails with the region, the route and a
-/// short diff for each visible region that differs from a fresh server render.
-/// A region that differs is given until the timeout to load again, so a write
+/// Waits until the page is quiet, then fails with the part, the route and a
+/// short diff for each visible part that differs from a fresh server render.
+/// A part that differs is given until the timeout to load again, so a write
 /// that lands during the check does not fail it.
 pub async fn assert_screen_converged(page: &playwright_rs::Page) {
     let arguments = serde_json::json!({
@@ -48,7 +48,7 @@ pub async fn assert_screen_converged(page: &playwright_rs::Page) {
     for mismatch in &report.blocking {
         failure.push_str(&format!(
             "\n  {} differs from a fresh GET {}: {}",
-            mismatch.region, mismatch.route, mismatch.diff
+            mismatch.part, mismatch.route, mismatch.diff
         ));
     }
     panic!("{failure}");

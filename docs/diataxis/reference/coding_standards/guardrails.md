@@ -80,20 +80,24 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | form fields urlencoded safe | Flags collection-typed fields on HTTP form structs. | `tests/infrastructure/guardrails/layers.rs:100` |
 | server layer boundaries | Prevents HTTP-layer files from referencing the whole-state types directly. | `tests/infrastructure/guardrails/layers.rs:166` |
 | http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:203` |
-| live regions in shell | Checks the dashboard shell, `assets/index.html`. Every element with `hx-get` is a | `tests/infrastructure/guardrails/live_regions.rs:20` |
-| region table matches shell | Checks a hand-written table of regions against the regions of the shell: each | `tests/infrastructure/guardrails/live_regions.rs:198` |
-| scripts write no region | Checks one `assets/dashboard-*.js` script. A script must not write the markup of | `tests/infrastructure/guardrails/live_regions.rs:298` |
-| scripts use action fetch | Checks one `assets/dashboard-*.js` script other than `dashboard-live.js`. A | `tests/infrastructure/guardrails/live_regions.rs:348` |
-| handler headers | Checks one handler file of the HTTP adapter. A handler answers its own element | `tests/infrastructure/guardrails/live_regions.rs:369` |
-| template targets | Checks one template source: a file of the HTTP adapter that renders markup, or | `tests/infrastructure/guardrails/live_regions.rs:402` |
-| no out of band swaps | Checks one template source for out-of-band swaps. An element that shows data | `tests/infrastructure/guardrails/live_regions.rs:462` |
-| draft controls only in dialog forms | Checks one source file of the HTTP adapter. A draft control is a form control | `tests/infrastructure/guardrails/live_regions.rs:555` |
-| dialog fragments carry the title | Checks that a literal of a dialog fragment carries the title that names the | `tests/infrastructure/guardrails/live_regions.rs:599` |
-| draft control exceptions are used | Checks the exceptions of the draft-control rule against the files they name: a | `tests/infrastructure/guardrails/live_regions.rs:617` |
 | test file naming | Rejects unit-test files with the singular `_test.rs` suffix in favor of `_tests.rs`. | `tests/infrastructure/guardrails/location.rs:7` |
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |
 | nesting depth | Fails when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`. | `tests/infrastructure/guardrails/nesting.rs:12` |
+| parts in shell | Checks the dashboard shell, `assets/index.html`. A part element has a `data-part` | `tests/infrastructure/guardrails/screen.rs:48` |
+| shell parts match the server | Checks the part names of the shell against the names that the server renders | `tests/infrastructure/guardrails/screen.rs:148` |
+| stub answers the parts of the server | Checks the source of the stub server against the names that the server renders | `tests/infrastructure/guardrails/screen.rs:192` |
+| part table matches shell | Checks a hand-written table of parts against the parts of the shell: each part of | `tests/infrastructure/guardrails/screen.rs:242` |
+| scripts write no part | Checks one `assets/dashboard-*.js` script other than `dashboard-screen.js`, the | `tests/infrastructure/guardrails/screen.rs:352` |
+| part write exceptions are used | Checks the exceptions of the part-write rule against the scripts they name: a | `tests/infrastructure/guardrails/screen.rs:399` |
+| scripts use action fetch | Checks one `assets/dashboard-*.js` script other than `dashboard-screen.js`. A | `tests/infrastructure/guardrails/screen.rs:428` |
+| handler headers | Checks one handler file of the HTTP adapter. A handler answers its own element | `tests/infrastructure/guardrails/screen.rs:449` |
+| template targets | Checks one template source: a file of the HTTP adapter that renders markup, or | `tests/infrastructure/guardrails/screen.rs:482` |
+| no out of band swaps | Checks one template source for out-of-band swaps. An element that shows data | `tests/infrastructure/guardrails/screen.rs:542` |
+| draft controls only in dialog forms | Checks one source file of the HTTP adapter. A draft control is a form control | `tests/infrastructure/guardrails/screen.rs:635` |
+| dialog fragments carry the title | Checks that a literal of a dialog fragment carries the title that names the | `tests/infrastructure/guardrails/screen.rs:679` |
+| draft control exceptions are used | Checks the exceptions of the draft-control rule against the files they name: a | `tests/infrastructure/guardrails/screen.rs:697` |
+| scripts listen no part swaps | Checks one `assets/dashboard-*.js` script. A direct morph writes each part, so an | `tests/infrastructure/guardrails/screen.rs:738` |
 | doc standards | Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files. | `tests/infrastructure/guardrails/structure.rs:38` |
 | mod purity | Enforces mod.rs purity: only module declarations, imports, and module docs are allowed. | `tests/infrastructure/guardrails/structure.rs:128` |
 | empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:204` |

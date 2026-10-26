@@ -9,7 +9,7 @@ Endpoints:
 - `POST /worlds/:key/posture`
 - `POST /worlds/:key/delete`
 
-The Worlds panel is a live region of the worlds and games kinds. Its fragment
+The Worlds panel is a part of the screen (`worlds`). Its fragment
 carries no root element of its own. A World row shows a shortened description. The World editor opens in the edit dialog
 (`#edit-dialog-body`): the Create and Edit controls load it, and its root
 (`data-dialog-form`) carries the title of the dialog. A World save answers nothing on success:

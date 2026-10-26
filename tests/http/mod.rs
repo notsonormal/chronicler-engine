@@ -24,6 +24,7 @@ mod races;
 mod reset;
 mod retrigger;
 mod screen;
+mod screen_load;
 mod settings;
 mod settings_connection_form;
 mod story_log;

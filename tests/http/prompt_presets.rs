@@ -107,7 +107,7 @@ async fn test_prompt_presets_panel_renders_full_surface() {
 
     assert!(
         !body.contains("prompt-presets-panel"),
-        "the shell's .prompt-presets-panel is the region: the fragment repeats no root: {body}"
+        "the shell's .prompt-presets-panel is the part: the fragment repeats no root: {body}"
     );
     assert!(body.contains("<h2>System Prompts</h2>"));
     assert!(body.contains("<h2>Quantifier Prompts</h2>"));

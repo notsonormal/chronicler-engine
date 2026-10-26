@@ -132,6 +132,12 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
           - **templates/**
             - `mod.rs` — Prompt presets askama templates.
             - `prompt_presets.rs` — Prompt preset templates
+        - **screen/**
+          - `mod.rs` — Screen route handlers.
+          - **handlers/**
+            - `mod.rs` — Screen route handlers.
+            - `parts.rs` — The parts of the screen: the one list of part names, each with its renderer.
+            - `screen.rs` — The screen load: one request that renders the parts the page names.
         - **settings/**
           - `mod.rs` — Settings module.
           - **handlers/**

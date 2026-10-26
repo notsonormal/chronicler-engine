@@ -67,15 +67,17 @@ Then the response is non-2xx
 And the response asks the client to swap nothing
 ```
 
-#### Scenario 38.18: A panel load that cannot read its data answers non-2xx and asks the client to change nothing
+#### Scenario 38.18: A panel load that cannot read its data answers non-2xx with an error fragment
 
 ```gherkin
 Given the settings, the Games or the Worlds cannot be read from storage
 When the client GETs /fragment/settings, /fragment/prompt-presets, /fragment/worlds or /fragment/games
 Then each response is non-2xx
-And each response asks the client to swap nothing
 And the body of each response is an error fragment
+And no response carries HX-Reswap
 ```
+
+`GET /screen` fails the same way when a part cannot be read: Scenario 45.11 (`docs/specs/screen.md`).
 
 #### Scenario 38.4: A failed user action is not a failed load
 

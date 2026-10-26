@@ -22,7 +22,7 @@ The panel splits into two client-side sub-tabs: **Connections** (default) and
 **Text Check**. The selected sub-tab is view state: it lives in `aria-selected`
 on the sub-tab buttons and in `hidden` on the sub-tab panels, and each lists
 its attribute in `data-keep`, so a load of the panel keeps the selected
-sub-tab. The panel is a live region of the settings and LLM-message kinds: its
+sub-tab. The panel is a part of the screen (`settings`): its
 fragment carries no root element of its own. The connection forms and the
 result of a connection Test open in the edit dialog, outside the panel, so a
 load of the panel never meets them.

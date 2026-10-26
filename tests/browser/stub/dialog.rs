@@ -1,4 +1,4 @@
-//! Stub-browser tests for the edit dialog: an htmx swap into its body opens it, Cancel and Escape close it and return focus to the opener, a save closes it only when the engine accepts it, and an answer from outside never replaces its form. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for the edit dialog: an htmx swap into its body opens it, Cancel and Escape close it and return focus to the opener, a save closes it only when the engine accepts it and the screen shows it, and an answer from outside never replaces its form. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 

@@ -5,11 +5,15 @@
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::change::ChangeKind;
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 use playwright_rs::Viewport;
 
 use super::*;
-use super::support::{StubRunner, active_element_is, load_now, read_banner, read_command_input};
+use super::support::{
+    StubRunner, active_element_is, ask_once_without_waiting, read_banner, read_command_input,
+    start_current,
+};
 
 /// A failed action leaves Send locked until the next idle status load and swaps nothing
 /// on its 500, so this submits the form directly rather than clicking Send.
@@ -95,7 +99,7 @@ async fn measure_action_area(page: &playwright_rs::Page) -> (f64, f64) {
 async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stub: StubServer) {
     let failures = stub.failure_handle();
     failures.set_header_degraded(true);
-    load_now(&page, "#failure-banner-degraded").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -143,54 +147,57 @@ async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stu
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.18
-async fn check_failed_ask_keeps_region_and_marks_banner(
+async fn check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_screen_error(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
-    let failures = stub.failure_handle();
+    let changes = stub.changes_handle();
+    start_current(&page).await;
     let before: String = page
         .evaluate::<(), String>("() => document.getElementById('story-log').innerHTML", None)
         .await
         .unwrap();
 
-    failures.set_asks_and_loads_failing(true);
-    load_now(&page, "#story-log").await;
+    changes.set_loads_failing(true);
+    stub.story_log_handle()
+        .append_narration("A line that arrives late.");
+    changes.bump(ChangeKind::STORY);
+    ask_once_without_waiting(&page).await;
+    let shown = || async { read_error_disclosure(&page, "#screen-error").await };
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
-            Duration::from_millis(100),
-            || async { read_banner(&page).await.0 },
+            Duration::from_millis(50),
+            || async { shown().await.0 }
         )
         .await,
-        "a failed ask should raise the banner"
+        "a failed screen load should show the screen error"
     );
-    let (visible, role, text) = read_banner(&page).await;
-    assert!(visible, "the banner should be up on a failed ask");
-    assert_eq!(role, "alert", "an unreachable banner reports role alert");
+    let (_, line, raw) = shown().await;
+    assert!(line.contains("GET /screen answered 500"), "got {line:?}");
     assert!(
-        text.contains("unreachable"),
-        "the banner should say the engine is unreachable, got {text:?}"
+        raw.contains("read failed"),
+        "the detail names the failure, got {raw:?}"
     );
-
+    let (banner_visible, _, _) = read_banner(&page).await;
+    assert!(
+        !banner_visible,
+        "the engine answered, so the banner must not report it unreachable"
+    );
     let after: String = page
         .evaluate::<(), String>("() => document.getElementById('story-log').innerHTML", None)
         .await
         .unwrap();
     assert_eq!(
         after, before,
-        "a failed ask must leave the story log's last good content in place"
+        "a failed load must leave the story log's last good content in place"
     );
 
-    failures.set_asks_and_loads_failing(false);
-    load_now(&page, "#story-log").await;
+    changes.set_loads_failing(false);
+    ask_once(&page).await;
     assert!(
-        wait_for_condition_async(
-            Duration::from_secs(10),
-            Duration::from_millis(100),
-            || async { !read_banner(&page).await.0 },
-        )
-        .await,
-        "a later successful ask should clear the banner"
+        !read_error_disclosure(&page, "#screen-error").await.0,
+        "a later successful load should clear the screen error"
     );
 }
 
@@ -313,7 +320,7 @@ async fn check_failed_action_does_not_raise_unreachable_banner(
         "a failed action on a reachable server must not raise the banner, got {banner_text:?} ({role})"
     );
 
-    let region_kept = page
+    let part_kept = page
         .evaluate::<(), bool>(
             r#"() => {
                     const now = document.getElementById('game-posture-controls');
@@ -323,10 +330,7 @@ async fn check_failed_action_does_not_raise_unreachable_banner(
         )
         .await
         .unwrap();
-    assert!(
-        region_kept,
-        "a failed action must leave its region in place"
-    );
+    assert!(part_kept, "a failed action must leave its part in place");
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.26
@@ -336,7 +340,7 @@ async fn check_status_details_popover_survives_a_load(page: playwright_rs::Page,
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -374,7 +378,7 @@ async fn check_status_details_popover_survives_a_load(page: playwright_rs::Page,
             .await
             .unwrap();
 
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
 
     assert!(
                 wait_for_condition_async(
@@ -423,7 +427,7 @@ async fn check_banner_details_popover_survives_a_banner_load(
 ) {
     let failures = stub.failure_handle();
     failures.set_header_degraded(true);
-    load_now(&page, "#failure-banner-degraded").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -454,7 +458,7 @@ async fn check_banner_details_popover_survives_a_banner_load(
             .await
             .unwrap();
 
-    load_now(&page, "#failure-banner-degraded").await;
+    load_screen_now(&page).await;
 
     assert!(
                 wait_for_condition_async(
@@ -642,7 +646,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -730,7 +734,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
     assert!(closed, "Escape should close the disclosure");
 
     status.set(StubStatus::Idle);
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     wait_for_status_ready(&page).await;
     let gone: bool = page
         .evaluate::<(), bool>(
@@ -835,7 +839,7 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
         GenerationFailureKind::PromptTooLong,
         "narration failed".to_string(),
     ));
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -866,7 +870,7 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     );
 
     status.set(StubStatus::Idle);
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     wait_for_status_ready(&page).await;
     let recovered = read_status_state(&page).await;
     assert!(
@@ -971,7 +975,7 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
             };
             let sentence = kind.line(&raw);
             status.set(StubStatus::Error(kind, raw));
-            load_now(&page, "#status-display").await;
+            load_screen_now(&page).await;
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(10),
@@ -1029,13 +1033,14 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
 // waits until its section opens, so this test arms the stub and reloads rather
 // than waiting for a load that no number would start.
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.33
-async fn check_failed_panel_load_reports_inside_the_panel(
+async fn check_failed_panel_load_reports_in_the_screen_error(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let url = stub.url();
     stub.failure_handle().set_panel_loads_failing(true);
     page.goto(&url, None).await.unwrap();
+    wait_for_screen_current(&page).await;
 
     for (tab, panel) in [
         ("worlds", ".worlds-panel"),
@@ -1049,21 +1054,29 @@ async fn check_failed_panel_load_reports_inside_the_panel(
             .await
             .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
 
-        let slot = format!("{panel} [data-error-slot]");
         wait_for_error_disclosure(
             &page,
-            &slot,
-            "a failed {tab} panel load must report inside the panel",
+            "#screen-error",
+            "a failed {tab} panel load must report in the screen error",
         )
         .await;
-        let (_, message, raw) = read_error_disclosure(&page, &slot).await;
+        let (_, message, raw) = read_error_disclosure(&page, "#screen-error").await;
         assert!(
-            !message.is_empty() && !message.contains("panel load failed"),
-            "the panel shows a short line, got {message:?}"
+            message.contains("GET /screen answered 500") && !message.contains("panel load failed"),
+            "the slot shows a short line, got {message:?}"
         );
         assert!(
             raw.contains("panel load failed"),
             "the server's own text belongs in the disclosure, got {raw:?}"
+        );
+        assert!(
+            page.evaluate::<String, bool>(
+                "(selector) => document.querySelector(selector).childNodes.length === 0",
+                Some(&panel.to_string()),
+            )
+            .await
+            .unwrap(),
+            "the {tab} part never loaded, so it holds nothing"
         );
     }
 
@@ -1195,7 +1208,7 @@ async fn check_engine_recovery_clears_the_inline_error_and_banner(
     );
 
     lifecycle.restart().await;
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -1232,7 +1245,7 @@ async fn run_failure_display_banner_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_ask_keeps_region_and_marks_banner,
+            check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_screen_error,
         )
         .await;
     runner
@@ -1307,7 +1320,7 @@ async fn run_failure_display_slot_checks() {
         .run_without_convergence(
             "the panel loads keep failing",
             StubActionOutcome::Pending,
-            check_failed_panel_load_reports_inside_the_panel,
+            check_failed_panel_load_reports_in_the_screen_error,
         )
         .await;
     runner

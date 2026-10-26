@@ -16,7 +16,7 @@ async fn test_games_posture_change_reaches_server() {
             open_games_tab(&page).await;
 
             // The save answers nothing: the games number moves, and the Games
-            // panel is the region whose load shows the saved value.
+            // panel is the part whose load shows the saved value.
             select_option_and_settle(
                 &page,
                 r#"#game-posture-controls select[name="narrative_tense"]"#,

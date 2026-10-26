@@ -29,7 +29,7 @@ function errorDisclosureHtml(popoverId, message, rawText) {
 }
 
 const INLINE_ERROR_CONTAINERS =
-  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, .worlds-panel, .games-panel, .settings-panel, .prompt-presets-panel";
+  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, [data-part]";
 
 let generatedErrorSlots = 0;
 const GENERATED_SLOT_PREFIX = "generated-";
@@ -56,7 +56,7 @@ function renderInlineError(slot, message, rawText) {
 }
 
 // A slot that the script made has no twin in the server's render, so clearing it
-// removes it, and the region shows the same markup as a fresh load.
+// removes it, and the part shows the same markup as a fresh load.
 function clearInlineError(slot) {
   if (!slot) return;
   if ((slot.dataset.errorSlot || "").startsWith(GENERATED_SLOT_PREFIX)) {
@@ -93,7 +93,10 @@ function markUnreachable() {
   refreshFailureBanner();
 }
 
+// Any HTTP answer means the engine is reachable: the banner and every slot that a
+// transport failure wrote clear together.
 function clearUnreachable() {
+  clearUnreachableSlots();
   const unreachable = document.getElementById("failure-banner-unreachable");
   if (!unreachable || unreachable.innerHTML.trim() === "") return;
   unreachable.innerHTML = "";
@@ -184,12 +187,6 @@ function throwServerDetail(response) {
   });
 }
 
-// A server that answered is reachable, so only a failed load of a live region
-// marks the engine unreachable.
-function isRegionLoad(elt) {
-  return !!elt && !!elt.hasAttribute && elt.hasAttribute("data-live");
-}
-
 // A button that sends its own request has no reporter besides this one: Stop,
 // Reset, and the row buttons. It reports in the inline slot of its container; a
 // button outside every container (Stop) reports in the command form's slot, where
@@ -211,11 +208,7 @@ document.body.addEventListener("htmx:responseError", function (evt) {
     return;
   }
   const slot = inlineErrorSlotFor(evt.detail.elt, true);
-  if (slot) {
-    reportSlotFailure(slot, evt.detail.xhr);
-  } else if (isRegionLoad(evt.detail.elt)) {
-    markUnreachable();
-  }
+  if (slot) reportSlotFailure(slot, evt.detail.xhr);
 });
 
 document.body.addEventListener("htmx:sendError", function (evt) {
@@ -231,14 +224,13 @@ document.body.addEventListener("htmx:afterRequest", function (evt) {
   if (!evt.detail.successful) return;
   clearUnreachable();
   clearInlineError(inlineErrorSlotFor(evt.detail.elt));
-  clearUnreachableSlots();
 });
 
-document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);
+document.addEventListener("screen:loaded", refreshFailureBanner);
 
 // The open state lives in `hidden` and the position `style` of the popover, and
 // in `aria-expanded` of the toggle. Each lists its attributes in `data-keep`, so a
-// load of the region keeps them.
+// load of the part keeps them.
 function closeErrorPopover(popover) {
   if (!popover) return;
   popover.hidden = true;

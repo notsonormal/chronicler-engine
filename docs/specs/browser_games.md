@@ -46,7 +46,7 @@ Given the Games tab is open and the rename form of a saved Game is open in the e
 When the number of `games` moves, and the page asks
 And the number of `worlds` moves, and the page asks
 And the number of `presets` moves, and the page asks
-Then the Games panel loads once for each move, and it reports data-live-state "current"
+Then the Games panel loads once for each move
 And the dialog is open, the rename form is the same element, and its name field is the same element, with the typed name and focus
 ```
 
@@ -56,7 +56,7 @@ And the dialog is open, the rename form is the same element, and its name field 
 Given the Games tab is open and the rename form of a saved Game is open in the edit dialog, with a typed name
 When the client presses Save and the engine answers 200
 Then the dialog is closed
-And the Games panel loads exactly once, and it reports data-live-state "current"
+And the Games panel loads exactly once
 And the Game's row shows the new name
 ```
 
@@ -69,7 +69,7 @@ And the client chose a World and a Persona other than the first ones in the New 
 When the number of `games` moves, and the page asks
 And the number of `worlds` moves, and the page asks
 And the number of `presets` moves, and the page asks
-Then the Games panel loads once for each move, and it reports data-live-state "current"
+Then the Games panel loads once for each move
 And the dialog is open, and the World select and the Persona select are the same elements, and show the chosen options
 ```
 

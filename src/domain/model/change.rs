@@ -18,8 +18,7 @@ pub enum GameKind {
 impl GameKind {
     pub const ALL: [GameKind; 3] = [Self::Story, Self::Options, Self::BusyState];
 
-    /// The field name of the kind in the answer of `GET /changes`, and the name that
-    /// `data-live` lists.
+    /// The field name of the kind in the answer of `GET /changes`.
     pub const fn token(self) -> &'static str {
         match self {
             Self::Story => "story",
@@ -49,8 +48,7 @@ impl EngineKind {
         Self::LlmMessages,
     ];
 
-    /// The field name of the kind in the answer of `GET /changes`, and the name that
-    /// `data-live` lists.
+    /// The field name of the kind in the answer of `GET /changes`.
     pub const fn token(self) -> &'static str {
         match self {
             Self::Games => "games",

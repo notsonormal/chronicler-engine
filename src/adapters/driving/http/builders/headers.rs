@@ -147,8 +147,8 @@ pub fn connections_degraded_marker(degraded: bool) -> String {
         .to_string()
 }
 
-/// The header region holds the game name only. The engine-wide failure banner and
-/// the Settings role-health cells are regions of their own.
+/// The header part holds the game name only. The engine-wide failure banner and
+/// the Settings role-health cells are parts of their own.
 pub fn header_fragment_html(game_name: String) -> Result<String> {
     HeaderTemplate { game_name }
         .render()

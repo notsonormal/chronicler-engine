@@ -16,6 +16,7 @@ use crate::adapters::driving::http::games;
 use crate::adapters::driving::http::history;
 use crate::adapters::driving::http::layout;
 use crate::adapters::driving::http::prompt_presets;
+use crate::adapters::driving::http::screen;
 use crate::adapters::driving::http::settings;
 use crate::adapters::driving::http::utils::action_layers::{refuse_stale_game, stamp_action_answers};
 use crate::adapters::driving::http::worlds;
@@ -95,6 +96,7 @@ pub fn build_router(app_state: AppState) -> Router {
             get(layout::handlers::character_headshots_fragment),
         )
         .route("/changes", get(layout::handlers::changes_handler))
+        .route("/screen", get(screen::handlers::screen_handler))
         .route("/status/busy", get(layout::handlers::busy_status_handler))
         .route(
             "/fragment/llm-messages",

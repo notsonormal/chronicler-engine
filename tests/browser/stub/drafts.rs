@@ -1,4 +1,4 @@
-//! Stub-browser tests for the rules that keep a draft out of a region: a load skips a control whose request is in flight, and no region of any tab holds a form that waits for a Save. Tagged against `docs/specs/browser_live_regions.md`.
+//! Stub-browser tests for the rules that keep a draft out of a part: a load skips a control whose request is in flight, and no part of any tab holds a form that waits for a Save. Tagged against `docs/specs/browser_screen.md`.
 
 use std::time::Duration;
 
@@ -78,11 +78,17 @@ async fn wait_for_a_settings_load_after(
     loads_before: usize,
     ends_in_state: &str,
 ) {
+    // "current": the stamp of the page equals the stamp of the stub. "behind": the load
+    // skipped a control in flight, so the page keeps its old stamp and loads again.
     let loaded = wait_for_condition_async(WAIT, Duration::from_millis(25), || async {
         changes.loads("/fragment/settings") > loads_before
             && page
                 .evaluate::<String, bool>(
-                    "(state) => document.querySelector('.settings-panel').dataset.liveState === state",
+                    r#"async (state) => {
+                        const answer = await (await fetch('/changes', { cache: 'no-store' })).json();
+                        const shown = document.documentElement.dataset.revision === answer.server + ':' + answer.revision;
+                        return state === 'current' ? shown : !shown;
+                    }"#,
                     Some(&ends_in_state.to_string()),
                 )
                 .await
@@ -95,7 +101,7 @@ async fn wait_for_a_settings_load_after(
     );
 }
 
-// [docs/specs/browser_live_regions.md] SCENARIO: 44.24
+// [docs/specs/browser_screen.md] SCENARIO: 44.24
 async fn check_a_load_skips_a_select_whose_request_is_in_flight(
     page: playwright_rs::Page,
     stub: StubServer,
@@ -110,7 +116,7 @@ async fn check_a_load_skips_a_select_whose_request_is_in_flight(
 
     let loads_before = changes.loads("/fragment/settings");
     changes.bump(ChangeKind::SETTINGS);
-    wait_for_a_settings_load_after(&page, &changes, loads_before, "due").await;
+    wait_for_a_settings_load_after(&page, &changes, loads_before, "behind").await;
 
     let (shown, in_flight) = select_state(&page).await;
     assert!(in_flight, "the save is still in flight after the load");
@@ -122,7 +128,7 @@ async fn check_a_load_skips_a_select_whose_request_is_in_flight(
     release_held_requests_and_wait_for_answers(&page).await;
 }
 
-// [docs/specs/browser_live_regions.md] SCENARIO: 44.25
+// [docs/specs/browser_screen.md] SCENARIO: 44.25
 async fn check_after_the_save_the_next_load_sets_the_select_to_the_server_value(
     page: playwright_rs::Page,
     stub: StubServer,
@@ -154,8 +160,8 @@ async fn check_after_the_save_the_next_load_sets_the_select_to_the_server_value(
     );
 }
 
-// [docs/specs/browser_live_regions.md] SCENARIO: 44.27
-async fn check_a_load_that_skipped_a_select_in_flight_leaves_the_region_due(
+// [docs/specs/browser_screen.md] SCENARIO: 44.27
+async fn check_a_load_that_skipped_a_select_in_flight_leaves_the_stamp_behind(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -179,7 +185,7 @@ async fn check_a_load_that_skipped_a_select_in_flight_leaves_the_region_due(
         .unwrap();
     // The engine committed the save and moved its number, and the answer is held:
     // the panel loads while the select still has its request in flight.
-    wait_for_a_settings_load_after(&page, &changes, loads_before, "due").await;
+    wait_for_a_settings_load_after(&page, &changes, loads_before, "behind").await;
     let (shown, in_flight) = select_state(&page).await;
     assert!(
         in_flight,
@@ -205,7 +211,7 @@ async fn wait_for_select_value(page: &playwright_rs::Page, expected: &str) -> St
     select_state(page).await.0
 }
 
-/// The tabs, each with the regions it shows.
+/// The tabs.
 const TABS: [&str; 6] = [
     "game",
     "settings",
@@ -215,8 +221,8 @@ const TABS: [&str; 6] = [
     "llm-messages",
 ];
 
-// [docs/specs/browser_live_regions.md] SCENARIO: 44.26
-async fn check_no_region_of_any_tab_holds_a_draft_control(
+// [docs/specs/browser_screen.md] SCENARIO: 44.26
+async fn check_no_part_of_any_tab_holds_a_draft_control(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -230,8 +236,8 @@ async fn check_no_region_of_any_tab_holds_a_draft_control(
         let loaded = wait_for_condition_async(WAIT, Duration::from_millis(25), || async {
             page.evaluate::<String, bool>(
                 r#"(tab) => {
-                    const regions = document.querySelectorAll('#' + tab + '-tab [data-live]');
-                    return regions.length > 0 && Array.from(regions).every((r) => r.dataset.liveState === 'current');
+                    const parts = document.querySelectorAll('#' + tab + '-tab [data-part]');
+                    return parts.length > 0 && Array.from(parts).every((part) => part.childNodes.length > 0);
                 }"#,
                 Some(&tab.to_string()),
             )
@@ -239,7 +245,7 @@ async fn check_no_region_of_any_tab_holds_a_draft_control(
             .unwrap_or(false)
         })
         .await;
-        assert!(loaded, "the regions of the {tab} tab load");
+        assert!(loaded, "the parts of the {tab} tab load");
 
         let drafts: Vec<String> = page
             .evaluate::<String, Vec<String>>(
@@ -247,8 +253,8 @@ async fn check_no_region_of_any_tab_holds_a_draft_control(
                     const controls = 'input:not([type=hidden]):not([type=button]):not([type=submit]), textarea, select';
                     const savesOnChange = (control) =>
                         control.matches('[hx-trigger="change"]') || !!control.closest('form[hx-trigger="change"]');
-                    return Array.from(document.querySelectorAll('#' + tab + '-tab [data-live]'))
-                        .flatMap((region) => Array.from(region.querySelectorAll(controls)))
+                    return Array.from(document.querySelectorAll('#' + tab + '-tab [data-part]'))
+                        .flatMap((part) => Array.from(part.querySelectorAll(controls)))
                         .filter((control) => !savesOnChange(control))
                         .filter((control) => !control.disabled && !control.readOnly)
                         .map((control) => control.outerHTML.slice(0, 120));
@@ -259,7 +265,7 @@ async fn check_no_region_of_any_tab_holds_a_draft_control(
             .unwrap();
         assert!(
             drafts.is_empty(),
-            "the {tab} tab holds draft controls in a region, so a load could erase a draft: {drafts:?}"
+            "the {tab} tab holds draft controls in a part, so a load could erase a draft: {drafts:?}"
         );
     }
 }
@@ -282,13 +288,13 @@ async fn run_draft_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_load_that_skipped_a_select_in_flight_leaves_the_region_due,
+            check_a_load_that_skipped_a_select_in_flight_leaves_the_stamp_behind,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_no_region_of_any_tab_holds_a_draft_control,
+            check_no_part_of_any_tab_holds_a_draft_control,
         )
         .await;
     runner.finish().await;

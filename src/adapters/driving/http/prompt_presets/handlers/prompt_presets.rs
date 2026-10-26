@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Prompt preset handlers
 
+use askama::Template;
 use axum::body::Body;
 use axum::{Form, extract::State, response::Html, response::IntoResponse, response::Response};
 
@@ -8,15 +9,14 @@ use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::domain::model::utils::settings_defaults;
 use crate::application::errors::ApplicationError;
+use crate::error::EngineError;
 use crate::application::prompt_preset_service::PresetEdit;
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{preset_edit_form_html, preset_view_form_html};
 use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response,
 };
-use crate::adapters::driving::http::utils::fragment::{
-    failed_fragment_response, render_or_error_fragment, render_response,
-};
+use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
 use crate::adapters::driving::http::utils::response::ok;
 
@@ -99,15 +99,18 @@ pub async fn new_preset_form_handler(
 }
 
 pub async fn panel_handler(State(app_state): State<AppState>) -> Response<Body> {
-    let settings = match app_state.settings() {
-        Ok(s) => s,
-        Err(e) => return failed_fragment_response(&format!("Load failed: {e}")),
-    };
+    render_fragment(
+        &app_state,
+        render_prompt_presets_panel,
+        "prompt_presets_panel",
+    )
+}
 
-    Html(render_or_error_fragment(&presets_template(
-        &app_state, &settings,
-    )))
-    .into_response()
+pub fn render_prompt_presets_panel(app_state: &AppState) -> Result<String, EngineError> {
+    let settings = app_state.settings()?;
+    presets_template(app_state, &settings)
+        .render()
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 /// Checkbox fields encode the mode flags: a checked box posts

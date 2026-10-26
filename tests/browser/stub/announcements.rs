@@ -6,7 +6,6 @@ use playwright_rs::AriaRole;
 
 use chronicler_engine::domain::model::state::generation_status::{GenerationFailureKind, Step};
 
-use super::support::load_now;
 use super::*;
 use super::support::StubRunner;
 
@@ -70,7 +69,7 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
     watch_live_region(&page, "status-error-announcer").await;
 
     status.set(StubStatus::Step(Step::Narrating));
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -91,7 +90,7 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
         "the phase change should be announced exactly once"
     );
 
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert_eq!(
         live_region_changes(&page, "status-announcer").await,
         1,
@@ -102,7 +101,7 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -124,7 +123,7 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
     );
 
     status.set(StubStatus::Idle);
-    load_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -156,7 +155,7 @@ async fn check_new_narration_and_options_are_announced_once(
     );
 
     log.append_narration("A new dawn breaks over the courtyard.");
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -184,7 +183,7 @@ async fn check_new_narration_and_options_are_announced_once(
 
     wait_for_element_children(&page, "#options-dock .option-item", 3).await;
     options.serve_alternate_set(true);
-    load_now(&page, "#options-dock").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -205,8 +204,8 @@ async fn check_new_narration_and_options_are_announced_once(
         "the changed option set should be announced exactly once"
     );
 
-    load_now(&page, "#story-log").await;
-    load_now(&page, "#options-dock").await;
+    load_screen_now(&page).await;
+    load_screen_now(&page).await;
     assert_eq!(
         live_region_changes(&page, "narration-announcer").await,
         1,

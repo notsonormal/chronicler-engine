@@ -96,15 +96,16 @@ Then a skip link targets the main landmark
 And a label names the command input "Action"
 ```
 
-#### Scenario 16.18: A failed load leaves its region unchanged and marks the banner
+#### Scenario 16.18: A failed screen load leaves the parts unchanged and shows the screen error
 
 ```gherkin
 Given the dashboard is loaded and the story log shows its entries
-When a story-log load fails
-Then the banner is visible and reports the engine as unreachable
+When a screen load fails with a non-2xx answer
+Then #screen-error shows "GET /screen answered 500" with the server's text behind its Details control
+And the banner is not visible, because the engine answered
 And the story log still shows the same entries
-When a later story-log load succeeds
-Then the banner disappears
+When a later screen load succeeds
+Then #screen-error is hidden
 ```
 
 #### Scenario 16.19: A failed action renders its message in the form's inline slot
@@ -147,7 +148,7 @@ Then the error is gone
 
 ```gherkin
 Given a role is degraded
-When the failure banner region loads the degraded-role banner
+When the failure banner loads the degraded-role banner
 Then the banner is visible and reports itself as status
 And the banner names the role, its failure effect, and the banner's engine-wide scope
 And its Details control opens the anchored disclosure
@@ -204,7 +205,7 @@ Then the disclosure is closed
 ```gherkin
 Given the banner reports a degraded role
 And the disclosure's Details control has been activated, so it is open with focus
-When the banner region loads again
+When the failure banner loads again
 Then the disclosure is still open, on the same element (the popover lists its open state in data-keep)
 And focus is still in its Details control
 And the banner is still up
@@ -268,13 +269,14 @@ And the card shows an inline error naming the refusal
 And the raw server text is reachable in that error's disclosure
 ```
 
-#### Scenario 16.33: A failed panel load reports inside the panel
+#### Scenario 16.33: A failed panel load reports in the screen error
 
 ```gherkin
-Given the dashboard loads and the Worlds, Games, Settings and Prompt Presets panel fragment loads fail
+Given the dashboard loads and the Worlds, Games, Settings and Prompt Presets panel renders fail
 When the client opens each of those tabs
-Then that panel shows a short failure message
+Then #screen-error shows a short failure message
 And its Details disclosure holds the raw server text
+And the panel holds no content
 And the banner is not raised
 ```
 
@@ -532,15 +534,14 @@ And the story log's error slot says that the active Game changed
 And the editor is still open and holds the typed text
 ```
 
-#### Scenario 16.56: The page names a Game only when every visible region shows it
+#### Scenario 16.56: The page names a Game only when the screen shows it
 
 ```gherkin
 Given the dashboard shows Game 1
 And the engine switched the active Game to Game 2
-And the story log, a visible region, is still loading the answer of an earlier ask
-When a later ask finds the story log loading
+And the screen load that shows Game 2 is still in flight
 Then the page still names Game 1
-When the story log load ends
+When the screen load ends
 Then the page names Game 2
 ```
 
@@ -549,7 +550,7 @@ Then the page names Game 2
 ```gherkin
 Given the dashboard shows Game 1 and the Games panel lists a second saved Game
 When the client presses Switch for the second Game and the engine accepts it
-Then the page names no Game until the next ask has loaded its regions
+Then the page names no Game until the next load of the screen
 And a send in that window carries no X-Chronicler-Game header
 And after the ask the page names the second Game
 ```
@@ -574,4 +575,22 @@ And the engine switched the active Game, and the page has not asked since
 When the client confirms that row's Reset
 Then the engine refuses it with 409 and "The active Game changed"
 And the game row's own inline error slot says that the game was not reset because the active Game changed
+```
+
+#### Scenario 16.60: A load that started before a Game change that this page sent does not name the old Game
+
+```gherkin
+Given the dashboard shows Game 1 and a screen load that names Game 1 is in flight
+When the client presses Switch for the second Game, the engine accepts it, and the old load ends
+Then the page names no Game, and a send in that window carries no X-Chronicler-Game header
+And after the next load the page names the second Game
+```
+
+#### Scenario 16.61: A preview send clears the Action input only if it still holds the text that the preview sent
+
+```gherkin
+Given the text check shows a preview of the command in the Action input
+When the client presses Send Original, and types more text in the input while the request is in flight
+And the engine takes the command and the screen shows the send
+Then the Action input keeps the typed text
 ```

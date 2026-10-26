@@ -8,7 +8,7 @@ use std::time::Duration;
 use chronicler_engine::domain::model::change::ChangeKind;
 
 use super::*;
-use super::support::{StubRunner, install_story_load_counter, load_now, story_load_count};
+use super::support::{StubRunner, install_story_load_counter, story_load_count};
 
 /// An open editor marks its entry `data-editing` and the root of the story log
 /// `data-editing-entry`.
@@ -1004,7 +1004,7 @@ async fn check_failed_swipe_switch_reports_in_the_story_log_slot(
     let swipe = stub.swipe_handle();
     swipe.set_two_swipes();
     swipe.set_switch_failing();
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
 
     assert!(
                 wait_for_condition_async(

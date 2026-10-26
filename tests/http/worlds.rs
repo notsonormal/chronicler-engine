@@ -348,7 +348,7 @@ async fn test_worlds_fragment_pluralises_game_count_http() {
     );
     assert!(
         !html.contains("worlds-panel"),
-        "the shell's .worlds-panel is the region: the fragment repeats no root: {html}"
+        "the shell's .worlds-panel is the part: the fragment repeats no root: {html}"
     );
     assert!(
         html.contains("(1 game)"),

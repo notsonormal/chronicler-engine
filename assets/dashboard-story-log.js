@@ -116,7 +116,8 @@ function clearEditState() {
     .querySelectorAll("#story-log [data-editing]")
     .forEach((entry) => entry.removeAttribute("data-editing"));
   editState = null;
-  loadRegionAgain(storyLogRoot());
+  forgetScreenStamp();
+  askNow();
 }
 
 function revertEdit() {
@@ -138,7 +139,6 @@ function cancelEdit() {
   if (editState === null) return;
   const entryId = editState.id;
   revertEdit();
-  askNow();
   const entry = document.querySelector(`[data-id="${entryId}"]`);
   const editBtn = entry ? entry.querySelector(".edit-btn") : null;
   if (editBtn) editBtn.focus();
@@ -161,7 +161,6 @@ function submitEdit() {
   const newText = document.getElementById("edit-textarea").value;
   const formData = new URLSearchParams();
   formData.append("text", newText);
-  let editKeptOpen = false;
   // Kept set until the outcome is known, so a failed save can restore the entry.
   actionFetch(`/history/${editState.id}`, {
     method: "POST",
@@ -169,23 +168,17 @@ function submitEdit() {
     body: formData,
   })
     .then((response) => {
-      if (reportedRefusal(response, "the edit was not saved")) {
-        editKeptOpen = true;
-        return;
-      }
+      if (reportedRefusal(response, "the edit was not saved")) return;
       if (!response.ok) return throwServerDetail(response);
-      // The lock stays until the load replaces the entry's controls, so a second
+      // The lock stays until the screen shows the saved entry, so a second
       // editor cannot open on a stale textarea.
       clearEditState();
-      chroniclerLive.settle().then(unlockEditing);
+      afterScreenShows(response.headers.get("X-Revision")).then(unlockEditing);
     })
     .catch((err) => {
       console.error("Failed to save message:", err);
       revertEdit();
       showStoryLogError("Failed to save the message.", err.message);
-    })
-    .finally(() => {
-      if (!editKeptOpen) askNow();
     });
 }
 
@@ -244,9 +237,9 @@ function switchSwipe(messageId, index) {
     .then((response) => {
       if (reportedRefusal(response, "the swipe was not switched")) return;
       if (!response.ok) return throwServerDetail(response);
-      // The story log loads the restored Swipe, so the restore is announced
-      // once that load has settled.
-      return chroniclerLive.settle().then(announceSwipeRestore);
+      // The story log shows the restored Swipe once the screen holds the
+      // revision of the switch, and the restore is announced then.
+      return afterScreenShows(response.headers.get("X-Revision")).then(announceSwipeRestore);
     })
     .catch((err) => {
       console.error("Swipe switch failed:", err);
@@ -273,7 +266,7 @@ function deleteMessage() {
     .then((response) => {
       if (reportedRefusal(response, "the message was not deleted")) return;
       if (!response.ok) return throwServerDetail(response);
-      return chroniclerLive.settle().then(focusAfterLogDelete);
+      return afterScreenShows(response.headers.get("X-Revision")).then(focusAfterLogDelete);
     })
     .catch((err) => {
       console.error("Delete failed:", err);
@@ -304,7 +297,7 @@ function storyLogCanScroll(log) {
 }
 
 // The log's height is what the flex column has left over, so its box settles
-// only once the regions beside it have loaded (the options dock alone takes
+// only once the parts beside it have loaded (the options dock alone takes
 // ~150px of it). An assignment made in the swap, or in the next frame, can
 // therefore still measure a log that does not overflow yet and clamp to the
 // top. While the log cannot scroll there is no position of the player's to
@@ -327,23 +320,30 @@ function followStoryLogBottom(log) {
   requestAnimationFrame(retry);
 }
 
-document.body.addEventListener("htmx:beforeSwap", function (evt) {
-  const target = evt.detail && evt.detail.target;
-  if (!target || target.id !== "story-log" || !evt.detail.shouldSwap) return;
+document.addEventListener("screen:beforemorph", function (evt) {
+  const log = storyLogRoot();
+  if (!log || !evt.detail.parts.includes("story-log")) return;
   storyLogSwapStart = {
-    atBottom: storyLogIsAtBottom(target),
-    entries: storyLogEntryCount(target),
+    atBottom: storyLogIsAtBottom(log),
+    entries: storyLogEntryCount(log),
   };
 });
 
-document.body.addEventListener("htmx:afterSwap", function (evt) {
+document.addEventListener("screen:loaded", function (evt) {
   const start = storyLogSwapStart;
   storyLogSwapStart = null;
-  const target = evt.detail && (evt.detail.target || evt.detail.elt);
-  if (!start || !target || target.id !== "story-log") return;
+  const log = storyLogRoot();
+  if (!start || !log || !evt.detail.parts.includes("story-log")) return;
   // An open edit owns the log's position.
   if (editState !== null) return;
   if (!start.atBottom) return;
-  if (storyLogEntryCount(target) <= start.entries) return;
-  followStoryLogBottom(target);
+  if (storyLogEntryCount(log) <= start.entries) return;
+  followStoryLogBottom(log);
+});
+
+// A tab change empties the story log, so an edit that was open is discarded and
+// the lock of the Edit buttons goes with it.
+document.addEventListener("screen:cleared", function () {
+  editState = null;
+  unlockEditing();
 });

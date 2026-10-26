@@ -1,4 +1,4 @@
-//! Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `server`, `settings_guard`, `stub_action_layers`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
+//! Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `screen`, `server`, `settings_guard`, `stub_action_layers`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
 
 #![allow(dead_code)]
 
@@ -6,7 +6,8 @@ pub mod browser;
 pub mod convergence;
 pub mod html;
 pub mod htmx_settle;
-pub mod live_region_table;
+pub mod screen;
+pub mod screen_part_table;
 pub mod server;
 pub mod settings_guard;
 pub mod stub_action_layers;
@@ -19,6 +20,8 @@ pub use browser::*;
 pub use convergence::*;
 #[allow(unused_imports)]
 pub use html::*;
+#[allow(unused_imports)]
+pub use screen::*;
 #[allow(unused_imports)]
 pub use server::*;
 #[allow(unused_imports)]

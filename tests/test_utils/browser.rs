@@ -9,6 +9,7 @@ use super::convergence::assert_screen_converged;
 use super::htmx_settle::{await_panel_ready, click_and_settle, install_htmx_settle};
 use super::html::preset_card_html_slice;
 use super::server::{buffer_text, get_config_port, registered_server_logs, tail_lines, TestServer};
+use super::screen::{wait_for_screen_current, WAIT_FOR_SCREEN_INIT_SCRIPT};
 use super::stub_server::StubServer;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_element_children;
@@ -107,8 +108,8 @@ async fn close_chrome(playwright: &playwright_rs::Playwright, browser: &playwrig
     let _ = playwright.shutdown().await;
 }
 
-/// After the test, the page must converge: each visible live region equals a
-/// fresh GET of its route.
+/// After the test, the page must converge: each visible part equals a fresh
+/// `GET /screen` of that part.
 pub async fn with_test_page<F, Fut>(config_path: &str, world: &str, persona: &str, test_fn: F)
 where
     F: FnOnce(playwright_rs::Page, u16) -> Fut,
@@ -153,32 +154,21 @@ impl SharedBrowser {
         let page = self.browser.new_page().await.unwrap();
         let url = stub.url();
         install_htmx_settle(&page).await;
+        page.add_init_script(WAIT_FOR_SCREEN_INIT_SCRIPT)
+            .await
+            .expect("add_init_script for the screen waiter");
         page.goto(&url, None)
             .await
             .unwrap_or_else(|e| panic!("navigate to stub at {url}: {e}"));
         wait_for_story_log(&page).await;
-        make_regions_current(&page).await;
+        wait_for_screen_current(&page).await;
         page
     }
 }
 
-/// The first ask of the page loads every region once. A stub test starts after
-/// that ask has settled: only a number the test moves can load a region
-/// afterwards, and a state the test writes into a region is not replaced by a
-/// late first ask.
-async fn make_regions_current(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>(
-        "async () => { await window.chroniclerLive.settle(); await window.chroniclerLive.askOnce(); }",
-        None,
-    )
-    .await
-    .expect("the stub page makes its live regions current");
-}
-
-/// A panel that is not a live region loads at page load, and a live region in a
-/// hidden section loads when the section opens. Either swap is on the recorded
-/// target list by the time `await_panel_ready` reads it, because that wait
-/// searches the whole list, so the wait follows the click for both kinds.
+/// A tab loads its parts when it opens. The load is on the recorded target list
+/// by the time `await_panel_ready` reads it, because that wait searches the
+/// whole list, so the wait follows the click.
 async fn open_tab(page: &playwright_rs::Page, tab: &str, gate_target: &str) {
     page.locator(&format!(r#"[data-tab="{tab}"]"#))
         .await

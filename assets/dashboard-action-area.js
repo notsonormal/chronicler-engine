@@ -5,7 +5,7 @@
 let checkInFlight = false;
 
 // The action area's own state between an accepted send and the first load of the
-// status display that follows it. The status display is a live region: the
+// status display that follows it. The status display is a part of the screen: the
 // action area reads it and never writes it. This state shows in #action-status.
 let sendPending = false;
 let pendingLoadStarted = false;
@@ -245,9 +245,8 @@ function updateToThinking() {
 // The status display loads after each send the engine took. The first load that
 // starts after the send ends the action area's own state, because that load
 // reads the state the send caused.
-document.body.addEventListener("htmx:beforeRequest", function (evt) {
-  const target = evt.detail && evt.detail.elt;
-  if (sendPending && target && target.id === "status-display") {
+document.addEventListener("screen:beforeload", function (evt) {
+  if (sendPending && evt.detail.parts.includes("status-display")) {
     pendingLoadStarted = true;
   }
 });
@@ -257,17 +256,12 @@ function readStatusDisplay() {
   applyStatusDisplay();
 }
 
-document.body.addEventListener("htmx:afterSwap", function (evt) {
-  syncActionState();
-  const target = evt.detail && (evt.detail.target || evt.detail.elt);
-  if (!target || !target.id) return;
-  if (target.id === "status-display") {
-    syncStatusClass();
-  } else if (target.id === "story-log") {
-    announceNewNarration();
-  } else if (target.id === "options-dock") {
-    announceOptions();
-  }
+document.addEventListener("screen:loaded", function (evt) {
+  const parts = evt.detail.parts;
+  if (parts.includes("status-display")) readStatusDisplay();
+  else syncActionState();
+  if (parts.includes("story-log")) announceNewNarration();
+  if (parts.includes("options-dock")) announceOptions();
 });
 
 function onCommandBeforeRequest() {
@@ -279,6 +273,17 @@ function onCommandBeforeRequest() {
 // command the engine never took keeps the text the player typed.
 function requestSucceeded(event) {
   return !!(event && event.detail && event.detail.successful);
+}
+
+// The input clears once the screen shows the command that it sent, and only if it
+// still holds the text that was sent: the player can type the next action before
+// the screen shows the last one.
+function clearCommandInputAfterScreenShows(event, sentText) {
+  const stamp = event.detail.xhr.getResponseHeader("X-Revision");
+  afterScreenShows(stamp).then(() => {
+    const input = commandInput();
+    if (input && input.value === sentText) clearCommandInput();
+  });
 }
 
 function clearCommandInput() {
@@ -299,11 +304,22 @@ function onCommandAfterRequest(event) {
   } else if (requestSucceeded(event) && !previewIsOpen()) {
     // The preview keeps the flagged command for editing, and a dispatched
     // command has been consumed, so clear the input.
-    clearCommandInput();
+    clearCommandInputAfterScreenShows(event, event.detail.requestConfig.parameters.command);
     beginPending();
   }
   syncActionState();
 }
+
+// The text that a preview send consumes is the text that the input held when the
+// request began: the player can type on while the request is in flight.
+let previewSentText = "";
+
+document.body.addEventListener("htmx:beforeRequest", function (evt) {
+  const path = evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
+  if (path !== "/action/confirm") return;
+  const input = commandInput();
+  previewSentText = input ? input.value : "";
+});
 
 // Both of the preview's send controls post a command the engine consumes.
 function onPreviewSendAfterRequest(event) {
@@ -311,7 +327,7 @@ function onPreviewSendAfterRequest(event) {
   if (refusal) {
     reportRefusal(commandFormSlot(), "the command was not sent", refusal);
   } else if (requestSucceeded(event)) {
-    clearCommandInput();
+    clearCommandInputAfterScreenShows(event, previewSentText);
     beginPending();
   } else {
     reportConfirmFailure(event);

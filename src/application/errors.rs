@@ -29,6 +29,16 @@ impl ApplicationError {
         }
     }
 
+    /// The engine error of a caller that has no use for the envelope: a validation or
+    /// a refusal keeps its kind as `EngineError::Validation`.
+    pub fn into_engine_error(self) -> EngineError {
+        match self {
+            Self::Validation(message) => EngineError::Validation(message),
+            refused @ Self::Refused(_) => EngineError::Validation(refused.to_string()),
+            Self::Engine(error) => error,
+        }
+    }
+
     /// Returns true for validation errors and `EngineError::WorldHasGames`.
     /// `WorldHasGames` surfaces as user-actionable (e.g. cannot delete world with active games).
     pub fn is_user_displayable(&self) -> bool {

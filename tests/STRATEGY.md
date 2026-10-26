@@ -225,8 +225,10 @@ Every stub check and every tier-3 check ends with the convergence check
 (`assert_screen_converged`, `tests/test_utils/convergence.rs`).
 `StubRunner::run` and `with_test_page` run it after the check, before the page
 closes. The check waits until the page is quiet. Then it compares each visible
-live region with a fresh GET of its own route, and it fails with the region,
-the route and a short diff.
+part with a fresh `GET /screen?parts=<name>`, and it fails with the part, the route
+and a short diff. It also checks that each part of a closed tab is empty, and that
+each part element has the attributes of the shell, apart from the focus fallback and
+the lock of the entry in edit.
 
 The comparison drops what a load keeps or skips by design: the attributes that
 `data-keep` names, the htmx classes, a showing inline error slot, and the story-log

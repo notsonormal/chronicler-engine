@@ -20,7 +20,7 @@ fn test_header_template_renders_game_name() {
     assert!(rendered.contains("Chronicler Engine"));
     assert!(
         !rendered.contains(r#"class="header""#),
-        "the shell's #header is the region, so the fragment repeats no root"
+        "the shell's #header is the part, so the fragment repeats no root"
     );
     assert!(rendered.contains(r#"class="game-title""#));
     assert!(rendered.contains("Test Game"));

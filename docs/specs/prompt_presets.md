@@ -11,8 +11,7 @@ Endpoints:
 - `POST /prompt-presets/{id}/delete`
 - `POST /prompt-presets/{id}/duplicate`
 
-The Prompt Presets panel is a live region of the prompt presets, settings and
-games kinds. Its fragment carries no root element of its own, and each preset
+The Prompt Presets panel is a part of the screen (`prompt-presets`). Its fragment carries no root element of its own, and each preset
 card carries a stable id (`preset-card-{id}`), so a load keeps the cards it does
 not change. The panel holds no form that waits for a Save. The Add control of each
 type, and the Edit and View controls of a card, load a form into the edit dialog

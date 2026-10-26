@@ -106,7 +106,7 @@ pub(super) fn resolve_boot_game(
         None,
     )?;
     let game_id = super::init_game::resolve_game_id(&catalogue, world_key, persona_key)
-        .map_err(boot_error)?;
+        .map_err(ApplicationError::into_engine_error)?;
     match storage.get_game(game_id.0) {
         Ok(Some(game)) => tracing::info!(
             "Starting on game '{}' (id={game_id}) with persona '{persona_key}'",
@@ -116,16 +116,6 @@ pub(super) fn resolve_boot_game(
         Err(e) => tracing::warn!("Failed to read the Game {game_id} at boot: {e}"),
     }
     Ok(game_id)
-}
-
-/// A refusal at boot keeps its kind, so the caller sees the same error a Games
-/// page request would.
-fn boot_error(error: ApplicationError) -> EngineError {
-    match error {
-        ApplicationError::Validation(message) => EngineError::Validation(message),
-        refused @ ApplicationError::Refused(_) => EngineError::Validation(refused.to_string()),
-        ApplicationError::Engine(error) => error,
-    }
 }
 
 fn prepare_state(data: &PreparedData) -> crate::error::Result<StateResources> {

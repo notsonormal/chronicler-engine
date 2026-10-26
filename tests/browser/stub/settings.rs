@@ -61,11 +61,7 @@ async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
         .click(None)
         .await
         .unwrap();
-    page.locator(r#"[data-tab="settings"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
+    open_settings(&page).await;
 
     let kept: bool = page
         .evaluate::<(), bool>(

@@ -1,4 +1,4 @@
-//! Shared stub-browser helpers: the check runner, page probes, node reads and the on-demand region load used by more than one stub test module.
+//! Shared stub-browser helpers: the check runner, page probes and node reads used by more than one stub test module.
 
 use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};
@@ -6,8 +6,6 @@ use std::time::{Duration, Instant};
 use futures_util::future::FutureExt;
 
 use super::*;
-
-const LOAD_NOW_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct CheckReport {
     name: String,
@@ -31,8 +29,8 @@ impl StubRunner {
         }
     }
 
-    /// After the check, the page must converge: each visible live region equals
-    /// a fresh GET of its route.
+    /// After the check, the page must converge: each visible part equals a fresh
+    /// `GET /screen` of that part.
     pub(super) async fn run<Fut>(
         &mut self,
         outcome: StubActionOutcome,
@@ -128,84 +126,147 @@ fn print_summary(reports: &[CheckReport]) {
     eprintln!("  {total:>7.3}s  total (shared browser)");
 }
 
-/// Fire a region's own htmx request now, whether or not a number of its kinds
-/// moved, and return once htmx has handled the response.
-///
-/// The page asks first, so the loop has already loaded what the stub's numbers
-/// say is due and holds no later load that would replace what the test does
-/// next. `htmx.ajax` with the element as its `source` then issues that
-/// element's own request: the element's `hx-get` path, its `hx-target`, its
-/// `hx-swap` (`morph:innerHTML` included), its `hx-sync` and its `hx-on::`
-/// handlers all take the same path a load of the loop takes.
-///
-/// htmx queues a request behind one already in flight on the same element and
-/// fires `htmx:afterRequest` for the earlier one first. So the helper waits
-/// until the element is idle, fires, and then waits for `htmx:afterRequest`
-/// carrying its own `xhr`. htmx fires that event after the swap is applied and
-/// also for a refused load that swaps nothing.
-///
-/// The request goes out whatever the region holds, and the hold still applies
-/// to its swap, so the helper also runs where an edit holds the region.
-pub(super) async fn load_now(page: &playwright_rs::Page, selector: &str) {
-    ask_once(page).await;
-    let fired = page
-        .evaluate::<String, String>(
-            r#"async (selector) => {
-                const el = document.querySelector(selector);
-                if (!el) return 'no element matches the selector';
-                const verb = el.hasAttribute('hx-get')
-                    ? 'get'
-                    : (el.hasAttribute('hx-post') ? 'post' : '');
-                const path = verb ? el.getAttribute('hx-' + verb) : '';
-                if (!path) return 'the container declares no hx-get/hx-post';
-                const inFlight = () => (el['htmx-internal-data'] || {}).xhr;
-                const deadline = Date.now() + 5000;
-                while (inFlight()) {
-                    if (Date.now() > deadline) return 'an earlier request never finished';
-                    await new Promise((resolve) => setTimeout(resolve, 10));
+/// Evaluates a script that answers a string, and fails with the script when it throws.
+pub(super) async fn eval_string(page: &playwright_rs::Page, script: &str) -> String {
+    page.evaluate::<(), String>(script, None)
+        .await
+        .unwrap_or_else(|e| panic!("evaluate failed: {e}\n{script}"))
+}
+
+/// Opens a dashboard section the way the player does, and waits until the page
+/// shows the screen of the section.
+pub(super) async fn open_section(page: &playwright_rs::Page, tab: &str, part: &str) {
+    page.locator(&format!(r#"[data-tab="{tab}"]"#))
+        .await
+        .click(None)
+        .await
+        .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
+    wait_for_screen_current(page).await;
+    await_panel_ready(page, part).await.expect_settled(tab);
+}
+
+/// Makes the page ask as it does when the tab becomes visible, and returns at once.
+pub(super) async fn ask_once_without_waiting(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        "() => { document.dispatchEvent(new Event('visibilitychange')); }",
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+/// The page asks only when a check makes it ask, and its first load has ended.
+pub(super) async fn start_current(page: &playwright_rs::Page) {
+    stop_page_timer(page).await;
+}
+
+/// Keeps each `GET /screen` of the page until `window.__releaseScreen()`, so a
+/// load stays in flight while a check works. `window.__screenHeld.length` counts
+/// the loads that wait.
+pub(super) async fn hold_screen_loads(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"() => {
+            const realFetch = window.fetch;
+            window.__holdScreen = true;
+            window.__screenHeld = [];
+            window.fetch = function (url, init) {
+                if (window.__holdScreen && String(url).startsWith('/screen')) {
+                    return new Promise((resolve) => {
+                        window.__screenHeld.push(() => resolve(realFetch.call(window, url, init)));
+                    });
                 }
-                window.__loadNowHandled = false;
-                let ownXhr = null;
-                const once = (evt) => {
-                    if (ownXhr && evt.detail && evt.detail.xhr === ownXhr) {
-                        window.__loadNowHandled = true;
-                        document.body.removeEventListener('htmx:afterRequest', once);
-                    }
-                };
-                document.body.addEventListener('htmx:afterRequest', once);
-                htmx.ajax(verb, path, { source: el });
-                ownXhr = inFlight();
-                return ownXhr ? '' : 'htmx did not send the request';
-            }"#,
-            Some(&selector.to_string()),
-        )
+                return realFetch.apply(this, arguments);
+            };
+            window.__releaseScreen = () => {
+                window.__holdScreen = false;
+                window.__screenHeld.splice(0).forEach((resume) => resume());
+            };
+        }"#,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+/// Sends each `GET /screen` at once but hands its answer to the page only at
+/// `window.__releaseScreenAnswers()`, so the server answers from the state of the
+/// moment of the request and a load stays in flight while a check works.
+pub(super) async fn delay_screen_answers(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"() => {
+            const realFetch = window.fetch;
+            window.__delayScreenAnswers = true;
+            window.__screenAnswers = [];
+            window.fetch = function (url, init) {
+                if (window.__delayScreenAnswers && String(url).startsWith('/screen')) {
+                    const answer = realFetch.call(window, url, init);
+                    return new Promise((resolve, reject) => {
+                        window.__screenAnswers.push(() => answer.then(resolve, reject));
+                    });
+                }
+                return realFetch.apply(this, arguments);
+            };
+            window.__releaseScreenAnswers = () => {
+                window.__delayScreenAnswers = false;
+                window.__screenAnswers.splice(0).forEach((deliver) => deliver());
+            };
+        }"#,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+pub(super) async fn release_screen_answers(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>("() => window.__releaseScreenAnswers()", None)
         .await
         .unwrap();
-    assert!(fired.is_empty(), "load_now('{selector}'): {fired}");
+}
 
-    let handled = wait_for_condition_async(LOAD_NOW_TIMEOUT, Duration::from_millis(10), || async {
-        page.evaluate::<(), bool>("() => window.__loadNowHandled === true", None)
-            .await
-            .unwrap_or(false)
-    })
+/// Records the `VERB url` of each request that the page sends from now on through
+/// `XMLHttpRequest` to a URL that starts with `prefix`.
+pub(super) async fn record_requests_to(page: &playwright_rs::Page, prefix: &str) {
+    page.evaluate::<String, ()>(
+        r#"(prefix) => {
+            window.__recordedRequests = [];
+            const open = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function (method, url) {
+                if (String(url).startsWith(prefix)) {
+                    window.__recordedRequests.push(method + ' ' + url);
+                }
+                return open.apply(this, arguments);
+            };
+        }"#,
+        Some(&prefix.to_string()),
+    )
+    .await
+    .unwrap();
+}
+
+pub(super) async fn recorded_requests(page: &playwright_rs::Page) -> Vec<String> {
+    page.evaluate::<(), Vec<String>>("() => window.__recordedRequests", None)
+        .await
+        .unwrap()
+}
+
+pub(super) async fn wait_for_held_screen_load(page: &playwright_rs::Page) {
+    let held = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(10),
+        || async {
+            page.evaluate::<(), bool>("() => window.__screenHeld.length > 0", None)
+                .await
+                .unwrap_or(false)
+        },
+    )
     .await;
-    assert!(
-        handled,
-        "load_now('{selector}'): the load was never answered within {LOAD_NOW_TIMEOUT:?}"
-    );
+    assert!(held, "a screen load must be held in the page");
 }
 
-/// Stops the page's own timer, so only the asks a check makes load a region.
-pub(super) async fn stop_page_timer(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>("() => window.chroniclerLive.stopTimer()", None)
+pub(super) async fn release_screen_loads(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>("() => window.__releaseScreen()", None)
         .await
-        .expect("the page stops its timer");
-}
-
-pub(super) async fn ask_once(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>("() => window.chroniclerLive.askOnce()", None)
-        .await
-        .expect("the page runs one ask");
+        .unwrap();
 }
 
 /// Keeps each request whose URL ends with `suffix` in the page until
@@ -278,7 +339,7 @@ pub(super) async fn wait_until_focused(
 }
 
 /// Focus lands inside `selector` or on the element itself: a load that removes
-/// the focused node and every row near it leaves focus on the region.
+/// the focused node and every row near it leaves focus on the part.
 pub(super) async fn wait_until_focus_within(
     page: &playwright_rs::Page,
     selector: &str,
@@ -374,13 +435,13 @@ pub(super) async fn story_load_count(page: &playwright_rs::Page) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// Counts the screen loads that write the story log.
 pub(super) async fn install_story_load_counter(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
             window.__storyLoads = 0;
-            document.body.addEventListener('htmx:afterRequest', (evt) => {
-                const elt = evt.detail && evt.detail.elt;
-                if (elt && elt.id === 'story-log') window.__storyLoads += 1;
+            document.addEventListener('screen:loaded', (evt) => {
+                if (evt.detail.parts.includes('story-log')) window.__storyLoads += 1;
             });
         })()"#,
         None,

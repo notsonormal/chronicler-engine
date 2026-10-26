@@ -3,13 +3,13 @@
 use std::time::Duration;
 
 use super::*;
-use super::support::{StubRunner, install_story_load_counter, load_now, story_load_count};
+use super::support::{StubRunner, install_story_load_counter, story_load_count};
 
 /// A state that survives one morph by chance must also survive the next, so
 /// the preservation tests load the story log twice.
 async fn load_story_log_twice(page: &playwright_rs::Page) {
-    load_now(page, "#story-log").await;
-    load_now(page, "#story-log").await;
+    load_screen_now(page).await;
+    load_screen_now(page).await;
 }
 
 // An innerHTML swap would replace the node and lose the selection, so the load
@@ -176,7 +176,7 @@ async fn check_load_removal_keeps_the_surviving_entries(
 ) {
     let story = stub.story_log_handle();
     story.set_extra_oldest(true);
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     let grew = wait_for_condition_async(
         Duration::from_secs(8),
         Duration::from_millis(50),
@@ -205,7 +205,7 @@ async fn check_load_removal_keeps_the_surviving_entries(
     .unwrap();
 
     story.set_extra_oldest(false);
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     let shrank = wait_for_condition_async(
         Duration::from_secs(8),
         Duration::from_millis(50),
@@ -335,7 +335,7 @@ async fn check_load_that_appends_an_entry_follows_the_bottom(
     );
 
     story.append_narration("A new dawn breaks over the courtyard.");
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     wait_for_story_log_entries(&page, before.entries + 1.0).await;
 
     let after = read_story_log_scroll(&page).await;
@@ -368,7 +368,7 @@ async fn check_load_that_appends_an_entry_leaves_a_scrolled_up_log_alone(
     );
 
     story.append_narration("A new dawn breaks over the courtyard.");
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     wait_for_story_log_entries(&page, before.entries + 1.0).await;
 
     let after = read_story_log_scroll(&page).await;

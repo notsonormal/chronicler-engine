@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use super::support::load_now;
 use super::*;
 use super::support::StubRunner;
 
@@ -60,7 +59,7 @@ async fn check_switch_swipe_leaves_dashboard_ready_and_drops_options(
 ) {
     let swipe = stub.swipe_handle();
     swipe.set_two_swipes();
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     wait_for_swipe_counter(&page, "2 / 2").await;
     wait_for_option_items(&page, 3).await;
 
@@ -121,7 +120,7 @@ async fn check_switch_swipe_leaves_dashboard_ready_and_drops_options(
 
     // The restored Swipe carries no option set, so the dock empties when the
     // options number moves.
-    load_now(&page, "#options-dock").await;
+    load_screen_now(&page).await;
     wait_for_option_items(&page, 0).await;
 }
 

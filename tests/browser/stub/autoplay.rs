@@ -4,12 +4,12 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::state::generation_status::Step;
 
-use super::support::{assert_busy_refusal, load_now, StubRunner};
+use super::support::{assert_busy_refusal, StubRunner};
 use super::*;
 
 async fn show_status(page: &playwright_rs::Page, stub: &StubServer, status: StubStatus) {
     stub.status_handle().set(status);
-    load_now(page, "#status-display").await;
+    load_screen_now(page).await;
 }
 
 async fn is_visible(page: &playwright_rs::Page, selector: &str) -> bool {
@@ -133,7 +133,7 @@ async fn check_a_swipe_switch_refused_for_a_held_game_shows_the_busy_message(
     stub: StubServer,
 ) {
     stub.swipe_handle().set_two_swipes();
-    load_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     let counter = "#story-log .swipe-counter";
     wait_until_visible(&page, counter, Duration::from_millis(2000)).await;
     assert_eq!(

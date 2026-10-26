@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Settings handlers
 
+use askama::Template;
 use axum::body::Body;
 use axum::{Form, extract::State, response::Html, response::IntoResponse, response::Response};
 
@@ -15,9 +16,7 @@ use crate::adapters::driving::http::utils::error::{
     raw_error_detail, refusal_message_without_layer_prefix_for_validation_and_config,
 };
 use crate::adapters::driving::http::utils::response::ok;
-use crate::adapters::driving::http::utils::fragment::{
-    failed_fragment_response, render_or_error_fragment,
-};
+use crate::adapters::driving::http::utils::fragment::{render_fragment, render_or_error_fragment};
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, opt_string};
 use crate::application::connection_test_service::ConnectionTestResult;
 use crate::domain::model::agent::Role;
@@ -26,17 +25,18 @@ use crate::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort
 use crate::error::EngineError;
 
 pub async fn settings_panel(State(app_state): State<AppState>) -> Response<Body> {
-    let settings = match app_state.settings() {
-        Ok(settings) => settings,
-        Err(e) => return failed_fragment_response(&e.to_string()),
-    };
-    match app_state.game_view_query.role_health() {
-        Ok(roles) => Html(render_or_error_fragment(&SettingsTemplate::from_settings(
-            &settings, &roles,
-        )))
-        .into_response(),
-        Err(e) => failed_fragment_response(&e.to_string()),
-    }
+    render_fragment(&app_state, render_settings_panel, "settings_panel")
+}
+
+pub fn render_settings_panel(app_state: &AppState) -> Result<String, EngineError> {
+    let settings = app_state.settings()?;
+    let roles = app_state
+        .game_view_query
+        .role_health()
+        .map_err(|e| EngineError::Config(e.to_string()))?;
+    SettingsTemplate::from_settings(&settings, &roles)
+        .render()
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 /// A save the settings refuse answers a non-2xx error fragment, which the control

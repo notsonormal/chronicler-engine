@@ -3,7 +3,7 @@
 
 use askama::Template;
 use axum::body::Body;
-use axum::http::{HeaderValue, StatusCode};
+use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 
 use crate::adapters::driving::http::AppState;
@@ -23,18 +23,14 @@ where
     }
 }
 
-/// The answer of a region load that fails: a 500 that tells htmx to leave the
-/// region as it is.
+/// The answer of a part route that fails: a 500 with the error text. The screen
+/// loads the parts through `GET /screen`, which answers its own 500.
 pub(crate) fn failed_fragment_response(message: &str) -> Response<Body> {
-    let mut response = (
+    (
         StatusCode::INTERNAL_SERVER_ERROR,
         Html(render_error(message)),
     )
-        .into_response();
-    response
-        .headers_mut()
-        .insert("HX-Reswap", HeaderValue::from_static("none"));
-    response
+        .into_response()
 }
 
 pub fn render_or_error_fragment(template: &impl Template) -> String {

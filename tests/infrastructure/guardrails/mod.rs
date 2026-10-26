@@ -4,9 +4,9 @@ pub mod enums;
 pub mod free_fn;
 pub mod inherent_impl;
 pub mod layers;
-pub mod live_regions;
 pub mod location;
 pub mod nesting;
+pub mod screen;
 pub mod structure;
 pub mod style;
 pub mod test_hygiene;
@@ -15,15 +15,15 @@ pub mod walker_rows;
 pub mod walkers;
 
 #[allow(dead_code)]
-#[path = "../../test_utils/live_region_table.rs"]
-mod live_region_table;
+#[path = "../../test_utils/screen_part_table.rs"]
+mod screen_part_table;
 
 pub use inherent_impl::*;
 pub use enums::*;
 pub use free_fn::*;
 pub use layers::*;
-pub use live_regions::*;
 pub use nesting::*;
+pub use screen::*;
 pub use structure::*;
 pub use style::*;
 pub use test_hygiene::*;
@@ -39,7 +39,7 @@ mod inherent_impl_tests;
 mod free_fn_tests;
 
 #[cfg(test)]
-mod live_regions_tests;
+mod screen_tests;
 
 #[cfg(test)]
 mod location_tests;
@@ -448,31 +448,52 @@ fn guardrails_browser_interactions_use_htmx_settle() {
 }
 
 #[test]
-fn guardrails_live_regions_in_shell() {
+fn guardrails_parts_in_shell() {
     let path = "assets/index.html";
     let content = std::fs::read_to_string(path).unwrap();
-    let errors = check_live_regions_in_shell(path, &content);
-    assert_violations(&errors, "live regions in the dashboard shell");
+    let errors = check_parts_in_shell(path, &content);
+    assert_violations(&errors, "parts in the dashboard shell");
 }
 
 #[test]
-fn guardrails_live_region_table_matches_the_shell() {
-    let table: Vec<ListedRegion> = live_region_table::REGIONS
+fn guardrails_part_table_matches_the_shell() {
+    let table: Vec<ListedPart> = screen_part_table::PARTS
         .iter()
-        .map(|region| ListedRegion {
-            selector: region.selector.to_string(),
-            path: region.path.to_string(),
-            kinds: region
-                .kinds
-                .iter()
-                .map(|kind| kind.token().to_string())
-                .collect(),
+        .map(|part| ListedPart {
+            selector: part.selector.to_string(),
+            name: part.name.to_string(),
         })
         .collect();
     let path = "assets/index.html";
     let content = std::fs::read_to_string(path).unwrap();
-    let errors = check_region_table_matches_shell(path, &content, &table);
-    assert_violations(&errors, "the region table of the live-region page tests");
+    let errors = check_part_table_matches_shell(path, &content, &table);
+    assert_violations(&errors, "the part table of the screen page tests");
+}
+
+#[test]
+fn guardrails_shell_parts_match_the_server() {
+    let server_parts: Vec<&str> =
+        chronicler_engine::adapters::driving::http::screen::handlers::screen_part_names().collect();
+    let path = "assets/index.html";
+    let content = std::fs::read_to_string(path).unwrap();
+    let errors = check_shell_parts_match_the_server(path, &content, &server_parts);
+    assert_violations(
+        &errors,
+        "the parts of the shell are the parts the server renders",
+    );
+}
+
+#[test]
+fn guardrails_stub_answers_the_parts_of_the_server() {
+    let server_parts: Vec<&str> =
+        chronicler_engine::adapters::driving::http::screen::handlers::screen_part_names().collect();
+    let path = "tests/test_utils/stub_server.rs";
+    let source = std::fs::read_to_string(path).unwrap();
+    let errors = check_stub_answers_the_parts_of_the_server(path, &source, &server_parts);
+    assert_violations(
+        &errors,
+        "the stub answers the parts that the server renders",
+    );
 }
 
 fn dashboard_scripts() -> Vec<(String, String)> {
@@ -496,25 +517,73 @@ fn dashboard_scripts() -> Vec<(String, String)> {
     scripts
 }
 
-fn shell_regions() -> Vec<String> {
-    region_names(&std::fs::read_to_string("assets/index.html").unwrap())
+fn shell_parts() -> Vec<String> {
+    part_element_names(&std::fs::read_to_string("assets/index.html").unwrap())
+}
+
+/// The scripts that write into a part, apart from `dashboard-screen.js`, which is
+/// the one writer of a part: the morph and the clear on leave.
+const PART_WRITE_EXCEPTIONS: &[PartWriteException] = &[PartWriteException {
+    path: "assets/dashboard-errors.js",
+    reason: "creates the inline error slot of a failed action inside the part that holds the control; a load keeps a slot that shows its error",
+}];
+
+fn scripts_that_do_not_write_parts() -> Vec<(String, String)> {
+    dashboard_scripts()
+        .into_iter()
+        .filter(|(path, _)| !path.ends_with("dashboard-screen.js"))
+        .collect()
 }
 
 #[test]
-fn guardrails_scripts_write_no_region() {
-    let regions = shell_regions();
+fn guardrails_scripts_write_no_part() {
+    let parts = shell_parts();
+    let errors: Vec<Violation> = scripts_that_do_not_write_parts()
+        .iter()
+        .filter(|(path, _)| {
+            !PART_WRITE_EXCEPTIONS
+                .iter()
+                .any(|row| path.ends_with(row.path))
+        })
+        .flat_map(|(path, script)| check_scripts_write_no_part(path, script, &parts))
+        .collect();
+    assert_violations(
+        &errors,
+        "dashboard scripts other than the screen script write no part element",
+    );
+}
+
+#[test]
+fn guardrails_part_write_exceptions_are_used() {
+    let errors = check_part_write_exceptions_are_used(
+        &scripts_that_do_not_write_parts(),
+        &shell_parts(),
+        PART_WRITE_EXCEPTIONS,
+    );
+    assert_violations(
+        &errors,
+        "every part-write exception names a script that writes a part",
+    );
+}
+
+#[test]
+fn guardrails_scripts_listen_no_part_swaps() {
+    let parts = shell_parts();
     let errors: Vec<Violation> = dashboard_scripts()
         .iter()
-        .flat_map(|(path, script)| check_scripts_write_no_region(path, script, &regions))
+        .flat_map(|(path, script)| check_scripts_listen_no_part_swaps(path, script, &parts))
         .collect();
-    assert_violations(&errors, "dashboard scripts write no region element");
+    assert_violations(
+        &errors,
+        "no dashboard script listens for the htmx swap of a part",
+    );
 }
 
 #[test]
 fn guardrails_scripts_use_action_fetch() {
     let errors: Vec<Violation> = dashboard_scripts()
         .iter()
-        .filter(|(path, _)| !path.ends_with("dashboard-live.js"))
+        .filter(|(path, _)| !path.ends_with("dashboard-screen.js"))
         .flat_map(|(path, script)| check_scripts_use_action_fetch(path, script))
         .collect();
     assert_violations(
@@ -525,15 +594,15 @@ fn guardrails_scripts_use_action_fetch() {
 
 #[test]
 fn guardrails_handler_headers() {
-    let regions = shell_regions();
+    let parts = shell_parts();
     let errors: Vec<Violation> = src_snapshot()
         .iter()
         .filter(|file| file.path.starts_with("adapters/driving/http/"))
-        .flat_map(|file| check_handler_headers(&file.path, &file.content, &regions))
+        .flat_map(|file| check_handler_headers(&file.path, &file.content, &parts))
         .collect();
     assert_violations(
         &errors,
-        "handlers steer no answer: no region retarget, no page refresh",
+        "handlers steer no answer: no part retarget, no page refresh",
     );
 }
 
@@ -552,15 +621,15 @@ fn template_sources() -> Vec<(String, String)> {
 }
 
 #[test]
-fn guardrails_templates_target_no_region() {
-    let regions = shell_regions();
+fn guardrails_templates_target_no_part() {
+    let parts = shell_parts();
     let errors: Vec<Violation> = template_sources()
         .iter()
-        .flat_map(|(path, content)| check_template_targets(path, content, &regions))
+        .flat_map(|(path, content)| check_template_targets(path, content, &parts))
         .collect();
     assert_violations(
         &errors,
-        "no template targets a region element or swaps one with outerHTML",
+        "no template targets a part element or swaps one with outerHTML",
     );
 }
 

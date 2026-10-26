@@ -46,7 +46,7 @@ fn classify_error(error: ApplicationError, prefix: &str) -> Result<String, Strin
     }
 }
 
-/// A non-2xx so htmx never swaps the region the failure describes.
+/// A non-2xx so htmx never swaps the element the failure describes.
 pub(crate) fn action_refusal_response(message: impl std::fmt::Display) -> Response<Body> {
     bad_request(error_fragment(message))
 }
@@ -68,7 +68,7 @@ pub(crate) fn refusal_message_without_layer_prefix_for_validation_and_config(
 }
 
 /// A 500 for an error the request cannot correct; htmx still never swaps the
-/// region the failure describes.
+/// element the failure describes.
 pub(crate) fn action_failure_response(message: impl std::fmt::Display) -> Response<Body> {
     internal_error(error_fragment(message))
 }

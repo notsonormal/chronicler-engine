@@ -21,9 +21,7 @@ use crate::adapters::driving::http::games::templates::games::{
     PersonaRowView,
 };
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::fragment::{
-    failed_fragment_response, render_failure_response, render_response,
-};
+use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response,
 };
@@ -34,16 +32,26 @@ pub async fn list_games_fragment(
     State(state): State<AppState>,
     current: Option<CurrentGame>,
 ) -> Response<axum::body::Body> {
-    let (active_game, saved_games) = match current_and_saved_games(&state, current) {
-        Ok(games) => games,
-        Err(e) => return failed_fragment_response(&format!("Failed to list games: {e}")),
-    };
+    let active_id = current.map(|CurrentGame(game_id)| game_id);
+    render_fragment(
+        &state,
+        |state| render_games_panel(state, active_id),
+        "list_games_fragment",
+    )
+}
+
+/// The Games panel for the given active Game, or the saved Games alone when no
+/// Game is active.
+pub fn render_games_panel(
+    state: &AppState,
+    active_id: Option<GameId>,
+) -> Result<String, EngineError> {
+    let (active_game, saved_games) =
+        current_and_saved_games(state, active_id).map_err(ApplicationError::into_engine_error)?;
 
     let posture_html = match &active_game {
-        Some(game) => match posture_controls_html(&state, game) {
-            Ok(html) => html,
-            Err(e) => return render_failure_response(&e),
-        },
+        Some(game) => posture_controls_html(state, game)
+            .map_err(|e| EngineError::Template(format!("Template error: {e}")))?,
         None => String::new(),
     };
 
@@ -54,22 +62,22 @@ pub async fn list_games_fragment(
     let active_game = active_game.map(view_of);
     let saved_games: Vec<_> = saved_games.into_iter().map(view_of).collect();
 
-    let worlds = match state.world_catalogue.list_worlds() {
-        Ok(worlds) => worlds,
-        Err(e) => return failed_fragment_response(&format!("Failed to list worlds: {e}")),
-    };
+    let worlds = state
+        .world_catalogue
+        .list_worlds()
+        .map_err(ApplicationError::into_engine_error)?;
 
-    let personas = persona_rows(&state);
+    let personas = persona_rows(state);
 
-    let template = GamesPanelTemplate {
+    GamesPanelTemplate {
         active_game,
         saved_games,
         worlds,
         personas,
         posture_html,
-    };
-
-    render_response(&template)
+    }
+    .render()
+    .map_err(|e| EngineError::Template(format!("Template error: {e}")))
 }
 
 fn persona_rows(state: &AppState) -> Vec<PersonaRowView> {
@@ -120,10 +128,9 @@ pub async fn new_game_form_handler(State(state): State<AppState>) -> Response<ax
 
 fn current_and_saved_games(
     state: &AppState,
-    current: Option<CurrentGame>,
+    active_id: Option<GameId>,
 ) -> Result<(Option<Game>, Vec<Game>), ApplicationError> {
     let games = state.game_catalogue.list_games()?;
-    let active_id = current.map(|CurrentGame(game_id)| game_id);
     let mut active_game = None;
     let saved_games = games
         .into_iter()

@@ -113,3 +113,11 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/prompt-presets/:id/delete` | `delete_preset_handler` |
 | POST | `/prompt-presets/:id/duplicate` | `duplicate_preset_handler` |
 | POST | `/prompt-presets/:id/activate` | `activate_preset_handler` |
+
+## Unknown areas
+
+The following routes have handler-module prefixes not listed in the script's `AREA_GROUPS`. Add a new area (or fold them into an existing one) in `scripts/extract_http_routes.py`:
+
+| Method | Path | Handler |
+|--------|------|---------|
+| GET | `/screen` | `screen_handler` |

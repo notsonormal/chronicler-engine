@@ -151,7 +151,7 @@ async fn check_a_world_posture_save_leaves_the_dialog_open_with_the_draft(
                 select.value = 'present';
                 select.dispatchEvent(new Event('change', { bubbles: true }));
                 await ended;
-                await window.chroniclerLive.settle();
+                await window.__waitForScreen();
                 const dialog = document.getElementById('edit-dialog');
                 const input = document.querySelector('#edit-dialog input[name="name"]');
                 if (!dialog.open) return 'the posture save closed the dialog';

@@ -46,7 +46,7 @@ chrome_devtools_evaluate(expression="(async () => { for (let i = 0; i < 30; i++)
 
 **Each `chrome_devtools_evaluate` call has a fixed 10 s cap** (`Timed out waiting for CDP response: Runtime.evaluate`), and an LLM turn takes longer. Click in one call, then poll in short calls of 8 s or less until the state you want appears. A timed-out call does not stop the page's JS or undo the click. Poll again, and keep the browser running.
 
-While a Job runs, poll `#status-display` until it reads "Ready" — during generation it reads "Thinking", "Narrating", "Generating" or "Quantifying" (spec 16.6). `/status/busy` renders the label inside an element with `data-status` (`idle`, `thinking`, `autoplay` or `failed`), and the status display loads it when the busy number of `GET /changes` moves. To see why a region did not load, read its `data-live-state` (`current`, `loading`, `held`, `stale` or `due`).
+While a Job runs, poll `#status-display` until it reads "Ready" — during generation it reads "Thinking", "Narrating", "Generating" or "Quantifying" (spec 16.6). `/status/busy` renders the label inside an element with `data-status` (`idle`, `thinking`, `autoplay` or `failed`), and the status display loads it when the revision of `GET /changes` moves. To see why a part did not load, compare `<html data-revision>` with the `server:revision` of `GET /changes`: they match when the page shows the screen of the server. `<html data-screen-busy>` says that an ask or a load is in flight, and `#screen-error` shows the failure of the last ask or load.
 
 Done when the surface under test is on screen.
 
@@ -104,7 +104,7 @@ Selector vocabulary: `docs/specs/browser_*.md`, enforced in `tests/browser/` (`d
 
 | Symptom | Check |
 |---|---|
-| Status display or another region frozen | `GET /changes` for the numbers, and the `data-live-state` of the region. `held` means an open edit, `stale` means a hidden section, and `due` means the last load failed |
+| Status display or another part frozen | `GET /changes` for the revision, `<html data-revision>` for the stamp that the page shows, `<html data-screen-busy>` for an ask or a load in flight, and `#screen-error` for the failure of the last ask or load. A part of a closed tab is empty by design |
 | Capability tool missing | `chrome_devtools_load`; loader missing → `/reload` |
 | Endpoint unreachable, or `Page.enable` times out | `/home/node/.pi/start-browser.sh`, then retry |
 | `Timed out waiting for CDP response: Runtime.evaluate` | The 10 s cap (step 2). The page's JS is still running. Poll again in a short call |

@@ -60,7 +60,7 @@ async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
 
     assert!(
         !body.contains("settings-panel"),
-        "the shell's .settings-panel is the region: the fragment repeats no root: {body}"
+        "the shell's .settings-panel is the part: the fragment repeats no root: {body}"
     );
     assert!(
         !body.contains("connection-editor") && !body.contains("editor-slot"),
@@ -332,15 +332,9 @@ async fn test_failed_settings_panel_load_reports_inside_the_panel() {
     assert_eq!(
         response.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
-        "a failed load answers non-2xx, so the loaded panel stays as it is"
+        "a failed load answers non-2xx, so the screen load that reads it fails"
     );
-    assert_eq!(
-        response
-            .headers()
-            .get("HX-Reswap")
-            .and_then(|value| value.to_str().ok()),
-        Some("none")
-    );
+    assert!(response.headers().get("HX-Reswap").is_none());
     let body = body_text(response).await;
 
     assert!(

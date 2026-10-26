@@ -18,6 +18,7 @@ use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
 use crate::application::generation::gate::Busy;
 use crate::domain::model::change::ChangeVersions;
+use crate::domain::model::game::GameId;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 
 pub async fn header_fragment(
@@ -111,19 +112,25 @@ pub async fn busy_status_handler(
     State(state): State<AppState>,
     current: Option<CurrentGame>,
 ) -> Html<String> {
-    let Some(CurrentGame(game_id)) = current else {
-        return Html(idle_answer());
+    Html(render_status_display(
+        &state,
+        current.map(|CurrentGame(game_id)| game_id),
+    ))
+}
+
+/// The status display for the given Game; with no Game it is idle. A Game whose
+/// status cannot be read shows its failure line in the display, not an error answer.
+pub fn render_status_display(state: &AppState, game: Option<GameId>) -> String {
+    let Some(game_id) = game else {
+        return idle_answer();
     };
     match state.game_view_query.status(game_id) {
-        Ok(Status::Busy(busy)) => Html(busy_answer(&busy)),
-        Ok(Status::Failed(failure)) => Html(failure_answer(&failure)),
-        Ok(Status::Idle) => Html(idle_answer()),
+        Ok(Status::Busy(busy)) => busy_answer(&busy),
+        Ok(Status::Failed(failure)) => failure_answer(&failure),
+        Ok(Status::Idle) => idle_answer(),
         Err(e) => {
             tracing::error!("busy_status_handler: {e}");
-            Html(failure_answer(&GenerationFailure::unreadable(
-                Record::Game,
-                &e,
-            )))
+            failure_answer(&GenerationFailure::unreadable(Record::Game, &e))
         }
     }
 }

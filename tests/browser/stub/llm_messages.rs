@@ -14,14 +14,14 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::change::ChangeKind;
 
-use super::support::{ask_once, stop_page_timer, wait_until_focused, StubRunner};
+use super::support::{wait_until_focused, StubRunner};
 use super::*;
 
 const OPEN_CONTROL: &str = ".llm-message-open";
 const RECORD: &str = "#edit-dialog .llm-message-record";
 const WAIT: Duration = Duration::from_millis(2000);
 
-/// The section loads its region when it opens, so the wait is for the card the load renders.
+/// The section loads its part when it opens, so the wait is for the card the load renders.
 async fn open_llm_messages_tab(page: &playwright_rs::Page) {
     page.locator(r#"[data-tab="llm-messages"]"#)
         .await

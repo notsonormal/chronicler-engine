@@ -229,19 +229,15 @@ async fn test_failed_load_answers_non_2xx_and_reswap_none() {
         StatusCode::INTERNAL_SERVER_ERROR,
         "a failed load must answer non-2xx, not 200 with an error body"
     );
-    assert_eq!(
-        response
-            .headers()
-            .get("HX-Reswap")
-            .and_then(|value| value.to_str().ok()),
-        Some("none"),
-        "a failed load must ask the client to swap nothing"
+    assert!(
+        response.headers().get("HX-Reswap").is_none(),
+        "a part route is no htmx target, so it steers no swap"
     );
 }
 
 // [docs/specs/failure_display.md] SCENARIO: 38.18
 #[tokio::test]
-async fn test_failed_panel_loads_answer_non_2xx_and_reswap_none() {
+async fn test_failed_panel_loads_answer_non_2xx_with_an_error_fragment() {
     for (path, call) in [
         ("/fragment/settings", StorageCall::GetSettings),
         ("/fragment/prompt-presets", StorageCall::GetSettings),
@@ -261,13 +257,9 @@ async fn test_failed_panel_loads_answer_non_2xx_and_reswap_none() {
             StatusCode::INTERNAL_SERVER_ERROR,
             "{path}: a failed load must answer non-2xx, not 200 with an error body"
         );
-        assert_eq!(
-            response
-                .headers()
-                .get("HX-Reswap")
-                .and_then(|value| value.to_str().ok()),
-            Some("none"),
-            "{path}: a failed load must ask the client to swap nothing"
+        assert!(
+            response.headers().get("HX-Reswap").is_none(),
+            "{path}: a part route is no htmx target, so it steers no swap"
         );
         let body = crate::support::http_requests::response_body(response).await;
         assert!(

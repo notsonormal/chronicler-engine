@@ -63,6 +63,10 @@ use super::server::{get_config_port, release_port_lock};
 use super::stub_action_layers::StubActionLayers;
 use super::CONFIG_PATH;
 
+mod handles;
+
+pub use handles::*;
+
 const DASHBOARD_SHELL: &str = include_str!("../../assets/index.html");
 
 const FIXTURE_VISUAL_SIDEBAR: &str = include_str!("stub_fixtures/visual_sidebar.html");
@@ -526,6 +530,7 @@ struct StubState {
     settings: std::sync::Mutex<AppSettings>,
     change_asks: std::sync::atomic::AtomicUsize,
     fragment_loads: std::sync::Mutex<HashMap<String, usize>>,
+    screen_requests: std::sync::Mutex<Vec<Vec<String>>>,
     loads_failing: std::sync::atomic::AtomicBool,
     story_log_delay_ms: std::sync::atomic::AtomicU64,
     options_failed: std::sync::atomic::AtomicBool,
@@ -562,7 +567,7 @@ impl StubGames {
 /// What `GET /changes` answers: a real `ChangeVersions`, so the stub answers the
 /// fields of the engine's own snapshot. A test moves a number through
 /// `StubChangesHandle`; the setters of the other handles move the number of the
-/// data they change, so a test that changes stub data still reaches the region
+/// data they change, so a test that changes stub data still reaches the screen
 /// without naming a number.
 #[derive(Debug, Clone)]
 struct StubChanges {
@@ -689,6 +694,7 @@ impl StubServer {
             settings: std::sync::Mutex::new(AppSettings::default()),
             change_asks: std::sync::atomic::AtomicUsize::new(0),
             fragment_loads: std::sync::Mutex::new(HashMap::new()),
+            screen_requests: std::sync::Mutex::new(Vec::new()),
             loads_failing: std::sync::atomic::AtomicBool::new(false),
             story_log_delay_ms: std::sync::atomic::AtomicU64::new(0),
             options_failed: std::sync::atomic::AtomicBool::new(false),
@@ -815,406 +821,6 @@ impl StubServer {
     }
 }
 
-#[derive(Clone)]
-pub struct StubLifecycleHandle {
-    addr: SocketAddr,
-    shutdown: Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
-    state: Arc<StubState>,
-}
-
-impl StubLifecycleHandle {
-    pub fn addr(&self) -> SocketAddr {
-        self.addr
-    }
-
-    pub fn stop(&self) {
-        if let Some(tx) = self
-            .shutdown
-            .lock()
-            .expect("stub shutdown lock poisoned")
-            .take()
-        {
-            let _ = tx.send(());
-        }
-    }
-
-    pub async fn restart(&self) {
-        let listener = tokio::net::TcpListener::bind(self.addr)
-            .await
-            .unwrap_or_else(|e| panic!("rebind stub on {}: {e}", self.addr));
-        let tx = serve_stub(listener, Arc::clone(&self.state));
-        *self.shutdown.lock().expect("stub shutdown lock poisoned") = Some(tx);
-    }
-}
-
-/// The numbers of `GET /changes`, and what the page asked and loaded.
-#[derive(Clone)]
-pub struct StubChangesHandle {
-    state: Arc<StubState>,
-}
-
-impl StubChangesHandle {
-    /// Moves the number of one kind.
-    pub fn bump(&self, kind: ChangeKind) {
-        self.state.bump(&[kind]);
-    }
-
-    pub fn set_server(&self, server: &str) {
-        self.state
-            .changes
-            .lock()
-            .expect("stub changes lock poisoned")
-            .versions
-            .server = server.to_string();
-    }
-
-    pub fn set_game(&self, game: Option<u64>) {
-        self.state
-            .changes
-            .lock()
-            .expect("stub changes lock poisoned")
-            .set_game(game);
-    }
-
-    /// The `X-Chronicler-Game` header of each `POST` to `path`, in arrival order.
-    pub fn game_headers(&self, path: &str) -> Vec<Option<String>> {
-        self.state.action_layers.game_headers(path)
-    }
-
-    /// Makes the action routes treat `game` as the active Game while `GET /changes`
-    /// still names the old one: the page that has not asked since a switch.
-    pub fn set_game_of_actions(&self, game: u64) {
-        self.state.action_layers.set_game_of_actions(game);
-    }
-
-    pub fn asks(&self) -> usize {
-        self.state
-            .change_asks
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// The requests the stub received for a fragment path or `/status/busy`,
-    /// failed ones included.
-    pub fn loads(&self, path: &str) -> usize {
-        self.state
-            .fragment_loads
-            .lock()
-            .expect("stub load counts lock poisoned")
-            .get(path)
-            .copied()
-            .unwrap_or(0)
-    }
-
-    /// Fails every fragment and `/status/busy` request with a 500 and leaves
-    /// `GET /changes` working, so a region load fails after a good ask.
-    pub fn set_loads_failing(&self, failing: bool) {
-        self.state
-            .loads_failing
-            .store(failing, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// Holds the story-log answer back, so a load is in flight for a while.
-    pub fn set_story_log_delay_ms(&self, millis: u64) {
-        self.state
-            .story_log_delay_ms
-            .store(millis, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubGamesHandle {
-    state: Arc<StubState>,
-}
-
-impl StubGamesHandle {
-    /// The Game posture save fails until armed, so the tests that drive a failed
-    /// save keep their outcome.
-    pub fn set_posture_saves_succeed(&self, succeeds: bool) {
-        self.state
-            .games
-            .lock()
-            .expect("stub games lock poisoned")
-            .posture_saves_succeed = succeeds;
-    }
-
-    pub fn set_rename_failing(&self, failing: bool) {
-        self.state
-            .games
-            .lock()
-            .expect("stub games lock poisoned")
-            .rename_failing = failing;
-    }
-
-    pub fn saved_names(&self) -> Vec<String> {
-        self.state
-            .games
-            .lock()
-            .expect("stub games lock poisoned")
-            .saved
-            .iter()
-            .map(|(_, name)| name.clone())
-            .collect()
-    }
-}
-
-#[derive(Clone)]
-pub struct StubLlmHandle {
-    state: Arc<StubState>,
-}
-
-impl StubLlmHandle {
-    /// A new LLM message is recorded: the next load of the panel lists it first.
-    pub fn record_message(&self) {
-        self.state
-            .llm_message_count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&[ChangeKind::LLM_MESSAGES]);
-    }
-
-    /// Retention removed every record, but the panel still lists the rows it loaded:
-    /// the record route answers a 404 from now on.
-    pub fn prune_records(&self) {
-        self.state
-            .llm_records_pruned
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubStoryLogHandle {
-    state: Arc<StubState>,
-}
-
-impl StubStoryLogHandle {
-    pub fn set_extra_oldest(&self, present: bool) {
-        self.state
-            .extra_oldest
-            .store(present, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&[ChangeKind::STORY]);
-    }
-
-    pub fn append_narration(&self, text: &str) {
-        *self
-            .state
-            .newest_narration
-            .lock()
-            .expect("stub narration lock poisoned") = Some(text.to_string());
-        self.state.bump(&[ChangeKind::STORY, ChangeKind::GAMES]);
-    }
-
-    pub fn remove_newest(&self) {
-        self.state
-            .deleted
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&[ChangeKind::STORY]);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubOptionsHandle {
-    state: Arc<StubState>,
-}
-
-impl StubOptionsHandle {
-    pub fn serve_alternate_set(&self, alternate: bool) {
-        self.state
-            .dock_options_alt
-            .store(alternate, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&[ChangeKind::OPTIONS]);
-    }
-
-    pub fn set_failure(&self, failed: bool) {
-        self.state
-            .options_failed
-            .store(failed, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&[ChangeKind::OPTIONS]);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubSaveHandle {
-    state: Arc<StubState>,
-}
-
-impl StubSaveHandle {
-    pub fn set_save_succeeds(&self, succeeds: bool) {
-        self.state
-            .save_succeeds
-            .store(succeeds, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// A connection Add or Edit refuses until armed, so the tests that drive a
-    /// refused save keep their outcome.
-    pub fn set_connection_saves_succeed(&self, succeeds: bool) {
-        self.state
-            .connection_saves_succeed
-            .store(succeeds, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// A connection Add or Edit answers the busy refusal, the way the engine
-    /// refuses a Settings save while Autoplay holds the Game.
-    pub fn set_connection_saves_refused_as_busy(&self, refused: bool) {
-        self.state
-            .connection_saves_refused_as_busy
-            .store(refused, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// A role save answers 200 but the engine keeps the value it had, so the next
-    /// render differs from the player's choice.
-    pub fn set_role_saves_keep_stored_value(&self, keeps: bool) {
-        self.state
-            .role_saves_keep_stored_value
-            .store(keeps, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// A role save commits and moves its number at once, but its answer waits
-    /// until `release_role_save_answer`: the save stays in flight in the page
-    /// while the engine already shows its effect.
-    pub fn hold_role_save_answers(&self) {
-        self.state
-            .role_save_answers_held
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn release_role_save_answer(&self) {
-        self.state.role_save_answer_permits.add_permits(1);
-    }
-
-    pub fn set_story_writes_refused_as_busy(&self, refused: bool) {
-        self.state
-            .story_writes_refused_as_busy
-            .store(refused, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn set_delete_succeeds(&self, succeeds: bool) {
-        self.state
-            .delete_succeeds
-            .store(succeeds, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubRowDeleteHandle {
-    state: Arc<StubState>,
-}
-
-impl StubRowDeleteHandle {
-    /// A preset delete refuses and a world delete fails until armed, so the
-    /// tests that drive those paths keep their outcome.
-    pub fn set_row_deletes_succeed(&self, succeeds: bool) {
-        self.state
-            .row_deletes_succeed
-            .store(succeeds, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn set_world_delete_refused(&self, refused: bool) {
-        self.state
-            .world_delete_refused
-            .store(refused, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubFailureHandle {
-    state: Arc<StubState>,
-}
-
-impl StubFailureHandle {
-    pub fn set_header_degraded(&self, degraded: bool) {
-        self.state
-            .header_degraded
-            .store(degraded, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&[ChangeKind::LLM_MESSAGES]);
-    }
-
-    pub fn set_asks_and_loads_failing(&self, failing: bool) {
-        self.state
-            .asks_and_loads_failing
-            .store(failing, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// Every panel loads once per page load, or when its section opens, so arming
-    /// this has no effect on a panel that has loaded.
-    pub fn set_panel_loads_failing(&self, failing: bool) {
-        self.state
-            .panel_loads_failing
-            .store(failing, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn set_world_posture_failing(&self, failing: bool) {
-        self.state
-            .worlds
-            .lock()
-            .expect("stub worlds lock poisoned")
-            .posture_failing = failing;
-    }
-
-    pub fn set_preset_card_refused(&self, refused: bool) {
-        self.state
-            .preset_card_refused
-            .store(refused, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubSwipeHandle {
-    state: Arc<StubState>,
-}
-
-impl StubSwipeHandle {
-    pub fn set_two_swipes(&self) {
-        self.state
-            .two_swipes
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&[ChangeKind::STORY]);
-    }
-
-    pub fn set_switch_failing(&self) {
-        self.state
-            .switch_fails
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubStatusHandle {
-    state: Arc<StubState>,
-}
-
-impl StubStatusHandle {
-    /// Moves the busy number, so the status display loads on the next ask.
-    pub fn set(&self, status: StubStatus) {
-        *self.state.status.lock().expect("stub status lock poisoned") = status;
-        self.state.bump(&[ChangeKind::BUSY_STATE]);
-    }
-}
-
-#[derive(Clone)]
-pub struct StubRetriggerHandle {
-    state: Arc<StubState>,
-}
-
-#[derive(Clone)]
-pub struct StubActionHandle {
-    state: Arc<StubState>,
-}
-
-impl StubActionHandle {
-    pub fn count(&self) -> usize {
-        self.state
-            .action_requests
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-}
-
-impl StubRetriggerHandle {
-    pub fn count(&self) -> usize {
-        self.state
-            .retrigger_requests
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-}
-
 impl Drop for StubServer {
     fn drop(&mut self) {
         if !self.owns_server {
@@ -1308,6 +914,10 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/status/busy", get(status_busy))
         .route("/status/reset-busy", post(reset_busy))
         .route("/changes", get(changes_answer))
+        .route("/screen", get(screen_answer))
+        .route("/stub/touch", get(touch_revision))
+        // A button that a check adds to a part posts here, so its request ends with 200.
+        .route("/probe/:name", post(|| async { StatusCode::OK }))
         .route("/fragment/header", get(header_fragment))
         .route("/fragment/failure-banner", get(failure_banner_fragment))
         .route("/fragment/story-log", get(story_log_fragment))
@@ -1587,7 +1197,9 @@ async fn count_and_fail_reads_middleware(
 ) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     let path = request.uri().path().to_string();
-    let is_load = path.starts_with("/fragment/") || path == "/status/busy";
+    let query = request.uri().query().unwrap_or_default().to_string();
+    let is_load = path.starts_with("/fragment/") || path == "/status/busy" || path == "/screen";
+    let names_part = |part: &str| query.split(['=', ',', '&']).any(|name| name == part);
     if is_load {
         *state
             .fragment_loads
@@ -1600,10 +1212,16 @@ async fn count_and_fail_reads_middleware(
         state.change_asks.fetch_add(1, SeqCst);
     }
     let delay_ms = state.story_log_delay_ms.load(SeqCst);
-    if path == "/fragment/story-log" && delay_ms > 0 {
+    let loads_story_log =
+        path == "/fragment/story-log" || (path == "/screen" && names_part("story-log"));
+    if loads_story_log && delay_ms > 0 {
         tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
     }
-    let is_panel_load = PANEL_LOAD_PATHS.contains(&path.as_str());
+    let is_panel_load = PANEL_LOAD_PATHS.contains(&path.as_str())
+        || (path == "/screen"
+            && ["worlds", "games", "settings", "prompt-presets"]
+                .iter()
+                .any(|part| names_part(part)));
     if is_panel_load && state.panel_loads_failing.load(SeqCst) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1616,16 +1234,12 @@ async fn count_and_fail_reads_middleware(
     let failing =
         state.asks_and_loads_failing.load(SeqCst) || (is_load && state.loads_failing.load(SeqCst));
     if is_read && failing {
-        let mut response = (
+        return (
             StatusCode::INTERNAL_SERVER_ERROR,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
             render_error("read failed"),
         )
             .into_response();
-        response
-            .headers_mut()
-            .insert("HX-Reswap", axum::http::HeaderValue::from_static("none"));
-        return response;
     }
     next.run(request).await
 }
@@ -1802,11 +1416,108 @@ async fn options_dock_fragment(State(state): State<Arc<StubState>>) -> Html<Stri
     }
 }
 
+/// The shell asks every `STUB_POLL_MS`, so a stub check waits for a load for a
+/// tenth of the time that the real shell takes.
+const STUB_POLL_MS: &str = "100";
+
 async fn index() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        DASHBOARD_SHELL,
+        DASHBOARD_SHELL.replace(
+            "data-poll-ms=\"1000\"",
+            &format!("data-poll-ms=\"{STUB_POLL_MS}\""),
+        ),
     )
+}
+
+async fn screen_part_html(state: &Arc<StubState>, name: &str) -> Option<String> {
+    let state = || State(Arc::clone(state));
+    Some(match name {
+        "header" => header_html(),
+        "failure-banner" => failure_banner_fragment(state()).await.0,
+        "story-log" => story_log_fragment(state()).await.0,
+        "visual-sidebar" => FIXTURE_VISUAL_SIDEBAR.to_string(),
+        "options-dock" => options_dock_fragment(state()).await.0,
+        "status-display" => {
+            let answer = status_busy(state()).await;
+            let bytes = axum::body::to_bytes(answer.into_body(), usize::MAX)
+                .await
+                .expect("read the stub status answer");
+            String::from_utf8_lossy(&bytes).to_string()
+        }
+        "settings" => settings_fragment(state()).await.0,
+        "prompt-presets" => presets_fragment(state()).await.0,
+        "worlds" => worlds_fragment(state()).await.0,
+        "games" => games_fragment(state()).await.0,
+        "llm-messages" => llm_messages_fragment(state()).await.0,
+        _ => return None,
+    })
+}
+
+/// `GET /screen?parts=`: the canned parts, each answered as the engine answers it.
+/// The request is recorded, and each part counts as a load of its own route.
+async fn screen_answer(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
+) -> Response<Body> {
+    let names: Vec<String> = query
+        .get("parts")
+        .map(|parts| parts.split(',').map(str::to_string).collect())
+        .unwrap_or_default();
+    let (stamp, game) = {
+        let changes = state.changes.lock().expect("stub changes lock poisoned");
+        (
+            changes.versions.stamp(),
+            changes.versions.game.map(|game| game.id.0),
+        )
+    };
+    state
+        .screen_requests
+        .lock()
+        .expect("stub screen requests lock poisoned")
+        .push(names.clone());
+    let mut body = String::new();
+    for name in &names {
+        let Some(html) = screen_part_html(&state, name).await else {
+            return (StatusCode::BAD_REQUEST, format!("unknown part {name}")).into_response();
+        };
+        if let Some(part) = super::screen_part_table::PARTS
+            .iter()
+            .find(|part| part.name == name)
+        {
+            *state
+                .fragment_loads
+                .lock()
+                .expect("stub load counts lock poisoned")
+                .entry(part.path.to_string())
+                .or_insert(0) += 1;
+        }
+        body.push_str(&format!("<template data-part=\"{name}\">{html}</template>"));
+    }
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "text/html; charset=utf-8".to_string()),
+            (header::HeaderName::from_static("x-revision"), stamp),
+            (
+                header::HeaderName::from_static("x-game"),
+                game.map(|id| id.to_string()).unwrap_or_default(),
+            ),
+        ],
+        body,
+    )
+        .into_response()
+}
+
+/// Moves the revision and nothing else, so the page loads its screen once more.
+async fn touch_revision(State(state): State<Arc<StubState>>) -> Response<Body> {
+    state
+        .changes
+        .lock()
+        .expect("stub changes lock poisoned")
+        .versions
+        .revision += 1;
+    (StatusCode::OK, "").into_response()
 }
 
 async fn action_check(

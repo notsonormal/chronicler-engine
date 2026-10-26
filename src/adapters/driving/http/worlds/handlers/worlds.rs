@@ -3,6 +3,8 @@
 
 use std::str::FromStr;
 
+use askama::Template;
+
 use axum::{extract::Path, extract::State, response::Response, Form};
 use serde::Deserialize;
 
@@ -15,7 +17,9 @@ use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response,
 };
-use crate::adapters::driving::http::utils::fragment::{failed_fragment_response, render_response};
+use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
+use crate::application::errors::ApplicationError;
+use crate::error::EngineError;
 use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::games_per_world;
 use crate::adapters::driving::http::worlds::templates::worlds::{
@@ -96,15 +100,24 @@ impl WorldForm {
 }
 
 pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let worlds = match state.world_catalogue.list_worlds() {
-        Ok(w) => w,
-        Err(e) => return failed_fragment_response(&format!("Failed to load worlds: {e}")),
-    };
+    render_fragment(&state, render_worlds_panel, "list_worlds_fragment")
+}
 
-    let games = state.game_catalogue.list_games().unwrap_or_default();
+pub fn render_worlds_panel(state: &AppState) -> Result<String, EngineError> {
+    let worlds = state
+        .world_catalogue
+        .list_worlds()
+        .map_err(ApplicationError::into_engine_error)?;
+
+    let games = state
+        .game_catalogue
+        .list_games()
+        .map_err(ApplicationError::into_engine_error)?;
     let games_per_world = games_per_world(&games);
 
-    render_response(&WorldsPanelTemplate::from_worlds(&worlds, &games_per_world))
+    WorldsPanelTemplate::from_worlds(&worlds, &games_per_world)
+        .render()
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 pub async fn create_world_handler(

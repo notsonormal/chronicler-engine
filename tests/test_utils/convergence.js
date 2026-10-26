@@ -1,21 +1,22 @@
-// The body of the convergence check, run inside the page by `convergence.rs`: it waits until the page is quiet, then compares each visible live region with a fresh GET of its own route.
+// The body of the convergence check, run inside the page by `convergence.rs`: it waits until the page is quiet, then compares each visible part with a fresh GET /screen of that part, checks that the parts of a closed tab are empty, and compares the attributes of each part element with the shell.
 async ({ timeoutMs }) => {
   const HTMX_CLASSES = ["htmx-request", "htmx-settling", "htmx-swapping", "htmx-added"];
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const quote = (text) => JSON.stringify(text.length > 70 ? text.slice(0, 70) + "…" : text);
 
-  const regionName = (region) =>
-    region.id ? "#" + region.id : "." + region.classList[0];
+  const partName = (part) => part.dataset.part;
 
-  const visibleRegions = () =>
-    Array.from(document.querySelectorAll("[data-live]")).filter((region) => {
-      const section = region.closest(".tab-content");
+  const visibleParts = () =>
+    Array.from(document.querySelectorAll("[data-part]")).filter((part) => {
+      const section = part.closest(".tab-content");
       return !section || section.classList.contains("active");
     });
 
-  // The loop keeps its record of each region in `liveRecords`, a script-level
-  // binding of dashboard-live.js.
-  async function reasonsNotQuiet(regions) {
+  // The page is quiet when no ask or load is in flight and the stamp of the page
+  // equals the `server:revision` of GET /changes.
+  async function reasonsNotQuiet() {
+    const root = document.documentElement;
+    if (root.hasAttribute("data-screen-busy")) return ["an ask or a load is in flight"];
     let answer;
     try {
       const response = await fetch("/changes", { cache: "no-store" });
@@ -24,36 +25,15 @@ async ({ timeoutMs }) => {
     } catch (error) {
       return ["GET /changes failed: " + error.message];
     }
-    const reasons = [];
-    for (const region of regions) {
-      const name = regionName(region);
-      const state = region.dataset.liveState;
-      if (state !== "current") {
-        reasons.push(name + ": data-live-state is " + quote(String(state)));
-        continue;
-      }
-      const record = liveRecords.get(region);
-      if (!record) {
-        reasons.push(name + ": never loaded");
-        continue;
-      }
-      if (record.loading || region.classList.contains("htmx-request")) {
-        reasons.push(name + ": a load is in flight");
-        continue;
-      }
-      const kinds = region.dataset.live.split(/\s+/).filter(Boolean);
-      const behind = kinds.filter(
-        (kind) => !record.numbers || record.numbers[kind] !== answer[kind],
-      );
-      if (behind.length > 0) {
-        reasons.push(name + ": its record differs from GET /changes in " + behind.join(", "));
-      }
+    const stamp = answer.server + ":" + answer.revision;
+    if (root.dataset.revision !== stamp) {
+      return ["the page shows " + quote(String(root.dataset.revision)) + ", the server is at " + stamp];
     }
-    return reasons;
+    return [];
   }
 
   // A load keeps these three kinds of state (`Idiomorph.defaults.callbacks` in
-  // dashboard-live.js): the attributes that the element's `data-keep` names, an
+  // dashboard-screen.js): the attributes that the element's `data-keep` names, an
   // inline error slot that shows an error, and a story-log entry in edit
   // (`data-editing`), which it skips.
   const showsInlineError = (node) =>
@@ -149,18 +129,83 @@ async ({ timeoutMs }) => {
     );
   }
 
-  async function diffRegion(region) {
-    const route = region.getAttribute("hx-get");
-    const response = await fetch(route, { cache: "no-store", headers: { "HX-Request": "true" } });
+  async function diffPart(part) {
+    const name = partName(part);
+    const route = "/screen?parts=" + name;
+    const response = await fetch(route, { cache: "no-store" });
     if (!response.ok) return "GET " + route + " answered " + response.status;
-    const template = document.createElement("template");
-    template.innerHTML = await response.text();
-    // The morph extension of htmx hands Idiomorph the element children of the
-    // answer, so a text node at the top of the answer is never part of the region.
+    const answer = document.createElement("template");
+    answer.innerHTML = await response.text();
+    const fresh = answer.content.querySelector("template[data-part]");
     return diffChildren(
-      Array.from(region.childNodes),
-      Array.from(template.content.children),
-      regionName(region),
+      Array.from(part.childNodes),
+      Array.from(fresh.content.childNodes),
+      "[data-part=" + name + "]",
+    );
+  }
+
+  // A script sets these on a part element: the focus fallback of a load, and the lock
+  // of the Edit controls while a story-log entry is in edit. The lock is expected
+  // exactly when the part holds an entry in edit.
+  const SCRIPT_ATTRIBUTES = ["tabindex", "data-editing-entry"];
+
+  // The action area derives the state class of the status display from the part's
+  // content (`statusDisplayState`), so the class is compared by that rule.
+  const STATUS_STATE_CLASSES = ["ready", "thinking", "error"];
+
+  function withoutStateClasses(attributes) {
+    if (!attributes.has("class")) return;
+    const kept = attributes
+      .get("class")
+      .split(/\s+/)
+      .filter((name) => !STATUS_STATE_CLASSES.includes(name));
+    attributes.set("class", kept.join(" "));
+  }
+
+  function statusStateProblem(part) {
+    const states = part.className.split(/\s+/).filter((name) => STATUS_STATE_CLASSES.includes(name));
+    const want = statusDisplayState(part);
+    return states.length === 1 && states[0] === want
+      ? null
+      : "the state class is " + quote(states.join(" ")) + ", the content says " + quote(want);
+  }
+
+  function diffPartElement(part, shellPart) {
+    const expected = new Map(comparableAttributes(shellPart));
+    const live = new Map(comparableAttributes(part));
+    if (partName(part) === "status-display") {
+      const problem = statusStateProblem(part);
+      if (problem) return problem;
+      withoutStateClasses(live);
+      withoutStateClasses(expected);
+    }
+    for (const name of SCRIPT_ATTRIBUTES) {
+      live.delete(name);
+      expected.delete(name);
+    }
+    const editing = part.querySelector("[data-editing]") !== null;
+    const locked = part.hasAttribute("data-editing-entry");
+    if (locked !== editing) {
+      return editing
+        ? "an entry is in edit and the part is not locked"
+        : "the part is locked and no entry is in edit";
+    }
+    for (const name of new Set([...live.keys(), ...expected.keys()])) {
+      if (live.get(name) !== expected.get(name)) {
+        return (
+          "attribute " + name + " " + quote(String(live.get(name))) +
+          " on the part element, the shell has " + quote(String(expected.get(name)))
+        );
+      }
+    }
+    return null;
+  }
+
+  async function shellParts() {
+    const response = await fetch("/", { cache: "no-store" });
+    const shell = new DOMParser().parseFromString(await response.text(), "text/html");
+    return new Map(
+      Array.from(shell.querySelectorAll("[data-part]")).map((part) => [partName(part), part]),
     );
   }
 
@@ -168,20 +213,40 @@ async ({ timeoutMs }) => {
   let notQuiet = [];
   let blocking = [];
   for (;;) {
-    const regions = visibleRegions();
-    notQuiet = await reasonsNotQuiet(regions);
+    const parts = visibleParts();
+    notQuiet = await reasonsNotQuiet();
     blocking = [];
     if (notQuiet.length === 0) {
-      for (const region of regions) {
-        const diff = await diffRegion(region);
+      const shell = await shellParts();
+      for (const part of Array.from(document.querySelectorAll("[data-part]"))) {
+        if (parts.includes(part)) continue;
+        if (part.childNodes.length > 0) {
+          blocking.push({
+            part: partName(part),
+            route: "(closed tab)",
+            diff: "a part of a closed tab holds " + part.childNodes.length + " nodes",
+          });
+        }
+      }
+      for (const part of parts) {
+        const rootDiff = diffPartElement(part, shell.get(partName(part)));
+        if (rootDiff) {
+          blocking.push({ part: partName(part), route: "/", diff: rootDiff });
+        }
+        const diff = await diffPart(part);
         if (!diff) continue;
-        blocking.push({ region: regionName(region), route: region.getAttribute("hx-get"), diff });
+        blocking.push({
+          part: partName(part),
+          route: "/screen?parts=" + partName(part),
+          diff,
+        });
       }
       if (blocking.length === 0) return JSON.stringify({ ok: true, notQuiet, blocking });
     }
     if (Date.now() > deadline) {
       return JSON.stringify({ ok: false, notQuiet, blocking });
     }
-    await sleep(100);
+    // The page asks every 100 ms in the stub, so a fixed pause could meet each ask in flight.
+    await sleep(60 + Math.random() * 80);
   }
 }

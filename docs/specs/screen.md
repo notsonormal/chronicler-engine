@@ -1,8 +1,11 @@
-# Feature Spec: Action answers and the Game header
+# Feature Spec: The screen load, action answers and the Game header
 
 Endpoints:
+- `GET /screen?parts=<names>`
 - every `POST` route
 - the Game-bound `POST` routes: `POST /action`, `POST /action/check`, `POST /action/confirm`, `POST /autoplay`, `POST /swipe/new`, `POST /retrigger`, `POST /reset`, `POST /message/:id/swipe/:index`, `POST /history/:id`, `POST /history/delete` and `POST /status/reset-busy`
+
+The screen is the header, the failure banner and the parts of the visible tab. `GET /screen` renders the parts that the page names, in one answer. The part names are `header`, `failure-banner`, `story-log`, `visual-sidebar`, `options-dock`, `status-display`, `settings`, `prompt-presets`, `worlds`, `games` and `llm-messages`.
 
 An action is a `POST` request. An action answers its outcome: a status code and the headers below. The client reads the data of an action from the screen, not from the answer.
 
@@ -102,9 +105,89 @@ When the client POST /history/delete with the header X-Chronicler-Game set to "1
 Then the response status is 409
 ```
 
+#### Scenario 45.8: A screen load answers one template for each named part, in the order asked
+
+```gherkin
+Given an engine with an active Game
+When the client GET /screen?parts=status-display,header,story-log
+Then the response status is 200
+And the body holds one template with data-part="status-display", then one with data-part="header", then one with data-part="story-log"
+And the header X-Revision has the form `<server>:<revision>`
+And the header X-Game is the id of the active Game
+```
+
+#### Scenario 45.9: A part of the screen equals the answer of its own part route
+
+```gherkin
+Given an engine with an active Game
+When the client GET /screen?parts=<name> for each part name
+Then the content of the template of each part equals the body of its own route: GET /fragment/header, /fragment/failure-banner, /fragment/story-log, /fragment/visual-sidebar, /fragment/options-dock, /status/busy, /fragment/settings, /fragment/prompt-presets, /fragment/worlds, /fragment/games and /fragment/llm-messages
+```
+
+#### Scenario 45.10: A missing, unknown or repeated part name answers 400 and renders nothing
+
+```gherkin
+Given an engine with an active Game
+When the client GET /screen with no parts query, with an empty one, with a part name that no part has, or with one name twice
+Then each response status is 400
+And each body holds no template
+And the `server:revision` of GET /changes is the same before and after each request
+```
+
+#### Scenario 45.11: One part that fails to render fails the whole screen
+
+```gherkin
+Given an engine with an active Game
+And the settings read fails
+When the client GET /screen?parts=header,settings
+Then the response status is 500
+And the body names the failure
+And the body holds no template
+When the client GET /screen?parts=header
+Then the response status is 200
+```
+
+#### Scenario 45.12: A screen holds at least the revision read before its render
+
+```gherkin
+Given an active Game and a second saved Game
+When the client GET /screen?parts=header
+Then the X-Revision of the answer equals the `server:revision` that GET /changes answers right after
+When the client POST /games/:id/rename for the active Game with a new name
+And the client GET /screen?parts=header
+Then the revision of the new X-Revision is higher than the earlier one
+And the template of the header holds the new name
+```
+
+#### Scenario 45.13: With no active Game the Game parts render empty and the other parts render
+
+```gherkin
+Given an engine with no active Game
+When the client GET /screen?parts=header,story-log,visual-sidebar,options-dock,status-display,games
+Then the response status is 200
+And the header X-Game is empty
+And the template of the header shows "No active game"
+And the templates of story-log, visual-sidebar and options-dock are empty
+And the template of status-display shows Ready
+And the template of games holds the New Game control
+```
+
+#### Scenario 45.14: The Worlds part fails when the Games that it counts cannot be read
+
+```gherkin
+Given an engine with an active Game
+And the read of the Games fails
+When the client GET /screen?parts=worlds
+Then the response status is 500
+And the body names the failure
+And the body holds no template
+```
+
 ---
 
 ## Properties
+
+- **S.1** `GET /screen` answers each part with the renderer of its own part route, so the screen and the part routes never differ. The screen reads the revision before it renders, so it holds at least that revision.
 
 These properties hold across every `POST` route and are observable through HTTP.
 Drift indicates a regression even if all scenarios pass.

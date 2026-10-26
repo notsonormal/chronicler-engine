@@ -1332,6 +1332,29 @@ body {
     display: none;
 }
 
+.screen-error {
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-small);
+}
+
+.screen-error[hidden] {
+    display: none;
+}
+
+.edit-dialog-status:empty {
+    display: none;
+}
+
+.edit-dialog-status {
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+}
+
+#edit-dialog[data-saving] #edit-dialog-body {
+    opacity: 0.6;
+}
+
 .connection-test-slot:empty {
     display: none;
 }

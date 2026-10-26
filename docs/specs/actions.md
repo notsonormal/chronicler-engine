@@ -388,7 +388,7 @@ And the Game is no longer busy
 The confirm path is the preview's send: it dispatches the checked command.
 The running generation shows in the status display, which loads when the
 busy state changes. A confirm that the engine refuses answers the refusal
-and writes no region.
+and writes no part of the screen.
 
 ## Properties
 

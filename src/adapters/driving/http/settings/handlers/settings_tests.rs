@@ -49,7 +49,7 @@ async fn test_settings_panel_returns_html() {
 
     assert!(
         !html.contains("settings-panel"),
-        "the shell's .settings-panel is the region, so the fragment repeats no root"
+        "the shell's .settings-panel is the part, so the fragment repeats no root"
     );
     assert!(html.contains("Connections"));
     assert!(html.contains("Text Check"));
