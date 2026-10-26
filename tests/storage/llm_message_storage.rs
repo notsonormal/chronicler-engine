@@ -1,4 +1,4 @@
-//! Integration tests for LLM message persistence: save/list, error-message preservation, global-cap pruning, and pagination across a real SQLite-backed `Storage`.
+//! Integration tests for LLM message persistence: save/list/get by id, error-message preservation, global-cap pruning, and pagination across a real SQLite-backed `Storage`.
 
 use chrono::Utc;
 use chronicler_engine::domain::model::llm_message::LlmMessage;
@@ -169,4 +169,30 @@ fn test_sqlite_whole_window_holds_every_roles_newest_attempt() {
         ),
         "a role whose newest row is not the window's newest row must still be in it"
     );
+}
+
+#[test]
+fn test_sqlite_get_returns_the_stored_record_and_none_for_a_missing_id() {
+    let storage = create_storage();
+    storage
+        .save_llm_message(&LlmMessage {
+            system_prompt: "the system prompt".to_string(),
+            raw_request_json: "{\"model\":\"gpt-4\"}".to_string(),
+            parsed_response: "hello".to_string(),
+            ..llm_message("narrator", "gpt-4", None, 0)
+        })
+        .unwrap();
+    let id = storage.list_latest_llm_messages(50).unwrap()[0].id;
+
+    let found = storage
+        .get_llm_message(id)
+        .unwrap()
+        .expect("the record exists");
+    assert_eq!(found.id, id);
+    assert_eq!(found.agent_name, "narrator");
+    assert_eq!(found.system_prompt, "the system prompt");
+    assert_eq!(found.raw_request_json, "{\"model\":\"gpt-4\"}");
+    assert_eq!(found.parsed_response, "hello");
+
+    assert!(storage.get_llm_message(id + 1).unwrap().is_none());
 }

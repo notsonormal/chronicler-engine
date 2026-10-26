@@ -3,6 +3,14 @@
 Endpoints:
 - `POST /action`
 - `GET /fragment/llm-messages`
+- `GET /fragment/llm-messages/:id`
+
+`GET /fragment/llm-messages` answers a header for each of the 50 newest attempts:
+the Agent, the backend and model, the time, and for a failed attempt the error mark
+with a short line of its failure text. A header holds no prompt, no response and no
+Raw JSON. The Open control of a header loads the record of the attempt into the edit
+dialog (`#edit-dialog-body`) through `GET /fragment/llm-messages/:id`. The record is
+read-only. Its root (`data-dialog-form`) carries the title of the dialog.
 
 ## Scenarios
 
@@ -16,7 +24,7 @@ When the client POST /action with command="look"
 And the Game is no longer busy
 Then GET /fragment/llm-messages shows one entry for the narrator that names the backend/model the attempt was made against
 And that entry carries the backend's failure text
-And that entry carries no Raw JSON section
+And the record of that entry carries the failure text and no Raw JSON section
 ```
 
 #### Scenario 33.2: A later successful attempt does not overwrite an earlier failed attempt
@@ -29,18 +37,45 @@ And the client POST /action with command="listen"
 And the Game is no longer busy
 Then GET /fragment/llm-messages shows two entries for the narrator
 And the first entry carries the backend's failure text
-And the second entry carries the second narration
+And the record of the second entry carries the second narration
 ```
 
-#### Scenario 33.3: The LLM Messages fragment renders each message collapsed, with its view state listed in data-keep
+#### Scenario 33.3: The LLM Messages list sends a header for each attempt
 
 ```gherkin
-Given an active Game with one recorded LLM attempt
+Given an active Game with a recorded LLM attempt that holds every field
+And a recorded LLM attempt that failed
 When the client GET /fragment/llm-messages
 Then the response status is "200 OK"
 And the body does not hold an element with the class "llm-messages-panel"
-And the attempt's card has the id "llm-msg-{id}"
-And the attempt's header reports aria-expanded="false" and lists "aria-expanded" in `data-keep`
-And the attempt's body is `hidden` and lists "hidden" in `data-keep`
-And each prompt `details` lists "open" in `data-keep`
+And each attempt's card has the id "llm-msg-{id}"
+And each card's Open control loads `/fragment/llm-messages/{id}` into `#edit-dialog-body`
+And each header names the Agent and the backend/model
+And the failed attempt's header carries the error mark
+And the body holds no system prompt, no user prompt, no response, no Raw JSON and no `details` element
+```
+
+#### Scenario 33.4: The record route answers the full record as a read-only dialog
+
+```gherkin
+Given an active Game with a recorded LLM attempt that holds every field
+And a recorded LLM attempt that failed
+When the client GET /fragment/llm-messages/{id} of the first attempt
+Then the response status is "200 OK"
+And the body is a dialog fragment: its root carries `data-dialog-form`, and it holds the title with the id "edit-dialog-title"
+And the body carries the system prompt, the user prompt, the response, the Raw Request JSON and the Raw Response JSON
+And the body names the backend/model
+And the body holds no form control
+And the body holds a Close control with `data-close-dialog`
+When the client GET /fragment/llm-messages/{id} of the failed attempt
+Then the body carries the failure text and no response
+```
+
+#### Scenario 33.5: The record route answers a 404 for an id that holds no record
+
+```gherkin
+Given an active Game with a recorded LLM attempt
+When the client GET /fragment/llm-messages/{id} with an id that no attempt holds
+Then the response status is "404 Not Found"
+And the body is an error fragment that says "LLM message not found"
 ```

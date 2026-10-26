@@ -55,6 +55,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | GET | `/status/busy` | `busy_status_handler` |
 | POST | `/status/reset-busy` | `reset_busy_handler` |
 | GET | `/fragment/llm-messages` | `llm_messages_fragment` |
+| GET | `/fragment/llm-messages/:id` | `llm_message_record_fragment` |
 
 ## Games
 

@@ -67,7 +67,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `games.rs` — Stub-browser tests for the Games panel: the keyboard-focus landing after a saved-game delete. Tagged against `docs/specs/browser_games.md`.
       - `layout.rs` — Layout checks (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Twelve checks share one browser through the shared runner; each runs on a fresh page against its own stub server, with panic isolation and a per-check timing summary.
       - `live_regions.rs` — Stub-browser tests for the live regions: the ask loop, the loads it starts, the entry in edit that a load skips, and the state a load keeps. The dialog forms that survive a load are here too. Tagged against `docs/specs/browser_live_regions.md`.
-      - `llm_messages.rs` — Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row. Tagged against `docs/specs/browser_llm_messages.md`.
+      - `llm_messages.rs` — Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row, the record that opens in the dialog, and the load that leaves the open dialog alone. Tagged against `docs/specs/browser_llm_messages.md`.
       - `mod.rs` — Stub-browser tests: browser-only behaviour against a fake engine.
       - `options.rs` — Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
       - `prompt_presets.rs` — Stub-browser tests for the Prompt Presets panel: the keyboard-focus landing after a preset card delete and when an editor opens, and the report of a refused editor. Tagged against `docs/specs/browser_prompt_presets.md`.
@@ -92,7 +92,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `games_fragment.rs` — HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.
     - `games_rename.rs` — HTTP E2E tests for game rename (POST /games/:id/rename).
     - `games_switch.rs` — HTTP E2E tests for game switching (POST /games/:id/switch).
-    - `llm_messages.rs` — HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders.
+    - `llm_messages.rs` — HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders, the list sends a header for each attempt, and the record of one attempt opens in the dialog.
     - `mod.rs` — HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, and server wiring.
     - `narrator_mode.rs` — HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
     - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on Options run at the end of a Job, and response-shape parsing.
@@ -160,7 +160,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `mod.rs` — LLM test binary: real LLM provider flows (ignored by default; run with `python build.py --llm-only`).
 - **storage/**
     - `changes.rs` — The storage seam of the change counters: what a committed transaction, a rolled-back transaction, a storage call, a failed call and a read do to the numbers.
-    - `llm_message_storage.rs` — Integration tests for LLM message persistence: save/list, error-message preservation, global-cap pruning, and pagination across a real SQLite-backed `Storage`.
+    - `llm_message_storage.rs` — Integration tests for LLM message persistence: save/list/get by id, error-message preservation, global-cap pruning, and pagination across a real SQLite-backed `Storage`.
     - `mod.rs` — Driven-adapter storage seam tests: repositories exercised against a real SQLite-backed `Storage`.
     - `preset_storage.rs` — Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset
     - `story_storage.rs` — The storage seam of the new records: the story reads, the dock record, the Game's failure line and the record writes of a transaction.

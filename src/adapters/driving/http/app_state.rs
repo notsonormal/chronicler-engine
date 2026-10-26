@@ -7,8 +7,8 @@ use askama::Template;
 
 use crate::adapters::driving::http::builders::headers::{failure_banner_html, header_fragment_html};
 use crate::adapters::driving::http::templates::{
-    CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrationLogTemplate, OptionsDockTemplate,
-    VisualSidebarTemplate,
+    CharacterHeadshotsTemplate, LlmMessageRecordTemplate, LlmMessagesTemplate,
+    NarrationLogTemplate, OptionsDockTemplate, VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
     CharacterPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
@@ -179,5 +179,22 @@ impl AppState {
         template
             .render()
             .map_err(|e| EngineError::Template(Self::render_error_context("LLM messages", e)))
+    }
+
+    /// `None` when no record has this id: retention removes the oldest records.
+    pub fn render_llm_message_record(&self, id: i64) -> Result<Option<String>> {
+        let message = self
+            .game_view_query
+            .llm_message(id)
+            .map_err(|e| EngineError::Config(Self::render_error_context("LLM message", e)))?;
+        message
+            .map(|message| {
+                LlmMessageRecordTemplate::new(&message)
+                    .render()
+                    .map_err(|e| {
+                        EngineError::Template(Self::render_error_context("LLM message", e))
+                    })
+            })
+            .transpose()
     }
 }

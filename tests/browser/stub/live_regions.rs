@@ -680,21 +680,15 @@ const STATUS_ENGAGED: Engaged = Engaged {
 const LLM_ENGAGED: Engaged = Engaged {
     region: LLM_PANEL,
     engage: r#"() => {
-        document.querySelector('.llm-message-header').click();
-        const system = document.querySelector('.llm-message-prompt-details');
-        system.open = true;
-        window.__llmHeader = document.querySelector('.llm-message-header');
-        window.__llmSystem = system;
-        return window.__llmHeader.getAttribute('aria-expanded') === 'true' ? '' : 'the row did not expand';
+        const open = document.querySelector('.llm-message-open');
+        open.focus();
+        window.__llmOpen = open;
+        return document.activeElement === open ? '' : 'the Open control did not take focus';
     }"#,
     check: r#"() => {
-        const header = document.querySelector('.llm-message-header');
-        const system = document.querySelector('.llm-message-prompt-details');
-        if (header !== window.__llmHeader) return 'the header is a new element';
-        if (system !== window.__llmSystem) return 'the System disclosure is a new element';
-        if (header.getAttribute('aria-expanded') !== 'true') return 'the row collapsed';
-        if (document.querySelector('.llm-message-body').hidden) return 'the body is hidden';
-        return system.open ? '' : 'the System disclosure closed';
+        const open = document.querySelector('.llm-message-open');
+        if (open !== window.__llmOpen) return 'the Open control is a new element';
+        return document.activeElement === open ? '' : 'the focus moved';
     }"#,
     end: None,
 };

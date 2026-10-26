@@ -552,3 +552,32 @@ async fn test_world_delete_storage_failure_renders_error_fragment_http() {
         "the error fragment must name the storage failure: {body:?}"
     );
 }
+
+// [docs/specs/worlds.md] SCENARIO: 25.13
+#[tokio::test]
+async fn test_world_row_shows_a_shortened_description_http() {
+    let storage_world = WorldCard {
+        key: "long_world".to_string(),
+        name: "Long World".to_string(),
+        description: format!("Opening {} FINAL-WORD", "lantern ".repeat(60)),
+        ..posture_world()
+    };
+    let storage = Arc::new(empty_sqlite_storage());
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    storage
+        .seed_world(&storage_world, &TestMap::single_room("start"))
+        .expect("seed the long World");
+
+    let html = fetch_body(&app, "/fragment/worlds").await;
+
+    assert!(
+        html.contains("Opening lantern") && html.contains('…'),
+        "the row shows the start of the description and a cut mark: {html}"
+    );
+    assert!(
+        !html.contains("FINAL-WORD"),
+        "the row does not show the end of a long description: {html}"
+    );
+}

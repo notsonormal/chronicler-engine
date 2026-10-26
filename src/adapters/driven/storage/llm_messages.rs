@@ -50,6 +50,34 @@ impl Storage {
         })
     }
 
+    pub fn get_llm_message(&self, id: i64) -> Result<Option<LlmMessage>, EngineError> {
+        self.with_backend_mut(StorageCall::GetLlmMessage, |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id, agent_name, backend_name, model_name, system_prompt, user_prompt,
+                                raw_request_json, raw_response_json, parsed_response, error_message, created_at
+                         FROM llm_messages
+                         WHERE id = ?1",
+                    )
+                    .db_context("Failed to prepare the LLM message query")?;
+
+                let mut rows = stmt
+                    .query_map([id], DbLlmMessage::from_row)
+                    .db_context("Failed to query LLM message")?;
+
+                match rows.next() {
+                    Some(row) => {
+                        let db_msg = row.db_context("Failed to read LLM message row")?;
+                        Ok(Some(LlmMessage::try_from(&db_msg)?))
+                    }
+                    None => Ok(None),
+                }
+            }
+        })
+    }
+
     pub fn list_latest_llm_messages(&self, limit: usize) -> Result<Vec<LlmMessage>, EngineError> {
         self.with_backend_mut(StorageCall::ListLatestLlmMessages, |backend| match backend {
             Backend::Sqlite { pool } => {

@@ -67,14 +67,4 @@ document.addEventListener("DOMContentLoaded", function () {
       p.hidden = p.id !== target;
     });
   });
-
-  // The header holds the open state in aria-expanded and the body in hidden. A
-  // load keeps both (data-keep), so a new LLM message never closes a row.
-  window.toggleLlmMessage = function (header) {
-    const body = document.getElementById(header.getAttribute("aria-controls"));
-    if (!body) return;
-    const expanded = header.getAttribute("aria-expanded") !== "true";
-    header.setAttribute("aria-expanded", String(expanded));
-    body.hidden = !expanded;
-  };
 });

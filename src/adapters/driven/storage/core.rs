@@ -37,6 +37,7 @@ pub enum StorageCall {
     DocksGet,
     GetCharacter,
     GetGame,
+    GetLlmMessage,
     GetPersona,
     GetPreset,
     GetSettings,

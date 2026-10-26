@@ -90,6 +90,10 @@ pub fn build_router(app_state: AppState) -> Router {
             "/fragment/llm-messages",
             get(layout::handlers::llm_messages_fragment),
         )
+        .route(
+            "/fragment/llm-messages/:id",
+            get(layout::handlers::llm_message_record_fragment),
+        )
         .route("/games", post(games::handlers::create_game_handler))
         .route(
             "/games/:id/switch",

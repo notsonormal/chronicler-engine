@@ -7,8 +7,8 @@ use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::story_window::StoryWindowEntry;
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::view_models::{
-    LlmMessageView, StoryRowView, CharacterPortraitView, OptionsDockViewModel, PreviewIssueView,
-    VisualSidebarViewModel,
+    LlmMessageRecordView, LlmMessageRowView, StoryRowView, CharacterPortraitView,
+    OptionsDockViewModel, PreviewIssueView, VisualSidebarViewModel,
 };
 
 #[derive(Template)]
@@ -145,58 +145,17 @@ impl TextCheckPreviewTemplate {
     source = r##"<div class="llm-message-list" id="llm-message-list">
 {% for msg in messages %}
 <div class="llm-message-card" id="llm-msg-{{ msg.id }}">
-    <button type="button" class="llm-message-header" id="llm-msg-header-{{ msg.id }}" aria-expanded="false" data-keep="aria-expanded" aria-controls="llm-msg-body-{{ msg.id }}" onclick="toggleLlmMessage(this)">
+    <div class="llm-message-header">
         <span class="llm-message-agent">{{ msg.agent_name }}</span>
         <span class="llm-message-model">{{ msg.backend_name }} / {{ msg.model_name }}</span>
         <span class="llm-message-time">{{ msg.timestamp }}</span>
-        {% if msg.error_message.is_some() %}<span class="llm-message-error">ERROR</span>{% endif %}
-    </button>
-    <div class="llm-message-body" id="llm-msg-body-{{ msg.id }}" hidden data-keep="hidden">
-        {% if msg.error_message.is_some() %}
-        <div class="llm-message-failure">
-            <span class="llm-message-failure-label">Failure</span>
-            <pre class="llm-message-failure-text">{{ msg.error_message.as_deref().unwrap_or_default() }}</pre>
-        </div>
-        {% endif %}
-        {% if !msg.system_prompt_preview.is_empty() || !msg.user_prompt_preview.is_empty() || !msg.parsed_response_preview.is_empty() %}
-        <div class="llm-message-prompts">
-            {% if !msg.system_prompt_preview.is_empty() %}
-            <details class="llm-message-prompt-details" data-keep="open">
-                <summary>System</summary>
-                <pre class="llm-message-prompt-pre">{{ msg.system_prompt_preview }}</pre>
-            </details>
-            {% endif %}
-            {% if !msg.user_prompt_preview.is_empty() %}
-            <details class="llm-message-prompt-details" data-keep="open">
-                <summary>User</summary>
-                <pre class="llm-message-prompt-pre">{{ msg.user_prompt_preview }}</pre>
-            </details>
-            {% endif %}
-            {% if !msg.parsed_response_preview.is_empty() %}
-            <details class="llm-message-prompt-details" data-keep="open" open>
-                <summary>Response</summary>
-                <pre class="llm-message-prompt-pre">{{ msg.parsed_response_preview }}</pre>
-            </details>
-            {% endif %}
-        </div>
-        {% endif %}
-        {% if !msg.raw_request_json.is_empty() || !msg.raw_response_json.is_empty() %}
-        <div class="llm-message-raw">
-            {% if !msg.raw_request_json.is_empty() %}
-            <details data-keep="open">
-                <summary>Raw Request JSON</summary>
-                <pre>{{ msg.raw_request_json }}</pre>
-            </details>
-            {% endif %}
-            {% if !msg.raw_response_json.is_empty() %}
-            <details data-keep="open">
-                <summary>Raw Response JSON</summary>
-                <pre>{{ msg.raw_response_json }}</pre>
-            </details>
-            {% endif %}
-        </div>
-        {% endif %}
+        {% if msg.error_summary.is_some() %}<span class="llm-message-error">ERROR</span>{% endif %}
+        <button type="button" class="btn-cyan llm-message-open" id="llm-msg-open-{{ msg.id }}" hx-get="/fragment/llm-messages/{{ msg.id }}" hx-target="#edit-dialog-body" hx-swap="innerHTML" aria-label="Open the record of {{ msg.agent_name }} at {{ msg.timestamp }}">Open</button>
     </div>
+    {% if let Some(summary) = msg.error_summary %}
+    <div class="llm-message-error-summary">{{ summary }}</div>
+    {% endif %}
+    <div class="inline-error-slot" data-error-slot="llm-msg-{{ msg.id }}" hidden></div>
 </div>
 {% endfor %}
 {% if messages.is_empty() %}
@@ -206,13 +165,81 @@ impl TextCheckPreviewTemplate {
     ext = "html"
 )]
 pub struct LlmMessagesTemplate {
-    pub messages: Vec<LlmMessageView>,
+    pub messages: Vec<LlmMessageRowView>,
 }
 
 impl LlmMessagesTemplate {
     pub fn new(messages: &[LlmMessage]) -> Self {
         Self {
-            messages: messages.iter().map(LlmMessageView::from).collect(),
+            messages: messages.iter().map(LlmMessageRowView::from).collect(),
+        }
+    }
+}
+
+/// The dialog that shows the whole record of one LLM attempt, read-only.
+#[derive(Template)]
+#[template(
+    source = r##"<div class="llm-message-record" data-dialog-form>
+    <h2 id="edit-dialog-title">{{ record.agent_name }} · {{ record.timestamp }}</h2>
+    <p class="llm-message-record-model">{{ record.backend_name }} / {{ record.model_name }}</p>
+    {% if record.error_message.is_some() %}
+    <div class="llm-message-failure">
+        <span class="llm-message-failure-label">Failure</span>
+        <pre class="llm-message-failure-text">{{ record.error_message.as_deref().unwrap_or_default() }}</pre>
+    </div>
+    {% endif %}
+    {% if !record.system_prompt.is_empty() || !record.user_prompt.is_empty() || !record.parsed_response.is_empty() %}
+    <div class="llm-message-prompts">
+        {% if !record.system_prompt.is_empty() %}
+        <details class="llm-message-prompt-details">
+            <summary>System</summary>
+            <pre class="llm-message-prompt-pre">{{ record.system_prompt }}</pre>
+        </details>
+        {% endif %}
+        {% if !record.user_prompt.is_empty() %}
+        <details class="llm-message-prompt-details">
+            <summary>User</summary>
+            <pre class="llm-message-prompt-pre">{{ record.user_prompt }}</pre>
+        </details>
+        {% endif %}
+        {% if !record.parsed_response.is_empty() %}
+        <details class="llm-message-prompt-details" open>
+            <summary>Response</summary>
+            <pre class="llm-message-prompt-pre">{{ record.parsed_response }}</pre>
+        </details>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if !record.raw_request_json.is_empty() || !record.raw_response_json.is_empty() %}
+    <div class="llm-message-raw">
+        {% if !record.raw_request_json.is_empty() %}
+        <details>
+            <summary>Raw Request JSON</summary>
+            <pre>{{ record.raw_request_json }}</pre>
+        </details>
+        {% endif %}
+        {% if !record.raw_response_json.is_empty() %}
+        <details>
+            <summary>Raw Response JSON</summary>
+            <pre>{{ record.raw_response_json }}</pre>
+        </details>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="form-actions">
+        <button type="button" class="btn-cyan" data-close-dialog>Close</button>
+    </div>
+</div>"##,
+    ext = "html"
+)]
+pub struct LlmMessageRecordTemplate {
+    pub record: LlmMessageRecordView,
+}
+
+impl LlmMessageRecordTemplate {
+    pub fn new(message: &LlmMessage) -> Self {
+        Self {
+            record: LlmMessageRecordView::from(message),
         }
     }
 }

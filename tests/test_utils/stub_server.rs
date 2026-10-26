@@ -123,13 +123,10 @@ fn default_story_log_entries() -> Vec<StoryRow> {
     ]
 }
 
-/// The LLM messages the stub shows, newest first: each carries prompts and raw
-/// JSON, so the card holds every kind of disclosure the real panel renders.
-fn llm_messages_html(count: usize) -> String {
-    use askama::Template;
-    use chronicler_engine::adapters::driving::http::templates::LlmMessagesTemplate;
-
-    let messages: Vec<LlmMessage> = (1..=count as u64)
+/// The LLM messages the stub holds, newest first: each carries prompts and raw
+/// JSON, so its record holds every kind of disclosure the real dialog renders.
+fn canned_llm_messages(count: usize) -> Vec<LlmMessage> {
+    (1..=count as u64)
         .rev()
         .map(|id| LlmMessage {
             id: id as i64,
@@ -144,8 +141,15 @@ fn llm_messages_html(count: usize) -> String {
             error_message: None,
             created_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, id as u32).unwrap(),
         })
-        .collect();
-    LlmMessagesTemplate::new(&messages)
+        .collect()
+}
+
+/// The list the real panel renders: one header for each message.
+fn llm_messages_html(count: usize) -> String {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::LlmMessagesTemplate;
+
+    LlmMessagesTemplate::new(&canned_llm_messages(count))
         .render()
         .expect("render LLM messages")
 }
@@ -527,6 +531,7 @@ struct StubState {
     presets: std::sync::Mutex<StubPresets>,
     worlds: std::sync::Mutex<StubWorlds>,
     llm_message_count: std::sync::atomic::AtomicUsize,
+    llm_records_pruned: std::sync::atomic::AtomicBool,
 }
 
 /// The Games the stub lists: a rename changes a name and a delete removes a saved
@@ -686,6 +691,7 @@ impl StubServer {
             presets: std::sync::Mutex::new(StubPresets::new()),
             worlds: std::sync::Mutex::new(StubWorlds::new()),
             llm_message_count: std::sync::atomic::AtomicUsize::new(1),
+            llm_records_pruned: std::sync::atomic::AtomicBool::new(false),
         });
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
@@ -947,6 +953,14 @@ impl StubLlmHandle {
             .llm_message_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.state.bump(&[ChangeKind::LLM_MESSAGES]);
+    }
+
+    /// Retention removed every record, but the panel still lists the rows it loaded:
+    /// the record route answers a 404 from now on.
+    pub fn prune_records(&self) {
+        self.state
+            .llm_records_pruned
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -1286,6 +1300,10 @@ fn stub_router(state: Arc<StubState>) -> Router {
         )
         .route("/fragment/options-dock", get(options_dock_fragment))
         .route("/fragment/llm-messages", get(llm_messages_fragment))
+        .route(
+            "/fragment/llm-messages/:id",
+            get(llm_message_record_fragment),
+        )
         .route("/fragment/settings", get(settings_fragment))
         .route(
             "/fragment/connections/new",
@@ -1379,6 +1397,37 @@ async fn llm_messages_fragment(State(state): State<Arc<StubState>>) -> Html<Stri
         .llm_message_count
         .load(std::sync::atomic::Ordering::SeqCst);
     Html(llm_messages_html(count))
+}
+
+/// The record of one message, rendered by the engine's own template. A pruned
+/// record answers the engine's 404.
+async fn llm_message_record_fragment(
+    State(state): State<Arc<StubState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Response<Body> {
+    use askama::Template;
+    use chronicler_engine::adapters::driving::http::templates::LlmMessageRecordTemplate;
+    use std::sync::atomic::Ordering::SeqCst;
+
+    let count = state.llm_message_count.load(SeqCst);
+    let record = canned_llm_messages(count)
+        .into_iter()
+        .find(|message| message.id == id)
+        .filter(|_| !state.llm_records_pruned.load(SeqCst));
+    match record {
+        Some(message) => Html(
+            LlmMessageRecordTemplate::new(&message)
+                .render()
+                .expect("render the LLM message record"),
+        )
+        .into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            render_error("LLM message not found"),
+        )
+            .into_response(),
+    }
 }
 
 /// The real delete answers nothing: the next load of the panel no longer lists the

@@ -5,6 +5,7 @@ use askama::Template;
 
 use crate::adapters::driving::http::builders::forms::{textarea_field, textarea_field_readonly};
 use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
+use crate::adapters::driving::http::utils::template_helpers::truncated_preview;
 use crate::adapters::driving::http::view_models::SafeHtml;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{AppSettings, NarratorMode};
@@ -178,7 +179,7 @@ impl PresetCardTemplate {
         };
         Self {
             preset: preset.clone(),
-            preview: truncated_preview(preset),
+            preview: truncated_preview(preset.preview_text()),
             active_badges,
             activate_buttons,
         }
@@ -222,26 +223,6 @@ fn options_slot_actions(
             }],
         )
     }
-}
-
-/// Sentence punctuation directly before the ellipsis would read as the end of the
-/// field rather than a cut, so it goes first — with any space it sat behind.
-fn truncated_preview(preset: &PromptPreset) -> String {
-    const MAX_PREVIEW_CHARS: usize = 120;
-    const TRAILING_PUNCTUATION: [char; 6] = ['.', ',', ';', ':', '!', '?'];
-    let text = preset.preview_text().replace('\n', " ");
-    let text = text.trim();
-    if text.chars().count() <= MAX_PREVIEW_CHARS {
-        return text.to_string();
-    }
-    let head: String = text.chars().take(MAX_PREVIEW_CHARS).collect();
-    let words = match head.rsplit_once(' ') {
-        Some((words, _)) => words,
-        None => head.as_str(),
-    };
-    let words =
-        words.trim_end_matches(|c: char| c.is_whitespace() || TRAILING_PUNCTUATION.contains(&c));
-    format!("{words}…")
 }
 
 pub(crate) fn preset_card_html(preset: &PromptPreset, settings: &AppSettings) -> String {

@@ -25,6 +25,10 @@ pub fn bad_request(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::BAD_REQUEST, body)
 }
 
+pub fn not_found(body: impl Into<String>) -> Response<Body> {
+    status_response(StatusCode::NOT_FOUND, body)
+}
+
 pub fn internal_error(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::INTERNAL_SERVER_ERROR, body)
 }

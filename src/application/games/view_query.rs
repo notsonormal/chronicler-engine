@@ -249,6 +249,10 @@ impl GameViewQuery {
             .map_err(Into::into)
     }
 
+    pub fn llm_message(&self, id: i64) -> Result<Option<LlmMessage>, ApplicationError> {
+        self.storage.get_llm_message(id).map_err(Into::into)
+    }
+
     pub fn role_health(&self) -> Result<Vec<RoleHealth>, ApplicationError> {
         // Retention keeps the whole table inside one window, so reading it
         // whole sees every role's newest attempt however long ago it ran.

@@ -151,7 +151,7 @@ Then the focus is on a control in the entry that is now the newest
 Given each region of the table above, with its section open
 And every interactive control of the region is in its engaged state:
   an open edit with typed text and focus, a focused Option, an open Details disclosure, a text selection,
-  an expanded LLM message, an open error Details popover in the failure banner,
+  a focused Open control of an LLM message, an open error Details popover in the failure banner,
   the chosen Settings sub-tab, each with typed text and focus where it has any
 When each kind that the region lists moves, one kind at a time, and the page asks
 Then the region loads once for each kind, and it reports data-live-state "current"

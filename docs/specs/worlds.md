@@ -10,7 +10,7 @@ Endpoints:
 - `POST /worlds/:key/delete`
 
 The Worlds panel is a live region of the worlds and games kinds. Its fragment
-carries no root element of its own. The World editor opens in the edit dialog
+carries no root element of its own. A World row shows a shortened description. The World editor opens in the edit dialog
 (`#edit-dialog-body`): the Create and Edit controls load it, and its root
 (`data-dialog-form`) carries the title of the dialog. A World save answers nothing on success:
 an empty 200. A refusal answers a 400 error fragment, and a failure a 500 error
@@ -136,6 +136,15 @@ And the World's card shows "1 game" and not "1 games"
 When a second game is created in that World
 And the client GET /fragment/worlds
 Then the World's card shows "2 games"
+```
+
+#### Scenario 25.13: A World row shows a shortened description
+
+```gherkin
+Given a seeded World whose description is longer than a row shows
+When the client GET /fragment/worlds
+Then the World's row shows the start of the description, cut at a word, with a cut mark
+And the row does not show the end of the description
 ```
 
 ### World delete

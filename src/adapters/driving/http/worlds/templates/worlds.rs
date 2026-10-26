@@ -2,7 +2,7 @@
 //! Worlds templates
 
 use askama::Template;
-use crate::adapters::driving::http::utils::template_helpers::select_options_html;
+use crate::adapters::driving::http::utils::template_helpers::{select_options_html, truncated_preview};
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::scenario::StartingScenario;
@@ -56,7 +56,7 @@ impl WorldsPanelTemplate {
                 WorldRowView {
                     key: w.key.clone(),
                     name: w.name.clone(),
-                    description: w.description.clone(),
+                    description: truncated_preview(&w.description),
                     game_count,
                 }
             })

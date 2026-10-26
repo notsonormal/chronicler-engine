@@ -2,10 +2,16 @@
 //! Fragment endpoints
 
 use axum::body::Body;
-use axum::{extract::State, response::Html, response::Response, Json};
+use axum::{
+    extract::{Path, State},
+    response::{Html, IntoResponse, Response},
+    Json,
+};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
+use crate::adapters::driving::http::utils::error::{
+    action_failure_response, action_not_found_response, error_disclosure, raw_error_detail,
+};
 use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::utils::response::html_escape;
 use crate::adapters::driving::http::AppState;
@@ -75,6 +81,19 @@ pub async fn character_headshots_fragment(
 
 pub async fn llm_messages_fragment(State(state): State<AppState>) -> Response<Body> {
     render_fragment(&state, |s| s.render_llm_messages(), "llm_messages_fragment")
+}
+
+/// The dialog opens only on a 2xx answer: a missing record answers a 404 and a failed
+/// read a 500, and the Open control reports either in the row's own slot.
+pub async fn llm_message_record_fragment(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Response<Body> {
+    match state.render_llm_message_record(id) {
+        Ok(Some(html)) => Html(html).into_response(),
+        Ok(None) => action_not_found_response("LLM message not found"),
+        Err(e) => action_failure_response(format!("Load failed: {e}")),
+    }
 }
 
 pub async fn changes_handler(

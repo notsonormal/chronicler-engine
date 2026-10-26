@@ -145,6 +145,7 @@ impl ChangeCounters {
             | StorageCall::DocksGet
             | StorageCall::GetCharacter
             | StorageCall::GetGame
+            | StorageCall::GetLlmMessage
             | StorageCall::GetPersona
             | StorageCall::GetPreset
             | StorageCall::GetSettings

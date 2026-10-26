@@ -1723,7 +1723,7 @@ input[type="checkbox"]:focus {
     border-radius: 8px;
 }
 
-#edit-dialog:has(.world-form-container, .preset-form, .preset-add-form) {
+#edit-dialog:has(.world-form-container, .preset-form, .preset-add-form, .llm-message-record) {
     width: min(90vw, 720px);
 }
 
@@ -1813,17 +1813,6 @@ input[type="checkbox"]:focus {
     gap: var(--spacing-sm);
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--color-bg-tertiary);
-    cursor: pointer;
-    user-select: none;
-    width: 100%;
-    border: none;
-    font: inherit;
-    color: inherit;
-    text-align: left;
-}
-
-.llm-message-header:hover {
-    background: var(--color-bg-header);
 }
 
 .llm-message-agent {
@@ -1853,6 +1842,24 @@ input[type="checkbox"]:focus {
     padding: 2px 6px;
     border: 1px solid var(--color-accent-red);
     border-radius: 4px;
+}
+
+/* A short line of the failure text, under the header: the whole text is in the record. */
+.llm-message-error-summary {
+    padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    overflow-wrap: anywhere;
+}
+
+.llm-message-record-model {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    margin-bottom: var(--spacing-md);
+}
+
+.llm-message-record .llm-message-raw {
+    margin-bottom: var(--spacing-md);
 }
 
 .llm-message-failure {
@@ -1886,11 +1893,6 @@ input[type="checkbox"]:focus {
     word-break: break-word;
 }
 
-.llm-message-body {
-    padding: var(--spacing-md);
-    border-top: 1px solid var(--color-border);
-}
-
 .llm-message-prompts {
     display: flex;
     flex-direction: column;
@@ -1898,24 +1900,11 @@ input[type="checkbox"]:focus {
     margin-bottom: var(--spacing-md);
 }
 
-/* The disclosure blocks end the card body, so their trailing gaps would read as
-   an empty region under the last one. */
-.llm-message-body > *:last-child,
+/* The disclosure blocks end the record, so their trailing gaps would read as an
+   empty region above the Close control. */
 .llm-message-prompts .llm-message-prompt-details:last-child,
 .llm-message-raw details:last-child {
     margin-bottom: 0;
-}
-
-.llm-message-prompt {
-    font-size: var(--font-size-small);
-    color: var(--color-text-primary);
-    line-height: 1.5;
-    word-break: break-word;
-}
-
-.llm-message-prompt strong {
-    color: var(--color-accent-green-bright);
-    font-weight: 600;
 }
 
 .llm-message-prompt-pre {

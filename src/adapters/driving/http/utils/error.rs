@@ -4,7 +4,9 @@
 use axum::body::Body;
 use axum::response::Response;
 
-use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error};
+use crate::adapters::driving::http::utils::response::{
+    bad_request, html_escape, internal_error, not_found,
+};
 use crate::application::errors::ApplicationError;
 use crate::error::EngineError;
 
@@ -47,6 +49,12 @@ fn classify_error(error: ApplicationError, prefix: &str) -> Result<String, Strin
 /// A non-2xx so htmx never swaps the region the failure describes.
 pub(crate) fn action_refusal_response(message: impl std::fmt::Display) -> Response<Body> {
     bad_request(error_fragment(message))
+}
+
+/// A 404 for a dialog that names a record the engine does not hold; the opener
+/// reports it in its own slot.
+pub(crate) fn action_not_found_response(message: impl std::fmt::Display) -> Response<Body> {
+    not_found(error_fragment(message))
 }
 
 pub(crate) fn refusal_message_without_layer_prefix_for_validation_and_config(
