@@ -5,7 +5,8 @@
 // `GET /changes`. The page asks while it is visible. A region loads when a
 // number of one of its kinds differs from the number it last loaded. No region
 // loads while the player edits in it, and a region in a hidden dashboard
-// section waits until the player opens the section.
+// section waits until the player opens the section. A disclosure that closes
+// without a save discards its edit.
 
 const LIVE_ASK_INTERVAL_MS = 1000;
 
@@ -134,6 +135,23 @@ function endEdit(element) {
   const disclosure = element.closest("details[data-close-on-save]");
   if (disclosure) disclosure.open = false;
 }
+
+// A disclosure that holds a form is the edit. When it closes without a save, the
+// edit is discarded: each form in it goes back to its rendered values, so the
+// region it held is free, and the page asks at once. A close after a save changes
+// nothing, because `endEdit` has already made the saved values the rendered ones.
+// `toggle` does not bubble, so the listener captures it on the document.
+document.addEventListener(
+  "toggle",
+  function (evt) {
+    const disclosure = evt.target;
+    if (!(disclosure instanceof HTMLDetailsElement) || disclosure.open) return;
+    if (!disclosure.closest("[data-live]")) return;
+    disclosure.querySelectorAll("form").forEach((form) => form.reset());
+    askNow();
+  },
+  true,
+);
 
 // The "Saved" line is view state: `data-saved` is in the `data-keep` of the
 // status element, so a load keeps it.

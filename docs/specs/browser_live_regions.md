@@ -4,7 +4,7 @@ Endpoint: browser DOM.
 
 The dashboard shows server data in **live regions**. A live region is an element with a `data-live` attribute. The attribute lists the kinds of data the region shows. The kinds are the names of the numbers of `GET /changes` (`docs/specs/changes.md`): `story`, `options`, `busy`, `games`, `worlds`, `settings`, `presets` and `llm`.
 
-The page asks `GET /changes` while it is visible. A region loads its own fragment when a number of one of its kinds differs from the number that the region last loaded. A region keeps what its load does not change. A region that holds an edit waits, and loads once when the edit ends. A region in a hidden dashboard section does not load: it waits, and loads once when the player opens the section. The region reports its state in `data-live-state`: `current`, `loading`, `held`, `stale` or `due`.
+The page asks `GET /changes` while it is visible. A region loads its own fragment when a number of one of its kinds differs from the number that the region last loaded. A region keeps what its load does not change. A region that holds an edit waits, and loads once when the edit ends. A disclosure that closes without a save discards its edit, so it ends the edit. A region in a hidden dashboard section does not load: it waits, and loads once when the player opens the section. The region reports its state in `data-live-state`: `current`, `loading`, `held`, `stale` or `due`.
 
 The header is outside every section, so it is always visible. The Game tab is a section too, and it is hidden while the player is on another section.
 
@@ -213,6 +213,7 @@ Then .games-panel reports data-live-state "held"
 When the client presses Save and the engine answers 200
 Then the name field is no longer a changed field: its default value is its current value
 And the `details` is closed
+And the name field still shows the saved name, because the close that follows a save discards nothing
 And .games-panel loads its fragment exactly once, and it reports data-live-state "current"
 ```
 
@@ -283,4 +284,25 @@ Then .settings-panel reports data-live-state "held" and has not loaded
 When the client cancels the editor
 Then Cancel sent no request, and .settings-panel loads exactly once
 And the Text Check sub-tab is still the chosen one
+```
+
+#### Scenario 44.23: A disclosure closed without a save discards its edit, and its region loads at once
+
+```gherkin
+Given .games-panel is open and current
+And the rename form of a saved Game is open, with a changed name
+And the number of `worlds` moved, and the page asked
+And .games-panel reports data-live-state "held"
+When the client closes the `details` without pressing Save
+Then the name field shows the rendered name again
+And the page asks at once, without waiting for its timer
+And .games-panel loads its fragment exactly once, and it reports data-live-state "current"
+
+Given .prompt-presets-panel is open and current
+And an Add form of a preset type is open, with a typed name
+And the number of `presets` moved, and the page asked
+And .prompt-presets-panel reports data-live-state "held"
+When the client closes the Add form without pressing Add Preset
+Then the name field is empty again
+And .prompt-presets-panel loads its fragment exactly once, and it reports data-live-state "current"
 ```

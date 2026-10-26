@@ -257,4 +257,5 @@ Then the response status is "200 OK"
 And the body does not hold an element with the class "games-panel"
 And the active game row and the row of the second game each carry the id "game-row-{game_id}"
 And each rename disclosure lists its open state in `data-keep` and carries `data-close-on-save`
+And the New Game form is inside a disclosure with the class "new-game-add", which lists its open state in `data-keep`, carries `data-close-on-save`, and has a summary "New Game"
 ```

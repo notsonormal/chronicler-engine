@@ -65,9 +65,23 @@ And the Games panel reports data-live-state "current"
 
 ```gherkin
 Given the Games tab is open
+And the New Game disclosure is open
 And the client chose a World and a Persona other than the first ones in the New Game form
 When the number of `games` moves, and the page asks
 And the number of `worlds` moves, and the page asks
 Then the Games panel does not load, and it reports data-live-state "held"
+And the New Game disclosure is the same element, and it is open
 And the World select and the Persona select are the same elements, and show the chosen options
+```
+
+#### Scenario 27.7: Closing the New Game form discards the choice, and the Games panel loads
+
+```gherkin
+Given the Games tab is open
+And the New Game disclosure is open
+And the client chose a World and a Persona other than the first ones in the New Game form
+And the number of `worlds` moved, and the page asked, so the Games panel reports data-live-state "held"
+When the client closes the New Game disclosure without starting a Game
+Then the World select and the Persona select show their first options again
+And the Games panel loads exactly once, and it reports data-live-state "current"
 ```

@@ -2037,7 +2037,8 @@ input[type="checkbox"]:focus {
     flex-wrap: wrap;
 }
 
-.preset-add-toggle {
+.preset-add-toggle,
+.new-game-toggle {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
@@ -2046,21 +2047,25 @@ input[type="checkbox"]:focus {
     user-select: none;
 }
 
-.preset-add-toggle:focus-visible {
+.preset-add-toggle:focus-visible,
+.new-game-toggle:focus-visible {
     outline: none;
     border-color: var(--color-accent-ok);
     box-shadow: var(--shadow-focus-ring);
 }
 
-.preset-add-toggle::-webkit-details-marker {
+.preset-add-toggle::-webkit-details-marker,
+.new-game-toggle::-webkit-details-marker {
     display: none;
 }
 
-.preset-add-toggle::marker {
+.preset-add-toggle::marker,
+.new-game-toggle::marker {
     content: "";
 }
 
-.preset-add-toggle::before {
+.preset-add-toggle::before,
+.new-game-toggle::before {
     content: "";
     width: 0;
     height: 0;
@@ -2069,11 +2074,13 @@ input[type="checkbox"]:focus {
     border-bottom: 4px solid transparent;
 }
 
-.preset-add[open] > .preset-add-toggle::before {
+.preset-add[open] > .preset-add-toggle::before,
+.new-game-add[open] > .new-game-toggle::before {
     transform: rotate(90deg);
 }
 
-.preset-add > form {
+.preset-add > form,
+.new-game-add > form {
     margin-top: var(--spacing-sm);
 }
 

@@ -982,7 +982,7 @@ fn games_engaged() -> Engaged {
     Engaged {
         region: GAMES_PANEL,
         engage: leak(format!(
-            "() => {{ const problem = ({OPEN_RENAME})(); return problem || ({CHOOSE_NEW_GAME})(); }}"
+            "() => {{ return ({OPEN_RENAME})() || ({OPEN_NEW_GAME})() || ({CHOOSE_NEW_GAME})(); }}"
         )),
         check: leak(format!(
             "() => ({RENAME_IS_INTACT})() || ({NEW_GAME_IS_INTACT})()"
@@ -1099,6 +1099,14 @@ const SAVE_RENAME: &str = r#"async () => {
     return '';
 }"#;
 
+const OPEN_NEW_GAME: &str = r#"() => {
+    const details = document.querySelector('.new-game-add');
+    if (!details) return 'the New Game disclosure is missing';
+    details.open = true;
+    window.__newGameDetails = details;
+    return details.open ? '' : 'the New Game disclosure did not open';
+}"#;
+
 const CHOOSE_NEW_GAME: &str = r#"() => {
     const world = document.getElementById('new-game-world');
     const persona = document.getElementById('new-game-persona');
@@ -1110,14 +1118,49 @@ const CHOOSE_NEW_GAME: &str = r#"() => {
 }"#;
 
 const NEW_GAME_IS_INTACT: &str = r#"() => {
+    const details = document.querySelector('.new-game-add');
     const world = document.getElementById('new-game-world');
     const persona = document.getElementById('new-game-persona');
+    if (details !== window.__newGameDetails) return 'the New Game disclosure is a new element';
+    if (!details.open) return 'the New Game disclosure closed';
     if (world !== window.__newGameWorld) return 'the World select is a new element';
     if (persona !== window.__newGamePersona) return 'the Persona select is a new element';
     if (world.value !== 'test') return 'the World choice changed: ' + world.value;
     if (persona.value !== 'test_player') return 'the Persona choice changed: ' + persona.value;
     return '';
 }"#;
+
+const NEW_GAME_IS_RENDERED: &str = r#"() => {
+    const world = document.getElementById('new-game-world');
+    const persona = document.getElementById('new-game-persona');
+    if (world.selectedIndex !== 0) return 'the World select keeps the choice: ' + world.value;
+    if (persona.selectedIndex !== 0) return 'the Persona select keeps the choice: ' + persona.value;
+    return '';
+}"#;
+
+/// Closes a disclosure the way the player does, with a click on its summary, and
+/// returns once the `toggle` event has run and every ask and load that followed
+/// has settled.
+const CLOSE_DISCLOSURE: &str = r#"async (selector) => {
+    const details = document.querySelector(selector);
+    if (!details) return 'no disclosure at ' + selector;
+    if (!details.open) return 'the disclosure is not open';
+    const toggled = new Promise((resolve) =>
+        details.addEventListener('toggle', resolve, { once: true }));
+    details.querySelector(':scope > summary').click();
+    await toggled;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await window.chroniclerLive.settle();
+    return details.open ? 'the disclosure is still open' : '';
+}"#;
+
+async fn close_disclosure(page: &playwright_rs::Page, selector: &str) {
+    let closed = page
+        .evaluate::<String, String>(CLOSE_DISCLOSURE, Some(&selector.to_string()))
+        .await
+        .unwrap_or_else(|e| panic!("close of {selector} failed: {e}"));
+    assert_eq!(closed, "", "closing {selector}");
+}
 
 const REVERT_NEW_GAME: &str = r#"async () => {
     document.getElementById('new-game-world').selectedIndex = 0;
@@ -1199,6 +1242,7 @@ async fn check_the_new_game_selects_keep_the_players_choice_through_a_load(
     start_current(&page).await;
     open_section(&page, "games", ".games-panel").await;
 
+    assert_eq!(eval_string(&page, OPEN_NEW_GAME).await, "");
     assert_eq!(eval_string(&page, CHOOSE_NEW_GAME).await, "");
     let before = changes.loads("/fragment/games");
     for kind in ["games", "worlds"] {
@@ -1216,6 +1260,128 @@ async fn check_the_new_game_selects_keep_the_players_choice_through_a_load(
         "a held panel must not load"
     );
     assert_eq!(live_state(&page, ".games-panel").await, "held");
+}
+
+// [docs/specs/browser_games.md] SCENARIO: 27.7
+async fn check_closing_the_new_game_form_discards_the_choice_and_the_games_panel_loads(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_NEW_GAME).await, "");
+    assert_eq!(eval_string(&page, CHOOSE_NEW_GAME).await, "");
+    changes.bump("worlds");
+    ask_once(&page).await;
+    assert_eq!(live_state(&page, ".games-panel").await, "held");
+
+    let before = changes.loads("/fragment/games");
+    close_disclosure(&page, ".new-game-add").await;
+    assert_eq!(
+        eval_string(&page, NEW_GAME_IS_RENDERED).await,
+        "",
+        "closing the form must discard the choice"
+    );
+    assert_eq!(
+        changes.loads("/fragment/games"),
+        before + 1,
+        "the freed panel must load exactly once"
+    );
+    assert_eq!(live_state(&page, ".games-panel").await, "current");
+}
+
+const FIELD_VALUE: &str = r#"(selector) => document.querySelector(selector).value"#;
+
+const FIELD_DEFAULT_VALUE: &str = r#"(selector) => document.querySelector(selector).defaultValue"#;
+
+async fn eval_with(page: &playwright_rs::Page, script: &str, selector: &str) -> String {
+    page.evaluate::<String, String>(script, Some(&selector.to_string()))
+        .await
+        .unwrap_or_else(|e| panic!("evaluate failed: {e}\n{script}"))
+}
+
+/// Closes the disclosure that holds `region`, without a save, and checks the rule:
+/// the field goes back to its rendered value, the page asks at once, and the
+/// region loads exactly once.
+async fn assert_closing_frees_the_region(
+    page: &playwright_rs::Page,
+    changes: &StubChangesHandle,
+    disclosure: &str,
+    field: &str,
+    region: (&str, &str),
+) {
+    let (selector, path) = region;
+    assert_eq!(live_state(page, selector).await, "held");
+    assert_ne!(
+        eval_with(page, FIELD_VALUE, field).await,
+        eval_with(page, FIELD_DEFAULT_VALUE, field).await,
+        "the field must hold an edit before the close"
+    );
+    let loads = changes.loads(path);
+    let asks = changes.asks();
+    close_disclosure(page, disclosure).await;
+    assert_eq!(
+        eval_with(page, FIELD_VALUE, field).await,
+        eval_with(page, FIELD_DEFAULT_VALUE, field).await,
+        "closing without a save must put the field back to its rendered value"
+    );
+    assert!(
+        changes.asks() > asks,
+        "the close must make the page ask at once"
+    );
+    assert_eq!(
+        changes.loads(path),
+        loads + 1,
+        "the freed region must load exactly once"
+    );
+    assert_eq!(live_state(page, selector).await, "current");
+}
+
+// [docs/specs/browser_live_regions.md] SCENARIO: 44.23
+async fn check_a_disclosure_closed_without_a_save_discards_its_edit_and_its_region_loads(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    changes.bump("worlds");
+    ask_once(&page).await;
+    assert_closing_frees_the_region(
+        &page,
+        &changes,
+        "#game-row-2 .game-rename",
+        "#game-row-2 .game-rename input[name=display_name]",
+        (".games-panel", "/fragment/games"),
+    )
+    .await;
+
+    open_section(&page, "prompt-presets", ".prompt-presets-panel").await;
+    let opened = eval_string(
+        &page,
+        r#"() => {
+            const details = document.querySelector('.preset-add');
+            details.open = true;
+            details.querySelector('input[name="name"]').value = 'A typed preset name';
+            return details.open ? '' : 'the Add form did not open';
+        }"#,
+    )
+    .await;
+    assert_eq!(opened, "");
+    changes.bump("presets");
+    ask_once(&page).await;
+    assert_closing_frees_the_region(
+        &page,
+        &changes,
+        ".preset-add",
+        ".preset-add input[name=name]",
+        (".prompt-presets-panel", "/fragment/prompt-presets"),
+    )
+    .await;
 }
 
 // [docs/specs/browser_live_regions.md] SCENARIO: 44.16
@@ -1275,6 +1441,12 @@ const WATCH_RENAME_SAVE: &str = r#"() => {
             open: details.open,
         };
     });
+    // The page's own listener is on the document, in the capture phase, so it has
+    // run when this one reads the field.
+    window.__afterClose = null;
+    details.addEventListener('toggle', () => {
+        window.__afterClose = { value: input.value, open: details.open };
+    });
     return '';
 }"#;
 
@@ -1303,6 +1475,15 @@ async fn check_a_successful_save_ends_the_edit_and_a_marked_disclosure_closes(
     assert_eq!(
         after_save, r#"{"changed":false,"open":false}"#,
         "when the save ended, the name was no longer a changed field and the disclosure was closed"
+    );
+    let after_close = eval_string(
+        &page,
+        "() => { const s = window.__afterClose; return s ? JSON.stringify(s) : 'the disclosure never toggled'; }",
+    )
+    .await;
+    assert_eq!(
+        after_close, r#"{"value":"A typed name","open":false}"#,
+        "a close that follows a save must leave the saved name in the field"
     );
     assert_eq!(changes.loads("/fragment/games"), before + 1);
     assert_eq!(live_state(&page, ".games-panel").await, "current");
@@ -1663,6 +1844,18 @@ async fn run_live_regions_checks() {
         .run(
             outcome,
             check_the_new_game_selects_keep_the_players_choice_through_a_load,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_closing_the_new_game_form_discards_the_choice_and_the_games_panel_loads,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_a_disclosure_closed_without_a_save_discards_its_edit_and_its_region_loads,
         )
         .await;
     runner

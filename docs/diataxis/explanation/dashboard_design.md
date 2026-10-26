@@ -45,7 +45,7 @@ A change can arrive while the player works. A load must neither destroy what the
 
 - A load morphs the region, so a node that the new fragment keeps stays the same node, with its focus, selection and scroll position.
 - View state, such as an open disclosure, an expanded LLM message or the active Settings sub-tab, lives in attributes that the server never sets. An element lists them in `data-keep`, and the load keeps them. The alternative was a region that waits while any disclosure is open. That region would show no new LLM message while a card is open, and an open error popover would hold the status display.
-- An edit holds the region. A region with an open editor or a changed field waits, and loads once when the edit ends. A control that saves on change goes back to its rendered value when its save fails. If it kept the value, that value would be an edit, and one failed save would stop the whole panel from updating with nothing on the screen to say why.
+- An edit holds the region. A region with an open editor or a changed field waits, and loads once when the edit ends. A control that saves on change goes back to its rendered value when its save fails. If it kept the value, that value would be an edit, and one failed save would stop the whole panel from updating with nothing on the screen to say why. A disclosure that holds a form follows the same reasoning: a closed disclosure hides its fields, but the browser keeps their values, so a draft that the player closed would hold the panel with nothing on the screen to say so. Closing it discards the draft.
 
 The tradeoff is that a held region shows older data while the edit lasts. The `data-live-state` of the region says so.
 

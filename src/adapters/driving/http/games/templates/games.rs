@@ -54,36 +54,39 @@ pub struct PersonaRowView {
 </div>
 
 <div class="games-section new-game-section">
-    <h2>New Game</h2>
     {% if worlds.is_empty() %}
+    <h2>New Game</h2>
     <div class="games-empty">No worlds available. Create a world first.</div>
     {% else %}
-    <form class="new-game-form" hx-post="/games" hx-swap="none">
-        <div class="form-row">
-            <label for="new-game-world">World</label>
-            <select id="new-game-world" name="world_key" required>
-                {% for world in worlds %}
-                <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-row">
-            {% if personas.is_empty() %}
-            <div class="games-empty">No personas available. Create a persona first.</div>
-            {% else %}
-            <label for="new-game-persona">Persona</label>
-            <select id="new-game-persona" name="persona_key" required>
-                {% for p in personas %}
-                <option value="{{ p.key }}">{{ p.name }}</option>
-                {% endfor %}
-            </select>
-            {% endif %}
-        </div>
-        <div class="form-row">
-            <button type="submit" class="btn-primary"
-                {% if personas.is_empty() %}disabled{% endif %}>Start New Game</button>
-        </div>
-    </form>
+    <details class="new-game-add" data-keep="open" data-close-on-save>
+        <summary class="btn-cyan new-game-toggle">New Game</summary>
+        <form class="new-game-form" hx-post="/games" hx-swap="none" data-reset-on-save>
+            <div class="form-row">
+                <label for="new-game-world">World</label>
+                <select id="new-game-world" name="world_key" required>
+                    {% for world in worlds %}
+                    <option value="{{ world.key }}" title="{{ world.description }}">{{ world.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                {% if personas.is_empty() %}
+                <div class="games-empty">No personas available. Create a persona first.</div>
+                {% else %}
+                <label for="new-game-persona">Persona</label>
+                <select id="new-game-persona" name="persona_key" required>
+                    {% for p in personas %}
+                    <option value="{{ p.key }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+            </div>
+            <div class="form-row">
+                <button type="submit" class="btn-primary"
+                    {% if personas.is_empty() %}disabled{% endif %}>Start New Game</button>
+            </div>
+        </form>
+    </details>
     {% endif %}
 </div>
 

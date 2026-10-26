@@ -183,4 +183,15 @@ async fn test_games_fragment_is_the_panel_content_with_stable_row_ids_http() {
         2,
         "each rename disclosure lists its open state in data-keep and closes on save: {html}"
     );
+    let new_game = html
+        .find(r#"<details class="new-game-add" data-keep="open" data-close-on-save>"#)
+        .map(|start| &html[start..])
+        .expect("the New Game form must sit in a disclosure that closes on save");
+    let (disclosure, _) = new_game
+        .split_once("</details>")
+        .expect("the New Game disclosure must close");
+    assert!(
+        disclosure.contains(">New Game</summary>") && disclosure.contains(r#"id="new-game-world""#),
+        "the disclosure must have the summary New Game and hold the form: {disclosure}"
+    );
 }

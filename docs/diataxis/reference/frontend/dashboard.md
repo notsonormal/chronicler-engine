@@ -69,7 +69,7 @@ A region is in one of five states, shown in its `data-live-state`:
 - **stale** — the region is due, and its section is hidden, so it loads when the player opens the section;
 - **due** — the last load failed or sent no request, so the next ask tries again.
 
-A region is held while it holds an edit: an element with `data-work` (the root of an open editor), or a field whose value differs from the rendered value. A held region does not swap, also when a load was already in flight. The **end-of-edit rule** frees it. A save that goes through makes the current value of each of its fields the rendered value, removes `data-work` from the form's editor root, and closes a disclosure that marks itself `data-close-on-save`. The held region then loads once. A save that fails keeps the edit of a form. A control that saves on change goes back to its rendered value, and its inline error says that the value was not saved.
+A region is held while it holds an edit: an element with `data-work` (the root of an open editor), or a field whose value differs from the rendered value. A held region does not swap, also when a load was already in flight. The **end-of-edit rule** frees it. A save that goes through makes the current value of each of its fields the rendered value, removes `data-work` from the form's editor root, and closes a disclosure that marks itself `data-close-on-save`. The held region then loads once. A disclosure that holds a form is an edit too. If it closes without a save, its edit is discarded: each form in it goes back to its rendered values, and the page asks at once, so the held region loads what it waited for. A close after a save discards nothing, because the save made the saved values the rendered ones. The New Game form and the Add forms of the Prompt Presets panel follow this rule, as does the Rename form of a Game. An editor with `data-work` is not a disclosure: its Cancel discards its edit. A save that fails keeps the edit of a form. A control that saves on change goes back to its rendered value, and its inline error says that the value was not saved.
 
 The Worlds editor and the connection editor open into an editor slot of their region (`#world-editor`, `#connection-editor`). While the slot holds an editor, the list of the region is hidden. Cancel empties the slot in the browser with no request.
 
@@ -81,7 +81,7 @@ The Worlds editor and the connection editor open into an editor slot of their re
 | `data-live-state` | On a region: its state. The script sets it. |
 | `data-keep` | On any element: the attributes that a load keeps. They hold view state, and the server never sets them. |
 | `data-work` | On the root of an open editor: the region is held. |
-| `data-close-on-save` | On a `<details>`: a save of its form closes it. |
+| `data-close-on-save` | On a `<details>`: a save of its form closes it. A close without a save is a discard (see the hold rule above), with or without this marker. |
 | `data-reset-on-save` | On a form that creates something: a save returns it to the empty rendered form. |
 | `data-autosave` | On a form that saves on change: a failed save returns its fields to the rendered values. |
 | `data-saved-flag` | On a saving control: the id of the element that shows "Saved" after a save that went through. That element has the class `saved-flag`, which draws the text. |
