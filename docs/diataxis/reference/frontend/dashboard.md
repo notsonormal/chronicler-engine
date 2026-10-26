@@ -14,7 +14,7 @@ A static shell holds the page frame. The server owns all domain content: it rend
 Four statements hold for every region and every action:
 
 1. **Data flows one way.** An action saves data and answers no region HTML. The data reaches the screen only through the change counters: a counter moves, and the regions that show that kind of data load. The page asks for the counters at once after any action, so the result shows without waiting for the next ask.
-2. **An action changes only the element it acts on.** A save answers nothing on success. On failure, it answers its error into the inline slot of its own form. A view change, such as opening an editor, changes only its own row or the editor slot of its region. No action targets a region element, and no answer writes out of band.
+2. **An action changes only the element it acts on.** A save answers nothing on success. On failure, it answers its error into the inline slot of its own form. A view change, such as opening an editor, changes only its own row, the editor slot of its region, or the edit dialog. No action targets a region element, and no answer writes out of band.
 3. **A region load keeps what it does not change.** Every region loads its own fragment and morphs it into place. A kept node keeps its focus, selection, scroll position and view state. A load waits while the player edits in the region. A load that removes the focused node moves focus to the nearest row that survives, or else to the region.
 4. **The browser owns view state, and the server owns data.**
 
@@ -71,7 +71,9 @@ A region is in one of five states, shown in its `data-live-state`:
 
 A region is held while it holds an edit: an element with `data-work` (the root of an open editor), or a field whose value differs from the rendered value. A held region does not swap, also when a load was already in flight. The **end-of-edit rule** frees it. A save that goes through makes the current value of each of its fields the rendered value, removes `data-work` from the form's editor root, and closes a disclosure that marks itself `data-close-on-save`. The held region then loads once. A disclosure that holds a form is an edit too. If it closes without a save, its edit is discarded: each form in it goes back to its rendered values, and the page asks at once, so the held region loads what it waited for. A close after a save discards nothing, because the save made the saved values the rendered ones. The New Game form and the Add forms of the Prompt Presets panel follow this rule, as does the Rename form of a Game. An editor with `data-work` is not a disclosure: its Cancel discards its edit. A save that fails keeps the edit of a form. A control that saves on change goes back to its rendered value, and its inline error says that the value was not saved.
 
-The Worlds editor and the connection editor open into an editor slot of their region (`#world-editor`, `#connection-editor`). While the slot holds an editor, the list of the region is hidden. Cancel empties the slot in the browser with no request.
+The Worlds editor opens into an editor slot of its region (`#world-editor`). While the slot holds an editor, the list of the region is hidden. Cancel empties the slot in the browser with no request.
+
+The edit dialog is one modal dialog of the shell (`#edit-dialog`), outside every region, so no load meets it. Today the connection forms (Add and Edit) and the Test result of a saved connection open there; the other forms that wait for a Save still open in their region, and they move into the dialog in a later stage. A swap into `#edit-dialog-body` opens the dialog, and the root of the fragment carries `data-dialog-form` and a heading with the id `edit-dialog-title`. Cancel, Escape and a save that the engine accepts close it. A click on the backdrop does not. An Escape that closes an open error detail closes only that detail. Closing the dialog discards the form and returns focus to the control that opened it. A save that was sent before Escape still applies, because closing the dialog does not cancel the request. An answer that comes from a control outside the dialog never replaces a form that is open in it. A refused save, with the busy refusal too, reports in the slot of its own form and keeps the dialog open. A load skips a control whose request is in flight, so the player's choice stays until the request ends. A load that skipped such a control does not count as current: its region stays due, and the page asks again when the request ends, so the control then gets the value that the engine renders.
 
 ### Markers
 
@@ -89,6 +91,9 @@ The Worlds editor and the connection editor open into an editor slot of their re
 | `data-refusal-what` | On a saving form: the words that finish "The Game is busy, so …" when the busy Game refuses the save. |
 | `data-opens-editor` | On a control that opens an editor: Cancel returns focus to it. |
 | `data-close-editor` | On a Cancel control in an editor slot: it empties the slot with no request. |
+| `data-dialog-form` | On the root of a fragment that opens in the edit dialog. |
+| `data-shell-form` | On the root of a form that the shell renders outside every region, such as the text-check preview. |
+| `data-close-dialog` | On a Cancel or Close control in the edit dialog: it closes the dialog with no request. |
 | `data-error-slot` | On an inline error slot: its name. A slot that shows an error keeps it through a load. |
 | `data-unreachable` | On an inline error slot that shows the Unreachable text: it clears with the banner. |
 | `data-status` | On the status display answer: the machine state (`idle`, `thinking`, `autoplay`, `failed`). |

@@ -222,13 +222,13 @@ And #submit-btn is enabled
 And pressing Enter in #command-form input[name="command"] submits the form
 ```
 
-#### Scenario 16.29: A failed connection form keeps its page and renders the failure inline
+#### Scenario 16.29: A failed connection form keeps its dialog and renders the failure inline
 
 ```gherkin
-Given the Settings panel is showing the shared connection form page
+Given the edit dialog is open with the connection Add form
 And the form is the same node as before the submission
 When the client submits the form and the server refuses it
-Then the form page is still in the document
+Then the edit dialog is still open with the same form
 And the form shows an inline error naming the failure
 And that short line quotes the server's own explanation of the refusal
 And the raw server text is reachable in that error's disclosure
@@ -293,13 +293,13 @@ And the game row's Reset control has keyboard focus
 And the banner is not raised
 ```
 
-#### Scenario 16.35: A refused connection edit keeps its page and renders the failure inline
+#### Scenario 16.35: A refused connection edit keeps its dialog and renders the failure inline
 
 ```gherkin
-Given the Settings panel is showing a saved connection's Edit form page
-And the form page is the same node as before the submission
+Given the edit dialog is open with a saved connection's Edit form
+And the form is the same node as before the submission
 When the client submits the form and the server refuses it
-Then the form page is still in the document
+Then the edit dialog is still open with the same form
 And the form shows an inline error naming the failure
 And the raw server text is reachable in that error's disclosure
 ```
@@ -420,3 +420,61 @@ And #status-display shows the label of the Job's step
 And the primary button is disabled
 ```
 
+#### Scenario 16.46: A swap into the dialog body opens the modal dialog
+
+```gherkin
+Given the dashboard is loaded and the edit dialog is closed
+When the client activates a control whose answer htmx swaps into #edit-dialog-body
+Then #edit-dialog is open as a modal dialog
+And the dialog is named by the heading of the form that it holds
+And the first field of the form has keyboard focus
+```
+
+#### Scenario 16.47: Cancel and Escape close the dialog and return focus to the opener
+
+```gherkin
+Given the edit dialog is open, and a control of the page opened it
+When the client presses Escape
+Then the edit dialog is closed and its body is empty
+And the control that opened it has keyboard focus
+When the client opens the dialog again
+And clicks the backdrop outside the dialog
+Then the edit dialog is still open
+When the client activates Cancel
+Then the edit dialog is closed and its body is empty
+And the control that opened it has keyboard focus
+And closing the dialog sent no request
+```
+
+#### Scenario 16.48: A save that the engine accepts closes the dialog
+
+```gherkin
+Given the edit dialog is open with a form
+When the client saves and the engine accepts the save
+Then the edit dialog is closed and its body is empty
+```
+
+A save that the engine refuses keeps the dialog open: see Scenarios 16.29, 16.35 and 40.6.
+
+#### Scenario 16.49: An answer that comes from outside never replaces the form of the open dialog
+
+```gherkin
+Given the client activated a connection's Test control, and its request is in flight
+And the client then opened the Add Connection form in the dialog, and typed a name
+When the answer of the Test arrives
+Then the edit dialog is still open with the Add Connection form
+And the typed name is still in the form
+And the result of the Test is not shown
+```
+
+#### Scenario 16.50: Escape closes an open error detail before it closes the dialog
+
+```gherkin
+Given the edit dialog is open with a form, and a typed value in a field
+And a refused save shows its error with the Details open
+When the client presses Escape
+Then the error detail is closed
+And the edit dialog is still open, and the field keeps the typed value
+When the client presses Escape again
+Then the edit dialog is closed
+```

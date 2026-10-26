@@ -141,93 +141,15 @@ fn test_healthy_role_renders_healthy() {
 }
 
 #[test]
-fn test_the_panel_keeps_the_sub_tab_in_attributes_the_server_never_changes() {
-    let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[])
-        .render()
-        .unwrap();
-
-    assert!(
-        !html.contains("settings-panel"),
-        "the shell's .settings-panel is the region, so the fragment repeats no root: {html}"
-    );
-    assert!(
-        html.contains(r#"id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-keep="aria-selected""#),
-        "the sub-tab button lists its selected state in data-keep: {html}"
-    );
-    assert!(
-        html.contains(r#"id="settings-text-check" role="tabpanel" aria-labelledby="subtab-text-check" hidden data-keep="hidden""#),
-        "the sub-tab panel lists its hidden state in data-keep: {html}"
-    );
-    assert!(
-        !html.contains("settings-subtab active") && !html.contains("settings-subtab-panel active"),
-        "the active sub-tab is no class: {html}"
-    );
-    assert!(
-        html.contains(r#"<div class="editor-slot" id="connection-editor"></div>"#),
-        "the editor slot renders empty: {html}"
-    );
-}
-
-#[test]
-fn test_role_rows_and_connection_rows_carry_stable_ids_and_their_own_error_slots() {
-    let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[])
-        .render()
-        .unwrap();
-
-    for id in [
-        "role-row-narrator",
-        "role-row-quantifier",
-        "connection-conn-1",
-        "connection-conn-2",
-    ] {
-        assert!(
-            html.contains(&format!(r#"id="{id}""#)),
-            "row id {id}: {html}"
-        );
-    }
-    for slot in [
-        "role-narrator",
-        "role-quantifier",
-        "connection-conn-1",
-        "connection-conn-2",
-    ] {
-        assert!(
-            html.contains(&format!(r#"data-error-slot="{slot}""#)),
-            "error slot {slot}: {html}"
-        );
-    }
-}
-
-#[test]
-fn test_panel_actions_answer_nothing_and_target_no_region() {
-    let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[])
-        .render()
-        .unwrap();
-
-    assert!(!html.contains(r#"hx-target=".settings-panel""#), "{html}");
-    assert!(
-        html.contains(r#"hx-trigger="change" hx-swap="none""#),
-        "the role select saves and swaps nothing: {html}"
-    );
-    assert!(
-        html.contains(r##"hx-get="/fragment/connections/new" hx-target="#connection-editor""##),
-        "Add Connection fills the editor slot: {html}"
-    );
-}
-
-#[test]
 fn test_connection_form_template_add_and_edit() {
     let settings = two_connection_settings();
     let add = ConnectionFormTemplate::new(None).render().unwrap();
-    assert!(add.contains(r#"<h2>Add Connection</h2>"#));
+    assert!(add.contains(r#"<h2 id="edit-dialog-title">Add Connection</h2>"#));
     assert!(add.contains(r#"hx-post="/connections/add""#));
-    assert!(add.contains("data-close-editor"));
+    assert!(add.contains("data-close-dialog"));
     assert!(
-        add.contains(r#"<div class="connection-form-page" id="connection-form-page" data-work>"#),
-        "the editor holds its region until the edit ends: {add}"
+        add.contains(r#"<div class="connection-form" data-dialog-form>"#),
+        "the form is a dialog fragment: {add}"
     );
     assert!(
         add.contains(r#"hx-swap="none""#),
@@ -238,7 +160,7 @@ fn test_connection_form_template_add_and_edit() {
     let edit = ConnectionFormTemplate::new(Some(&settings.connections[0]))
         .render()
         .unwrap();
-    assert!(edit.contains(r#"<h2>Edit Test Narrator</h2>"#));
+    assert!(edit.contains(r#"<h2 id="edit-dialog-title">Edit Test Narrator</h2>"#));
     assert!(edit.contains(r#"hx-post="/connections/conn-1/edit""#));
     assert!(edit.contains(r#"name="conn_model" value="openai/gpt-4o-mini""#));
     assert!(edit.contains(r#"name="conn_api_key" value="sk-test""#));

@@ -35,7 +35,8 @@ use chronicler_engine::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GameRowView, GamesPanelTemplate, PersonaRowView,
 };
 use chronicler_engine::adapters::driving::http::settings::templates::{
-    ConnectionFormTemplate, SettingsTemplate,
+    ConnectionFormTemplate, ConnectionTestDialogTemplate, ConnectionTestResultTemplate,
+    SettingsTemplate,
 };
 use chronicler_engine::adapters::driving::http::layout::handlers::{
     busy_answer, failure_answer, idle_answer,
@@ -226,6 +227,18 @@ fn connection_form_html(connection: Option<&LlmConnection>) -> String {
     ConnectionFormTemplate::new(connection)
         .render()
         .expect("render connection form")
+}
+
+fn connection_test_result_html(model: &str) -> String {
+    use askama::Template;
+
+    ConnectionTestResultTemplate {
+        backend_name: "Mock".to_string(),
+        model_name: model.to_string(),
+        elapsed_ms: 7,
+    }
+    .render()
+    .expect("render connection test result")
 }
 
 fn custom_preset(id: &str, name: &str) -> PromptPreset {
@@ -479,6 +492,11 @@ struct StubState {
     newest_narration: std::sync::Mutex<Option<String>>,
     extra_oldest: std::sync::atomic::AtomicBool,
     save_succeeds: std::sync::atomic::AtomicBool,
+    connection_saves_succeed: std::sync::atomic::AtomicBool,
+    connection_saves_refused_as_busy: std::sync::atomic::AtomicBool,
+    role_saves_keep_stored_value: std::sync::atomic::AtomicBool,
+    role_save_answers_held: std::sync::atomic::AtomicBool,
+    role_save_answer_permits: tokio::sync::Semaphore,
     story_writes_refused_as_busy: std::sync::atomic::AtomicBool,
     delete_succeeds: std::sync::atomic::AtomicBool,
     deleted: std::sync::atomic::AtomicBool,
@@ -631,6 +649,11 @@ impl StubServer {
             newest_narration: std::sync::Mutex::new(None),
             extra_oldest: std::sync::atomic::AtomicBool::new(false),
             save_succeeds: std::sync::atomic::AtomicBool::new(false),
+            connection_saves_succeed: std::sync::atomic::AtomicBool::new(false),
+            connection_saves_refused_as_busy: std::sync::atomic::AtomicBool::new(false),
+            role_saves_keep_stored_value: std::sync::atomic::AtomicBool::new(false),
+            role_save_answers_held: std::sync::atomic::AtomicBool::new(false),
+            role_save_answer_permits: tokio::sync::Semaphore::new(0),
             story_writes_refused_as_busy: std::sync::atomic::AtomicBool::new(false),
             delete_succeeds: std::sync::atomic::AtomicBool::new(false),
             deleted: std::sync::atomic::AtomicBool::new(false),
@@ -967,6 +990,43 @@ impl StubSaveHandle {
             .store(succeeds, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// A connection Add or Edit refuses until armed, so the tests that drive a
+    /// refused save keep their outcome.
+    pub fn set_connection_saves_succeed(&self, succeeds: bool) {
+        self.state
+            .connection_saves_succeed
+            .store(succeeds, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// A connection Add or Edit answers the busy refusal, the way the engine
+    /// refuses a Settings save while Autoplay holds the Game.
+    pub fn set_connection_saves_refused_as_busy(&self, refused: bool) {
+        self.state
+            .connection_saves_refused_as_busy
+            .store(refused, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// A role save answers 200 but the engine keeps the value it had, so the next
+    /// render differs from the player's choice.
+    pub fn set_role_saves_keep_stored_value(&self, keeps: bool) {
+        self.state
+            .role_saves_keep_stored_value
+            .store(keeps, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// A role save commits and moves its number at once, but its answer waits
+    /// until `release_role_save_answer`: the save stays in flight in the page
+    /// while the engine already shows its effect.
+    pub fn hold_role_save_answers(&self) {
+        self.state
+            .role_save_answers_held
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn release_role_save_answer(&self) {
+        self.state.role_save_answer_permits.add_permits(1);
+    }
+
     pub fn set_story_writes_refused_as_busy(&self, refused: bool) {
         self.state
             .story_writes_refused_as_busy
@@ -1151,15 +1211,11 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/", get(index))
         .route("/action/check", post(action_check))
         .route("/action/confirm", post(action_confirm))
-        .route(
-            "/connections/add",
-            post(|| async { client_refusal("Unknown LLM backend 'bogus_provider'") }),
-        )
-        .route(
-            "/connections/:id/edit",
-            post(|| async { client_refusal("Unknown LLM backend 'bogus_provider'") }),
-        )
+        .route("/connections/add", post(save_connection))
+        .route("/connections/:id/edit", post(save_connection))
         .route("/connections/set-quantifier", post(set_quantifier))
+        .route("/connections/test", post(test_connection_form))
+        .route("/connections/:id/test", post(test_saved_connection))
         .route(
             "/prompt-presets",
             post(|| async { client_refusal("Invalid preset type") }),
@@ -1421,7 +1477,10 @@ async fn set_quantifier(
     State(state): State<Arc<StubState>>,
     Form(form): Form<HashMap<String, String>>,
 ) -> Response<Body> {
-    if let Some(id) = form.get("connection_id") {
+    let keeps = state
+        .role_saves_keep_stored_value
+        .load(std::sync::atomic::Ordering::SeqCst);
+    if let (Some(id), false) = (form.get("connection_id"), keeps) {
         state
             .settings
             .lock()
@@ -1429,7 +1488,52 @@ async fn set_quantifier(
             .quantifier_connection_id = id.clone();
     }
     state.bump(&[ChangeKind::SETTINGS]);
+    if state
+        .role_save_answers_held
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        state
+            .role_save_answer_permits
+            .acquire()
+            .await
+            .expect("role save answer gate closed")
+            .forget();
+    }
     (StatusCode::OK, "").into_response()
+}
+
+/// The real handler wraps the result of a saved connection's test in the dialog.
+async fn test_saved_connection(
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Html<String> {
+    use askama::Template;
+
+    Html(
+        ConnectionTestDialogTemplate::new(id.clone(), connection_test_result_html(&id))
+            .render()
+            .expect("render connection test dialog"),
+    )
+}
+
+async fn test_connection_form() -> Html<String> {
+    Html(connection_test_result_html("typed-model"))
+}
+
+/// A connection save refuses the typed provider until a test arms it.
+async fn save_connection(State(state): State<Arc<StubState>>) -> Response<Body> {
+    if state
+        .connection_saves_refused_as_busy
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return (StatusCode::OK, Html(BUSY_STATUS)).into_response();
+    }
+    if state
+        .connection_saves_succeed
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return (StatusCode::OK, "").into_response();
+    }
+    client_refusal("Unknown LLM backend 'bogus_provider'")
 }
 
 async fn save_text_check(

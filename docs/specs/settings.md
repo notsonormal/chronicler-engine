@@ -23,8 +23,9 @@ The panel splits into two client-side sub-tabs: **Connections** (default) and
 on the sub-tab buttons and in `hidden` on the sub-tab panels, and each lists
 its attribute in `data-keep`, so a load of the panel keeps the selected
 sub-tab. The panel is a live region of the settings and LLM-message kinds: its
-fragment carries no root element of its own, and it carries an empty editor
-slot for the connection editor.
+fragment carries no root element of its own. The connection forms and the
+result of a connection Test open in the edit dialog, outside the panel, so a
+load of the panel never meets them.
 
 A save answers nothing on success: an empty 200. A refusal answers a 400 error
 fragment, and a failure a 500 error fragment. The control that saved reports the
@@ -37,7 +38,7 @@ Given a fresh app state with the default connections
 When the client GET /fragment/settings
 Then the response is 200
 And the body holds a Connections sub-tab and a Text Check sub-tab, and no root element of its own
-And the body holds an empty connection editor slot
+And the body holds no editor slot and no slot for the result of a connection Test
 And the Connections sub-tab is the selected one, and the sub-tab attributes are listed in data-keep
 And the connection rows and the role rows carry stable ids
 And the Connections panel holds a role row for Narrator and a role row for Quantifier, each with a connection select
@@ -46,6 +47,25 @@ And the Connections panel offers an Add Connection control
 And the Text Check panel holds the check_mode select and the enable_auto_check checkbox
 And the body contains no "Set as Narrator" or "Set as Quantifier" control
 And the body contains no always-open Add Connection form
+```
+
+#### Scenario 20.34: Each role row and connection row reports a failure in its own error slot
+
+```gherkin
+Given a fresh app state with the default connections
+When the client GET /fragment/settings
+Then the Narrator and Quantifier role rows and each connection row hold an error slot of their own
+And the text-check card holds an error slot of its own
+```
+
+#### Scenario 20.35: The controls of the panel swap nothing into the panel
+
+```gherkin
+Given a fresh app state with the default connections
+When the client GET /fragment/settings
+Then each role select saves on change and swaps nothing
+And the Add Connection, Edit and Test controls target the edit dialog
+And no control targets the panel
 ```
 
 #### Scenario 20.16: The role rows report each role's health
@@ -181,13 +201,27 @@ And the body carries the unknown-backend failure text naming "bogus_provider"
 And a following GET /fragment/settings still lists the connection rows
 ```
 
-### GET /fragment/connections/{id}/edit — edit form
+### GET /fragment/connections/new and GET /fragment/connections/{id}/edit — the connection forms
 
-The connection editor opens into the editor slot of the panel. The editor
-root holds the panel (`data-work`) until the edit ends. Cancel empties the slot
-in the browser and sends no request.
+A connection form is a dialog fragment: its root carries `data-dialog-form`, and
+its heading has the id `edit-dialog-title`. The client puts it in the edit
+dialog. Cancel closes the dialog in the browser and sends no request.
 
-#### Scenario 20.24: The connection Edit form refuses an unknown connection and leaves the editor slot empty
+#### Scenario 20.36: The connection forms answer dialog fragments
+
+```gherkin
+Given a fresh app state with the default connections
+When the client GET /fragment/connections/new
+Then the response is 200
+And the body is a dialog fragment titled "Add Connection", with a form that posts to /connections/add
+When the client GET /fragment/connections/{id}/edit for a saved connection
+Then the response is 200
+And the body is a dialog fragment titled with the connection's name, with a form that posts to /connections/{id}/edit
+And each form has a Cancel control, a Test control for the typed values, and its own error slot
+And each form names what a busy refusal leaves unsaved
+```
+
+#### Scenario 20.24: The connection Edit form refuses an unknown connection and opens no dialog
 
 ```gherkin
 Given a fresh app state
@@ -317,7 +351,7 @@ moves role health or the failure banner.
 Given a saved mock connection
 When the client tests that connection
 Then the response is 200
-And the body reports a successful reply naming the connection's model and the reply time
+And the body is a dialog fragment that reports a successful reply naming the connection's model and the reply time
 And the LLM Messages list is still empty
 And no role's health has a backend or a failure
 ```
@@ -328,7 +362,7 @@ And no role's health has a backend or a failure
 Given a saved connection whose provider fails the test call
 When the client tests that connection
 Then the response is 200
-And the body carries a short failure message with a Details disclosure holding the raw failure text
+And the body is a dialog fragment with a short failure message and a Details disclosure holding the raw failure text
 And the LLM Messages list is still empty
 ```
 

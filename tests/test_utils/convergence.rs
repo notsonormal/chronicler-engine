@@ -37,12 +37,6 @@ pub const ALLOWED_MISMATCHES: &[AllowedMismatch] = &[
         removed_in_stage: 3,
     },
     AllowedMismatch {
-        route: "/fragment/settings",
-        tolerates: Tolerates::HeldByOpenEdit("#connection-editor"),
-        reason: "an open connection editor (`#connection-editor`) holds the Settings panel, so it keeps the form that the server does not render",
-        removed_in_stage: 2,
-    },
-    AllowedMismatch {
         route: "/fragment/prompt-presets",
         tolerates: Tolerates::HeldByOpenEdit(".preset-card[data-work], .preset-add"),
         reason: "an open preset editor or an Add form with typed text holds the Prompt Presets panel, so it keeps the form that the server does not render",

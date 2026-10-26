@@ -54,8 +54,8 @@ async fn test_settings_panel_returns_html() {
     assert!(html.contains("Connections"));
     assert!(html.contains("Text Check"));
     assert!(
-        html.contains(r#"id="connection-editor""#),
-        "the panel renders its editor slot, empty"
+        !html.contains("connection-editor"),
+        "the connection forms open in the dialog, so the panel renders no editor slot"
     );
 }
 
@@ -145,12 +145,16 @@ async fn test_new_connection_form_returns_the_add_form() {
     let app_state = make_test_app_state();
     let response = new_connection_form(axum::extract::State(app_state)).await;
 
-    assert!(response.0.contains(r#"<h2>Add Connection</h2>"#));
-    assert!(response.0.contains(r#"id="conn_name""#));
-    assert!(response.0.contains("data-close-editor"));
     assert!(
-        response.0.contains("data-work"),
-        "the editor holds its region until the edit ends: {}",
+        response
+            .0
+            .contains(r#"<h2 id="edit-dialog-title">Add Connection</h2>"#)
+    );
+    assert!(response.0.contains(r#"id="conn_name""#));
+    assert!(response.0.contains("data-close-dialog"));
+    assert!(
+        response.0.contains("data-dialog-form"),
+        "the form is a dialog fragment: {}",
         response.0
     );
     assert!(
@@ -173,7 +177,7 @@ async fn test_edit_connection_form_returns_form() {
         edit_connection_form(axum::extract::State(app_state), Path("test-conn".into())).await;
     let body = body_text(response).await;
 
-    assert!(body.contains(r#"<h2>Edit Test</h2>"#));
+    assert!(body.contains(r#"<h2 id="edit-dialog-title">Edit Test</h2>"#));
     assert!(body.contains(r#"hx-post="/connections/test-conn/edit""#));
 }
 

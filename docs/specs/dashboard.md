@@ -36,7 +36,7 @@ Then the response body is a status element with data-status "idle" and the label
 #### Scenario 39.2: The shell defines each referenced icon exactly once
 ```gherkin
 Given a game with at least 2 Messages and a stored trigger
-When the client requests GET / and GET /fragment/story-log, /fragment/games and /fragment/connections/new
+When the client requests GET / and GET /fragment/story-log and /fragment/games
 Then the shell defines each icon exactly once
 And every icon the shell or a fragment named above references is one the shell defines
 And each fragment named above shows at least one icon

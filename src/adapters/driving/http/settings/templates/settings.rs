@@ -26,7 +26,6 @@ pub struct RoleRowView {
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="editor-slot" id="connection-editor"></div>
 <div class="settings-subtabs" role="tablist" aria-label="Settings sections">
     <button class="settings-subtab" role="tab" id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-keep="aria-selected">Connections<span class="subtab-marker-slot" id="subtab-connections-marker">{{ degraded_marker }}</span></button>
     <button class="settings-subtab" role="tab" id="subtab-text-check" aria-controls="settings-text-check" aria-selected="false" data-keep="aria-selected">Text Check</button>
@@ -58,17 +57,16 @@ pub struct RoleRowView {
                 {% if conn.id == quantifier_connection_id %}<span class="badge quantifier">Quantifier</span>{% endif %}
             </div>
             <div class="connection-actions">
-                <button type="button" hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="#connection-editor" hx-swap="innerHTML" data-opens-editor class="btn-cyan">Edit</button>
-                <button type="button" hx-post="/connections/{{ conn.id }}/test" hx-target="next .connection-test-slot" hx-swap="innerHTML" class="btn-cyan">Test</button>
+                <button type="button" hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">Edit</button>
+                <button type="button" hx-post="/connections/{{ conn.id }}/test" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">Test</button>
                 <button type="button" hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-swap="none" class="btn-danger">Delete</button>
             </div>
-            <div class="inline-error-slot connection-test-slot"></div>
             <div class="inline-error-slot" data-error-slot="connection-{{ conn.id }}" hidden></div>
         </div>
         {% endfor %}
     </div>
     <div class="connection-add">
-        <button type="button" hx-get="/fragment/connections/new" hx-target="#connection-editor" hx-swap="innerHTML" data-opens-editor class="btn-primary">Add Connection</button>
+        <button type="button" hx-get="/fragment/connections/new" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-primary">Add Connection</button>
     </div>
 </div>
 <div class="settings-subtab-panel" id="settings-text-check" role="tabpanel" aria-labelledby="subtab-text-check" hidden data-keep="hidden">
@@ -142,10 +140,9 @@ impl SettingsTemplate {
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="connection-form-page" id="connection-form-page" data-work>
-    <button type="button" class="back-link" data-close-editor><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg> Connections</button>
-    <h2>{% if editing %}Edit {{ name }}{% else %}Add Connection{% endif %}</h2>
-    <form hx-post="{{ form_action }}" hx-swap="none">
+<div class="connection-form" data-dialog-form>
+    <h2 id="edit-dialog-title">{% if editing %}Edit {{ name }}{% else %}Add Connection{% endif %}</h2>
+    <form hx-post="{{ form_action }}" hx-swap="none" data-refusal-what="the connection was not saved">
         <div class="form-group">
             <label for="conn_name">Name</label>
             <input type="text" id="conn_name" name="conn_name" value="{{ name }}" placeholder="My OpenRouter" />
@@ -188,7 +185,7 @@ impl SettingsTemplate {
         <div class="form-actions">
             <button type="submit" class="btn-primary">Save</button>
             <button type="button" class="btn-cyan" hx-post="/connections/test" hx-include="closest form" hx-target="next .connection-test-slot" hx-swap="innerHTML">Test</button>
-            <button type="button" class="btn-cyan" data-close-editor>Cancel</button>
+            <button type="button" class="btn-cyan" data-close-dialog>Cancel</button>
         </div>
         <div class="inline-error-slot connection-test-slot"></div>
     </form>
@@ -243,6 +240,36 @@ impl ConnectionFormTemplate {
             form_action: connection
                 .map(|conn| format!("/connections/{}/edit", conn.id))
                 .unwrap_or_else(|| "/connections/add".to_string()),
+        }
+    }
+}
+
+/// The dialog that shows the answer of the Test of a saved connection: the
+/// result is the answer of an action, so it opens outside the Settings screen.
+#[derive(Template)]
+#[template(
+    source = r##"
+<div class="connection-test-dialog" data-dialog-form>
+    <h2 id="edit-dialog-title">Test {{ connection_name }}</h2>
+    {{ result }}
+    <div class="form-actions">
+        <button type="button" class="btn-cyan" data-close-dialog>Close</button>
+    </div>
+</div>
+"##,
+    ext = "html"
+)]
+pub struct ConnectionTestDialogTemplate {
+    connection_name: String,
+    result: SafeHtml,
+}
+
+impl ConnectionTestDialogTemplate {
+    /// `result_html` is the rendered result of the test, or its error disclosure.
+    pub fn new(connection_name: String, result_html: String) -> Self {
+        Self {
+            connection_name,
+            result: SafeHtml::new(result_html),
         }
     }
 }

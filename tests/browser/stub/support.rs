@@ -208,6 +208,63 @@ pub(super) async fn ask_once(page: &playwright_rs::Page) {
         .expect("the page runs one ask");
 }
 
+/// Keeps each request whose URL ends with `suffix` in the page until
+/// `window.releaseHeldRequests()`, so it stays in flight while a check works.
+/// `window.heldRequestsAnswered` counts the held requests whose answer came back.
+pub(super) async fn hold_requests_ending_with(page: &playwright_rs::Page, suffix: &str) {
+    page.evaluate::<String, ()>(
+        r#"(suffix) => {
+            const open = XMLHttpRequest.prototype.open;
+            const send = XMLHttpRequest.prototype.send;
+            const held = [];
+            window.heldRequestsAnswered = 0;
+            XMLHttpRequest.prototype.open = function (method, url) {
+                this.heldUrl = String(url);
+                return open.apply(this, arguments);
+            };
+            XMLHttpRequest.prototype.send = function (body) {
+                if (this.heldUrl.endsWith(suffix)) {
+                    this.addEventListener('loadend', () => { window.heldRequestsAnswered += 1; });
+                    held.push(() => send.call(this, body));
+                    return;
+                }
+                return send.call(this, body);
+            };
+            window.releaseHeldRequests = () => held.splice(0).forEach((resume) => resume());
+        }"#,
+        Some(&suffix.to_string()),
+    )
+    .await
+    .unwrap();
+}
+
+/// Sends the held requests and waits until each answer came back.
+pub(super) async fn release_held_requests_and_wait_for_answers(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        "() => { window.expectedHeldAnswers = window.heldRequestsAnswered + 1; window.releaseHeldRequests(); }",
+        None,
+    )
+    .await
+    .unwrap();
+    let answered = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            page.evaluate::<(), bool>(
+                "() => window.heldRequestsAnswered >= window.expectedHeldAnswers",
+                None,
+            )
+            .await
+            .unwrap_or(false)
+        },
+    )
+    .await;
+    assert!(
+        answered,
+        "the held request must be answered after its release"
+    );
+}
+
 /// Focus lands only at the end of a swap.
 pub(super) async fn wait_until_focused(
     page: &playwright_rs::Page,

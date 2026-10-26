@@ -1,9 +1,11 @@
 //! Tests for the live-region guardrail.
 
 use crate::live_regions::{
-    check_handler_headers, check_live_regions_in_shell, check_no_out_of_band_swaps,
-    check_region_table_matches_shell, check_scripts_use_action_fetch,
-    check_scripts_write_no_region, check_template_targets, region_names, ListedRegion,
+    check_dialog_fragments_carry_the_title, check_draft_control_exceptions_are_used,
+    check_draft_controls_only_in_dialog_forms, check_handler_headers, check_live_regions_in_shell,
+    check_no_out_of_band_swaps, check_region_table_matches_shell, check_scripts_use_action_fetch,
+    check_scripts_write_no_region, check_template_targets, region_names, DraftControlException,
+    ListedRegion,
 };
 
 const GOOD_REGION: &str = r#"<div id="story-log" data-live="story busy worlds" hx-get="/fragment/story-log" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>"#;
@@ -352,4 +354,157 @@ fn test_check_region_table_matches_shell_rejects_other_kinds_and_another_path() 
     assert_eq!(violations.len(), 2);
     assert!(violations[0].message.contains("kinds"));
     assert!(violations[1].message.contains("loads"));
+}
+
+const REGION_WITH_A_TEST_FORM: &str = r##"
+#[template(source = r#"<div class="settings-panel">
+    <form hx-post="/connections/test" hx-swap="none">
+        <input type="text" name="conn_model" value="">
+        <button type="submit">Test</button>
+    </form>
+</div>"#)]
+struct SettingsTemplate;
+"##;
+
+#[test]
+fn test_check_draft_controls_rejects_a_test_form_inside_a_region() {
+    let violations = check_draft_controls_only_in_dialog_forms(
+        "adapters/driving/http/settings/templates/settings.rs",
+        REGION_WITH_A_TEST_FORM,
+    );
+    assert_eq!(violations.len(), 1, "{violations:?}");
+    assert!(violations[0].message.contains("data-dialog-form"));
+    assert_eq!(violations[0].line, 4);
+}
+
+#[test]
+fn test_check_draft_controls_accepts_a_form_in_a_dialog_fragment() {
+    let source = REGION_WITH_A_TEST_FORM.replace(
+        r#"<div class="settings-panel">"#,
+        r#"<div class="connection-form" data-dialog-form>"#,
+    );
+    assert!(check_draft_controls_only_in_dialog_forms("a.rs", &source).is_empty());
+}
+
+#[test]
+fn test_check_draft_controls_accepts_controls_that_save_on_change() {
+    let source = r##"r#"<select name="a" hx-post="/x" hx-trigger="change"><option></option></select>
+<form hx-post="/y" hx-trigger="change"><input type="checkbox" name="b"><select name="c"></select></form>"#"##;
+    assert!(check_draft_controls_only_in_dialog_forms("a.rs", source).is_empty());
+}
+
+#[test]
+fn test_check_draft_controls_ignores_hidden_readonly_disabled_and_button_controls() {
+    let source = r##"r#"<form hx-post="/y"><input type="hidden" name="a"><input type="text" readonly><textarea disabled></textarea><input type="submit"></form>"#"##;
+    assert!(check_draft_controls_only_in_dialog_forms("a.rs", source).is_empty());
+}
+
+#[test]
+fn test_check_draft_controls_judges_a_control_after_an_autosave_form_by_its_own_form() {
+    let source = r##"r#"<form hx-post="/y" hx-trigger="change"><select name="c"></select></form><form hx-post="/z"><input type="text" name="d"></form>"#"##;
+    assert_eq!(
+        check_draft_controls_only_in_dialog_forms("a.rs", source).len(),
+        1
+    );
+}
+
+#[test]
+fn test_check_draft_control_exceptions_flags_a_stale_row() {
+    let exceptions = [DraftControlException {
+        path: "a.rs",
+        reason: "a form that moved",
+        removed_in_stage: Some(3),
+    }];
+    let clean = vec![(
+        "a.rs".to_string(),
+        r##"r#"<div data-dialog-form><input type="text"></div>"#"##.to_string(),
+    )];
+    let still_needed = vec![("a.rs".to_string(), REGION_WITH_A_TEST_FORM.to_string())];
+
+    assert_eq!(
+        check_draft_control_exceptions_are_used(&clean, &exceptions).len(),
+        1
+    );
+    assert!(check_draft_control_exceptions_are_used(&still_needed, &exceptions).is_empty());
+}
+
+#[test]
+fn test_check_draft_controls_accepts_a_form_of_the_shell() {
+    let source =
+        r##"r#"<div class="preview" data-shell-form><textarea name="command"></textarea></div>"#"##;
+    assert!(check_draft_controls_only_in_dialog_forms("a.rs", source).is_empty());
+}
+
+#[test]
+fn test_check_draft_controls_judges_the_literal_not_its_first_tag() {
+    // The marker sits on an inner tag of a different literal, so the first
+    // literal holds a draft control with no marker of its own.
+    let source = r##"r#"<div class="a"><input type="text" name="x"></div>"#; r#"<div data-dialog-form></div>"#"##;
+    assert_eq!(
+        check_draft_controls_only_in_dialog_forms("a.rs", source).len(),
+        1
+    );
+}
+
+#[test]
+fn test_check_draft_controls_counts_a_conditionally_disabled_control() {
+    for tag in [
+        r#"<textarea name="a" {% if busy %}disabled{% endif %}></textarea>"#,
+        r#"<input type="text" name="a"{{ disabled(busy) }}>"#,
+        r#"<select name="a" {% if busy %} disabled{% endif %}></select>"#,
+    ] {
+        let source = format!("r#\"{tag}\"#");
+        assert_eq!(
+            check_draft_controls_only_in_dialog_forms("a.rs", &source).len(),
+            1,
+            "{tag}"
+        );
+    }
+}
+
+#[test]
+fn test_check_draft_controls_accepts_an_unconditionally_disabled_or_readonly_control() {
+    for tag in [
+        r#"<textarea rows="3" disabled>x</textarea>"#,
+        r#"<input type="text" readonly value="x">"#,
+        r#"<textarea readonly></textarea>"#,
+    ] {
+        let source = format!("r#\"{tag}\"#");
+        assert!(
+            check_draft_controls_only_in_dialog_forms("a.rs", &source).is_empty(),
+            "{tag}"
+        );
+    }
+}
+
+#[test]
+fn test_check_dialog_fragments_carry_the_title() {
+    let titled = r##"r#"<div data-dialog-form><h2 id="edit-dialog-title">Add</h2></div>"#"##;
+    let untitled = r##"r#"<div data-dialog-form><h2>Add</h2></div>"#"##;
+    assert!(check_dialog_fragments_carry_the_title("a.rs", titled).is_empty());
+    let violations = check_dialog_fragments_carry_the_title("a.rs", untitled);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("edit-dialog-title"));
+}
+
+#[test]
+fn test_check_draft_control_exceptions_flags_a_permanent_row_whose_file_holds_a_form() {
+    let permanent = [DraftControlException {
+        path: "a.rs",
+        reason: "a field builder",
+        removed_in_stage: None,
+    }];
+    let builder = vec![(
+        "a.rs".to_string(),
+        r##"r#"<div class="form-group"><textarea name="a"></textarea></div>"#"##.to_string(),
+    )];
+    let with_form = vec![(
+        "a.rs".to_string(),
+        r##"r#"<form hx-post="/x"><textarea name="a"></textarea></form>"#"##.to_string(),
+    )];
+
+    assert!(check_draft_control_exceptions_are_used(&builder, &permanent).is_empty());
+    let violations = check_draft_control_exceptions_are_used(&with_form, &permanent);
+    assert_eq!(violations.len(), 1, "{violations:?}");
+    assert!(violations[0].message.contains("permanent"));
 }

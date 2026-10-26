@@ -132,11 +132,7 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
         );
     }
 
-    for uri in [
-        "/fragment/story-log",
-        "/fragment/games",
-        "/fragment/connections/new",
-    ] {
+    for uri in ["/fragment/story-log", "/fragment/games"] {
         let icons = referenced_icons(&fetch_body(&app, uri).await);
         assert!(!icons.is_empty(), "{uri} should show at least one icon");
         for icon in icons {

@@ -755,41 +755,6 @@ const SUBTAB_ENGAGED: Engaged = Engaged {
     end: None,
 };
 
-const CONNECTION_EDITOR_ENGAGED: Engaged = Engaged {
-    region: SETTINGS_PANEL,
-    engage: concat!(
-        "async () => {",
-        after_settle!(),
-        r#"
-        await afterSettle(() =>
-            document.querySelector('#connection-openrouter-gpt-4o-mini button[hx-get$="/edit"]').click());
-        const input = document.getElementById('conn_name');
-        if (!input) return 'the editor did not open';
-        input.value = 'A typed connection';
-        input.focus();
-        window.__editor = document.getElementById('connection-form-page');
-        window.__editorInput = input;
-        return document.activeElement === input ? '' : 'the name field has no focus';
-    }"#
-    ),
-    check: r#"() => {
-        const editor = document.getElementById('connection-form-page');
-        const input = document.getElementById('conn_name');
-        if (editor !== window.__editor) return 'the editor is a new element';
-        if (!editor.hasAttribute('data-work')) return 'the editor lost its hold';
-        if (input !== window.__editorInput) return 'the name field is a new element';
-        if (input.value !== 'A typed connection') return 'the typed name changed: ' + input.value;
-        return document.activeElement === input ? '' : 'the name field lost focus';
-    }"#,
-    end: Some(
-        r#"async () => {
-        document.querySelector('#connection-editor .back-link').click();
-        await window.chroniclerLive.settle();
-        return '';
-    }"#,
-    ),
-};
-
 const PRESET_EDIT_ENGAGED: Engaged = Engaged {
     region: PRESETS_PANEL,
     engage: OPEN_PRESET_EDIT,
@@ -953,7 +918,6 @@ async fn check_a_load_keeps_the_engaged_state_of_each_region(
 
     open_section(&page, "settings", ".settings-panel").await;
     assert_engaged_state_survives(&page, &changes, &SUBTAB_ENGAGED).await;
-    assert_engaged_state_survives(&page, &changes, &CONNECTION_EDITOR_ENGAGED).await;
 
     open_section(&page, "prompt-presets", ".prompt-presets-panel").await;
     assert_engaged_state_survives(&page, &changes, &PRESET_EDIT_ENGAGED).await;
@@ -1612,7 +1576,7 @@ async fn check_a_world_editor_survives_a_game_rename_that_raises_games(
 }
 
 // [docs/specs/browser_live_regions.md] SCENARIO: 44.22
-async fn check_a_connection_editor_keeps_the_sub_tab_and_cancel_loads_the_panel_once(
+async fn check_a_connection_form_in_the_dialog_survives_a_settings_load_and_keeps_the_sub_tab(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -1621,35 +1585,64 @@ async fn check_a_connection_editor_keeps_the_sub_tab_and_cancel_loads_the_panel_
     open_section(&page, "settings", ".settings-panel").await;
 
     assert_eq!(eval_string(&page, SUBTAB_ENGAGED.engage).await, "");
-    assert_eq!(
-        eval_string(&page, CONNECTION_EDITOR_ENGAGED.engage).await,
-        ""
-    );
+    let opened = eval_string(
+        &page,
+        concat!(
+            "async () => {",
+            after_settle!(),
+            r#"
+            await afterSettle(() =>
+                document.querySelector('#connection-openrouter-gpt-4o-mini button[hx-get$="/edit"]').click());
+            const input = document.getElementById('conn_name');
+            if (!input) return 'the form did not open';
+            input.value = 'A typed connection';
+            input.focus();
+            window.__form = document.querySelector('#edit-dialog .connection-form');
+            window.__formInput = input;
+            return document.activeElement === input ? '' : 'the name field has no focus';
+        }"#
+        ),
+    )
+    .await;
+    assert_eq!(opened, "");
     let loads = changes.loads("/fragment/settings");
     let requests = changes.loads("/fragment/connections/openrouter-gpt-4o-mini/edit");
     changes.bump(ChangeKind::SETTINGS);
     ask_once(&page).await;
-    assert_eq!(live_state(&page, ".settings-panel").await, "held");
-    assert_eq!(changes.loads("/fragment/settings"), loads);
-
     assert_eq!(
-        eval_string(&page, CONNECTION_EDITOR_ENGAGED.end.unwrap()).await,
-        ""
+        changes.loads("/fragment/settings"),
+        loads + 1,
+        "an open form holds no region, so the panel loads"
     );
+    assert_eq!(live_state(&page, ".settings-panel").await, "current");
+    let intact = eval_string(
+        &page,
+        r#"() => {
+            const form = document.querySelector('#edit-dialog .connection-form');
+            const input = document.getElementById('conn_name');
+            if (form !== window.__form) return 'the form is a new element';
+            if (input !== window.__formInput) return 'the name field is a new element';
+            if (input.value !== 'A typed connection') return 'the typed name changed: ' + input.value;
+            return document.activeElement === input ? '' : 'the name field lost focus';
+        }"#,
+    )
+    .await;
+    assert_eq!(intact, "", "the load of the panel leaves the dialog alone");
+
+    eval_string(
+        &page,
+        "() => { document.querySelector('#edit-dialog [data-close-dialog]').click(); return ''; }",
+    )
+    .await;
     assert_eq!(
         changes.loads("/fragment/connections/openrouter-gpt-4o-mini/edit"),
         requests,
         "Cancel sends no request"
     );
     assert_eq!(
-        changes.loads("/fragment/settings"),
-        loads + 1,
-        "Cancel ends the edit, and the panel loads once"
-    );
-    assert_eq!(
         eval_string(&page, SUBTAB_ENGAGED.check).await,
         "",
-        "the sub-tab is still the one the player chose, after the editor and the load"
+        "the sub-tab is still the one the player chose, after the dialog and the load"
     );
 }
 
@@ -1787,7 +1780,7 @@ async fn run_live_regions_checks() {
     runner
         .run(
             outcome,
-            check_a_connection_editor_keeps_the_sub_tab_and_cancel_loads_the_panel_once,
+            check_a_connection_form_in_the_dialog_survives_a_settings_load_and_keeps_the_sub_tab,
         )
         .await;
     runner.finish().await;

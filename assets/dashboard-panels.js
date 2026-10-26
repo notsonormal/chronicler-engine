@@ -9,7 +9,7 @@
 const PRESET_CARD = ".preset-card";
 const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";
 // A form field is the better landing spot: an Edit that opens a form should put
-// the caret in its first field, not on the back link above it.
+// the caret in its first field, not on a control above it.
 const FOCUSABLE_FIELD = "input:not([type=hidden]), select, textarea";
 // A refused Edit or View answers 200 with an error fragment standing in for the
 // card it replaced: that message is the landing spot.

@@ -17,7 +17,7 @@ async fn open_settings_panel(page: &playwright_rs::Page) {
 async fn connection_form_node_is_still_present(page: &playwright_rs::Page) -> bool {
     page.evaluate::<(), bool>(
         r#"() => {
-            const now = document.querySelector('.connection-form-page');
+            const now = document.querySelector('#edit-dialog .connection-form');
             return !!now && now === window.__connectionFormBefore;
         }"#,
         None,
@@ -29,7 +29,7 @@ async fn connection_form_node_is_still_present(page: &playwright_rs::Page) -> bo
 async fn stash_connection_form_node(page: &playwright_rs::Page) -> bool {
     page.evaluate::<(), bool>(
         r#"() => {
-            window.__connectionFormBefore = document.querySelector('.connection-form-page');
+            window.__connectionFormBefore = document.querySelector('#edit-dialog .connection-form');
             return !!window.__connectionFormBefore;
         }"#,
         None,
@@ -40,7 +40,7 @@ async fn stash_connection_form_node(page: &playwright_rs::Page) -> bool {
 
 async fn submit_connection_form(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
-        r#"() => document.querySelector('.connection-form-page form').requestSubmit()"#,
+        r#"() => document.querySelector('#edit-dialog .connection-form form').requestSubmit()"#,
         None,
     )
     .await
@@ -63,16 +63,21 @@ async fn check_failed_connection_add_keeps_the_form_and_renders_inline(
 ) {
     open_settings_panel(&page).await;
 
-    click_and_settle(&page, ".connection-add button", "#connection-editor").await;
-    wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
+    click_and_settle(&page, ".connection-add button", "#edit-dialog-body").await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
     assert!(
         stash_connection_form_node(&page).await,
-        "the Add form page should be loaded"
+        "the Add form should be loaded"
     );
 
     submit_connection_form(&page).await;
 
-    let slot = r#".connection-form-page [data-error-slot="connection-form"]"#;
+    let slot = r#"#edit-dialog .connection-form [data-error-slot="connection-form"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
         "a refused connection add should render into the form's inline slot"
@@ -93,7 +98,7 @@ async fn check_failed_connection_add_keeps_the_form_and_renders_inline(
     );
     assert!(
         connection_form_node_is_still_present(&page).await,
-        "a refused connection add must leave the form page in place"
+        "a refused connection add must leave the form in place in the dialog"
     );
 }
 
@@ -107,18 +112,23 @@ async fn check_failed_connection_edit_keeps_the_form_and_renders_inline(
     click_and_settle(
         &page,
         ".connection-list .connection-row:first-child button:has-text('Edit')",
-        "#connection-editor",
+        "#edit-dialog-body",
     )
     .await;
-    wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
     assert!(
         stash_connection_form_node(&page).await,
-        "the Edit form page should be loaded"
+        "the Edit form should be loaded"
     );
 
     submit_connection_form(&page).await;
 
-    let slot = r#".connection-form-page [data-error-slot="connection-form"]"#;
+    let slot = r#"#edit-dialog .connection-form [data-error-slot="connection-form"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
         "a refused connection edit should render into the form's inline slot"
@@ -135,7 +145,7 @@ async fn check_failed_connection_edit_keeps_the_form_and_renders_inline(
     );
     assert!(
         connection_form_node_is_still_present(&page).await,
-        "a refused connection edit must leave the form page in place"
+        "a refused connection edit must leave the form in place in the dialog"
     );
 }
 

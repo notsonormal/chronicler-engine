@@ -474,3 +474,205 @@ pub fn check_no_out_of_band_swaps(path: &str, content: &str) -> Vec<Violation> {
         })
         .collect()
 }
+
+/// A template file of the HTTP adapter that still renders a draft control without
+/// a form marker, with the reason, and the stage of the plan that removes the row.
+/// A row with no stage is a field-builder file: its literals hold no `<form`, and
+/// the screen sweep checks where its fields render. The list only shrinks: a row
+/// whose file renders no such control any more fails the guardrail.
+pub struct DraftControlException {
+    pub path: &'static str,
+    pub reason: &'static str,
+    pub removed_in_stage: Option<u8>,
+}
+
+pub const DRAFT_CONTROL_EXCEPTIONS: &[DraftControlException] = &[
+    DraftControlException {
+        path: "adapters/driving/http/games/templates/games.rs",
+        reason: "the Rename and New Game forms are still inside the Games panel",
+        removed_in_stage: Some(3),
+    },
+    DraftControlException {
+        path: "adapters/driving/http/prompt_presets/templates/prompt_presets.rs",
+        reason: "the preset Add forms are still inside the Prompt Presets panel",
+        removed_in_stage: Some(3),
+    },
+    DraftControlException {
+        path: "adapters/driving/http/builders/presets.rs",
+        reason: "the preset Edit form still replaces its card inside the Prompt Presets panel",
+        removed_in_stage: Some(3),
+    },
+    DraftControlException {
+        path: "adapters/driving/http/worlds/templates/worlds.rs",
+        reason: "the World editor is still inside the Worlds panel",
+        removed_in_stage: Some(3),
+    },
+    DraftControlException {
+        path: "adapters/driving/http/builders/forms.rs",
+        reason: "the field builder: its literals hold no form, and the screen sweep checks where the fields render",
+        removed_in_stage: None,
+    },
+];
+
+/// The markers that say a literal renders outside every region: a form of the edit
+/// dialog, and a form of the shell (the text-check preview).
+const DRAFT_FORM_MARKERS: [&str; 2] = ["data-dialog-form", "data-shell-form"];
+
+/// The raw string literals (`r"…"`, `r#"…"#`, …) of a Rust source, with the byte
+/// offset of each one's content. The markup of the HTTP adapter sits in raw strings.
+fn raw_string_literals(source: &str) -> Vec<(usize, &str)> {
+    let bytes = source.as_bytes();
+    let mut literals = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        let starts_raw = bytes[index] == b'r'
+            && (index == 0
+                || !(bytes[index - 1].is_ascii_alphanumeric() || bytes[index - 1] == b'_'));
+        if !starts_raw {
+            index += 1;
+            continue;
+        }
+        let mut cursor = index + 1;
+        while cursor < bytes.len() && bytes[cursor] == b'#' {
+            cursor += 1;
+        }
+        if cursor >= bytes.len() || bytes[cursor] != b'"' {
+            index += 1;
+            continue;
+        }
+        let hashes = cursor - index - 1;
+        let content_start = cursor + 1;
+        let closing = format!("\"{}", "#".repeat(hashes));
+        match source[content_start..].find(&closing) {
+            Some(length) => {
+                literals.push((
+                    content_start,
+                    &source[content_start..content_start + length],
+                ));
+                index = content_start + length + closing.len();
+            }
+            None => break,
+        }
+    }
+    literals
+}
+
+/// The tag with its template syntax cut out. A conditional attribute such as
+/// `{% if busy %} disabled{% endif %}` or `{{ disabled(busy) }}` is no attribute
+/// that holds for every render, so it must not count as one.
+fn tag_without_template_syntax(tag: &str) -> String {
+    let conditional =
+        Regex::new(r"(?s)\{%-?\s*if\b.*?\{%-?\s*endif\s*-?%\}").expect("conditional pattern");
+    let expression = Regex::new(r"(?s)\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}").expect("template pattern");
+    let without_conditionals = conditional.replace_all(tag, "");
+    expression
+        .replace_all(&without_conditionals, "")
+        .into_owned()
+}
+
+/// Checks one source file of the HTTP adapter. A draft control is a form control
+/// whose value waits for a Save: an `input`, `textarea` or `select` that is not
+/// hidden, a button, or always read-only or disabled, and that does not save on
+/// change (its own `hx-trigger="change"`, or the one of its form). A load of a
+/// region replaces what it renders, so a literal that holds a draft control passes
+/// only if the same literal carries `data-dialog-form` (the edit dialog is outside
+/// every region) or `data-shell-form` (a form of the shell).
+pub fn check_draft_controls_only_in_dialog_forms(path: &str, source: &str) -> Vec<Violation> {
+    let token = Regex::new(r"(?s)<form\b[^>]*>|</form>|<(?:input|textarea|select)\b[^>]*>")
+        .expect("form control pattern");
+    let always = Regex::new(r"\s(?:disabled|readonly)(?:[\s=/>]|$)").expect("always pattern");
+    let mut violations = Vec::new();
+
+    for (offset, literal) in raw_string_literals(source) {
+        if DRAFT_FORM_MARKERS
+            .iter()
+            .any(|marker| literal.contains(marker))
+        {
+            continue;
+        }
+        let mut in_autosave_form = false;
+        for found in token.find_iter(literal) {
+            let tag = tag_without_template_syntax(found.as_str());
+            if tag.starts_with("<form") {
+                in_autosave_form = tag.contains(r#"hx-trigger="change""#);
+                continue;
+            }
+            if tag == "</form>" {
+                in_autosave_form = false;
+                continue;
+            }
+            let saves_on_change = in_autosave_form || tag.contains(r#"hx-trigger="change""#);
+            let holds_no_draft = [r#"type="hidden""#, r#"type="button""#, r#"type="submit""#]
+                .iter()
+                .any(|marker| tag.contains(marker))
+                || always.is_match(&tag);
+            if saves_on_change || holds_no_draft {
+                continue;
+            }
+            violations.push(Violation::error(
+                path,
+                line_of(source, offset + found.start()),
+                "a draft control is in a literal without `data-dialog-form` or `data-shell-form`. A load of a region would erase the draft: the form belongs in the edit dialog.",
+            ));
+        }
+    }
+    violations
+}
+
+/// Checks that a literal of a dialog fragment carries the title that names the
+/// dialog: the edit dialog takes its accessible name from `edit-dialog-title`.
+pub fn check_dialog_fragments_carry_the_title(path: &str, source: &str) -> Vec<Violation> {
+    raw_string_literals(source)
+        .into_iter()
+        .filter(|(_, literal)| literal.contains("data-dialog-form"))
+        .filter(|(_, literal)| !literal.contains(r#"id="edit-dialog-title""#))
+        .map(|(offset, _)| {
+            Violation::error(
+                path,
+                line_of(source, offset),
+                "a literal with `data-dialog-form` has no element with `id=\"edit-dialog-title\"`: the dialog would have no name",
+            )
+        })
+        .collect()
+}
+
+/// Checks the exceptions of the draft-control rule against the files they name: a
+/// row whose file no longer renders a draft control outside a form marker is stale,
+/// and a permanent row (no stage) names a file whose literals hold no `<form`.
+pub fn check_draft_control_exceptions_are_used(
+    files: &[(String, String)],
+    exceptions: &[DraftControlException],
+) -> Vec<Violation> {
+    let mut violations = Vec::new();
+    for row in exceptions {
+        let sources = || files.iter().filter(|(path, _)| path == row.path);
+        let needed = sources().any(|(path, source)| {
+            !check_draft_controls_only_in_dialog_forms(path, source).is_empty()
+        });
+        if !needed {
+            violations.push(Violation::error(
+                row.path,
+                1,
+                format!(
+                    "the exception `{}` is stale: the file has no draft control outside a form marker. Remove the row.",
+                    row.reason
+                ),
+            ));
+        }
+        if row.removed_in_stage.is_none() {
+            let holds_form = sources().any(|(_, source)| {
+                raw_string_literals(source)
+                    .iter()
+                    .any(|(_, literal)| literal.contains("<form"))
+            });
+            if holds_form {
+                violations.push(Violation::error(
+                    row.path,
+                    1,
+                    "a permanent exception names a file whose literals hold a `<form`: only a field builder may stay without a form marker",
+                ));
+            }
+        }
+    }
+    violations
+}

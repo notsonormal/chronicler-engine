@@ -93,7 +93,7 @@ impl OptionsDockTemplate {
 
 #[derive(Template)]
 #[template(
-    source = r##"<div class="text-check-preview" role="group" aria-label="Text check suggestions">
+    source = r##"<div class="text-check-preview" role="group" aria-label="Text check suggestions" data-shell-form>
     <div class="preview-header">
         <svg class="icon preview-icon" aria-hidden="true"><use href="#i-spell-check"/></svg>
         <span>Text check suggestions</span>

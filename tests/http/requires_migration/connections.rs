@@ -296,7 +296,7 @@ async fn test_edit_connection_form_not_found() {
     assert_eq!(
         response.status(),
         http::StatusCode::BAD_REQUEST,
-        "an unknown connection is refused, so the editor slot stays empty"
+        "an unknown connection is refused, so no dialog opens"
     );
     let body = axum::body::to_bytes(response.into_body(), 1024)
         .await

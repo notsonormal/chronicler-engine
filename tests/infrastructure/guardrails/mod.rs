@@ -573,6 +573,56 @@ fn guardrails_templates_have_no_out_of_band_swaps() {
     assert_violations(&errors, "no template has hx-swap-oob");
 }
 
+fn http_adapter_template_files() -> Vec<(String, String)> {
+    src_snapshot()
+        .iter()
+        .filter(|file| file.path.starts_with("adapters/driving/http/"))
+        .filter(|file| !file.path.ends_with("_tests.rs"))
+        .map(|file| (file.path.clone(), file.content.clone()))
+        .collect()
+}
+
+#[test]
+fn guardrails_draft_controls_only_in_dialog_forms() {
+    let errors: Vec<Violation> = http_adapter_template_files()
+        .iter()
+        .filter(|(path, _)| {
+            !DRAFT_CONTROL_EXCEPTIONS
+                .iter()
+                .any(|row| row.path == path.as_str())
+        })
+        .flat_map(|(path, source)| check_draft_controls_only_in_dialog_forms(path, source))
+        .collect();
+    assert_violations(
+        &errors,
+        "a literal with a draft control carries data-dialog-form or data-shell-form",
+    );
+}
+
+#[test]
+fn guardrails_dialog_fragments_carry_the_title() {
+    let errors: Vec<Violation> = http_adapter_template_files()
+        .iter()
+        .flat_map(|(path, source)| check_dialog_fragments_carry_the_title(path, source))
+        .collect();
+    assert_violations(
+        &errors,
+        "a dialog fragment carries the id edit-dialog-title",
+    );
+}
+
+#[test]
+fn guardrails_draft_control_exceptions_are_used() {
+    let errors = check_draft_control_exceptions_are_used(
+        &http_adapter_template_files(),
+        DRAFT_CONTROL_EXCEPTIONS,
+    );
+    assert_violations(
+        &errors,
+        "every draft-control exception names a file that needs it",
+    );
+}
+
 #[test]
 fn guardrails_walker_banned_name() {
     let files = src_snapshot();

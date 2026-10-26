@@ -244,8 +244,13 @@ document.addEventListener("click", function (evt) {
   if (!target.closest(".error-detail-popover")) closeAllErrorPopovers();
 });
 
+// Escape closes an open error detail first. It must not also reach the modal
+// dialog, which would close and discard the draft that the error is about.
 document.addEventListener("keydown", function (evt) {
-  if (evt.key === "Escape") closeAllErrorPopovers();
+  if (evt.key !== "Escape") return;
+  const anyOpen = document.querySelector(".error-detail-popover:not([hidden])");
+  closeAllErrorPopovers();
+  if (anyOpen) evt.preventDefault();
 });
 
 window.addEventListener("resize", closeAllErrorPopovers);

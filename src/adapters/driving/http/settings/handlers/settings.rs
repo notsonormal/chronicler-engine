@@ -7,7 +7,8 @@ use axum::{Form, extract::State, response::Html, response::IntoResponse, respons
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::headers::role_label;
 use crate::adapters::driving::http::settings::templates::settings::{
-    ConnectionFormTemplate, ConnectionTestResultTemplate, SettingsTemplate,
+    ConnectionFormTemplate, ConnectionTestDialogTemplate, ConnectionTestResultTemplate,
+    SettingsTemplate,
 };
 use crate::adapters::driving::http::utils::error::{
     action_error_response, action_failure_response, action_refusal_response, error_disclosure,
@@ -190,8 +191,8 @@ pub async fn new_connection_form(State(_app_state): State<AppState>) -> Html<Str
     Html(render_or_error_fragment(&ConnectionFormTemplate::new(None)))
 }
 
-/// A non-2xx keeps the editor slot empty: the connection list stays on screen and
-/// the Edit control reports the failure in its own slot.
+/// A non-2xx opens no dialog: the connection list stays on screen and the Edit
+/// control reports the failure in its own slot.
 pub async fn edit_connection_form(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -267,7 +268,7 @@ impl ConnectionTestSurface<'_> {
     }
 }
 
-/// A 200 keeps htmx's swap inside the result slot, so the connection row or form is never replaced.
+/// A failed test answers 200, so htmx swaps the disclosure into its target: the result slot of the form for the form Test, and the dialog body for a saved connection, where the caller wraps it.
 fn connection_test_error(message: &str, surface: ConnectionTestSurface<'_>) -> Html<String> {
     Html(error_disclosure(
         &surface.popover_id(),
@@ -306,10 +307,22 @@ pub async fn test_saved_connection_handler(
     let service = app_state.connection_test_service.clone();
     let surface_id = id.clone();
     let surface = ConnectionTestSurface::SavedConnection(&surface_id);
-    match run_connection_test(move || service.test_saved_connection(&id)).await {
+    let connection_name = app_state
+        .settings()
+        .ok()
+        .and_then(|settings| {
+            settings
+                .find_connection(&id)
+                .map(|found| found.name.clone())
+        })
+        .unwrap_or_else(|| id.clone());
+    let result = match run_connection_test(move || service.test_saved_connection(&id)).await {
         Ok(result) => connection_test_success(&result),
         Err(message) => connection_test_error(&message, surface),
-    }
+    };
+    Html(render_or_error_fragment(
+        &ConnectionTestDialogTemplate::new(connection_name, result.0),
+    ))
 }
 
 pub async fn test_form_connection_handler(

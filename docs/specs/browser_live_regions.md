@@ -152,7 +152,7 @@ And every interactive control of the region is in its engaged state:
   an open edit with typed text and focus, a focused Option, an open Details disclosure, a text selection,
   an open rename form with typed text, a chosen option of a select, an expanded LLM message,
   an open error Details popover in the failure banner, the chosen Settings sub-tab,
-  an open connection editor, a preset card in edit, an open World editor, each with typed text and focus
+  a preset card in edit, an open World editor, each with typed text and focus
 When each kind that the region lists moves, one kind at a time, and the page asks
 Then each node, value, open state, selection and focus of the engaged state is as it was
 When every edit of the region ends
@@ -274,15 +274,16 @@ Then .worlds-panel loads exactly once, and it reports data-live-state "current"
 And #world-editor is empty
 ```
 
-#### Scenario 44.22: A connection editor keeps the chosen sub-tab, and Cancel sends no request
+#### Scenario 44.22: A connection form in the dialog survives a Settings load, and Cancel sends no request
 
 ```gherkin
 Given .settings-panel is open and current, with the Text Check sub-tab chosen
-And the connection editor is open in #connection-editor
+And the connection form is open in the edit dialog, with a typed name and focus
 When the number of `settings` moves, and the page asks
-Then .settings-panel reports data-live-state "held" and has not loaded
-When the client cancels the editor
-Then Cancel sent no request, and .settings-panel loads exactly once
+Then .settings-panel loads its fragment exactly once, and it reports data-live-state "current"
+And the form is the same element, with its typed name and focus
+When the client cancels the dialog
+Then Cancel sent no request
 And the Text Check sub-tab is still the chosen one
 ```
 
@@ -305,4 +306,51 @@ And .prompt-presets-panel reports data-live-state "held"
 When the client closes the Add form without pressing Add Preset
 Then the name field is empty again
 And .prompt-presets-panel loads its fragment exactly once, and it reports data-live-state "current"
+```
+
+#### Scenario 44.24: A load skips a select whose request is in flight
+
+```gherkin
+Given .settings-panel is open and current
+And the client chose another connection in #role-select-quantifier, and the request of the save is in flight
+And the engine still renders the old connection
+When the number of `settings` moves, and .settings-panel loads its fragment
+Then #role-select-quantifier still shows the client's choice
+And its request is still in flight
+And .settings-panel reports data-live-state "due", not "current"
+```
+
+#### Scenario 44.25: After the save, the next load sets the select to the server value
+
+```gherkin
+Given the client chose another connection in #role-select-quantifier, and the request of the save is in flight
+And the engine answers the save but keeps the connection that it had
+When the request ends and the number of `settings` moves
+Then .settings-panel loads its fragment
+And #role-select-quantifier no longer reports htmx-request
+And #role-select-quantifier shows the connection that the engine renders, not the client's choice
+```
+
+#### Scenario 44.27: A load that skipped a control in flight leaves the region due, and the end of the request loads it again
+
+```gherkin
+Given .settings-panel is open and current
+And the client chose another connection in #role-select-quantifier
+And the engine committed the save, and kept the connection that it had, but its answer has not come yet
+When .settings-panel loads its fragment
+Then #role-select-quantifier still shows the client's choice
+And .settings-panel reports data-live-state "due"
+When the answer of the save comes
+Then .settings-panel loads its fragment again
+And #role-select-quantifier shows the connection that the engine renders
+And .settings-panel reports data-live-state "current"
+```
+
+#### Scenario 44.26: No region of any tab holds a draft control
+
+```gherkin
+Given the dashboard is loaded
+When the client opens each tab in turn
+Then no region of the tab holds a form that waits for a Save
+And a control that saves on change is not such a form
 ```

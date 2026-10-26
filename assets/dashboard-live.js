@@ -35,6 +35,7 @@ function liveRecordOf(region) {
       requested: false,
       swapped: false,
       held: false,
+      skippedInFlight: false,
       focusPlan: null,
       waiters: [],
     };
@@ -172,7 +173,8 @@ function isSavingControl(element) {
 // not contradict what the page shows.
 function settleSave(evt) {
   const element = evt.detail && evt.detail.elt;
-  if (!element || !element.closest || !element.closest("[data-live]")) return;
+  if (!element || !element.closest) return;
+  if (!element.closest("[data-live], #edit-dialog")) return;
   if (!isSavingControl(element)) return;
   const refused = answeredBusy(evt);
   const saved = evt.detail.successful && !refused;
@@ -195,6 +197,7 @@ function beginLoad(region, record, answer) {
   record.loading = true;
   record.swapped = false;
   record.held = false;
+  record.skippedInFlight = false;
   record.pending = answer;
   setLiveState(region, "loading");
 }
@@ -396,7 +399,10 @@ document.body.addEventListener("htmx:afterRequest", function (evt) {
     return;
   }
   const record = liveRecordOf(region);
-  if (record.swapped) {
+  // A load that skipped a control in flight shows what the control held, not
+  // what the engine rendered, so it must not stand for the numbers it saw.
+  const staleBySkip = record.swapped && record.skippedInFlight;
+  if (record.swapped && !staleBySkip) {
     record.numbers = record.pending;
     setLiveState(region, "current");
   } else if (record.held) {
@@ -406,6 +412,9 @@ document.body.addEventListener("htmx:afterRequest", function (evt) {
   }
   record.focusPlan = null;
   settleLoad(record);
+  // While the request is in flight, its own end asks again. A request that ended
+  // before this load did has asked already, and found the region loading.
+  if (staleBySkip && !regionHasRequestInFlight(region)) askNow();
 });
 
 // View state lives in attributes that the server never changes. An element
@@ -430,12 +439,54 @@ function showsInlineError(node) {
   );
 }
 
+// A control whose request is in flight holds a value that the engine has not
+// seen, so a load must not overwrite it. The next load, after the request ends,
+// sets the rendered value. The page counts the requests itself: the htmx class
+// `htmx-request` is not enough, because the settle of a swap that lands during a
+// request writes the old `class` back onto the element after the request ended.
+const requestsInFlight = new Map();
+
+document.body.addEventListener("htmx:beforeRequest", function (evt) {
+  const element = evt.detail && evt.detail.elt;
+  if (element) requestsInFlight.set(element, (requestsInFlight.get(element) || 0) + 1);
+});
+
+document.body.addEventListener("htmx:afterRequest", function (evt) {
+  const element = evt.detail && evt.detail.elt;
+  const count = element ? requestsInFlight.get(element) || 0 : 0;
+  if (count > 1) requestsInFlight.set(element, count - 1);
+  else requestsInFlight.delete(element);
+});
+
+function requestIsInFlight(node) {
+  return !!node && node.nodeType === 1 && requestsInFlight.has(node);
+}
+
+function regionHasRequestInFlight(region) {
+  return Array.from(requestsInFlight.keys()).some(
+    (element) => element !== region && region.contains(element),
+  );
+}
+
+function noteSkippedInFlight(node) {
+  const region = node.closest("[data-live]");
+  if (region && region !== node) liveRecordOf(region).skippedInFlight = true;
+}
+
+function loadKeeps(node) {
+  if (requestIsInFlight(node)) {
+    noteSkippedInFlight(node);
+    return true;
+  }
+  return showsInlineError(node);
+}
+
 Idiomorph.defaults.callbacks.beforeNodeMorphed = function (oldNode) {
-  if (showsInlineError(oldNode)) return false;
+  if (loadKeeps(oldNode)) return false;
 };
 
 Idiomorph.defaults.callbacks.beforeNodeRemoved = function (node) {
-  if (showsInlineError(node)) return false;
+  if (loadKeeps(node)) return false;
 };
 
 const LIVE_FOCUSABLE =

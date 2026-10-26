@@ -62,7 +62,10 @@ async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
         !body.contains("settings-panel"),
         "the shell's .settings-panel is the region: the fragment repeats no root: {body}"
     );
-    assert!(body.contains(r#"<div class="editor-slot" id="connection-editor"></div>"#));
+    assert!(
+        !body.contains("connection-editor") && !body.contains("editor-slot"),
+        "the connection forms open in the dialog, so the panel renders no editor slot: {body}"
+    );
     assert!(body.contains(r#"role="tablist""#));
     assert!(body.contains(
         r#"id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-keep="aria-selected""#
@@ -85,7 +88,14 @@ async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
         body.contains(">Test</button>"),
         "each connection row must offer a Test control: {body}"
     );
-    assert!(body.contains("connection-test-slot"));
+    assert!(
+        !body.contains("connection-test-slot"),
+        "the result of a row Test opens in the dialog, so a row renders no result slot: {body}"
+    );
+    assert!(
+        !body.contains("settings-subtab active") && !body.contains("settings-subtab-panel active"),
+        "the active sub-tab is no class: {body}"
+    );
     assert!(body.contains("Add Connection"));
     assert!(!body.contains("Set as Narrator"));
     assert!(!body.contains("Set as Quantifier"));
@@ -102,6 +112,109 @@ async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
         ),
         "the text-check status must be a saved-flag that a load keeps, so the browser can show Saved: {body}"
     );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.34
+#[tokio::test]
+async fn test_role_rows_and_connection_rows_report_failures_in_their_own_error_slots() {
+    let app = TestAppBuilder::default_app();
+
+    let body = get_body(&app, "/fragment/settings").await;
+
+    for slot in [
+        "role-narrator",
+        "role-quantifier",
+        "connection-openrouter-gpt-4o-mini",
+    ] {
+        assert!(
+            body.contains(&format!(r#"data-error-slot="{slot}""#)),
+            "error slot {slot}: {body}"
+        );
+    }
+    assert!(
+        body.contains(r#"data-error-slot="text-check-card""#),
+        "the text-check card has its own error slot: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.35
+#[tokio::test]
+async fn test_panel_controls_swap_nothing_into_the_panel() {
+    let app = TestAppBuilder::default_app();
+
+    let body = get_body(&app, "/fragment/settings").await;
+
+    assert!(
+        body.contains(r#"hx-trigger="change" hx-swap="none""#),
+        "a role select saves on change and swaps nothing: {body}"
+    );
+    assert!(
+        body.contains(r##"hx-get="/fragment/connections/new" hx-target="#edit-dialog-body""##),
+        "Add Connection opens the dialog: {body}"
+    );
+    assert!(
+        body.contains(r##"hx-get="/fragment/connections/openrouter-gpt-4o-mini/edit" hx-target="#edit-dialog-body""##),
+        "Edit opens the dialog: {body}"
+    );
+    assert!(
+        body.contains(
+            r##"hx-post="/connections/openrouter-gpt-4o-mini/test" hx-target="#edit-dialog-body""##
+        ),
+        "Test shows its result in the dialog: {body}"
+    );
+    assert!(
+        !body.contains(r#"hx-target=".settings-panel""#),
+        "no control targets the panel: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.36
+#[tokio::test]
+async fn test_connection_forms_answer_dialog_fragments() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let add = get_body(&app, "/fragment/connections/new").await;
+    assert!(
+        add.contains("data-dialog-form")
+            && add.contains(r#"<h2 id="edit-dialog-title">Add Connection</h2>"#),
+        "the Add form is a dialog fragment with its own title: {add}"
+    );
+    assert!(add.contains(r#"hx-post="/connections/add""#), "{add}");
+
+    let edit = get_body(&app, "/fragment/connections/openrouter-gpt-4o-mini/edit").await;
+    assert!(
+        edit.contains("data-dialog-form")
+            && edit.contains(r#"<h2 id="edit-dialog-title">Edit openrouter-gpt-4o-mini</h2>"#),
+        "the Edit form is a dialog fragment with its own title: {edit}"
+    );
+    assert!(
+        edit.contains(r#"hx-post="/connections/openrouter-gpt-4o-mini/edit""#),
+        "{edit}"
+    );
+    for form in [&add, &edit] {
+        assert!(
+            form.contains("data-close-dialog"),
+            "a Cancel control: {form}"
+        );
+        assert!(
+            form.contains(r#"hx-post="/connections/test""#)
+                && form.contains(r#"hx-include="closest form""#),
+            "a Test control for the typed values: {form}"
+        );
+        assert!(
+            form.contains(r#"data-error-slot="connection-form""#),
+            "the form reports a refusal in its own slot: {form}"
+        );
+        assert!(
+            form.contains("data-refusal-what="),
+            "the form names what a busy refusal leaves unsaved: {form}"
+        );
+        assert!(
+            !form.contains("data-close-editor") && !form.contains("data-work"),
+            "no editor-slot marker: {form}"
+        );
+    }
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.12
@@ -235,14 +348,14 @@ async fn test_failed_settings_panel_load_reports_inside_the_panel() {
         "a panel that cannot read settings must render the failure: {body}"
     );
     assert!(
-        !body.contains(r#"id="connection-editor""#),
+        !body.contains(r#"id="subtab-connections""#),
         "the panel must not render a settings panel it could not read: {body}"
     );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.24
 #[tokio::test]
-async fn test_unknown_connection_edit_form_is_refused_and_leaves_the_slot_empty() {
+async fn test_unknown_connection_edit_form_is_refused_and_opens_no_dialog() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
@@ -254,7 +367,7 @@ async fn test_unknown_connection_edit_form_is_refused_and_leaves_the_slot_empty(
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
-        "a refusal answers non-2xx, so the editor slot stays empty"
+        "a refusal answers non-2xx, so no dialog opens"
     );
     let body = body_text(response).await;
 
@@ -662,7 +775,12 @@ async fn test_saved_connection_test_reports_success_and_records_nothing() {
         body.contains(" ms"),
         "the reply must carry the reply time: {body}"
     );
-
+    assert!(
+        body.contains("data-dialog-form")
+            && body.contains(r#"<h2 id="edit-dialog-title">Test "#)
+            && body.contains("data-close-dialog"),
+        "the answer is a dialog fragment with a title and a Close control: {body}"
+    );
     assert!(
         state
             .game_view_query
@@ -714,6 +832,10 @@ async fn test_failed_saved_connection_test_renders_the_error_disclosure() {
     assert!(
         body.contains("configured_failure"),
         "the raw failure text must name the provider error: {body}"
+    );
+    assert!(
+        body.contains("data-dialog-form") && body.contains("data-close-dialog"),
+        "the failure shows in the dialog too: {body}"
     );
     assert!(
         state

@@ -971,12 +971,8 @@ body {
     display: none;
 }
 
-/* A slot with no editor takes no space. While it holds one, the list of its panel is hidden. */
+/* A slot with no editor takes no space. */
 .editor-slot:empty {
-    display: none;
-}
-
-.settings-panel:has(#connection-editor > *) > :not(#connection-editor) {
     display: none;
 }
 
@@ -1105,27 +1101,15 @@ body {
     justify-content: flex-start;
 }
 
-.connection-form-page {
+.connection-form,
+.connection-test-dialog {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
 }
 
-.connection-form-page .back-link {
-    align-self: flex-start;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    background: transparent;
-    border: none;
-    color: var(--color-accent-cyan);
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    cursor: pointer;
-    padding: 0;
-}
-
-.connection-form-page .form-actions {
+.connection-form .form-actions,
+.connection-test-dialog .form-actions {
     display: flex;
     gap: var(--spacing-sm);
     margin-top: var(--spacing-sm);
@@ -1170,21 +1154,26 @@ body {
     line-height: 1.5;
 }
 
-.settings-panel .form-group {
+.settings-panel .form-group,
+#edit-dialog .form-group {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
     margin-bottom: var(--spacing-sm);
 }
 
-.settings-panel label {
+.settings-panel label,
+#edit-dialog label {
     font-size: var(--font-size-small);
     color: var(--color-text-muted);
 }
 
 .settings-panel input,
 .settings-panel select,
-.settings-panel textarea {
+.settings-panel textarea,
+#edit-dialog input,
+#edit-dialog select,
+#edit-dialog textarea {
     background: var(--color-bg-primary);
     border: 1px solid var(--color-border);
     border-radius: 4px;
@@ -1196,7 +1185,10 @@ body {
 
 .settings-panel input:focus,
 .settings-panel select:focus,
-.settings-panel textarea:focus {
+.settings-panel textarea:focus,
+#edit-dialog input:focus,
+#edit-dialog select:focus,
+#edit-dialog textarea:focus {
     outline: none;
     border-color: var(--color-accent-ok);
     box-shadow: var(--shadow-focus-ring);
@@ -1674,8 +1666,24 @@ input[type="checkbox"]:focus {
     line-height: 1.4;
 }
 
-.settings-panel .checkbox-label {
+.settings-panel .checkbox-label,
+#edit-dialog .checkbox-label {
     color: var(--color-text-primary);
+}
+
+#edit-dialog {
+    width: min(90vw, 560px);
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: var(--spacing-lg);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+
+#edit-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.6);
 }
 
 @media (max-width: 768px) {
