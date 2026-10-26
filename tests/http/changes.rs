@@ -10,24 +10,29 @@ use tower::util::ServiceExt;
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride, TxWrite};
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::agent::Role;
+use chronicler_engine::domain::model::change::{ChangeKind, EngineKind, GameKind};
 use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::settings::NarratorMode;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
-    active_game_of, empty_sqlite_storage, ScriptedModel, TestAppBuilder, TestMap,
+    active_game_of, empty_sqlite_storage, tx_token, ScriptedModel, TestAppBuilder, TestMap,
 };
+use chronicler_engine::domain::model::message::{Maker, Swipe, SwipeAt};
 
 use crate::support::app_wiring::{app_with_model, app_with_script, two_game_app};
-use crate::support::http_fixtures::{append_narrations, create_game_from, world_form_body};
+use crate::support::http_fixtures::{append_narrations, create_game_from, story_of, world_form_body};
 use crate::support::http_requests::{
     post_action, post_form, response_body, wait_for_jobs, wait_settled,
 };
 use crate::SettingsTestGuard;
 
-const KINDS: [&str; 8] = [
-    "story", "options", "busy", "games", "worlds", "settings", "presets", "llm",
-];
-const ENGINE_WIDE_KINDS: [&str; 5] = ["games", "worlds", "settings", "presets", "llm"];
+fn kinds() -> [&'static str; 8] {
+    ChangeKind::ALL.map(ChangeKind::token)
+}
+
+fn engine_wide_kinds() -> [&'static str; 5] {
+    EngineKind::ALL.map(EngineKind::token)
+}
 
 async fn fetch_changes(app: &axum::Router) -> Value {
     let request = Request::builder()
@@ -80,7 +85,7 @@ fn assert_moved_among(
 }
 
 fn assert_moved(before: &Value, after: &Value, expected: &[&str], label: &str) {
-    assert_moved_among(&KINDS, before, after, expected, label);
+    assert_moved_among(&kinds(), before, after, expected, label);
 }
 
 async fn assert_save_moves(
@@ -118,7 +123,7 @@ async fn test_changes_answer_holds_the_server_id_the_game_and_a_number_for_each_
         active_game_of(&state).0,
         "the answer names the active Game"
     );
-    for kind in KINDS {
+    for kind in kinds() {
         assert!(
             answer[kind].is_u64(),
             "the number of {kind} is a whole number: {answer}"
@@ -135,13 +140,13 @@ async fn test_changes_answer_holds_the_server_id_the_game_and_a_number_for_each_
         Value::Null,
         "with no active Game the answer names none"
     );
-    for kind in ["story", "options", "busy"] {
+    for kind in GameKind::ALL.map(GameKind::token) {
         assert!(
             answer.get(kind).is_none(),
             "with no active Game the answer holds no {kind}: {answer}"
         );
     }
-    for kind in ENGINE_WIDE_KINDS {
+    for kind in engine_wide_kinds() {
         assert!(
             answer[kind].is_u64(),
             "the number of {kind} is a whole number: {answer}"
@@ -283,7 +288,7 @@ async fn test_a_new_a_switched_and_a_reset_game_change_the_active_game() {
             }
         };
         assert_eq!(after["game"], expected_game.0, "{row}: the active Game");
-        assert_moved_among(&ENGINE_WIDE_KINDS, &before, &after, moves, row);
+        assert_moved_among(&engine_wide_kinds(), &before, &after, moves, row);
     }
 }
 
@@ -636,15 +641,17 @@ async fn test_the_start_and_the_end_of_an_autoplay_run_move_the_busy_state_and_t
         "the start of a run",
     );
 
+    let started = fetch_changes(&app).await;
+
     let stopped = post_form(&app, "/status/reset-busy", "").await;
     assert_eq!(response_body(stopped).await, "reset");
     pause.release();
     assert!(wait_for_jobs(&state, 5000).await, "the run ends");
     assert_moved(
-        &baseline,
+        &started,
         &fetch_changes(&app).await,
         &["busy", "games", "options"],
-        "the stop of a run",
+        "the stop of a run, since its start",
     );
 }
 
@@ -704,4 +711,53 @@ async fn test_a_message_saved_in_a_game_that_is_not_active_moves_the_games_list(
         &["games", "llm"],
         "the end of a Job in a Game that is not active",
     );
+}
+
+// [docs/specs/changes.md] SCENARIO: 43.15
+#[tokio::test]
+async fn test_a_save_of_the_story_log_moves_the_story_and_a_delete_also_the_games_list() {
+    for row in ["edit", "switch", "delete"] {
+        let storage = Arc::new(empty_sqlite_storage());
+        let (app, state) = TestAppBuilder::default_test()
+            .storage(Arc::clone(&storage))
+            .build_with_state();
+        let game = active_game_of(&state);
+        append_narrations(&storage, game, 1, |_| "A second Narration.".to_string());
+        let last = story_of(&state).pop().expect("the story holds a Message");
+        let second_swipe = Swipe::new(
+            "A second Swipe.".to_string(),
+            Maker::Narrator,
+            last.swipes[0].state.clone(),
+        );
+        storage
+            .transaction(game, tx_token(), |tx| {
+                tx.insert_swipe(
+                    SwipeAt {
+                        message: last.id,
+                        swipe: 1,
+                    },
+                    &second_swipe,
+                )
+            })
+            .expect("the second Swipe saves");
+
+        let (uri, body, moves): (String, &str, &[&str]) = match row {
+            "edit" => (
+                format!("/history/{}", last.id),
+                "text=An+edited+text",
+                &["story"],
+            ),
+            "switch" => (
+                format!("/message/{}/swipe/1", last.id),
+                "",
+                &["story", "options", "busy"],
+            ),
+            _ => (
+                "/history/delete".to_string(),
+                "",
+                &["story", "games", "options", "busy"],
+            ),
+        };
+        assert_save_moves(&app, &uri, body, moves, row).await;
+    }
 }

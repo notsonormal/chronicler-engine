@@ -1,11 +1,11 @@
 //! The storage seam of the change counters: what a committed transaction, a rolled-back transaction, a storage call, a failed call and a read do to the numbers.
 
-use chronicler_engine::adapters::driven::storage::{Storage, StorageCall, TestOverride, TxWrite};
-use chronicler_engine::domain::model::change::ChangeVersions;
-use chronicler_engine::domain::model::game::{GameId, NewGame};
-use chronicler_engine::domain::model::dock::DockRecord;
+use chronicler_engine::adapters::driven::storage::{Storage, StorageCall, TestOverride, Tx, TxWrite};
+use chronicler_engine::domain::model::change::{ChangeKind, ChangeVersions};
+use chronicler_engine::domain::model::dock::{DockRecord, OptionsFailure};
+use chronicler_engine::domain::model::game::{ConfigChange, GameId, NewGame};
 use chronicler_engine::domain::model::message::SwipeAt;
-use chronicler_engine::domain::model::settings::AppSettings;
+use chronicler_engine::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense};
 use chronicler_engine::domain::model::state::generation_status::GenerationFailure;
 use chronicler_engine::test_support::{
     test_new_game, dummy_message, dummy_swipe, empty_sqlite_storage, seed_game_row, tx_token,
@@ -40,6 +40,139 @@ fn write_message_with_two_swipe_writes(
     })
 }
 
+/// Every kind of write, each once. `write_case` has no wildcard arm, so a new `TxWrite`
+/// does not compile until it has a case there, and the slots keep this list whole.
+const ALL_WRITES: [TxWrite; 13] = [
+    TxWrite::InsertGame,
+    TxWrite::DeleteGame,
+    TxWrite::InsertMessage,
+    TxWrite::SetActiveSwipe,
+    TxWrite::DeleteMessage,
+    TxWrite::InsertSwipe,
+    TxWrite::SetSwipeText,
+    TxWrite::SetSwipeState,
+    TxWrite::SetGameFailure,
+    TxWrite::SetGameConfig,
+    TxWrite::PutDock,
+    TxWrite::PutOptionsFailure,
+    TxWrite::ClearDock,
+];
+
+/// A write, the kinds its commit must raise, and the position of the write in
+/// `ALL_WRITES`.
+struct WriteCase {
+    slot: usize,
+    raises: &'static [ChangeKind],
+}
+
+fn write_case(write: TxWrite) -> WriteCase {
+    let (slot, raises): (usize, &'static [ChangeKind]) = match write {
+        TxWrite::InsertGame => (0, &[ChangeKind::GAMES]),
+        TxWrite::DeleteGame => (1, &[ChangeKind::GAMES]),
+        TxWrite::InsertMessage => (2, &[ChangeKind::STORY, ChangeKind::GAMES]),
+        TxWrite::SetActiveSwipe => (3, &[ChangeKind::STORY]),
+        TxWrite::DeleteMessage => (4, &[ChangeKind::STORY, ChangeKind::GAMES]),
+        TxWrite::InsertSwipe => (5, &[ChangeKind::STORY]),
+        TxWrite::SetSwipeText => (6, &[ChangeKind::STORY]),
+        TxWrite::SetSwipeState => (7, &[ChangeKind::STORY]),
+        TxWrite::SetGameFailure => (8, &[ChangeKind::BUSY_STATE]),
+        TxWrite::SetGameConfig => (9, &[ChangeKind::GAMES]),
+        TxWrite::PutDock => (10, &[ChangeKind::OPTIONS]),
+        TxWrite::PutOptionsFailure => (11, &[ChangeKind::OPTIONS]),
+        TxWrite::ClearDock => (12, &[ChangeKind::OPTIONS]),
+    };
+    WriteCase { slot, raises }
+}
+
+/// Commits one unit of `write` alone, on a Game that holds one Message with one Swipe.
+/// The create unit serves a new Game, and it raises no Game kind.
+fn commit_alone(storage: &Storage, game: GameId, message: u64, write: TxWrite) {
+    let at = SwipeAt { message, swipe: 0 };
+    let unit = |body: &dyn Fn(&mut Tx<'_>) -> Result<(), chronicler_engine::error::EngineError>| {
+        storage
+            .transaction(game, tx_token(), |tx| body(tx))
+            .unwrap_or_else(|error| panic!("the unit of {write:?} commits: {error}"));
+    };
+    match write {
+        TxWrite::InsertGame => storage
+            .transaction_new_game(&new_game("Created"), tx_token(), |_, _| Ok(()))
+            .expect("the create unit commits"),
+        TxWrite::DeleteGame => unit(&|tx| tx.delete_game()),
+        TxWrite::InsertMessage => {
+            unit(&|tx| tx.insert_message(&dummy_message("another")).map(|_| ()))
+        }
+        TxWrite::SetActiveSwipe => unit(&|tx| tx.set_active_swipe(at)),
+        TxWrite::DeleteMessage => unit(&|tx| tx.delete_message(message)),
+        TxWrite::InsertSwipe => {
+            unit(&|tx| tx.insert_swipe(SwipeAt { message, swipe: 1 }, &dummy_swipe("second")))
+        }
+        TxWrite::SetSwipeText => unit(&|tx| tx.set_swipe_text(at, "edited")),
+        TxWrite::SetSwipeState => unit(&|tx| tx.set_swipe_state(at, &dummy_swipe("x").state)),
+        TxWrite::SetGameFailure => unit(&|tx| tx.set_game_failure(None)),
+        TxWrite::SetGameConfig => unit(&|tx| {
+            tx.set_game_config(&ConfigChange::Posture {
+                perspective: NarrativePerspective::Second,
+                tense: NarrativeTense::Present,
+            })
+        }),
+        TxWrite::PutDock => unit(&|tx| tx.put_dock(&DockRecord::default())),
+        TxWrite::PutOptionsFailure => unit(&|tx| {
+            tx.put_options_failure(&OptionsFailure {
+                reason: "no set".to_string(),
+                raw: "raw".to_string(),
+            })
+        }),
+        TxWrite::ClearDock => unit(&|tx| tx.clear_dock()),
+    }
+}
+
+fn moved_kinds(before: &ChangeVersions, after: &ChangeVersions) -> Vec<ChangeKind> {
+    ChangeKind::ALL
+        .into_iter()
+        .filter(|&kind| before.number(kind) != after.number(kind))
+        .collect()
+}
+
+// CASE storage-changes-tx-each-write: each kind of write, committed alone, raises exactly the kinds of its row
+#[test]
+fn each_kind_of_write_raises_exactly_its_kinds() {
+    let slots: Vec<usize> = ALL_WRITES
+        .iter()
+        .map(|&write| write_case(write).slot)
+        .collect();
+    assert_eq!(
+        slots,
+        (0..ALL_WRITES.len()).collect::<Vec<_>>(),
+        "ALL_WRITES lists every write once, in the order of its slot"
+    );
+
+    for write in ALL_WRITES {
+        let storage = empty_sqlite_storage();
+        let game = seed_game_row(&storage, &new_game("Alone"));
+        let message = storage
+            .transaction(game, tx_token(), |tx| {
+                let message = tx.insert_message(&dummy_message("hello"))?;
+                tx.insert_swipe(SwipeAt { message, swipe: 0 }, &dummy_swipe("hello"))?;
+                Ok(message)
+            })
+            .expect("the setup unit commits");
+        let before = storage.changes().versions(Some(game));
+
+        commit_alone(&storage, game, message, write);
+
+        let after = storage.changes().versions(Some(game));
+        let expected: Vec<ChangeKind> = ChangeKind::ALL
+            .into_iter()
+            .filter(|kind| write_case(write).raises.contains(kind))
+            .collect();
+        assert_eq!(
+            moved_kinds(&before, &after),
+            expected,
+            "the kinds that {write:?} moved"
+        );
+    }
+}
+
 // CASE storage-changes-tx-commit: a committed unit raises each kind of its writes once, for its Game
 #[test]
 fn a_committed_unit_raises_each_kind_of_its_writes_once() {
@@ -50,7 +183,7 @@ fn a_committed_unit_raises_each_kind_of_its_writes_once() {
     write_message_with_two_swipe_writes(&storage, game).expect("the unit commits");
 
     let after = versions_of(&storage, game);
-    let (before_game, after_game) = (before.of_game.unwrap(), after.of_game.unwrap());
+    let (before_game, after_game) = (before.game.unwrap().numbers, after.game.unwrap().numbers);
     assert_eq!(
         after_game.story,
         before_game.story + 1,
@@ -129,12 +262,12 @@ fn a_unit_raises_the_numbers_of_its_own_game_only() {
     let storage = empty_sqlite_storage();
     let written = seed_game_row(&storage, &new_game("Written"));
     let other = seed_game_row(&storage, &new_game("Other"));
-    let other_before = versions_of(&storage, other).of_game;
+    let other_before = versions_of(&storage, other).game;
 
     write_message_with_two_swipe_writes(&storage, written).expect("the unit commits");
 
     assert_eq!(
-        versions_of(&storage, other).of_game,
+        versions_of(&storage, other).game,
         other_before,
         "the other Game keeps its numbers"
     );
@@ -145,13 +278,13 @@ fn a_unit_raises_the_numbers_of_its_own_game_only() {
 fn a_dock_write_raises_options_only() {
     let storage = empty_sqlite_storage();
     let game = seed_game_row(&storage, &new_game("Dock"));
-    let before = versions_of(&storage, game).of_game.unwrap();
+    let before = versions_of(&storage, game).game.unwrap().numbers;
 
     storage
         .transaction(game, tx_token(), |tx| tx.put_dock(&DockRecord::default()))
         .expect("the unit commits");
 
-    let after = versions_of(&storage, game).of_game.unwrap();
+    let after = versions_of(&storage, game).game.unwrap().numbers;
     assert_eq!(after.options, before.options + 1);
     assert_eq!(
         (after.story, after.busy_state),
@@ -164,7 +297,7 @@ fn a_dock_write_raises_options_only() {
 fn a_write_of_the_failure_line_raises_the_busy_state_only() {
     let storage = empty_sqlite_storage();
     let game = seed_game_row(&storage, &new_game("Failure"));
-    let before = versions_of(&storage, game).of_game.unwrap();
+    let before = versions_of(&storage, game).game.unwrap().numbers;
 
     storage
         .transaction(game, tx_token(), |tx| {
@@ -174,7 +307,7 @@ fn a_write_of_the_failure_line_raises_the_busy_state_only() {
         })
         .expect("the unit commits");
 
-    let after = versions_of(&storage, game).of_game.unwrap();
+    let after = versions_of(&storage, game).game.unwrap().numbers;
     assert_eq!(after.busy_state, before.busy_state + 1);
     assert_eq!((after.story, after.options), (before.story, before.options));
 }
@@ -245,11 +378,12 @@ fn a_snapshot_names_its_game_and_a_new_game_reads_as_zeros() {
     let storage = empty_sqlite_storage();
 
     let none = storage.changes().versions(None);
-    assert_eq!((none.game, none.of_game), (None, None));
+    assert_eq!(none.game, None);
 
     let unknown = storage.changes().versions(Some(GameId(4242)));
-    assert_eq!(unknown.game, Some(4242));
-    let numbers = unknown.of_game.expect("a named Game has numbers");
+    let named = unknown.game.expect("a named Game has numbers");
+    assert_eq!(named.id, GameId(4242));
+    let numbers = named.numbers;
     assert_eq!(
         (numbers.story, numbers.options, numbers.busy_state),
         (0, 0, 0)

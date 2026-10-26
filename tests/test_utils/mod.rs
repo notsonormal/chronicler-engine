@@ -5,6 +5,7 @@
 pub mod browser;
 pub mod html;
 pub mod htmx_settle;
+pub mod live_region_table;
 pub mod server;
 pub mod settings_guard;
 pub mod stub_server;

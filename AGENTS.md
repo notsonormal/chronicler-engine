@@ -41,6 +41,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
         - `test_support.rs` — Test infrastructure types for storage failure injection
         - `transaction.rs` — The transaction: one unit of record writes that lands whole
         - `worlds.rs` — World storage backend operations
+        - `write_guard.rs` — The write guard: the one place a `Tx` write checks its injected failure and records the kinds it changed
         - **mappers/**
           - `llm_message.rs` — LLM message mapper
           - `message.rs` — Message mapper

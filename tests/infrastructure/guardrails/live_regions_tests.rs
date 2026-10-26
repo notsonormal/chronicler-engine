@@ -2,8 +2,8 @@
 
 use crate::live_regions::{
     check_handler_headers, check_live_regions_in_shell, check_no_out_of_band_swaps,
-    check_scripts_use_action_fetch, check_scripts_write_no_region, check_template_targets,
-    region_names,
+    check_region_table_matches_shell, check_scripts_use_action_fetch,
+    check_scripts_write_no_region, check_template_targets, region_names, ListedRegion,
 };
 
 const GOOD_REGION: &str = r#"<div id="story-log" data-live="story busy worlds" hx-get="/fragment/story-log" hx-trigger="refresh" hx-swap="morph:innerHTML"></div>"#;
@@ -296,4 +296,60 @@ fn test_templates_have_no_out_of_band_swaps_rejects_the_attribute() {
 fn test_templates_have_no_out_of_band_swaps_accepts_a_comment_and_clean_markup() {
     let source = "// The header no longer answers hx-swap-oob swaps.\n<div hx-swap=\"none\"></div>";
     assert!(check_no_out_of_band_swaps("src/x.rs", source).is_empty());
+}
+
+const TWO_REGIONS: &str = r#"<div id="story-log" data-live="story busy" hx-get="/fragment/story-log"></div>
+<aside class="visual-sidebar side" data-live="story" hx-get="/fragment/visual-sidebar"></aside>"#;
+
+fn row(selector: &str, path: &str, kinds: &[&str]) -> ListedRegion {
+    ListedRegion {
+        selector: selector.to_string(),
+        path: path.to_string(),
+        kinds: kinds.iter().map(|kind| kind.to_string()).collect(),
+    }
+}
+
+fn good_table() -> Vec<ListedRegion> {
+    vec![
+        row("#story-log", "/fragment/story-log", &["busy", "story"]),
+        row(".visual-sidebar", "/fragment/visual-sidebar", &["story"]),
+    ]
+}
+
+#[test]
+fn test_check_region_table_matches_shell_accepts_a_table_that_lists_every_region() {
+    assert!(
+        check_region_table_matches_shell("assets/index.html", TWO_REGIONS, &good_table())
+            .is_empty()
+    );
+}
+
+#[test]
+fn test_check_region_table_matches_shell_rejects_a_region_the_table_lacks() {
+    let mut table = good_table();
+    table.pop();
+    let violations = check_region_table_matches_shell("assets/index.html", TWO_REGIONS, &table);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains(".visual-sidebar"));
+}
+
+#[test]
+fn test_check_region_table_matches_shell_rejects_a_row_with_no_region() {
+    let mut table = good_table();
+    table.push(row("#gone", "/fragment/gone", &["games"]));
+    let violations = check_region_table_matches_shell("assets/index.html", TWO_REGIONS, &table);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].message.contains("#gone"));
+}
+
+#[test]
+fn test_check_region_table_matches_shell_rejects_other_kinds_and_another_path() {
+    let table = vec![
+        row("#story-log", "/fragment/story-log", &["story"]),
+        row(".visual-sidebar", "/fragment/elsewhere", &["story"]),
+    ];
+    let violations = check_region_table_matches_shell("assets/index.html", TWO_REGIONS, &table);
+    assert_eq!(violations.len(), 2);
+    assert!(violations[0].message.contains("kinds"));
+    assert!(violations[1].message.contains("loads"));
 }

@@ -1,13 +1,14 @@
 //! Live-region guardrails: each element of the dashboard shell that lists data kinds in `data-live` loads through the one load path, and no script or handler writes a region by another path.
 
+use chronicler_engine::domain::model::change::ChangeKind;
 use regex::Regex;
 
 use crate::Violation;
 
 /// The names of the numbers of `GET /changes` that a region may list.
-const LIVE_KINDS: [&str; 8] = [
-    "story", "options", "busy", "games", "worlds", "settings", "presets", "llm",
-];
+fn live_kinds() -> [&'static str; 8] {
+    ChangeKind::ALL.map(ChangeKind::token)
+}
 
 /// Checks the dashboard shell, `assets/index.html`. Every element with `hx-get` is a
 /// live region: it has a `data-live` attribute. Each element with a `data-live`
@@ -88,12 +89,13 @@ pub fn check_live_regions_in_shell(path: &str, content: &str) -> Vec<Violation> 
                 "a live region lists no kind in `data-live`.",
             ));
         }
-        for kind in kinds.iter().filter(|kind| !LIVE_KINDS.contains(kind)) {
+        for kind in kinds.iter().filter(|kind| !live_kinds().contains(kind)) {
             violations.push(Violation::error(
                 path,
                 line,
                 format!(
-                    "a live region lists the unknown kind `{kind}`. The kinds are {LIVE_KINDS:?}."
+                    "a live region lists the unknown kind `{kind}`. The kinds are {:?}.",
+                    live_kinds()
                 ),
             ));
         }
@@ -109,13 +111,24 @@ pub fn check_live_regions_in_shell(path: &str, content: &str) -> Vec<Violation> 
     violations
 }
 
-/// The names of the region elements of the shell: the `id` (else the first class)
-/// of each element with `data-live` or `hx-get`.
-pub fn region_names(index_html: &str) -> Vec<String> {
+/// One region element of the shell: an element with `data-live` or `hx-get`.
+pub struct ShellRegion {
+    /// The `id`, else the first class.
+    pub name: String,
+    /// `#id`, else `.class`: the selector the tests use.
+    pub selector: String,
+    /// The `hx-get` path.
+    pub path: String,
+    /// The tokens of `data-live`.
+    pub kinds: Vec<String>,
+}
+
+/// The region elements of the shell, each name once.
+pub fn regions_of_shell(index_html: &str) -> Vec<ShellRegion> {
     let start_tag = Regex::new(r"<[A-Za-z][A-Za-z0-9-]*\b([^>]*)>").expect("start tag pattern");
     let attribute = Regex::new(r#"([A-Za-z_:][A-Za-z0-9_:.-]*)(?:\s*=\s*"([^"]*)")?"#)
         .expect("attribute pattern");
-    let mut names: Vec<String> = Vec::new();
+    let mut regions: Vec<ShellRegion> = Vec::new();
     for tag in start_tag.captures_iter(index_html) {
         let attributes: Vec<(String, String)> = attribute
             .captures_iter(&tag[1])
@@ -138,16 +151,111 @@ pub fn region_names(index_html: &str) -> Vec<String> {
         if value_of("data-live").is_none() && value_of("hx-get").is_none() {
             continue;
         }
-        let name = value_of("id")
-            .filter(|id| !id.is_empty())
-            .or_else(|| value_of("class").and_then(|classes| classes.split_whitespace().next()));
-        if let Some(name) = name {
-            if !names.iter().any(|known| known == name) {
-                names.push(name.to_string());
-            }
+        let id = value_of("id").filter(|id| !id.is_empty());
+        let class = value_of("class").and_then(|classes| classes.split_whitespace().next());
+        let (name, selector) = match (id, class) {
+            (Some(id), _) => (id, format!("#{id}")),
+            (None, Some(class)) => (class, format!(".{class}")),
+            (None, None) => continue,
+        };
+        if regions.iter().any(|known| known.name == name) {
+            continue;
+        }
+        regions.push(ShellRegion {
+            name: name.to_string(),
+            selector,
+            path: value_of("hx-get").unwrap_or("").to_string(),
+            kinds: value_of("data-live")
+                .unwrap_or("")
+                .split_whitespace()
+                .map(str::to_string)
+                .collect(),
+        });
+    }
+    regions
+}
+
+/// The names of the region elements of the shell: the `id` (else the first class)
+/// of each element with `data-live` or `hx-get`.
+pub fn region_names(index_html: &str) -> Vec<String> {
+    regions_of_shell(index_html)
+        .into_iter()
+        .map(|region| region.name)
+        .collect()
+}
+
+/// One row of a table that lists the live regions of the shell by hand.
+pub struct ListedRegion {
+    pub selector: String,
+    pub path: String,
+    pub kinds: Vec<String>,
+}
+
+/// Checks a hand-written table of regions against the regions of the shell: each
+/// region of the shell with `data-live` has a row with the same selector, `hx-get`
+/// path and kinds, and each row names such a region. A page test that loops over the
+/// table then covers every region the page has.
+pub fn check_region_table_matches_shell(
+    path: &str,
+    index_html: &str,
+    table: &[ListedRegion],
+) -> Vec<Violation> {
+    let sorted = |kinds: &[String]| {
+        let mut kinds = kinds.to_vec();
+        kinds.sort();
+        kinds
+    };
+    let shell: Vec<ShellRegion> = regions_of_shell(index_html)
+        .into_iter()
+        .filter(|region| !region.kinds.is_empty())
+        .collect();
+    let mut violations = Vec::new();
+    for region in &shell {
+        let Some(row) = table.iter().find(|row| row.selector == region.selector) else {
+            violations.push(Violation::error(
+                path,
+                1,
+                format!(
+                    "the shell has the live region `{}` and the table has no row for it.",
+                    region.selector
+                ),
+            ));
+            continue;
+        };
+        if row.path != region.path {
+            violations.push(Violation::error(
+                path,
+                1,
+                format!(
+                    "the row of `{}` loads `{}`, and the shell loads `{}`.",
+                    region.selector, row.path, region.path
+                ),
+            ));
+        }
+        if sorted(&row.kinds) != sorted(&region.kinds) {
+            violations.push(Violation::error(
+                path,
+                1,
+                format!(
+                    "the row of `{}` lists the kinds {:?}, and the shell lists {:?}.",
+                    region.selector, row.kinds, region.kinds
+                ),
+            ));
         }
     }
-    names
+    for row in table {
+        if !shell.iter().any(|region| region.selector == row.selector) {
+            violations.push(Violation::error(
+                path,
+                1,
+                format!(
+                    "the table has a row for `{}`, and the shell has no such live region.",
+                    row.selector
+                ),
+            ));
+        }
+    }
+    violations
 }
 
 /// True when `text` holds a quoted string that names the region: an id, a class or

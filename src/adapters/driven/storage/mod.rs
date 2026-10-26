@@ -17,6 +17,7 @@ pub mod stories;
 pub mod transaction;
 pub mod utils;
 pub mod worlds;
+mod write_guard;
 
 pub use core::*;
 pub use transaction::{Tx, TxToken, TxWrite};

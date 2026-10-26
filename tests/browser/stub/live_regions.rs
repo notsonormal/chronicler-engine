@@ -7,98 +7,12 @@
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::change::ChangeKind;
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 
 use super::support::{ask_once, read_banner, stop_page_timer, StubRunner};
 use super::*;
-
-/// `section` is the `data-tab` of the region's section; the header is outside every
-/// section, so its `section` is empty.
-struct Region {
-    selector: &'static str,
-    path: &'static str,
-    kinds: &'static [&'static str],
-    section: &'static str,
-}
-
-impl Region {
-    fn starts_visible(&self) -> bool {
-        self.section.is_empty() || self.section == "game"
-    }
-}
-
-const REGIONS: [Region; 11] = [
-    Region {
-        selector: "#header",
-        path: "/fragment/header",
-        kinds: &["games"],
-        section: "",
-    },
-    Region {
-        selector: "#story-log",
-        path: "/fragment/story-log",
-        kinds: &["story", "busy", "worlds"],
-        section: "game",
-    },
-    Region {
-        selector: ".visual-sidebar",
-        path: "/fragment/visual-sidebar",
-        kinds: &["story", "worlds"],
-        section: "game",
-    },
-    Region {
-        selector: "#options-dock",
-        path: "/fragment/options-dock",
-        kinds: &["options", "busy"],
-        section: "game",
-    },
-    Region {
-        selector: "#status-display",
-        path: "/status/busy",
-        kinds: &["busy"],
-        section: "game",
-    },
-    Region {
-        selector: ".games-panel",
-        path: "/fragment/games",
-        kinds: &["games", "worlds", "presets"],
-        section: "games",
-    },
-    Region {
-        selector: ".llm-messages-panel",
-        path: "/fragment/llm-messages",
-        kinds: &["llm"],
-        section: "llm-messages",
-    },
-    Region {
-        selector: "#failure-banner-degraded",
-        path: "/fragment/failure-banner",
-        kinds: &["settings", "llm"],
-        section: "",
-    },
-    Region {
-        selector: ".settings-panel",
-        path: "/fragment/settings",
-        kinds: &["settings", "llm"],
-        section: "settings",
-    },
-    Region {
-        selector: ".prompt-presets-panel",
-        path: "/fragment/prompt-presets",
-        kinds: &["presets", "settings", "games"],
-        section: "prompt-presets",
-    },
-    Region {
-        selector: ".worlds-panel",
-        path: "/fragment/worlds",
-        kinds: &["worlds", "games"],
-        section: "worlds",
-    },
-];
-
-const ALL_KINDS: [&str; 8] = [
-    "story", "options", "busy", "games", "worlds", "settings", "presets", "llm",
-];
+use crate::test_utils::live_region_table::REGIONS;
 
 const STORY_LOG: usize = 1;
 const GAMES_PANEL: usize = 5;
@@ -108,7 +22,7 @@ const SETTINGS_PANEL: usize = 8;
 const PRESETS_PANEL: usize = 9;
 const WORLDS_PANEL: usize = 10;
 
-fn expected_loads(kind: &str) -> Vec<usize> {
+fn expected_loads(kind: ChangeKind) -> Vec<usize> {
     REGIONS
         .iter()
         .map(|region| usize::from(region.starts_visible() && region.kinds.contains(&kind)))
@@ -270,7 +184,7 @@ async fn check_a_moved_number_loads_the_regions_that_list_its_kind(
     let changes = stub.changes_handle();
     start_current(&page).await;
 
-    for kind in ALL_KINDS {
+    for kind in ChangeKind::ALL {
         let before = region_loads(&changes);
         changes.bump(kind);
         ask_once(&page).await;
@@ -443,7 +357,7 @@ async fn check_a_page_that_becomes_visible_asks_at_once(
     start_current(&page).await;
 
     page.evaluate::<(), ()>(HIDE_PAGE, None).await.unwrap();
-    changes.bump("options");
+    changes.bump(ChangeKind::OPTIONS);
     let asks = changes.asks();
     let before = region_loads(&changes);
 
@@ -456,7 +370,7 @@ async fn check_a_page_that_becomes_visible_asks_at_once(
     );
     assert_eq!(
         loads_since(&changes, &before),
-        expected_loads("options"),
+        expected_loads(ChangeKind::OPTIONS),
         "only the dock lists `options`"
     );
 }
@@ -490,7 +404,7 @@ async fn check_an_edit_holds_its_region_which_loads_once_when_the_edit_ends(
     eval_string(&page, OPEN_EDIT).await;
     let before = region_loads(&changes);
     for _ in 0..3 {
-        changes.bump("story");
+        changes.bump(ChangeKind::STORY);
         ask_once(&page).await;
     }
     assert_eq!(
@@ -521,7 +435,7 @@ async fn check_a_load_in_flight_when_an_edit_began_does_not_replace_the_edit(
     let changes = stub.changes_handle();
     start_current(&page).await;
     changes.set_story_log_delay_ms(400);
-    changes.bump("story");
+    changes.bump(ChangeKind::STORY);
     let before = changes.loads("/fragment/story-log");
 
     let script = format!(
@@ -569,7 +483,7 @@ async fn check_a_disclosure_that_lists_its_open_state_stays_open_through_a_load(
     )
     .await;
     let before = changes.loads("/fragment/options-dock");
-    changes.bump("options");
+    changes.bump(ChangeKind::OPTIONS);
     ask_once(&page).await;
     assert_eq!(changes.loads("/fragment/options-dock"), before + 1);
     let state = eval_string(
@@ -640,7 +554,7 @@ async fn assert_engaged_state_survives(
 
     let before = changes.loads(region.path);
     for kind in region.kinds {
-        changes.bump(kind);
+        changes.bump(*kind);
         ask_once(page).await;
         let problem = eval_string(page, engaged.check).await;
         assert_eq!(problem, "", "{} after `{kind}` moved", region.selector);
@@ -1178,7 +1092,7 @@ async fn assert_games_panel_holds_through_each_kind(
 ) {
     let before = changes.loads("/fragment/games");
     for kind in REGIONS[GAMES_PANEL].kinds {
-        changes.bump(kind);
+        changes.bump(*kind);
         ask_once(page).await;
         assert_eq!(eval_string(page, check).await, "", "after `{kind}` moved");
     }
@@ -1245,7 +1159,7 @@ async fn check_the_new_game_selects_keep_the_players_choice_through_a_load(
     assert_eq!(eval_string(&page, OPEN_NEW_GAME).await, "");
     assert_eq!(eval_string(&page, CHOOSE_NEW_GAME).await, "");
     let before = changes.loads("/fragment/games");
-    for kind in ["games", "worlds"] {
+    for kind in [ChangeKind::GAMES, ChangeKind::WORLDS] {
         changes.bump(kind);
         ask_once(&page).await;
         assert_eq!(
@@ -1273,7 +1187,7 @@ async fn check_closing_the_new_game_form_discards_the_choice_and_the_games_panel
 
     assert_eq!(eval_string(&page, OPEN_NEW_GAME).await, "");
     assert_eq!(eval_string(&page, CHOOSE_NEW_GAME).await, "");
-    changes.bump("worlds");
+    changes.bump(ChangeKind::WORLDS);
     ask_once(&page).await;
     assert_eq!(live_state(&page, ".games-panel").await, "held");
 
@@ -1349,7 +1263,7 @@ async fn check_a_disclosure_closed_without_a_save_discards_its_edit_and_its_regi
     open_section(&page, "games", ".games-panel").await;
 
     assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
-    changes.bump("worlds");
+    changes.bump(ChangeKind::WORLDS);
     ask_once(&page).await;
     assert_closing_frees_the_region(
         &page,
@@ -1372,7 +1286,7 @@ async fn check_a_disclosure_closed_without_a_save_discards_its_edit_and_its_regi
     )
     .await;
     assert_eq!(opened, "");
-    changes.bump("presets");
+    changes.bump(ChangeKind::PROMPT_PRESETS);
     ask_once(&page).await;
     assert_closing_frees_the_region(
         &page,
@@ -1395,13 +1309,13 @@ async fn check_a_region_in_a_hidden_section_waits_and_the_section_loads_it_once(
     assert_eq!(changes.loads("/fragment/llm-messages"), 0);
 
     let header = changes.loads("/fragment/header");
-    changes.bump("games");
+    changes.bump(ChangeKind::GAMES);
     ask_once(&page).await;
     assert_eq!(changes.loads("/fragment/header"), header + 1);
     assert_eq!(changes.loads("/fragment/games"), 0, "a hidden region waits");
     assert_eq!(live_state(&page, ".games-panel").await, "stale");
 
-    changes.bump("llm");
+    changes.bump(ChangeKind::LLM_MESSAGES);
     ask_once(&page).await;
     assert_eq!(changes.loads("/fragment/llm-messages"), 0);
     assert_eq!(live_state(&page, ".llm-messages-panel").await, "stale");
@@ -1419,7 +1333,7 @@ async fn check_a_region_in_a_hidden_section_waits_and_the_section_loads_it_once(
 
     // The Game tab is a section too: it is hidden now.
     let story = changes.loads("/fragment/story-log");
-    changes.bump("story");
+    changes.bump(ChangeKind::STORY);
     ask_once(&page).await;
     assert_eq!(changes.loads("/fragment/story-log"), story);
     assert_eq!(live_state(&page, "#story-log").await, "stale");
@@ -1461,7 +1375,7 @@ async fn check_a_successful_save_ends_the_edit_and_a_marked_disclosure_closes(
 
     assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
     eval_string(&page, WATCH_RENAME_SAVE).await;
-    changes.bump("worlds");
+    changes.bump(ChangeKind::WORLDS);
     ask_once(&page).await;
     assert_eq!(live_state(&page, ".games-panel").await, "held");
 
@@ -1511,7 +1425,7 @@ async fn check_a_failed_save_keeps_the_edit_and_a_failed_auto_save_goes_back(
 
     stub.games_handle().set_rename_failing(true);
     assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
-    changes.bump("worlds");
+    changes.bump(ChangeKind::WORLDS);
     ask_once(&page).await;
     assert_eq!(eval_string(&page, SAVE_RENAME).await, "");
     let (shown, line, raw) =
@@ -1578,7 +1492,7 @@ async fn check_a_load_keeps_an_inline_error_that_is_showing(
     assert!(shown, "the failed save must report in the form's slot");
 
     let before = changes.loads("/fragment/games");
-    changes.bump("games");
+    changes.bump(ChangeKind::GAMES);
     ask_once(&page).await;
     assert_eq!(
         changes.loads("/fragment/games"),
@@ -1713,7 +1627,7 @@ async fn check_a_connection_editor_keeps_the_sub_tab_and_cancel_loads_the_panel_
     );
     let loads = changes.loads("/fragment/settings");
     let requests = changes.loads("/fragment/connections/openrouter-gpt-4o-mini/edit");
-    changes.bump("settings");
+    changes.bump(ChangeKind::SETTINGS);
     ask_once(&page).await;
     assert_eq!(live_state(&page, ".settings-panel").await, "held");
     assert_eq!(changes.loads("/fragment/settings"), loads);

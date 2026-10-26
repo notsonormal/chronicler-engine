@@ -11,6 +11,8 @@
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::change::ChangeKind;
+
 use super::support::{ask_once, stop_page_timer, StubRunner};
 use super::*;
 
@@ -94,7 +96,7 @@ async fn stash_nodes(page: &playwright_rs::Page) {
 async fn load_the_panel(page: &playwright_rs::Page, stub: &StubServer) {
     let changes = stub.changes_handle();
     let before = changes.loads("/fragment/llm-messages");
-    changes.bump("llm");
+    changes.bump(ChangeKind::LLM_MESSAGES);
     ask_once(page).await;
     assert_eq!(
         changes.loads("/fragment/llm-messages"),

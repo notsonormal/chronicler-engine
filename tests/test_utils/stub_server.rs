@@ -17,6 +17,10 @@ use axum::Router;
 use chrono::{TimeZone, Utc};
 
 use chronicler_engine::adapters::driving::http::utils::response::BUSY_STATUS;
+use chronicler_engine::domain::model::change::{
+    ActiveGameVersions, ChangeKind, ChangeVersions, EngineKind, GameKind, GameVersions,
+};
+use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::adapters::driving::http::builders::headers::{
     failure_banner_html, header_fragment_html,
 };
@@ -516,77 +520,82 @@ impl StubGames {
     }
 }
 
-/// What `GET /changes` answers. A test moves a number through `StubChangesHandle`; the
-/// setters of the other handles move the number of the data they change, so a
-/// test that changes stub data still reaches the region without naming a number.
+/// What `GET /changes` answers: a real `ChangeVersions`, so the stub answers the
+/// fields of the engine's own snapshot. A test moves a number through
+/// `StubChangesHandle`; the setters of the other handles move the number of the
+/// data they change, so a test that changes stub data still reaches the region
+/// without naming a number.
 #[derive(Debug, Clone)]
 struct StubChanges {
-    server: String,
-    game: Option<u64>,
-    story: u64,
-    options: u64,
-    busy: u64,
-    games: u64,
-    worlds: u64,
-    settings: u64,
-    presets: u64,
-    llm: u64,
+    versions: ChangeVersions,
 }
 
 impl StubChanges {
     fn new() -> Self {
-        Self {
-            server: "stub-server-1".to_string(),
-            game: Some(1),
+        let one = GameVersions {
             story: 1,
             options: 1,
-            busy: 1,
-            games: 1,
-            worlds: 1,
-            settings: 1,
-            presets: 1,
-            llm: 1,
+            busy_state: 1,
+        };
+        Self {
+            versions: ChangeVersions {
+                server: "stub-server-1".to_string(),
+                game: Some(ActiveGameVersions {
+                    id: GameId(1),
+                    numbers: one,
+                }),
+                games: 1,
+                worlds: 1,
+                settings: 1,
+                prompt_presets: 1,
+                llm_messages: 1,
+            },
         }
     }
 
-    fn number_mut(&mut self, kind: &str) -> &mut u64 {
+    fn bump(&mut self, kind: ChangeKind) {
+        let versions = &mut self.versions;
         match kind {
-            "story" => &mut self.story,
-            "options" => &mut self.options,
-            "busy" => &mut self.busy,
-            "games" => &mut self.games,
-            "worlds" => &mut self.worlds,
-            "settings" => &mut self.settings,
-            "presets" => &mut self.presets,
-            "llm" => &mut self.llm,
-            other => panic!("the stub has no change number named {other:?}"),
+            ChangeKind::Game(kind) => {
+                let game = versions
+                    .game
+                    .as_mut()
+                    .unwrap_or_else(|| panic!("the stub has no active Game to move {kind:?}"));
+                match kind {
+                    GameKind::Story => game.numbers.story += 1,
+                    GameKind::Options => game.numbers.options += 1,
+                    GameKind::BusyState => game.numbers.busy_state += 1,
+                }
+            }
+            ChangeKind::Engine(kind) => match kind {
+                EngineKind::Games => versions.games += 1,
+                EngineKind::Worlds => versions.worlds += 1,
+                EngineKind::Settings => versions.settings += 1,
+                EngineKind::PromptPresets => versions.prompt_presets += 1,
+                EngineKind::LlmMessages => versions.llm_messages += 1,
+            },
         }
+    }
+
+    /// A Game that was active before keeps its numbers when it becomes active again.
+    fn set_game(&mut self, game: Option<u64>) {
+        let kept = self.versions.game.map(|active| active.numbers);
+        self.versions.game = game.map(|id| ActiveGameVersions {
+            id: GameId(id),
+            numbers: kept.unwrap_or_default(),
+        });
     }
 
     fn answer(&self) -> serde_json::Value {
-        let mut answer = serde_json::json!({
-            "server": self.server,
-            "game": self.game,
-            "games": self.games,
-            "worlds": self.worlds,
-            "settings": self.settings,
-            "presets": self.presets,
-            "llm": self.llm,
-        });
-        if self.game.is_some() {
-            answer["story"] = self.story.into();
-            answer["options"] = self.options.into();
-            answer["busy"] = self.busy.into();
-        }
-        answer
+        serde_json::to_value(&self.versions).expect("the stub snapshot serializes")
     }
 }
 
 impl StubState {
-    fn bump(&self, kinds: &[&str]) {
+    fn bump(&self, kinds: &[ChangeKind]) {
         let mut changes = self.changes.lock().expect("stub changes lock poisoned");
-        for kind in kinds {
-            *changes.number_mut(kind) += 1;
+        for &kind in kinds {
+            changes.bump(kind);
         }
     }
 }
@@ -783,9 +792,8 @@ pub struct StubChangesHandle {
 }
 
 impl StubChangesHandle {
-    /// Moves the number of one kind: `story`, `options`, `busy`, `games`,
-    /// `worlds`, `settings`, `presets` or `llm`.
-    pub fn bump(&self, kind: &str) {
+    /// Moves the number of one kind.
+    pub fn bump(&self, kind: ChangeKind) {
         self.state.bump(&[kind]);
     }
 
@@ -794,6 +802,7 @@ impl StubChangesHandle {
             .changes
             .lock()
             .expect("stub changes lock poisoned")
+            .versions
             .server = server.to_string();
     }
 
@@ -802,7 +811,7 @@ impl StubChangesHandle {
             .changes
             .lock()
             .expect("stub changes lock poisoned")
-            .game = game;
+            .set_game(game);
     }
 
     pub fn asks(&self) -> usize {
@@ -876,7 +885,7 @@ impl StubLlmHandle {
         self.state
             .llm_message_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&["llm"]);
+        self.state.bump(&[ChangeKind::LLM_MESSAGES]);
     }
 }
 
@@ -890,7 +899,7 @@ impl StubStoryLogHandle {
         self.state
             .extra_oldest
             .store(present, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&["story"]);
+        self.state.bump(&[ChangeKind::STORY]);
     }
 
     pub fn append_narration(&self, text: &str) {
@@ -899,14 +908,14 @@ impl StubStoryLogHandle {
             .newest_narration
             .lock()
             .expect("stub narration lock poisoned") = Some(text.to_string());
-        self.state.bump(&["story", "games"]);
+        self.state.bump(&[ChangeKind::STORY, ChangeKind::GAMES]);
     }
 
     pub fn remove_newest(&self) {
         self.state
             .deleted
             .store(true, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&["story"]);
+        self.state.bump(&[ChangeKind::STORY]);
     }
 }
 
@@ -920,14 +929,14 @@ impl StubOptionsHandle {
         self.state
             .dock_options_alt
             .store(alternate, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&["options"]);
+        self.state.bump(&[ChangeKind::OPTIONS]);
     }
 
     pub fn set_failure(&self, failed: bool) {
         self.state
             .options_failed
             .store(failed, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&["options"]);
+        self.state.bump(&[ChangeKind::OPTIONS]);
     }
 }
 
@@ -987,7 +996,7 @@ impl StubFailureHandle {
         self.state
             .header_degraded
             .store(degraded, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&["llm"]);
+        self.state.bump(&[ChangeKind::LLM_MESSAGES]);
     }
 
     pub fn set_asks_and_loads_failing(&self, failing: bool) {
@@ -1029,7 +1038,7 @@ impl StubSwipeHandle {
         self.state
             .two_swipes
             .store(true, std::sync::atomic::Ordering::SeqCst);
-        self.state.bump(&["story"]);
+        self.state.bump(&[ChangeKind::STORY]);
     }
 
     pub fn set_switch_failing(&self) {
@@ -1048,7 +1057,7 @@ impl StubStatusHandle {
     /// Moves the busy number, so the status display loads on the next ask.
     pub fn set(&self, status: StubStatus) {
         *self.state.status.lock().expect("stub status lock poisoned") = status;
-        self.state.bump(&["busy"]);
+        self.state.bump(&[ChangeKind::BUSY_STATE]);
     }
 }
 
@@ -1245,7 +1254,7 @@ async fn delete_game(
         .expect("stub games lock poisoned")
         .saved
         .retain(|(saved, _)| *saved != id);
-    state.bump(&["games"]);
+    state.bump(&[ChangeKind::GAMES]);
     (StatusCode::OK, "").into_response()
 }
 
@@ -1271,7 +1280,7 @@ async fn rename_game(
             *name = form.display_name;
         }
     }
-    state.bump(&["games"]);
+    state.bump(&[ChangeKind::GAMES]);
     (StatusCode::OK, "").into_response()
 }
 
@@ -1425,14 +1434,14 @@ async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     }
     state.switched.store(true, SeqCst);
     state.dock_options_live.store(false, SeqCst);
-    state.bump(&["story", "options"]);
+    state.bump(&[ChangeKind::STORY, ChangeKind::OPTIONS]);
     Html(story_log_html(&restored_swipe_entries())).into_response()
 }
 
 /// The real Stop answers a plain word and moves the busy state.
 async fn reset_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
     *state.status.lock().expect("stub status lock poisoned") = StubStatus::Idle;
-    state.bump(&["busy"]);
+    state.bump(&[ChangeKind::BUSY_STATE]);
     (StatusCode::OK, "reset").into_response()
 }
 
@@ -1496,7 +1505,7 @@ async fn action_check(
 /// Game, so the busy state moves.
 fn dispatched(state: &StubState) -> Response<Body> {
     *state.status.lock().expect("stub status lock poisoned") = StubStatus::Step(Step::Narrating);
-    state.bump(&["busy"]);
+    state.bump(&[ChangeKind::BUSY_STATE]);
     (StatusCode::OK, "").into_response()
 }
 
@@ -1588,7 +1597,7 @@ async fn start_autoplay(State(state): State<Arc<StubState>>) -> Response<Body> {
                 budget: 10,
                 step: Some(Step::Narrating),
             };
-            state.bump(&["busy"]);
+            state.bump(&[ChangeKind::BUSY_STATE]);
             (StatusCode::OK, "").into_response()
         }
         StubActionOutcome::Refused => (
@@ -1646,7 +1655,7 @@ async fn delete_preset(
             .expect("stub presets lock poisoned")
             .custom
             .retain(|preset| preset.id != id);
-        state.bump(&["presets"]);
+        state.bump(&[ChangeKind::PROMPT_PRESETS]);
         (StatusCode::OK, "").into_response()
     } else {
         client_refusal("Preset is a mode default; change the default before deleting")
@@ -1671,7 +1680,7 @@ async fn activate_preset(
             .expect("stub presets lock poisoned")
             .active_system = id;
     }
-    state.bump(&["presets", "settings"]);
+    state.bump(&[ChangeKind::PROMPT_PRESETS, ChangeKind::SETTINGS]);
     (StatusCode::OK, "").into_response()
 }
 
@@ -1693,7 +1702,7 @@ async fn duplicate_preset(
         copy.is_default = false;
         presets.custom.push(copy);
     }
-    state.bump(&["presets"]);
+    state.bump(&[ChangeKind::PROMPT_PRESETS]);
     (StatusCode::OK, "").into_response()
 }
 
@@ -1748,7 +1757,7 @@ async fn save_world(
             }),
         }
     }
-    state.bump(&["worlds"]);
+    state.bump(&[ChangeKind::WORLDS]);
     (StatusCode::OK, "").into_response()
 }
 
@@ -1763,7 +1772,7 @@ async fn save_world_posture(State(state): State<Arc<StubState>>) -> Response<Bod
     {
         return client_refusal("Unknown narrator mode");
     }
-    state.bump(&["worlds"]);
+    state.bump(&[ChangeKind::WORLDS]);
     (StatusCode::OK, "").into_response()
 }
 
@@ -1784,7 +1793,7 @@ async fn delete_world(
             .expect("stub worlds lock poisoned")
             .worlds
             .retain(|world| world.key != key);
-        state.bump(&["worlds"]);
+        state.bump(&[ChangeKind::WORLDS]);
         (StatusCode::OK, "").into_response()
     } else {
         client_failure("Stub world delete failure")
@@ -1802,7 +1811,7 @@ async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
         .save_succeeds
         .load(std::sync::atomic::Ordering::SeqCst)
     {
-        state.bump(&["story"]);
+        state.bump(&[ChangeKind::STORY]);
         (StatusCode::OK, "").into_response()
     } else {
         client_failure("Stub save failure")
@@ -1818,7 +1827,7 @@ async fn delete_message(State(state): State<Arc<StubState>>) -> Response<Body> {
         return client_failure("Stub delete failure");
     }
     state.deleted.store(true, SeqCst);
-    state.bump(&["story"]);
+    state.bump(&[ChangeKind::STORY]);
     (StatusCode::OK, "").into_response()
 }
 

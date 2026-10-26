@@ -14,6 +14,10 @@ pub mod unit_test_allowlist;
 pub mod walker_rows;
 pub mod walkers;
 
+#[allow(dead_code)]
+#[path = "../../test_utils/live_region_table.rs"]
+mod live_region_table;
+
 pub use inherent_impl::*;
 pub use enums::*;
 pub use free_fn::*;
@@ -449,6 +453,26 @@ fn guardrails_live_regions_in_shell() {
     let content = std::fs::read_to_string(path).unwrap();
     let errors = check_live_regions_in_shell(path, &content);
     assert_violations(&errors, "live regions in the dashboard shell");
+}
+
+#[test]
+fn guardrails_live_region_table_matches_the_shell() {
+    let table: Vec<ListedRegion> = live_region_table::REGIONS
+        .iter()
+        .map(|region| ListedRegion {
+            selector: region.selector.to_string(),
+            path: region.path.to_string(),
+            kinds: region
+                .kinds
+                .iter()
+                .map(|kind| kind.token().to_string())
+                .collect(),
+        })
+        .collect();
+    let path = "assets/index.html";
+    let content = std::fs::read_to_string(path).unwrap();
+    let errors = check_region_table_matches_shell(path, &content, &table);
+    assert_violations(&errors, "the region table of the live-region page tests");
 }
 
 fn dashboard_scripts() -> Vec<(String, String)> {

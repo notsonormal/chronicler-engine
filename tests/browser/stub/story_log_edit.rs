@@ -5,6 +5,8 @@
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::change::ChangeKind;
+
 use super::*;
 use super::support::{StubRunner, install_story_load_counter, load_now, story_load_count};
 
@@ -111,7 +113,7 @@ async fn check_an_open_edit_holds_the_story_log(page: playwright_rs::Page, stub:
 
     wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
-    stub.changes_handle().bump("story");
+    stub.changes_handle().bump(ChangeKind::STORY);
     let persisted = wait_for_element_persist(&page, "#edit-textarea", Duration::from_secs(3)).await;
     assert!(
         persisted,
@@ -333,7 +335,7 @@ async fn check_escape_cancels_edit(page: playwright_rs::Page, stub: StubServer) 
         .await
         .unwrap();
     // A number moved during the edit is what the log loads once the edit ends.
-    stub.changes_handle().bump("story");
+    stub.changes_handle().bump(ChangeKind::STORY);
     textarea.press("Escape", None).await.unwrap();
 
     wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;

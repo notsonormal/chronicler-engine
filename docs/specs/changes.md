@@ -202,7 +202,8 @@ And the run is between the start and its first Job
 Then exactly `busy` and `games` moved
 
 When the client POST /status/reset-busy
-Then exactly `busy`, `games` and `options` moved since the start of the run
+And the run has ended
+Then, since the snapshot at the start of the run, exactly `busy`, `games` and `options` moved
 ```
 
 #### Scenario 43.13: A change of the step of a run moves the busy state and not the Games list
@@ -224,4 +225,17 @@ And the Job ends
 Then exactly `games` and `llm` moved since the creation of the second Game
 And the `game` of the answer is the second Game
 And the `story`, `options` and `busy` numbers of the second Game did not move
+```
+
+#### Scenario 43.15: A save of the story log moves the story, and a delete also moves the Games list
+
+```gherkin
+Given an active Game whose story holds a second Narration, and whose last Message holds two Swipes
+When the client saves one of these, each on a fresh server:
+| Save                                                       | Numbers that move                 |
+| POST /history/:id with a new text                          | story                             |
+| POST /message/:id/swipe/1 for the last Message             | story, options, busy              |
+| POST /history/delete                                       | story, games, options, busy       |
+Then the response status is 200
+And exactly the numbers of its row moved
 ```

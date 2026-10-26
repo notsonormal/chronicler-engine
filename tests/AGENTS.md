@@ -168,6 +168,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.
     - `html.rs` — HTML slicing helpers for panel markup — locate a region by a stable anchor string.
     - `htmx_settle.rs` — htmx settle harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
+    - `live_region_table.rs` — The live regions of the dashboard shell, as the stub-browser tests list them: the selector, the fragment path, the kinds of change that load it, and its section. The guardrails check the table against `assets/index.html`.
     - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `server`, `settings_guard`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.
     - `settings_guard.rs` — `SettingsTestGuard` — serializes tests that mutate global settings state via a process-wide `Mutex`.

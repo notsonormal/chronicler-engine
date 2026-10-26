@@ -80,12 +80,13 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | form fields urlencoded safe | Flags collection-typed fields on HTTP form structs. | `tests/infrastructure/guardrails/layers.rs:100` |
 | server layer boundaries | Prevents HTTP-layer files from referencing the whole-state types directly. | `tests/infrastructure/guardrails/layers.rs:166` |
 | http storage leak | Prevents HTTP layer files from directly referencing the driven `Storage` namespace. | `tests/infrastructure/guardrails/layers.rs:203` |
-| live regions in shell | Checks the dashboard shell, `assets/index.html`. Every element with `hx-get` is a | `tests/infrastructure/guardrails/live_regions.rs:19` |
-| scripts write no region | Checks one `assets/dashboard-*.js` script. A script must not write the markup of | `tests/infrastructure/guardrails/live_regions.rs:190` |
-| scripts use action fetch | Checks one `assets/dashboard-*.js` script other than `dashboard-live.js`. A | `tests/infrastructure/guardrails/live_regions.rs:240` |
-| handler headers | Checks one handler file of the HTTP adapter. A handler answers its own element | `tests/infrastructure/guardrails/live_regions.rs:261` |
-| template targets | Checks one template source: a file of the HTTP adapter that renders markup, or | `tests/infrastructure/guardrails/live_regions.rs:294` |
-| no out of band swaps | Checks one template source for out-of-band swaps. An element that shows data | `tests/infrastructure/guardrails/live_regions.rs:354` |
+| live regions in shell | Checks the dashboard shell, `assets/index.html`. Every element with `hx-get` is a | `tests/infrastructure/guardrails/live_regions.rs:20` |
+| region table matches shell | Checks a hand-written table of regions against the regions of the shell: each | `tests/infrastructure/guardrails/live_regions.rs:198` |
+| scripts write no region | Checks one `assets/dashboard-*.js` script. A script must not write the markup of | `tests/infrastructure/guardrails/live_regions.rs:298` |
+| scripts use action fetch | Checks one `assets/dashboard-*.js` script other than `dashboard-live.js`. A | `tests/infrastructure/guardrails/live_regions.rs:348` |
+| handler headers | Checks one handler file of the HTTP adapter. A handler answers its own element | `tests/infrastructure/guardrails/live_regions.rs:369` |
+| template targets | Checks one template source: a file of the HTTP adapter that renders markup, or | `tests/infrastructure/guardrails/live_regions.rs:402` |
+| no out of band swaps | Checks one template source for out-of-band swaps. An element that shows data | `tests/infrastructure/guardrails/live_regions.rs:462` |
 | test file naming | Rejects unit-test files with the singular `_test.rs` suffix in favor of `_tests.rs`. | `tests/infrastructure/guardrails/location.rs:7` |
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |

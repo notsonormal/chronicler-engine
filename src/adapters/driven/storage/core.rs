@@ -245,7 +245,7 @@ impl Storage {
         // waits for the lock, so it never sees a raised number with the old data.
         if result.is_ok() {
             self.changes
-                .raise(None, ChangeCounters::kinds_of_call(call));
+                .raise_engine(ChangeCounters::kinds_of_call(call));
         }
         result
     }

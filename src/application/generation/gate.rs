@@ -11,7 +11,7 @@ use crate::domain::model::character::CharacterCard;
 use crate::domain::model::dock::{DockRecord, OptionsFailure};
 use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::agent::Kind;
-use crate::domain::model::change::ChangeKind;
+use crate::domain::model::change::{EngineKind, GameKind};
 use crate::domain::model::generation::{
     GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanRefusal, Place, StoryEnd,
 };
@@ -201,13 +201,10 @@ impl BusyRegistry {
         result
     }
 
-    fn busy_of_each(holders: &Holders) -> HashMap<GameId, (Busy, bool)> {
+    fn busy_of_each(holders: &Holders) -> HashMap<GameId, Busy> {
         holders
             .iter()
-            .map(|(game, holder)| {
-                let is_run = matches!(holder, Holder::Autoplay { .. });
-                (*game, (holder.busy(), is_run))
-            })
+            .map(|(game, holder)| (*game, holder.busy()))
             .collect()
     }
 
@@ -215,23 +212,23 @@ impl BusyRegistry {
     /// of Games that a run holds changed: the list marks those Games.
     fn raise_busy_changes(
         storage: &Storage,
-        before: &HashMap<GameId, (Busy, bool)>,
-        after: &HashMap<GameId, (Busy, bool)>,
+        before: &HashMap<GameId, Busy>,
+        after: &HashMap<GameId, Busy>,
     ) {
         let changes = storage.changes();
         for game in before.keys().chain(after.keys()).collect::<HashSet<_>>() {
-            if before.get(game).map(|held| &held.0) != after.get(game).map(|held| &held.0) {
-                changes.raise(Some(*game), &[ChangeKind::BusyState]);
+            if before.get(game) != after.get(game) {
+                changes.raise_game(*game, &[GameKind::BusyState]);
             }
         }
-        let run_games = |held: &HashMap<GameId, (Busy, bool)>| -> HashSet<GameId> {
+        let run_games = |held: &HashMap<GameId, Busy>| -> HashSet<GameId> {
             held.iter()
-                .filter(|(_, (_, is_run))| *is_run)
+                .filter(|(_, busy)| matches!(busy, Busy::Autoplay { .. }))
                 .map(|(game, _)| *game)
                 .collect()
         };
         if run_games(before) != run_games(after) {
-            changes.raise(None, &[ChangeKind::Games]);
+            changes.raise_engine(&[EngineKind::Games]);
         }
     }
 }
