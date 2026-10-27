@@ -111,7 +111,7 @@ async fn check_an_entry_in_edit_survives_loads_of_the_story_log(
         .unwrap();
 
     let changes = stub.changes_handle();
-    let loads = changes.loads("/fragment/story-log");
+    let loads = changes.loads("story-log");
     stub.story_log_handle()
         .append_narration("Narration that arrived during the edit.");
     changes.bump(ChangeKind::STORY);
@@ -119,7 +119,7 @@ async fn check_an_entry_in_edit_survives_loads_of_the_story_log(
         Duration::from_secs(5),
         Duration::from_millis(25),
         || async {
-            changes.loads("/fragment/story-log") > loads
+            changes.loads("story-log") > loads
                 && page
                     .evaluate::<(), bool>(
                         "(() => document.getElementById('story-log').innerText.includes('Narration that arrived during the edit.'))()",

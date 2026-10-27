@@ -4,6 +4,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 
 use crate::application::errors::ApplicationError;
+use crate::application::generation::gate::Refusal;
 use crate::error::EngineError;
 use crate::test_support::body_text;
 
@@ -55,5 +56,23 @@ async fn html_escape_in_body() {
     assert!(
         !body.contains("<script>"),
         "body must escape <script>: {body}"
+    );
+}
+
+#[test]
+fn validation_into_engine_error_keeps_the_reason_as_validation() {
+    let error = ApplicationError::validation("bad input").into_engine_error();
+    assert!(
+        matches!(&error, EngineError::Validation(reason) if reason == "bad input"),
+        "got: {error:?}"
+    );
+}
+
+#[test]
+fn refused_into_engine_error_keeps_the_refusal_line_as_validation() {
+    let error = ApplicationError::Refused(Refusal::StillThinking).into_engine_error();
+    assert!(
+        matches!(&error, EngineError::Validation(line) if line == "Still thinking..."),
+        "got: {error:?}"
     );
 }

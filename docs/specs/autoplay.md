@@ -362,12 +362,12 @@ And the Game is idle
 
 ```gherkin
 Given a run that holds the Game before its first Job on the active Game
-When the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+When the client requests GET /screen?parts=send-control,autoplay-controls
 Then #submit-btn and #autoplay-btn carry the disabled attribute
 And the autoplay answer holds #stop-btn, which posts to /status/reset-busy
 
 When the client POST /status/reset-busy
-And the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+And the client requests GET /screen?parts=send-control,autoplay-controls
 Then #submit-btn and #autoplay-btn do not carry the disabled attribute
 And the autoplay answer holds no #stop-btn
 ```

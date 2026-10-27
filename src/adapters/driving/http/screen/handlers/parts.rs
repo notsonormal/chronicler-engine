@@ -43,6 +43,8 @@ pub const SCREEN_PARTS: [(&str, PartRenderer); 13] = [
     ("llm-messages", render_llm_messages_part as PartRenderer),
 ];
 
+/// The part names in the order of `SCREEN_PARTS`. Only the guardrail and the
+/// tests that compare another list of parts with the server's call it.
 pub fn screen_part_names() -> impl Iterator<Item = &'static str> {
     SCREEN_PARTS.iter().map(|(name, _)| *name)
 }

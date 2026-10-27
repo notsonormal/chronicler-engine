@@ -308,8 +308,8 @@ fn names_a_part(text: &str, parts: &[String]) -> bool {
     })
 }
 
-/// True when `expression` names a part, or uses an identifier that the script
-/// declares (`const`, `let`, `var`) from an expression that does, up to three
+/// True when `expression` names a part, or uses an identifier (outside its quoted
+/// strings) that the script declares (`const`, `let`, `var`) from an expression that does, up to three
 /// declarations deep: `const root = el.closest(CONTAINERS)` reaches a part when
 /// `CONTAINERS` is a selector that lists `[data-part]`.
 fn resolves_to_part(expression: &str, script: &str, parts: &[String], depth: usize) -> bool {
@@ -319,10 +319,12 @@ fn resolves_to_part(expression: &str, script: &str, parts: &[String], depth: usi
     if depth == 0 {
         return false;
     }
+    let quoted = Regex::new(r#""[^"]*"|'[^']*'|`[^`]*`"#).expect("quoted string pattern");
+    let code = quoted.replace_all(expression, "");
     let identifier = Regex::new(r"[A-Za-z_$][\w$]*").expect("identifier pattern");
     let declaration =
         Regex::new(r"(?:const|let|var)\s+([\w$]+)\s*=\s*([^;]+);").expect("declaration pattern");
-    identifier.find_iter(expression).any(|used| {
+    identifier.find_iter(&code).any(|used| {
         declaration
             .captures_iter(script)
             .filter(|decl| &decl[1] == used.as_str())
@@ -387,15 +389,65 @@ pub fn check_scripts_write_no_part(path: &str, script: &str, parts: &[String]) -
     violations
 }
 
-/// A script that writes into a part on purpose, with the reason. A row whose script
-/// no longer writes a part fails the guardrail.
+/// One function of a script that writes into a part on purpose, with the reason.
+/// The rest of the script stays under the rule. A row whose function is missing, or
+/// has no part write, fails the guardrail.
 pub struct PartWriteException {
     pub path: &'static str,
+    pub function: &'static str,
     pub reason: &'static str,
 }
 
+/// `script` with the text of `function <name>(…) { … }` replaced by spaces. Newlines
+/// stay, so a violation elsewhere keeps its line number. The braces are counted
+/// without reading strings or comments, so the function must hold no unbalanced
+/// brace in a literal. `None` when the script has no such function.
+pub fn without_function(script: &str, name: &str) -> Option<String> {
+    let start = Regex::new(&format!(r"function\s+{}\s*\(", regex::escape(name)))
+        .expect("function pattern")
+        .find(script)?
+        .start();
+    let open = start + script[start..].find('{')?;
+    let mut depth = 0usize;
+    let mut end = None;
+    for (offset, ch) in script[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(open + offset + 1);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let end = end?;
+    let blanked: String = script[start..end]
+        .chars()
+        .map(|ch| if ch == '\n' { '\n' } else { ' ' })
+        .collect();
+    Some(format!("{}{}{}", &script[..start], blanked, &script[end..]))
+}
+
+/// `script` as the part-write rule reads it: the function of each exception row for
+/// this path is blanked.
+pub fn without_exempt_functions(
+    path: &str,
+    script: &str,
+    exceptions: &[PartWriteException],
+) -> String {
+    exceptions
+        .iter()
+        .filter(|row| path.ends_with(row.path))
+        .fold(script.to_string(), |text, row| {
+            without_function(&text, row.function).unwrap_or(text)
+        })
+}
+
 /// Checks the exceptions of the part-write rule against the scripts they name: a
-/// row whose script has no part write is stale.
+/// row whose function is missing, or writes no part, is stale.
 pub fn check_part_write_exceptions_are_used(
     scripts: &[(String, String)],
     parts: &[String],
@@ -407,15 +459,20 @@ pub fn check_part_write_exceptions_are_used(
             !scripts
                 .iter()
                 .filter(|(path, _)| path.ends_with(row.path))
-                .any(|(path, script)| !check_scripts_write_no_part(path, script, parts).is_empty())
+                .any(|(path, script)| {
+                    without_function(script, row.function).is_some_and(|blanked| {
+                        check_scripts_write_no_part(path, script, parts).len()
+                            > check_scripts_write_no_part(path, &blanked, parts).len()
+                    })
+                })
         })
         .map(|row| {
             Violation::error(
                 row.path,
                 1,
                 format!(
-                    "the exception `{}` is stale: the script writes no part. Remove the row.",
-                    row.reason
+                    "the exception `{}` is stale: `{}` is missing or writes no part. Remove the row.",
+                    row.reason, row.function
                 ),
             )
         })
@@ -550,6 +607,81 @@ pub fn check_no_out_of_band_swaps(path: &str, content: &str) -> Vec<Violation> {
                 path,
                 index + 1,
                 "a template has `hx-swap-oob`. No answer writes a second element out of band: each element that shows data belongs to one part and loads with it.",
+            )
+        })
+        .collect()
+}
+
+/// A form that carries `hx-on::after-request`, with the reason. `isSavingControl`
+/// skips such a form, so its own handler must report its own refusal, and no other
+/// reporter speaks for it. `marker` is a text of the form's start tag.
+pub struct AfterRequestForm {
+    pub path: &'static str,
+    pub marker: &'static str,
+    pub reason: &'static str,
+}
+
+fn form_start_tags_with_after_request(content: &str) -> Vec<(usize, String)> {
+    let form_tag = Regex::new(r"<form\b[^>]*>").expect("form tag pattern");
+    form_tag
+        .find_iter(content)
+        .filter(|tag| {
+            tag.as_str().contains("hx-on::after-request")
+                || tag.as_str().contains("hx-on:htmx:after-request")
+        })
+        .map(|tag| (line_of(content, tag.start()), tag.as_str().to_string()))
+        .collect()
+}
+
+/// Checks one template source, or the shell: a `<form>` with an `hx-on::after-request`
+/// attribute must be a listed form. Without the row, a form of a part or the dialog
+/// would opt out of the save report by adding the attribute.
+pub fn check_after_request_forms_are_listed(
+    path: &str,
+    content: &str,
+    rows: &[AfterRequestForm],
+) -> Vec<Violation> {
+    form_start_tags_with_after_request(content)
+        .into_iter()
+        .filter(|(_, tag)| {
+            !rows
+                .iter()
+                .any(|row| row.path == path && tag.contains(row.marker))
+        })
+        .map(|(line, _)| {
+            Violation::error(
+                path,
+                line,
+                "a form has `hx-on::after-request` and is not listed. A form that reports its own refusal needs a row with its reason; any other form is reported by `settleSave`.",
+            )
+        })
+        .collect()
+}
+
+/// Checks the rows against the sources: a row whose form is gone is stale.
+pub fn check_after_request_form_rows_are_used(
+    sources: &[(String, String)],
+    rows: &[AfterRequestForm],
+) -> Vec<Violation> {
+    rows.iter()
+        .filter(|row| {
+            !sources
+                .iter()
+                .filter(|(path, _)| path == row.path)
+                .any(|(_, content)| {
+                    form_start_tags_with_after_request(content)
+                        .iter()
+                        .any(|(_, tag)| tag.contains(row.marker))
+                })
+        })
+        .map(|row| {
+            Violation::error(
+                row.path,
+                1,
+                format!(
+                    "the row `{}` is stale: no form with `hx-on::after-request` has the marker `{}`. Remove the row.",
+                    row.reason, row.marker
+                ),
             )
         })
         .collect()

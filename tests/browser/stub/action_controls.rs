@@ -611,6 +611,52 @@ async fn check_a_pending_state_ends_at_once_when_the_engine_does_not_take_its_re
     }
 }
 
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.71
+async fn check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    stub.save_handle().set_story_writes_refused_as_busy(true);
+    wait_for_screen_current(&page).await;
+    eval_string(
+        &page,
+        r#"() => {
+            window.__reportsWritten = 0;
+            new MutationObserver((records) => {
+                for (const record of records) {
+                    for (const node of record.addedNodes) {
+                        if (node.nodeType === 1 && node.matches('.error-disclosure')) {
+                            window.__reportsWritten += 1;
+                        }
+                    }
+                }
+            }).observe(document.getElementById('options-dock'), { childList: true, subtree: true });
+            return '';
+        }"#,
+    )
+    .await;
+    start_pending_request(&page, PendingStarter::NewOptions).await;
+    wait_for_error_disclosure(
+        &page,
+        refusal_slot_of(PendingStarter::NewOptions),
+        "the refused request is reported in the regen form's slot",
+    )
+    .await;
+    wait_for_screen_current(&page).await;
+
+    let (_, line, _) =
+        read_error_disclosure(&page, refusal_slot_of(PendingStarter::NewOptions)).await;
+    assert!(
+        line.contains("the new options were not requested"),
+        "the form reports in its own words, got {line:?}"
+    );
+    assert_eq!(
+        eval_string(&page, "() => String(window.__reportsWritten)").await,
+        "1",
+        "one refusal is one report: the saving-control reporter must leave the regen form to its own handler"
+    );
+}
+
 #[tokio::test]
 async fn run_action_controls_checks() {
     let mut runner = StubRunner::launch().await;
@@ -666,6 +712,12 @@ async fn run_action_controls_checks() {
         .run(
             StubActionOutcome::Refused,
             check_a_pending_state_ends_at_once_when_the_engine_does_not_take_its_request,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Refused,
+            check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report,
         )
         .await;
     runner.finish().await;

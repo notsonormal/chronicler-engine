@@ -1,11 +1,6 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! The action control parts: Send, and Autoplay with Stop, each rendered from the busy state of the Game
 
-use axum::body::Body;
-use axum::extract::State;
-use axum::response::{Html, IntoResponse, Response};
-
-use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
 use crate::application::generation::gate::Busy;
@@ -61,26 +56,4 @@ pub fn render_send_control(state: &AppState, game: Option<GameId>) -> String {
 
 pub fn render_autoplay_controls(state: &AppState, game: Option<GameId>) -> String {
     autoplay_controls_answer(busy_of_game(state, game).as_ref())
-}
-
-pub async fn send_control_fragment(
-    State(state): State<AppState>,
-    current: Option<CurrentGame>,
-) -> Response<Body> {
-    Html(render_send_control(
-        &state,
-        current.map(|CurrentGame(game_id)| game_id),
-    ))
-    .into_response()
-}
-
-pub async fn autoplay_controls_fragment(
-    State(state): State<AppState>,
-    current: Option<CurrentGame>,
-) -> Response<Body> {
-    Html(render_autoplay_controls(
-        &state,
-        current.map(|CurrentGame(game_id)| game_id),
-    ))
-    .into_response()
 }

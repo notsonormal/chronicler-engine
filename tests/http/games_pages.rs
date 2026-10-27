@@ -126,8 +126,8 @@ async fn test_the_first_page_lists_50_saved_games_and_offers_the_next_page() {
     assert_eq!(pager_position(&part), "Page 1 of 2");
     let previous = tag_with_class(&part, "games-page-previous");
     assert!(
-        previous.contains("disabled"),
-        "Previous is disabled on page 1: {previous}"
+        previous.contains(r#"aria-disabled="true""#) && !previous.contains(" disabled"),
+        "Previous is inert on page 1, and not disabled, so it can keep focus: {previous}"
     );
     let next = tag_with_class(&part, "games-page-next");
     assert!(
@@ -151,8 +151,8 @@ async fn test_the_last_page_lists_the_games_that_remain_and_offers_the_previous_
     assert_eq!(pager_position(&part), "Page 2 of 2");
     let next = tag_with_class(&part, "games-page-next");
     assert!(
-        next.contains("disabled"),
-        "Next is disabled on the last page: {next}"
+        next.contains(r#"aria-disabled="true""#) && !next.contains(" disabled"),
+        "Next is inert on the last page, and not disabled, so it can keep focus: {next}"
     );
     let previous = tag_with_class(&part, "games-page-previous");
     assert!(

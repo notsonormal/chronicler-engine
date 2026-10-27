@@ -19,6 +19,7 @@ use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_or_error_fragment};
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, opt_string};
 use crate::application::connection_test_service::ConnectionTestResult;
+use crate::application::errors::ApplicationError;
 use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort, TextCheckMode};
@@ -33,7 +34,7 @@ pub fn render_settings_panel(app_state: &AppState) -> Result<String, EngineError
     let roles = app_state
         .game_view_query
         .role_health()
-        .map_err(|e| EngineError::Config(e.to_string()))?;
+        .map_err(ApplicationError::into_engine_error)?;
     SettingsTemplate::from_settings(&settings, &roles)
         .render()
         .map_err(|e| EngineError::Template(e.to_string()))

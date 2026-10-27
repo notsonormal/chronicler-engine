@@ -121,7 +121,8 @@ function renderDialogStatus() {
   const lines = [];
   if (editDialog.hasAttribute("data-saving")) lines.push("Saving…");
   if (editDialog.open && screenErrorSummary) lines.push(screenErrorSummary);
-  status.textContent = lines.join(" ");
+  const text = lines.join(" ");
+  if (status.textContent !== text) status.textContent = text;
 }
 
 document.addEventListener("screen:error", function (evt) {

@@ -14,6 +14,7 @@ use crate::adapters::driving::http::view_models::{
     CharacterPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
 use crate::application::connection_test_service::ConnectionTestService;
+use crate::application::errors::ApplicationError;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GameWriter;
@@ -96,7 +97,7 @@ impl AppState {
         let roles = self
             .game_view_query
             .role_health()
-            .map_err(|e| EngineError::Config(Self::render_error_context("failure banner", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
         Ok(failure_banner_html(&roles))
     }
 
@@ -104,7 +105,7 @@ impl AppState {
         let window = self
             .game_view_query
             .story_window(game_id)
-            .map_err(|e| EngineError::Config(Self::render_error_context("story log", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
 
         let view_only = self.game_view_query.autoplay_holds(game_id);
         NarrationLogTemplate::new(&window.entries, window.retrigger_allowed, view_only)
@@ -116,12 +117,12 @@ impl AppState {
         let (room_name, image_path) = self
             .game_view_query
             .get_current_room_view(game_id)
-            .map_err(|e| EngineError::Config(Self::render_error_context("visual sidebar", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
 
         let character_data = self
             .game_view_query
             .get_character_headshots(game_id, true)
-            .map_err(|e| EngineError::Config(Self::render_error_context("visual sidebar", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
 
         let character_portraits: Vec<CharacterPortraitView> = character_data
             .into_iter()
@@ -139,7 +140,7 @@ impl AppState {
         let dock = self
             .game_view_query
             .dock(game_id)
-            .map_err(|e| EngineError::Config(Self::render_error_context("options dock", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
         // The one registry, not a saved record, answers "is something generating?".
         let is_busy = self.game_view_query.is_busy(game_id);
 
@@ -154,9 +155,7 @@ impl AppState {
         let character_data = self
             .game_view_query
             .get_character_headshots(game_id, false)
-            .map_err(|e| {
-                EngineError::Config(Self::render_error_context("character headshots", e))
-            })?;
+            .map_err(ApplicationError::into_engine_error)?;
 
         let character_portraits: Vec<CharacterPortraitView> = character_data
             .into_iter()
@@ -173,7 +172,7 @@ impl AppState {
         let messages = self
             .game_view_query
             .list_latest_llm_messages(50)
-            .map_err(|e| EngineError::Config(Self::render_error_context("LLM messages", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
 
         let template = LlmMessagesTemplate::new(&messages);
         template
@@ -186,7 +185,7 @@ impl AppState {
         let message = self
             .game_view_query
             .llm_message(id)
-            .map_err(|e| EngineError::Config(Self::render_error_context("LLM message", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
         message
             .map(|message| {
                 LlmMessageRecordTemplate::new(&message)

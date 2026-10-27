@@ -23,7 +23,7 @@ use crate::adapters::driving::http::games::templates::games::{
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::adapters::driving::http::utils::error::{
-    action_error_response, action_failure_response, action_refusal_response,
+    action_error_response, action_failure_response, action_not_found_response,
 };
 use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
@@ -75,14 +75,11 @@ pub fn render_games_panel(
         .list_worlds()
         .map_err(ApplicationError::into_engine_error)?;
 
-    let personas = persona_rows(state);
-
     GamesPanelTemplate {
         active_game,
         saved_games,
         pager: GamesPagerView::new(saved.page, saved.page_count),
         worlds,
-        personas,
         posture_html,
     }
     .render()
@@ -116,7 +113,7 @@ pub async fn rename_game_form_handler(
             id: game.id,
             display_name: game.display_name,
         }),
-        Ok(None) => action_refusal_response("Game not found"),
+        Ok(None) => action_not_found_response("Game not found"),
         Err(e) => action_failure_response(format!("Failed to read game: {e}")),
     }
 }

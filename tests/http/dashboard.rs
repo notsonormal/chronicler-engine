@@ -19,8 +19,8 @@ use crate::support::http_assertions::{
 };
 use crate::support::http_fixtures::{seed_offered_set, story_of};
 use crate::support::http_requests::{
-    fetch_status_label, fetch_body, fetch_busy_status, post_action, post_empty, response_body,
-    wait_for_jobs, wait_settled,
+    fetch_status_label, fetch_body, fetch_busy_status, fetch_part, post_action, post_empty,
+    response_body, wait_for_jobs, wait_settled,
 };
 
 // [docs/specs/dashboard.md] SCENARIO: 39.1
@@ -368,8 +368,8 @@ async fn status_with_no_active_game() {
 
 async fn fetch_action_controls(app: &axum::Router) -> ActionControls {
     ActionControls {
-        send: fetch_body(app, "/fragment/send-control").await,
-        autoplay: fetch_body(app, "/fragment/autoplay-controls").await,
+        send: fetch_part(app, "send-control").await,
+        autoplay: fetch_part(app, "autoplay-controls").await,
     }
 }
 

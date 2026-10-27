@@ -243,7 +243,7 @@ async fn test_rename_form_of_an_unknown_game_is_refused() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = response_body(response).await;
     assert!(
         body.contains("error-message") && body.contains("Game not found"),

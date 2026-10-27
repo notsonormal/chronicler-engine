@@ -72,7 +72,7 @@ async fn wait_for_a_settings_load_after(
     // A load records the stamp of what it rendered, also when it skipped a control in
     // flight, so the stamp of the page equals the stamp of the stub after it.
     let loaded = wait_for_condition_async(WAIT, Duration::from_millis(25), || async {
-        changes.loads("/fragment/settings") > loads_before
+        changes.loads("settings") > loads_before
             && page
                 .evaluate::<(), bool>(
                     r#"async () => {
@@ -104,7 +104,7 @@ async fn check_a_load_skips_a_select_whose_request_is_in_flight(
         "the engine has not seen the save, so it still renders the old value"
     );
 
-    let loads_before = changes.loads("/fragment/settings");
+    let loads_before = changes.loads("settings");
     changes.bump(ChangeKind::SETTINGS);
     wait_for_a_settings_load_after(&page, &changes, loads_before).await;
 
@@ -131,12 +131,12 @@ async fn check_after_the_save_the_next_load_sets_the_select_to_the_server_value(
         server_value, chosen,
         "the engine keeps its own value, so the next render differs from the choice"
     );
-    let loads_before = changes.loads("/fragment/settings");
+    let loads_before = changes.loads("settings");
 
     release_held_requests_and_wait_for_answers(&page).await;
 
     let settled = wait_for_condition_async(WAIT, Duration::from_millis(25), || async {
-        changes.loads("/fragment/settings") > loads_before && !select_state(&page).await.1
+        changes.loads("settings") > loads_before && !select_state(&page).await.1
     })
     .await;
     assert!(
@@ -166,7 +166,7 @@ async fn check_a_load_that_skipped_a_select_in_flight_records_the_stamp_and_the_
     } else {
         "openrouter-euryale"
     };
-    let loads_before = changes.loads("/fragment/settings");
+    let loads_before = changes.loads("settings");
 
     page.locator(QUANTIFIER_SELECT)
         .await

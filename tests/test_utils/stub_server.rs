@@ -206,7 +206,6 @@ fn games_html(games: &StubGames, requested_page: u64) -> String {
             .collect(),
         pager: GamesPagerView::new(page, SavedGamesPage::page_count_of(total)),
         worlds: new_game_worlds(),
-        personas: new_game_personas(),
         posture_html: posture,
     }
     .render()
@@ -1041,7 +1040,7 @@ async fn rename_game_form_fragment(
                 .expect("render the Rename form"),
         )
         .into_response(),
-        None => client_refusal("Game not found"),
+        None => client_not_found("Game not found"),
     }
 }
 
@@ -1506,7 +1505,7 @@ async fn screen_answer(
                 .fragment_loads
                 .lock()
                 .expect("stub load counts lock poisoned")
-                .entry(part.path.to_string())
+                .entry(part.name.to_string())
                 .or_insert(0) += 1;
         }
         body.push_str(&format!("<template data-part=\"{name}\">{html}</template>"));
@@ -1805,7 +1804,7 @@ async fn preset_edit_form_fragment(
     let presets = state.presets.lock().expect("stub presets lock poisoned");
     match presets.find(&id) {
         Some(preset) => Html(preset_edit_form_html(&preset, "system")).into_response(),
-        None => client_refusal("Preset not found"),
+        None => client_not_found("Preset not found"),
     }
 }
 
@@ -1816,7 +1815,7 @@ async fn preset_view_form_fragment(
     let presets = state.presets.lock().expect("stub presets lock poisoned");
     match presets.find(&id) {
         Some(preset) => Html(preset_view_form_html(&preset)).into_response(),
-        None => client_refusal("Preset not found"),
+        None => client_not_found("Preset not found"),
     }
 }
 
@@ -1933,6 +1932,15 @@ fn client_failure(message: &str) -> Response<Body> {
         StatusCode::INTERNAL_SERVER_ERROR,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
         format!("<p>{message}</p>"),
+    )
+        .into_response()
+}
+
+fn client_not_found(message: &str) -> Response<Body> {
+    (
+        StatusCode::NOT_FOUND,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        render_error(message),
     )
         .into_response()
 }

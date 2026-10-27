@@ -11,6 +11,7 @@ mod dialog;
 mod drafts;
 mod failure_display;
 mod form_failures;
+mod game_header;
 mod games;
 mod layout;
 mod llm_messages;

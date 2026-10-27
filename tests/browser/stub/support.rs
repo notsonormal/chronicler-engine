@@ -474,3 +474,18 @@ pub(super) async fn assert_busy_refusal(page: &playwright_rs::Page, slot: &str, 
         "the details carry the engine's answer, got {detail:?}"
     );
 }
+
+pub(super) async fn submit_intercepted_command(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"(() => {
+            const input = document.querySelector('#command-form input[name="command"]');
+            input.value = 'look at the casle';
+            document.querySelector('#submit-btn').click();
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap();
+
+    wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
+}

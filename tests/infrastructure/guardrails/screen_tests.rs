@@ -1,6 +1,7 @@
 //! Tests for the screen guardrail.
 
 use crate::screen::{
+    check_after_request_form_rows_are_used, check_after_request_forms_are_listed,
     check_dialog_fragments_carry_the_title, check_draft_control_exceptions_are_used,
     check_draft_controls_only_in_dialog_forms, check_handler_headers, check_no_out_of_band_swaps,
     check_part_table_matches_shell, check_part_write_exceptions_are_used, check_parts_in_shell,
@@ -8,7 +9,7 @@ use crate::screen::{
     check_scripts_write_no_disabled, check_scripts_write_no_part,
     check_shell_parts_match_the_server, check_stub_answers_the_parts_of_the_server,
     check_template_targets, part_element_names, DraftControlException, ListedPart,
-    PartWriteException,
+    without_exempt_functions, AfterRequestForm, PartWriteException,
 };
 
 const GOOD_PART: &str = r#"<div class="tab-content" id="game-tab"><div id="story-log" data-part="story-log"></div></div>"#;
@@ -255,23 +256,72 @@ fn test_scripts_write_no_part_accepts_a_selector_constant_that_lists_no_part() {
     assert!(check_scripts_write_no_part("assets/dashboard-x.js", script, &parts()).is_empty());
 }
 
+const EXEMPT_ROW: PartWriteException = PartWriteException {
+    path: "assets/dashboard-x.js",
+    function: "makeSlot",
+    reason: "a reason",
+};
+
+const EXEMPT_SCRIPT: &str = "function makeSlot() {\n  document.getElementById(\"header\").replaceChildren();\n}\nfunction other() {\n  const a = 1;\n}";
+
+fn script_of(content: &str) -> (String, String) {
+    ("assets/dashboard-x.js".to_string(), content.to_string())
+}
+
 #[test]
-fn test_part_write_exceptions_flag_a_script_that_writes_no_part() {
-    let exceptions = [PartWriteException {
-        path: "assets/dashboard-x.js",
-        reason: "a reason",
-    }];
-    let writer = (
-        "assets/dashboard-x.js".to_string(),
-        r#"document.getElementById("header").replaceChildren();"#.to_string(),
+fn test_part_write_exceptions_accept_a_function_that_writes_a_part() {
+    assert!(
+        check_part_write_exceptions_are_used(&[script_of(EXEMPT_SCRIPT)], &parts(), &[EXEMPT_ROW])
+            .is_empty()
     );
-    let quiet = (
-        "assets/dashboard-x.js".to_string(),
-        "const a = 1;".to_string(),
-    );
-    assert!(check_part_write_exceptions_are_used(&[writer], &parts(), &exceptions).is_empty());
+}
+
+#[test]
+fn test_part_write_exceptions_flag_a_function_that_writes_no_part() {
+    let quiet = "function makeSlot() {\n  const a = 1;\n}\nfunction other() {\n  document.getElementById(\"header\").replaceChildren();\n}";
     assert_eq!(
-        check_part_write_exceptions_are_used(&[quiet], &parts(), &exceptions).len(),
+        check_part_write_exceptions_are_used(&[script_of(quiet)], &parts(), &[EXEMPT_ROW]).len(),
+        1,
+        "a write in another function does not keep the row alive"
+    );
+}
+
+#[test]
+fn test_part_write_exceptions_flag_a_function_that_is_missing() {
+    assert_eq!(
+        check_part_write_exceptions_are_used(&[script_of("const a = 1;")], &parts(), &[EXEMPT_ROW])
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn test_the_exempt_function_hides_its_own_part_write_only() {
+    let exceptions = [EXEMPT_ROW];
+    let read = without_exempt_functions("assets/dashboard-x.js", EXEMPT_SCRIPT, &exceptions);
+    assert!(check_scripts_write_no_part("assets/dashboard-x.js", &read, &parts()).is_empty());
+
+    let with_another_write = format!(
+        "{EXEMPT_SCRIPT}\nfunction later() {{\n  document.getElementById(\"header\").innerHTML = x;\n}}"
+    );
+    let read = without_exempt_functions("assets/dashboard-x.js", &with_another_write, &exceptions);
+    let violations = check_scripts_write_no_part("assets/dashboard-x.js", &read, &parts());
+    assert_eq!(
+        violations.len(),
+        1,
+        "a part write outside the function fails"
+    );
+    assert_eq!(
+        violations[0].line, 8,
+        "the line numbers survive the blanking"
+    );
+}
+
+#[test]
+fn test_the_exempt_function_of_another_script_hides_nothing() {
+    let other = without_exempt_functions("assets/dashboard-y.js", EXEMPT_SCRIPT, &[EXEMPT_ROW]);
+    assert_eq!(
+        check_scripts_write_no_part("assets/dashboard-y.js", &other, &parts()).len(),
         1
     );
 }
@@ -279,6 +329,12 @@ fn test_part_write_exceptions_flag_a_script_that_writes_no_part() {
 #[test]
 fn test_scripts_write_no_part_accepts_a_write_to_an_element_that_is_not_a_part() {
     let script = "const preview = document.getElementById(\"action-preview\");\npreview.innerHTML = \"\";\nconst own = document.getElementById(\"action-status\");\nown.innerHTML = x;\nconst shown = degraded.innerHTML.trim() !== \"\";";
+    assert!(check_scripts_write_no_part("assets/dashboard-x.js", script, &parts()).is_empty());
+}
+
+#[test]
+fn test_scripts_write_no_part_does_not_read_identifiers_inside_a_string() {
+    let script = "const header = document.getElementById(\"header\");\nconst slot = document.getElementById(\"header-extra\");\nslot.innerHTML = x;";
     assert!(check_scripts_write_no_part("assets/dashboard-x.js", script, &parts()).is_empty());
 }
 
@@ -822,4 +878,58 @@ fn test_scripts_write_no_disabled_accepts_other_attributes_and_lookalike_names()
 fn test_scripts_write_no_disabled_does_not_read_a_comment_line() {
     let script = "// A script must not write `btn.disabled = true` or btn.setAttribute(\"disabled\", \"\").\nconst x = 1;";
     assert!(check_scripts_write_no_disabled("assets/dashboard-x.js", script).is_empty());
+}
+
+const LISTED_FORM: AfterRequestForm = AfterRequestForm {
+    path: "adapters/x.rs",
+    marker: "own-form",
+    reason: "a reason",
+};
+
+#[test]
+fn test_after_request_forms_accept_a_listed_form_and_a_form_without_the_attribute() {
+    let content = r#"<form class="own-form" hx-post="/a" hx-on::after-request="done(event)"></form>
+<form class="plain" hx-post="/b"></form>"#;
+    assert!(
+        check_after_request_forms_are_listed("adapters/x.rs", content, &[LISTED_FORM]).is_empty()
+    );
+}
+
+#[test]
+fn test_after_request_forms_reject_an_unlisted_form_in_either_spelling() {
+    for attribute in ["hx-on::after-request", "hx-on:htmx:after-request"] {
+        let content = format!(
+            "<div></div>\n<form class=\"other\" hx-post=\"/a\" {attribute}=\"done()\"></form>"
+        );
+        let violations =
+            check_after_request_forms_are_listed("adapters/x.rs", &content, &[LISTED_FORM]);
+        assert_eq!(violations.len(), 1, "{attribute}");
+        assert_eq!(violations[0].line, 2);
+    }
+}
+
+#[test]
+fn test_after_request_forms_reject_a_listed_marker_in_another_file() {
+    let content = r#"<form class="own-form" hx-on::after-request="done()"></form>"#;
+    assert_eq!(
+        check_after_request_forms_are_listed("adapters/y.rs", content, &[LISTED_FORM]).len(),
+        1
+    );
+}
+
+#[test]
+fn test_after_request_form_rows_flag_a_form_that_is_gone() {
+    let kept = (
+        "adapters/x.rs".to_string(),
+        r#"<form class="own-form" hx-on::after-request="done()"></form>"#.to_string(),
+    );
+    let gone = (
+        "adapters/x.rs".to_string(),
+        r#"<form class="own-form" hx-post="/a"></form>"#.to_string(),
+    );
+    assert!(check_after_request_form_rows_are_used(&[kept], &[LISTED_FORM]).is_empty());
+    assert_eq!(
+        check_after_request_form_rows_are_used(&[gone], &[LISTED_FORM]).len(),
+        1
+    );
 }

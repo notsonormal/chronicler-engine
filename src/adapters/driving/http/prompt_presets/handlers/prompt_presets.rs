@@ -8,13 +8,13 @@ use axum::{Form, extract::State, response::Html, response::IntoResponse, respons
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{AppSettings, NarratorMode};
 use crate::domain::model::utils::settings_defaults;
-use crate::application::errors::ApplicationError;
 use crate::error::EngineError;
-use crate::application::prompt_preset_service::PresetEdit;
+use crate::application::prompt_preset_service::{PresetEdit, PromptPresetService};
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{preset_edit_form_html, preset_view_form_html};
 use crate::adapters::driving::http::utils::error::{
-    action_error_response, action_failure_response, action_refusal_response,
+    action_error_response, action_failure_response, action_not_found_response,
+    action_refusal_response,
 };
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
@@ -51,14 +51,13 @@ fn presets_template(app_state: &AppState, settings: &AppSettings) -> PromptPrese
     }
 }
 
-/// The dialog forms open only on a 2xx answer: a missing preset or a failed
-/// read answers a non-2xx error, and the control that asked reports it in its own
-/// slot.
+/// The dialog forms open only on a 2xx answer: a missing preset answers a 404 and a
+/// failed read a 500, and the control that asked reports either in its own slot.
 macro_rules! require_preset {
     ($storage:expr, $id:expr) => {
         match $storage.get_preset($id) {
             Ok(Some(p)) => p,
-            Ok(None) => return action_refusal_response("Preset not found"),
+            Ok(None) => return action_not_found_response("Preset not found"),
             Err(e) => return action_failure_response(format!("Load failed: {e}")),
         }
     };
@@ -195,13 +194,11 @@ pub async fn edit_preset_form_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Response<Body> {
-    match app_state.prompt_preset_service.editable(&id) {
-        Ok(preset) => {
-            Html(preset_edit_form_html(&preset, preset.preset_type.as_str())).into_response()
-        }
-        Err(ApplicationError::Validation(message)) => action_refusal_response(message),
-        Err(e) => action_failure_response(format!("Load failed: {e}")),
+    let preset = require_preset!(app_state.prompt_preset_service, &id);
+    if let Err(e) = PromptPresetService::ensure_editable(&preset) {
+        return action_error_response(e, "Load failed");
     }
+    Html(preset_edit_form_html(&preset, preset.preset_type.as_str())).into_response()
 }
 
 pub async fn update_preset_handler(

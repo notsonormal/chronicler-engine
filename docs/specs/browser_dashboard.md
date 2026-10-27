@@ -691,3 +691,13 @@ When the client retries, retriggers, or asks for new options, and the engine ref
 Then the slot of the request reports it
 And #action-status is empty
 ```
+
+#### Scenario 16.71: A 409 on the Options regen form shows exactly one refusal report
+
+```gherkin
+Given the dashboard is loaded and the options dock shows options
+When the client asks for new options and the engine refuses the request with 409
+Then the options dock shows one refusal report
+And the report says "the new options were not requested"
+And no report says "the change was not saved"
+```

@@ -168,7 +168,7 @@ pub fn opening_tag_of_id(html: &str, id: &str) -> Option<String> {
 }
 
 /// The two parts of the action controls, as the client fetches them: the body of
-/// `GET /fragment/send-control` and the body of `GET /fragment/autoplay-controls`.
+/// `GET /screen?parts=send-control` and the content of `GET /screen?parts=autoplay-controls`.
 pub struct ActionControls {
     pub send: String,
     pub autoplay: String,

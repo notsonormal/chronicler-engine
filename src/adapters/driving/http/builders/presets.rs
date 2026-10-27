@@ -7,7 +7,7 @@ use crate::adapters::driving::http::builders::forms::{textarea_field, textarea_f
 use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::template_helpers::truncated_preview;
 use crate::adapters::driving::http::view_models::SafeHtml;
-use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{AppSettings, NarratorMode};
 
 #[derive(Template)]
@@ -140,7 +140,7 @@ pub fn preset_edit_form_html(preset: &PromptPreset, preset_type: &str) -> String
             &preset.output_format,
             6,
         ),
-        shows_allowed_modes: preset.preset_type != PresetType::Options,
+        shows_allowed_modes: preset.preset_type.is_mode_tagged(),
         novel_checked: preset.allows_novel(),
         interactive_fiction_checked: preset.allows_interactive_fiction(),
         novel_label: NarratorMode::Novel.display_label(),

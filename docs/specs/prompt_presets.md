@@ -95,12 +95,12 @@ And the body contains a "Save" button
 And the body contains a "Cancel" button that closes the dialog
 ```
 
-#### Scenario 21.5: Edit form for a nonexistent preset is refused
+#### Scenario 21.5: Edit form for a nonexistent preset answers 404
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/prompt-presets/does-not-exist/edit
-Then the response is a 400
+Then the response is a 404
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
@@ -127,12 +127,12 @@ And the body contains read-only fields for Role, Instructions, Writing Style, Ou
 And the body contains a "Close" button that closes the dialog
 ```
 
-#### Scenario 21.8: View form for a nonexistent preset is refused
+#### Scenario 21.8: View form for a nonexistent preset answers 404
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/prompt-presets/does-not-exist/view
-Then the response is a 400
+Then the response is a 404
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 

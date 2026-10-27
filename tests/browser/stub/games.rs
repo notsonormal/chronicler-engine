@@ -210,6 +210,45 @@ async fn check_a_click_on_next_during_a_load_drops_the_old_answer(
     );
 }
 
+// [docs/specs/browser_games.md] SCENARIO: 27.11
+async fn check_next_on_the_last_page_keeps_keyboard_focus_and_does_nothing(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    stub.games_handle().set_saved_games(PAGE_SIZE as u64 + 1);
+    open_games_tab(&page).await;
+    wait_for_saved_game_rows(&page, PAGE_SIZE).await;
+
+    page.locator(".games-page-next")
+        .await
+        .focus()
+        .await
+        .unwrap();
+    page.keyboard().press("Enter", None).await.unwrap();
+    wait_for_saved_game_rows(&page, 1).await;
+    assert_eq!(pager_position(&page).await, "Page 2 of 2");
+    assert!(
+        wait_until_focused(&page, ".games-page-next", Duration::from_secs(5)).await,
+        "Next must keep keyboard focus when it reaches the last page"
+    );
+
+    let requests_before = stub.changes_handle().screen_requests().len();
+    page.keyboard().press("Enter", None).await.unwrap();
+    load_screen_now(&page).await;
+    wait_for_saved_game_rows(&page, 1).await;
+
+    assert_eq!(
+        stub.changes_handle().screen_requests().len(),
+        requests_before + 1,
+        "a press on Next at the last page must ask for no screen load; only the load of this check"
+    );
+    assert_eq!(pager_position(&page).await, "Page 2 of 2");
+    assert!(
+        wait_until_focused(&page, ".games-page-next", Duration::from_secs(5)).await,
+        "Next must keep keyboard focus after a press that does nothing"
+    );
+}
+
 #[tokio::test]
 async fn run_games_checks() {
     let mut runner = StubRunner::launch().await;
@@ -235,6 +274,12 @@ async fn run_games_checks() {
         .run(
             StubActionOutcome::Pending,
             check_a_click_on_next_during_a_load_drops_the_old_answer,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_next_on_the_last_page_keeps_keyboard_focus_and_does_nothing,
         )
         .await;
     runner.finish().await;

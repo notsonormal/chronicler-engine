@@ -469,3 +469,14 @@ And the dialog says "Saving…" and names the failure, and stays open
 When the next load is good
 Then the dialog closes, and #screen-error is empty
 ```
+
+#### Scenario 44.44: A screen failure that lasts keeps its open Details and its node
+
+```gherkin
+Given the dashboard is loaded and the page is quiet
+When each load of the screen fails with the same answer
+And #screen-error shows the failure and the client opens its Details
+And the page makes more loads that fail with the same answer
+Then the Details of #screen-error stays open
+And the disclosure node in #screen-error is the node that showed before
+```

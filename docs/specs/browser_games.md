@@ -91,10 +91,10 @@ Then the World select and the Persona select show their first options
 Given the engine holds 51 saved Games
 And the client opened the Games tab
 Then the Saved Games list shows 50 Games and the pager shows "Page 1 of 2"
-And the Previous control is disabled and the Next control is enabled
+And the Previous control is inert and the Next control is enabled
 When the client presses Next
 Then the Saved Games list shows one Game and the pager shows "Page 2 of 2"
-And the Next control is disabled and the Previous control is enabled
+And the Next control is inert and the Previous control is enabled
 When the engine changes and the page loads the screen
 Then the Saved Games list still shows page 2
 When the client presses Previous
@@ -120,4 +120,18 @@ And a load of the screen is in flight
 When the client presses Next, and the old answer arrives
 Then the old answer is dropped
 And the `games` part shows page 2
+```
+
+#### Scenario 27.11: Next on the last page keeps keyboard focus and does nothing
+
+```gherkin
+Given the engine holds 51 saved Games
+And the client opened the Games tab and put keyboard focus on Next
+When the client presses Enter on Next
+Then the pager shows "Page 2 of 2"
+And keyboard focus stays on the Next control
+When the client presses Enter on Next again
+Then the page asks for no screen load
+And the pager shows "Page 2 of 2"
+And keyboard focus stays on the Next control
 ```

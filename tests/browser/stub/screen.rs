@@ -29,7 +29,7 @@ const GAME_TAB_PARTS: [&str; 8] = [
 ];
 
 fn part_loads(changes: &StubChangesHandle) -> Vec<usize> {
-    PARTS.iter().map(|part| changes.loads(part.path)).collect()
+    PARTS.iter().map(|part| changes.loads(part.name)).collect()
 }
 
 fn loads_since(changes: &StubChangesHandle, before: &[usize]) -> Vec<usize> {
@@ -106,14 +106,14 @@ async fn check_an_action_asks_at_once_when_its_request_ends(
     ask_once(&page).await;
 
     let asks = changes.asks();
-    let status_loads = changes.loads("/status/busy");
+    let status_loads = changes.loads("status-display");
     page.evaluate::<(), ()>("() => document.getElementById('stop-btn').click()", None)
         .await
         .expect("the test presses Stop");
     wait_for_asks(&changes, asks + 1).await;
     wait_for_screen_current(&page).await;
     assert_eq!(
-        changes.loads("/status/busy"),
+        changes.loads("status-display"),
         status_loads + 1,
         "Stop moved the revision, so the screen loads once and shows the status display"
     );
@@ -407,11 +407,11 @@ async fn check_a_tab_change_empties_the_closing_tab_and_loads_the_opening_tab_on
 ) {
     let changes = stub.changes_handle();
     start_current(&page).await;
-    assert_eq!(changes.loads("/fragment/games"), 0);
+    assert_eq!(changes.loads("games"), 0);
 
     open_section(&page, "games", ".games-panel").await;
     assert_eq!(
-        changes.loads("/fragment/games"),
+        changes.loads("games"),
         1,
         "opening the tab loads its part exactly once"
     );
@@ -434,17 +434,17 @@ async fn check_a_tab_change_empties_the_closing_tab_and_loads_the_opening_tab_on
         );
     }
 
-    let story = changes.loads("/fragment/story-log");
+    let story = changes.loads("story-log");
     changes.bump(ChangeKind::STORY);
     ask_once(&page).await;
     assert_eq!(
-        changes.loads("/fragment/story-log"),
+        changes.loads("story-log"),
         story,
         "a change while the Game tab is closed loads no Game part"
     );
 
     open_section(&page, "game", "#story-log").await;
-    assert_eq!(changes.loads("/fragment/story-log"), story + 1);
+    assert_eq!(changes.loads("story-log"), story + 1);
     assert!(
         part_is_empty(&page, ".games-panel").await,
         "the Games part is empty again"
@@ -802,6 +802,73 @@ async fn check_an_answer_that_the_page_cannot_read_or_show_gives_the_screen_erro
     );
 }
 
+// [docs/specs/browser_screen.md] SCENARIO: 44.44
+async fn check_a_screen_failure_that_lasts_keeps_its_open_details_and_its_node(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+
+    changes.set_loads_failing(true);
+    changes.bump(ChangeKind::STORY);
+    ask_once_without_waiting(&page).await;
+    wait_for_screen_error(&page, "GET /screen answered 500").await;
+    page.locator("#screen-error .error-details-toggle")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    eval_string(
+        &page,
+        r#"() => {
+            document.querySelector('#screen-error .error-disclosure').dataset.shownBefore = 'yes';
+            return '';
+        }"#,
+    )
+    .await;
+
+    for _ in 0..3 {
+        let loads_before = changes.loads("/screen");
+        ask_once_without_waiting(&page).await;
+        assert!(
+            wait_for_condition_async(
+                Duration::from_secs(10),
+                Duration::from_millis(25),
+                || async {
+                    changes.loads("/screen") > loads_before
+                        && eval_string(
+                            &page,
+                            "() => document.documentElement.hasAttribute('data-screen-busy') ? 'busy' : ''",
+                        )
+                        .await
+                        .is_empty()
+                }
+            )
+            .await,
+            "each ask must make a load that fails and ends"
+        );
+    }
+
+    assert_eq!(
+        eval_string(
+            &page,
+            r#"() => {
+                const disclosure = document.querySelector('#screen-error .error-disclosure');
+                const popover = document.querySelector('#screen-error .error-detail-popover');
+                return (disclosure ? disclosure.dataset.shownBefore || 'replaced' : 'gone') +
+                    '/' + (popover && !popover.hidden ? 'open' : 'closed');
+            }"#
+        )
+        .await,
+        "yes/open",
+        "a failure that repeats must keep the open Details and the node that showed"
+    );
+
+    changes.set_loads_failing(false);
+    ask_once(&page).await;
+}
+
 #[tokio::test]
 async fn run_screen_checks() {
     let mut runner = StubRunner::launch().await;
@@ -895,6 +962,12 @@ async fn run_screen_checks() {
         .run(
             outcome,
             check_an_answer_that_the_page_cannot_read_or_show_gives_the_screen_error,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_a_screen_failure_that_lasts_keeps_its_open_details_and_its_node,
         )
         .await;
     runner.finish().await;

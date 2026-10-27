@@ -2,10 +2,7 @@
 
 use std::time::Duration;
 
-use super::screen_keeps::{
-    CANCEL_DIALOG, DIALOG_STATUS, NEW_GAME_IS_INTACT, OPEN_NEW_GAME, OPEN_RENAME,
-    PRESS_SAVE_IN_RENAME_DIALOG,
-};
+use super::dialog::{CANCEL_DIALOG, NEW_GAME_IS_INTACT, OPEN_NEW_GAME, OPEN_RENAME};
 use super::support::{
     eval_string, hold_screen_loads, open_section, recorded_requests, record_requests_to,
     release_screen_loads, start_current, wait_for_held_screen_load, StubRunner,
@@ -199,6 +196,74 @@ async fn check_a_save_followed_by_a_failed_load_keeps_the_dialog_at_saving_until
     assert_eq!(eval_string(&page, DIALOG_STATUS).await, "");
 }
 
+pub(super) const DIALOG_STATUS: &str =
+    "() => document.getElementById('edit-dialog-status').textContent.trim()";
+
+pub(super) const PRESS_SAVE_IN_RENAME_DIALOG: &str = r#"() => {
+    document.querySelector('#edit-dialog .game-rename-form form button[type=submit]').click();
+}"#;
+
+// [docs/specs/browser_screen.md] SCENARIO: 44.34
+async fn check_the_dialog_says_saving_until_the_screen_shows_the_save(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    hold_screen_loads(&page).await;
+
+    page.evaluate::<(), ()>(PRESS_SAVE_IN_RENAME_DIALOG, None)
+        .await
+        .unwrap();
+    wait_for_held_screen_load(&page).await;
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+            || async { eval_string(&page, DIALOG_STATUS).await == "Saving…" }
+        )
+        .await,
+        "the dialog says Saving… while the screen does not show the save"
+    );
+    assert_eq!(
+        eval_string(
+            &page,
+            "() => document.getElementById('edit-dialog').open ? '' : 'closed'"
+        )
+        .await,
+        "",
+        "the accepted save does not close the dialog before the screen shows it"
+    );
+
+    release_screen_loads(&page).await;
+    wait_for_screen_current(&page).await;
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+            || async {
+                eval_string(
+                    &page,
+                    "() => document.getElementById('edit-dialog').open ? 'open' : ''",
+                )
+                .await
+                .is_empty()
+            }
+        )
+        .await,
+        "the dialog closes once the screen shows the save"
+    );
+    assert_eq!(eval_string(&page, DIALOG_STATUS).await, "");
+    let shown = page
+        .locator("#game-row-2 .game-name")
+        .await
+        .inner_text()
+        .await
+        .unwrap();
+    assert_eq!(shown, "A typed name", "the screen shows the renamed Game");
+}
+
 #[tokio::test]
 async fn run_screen_save_checks() {
     let mut runner = StubRunner::launch().await;
@@ -225,6 +290,12 @@ async fn run_screen_save_checks() {
         .run(
             outcome,
             check_a_save_followed_by_a_failed_load_keeps_the_dialog_at_saving_until_the_next_good_load,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_the_dialog_says_saving_until_the_screen_shows_the_save,
         )
         .await;
     runner.finish().await;

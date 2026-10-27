@@ -282,7 +282,7 @@ async fn test_prompt_preset_edit_form_missing_returns_error() {
         .oneshot(get_request("/fragment/prompt-presets/does-not-exist/edit"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }
@@ -343,7 +343,7 @@ async fn test_prompt_preset_view_form_missing_returns_error() {
         .oneshot(get_request("/fragment/prompt-presets/does-not-exist/view"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = body_text(response).await;
     assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
 }

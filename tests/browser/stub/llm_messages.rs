@@ -137,11 +137,11 @@ async fn check_focused_open_control_keeps_focus_across_panel_load(
     .await
     .unwrap();
     let changes = stub.changes_handle();
-    let before = changes.loads("/fragment/llm-messages");
+    let before = changes.loads("llm-messages");
     changes.bump(ChangeKind::LLM_MESSAGES);
     ask_once(&page).await;
     assert_eq!(
-        changes.loads("/fragment/llm-messages"),
+        changes.loads("llm-messages"),
         before + 1,
         "a moved `llm` number must load the panel once"
     );

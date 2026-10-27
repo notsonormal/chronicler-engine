@@ -533,10 +533,11 @@ fn shell_parts() -> Vec<String> {
     part_element_names(&std::fs::read_to_string("assets/index.html").unwrap())
 }
 
-/// The scripts that write into a part, apart from `dashboard-screen.js`, which is
+/// The functions that write into a part, apart from `dashboard-screen.js`, which is
 /// the one writer of a part: the morph and the clear on leave.
 const PART_WRITE_EXCEPTIONS: &[PartWriteException] = &[PartWriteException {
     path: "assets/dashboard-errors.js",
+    function: "inlineErrorSlotFor",
     reason: "creates the inline error slot of a failed action inside the part that holds the control; a load keeps a slot that shows its error",
 }];
 
@@ -552,12 +553,10 @@ fn guardrails_scripts_write_no_part() {
     let parts = shell_parts();
     let errors: Vec<Violation> = scripts_that_do_not_write_parts()
         .iter()
-        .filter(|(path, _)| {
-            !PART_WRITE_EXCEPTIONS
-                .iter()
-                .any(|row| path.ends_with(row.path))
+        .flat_map(|(path, script)| {
+            let read = without_exempt_functions(path, script, PART_WRITE_EXCEPTIONS);
+            check_scripts_write_no_part(path, &read, &parts)
         })
-        .flat_map(|(path, script)| check_scripts_write_no_part(path, script, &parts))
         .collect();
     assert_violations(
         &errors,
@@ -664,6 +663,54 @@ fn guardrails_templates_have_no_out_of_band_swaps() {
         .flat_map(|(path, content)| check_no_out_of_band_swaps(path, content))
         .collect();
     assert_violations(&errors, "no template has hx-swap-oob");
+}
+
+/// The forms that carry `hx-on::after-request`. `isSavingControl` skips each of
+/// them, so each one's own handler reports its own refusal.
+const AFTER_REQUEST_FORMS: &[AfterRequestForm] = &[
+    AfterRequestForm {
+        path: "adapters/driving/http/templates.rs",
+        marker: "options-regen-form",
+        reason: "the regen form of the options dock: `onNewOptionsAfterRequest` reports its refusal in its own words, and a second report would say the change was not saved",
+    },
+    AfterRequestForm {
+        path: "adapters/driving/http/templates.rs",
+        marker: "hx-post=\"/action/confirm\"",
+        reason: "the confirm forms of the text-check preview, in the shell: `onPreviewSendAfterRequest` reports the refusal on the command form's slot",
+    },
+    AfterRequestForm {
+        path: "assets/index.html",
+        marker: "id=\"command-form\"",
+        reason: "the command form of the shell, outside every part and the dialog: `onCommandAfterRequest` reports its refusal",
+    },
+    AfterRequestForm {
+        path: "assets/index.html",
+        marker: "id=\"autoplay-form\"",
+        reason: "the Autoplay form of the shell, outside every part and the dialog: `onAutoplayAfterRequest` reports its refusal",
+    },
+];
+
+#[test]
+fn guardrails_after_request_forms_are_listed() {
+    let errors: Vec<Violation> = template_sources()
+        .iter()
+        .flat_map(|(path, content)| {
+            check_after_request_forms_are_listed(path, content, AFTER_REQUEST_FORMS)
+        })
+        .collect();
+    assert_violations(
+        &errors,
+        "a form with hx-on::after-request is a listed form that reports its own refusal",
+    );
+}
+
+#[test]
+fn guardrails_after_request_form_rows_are_used() {
+    let errors = check_after_request_form_rows_are_used(&template_sources(), AFTER_REQUEST_FORMS);
+    assert_violations(
+        &errors,
+        "every after-request form row names a form that still has the attribute",
+    );
 }
 
 fn http_adapter_template_files() -> Vec<(String, String)> {

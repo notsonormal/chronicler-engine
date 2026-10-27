@@ -11,17 +11,16 @@ use chronicler_engine::adapters::driving::http::screen::handlers::screen_part_na
 use chronicler_engine::test_support::{active_game_of, empty_sqlite_storage, TestAppBuilder};
 
 use crate::support::app_wiring::two_game_app;
-use crate::support::http_requests::{post_form, response_body};
+use crate::support::http_requests::{post_form, response_body, templates_of};
 use crate::SettingsTestGuard;
 
-const PART_ROUTES: [(&str, &str); 13] = [
+/// The parts that have a route of their own. The two action control parts have none.
+const PART_ROUTES: [(&str, &str); 11] = [
     ("header", "/fragment/header"),
     ("failure-banner", "/fragment/failure-banner"),
     ("story-log", "/fragment/story-log"),
     ("visual-sidebar", "/fragment/visual-sidebar"),
     ("options-dock", "/fragment/options-dock"),
-    ("send-control", "/fragment/send-control"),
-    ("autoplay-controls", "/fragment/autoplay-controls"),
     ("status-display", "/status/busy"),
     ("settings", "/fragment/settings"),
     ("prompt-presets", "/fragment/prompt-presets"),
@@ -29,6 +28,8 @@ const PART_ROUTES: [(&str, &str); 13] = [
     ("games", "/fragment/games"),
     ("llm-messages", "/fragment/llm-messages"),
 ];
+
+const ACTION_CONTROL_PARTS: [&str; 2] = ["send-control", "autoplay-controls"];
 
 async fn get(app: &axum::Router, uri: &str) -> axum::response::Response<Body> {
     let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
@@ -54,25 +55,6 @@ fn header_text(response: &axum::response::Response<Body>, name: &str) -> String 
         .to_str()
         .unwrap()
         .to_string()
-}
-
-/// The templates of a screen body: each part name with its content, in order.
-fn templates_of(body: &str) -> Vec<(String, String)> {
-    const OPEN: &str = "<template data-part=\"";
-    let mut found = Vec::new();
-    let mut rest = body;
-    while let Some(at) = rest.find(OPEN) {
-        let after = &rest[at + OPEN.len()..];
-        let name_end = after.find("\">").expect("the template tag closes");
-        let content_start = name_end + 2;
-        let content_end = after.find("</template>").expect("the template closes");
-        found.push((
-            after[..name_end].to_string(),
-            after[content_start..content_end].to_string(),
-        ));
-        rest = &after[content_end + "</template>".len()..];
-    }
-    found
 }
 
 fn revision_of(stamp: &str) -> u64 {
@@ -109,11 +91,13 @@ async fn test_a_screen_load_answers_one_template_for_each_named_part_in_the_orde
 #[tokio::test]
 async fn test_a_part_of_the_screen_equals_the_answer_of_its_own_part_route() {
     let (app, _state, _storage, _second) = two_game_app();
-    let named: Vec<&str> = screen_part_names().collect();
+    let named: Vec<&str> = screen_part_names()
+        .filter(|name| !ACTION_CONTROL_PARTS.contains(name))
+        .collect();
     assert_eq!(
         named,
         PART_ROUTES.map(|(name, _)| name),
-        "the table of this test names every part, in the order of SCREEN_PARTS"
+        "the table of this test names every part that has a route, in the order of SCREEN_PARTS"
     );
 
     for (name, route) in PART_ROUTES {
@@ -175,6 +159,39 @@ async fn test_one_part_that_fails_to_render_fails_the_whole_screen() {
     assert_eq!(header_only.status(), StatusCode::OK);
 }
 
+// [docs/specs/screen.md] SCENARIO: 45.16
+#[tokio::test]
+async fn test_a_part_whose_read_fails_answers_the_failure_of_that_read_not_a_configuration_error() {
+    let _guard = SettingsTestGuard::new();
+    for part in ["failure-banner", "settings", "llm-messages"] {
+        let storage = Arc::new(empty_sqlite_storage());
+        let app = TestAppBuilder::default_test()
+            .storage(Arc::clone(&storage))
+            .build();
+        storage.add_failure(
+            StorageCall::ListLatestLlmMessages,
+            TestOverride::internal("messages read failure"),
+        );
+
+        let response = get(&app, &format!("/screen?parts={part}")).await;
+
+        assert_eq!(
+            response.status(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "{part}"
+        );
+        let body = response_body(response).await;
+        assert!(
+            body.contains("messages read failure"),
+            "{part}: the body names the failure: {body}"
+        );
+        assert!(
+            !body.contains("Configuration error"),
+            "{part}: a read failure is not a configuration error: {body}"
+        );
+    }
+}
+
 // [docs/specs/screen.md] SCENARIO: 45.14
 #[tokio::test]
 async fn test_the_worlds_part_fails_when_the_games_that_it_counts_cannot_be_read() {
@@ -201,7 +218,7 @@ async fn test_the_worlds_part_fails_when_the_games_that_it_counts_cannot_be_read
 
 // [docs/specs/screen.md] SCENARIO: 45.12
 #[tokio::test]
-async fn test_a_screen_holds_at_least_the_revision_read_before_its_render() {
+async fn test_a_screen_carries_the_revision_of_the_changes_route_and_a_write_moves_it() {
     let (app, state, _storage, _second) = two_game_app();
     let active = active_game_of(&state).0;
 

@@ -147,7 +147,7 @@ When the client GET /screen?parts=header
 Then the response status is 200
 ```
 
-#### Scenario 45.12: A screen holds at least the revision read before its render
+#### Scenario 45.12: A screen carries the revision of the changes route, and a write moves it
 
 ```gherkin
 Given an active Game and a second saved Game
@@ -187,7 +187,7 @@ And the body holds no template
 
 ## Properties
 
-- **S.1** `GET /screen` answers each part with the renderer of its own part route, so the screen and the part routes never differ. The screen reads the revision before it renders, so it holds at least that revision.
+- **S.1** `GET /screen` answers each part with the renderer of its own part route, so the screen and the part routes never differ. The two action control parts have no route of their own. The screen reads the revision before it renders, so it holds at least that revision.
 
 These properties hold across every `POST` route and are observable through HTTP.
 Drift indicates a regression even if all scenarios pass.
@@ -209,4 +209,15 @@ When the client GET /screen?parts=games&games_page=<value> for each of "0", "-1"
 Then each response status is "400 BAD_REQUEST"
 And each body is an error fragment that names games_page
 And no body holds a template
+```
+
+#### Scenario 45.16: A part whose read fails answers the failure of that read, not a configuration error
+
+```gherkin
+Given an engine with an active Game
+And the read of the LLM messages fails
+When the client GET /screen?parts=failure-banner, /screen?parts=settings and /screen?parts=llm-messages
+Then each response status is 500
+And each body names the failure of the read
+And no body calls the failure a configuration error
 ```

@@ -101,9 +101,9 @@ pub struct PersonaRowView {
     </div>
     {% if let Some(pager) = pager %}
     <nav class="games-pager" aria-label="Saved Games pages">
-        <button type="button" class="btn-cyan games-page-previous" data-page="{{ pager.previous_page }}"{% if pager.previous_disabled %} disabled{% endif %}>Previous</button>
+        <button type="button" class="btn-cyan games-page-previous" data-page="{{ pager.previous_page }}"{% if pager.previous_disabled %} aria-disabled="true"{% endif %}>Previous</button>
         <span class="games-page-position">Page {{ pager.page }} of {{ pager.page_count }}</span>
-        <button type="button" class="btn-cyan games-page-next" data-page="{{ pager.next_page }}"{% if pager.next_disabled %} disabled{% endif %}>Next</button>
+        <button type="button" class="btn-cyan games-page-next" data-page="{{ pager.next_page }}"{% if pager.next_disabled %} aria-disabled="true"{% endif %}>Next</button>
     </nav>
     {% endif %}
 </div>
@@ -115,7 +115,6 @@ pub struct GamesPanelTemplate {
     pub saved_games: Vec<GameRowView>,
     pub pager: Option<GamesPagerView>,
     pub worlds: Vec<WorldCard>,
-    pub personas: Vec<PersonaRowView>,
     /// Rendered before the panel, because the preset load behind it can fail on its own.
     pub posture_html: String,
 }

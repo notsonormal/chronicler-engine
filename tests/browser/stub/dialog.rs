@@ -1,15 +1,39 @@
-//! Stub-browser tests for the edit dialog: an htmx swap into its body opens it, Cancel and Escape close it and return focus to the opener, a save closes it only when the engine accepts it and the screen shows it, and an answer from outside never replaces its form. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for the edit dialog: an htmx swap into its body opens it, Cancel and Escape close it and return focus to the opener, a save closes it only when the engine accepts it and the screen shows it, an answer from outside never replaces its form, and the dialog forms that a screen load never reaches. Tagged against `docs/specs/browser_dashboard.md`, `docs/specs/browser_games.md` and `docs/specs/browser_screen.md`.
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::change::ChangeKind;
+
+use super::screen_keeps::SUBTAB_ENGAGED;
 use super::support::{
-    dialog_body_is_empty, dialog_is_open, hold_requests_ending_with, open_settings,
-    release_held_requests_and_wait_for_answers, wait_until_dialog_closed, wait_until_focused,
-    StubRunner,
+    eval_string, open_section, start_current, dialog_body_is_empty, dialog_is_open,
+    hold_requests_ending_with, open_settings, release_held_requests_and_wait_for_answers,
+    wait_until_dialog_closed, wait_until_focused, StubRunner,
 };
 use super::*;
 
 const DIALOG_WAIT: Duration = Duration::from_secs(5);
+
+const GAMES_PANEL_KINDS: [ChangeKind; 3] = [
+    ChangeKind::GAMES,
+    ChangeKind::WORLDS,
+    ChangeKind::PROMPT_PRESETS,
+];
+
+/// Runs `action`, and returns once the htmx swap that it started has settled.
+/// htmx settles a swap 20 ms after it lands, and the page moves focus into a new
+/// editor then, so a check that engages the editor waits for that settle first.
+macro_rules! after_settle {
+    () => {
+        r#"const afterSettle = (action) => new Promise((resolve) => {
+        document.body.addEventListener('htmx:afterSettle', function once(evt) {
+                        document.body.removeEventListener('htmx:afterSettle', once);
+            resolve();
+        });
+        action();
+    });"#
+    };
+}
 
 async fn submit_dialog_form(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
@@ -271,7 +295,7 @@ async fn check_closing_the_dialog_focuses_the_control_with_the_openers_request_a
     // Set Active leaves the card with one activate button fewer, so the load
     // morphs the buttons of the card in place: the node that opened the dialog is
     // another control afterwards.
-    let loads = changes.loads("/fragment/prompt-presets");
+    let loads = changes.loads("prompt-presets");
     page.evaluate::<(), ()>(
         "() => { fetch('/prompt-presets/custom_ref/activate?mode=novel', { method: 'POST' }); }",
         None,
@@ -279,7 +303,7 @@ async fn check_closing_the_dialog_focuses_the_control_with_the_openers_request_a
     .await
     .unwrap();
     let rewritten = wait_for_condition_async(DIALOG_WAIT, Duration::from_millis(25), || async {
-        changes.loads("/fragment/prompt-presets") > loads
+        changes.loads("prompt-presets") > loads
             && page
                 .evaluate::<(), bool>(
                     "() => window.__openerNode.isConnected && window.__openerNode.getAttribute('hx-get') !== '/fragment/prompt-presets/custom_ref/edit'",
@@ -304,6 +328,427 @@ async fn check_closing_the_dialog_focuses_the_control_with_the_openers_request_a
     assert!(
         wait_until_focused(&page, PRESET_EDIT_REQUEST, Duration::from_secs(2)).await,
         "focus goes to the control that sends the opener's request, not to the node that was rewritten"
+    );
+}
+
+/// The dialog forms of the Games panel, opened the way the player does: a click
+/// on the control, and a wait until htmx has settled the swap into the dialog body.
+pub(super) const OPEN_RENAME: &str = concat!(
+    "async () => {",
+    after_settle!(),
+    r#"
+    await afterSettle(() =>
+        document.querySelector('#game-row-2 button[hx-get$="/rename"]').click());
+    const input = document.querySelector('#edit-dialog input[name="display_name"]');
+    if (!input) return 'the dialog did not open with the rename form';
+    input.value = 'A typed name';
+    input.focus();
+    window.__renameForm = document.querySelector('#edit-dialog .game-rename-form');
+    window.__renameInput = input;
+    return document.activeElement === input ? '' : 'the name field has no focus';
+}"#
+);
+
+pub(super) const RENAME_IS_INTACT: &str = r#"() => {
+    const dialog = document.getElementById('edit-dialog');
+    const form = document.querySelector('#edit-dialog .game-rename-form');
+    const input = form ? form.querySelector('input[name="display_name"]') : null;
+    if (!dialog.open) return 'the dialog closed';
+    if (form !== window.__renameForm) return 'the rename form is a new element';
+    if (input !== window.__renameInput) return 'the name field is a new element';
+    if (input.value !== 'A typed name') return 'the typed name changed: ' + input.value;
+    if (document.activeElement !== input) return 'the name field lost focus';
+    return '';
+}"#;
+
+/// Presses Save in the rename dialog, and returns once the request has ended and
+/// every ask and load that followed has settled. The wait for a macrotask lets the
+/// page's own `afterRequest` listener run first: it sits on the body, and this
+/// listener sits on the form.
+const SAVE_RENAME: &str = r#"async () => {
+    const form = document.querySelector('#edit-dialog .game-rename-form form');
+    const ended = new Promise((resolve) =>
+        form.addEventListener('htmx:afterRequest', resolve, { once: true }));
+    form.querySelector('button[type=submit]').click();
+    await ended;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await window.__waitForScreen();
+    return '';
+}"#;
+
+pub(super) const OPEN_NEW_GAME: &str = concat!(
+    "async () => {",
+    after_settle!(),
+    r#"
+    await afterSettle(() =>
+        document.querySelector('button[hx-get="/fragment/games/new"]').click());
+    const world = document.getElementById('new-game-world');
+    const persona = document.getElementById('new-game-persona');
+    if (!world || !persona) return 'the dialog did not open with the New Game form';
+    world.value = 'test';
+    persona.value = 'test_player';
+    window.__newGameForm = document.querySelector('#edit-dialog .new-game-form-dialog');
+    window.__newGameWorld = world;
+    window.__newGamePersona = persona;
+    return world.value === 'test' && persona.value === 'test_player' ? '' : 'the choice did not take';
+}"#
+);
+
+pub(super) const NEW_GAME_IS_INTACT: &str = r#"() => {
+    const dialog = document.getElementById('edit-dialog');
+    const world = document.getElementById('new-game-world');
+    const persona = document.getElementById('new-game-persona');
+    if (!dialog.open) return 'the dialog closed';
+    if (document.querySelector('#edit-dialog .new-game-form-dialog') !== window.__newGameForm) return 'the New Game form is a new element';
+    if (world !== window.__newGameWorld) return 'the World select is a new element';
+    if (persona !== window.__newGamePersona) return 'the Persona select is a new element';
+    if (world.value !== 'test') return 'the World choice changed: ' + world.value;
+    if (persona.value !== 'test_player') return 'the Persona choice changed: ' + persona.value;
+    return '';
+}"#;
+
+const NEW_GAME_IS_RENDERED: &str = r#"() => {
+    const world = document.getElementById('new-game-world');
+    const persona = document.getElementById('new-game-persona');
+    if (world.selectedIndex !== 0) return 'the World select keeps the choice: ' + world.value;
+    if (persona.selectedIndex !== 0) return 'the Persona select keeps the choice: ' + persona.value;
+    return '';
+}"#;
+
+pub(super) const CANCEL_DIALOG: &str = r#"async () => {
+    const dialog = document.getElementById('edit-dialog');
+    if (!dialog.open) return 'the dialog is not open';
+    const closed = new Promise((resolve) =>
+        dialog.addEventListener('close', resolve, { once: true }));
+    dialog.querySelector('[data-close-dialog]').click();
+    await closed;
+    await window.__waitForScreen();
+    if (dialog.open) return 'the dialog is still open';
+    return document.getElementById('edit-dialog-body').children.length === 0
+        ? '' : 'the dialog body still holds the form';
+}"#;
+
+async fn assert_games_panel_loads_around_the_dialog(
+    page: &playwright_rs::Page,
+    changes: &StubChangesHandle,
+    check: &str,
+) {
+    let before = changes.loads("games");
+    for kind in GAMES_PANEL_KINDS {
+        changes.bump(kind);
+        ask_once(page).await;
+        assert_eq!(eval_string(page, check).await, "", "after `{kind}` moved");
+    }
+    assert_eq!(
+        changes.loads("games"),
+        before + GAMES_PANEL_KINDS.len(),
+        "the panel loads for each kind that moved"
+    );
+}
+
+// [docs/specs/browser_games.md] SCENARIO: 27.4
+async fn check_an_open_rename_dialog_keeps_its_text_and_focus_through_a_load_of_each_kind(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    assert_games_panel_loads_around_the_dialog(&page, &changes, RENAME_IS_INTACT).await;
+}
+
+// [docs/specs/browser_games.md] SCENARIO: 27.5
+async fn check_saving_the_rename_dialog_closes_it_and_the_games_panel_shows_the_name(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    let before = changes.loads("games");
+    assert_eq!(eval_string(&page, SAVE_RENAME).await, "");
+    assert_eq!(
+        changes.loads("games"),
+        before + 1,
+        "the saved rename must load the panel exactly once"
+    );
+    assert_eq!(
+        eval_string(
+            &page,
+            "() => document.getElementById('edit-dialog').open ? 'the dialog is still open' : ''"
+        )
+        .await,
+        "",
+        "an accepted save closes the dialog"
+    );
+    let shown = page
+        .locator("#game-row-2 .game-name")
+        .await
+        .inner_text()
+        .await
+        .unwrap();
+    assert_eq!(shown, "A typed name", "the load shows the renamed Game");
+}
+
+// [docs/specs/browser_games.md] SCENARIO: 27.6
+async fn check_the_new_game_selects_keep_the_players_choice_through_a_load(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_NEW_GAME).await, "");
+    assert_games_panel_loads_around_the_dialog(&page, &changes, NEW_GAME_IS_INTACT).await;
+}
+
+// [docs/specs/browser_games.md] SCENARIO: 27.7
+async fn check_cancelling_the_new_game_dialog_discards_the_choice(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_NEW_GAME).await, "");
+    changes.bump(ChangeKind::WORLDS);
+    ask_once(&page).await;
+    assert_eq!(eval_string(&page, NEW_GAME_IS_INTACT).await, "");
+
+    assert_eq!(eval_string(&page, CANCEL_DIALOG).await, "");
+    assert_eq!(
+        eval_string(&page, OPEN_NEW_GAME_WITHOUT_CHOOSING).await,
+        "",
+        "the New Game control opens a fresh form"
+    );
+    assert_eq!(
+        eval_string(&page, NEW_GAME_IS_RENDERED).await,
+        "",
+        "the form that opens again shows the first options, not the discarded choice"
+    );
+}
+
+const OPEN_NEW_GAME_WITHOUT_CHOOSING: &str = concat!(
+    "async () => {",
+    after_settle!(),
+    r#"
+    await afterSettle(() =>
+        document.querySelector('button[hx-get="/fragment/games/new"]').click());
+    return document.getElementById('new-game-world') ? '' : 'the dialog did not open with the New Game form';
+}"#
+);
+
+// [docs/specs/browser_screen.md] SCENARIO: 44.17
+async fn check_a_save_that_fails_keeps_the_dialog_open_with_its_typed_values(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    start_current(&page).await;
+    open_section(&page, "games", ".games-panel").await;
+
+    stub.games_handle().set_rename_failing(true);
+    assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
+    assert_eq!(eval_string(&page, SAVE_RENAME).await, "");
+    let (shown, line, raw) = read_error_disclosure(
+        &page,
+        "#edit-dialog .game-rename-form form [data-error-slot]",
+    )
+    .await;
+    assert!(shown, "a failed save must report in the form's own slot");
+    assert!(line.contains("action failed"), "got {line:?}");
+    assert!(raw.contains("Stub rename failure"), "got {raw:?}");
+    assert_eq!(
+        eval_string(&page, RENAME_IS_INTACT).await,
+        "",
+        "the dialog stays open with the same form and the typed name"
+    );
+}
+
+const OPEN_PRESET_EDIT: &str = concat!(
+    "async () => {",
+    after_settle!(),
+    r#"
+    await afterSettle(() =>
+        document.querySelector('button[hx-get="/fragment/prompt-presets/custom_ref/edit"]').click());
+    const input = document.getElementById('edit-name-custom_ref');
+    if (!input) return 'the dialog did not open with the edit form';
+    input.value = 'A typed preset name';
+    input.focus();
+    window.__presetForm = document.querySelector('#edit-dialog .preset-form');
+    window.__presetInput = input;
+    return document.activeElement === input ? '' : 'the name field has no focus';
+}"#
+);
+
+const PRESET_EDIT_IS_INTACT: &str = r#"() => {
+    const form = document.querySelector('#edit-dialog .preset-form');
+    const input = document.getElementById('edit-name-custom_ref');
+    if (!document.getElementById('edit-dialog').open) return 'the dialog closed';
+    if (form !== window.__presetForm) return 'the form is a new element';
+    if (input !== window.__presetInput) return 'the name field is a new element';
+    if (input.value !== 'A typed preset name') return 'the typed name changed: ' + input.value;
+    return document.activeElement === input ? '' : 'the name field lost focus';
+}"#;
+
+// [docs/specs/browser_screen.md] SCENARIO: 44.20
+async fn check_a_preset_form_in_the_dialog_survives_a_presets_load_and_cancel_sends_no_request(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "prompt-presets", ".prompt-presets-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_PRESET_EDIT).await, "");
+    let loads = changes.loads("prompt-presets");
+    changes.bump(ChangeKind::PROMPT_PRESETS);
+    ask_once(&page).await;
+    assert_eq!(
+        changes.loads("prompt-presets"),
+        loads + 1,
+        "an open form holds no part, so the panel loads"
+    );
+    assert_eq!(
+        eval_string(&page, PRESET_EDIT_IS_INTACT).await,
+        "",
+        "the load of the panel leaves the dialog alone"
+    );
+
+    start_counting_requests(&page).await;
+    assert_eq!(eval_string(&page, CANCEL_DIALOG).await, "");
+    assert_eq!(requests_counted(&page).await, 0, "Cancel sends no request");
+}
+
+const OPEN_WORLD_EDITOR: &str = concat!(
+    "async () => {",
+    after_settle!(),
+    r#"
+    await afterSettle(() =>
+        document.querySelector('#world-test button[hx-get$="/edit"]').click());
+    const input = document.querySelector('#edit-dialog input[name="name"]');
+    if (!input) return 'the dialog did not open with the World form';
+    input.value = 'A typed world name';
+    input.focus();
+    window.__worldForm = document.getElementById('world-form-container');
+    window.__worldInput = input;
+    return document.activeElement === input ? '' : 'the name field has no focus';
+}"#
+);
+
+const WORLD_EDITOR_IS_INTACT: &str = r#"() => {
+    const form = document.getElementById('world-form-container');
+    const input = document.querySelector('#edit-dialog input[name="name"]');
+    if (!document.getElementById('edit-dialog').open) return 'the dialog closed';
+    if (form !== window.__worldForm) return 'the form is a new element';
+    if (input !== window.__worldInput) return 'the name field is a new element';
+    if (input.value !== 'A typed world name') return 'the typed name changed: ' + input.value;
+    return document.activeElement === input ? '' : 'the name field lost focus';
+}"#;
+
+// [docs/specs/browser_screen.md] SCENARIO: 44.21
+async fn check_a_world_form_in_the_dialog_survives_a_game_rename_that_raises_games(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "worlds", ".worlds-panel").await;
+
+    assert_eq!(eval_string(&page, OPEN_WORLD_EDITOR).await, "");
+    let loads = changes.loads("worlds");
+    let renamed = eval_string(
+        &page,
+        r#"async () => {
+            const response = await actionFetch('/games/2/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'display_name=Renamed+elsewhere',
+            });
+            await window.__waitForScreen();
+            return response.ok ? '' : 'the rename failed';
+        }"#,
+    )
+    .await;
+    assert_eq!(renamed, "");
+
+    assert_eq!(
+        eval_string(&page, WORLD_EDITOR_IS_INTACT).await,
+        "",
+        "a Game rename must not destroy the open World form"
+    );
+    assert_eq!(
+        changes.loads("worlds"),
+        loads + 1,
+        "the Worlds panel loads for the moved number"
+    );
+    assert_eq!(eval_string(&page, CANCEL_DIALOG).await, "");
+}
+
+// [docs/specs/browser_screen.md] SCENARIO: 44.22
+async fn check_a_connection_form_in_the_dialog_survives_a_settings_load_and_keeps_the_sub_tab(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    start_current(&page).await;
+    open_section(&page, "settings", ".settings-panel").await;
+
+    assert_eq!(eval_string(&page, SUBTAB_ENGAGED.engage).await, "");
+    let opened = eval_string(
+        &page,
+        concat!(
+            "async () => {",
+            after_settle!(),
+            r#"
+            await afterSettle(() =>
+                document.querySelector('#connection-openrouter-gpt-4o-mini button[hx-get$="/edit"]').click());
+            const input = document.getElementById('conn_name');
+            if (!input) return 'the form did not open';
+            input.value = 'A typed connection';
+            input.focus();
+            window.__form = document.querySelector('#edit-dialog .connection-form');
+            window.__formInput = input;
+            return document.activeElement === input ? '' : 'the name field has no focus';
+        }"#
+        ),
+    )
+    .await;
+    assert_eq!(opened, "");
+    let loads = changes.loads("settings");
+    changes.bump(ChangeKind::SETTINGS);
+    ask_once(&page).await;
+    assert_eq!(
+        changes.loads("settings"),
+        loads + 1,
+        "an open form holds no part, so the panel loads"
+    );
+    let intact = eval_string(
+        &page,
+        r#"() => {
+            const form = document.querySelector('#edit-dialog .connection-form');
+            const input = document.getElementById('conn_name');
+            if (form !== window.__form) return 'the form is a new element';
+            if (input !== window.__formInput) return 'the name field is a new element';
+            if (input.value !== 'A typed connection') return 'the typed name changed: ' + input.value;
+            return document.activeElement === input ? '' : 'the name field lost focus';
+        }"#,
+    )
+    .await;
+    assert_eq!(intact, "", "the load of the panel leaves the dialog alone");
+
+    start_counting_requests(&page).await;
+    assert_eq!(eval_string(&page, CANCEL_DIALOG).await, "");
+    assert_eq!(requests_counted(&page).await, 0, "Cancel sends no request");
+    assert_eq!(
+        eval_string(&page, SUBTAB_ENGAGED.check).await,
+        "",
+        "the sub-tab is still the one the player chose, after the dialog and the load"
     );
 }
 
@@ -350,6 +795,54 @@ async fn run_dialog_checks() {
         .run(
             StubActionOutcome::Pending,
             check_the_open_dialog_is_centred_in_the_viewport,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_save_that_fails_keeps_the_dialog_open_with_its_typed_values,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_an_open_rename_dialog_keeps_its_text_and_focus_through_a_load_of_each_kind,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_saving_the_rename_dialog_closes_it_and_the_games_panel_shows_the_name,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_the_new_game_selects_keep_the_players_choice_through_a_load,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_cancelling_the_new_game_dialog_discards_the_choice,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_preset_form_in_the_dialog_survives_a_presets_load_and_cancel_sends_no_request,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_world_form_in_the_dialog_survives_a_game_rename_that_raises_games,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_connection_form_in_the_dialog_survives_a_settings_load_and_keeps_the_sub_tab,
         )
         .await;
     runner.finish().await;

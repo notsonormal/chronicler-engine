@@ -253,7 +253,7 @@
     font-size: var(--font-size-xs);
 }
 
-.games-pager button:disabled {
+.games-pager button[aria-disabled="true"] {
     opacity: 0.5;
     cursor: not-allowed;
 }

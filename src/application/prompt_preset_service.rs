@@ -84,10 +84,16 @@ impl PromptPresetService {
         let preset = self
             .get_preset(id)?
             .ok_or_else(|| ApplicationError::validation("Preset not found"))?;
+        Self::ensure_editable(&preset)?;
+        Ok(preset)
+    }
+
+    /// An edit may change a preset that is not a default.
+    pub fn ensure_editable(preset: &PromptPreset) -> std::result::Result<(), ApplicationError> {
         if preset.is_default {
             return Err(ApplicationError::validation("Cannot edit default presets"));
         }
-        Ok(preset)
+        Ok(())
     }
 
     pub fn edit_preset(

@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! The pages of saved Games: the page size, and the rule that names the page a request gets.
 
 use super::game::Game;

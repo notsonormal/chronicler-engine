@@ -275,12 +275,12 @@ And the form has a display_name field holding "The Long Road"
 And the form has an error slot and a Cancel control that closes the dialog
 ```
 
-#### Scenario 20.38: The Rename form of an unknown Game is refused
+#### Scenario 20.38: The Rename form of an unknown Game answers 404
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/games/9999/rename
-Then the response status is "400 BAD_REQUEST"
+Then the response status is "404 NOT_FOUND"
 And the body is an error fragment that names the missing Game
 ```
 
@@ -319,7 +319,7 @@ Then the response status is "200 OK"
 And the Saved Games section lists 50 Games, the newest first
 And the Active Game section lists the active Game, and the Saved Games section does not
 And the pager (`games-pager`) shows "Page 1 of 2"
-And the Previous control is disabled
+And the Previous control is inert (`aria-disabled="true"`)
 And the Next control is enabled and goes to page 2
 ```
 
@@ -331,7 +331,7 @@ When the client GET /screen?parts=games&games_page=2
 Then the response status is "200 OK"
 And the Saved Games section lists one Game, the oldest
 And the pager shows "Page 2 of 2"
-And the Next control is disabled
+And the Next control is inert (`aria-disabled="true"`)
 And the Previous control is enabled and goes to page 1
 ```
 

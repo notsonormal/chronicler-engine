@@ -212,12 +212,12 @@ async fn check_the_test_result_of_a_saved_connection_opens_in_the_dialog_and_sur
         "the dialog shows the result of the test, got {result:?}"
     );
 
-    let loads_before = changes.loads("/fragment/settings");
+    let loads_before = changes.loads("settings");
     changes.bump(ChangeKind::SETTINGS);
     let loaded = wait_for_condition_async(
         Duration::from_secs(5),
         Duration::from_millis(25),
-        || async { changes.loads("/fragment/settings") > loads_before },
+        || async { changes.loads("settings") > loads_before },
     )
     .await;
     assert!(loaded, "the Settings panel loads after its number moved");

@@ -54,8 +54,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | GET | `/fragment/character-headshots` | `character_headshots_fragment` |
 | GET | `/changes` | `changes_handler` |
 | GET | `/status/busy` | `busy_status_handler` |
-| GET | `/fragment/send-control` | `send_control_fragment` |
-| GET | `/fragment/autoplay-controls` | `autoplay_controls_fragment` |
 | GET | `/fragment/llm-messages` | `llm_messages_fragment` |
 | GET | `/fragment/llm-messages/:id` | `llm_message_record_fragment` |
 

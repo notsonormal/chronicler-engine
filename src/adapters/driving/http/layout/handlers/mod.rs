@@ -5,8 +5,7 @@ mod action_controls;
 mod endpoints;
 
 pub use action_controls::{
-    autoplay_controls_answer, autoplay_controls_fragment, render_autoplay_controls,
-    render_send_control, send_control_answer, send_control_fragment,
+    autoplay_controls_answer, render_autoplay_controls, render_send_control, send_control_answer,
 };
 
 pub use endpoints::{

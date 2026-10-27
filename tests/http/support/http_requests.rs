@@ -28,6 +28,34 @@ pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     response_body(response).await
 }
 
+/// The templates of a screen body: each part name with its content, in order.
+pub fn templates_of(body: &str) -> Vec<(String, String)> {
+    const OPEN: &str = "<template data-part=\"";
+    let mut found = Vec::new();
+    let mut rest = body;
+    while let Some(at) = rest.find(OPEN) {
+        let after = &rest[at + OPEN.len()..];
+        let name_end = after.find("\">").expect("the template tag closes");
+        let content_start = name_end + 2;
+        let content_end = after.find("</template>").expect("the template closes");
+        found.push((
+            after[..name_end].to_string(),
+            after[content_start..content_end].to_string(),
+        ));
+        rest = &after[content_end + "</template>".len()..];
+    }
+    found
+}
+
+/// The content of one part, as the client gets it: the template of
+/// `GET /screen?parts=<name>`.
+pub async fn fetch_part(app: &axum::Router, name: &str) -> String {
+    let screen = fetch_body(app, &format!("/screen?parts={name}")).await;
+    let mut templates = templates_of(&screen);
+    assert_eq!(templates.len(), 1, "{name}: one template in {screen}");
+    templates.remove(0).1
+}
+
 /// The status endpoint answers `idle`, a step endpoint string, or the failure
 /// disclosure.
 pub async fn fetch_busy_status(app: &axum::Router) -> String {

@@ -213,8 +213,25 @@ function screenErrorSlot() {
 // An answer that the page cannot use shows in one shell slot, and the parts keep
 // their content. The dialog is modal, so it also hears the summary: the slot is
 // behind it. An empty summary says that the slot is clear.
+// A failure that lasts is the same failure at each load, so a report that the slot
+// already shows writes nothing: an open Details stays open, and the alert does not
+// fire again.
+function screenErrorShows(slot, summary, detail) {
+  if (!slot || slot.hidden) return false;
+  const shownSummary = slot.querySelector(".error-disclosure-text");
+  const shownDetail = slot.querySelector(".error-detail-raw");
+  return (
+    !!shownSummary &&
+    !!shownDetail &&
+    shownSummary.textContent === summary &&
+    shownDetail.textContent === detail
+  );
+}
+
 function reportScreenError(summary, detail) {
-  renderInlineError(screenErrorSlot(), summary, detail);
+  const slot = screenErrorSlot();
+  if (screenErrorShows(slot, summary, detail)) return;
+  renderInlineError(slot, summary, detail);
   fireScreenEvent("screen:error", { summary: summary });
 }
 
@@ -381,10 +398,11 @@ document.addEventListener("visibilitychange", function () {
 
 // The page of the saved Games is view state of the Games tab: a Previous or Next
 // control carries the page that it goes to, and the loads ask for it until the
-// player leaves the tab.
+// player leaves the tab. A control that cannot move is `aria-disabled`, not
+// `disabled`: it keeps keyboard focus through the morph.
 document.addEventListener("click", function (event) {
   const control = event.target.closest('[data-part="games"] [data-page]');
-  if (!control || control.disabled) return;
+  if (!control || control.getAttribute("aria-disabled") === "true") return;
   screenRoot.dataset.gamesPage = control.dataset.page;
   forgetScreenStamp();
   askNow();
