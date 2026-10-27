@@ -181,7 +181,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `htmx_settle.rs` — htmx settle harness primitive: a counter of `htmx:afterSettle` and `screen:loaded` installed at page load, and a target-scoped wait for an interaction's own swap or the screen load that shows it.
     - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `screen`, `server`, `settings_guard`, `stub_action_layers`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
     - `screen.rs` — Waits on the stamp of the page: the page shows the screen of the server when `<html data-revision>` equals the `server:revision` of `GET /changes` and no ask or load is in flight.
-    - `screen_part_table.rs` — The parts of the dashboard screen, as the stub-browser tests list them: the selector, the name, the route that answers the part, and its section. The guardrails check the table against `assets/index.html` and `SCREEN_PARTS`.
+    - `screen_part_table.rs` — The parts of the dashboard screen, as the stub-browser tests list them: the selector, the name, and its section. The guardrails check the table against `assets/index.html` and `SCREEN_PARTS`.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.
     - `settings_guard.rs` — `SettingsTestGuard` — serializes tests that mutate global settings state via a process-wide `Mutex`.
     - `stub_action_layers.rs` — What the engine's two action layers do, for the stub server: record the Game header of each `POST`, refuse a Game-bound one that names another Game, and stamp the answer with `X-Revision`.
