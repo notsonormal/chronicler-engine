@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use chronicler_engine::domain::model::change::ChangeKind;
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 
 use chronicler_engine::domain::model::state::generation_status::Step;
@@ -10,9 +9,9 @@ use chronicler_engine::domain::model::state::generation_status::Step;
 use super::*;
 use super::support::{
     StubRunner, accept_delete_confirmation, active_element_is, ask_once_without_waiting,
-    assert_busy_refusal, delay_screen_answers, hold_requests_ending_with, hold_screen_loads,
-    read_banner, read_command_input, release_held_requests_and_wait_for_answers,
-    release_screen_answers, release_screen_loads, wait_for_held_screen_load,
+    assert_busy_refusal, hold_requests_ending_with, hold_screen_loads, read_banner,
+    read_command_input, release_held_requests_and_wait_for_answers, release_screen_loads,
+    wait_for_held_screen_load,
 };
 
 async fn stash_action_area_nodes(page: &playwright_rs::Page) {
@@ -541,6 +540,8 @@ async fn check_refused_concurrent_send_keeps_the_command_and_reports_in_the_form
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
+    wait_for_status_ready(&page).await;
+    let status_before = status_display_text(&page).await;
     fill_command_input(&page, "look around").await;
     page.evaluate::<(), ()>(
         r#"() => document.getElementById('command-form').requestSubmit()"#,
@@ -561,18 +562,10 @@ async fn check_refused_concurrent_send_keeps_the_command_and_reports_in_the_form
         "look around",
         "a command the engine refused must keep the text the player typed"
     );
-    let display_class: String = page
-        .evaluate::<(), String>(
-            "(() => document.getElementById('status-display').className)()",
-            None,
-        )
-        .await
-        .unwrap();
-    assert!(
-        display_class
-            .split_whitespace()
-            .any(|class| class == "ready"),
-        "a refusal leaves the status display as it was, got {display_class:?}"
+    assert_eq!(
+        status_display_text(&page).await,
+        status_before,
+        "a refusal leaves the status display as it was"
     );
     let preview_children: f64 = page
         .evaluate::<(), f64>(
@@ -869,7 +862,7 @@ async fn check_the_page_names_a_game_only_when_the_screen_shows_it(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.57
-async fn check_a_switch_sent_from_this_page_clears_the_game_until_the_next_ask(
+async fn check_a_send_after_a_switch_from_this_page_gets_the_game_refusal_and_keeps_the_text(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -882,101 +875,57 @@ async fn check_a_switch_sent_from_this_page_clears_the_game_until_the_next_ask(
     let switch = r#"button[hx-post="/games/2/switch"]"#;
     wait_until_visible(&page, switch, Duration::from_secs(5)).await;
     stop_page_timer(&page).await;
-
-    let seen: (String, bool) = page
-        .evaluate::<(), (String, bool)>(
-            r#"async () => {
-                let seen = null;
-                document.body.addEventListener('htmx:afterRequest', () => {
-                    if (seen) return;
-                    seen = document.documentElement.dataset.game || '';
-                    actionFetch('/retrigger', { method: 'POST' }).catch(() => {});
-                }, { once: true });
-                document.querySelector('button[hx-post="/games/2/switch"]').click();
-                while (seen === null) await new Promise((resolve) => setTimeout(resolve, 5));
-                return [seen, true];
-            }"#,
-            None,
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        seen.0, "",
-        "the switch answer removed the Game the page named"
-    );
-    assert_eq!(
-        stub.changes_handle().game_headers("/retrigger"),
-        vec![None],
-        "a send before the next ask carries no Game header, so it meets no false refusal"
-    );
-    wait_until_page_shows_game(&page, "2").await;
-}
-
-// [docs/specs/browser_dashboard.md] SCENARIO: 16.60
-async fn check_a_load_that_started_before_a_switch_does_not_name_the_old_game(
-    page: playwright_rs::Page,
-    stub: StubServer,
-) {
-    let changes = stub.changes_handle();
-    wait_until_page_shows_game(&page, "1").await;
-    page.locator(r#"[data-tab="games"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
-    let switch = r#"button[hx-post="/games/2/switch"]"#;
-    wait_until_visible(&page, switch, Duration::from_secs(5)).await;
-    stop_page_timer(&page).await;
-
-    delay_screen_answers(&page).await;
-    let requests = changes.screen_requests().len();
-    changes.bump(ChangeKind::SETTINGS);
-    ask_once_without_waiting(&page).await;
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(20),
-            || async { changes.screen_requests().len() > requests }
-        )
-        .await,
-        "the engine must receive the load before the switch"
-    );
+    hold_screen_loads(&page).await;
 
     page.evaluate::<(), ()>(
         r#"() => {
-            window.__gamesNamed = [];
-            new MutationObserver(() => {
-                window.__gamesNamed.push(document.documentElement.dataset.game || '');
-            }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-game'] });
+            document.getElementById('command-input').value = 'look around';
             document.querySelector('button[hx-post="/games/2/switch"]').click();
         }"#,
         None,
     )
     .await
     .unwrap();
-    let cleared = wait_for_condition_async(
-        Duration::from_secs(5),
-        Duration::from_millis(20),
-        || async {
-            page.evaluate::<(), String>("() => document.documentElement.dataset.game || ''", None)
-                .await
-                .unwrap()
-                .is_empty()
-        },
+    wait_for_held_screen_load(&page).await;
+    assert_eq!(
+        page.evaluate::<(), String>("() => document.documentElement.dataset.game || ''", None)
+            .await
+            .unwrap(),
+        "1",
+        "the switch answer does not remove the Game the page names"
+    );
+
+    page.evaluate::<(), ()>(
+        "() => document.getElementById('command-form').requestSubmit()",
+        None,
+    )
+    .await
+    .unwrap();
+    let slot = r#"#command-form [data-error-slot="action"]"#;
+    wait_for_error_disclosure(
+        &page,
+        slot,
+        "the send before the next load reports in the command form's slot",
     )
     .await;
-    assert!(cleared, "the switch removes the Game the page named");
-
-    release_screen_answers(&page).await;
-    wait_until_page_shows_game(&page, "2").await;
-    let named: Vec<String> = page
-        .evaluate::<(), Vec<String>>("() => window.__gamesNamed", None)
-        .await
-        .unwrap();
+    let (_, line, _) = read_error_disclosure(&page, slot).await;
     assert!(
-        !named.iter().any(|game| game == "1"),
-        "the load that started before the switch must not name Game 1 again, the page named {named:?}"
+        line.contains("The active Game changed"),
+        "the line says the Game changed, got {line:?}"
     );
+    assert_eq!(
+        stub.changes_handle().game_headers("/action/check"),
+        vec![Some("1".to_string())],
+        "the send names the Game that the page still shows"
+    );
+    assert_eq!(
+        read_command_input(&page).await,
+        "look around",
+        "a refused send keeps the text the player typed"
+    );
+
+    release_screen_loads(&page).await;
+    wait_until_page_shows_game(&page, "2").await;
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.61
@@ -1143,13 +1092,7 @@ async fn run_dashboard_action_area_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_switch_sent_from_this_page_clears_the_game_until_the_next_ask,
-        )
-        .await;
-    runner
-        .run(
-            StubActionOutcome::Pending,
-            check_a_load_that_started_before_a_switch_does_not_name_the_old_game,
+            check_a_send_after_a_switch_from_this_page_gets_the_game_refusal_and_keeps_the_text,
         )
         .await;
     runner

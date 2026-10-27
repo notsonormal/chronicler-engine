@@ -183,8 +183,9 @@ function submitEdit() {
 }
 
 // Retry and retrigger answer nothing when the engine takes them, and the Job
-// they start shows in the status display. A refusal or a failure reports in the
-// story log's error slot and ends the action area's own state.
+// they start shows in the status display. The action area's own state, which
+// begins before the request, ends when the screen shows the answer's revision. A
+// refusal or a failure reports in the story log's error slot and ends it at once.
 function submitGenerationRequest(url, failureMessage, refusedWhat) {
   clearInlineError(storyLogErrorSlot());
   updateToThinking();
@@ -195,6 +196,7 @@ function submitGenerationRequest(url, failureMessage, refusedWhat) {
         return;
       }
       if (!response.ok) return throwServerDetail(response);
+      endPendingWhenScreenShows(response.headers.get("X-Revision"));
     })
     .catch((err) => {
       console.error(`${failureMessage}:`, err);

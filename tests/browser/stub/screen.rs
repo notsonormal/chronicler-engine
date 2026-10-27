@@ -141,6 +141,24 @@ async fn check_an_action_asks_at_once_when_its_request_ends(
         entries - 1,
         "the story log loads at once and no longer shows the deleted entry"
     );
+
+    // A script action that wrote nothing moves no revision: the page forgets its
+    // stamp when the request ends, so the screen still loads.
+    let loads = changes.loads("/screen");
+    let asks = changes.asks();
+    page.evaluate::<(), ()>(
+        "async () => { await actionFetch('/retrigger', { method: 'POST' }); }",
+        None,
+    )
+    .await
+    .unwrap();
+    wait_for_asks(&changes, asks + 1).await;
+    wait_for_screen_current(&page).await;
+    assert_eq!(
+        changes.loads("/screen"),
+        loads + 1,
+        "the script action wrote nothing, and its end loads the screen once"
+    );
 }
 
 // [docs/specs/browser_screen.md] SCENARIO: 44.1
@@ -622,7 +640,7 @@ async fn wait_for_screen_loads(changes: &StubChangesHandle, expected: usize) {
 }
 
 // [docs/specs/browser_screen.md] SCENARIO: 44.39
-async fn check_a_slow_request_in_a_part_does_not_make_every_ask_load_the_screen(
+async fn check_each_move_of_the_revision_loads_the_screen_once_while_a_request_runs(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -633,40 +651,56 @@ async fn check_a_slow_request_in_a_part_does_not_make_every_ask_load_the_screen(
     page.evaluate::<(), ()>(TEST_CONNECTION, None)
         .await
         .unwrap();
+    eval_string(
+        &page,
+        r#"() => {
+            window.__testButton = document.querySelector('#connection-openrouter-gpt-4o-mini button[hx-post$="/test"]');
+            return '';
+        }"#,
+    )
+    .await;
 
     let loads = changes.loads("/screen");
-    changes.bump(ChangeKind::SETTINGS);
-    ask_once_without_waiting(&page).await;
-    wait_for_screen_loads(&changes, loads + 1).await;
-
-    for _ in 0..3 {
-        let asks = changes.asks();
+    for moved in 1..=3 {
         changes.bump(ChangeKind::SETTINGS);
         ask_once_without_waiting(&page).await;
-        wait_for_asks(&changes, asks + 1).await;
+        wait_for_screen_loads(&changes, loads + moved).await;
     }
     assert_eq!(
         changes.loads("/screen"),
-        loads + 1,
-        "the Test request has not ended, so the asks that follow the first load start no load"
+        loads + 3,
+        "each move of the revision loads the screen once, though the Test request has not ended"
+    );
+    assert_eq!(
+        eval_string(
+            &page,
+            r#"() => String(document.querySelector('#connection-openrouter-gpt-4o-mini button[hx-post$="/test"]') === window.__testButton)"#,
+        )
+        .await,
+        "true",
+        "the loads keep the Test control that has a request in flight"
     );
 
     release_held_requests_and_wait_for_answers(&page).await;
     wait_for_screen_current(&page).await;
     assert_eq!(
         changes.loads("/screen"),
-        loads + 2,
-        "the end of the request loads the screen once more"
+        loads + 4,
+        "the end of the request loads the screen once more, and the stamp of the page is the stamp of the engine"
     );
 }
 
 // [docs/specs/browser_screen.md] SCENARIO: 44.40
-async fn check_a_wait_for_a_stamp_of_a_newer_server_ends_only_when_the_page_shows_that_server(
+async fn check_a_wait_for_a_stamp_of_another_server_ends_only_at_a_load_that_started_after_it(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let changes = stub.changes_handle();
     start_current(&page).await;
+    hold_screen_loads(&page).await;
+    changes.bump(ChangeKind::STORY);
+    ask_once_without_waiting(&page).await;
+    wait_for_held_screen_load(&page).await;
     eval_string(
         &page,
         r#"() => {
@@ -677,12 +711,12 @@ async fn check_a_wait_for_a_stamp_of_a_newer_server_ends_only_when_the_page_show
     )
     .await;
 
-    changes.bump(ChangeKind::STORY);
-    ask_once(&page).await;
+    release_screen_loads(&page).await;
+    wait_for_screen_current(&page).await;
     assert_eq!(
         eval_string(&page, "() => window.__waitState").await,
         "waiting",
-        "the page still shows the old server, which is not a restart of the new one"
+        "the load that started before the wait may still carry the old server, so it does not end the wait"
     );
 
     changes.set_server("stub-server-2");
@@ -690,7 +724,7 @@ async fn check_a_wait_for_a_stamp_of_a_newer_server_ends_only_when_the_page_show
     assert_eq!(
         eval_string(&page, "() => window.__waitState").await,
         "over",
-        "the page shows the new server"
+        "a load that started after the wait began and shows another server ends the wait"
     );
 }
 
@@ -848,13 +882,13 @@ async fn run_screen_checks() {
     runner
         .run(
             outcome,
-            check_a_slow_request_in_a_part_does_not_make_every_ask_load_the_screen,
+            check_each_move_of_the_revision_loads_the_screen_once_while_a_request_runs,
         )
         .await;
     runner
         .run(
             outcome,
-            check_a_wait_for_a_stamp_of_a_newer_server_ends_only_when_the_page_shows_that_server,
+            check_a_wait_for_a_stamp_of_another_server_ends_only_at_a_load_that_started_after_it,
         )
         .await;
     runner

@@ -57,7 +57,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `prompt_presets.rs` — Browser prompt-presets tests: the duplicate → edit → save click chain wiring guard. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
     - **stub/**
-      - `action_controls.rs` — Stub-browser tests for the action controls: the disabled state that a check request gives its own controls, the view states of the action area, and the load that follows a request. Tagged against `docs/specs/browser_dashboard.md`.
+      - `action_controls.rs` — Stub-browser tests for the action controls: what a check request does to the controls of the action area, the view states of the action area, and the load that follows a request. Tagged against `docs/specs/browser_dashboard.md`.
       - `announcements.rs` — Stub-browser tests for the live-region announcements: each change is announced exactly once. Tagged against `docs/specs/browser_dashboard.md`.
       - `autoplay.rs` — Stub-browser tests for the Autoplay control: the progress status and the action area while a run holds the Game. Tagged against `docs/specs/browser_autoplay.md`.
       - `dashboard.rs` — Stub-browser tests for dashboard chrome: the action-area state machine, the tab bar, the landmarks and the status display. Tagged against `docs/specs/browser_dashboard.md`.

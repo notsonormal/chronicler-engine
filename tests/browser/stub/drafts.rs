@@ -76,20 +76,18 @@ async fn wait_for_a_settings_load_after(
     page: &playwright_rs::Page,
     changes: &StubChangesHandle,
     loads_before: usize,
-    ends_in_state: &str,
 ) {
-    // "current": the stamp of the page equals the stamp of the stub. "behind": the load
-    // skipped a control in flight, so the page keeps its old stamp and loads again.
+    // A load records the stamp of what it rendered, also when it skipped a control in
+    // flight, so the stamp of the page equals the stamp of the stub after it.
     let loaded = wait_for_condition_async(WAIT, Duration::from_millis(25), || async {
         changes.loads("/fragment/settings") > loads_before
             && page
-                .evaluate::<String, bool>(
-                    r#"async (state) => {
+                .evaluate::<(), bool>(
+                    r#"async () => {
                         const answer = await (await fetch('/changes', { cache: 'no-store' })).json();
-                        const shown = document.documentElement.dataset.revision === answer.server + ':' + answer.revision;
-                        return state === 'current' ? shown : !shown;
+                        return document.documentElement.dataset.revision === answer.server + ':' + answer.revision;
                     }"#,
-                    Some(&ends_in_state.to_string()),
+                    None,
                 )
                 .await
                 .unwrap_or(false)
@@ -97,7 +95,7 @@ async fn wait_for_a_settings_load_after(
     .await;
     assert!(
         loaded,
-        "the Settings panel loads and ends in the {ends_in_state} state"
+        "the Settings panel loads and the stamp of the page equals the stamp of the engine"
     );
 }
 
@@ -116,7 +114,7 @@ async fn check_a_load_skips_a_select_whose_request_is_in_flight(
 
     let loads_before = changes.loads("/fragment/settings");
     changes.bump(ChangeKind::SETTINGS);
-    wait_for_a_settings_load_after(&page, &changes, loads_before, "behind").await;
+    wait_for_a_settings_load_after(&page, &changes, loads_before).await;
 
     let (shown, in_flight) = select_state(&page).await;
     assert!(in_flight, "the save is still in flight after the load");
@@ -161,7 +159,7 @@ async fn check_after_the_save_the_next_load_sets_the_select_to_the_server_value(
 }
 
 // [docs/specs/browser_screen.md] SCENARIO: 44.27
-async fn check_a_load_that_skipped_a_select_in_flight_leaves_the_stamp_behind(
+async fn check_a_load_that_skipped_a_select_in_flight_records_the_stamp_and_the_end_of_the_request_loads_again(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -185,7 +183,7 @@ async fn check_a_load_that_skipped_a_select_in_flight_leaves_the_stamp_behind(
         .unwrap();
     // The engine committed the save and moved its number, and the answer is held:
     // the panel loads while the select still has its request in flight.
-    wait_for_a_settings_load_after(&page, &changes, loads_before, "behind").await;
+    wait_for_a_settings_load_after(&page, &changes, loads_before).await;
     let (shown, in_flight) = select_state(&page).await;
     assert!(
         in_flight,
@@ -200,7 +198,7 @@ async fn check_a_load_that_skipped_a_select_in_flight_leaves_the_stamp_behind(
         shown, server_value,
         "after the save ended, the panel loaded again and set the select to the engine's value"
     );
-    wait_for_a_settings_load_after(&page, &changes, loads_before + 1, "current").await;
+    wait_for_a_settings_load_after(&page, &changes, loads_before + 1).await;
 }
 
 async fn wait_for_select_value(page: &playwright_rs::Page, expected: &str) -> String {
@@ -288,7 +286,7 @@ async fn run_draft_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_load_that_skipped_a_select_in_flight_leaves_the_stamp_behind,
+            check_a_load_that_skipped_a_select_in_flight_records_the_stamp_and_the_end_of_the_request_loads_again,
         )
         .await;
     runner

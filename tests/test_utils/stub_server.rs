@@ -518,6 +518,7 @@ struct StubState {
     role_save_answers_held: std::sync::atomic::AtomicBool,
     role_save_answer_permits: tokio::sync::Semaphore,
     story_writes_refused_as_busy: std::sync::atomic::AtomicBool,
+    generation_requests_accepted: std::sync::atomic::AtomicBool,
     action_layers: StubActionLayers,
     delete_succeeds: std::sync::atomic::AtomicBool,
     deleted: std::sync::atomic::AtomicBool,
@@ -682,6 +683,7 @@ impl StubServer {
             role_save_answers_held: std::sync::atomic::AtomicBool::new(false),
             role_save_answer_permits: tokio::sync::Semaphore::new(0),
             story_writes_refused_as_busy: std::sync::atomic::AtomicBool::new(false),
+            generation_requests_accepted: std::sync::atomic::AtomicBool::new(false),
             action_layers: StubActionLayers::default(),
             delete_succeeds: std::sync::atomic::AtomicBool::new(false),
             deleted: std::sync::atomic::AtomicBool::new(false),
@@ -1644,6 +1646,12 @@ async fn retry_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
     {
         return busy_refusal();
     }
+    if state
+        .generation_requests_accepted
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return dispatched(&state);
+    }
     client_failure("Stub retry failure")
 }
 
@@ -1669,6 +1677,12 @@ async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body>
     state
         .retrigger_requests
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    if state
+        .generation_requests_accepted
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return dispatched(&state);
+    }
     client_failure("Stub retrigger failure")
 }
 

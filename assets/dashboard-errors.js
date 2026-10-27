@@ -1,7 +1,5 @@
 // Failure surfaces: inline error slots, the failure banner, the details popovers and the htmx error hooks.
 
-console.log("[HTMX] Initializing...");
-
 function escapeHtml(value) {
   const entities = {
     "&": "&amp;",

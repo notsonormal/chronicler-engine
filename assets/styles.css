@@ -684,9 +684,13 @@ body {
     display: contents;
 }
 
-/* Between an accepted send and the load that shows its Job, the part still
-   renders Send and Autoplay as idle. The state attribute of the area says that a
-   send is pending, and the buttons look and act as disabled. */
+/* Send and Autoplay look busy and take no click while the form that each one
+   submits has a request in flight, and between an accepted send and the load that
+   shows its Job: the part still renders them as idle there. The state attribute of
+   the area says that a send is pending. Neither is `disabled`: the server renders
+   that. */
+.action-area:has(#command-form.htmx-request) #submit-btn,
+.action-area:has(#autoplay-form.htmx-request) #autoplay-btn,
 .action-area[data-state="generating"] #submit-btn,
 .action-area[data-state="generating"] #autoplay-btn {
     opacity: 0.5;
@@ -709,6 +713,12 @@ body {
 }
 
 .status.error {
+    color: var(--color-accent-red);
+}
+
+/* The failure answer is a bare element with no class, so the display takes its
+   colour from its content. No script writes the part root. */
+#status-display:has([data-status="failed"]) {
     color: var(--color-accent-red);
 }
 

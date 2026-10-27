@@ -285,6 +285,14 @@ impl StubSaveHandle {
             .store(refused, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// The retry and the retrigger answer as an engine that took them: its Job holds
+    /// the Game, so the busy state moves. They fail until armed.
+    pub fn set_generation_requests_accepted(&self, accepted: bool) {
+        self.state
+            .generation_requests_accepted
+            .store(accepted, std::sync::atomic::Ordering::SeqCst);
+    }
+
     pub fn set_delete_succeeds(&self, succeeds: bool) {
         self.state
             .delete_succeeds

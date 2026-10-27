@@ -188,41 +188,6 @@ pub(super) async fn hold_screen_loads(page: &playwright_rs::Page) {
     .unwrap();
 }
 
-/// Sends each `GET /screen` at once but hands its answer to the page only at
-/// `window.__releaseScreenAnswers()`, so the server answers from the state of the
-/// moment of the request and a load stays in flight while a check works.
-pub(super) async fn delay_screen_answers(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>(
-        r#"() => {
-            const realFetch = window.fetch;
-            window.__delayScreenAnswers = true;
-            window.__screenAnswers = [];
-            window.fetch = function (url, init) {
-                if (window.__delayScreenAnswers && String(url).startsWith('/screen')) {
-                    const answer = realFetch.call(window, url, init);
-                    return new Promise((resolve, reject) => {
-                        window.__screenAnswers.push(() => answer.then(resolve, reject));
-                    });
-                }
-                return realFetch.apply(this, arguments);
-            };
-            window.__releaseScreenAnswers = () => {
-                window.__delayScreenAnswers = false;
-                window.__screenAnswers.splice(0).forEach((deliver) => deliver());
-            };
-        }"#,
-        None,
-    )
-    .await
-    .unwrap();
-}
-
-pub(super) async fn release_screen_answers(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>("() => window.__releaseScreenAnswers()", None)
-        .await
-        .unwrap();
-}
-
 /// Records the `VERB url` of each request that the page sends from now on through
 /// `XMLHttpRequest` to a URL that starts with `prefix`.
 pub(super) async fn record_requests_to(page: &playwright_rs::Page, prefix: &str) {

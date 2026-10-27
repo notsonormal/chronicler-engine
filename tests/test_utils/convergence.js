@@ -149,36 +149,9 @@ async ({ timeoutMs }) => {
   // exactly when the part holds an entry in edit.
   const SCRIPT_ATTRIBUTES = ["tabindex", "data-editing-entry"];
 
-  // The action area derives the state class of the status display from the part's
-  // content (`statusDisplayState`), so the class is compared by that rule.
-  const STATUS_STATE_CLASSES = ["ready", "thinking", "error"];
-
-  function withoutStateClasses(attributes) {
-    if (!attributes.has("class")) return;
-    const kept = attributes
-      .get("class")
-      .split(/\s+/)
-      .filter((name) => !STATUS_STATE_CLASSES.includes(name));
-    attributes.set("class", kept.join(" "));
-  }
-
-  function statusStateProblem(part) {
-    const states = part.className.split(/\s+/).filter((name) => STATUS_STATE_CLASSES.includes(name));
-    const want = statusDisplayState(part);
-    return states.length === 1 && states[0] === want
-      ? null
-      : "the state class is " + quote(states.join(" ")) + ", the content says " + quote(want);
-  }
-
   function diffPartElement(part, shellPart) {
     const expected = new Map(comparableAttributes(shellPart));
     const live = new Map(comparableAttributes(part));
-    if (partName(part) === "status-display") {
-      const problem = statusStateProblem(part);
-      if (problem) return problem;
-      withoutStateClasses(live);
-      withoutStateClasses(expected);
-    }
     for (const name of SCRIPT_ATTRIBUTES) {
       live.delete(name);
       expected.delete(name);

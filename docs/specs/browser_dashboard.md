@@ -366,17 +366,15 @@ And the command form's own inline error slot reports the failure
 And the command input still holds the typed command
 ```
 
-#### Scenario 16.41: A generation error takes the error state's class and colour
+#### Scenario 16.41: A generation error is drawn in the error colour
 
 ```gherkin
 Given the dashboard is loaded and idle
 When the status display reports a generation error
-Then #status-display carries the error state's class and not the ready state's
-And the short line is drawn in the palette's error colour, not the Ready colour
+Then the short line is drawn in the palette's error colour, not the Ready colour
 And the whole short line is readable without opening Details
 When the status returns to Ready
-Then #status-display carries the ready state's class again
-And Ready is drawn in its own colour
+Then Ready is drawn in its own colour
 ```
 
 #### Scenario 16.42: A refused concurrent send keeps the typed command and reports in the command form's slot
@@ -553,14 +551,19 @@ When the screen load ends
 Then the page names Game 2
 ```
 
-#### Scenario 16.57: A switch that this page sent clears the Game that the page names, until the next ask
+#### Scenario 16.57: A send after a switch that this page sent gets the refusal of a changed Game and keeps its text
 
 ```gherkin
 Given the dashboard shows Game 1 and the Games panel lists a second saved Game
+And the client typed a command in the Action input
 When the client presses Switch for the second Game and the engine accepts it
-Then the page names no Game until the next load of the screen
-And a send in that window carries no X-Chronicler-Game header
-And after the ask the page names the second Game
+Then the page still names Game 1 until the next load shows Game 2
+When the client sends the command before that load ends
+Then the engine refuses it with 409 and "The active Game changed"
+And the command form's own inline error slot says that the active Game changed
+And the Action input still holds the command
+When the load ends
+Then the page names the second Game
 ```
 
 A create and a Reset that this page sent do the same.
@@ -585,15 +588,6 @@ Then the engine refuses it with 409 and "The active Game changed"
 And the game row's own inline error slot says that the game was not reset because the active Game changed
 ```
 
-#### Scenario 16.60: A load that started before a Game change that this page sent does not name the old Game
-
-```gherkin
-Given the dashboard shows Game 1 and a screen load that names Game 1 is in flight
-When the client presses Switch for the second Game, the engine accepts it, and the old load ends
-Then the page names no Game, and a send in that window carries no X-Chronicler-Game header
-And after the next load the page names the second Game
-```
-
 #### Scenario 16.61: A preview send clears the Action input only if it still holds the text that the preview sent
 
 ```gherkin
@@ -603,15 +597,16 @@ And the engine takes the command and the screen shows the send
 Then the Action input keeps the typed text
 ```
 
-#### Scenario 16.62: A check request disables Send and the Action input until it ends
+#### Scenario 16.62: A check request disables the Action input and shows Send as busy until it ends
 
 ```gherkin
 Given the dashboard is loaded and idle, and the engine holds the request that checks a command
 When the client submits a command
-Then #submit-btn and the Action input are disabled
+Then the Action input is disabled
+And #submit-btn is not disabled, and it takes no click
 And #action-area carries the state "checking"
 When the engine answers the request
-Then #submit-btn and the Action input are enabled
+Then the Action input is enabled and #submit-btn takes clicks
 And #action-area no longer carries the state "checking"
 ```
 
@@ -626,23 +621,24 @@ When the engine answers the request
 Then the engine has received one request that checks a command
 ```
 
-#### Scenario 16.64: A load that lands during a check request leaves the controls to the load that follows the request
+#### Scenario 16.64: A load that lands during a check request renders Send as the server does
 
 ```gherkin
 Given the dashboard is loaded and idle, and the engine holds the request that checks a command
 When the client submits a command
 And the Game starts a Job, so the page loads the screen while the request runs
-Then #submit-btn is still disabled
-When the engine answers the request without a screen change
 Then #submit-btn is disabled and labelled as a generating indicator, as the server renders it
+When the engine answers the request without a screen change
+Then #submit-btn is still disabled and labelled as a generating indicator
 ```
 
-#### Scenario 16.65: A check request that starts while the server renders Send as disabled leaves it disabled
+#### Scenario 16.65: A check request writes no `disabled` on Send
 
 ```gherkin
 Given the dashboard shows a Job that runs, so #submit-btn is disabled
 When the client submits the command form and the engine answers the check
 Then #submit-btn is disabled and labelled as a generating indicator
+And its `disabled` attribute was not written at the start or at the end of the request
 ```
 
 #### Scenario 16.66: #action-area carries the state "preview" while the text-check preview is open
@@ -665,13 +661,33 @@ When the client focuses the Action input and presses Tab three times
 Then focus is on Send, then on the cycles field, then on Autoplay
 ```
 
-#### Scenario 16.68: A check answer whose swap throws does not leave the page waiting for it
+#### Scenario 16.68: A check answer whose swap throws leaves the command form dead and the screen loading
 
 ```gherkin
 Given the dashboard is loaded and idle
 And the swap of the answer to a check request throws
 When the client submits a command
 Then htmx reports the load error
-And the loads of the screen do not wait for the request any more
-And a load of the screen renders Send enabled, and #action-area does not carry the state "checking"
+And the screen loads again, though no change moved the revision
+And #submit-btn is enabled as the server renders it, and #action-area does not carry the state "checking"
+But the Action input stays disabled, #submit-btn still takes no click, and the command form sends nothing when it is submitted again
+```
+
+#### Scenario 16.69: A pending state ends when the screen shows the answer of its request
+
+```gherkin
+Given the dashboard is loaded and idle
+When the client sends a command, sends a previewed command, starts Autoplay, retries, retriggers, or asks for new options, and the engine takes the request
+Then #action-status shows "Thinking..." while the screen does not show the answer yet
+When the screen shows the answer
+Then #action-status is empty
+```
+
+#### Scenario 16.70: A pending state ends at once when the engine does not take its request
+
+```gherkin
+Given the dashboard is loaded and idle
+When the client retries, retriggers, or asks for new options, and the engine refuses the request or it fails
+Then the slot of the request reports it
+And #action-status is empty
 ```

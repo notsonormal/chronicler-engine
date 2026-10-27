@@ -16,7 +16,7 @@ The dashboard shows one **screen**: the header, the failure banner and the visib
 
 The page asks `GET /changes` (`docs/specs/changes.md`) while it is visible. The answer holds the `server` and the `revision` of the engine. The page shows the **stamp** `<server>:<revision>` of its last good load in `<html data-revision>`, and the id of the Game that the load showed in `<html data-game>`. When the stamp of the answer differs from the stamp of the page, one `GET /screen?parts=<names>` (`docs/specs/screen.md`) loads the header, the failure banner and the parts of the visible tab, and a direct morph writes each part. The interval of the ask is `<html data-poll-ms>`. While an ask or a load is in flight, `<html>` has the attribute `data-screen-busy`.
 
-A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes and loads the tab that opens. No part holds a draft: a form that waits for a Save is in the edit dialog, outside every part. A load keeps what it does not change, and it skips the one element that holds unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight.
+A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes and loads the tab that opens. No part holds a draft: a form that waits for a Save is in the edit dialog, outside every part. A load keeps what it does not change, and it skips the one element that holds unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight. A load always records the stamp of what it rendered. The end of every action request forgets the stamp, so the next ask loads the screen once.
 
 A non-2xx answer of `GET /changes` or `GET /screen` shows in `#screen-error`, and every part keeps its content. Only a network error shows the Unreachable banner.
 
@@ -175,6 +175,10 @@ And the screen loads and shows what the action changed
 When a script action ends, for example the Delete control of the story log
 Then the page sends GET /changes at once
 And the story log no longer shows the deleted entry
+
+When a script action ends that wrote nothing, for example a Retrigger that fails
+Then the page sends GET /changes at once
+And the screen loads once
 ```
 
 #### Scenario 44.16: A tab change empties the closing tab and loads the opening tab once
@@ -267,7 +271,7 @@ And the engine still renders the old connection
 When the revision moves, and the `settings` part loads
 Then #role-select-quantifier still shows the client's choice
 And its request is still in flight
-And the stamp of the page is not the stamp of the engine
+And the stamp of the page is the stamp of the engine
 ```
 
 #### Scenario 44.25: After the save, the next load sets the select to the server value
@@ -290,7 +294,7 @@ Then no part of the tab holds a form that waits for a Save
 And a control that saves on change is not such a form
 ```
 
-#### Scenario 44.27: A load that skipped a control in flight does not move the stamp, and the end of the request loads again
+#### Scenario 44.27: A load that skipped a control in flight records the stamp, and the end of the request loads again
 
 ```gherkin
 Given the `settings` part is open
@@ -298,7 +302,7 @@ And the client chose another connection in #role-select-quantifier
 And the engine committed the save, and kept the connection that it had, but its answer has not come yet
 When the screen loads
 Then #role-select-quantifier still shows the client's choice
-And the stamp of the page is not the stamp of the engine
+And the stamp of the page is the stamp of the engine
 When the answer of the save comes
 Then the screen loads again
 And #role-select-quantifier shows the connection that the engine renders
@@ -407,26 +411,26 @@ When the held load ends
 Then the dialog closes
 ```
 
-#### Scenario 44.39: A slow request in a part does not make every ask load the screen
+#### Scenario 44.39: Each move of the revision loads the screen once while a request of a part runs
 
 ```gherkin
 Given the `settings` part is open
 And the client pressed Test for a saved connection, and the request has not ended
 When the revision moves, and the page asks
 Then the screen loads once, and the Test control keeps its state
-When the revision moves again, and the page asks again
-Then no further screen load starts
+When the revision moves twice more, and the page asks after each move
+Then the screen loads once after each move
 When the request ends
 Then the screen loads once more, and the stamp of the page is the stamp of the engine
 ```
 
-#### Scenario 44.40: A wait for a stamp of a newer server ends only when the page shows that server
+#### Scenario 44.40: A wait for a stamp of another server ends only at a load that started after the wait
 
 ```gherkin
-Given the page shows a stamp of server A
-And an action answer carries a stamp of server B, which is newer than server A
-When the screen loads and the page still shows server A
-Then the wait for the stamp of server B is not over
+Given a screen load is in flight and the page shows a stamp of server A
+And an action answer carries a stamp of server B
+When the page starts to wait for the stamp of server B, and the load that was in flight ends and shows server A
+Then the wait is not over
 When the engine answers as server B and the screen loads
 Then the wait is over
 ```

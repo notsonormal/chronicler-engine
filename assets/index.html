@@ -6,11 +6,11 @@
     <title>Chronicler Engine</title>
     <script src="/assets/htmx.min.js?v=1"></script>
     <script src="/assets/idiomorph-ext.min.js?v=1"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=20" />
+    <link rel="stylesheet" href="/assets/styles.css?v=22" />
     <link rel="stylesheet" href="/assets/worlds.css?v=8" />
     <link rel="stylesheet" href="/assets/games.css?v=5" />
   </head>
-  <body hx-ext="morph">
+  <body>
     <!-- Icons are Lucide (ISC; the Feather-derived ones MIT); licence text in /assets/LICENSE-lucide.txt. -->
     <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
       <symbol id="i-pencil" viewBox="0 0 24 24">
@@ -121,7 +121,7 @@
           hx-target="#action-preview"
           hx-swap="innerHTML"
           hx-sync="this:drop"
-          hx-disabled-elt="#command-input, #submit-btn"
+          hx-disabled-elt="#command-input"
           hx-on::before-request="onCommandBeforeRequest()"
           hx-on::after-request="onCommandAfterRequest(event)"
         >
@@ -146,7 +146,7 @@
           hx-post="/autoplay"
           hx-swap="none"
           hx-sync="this:drop"
-          hx-disabled-elt="#autoplay-btn, #autoplay-cycles"
+          hx-disabled-elt="#autoplay-cycles"
           hx-on::after-request="onAutoplayAfterRequest(event)"
         >
           <label class="visually-hidden" for="autoplay-cycles">Autoplay cycles</label>
@@ -167,12 +167,10 @@
         <!-- The action area's own state, next to the live status display that it never writes. -->
         <div class="status thinking" id="action-status"></div>
         <div
-          class="status ready"
+          class="status"
           id="status-display"
           data-part="status-display"
-        >
-          <span class="status ready" data-status="idle">Ready</span>
-        </div>
+        ></div>
       </div>
       <div
         id="restore-notice"
@@ -234,11 +232,11 @@
     </dialog>
 
 
-    <script src="/assets/dashboard-errors.js?v=11"></script>
-    <script src="/assets/dashboard-screen.js?v=5"></script>
-    <script src="/assets/dashboard-saves.js?v=1"></script>
-    <script src="/assets/dashboard-action-area.js?v=12"></script>
-    <script src="/assets/dashboard-story-log.js?v=11"></script>
+    <script src="/assets/dashboard-errors.js?v=12"></script>
+    <script src="/assets/dashboard-screen.js?v=6"></script>
+    <script src="/assets/dashboard-saves.js?v=2"></script>
+    <script src="/assets/dashboard-action-area.js?v=14"></script>
+    <script src="/assets/dashboard-story-log.js?v=12"></script>
     <script src="/assets/dashboard-slash-menu.js?v=1"></script>
     <script src="/assets/dashboard-panels.js?v=9"></script>
     <script src="/assets/dashboard-dialog.js?v=7"></script>

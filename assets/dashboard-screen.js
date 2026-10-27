@@ -53,12 +53,8 @@ function showsInlineError(node) {
 // seen, so a load must not overwrite it. The page counts the requests itself: the
 // htmx class `htmx-request` is not enough, because the settle of a swap that lands
 // during a request writes the old `class` back onto the element after the request
-// ended. A request also holds the controls that its `hx-disabled-elt` names: htmx
-// clears their `disabled` when the request ends, whatever the server rendered
-// there meanwhile. A load leaves them alone, and the end of the request asks for
-// the load that shows them.
+// ended.
 const requestsInFlight = new Map();
-const disabledByRequest = new WeakMap();
 
 function holdInFlight(node) {
   requestsInFlight.set(node, (requestsInFlight.get(node) || 0) + 1);
@@ -70,62 +66,29 @@ function releaseInFlight(node) {
   else requestsInFlight.delete(node);
 }
 
-// The controls that htmx disables for a request: the elements that the
-// `hx-disabled-elt` of the request's element, or of its closest ancestor that has
-// one, selects. This reads plain CSS selectors only. htmx also takes `this`,
-// `closest …` and `find …`, which `querySelectorAll` does not read, so the shell
-// names its controls with plain selectors.
-function controlsDisabledBy(element) {
-  const holder = element.closest("[hx-disabled-elt]");
-  if (!holder) return [];
-  return Array.from(document.querySelectorAll(holder.getAttribute("hx-disabled-elt")));
-}
-
 document.body.addEventListener("htmx:beforeRequest", function (evt) {
   const element = evt.detail && evt.detail.elt;
-  if (!element) return;
-  holdInFlight(element);
-  const controls = controlsDisabledBy(element);
-  controls.forEach(holdInFlight);
-  disabledByRequest.set(evt.detail.xhr, {
-    controls: controls,
-    renderedDisabled: controls.some((control) => control.hasAttribute("disabled")),
-  });
+  if (element) holdInFlight(element);
 });
 
+// The end of an action leaves the screen stale in a way that the revision may not
+// show: a load that skipped the control of the request recorded the stamp, and an
+// action that wrote nothing moves no revision. So the end of every request that is
+// not a read forgets the stamp, and the page asks at once. A swap that throws
+// skips `htmx:afterRequest`, so `htmx:onLoadError` is the end of that request.
 function endRequest(evt) {
   const element = evt.detail && evt.detail.elt;
   if (element && requestsInFlight.has(element)) releaseInFlight(element);
-  const held = disabledByRequest.get(evt.detail.xhr);
-  if (!held) return;
-  disabledByRequest.delete(evt.detail.xhr);
-  held.controls.forEach(releaseInFlight);
-  // A control that the server rendered as disabled shows enabled once htmx
-  // clears it, so the screen must load again to render it as the server does.
-  if (held.renderedDisabled) forgetScreenStamp();
+  const config = evt.detail && evt.detail.requestConfig;
+  if (!config || config.verb !== "get") forgetScreenStamp();
+  askNow();
 }
 
 document.body.addEventListener("htmx:afterRequest", endRequest);
-
-// A swap that throws skips `htmx:afterRequest` and leaves `disabled` on the
-// controls of the request. The request is over all the same, so the loads stop
-// waiting for it, and the next load renders the controls of the parts again.
-document.body.addEventListener("htmx:onLoadError", function (evt) {
-  endRequest(evt);
-  forgetScreenStamp();
-});
+document.body.addEventListener("htmx:onLoadError", endRequest);
 
 function requestIsInFlight(node) {
   return !!node && node.nodeType === 1 && requestsInFlight.has(node);
-}
-
-// An element that left the page can end its request without an event that
-// reaches the body, so only a request of an element on the page counts.
-function aRequestOfThePageIsInFlight() {
-  for (const element of requestsInFlight.keys()) {
-    if (element.isConnected) return true;
-  }
-  return false;
 }
 
 // A story-log entry in edit holds the text that the player is typing. A load skips
@@ -135,21 +98,8 @@ function isBeingEdited(node) {
   return !!node && node.nodeType === 1 && node.hasAttribute("data-editing");
 }
 
-// A load that skipped a control in flight shows what the control showed, not what
-// the engine rendered, so it must not stand for the revision it saw.
-let skippedInFlightInLoad = false;
-
-// While the request that a load skipped runs, another load would skip it again and
-// write nothing new, so the asks wait. The end of the request asks.
-let loadWaitsForRequests = false;
-
 function loadKeeps(node) {
-  if (isBeingEdited(node)) return true;
-  if (requestIsInFlight(node)) {
-    skippedInFlightInLoad = true;
-    return true;
-  }
-  return showsInlineError(node);
+  return isBeingEdited(node) || requestIsInFlight(node) || showsInlineError(node);
 }
 
 Idiomorph.defaults.callbacks.beforeNodeMorphed = function (oldNode) {
@@ -211,21 +161,11 @@ function applyFocusPlan(part, plan) {
 // that shows nothing yet, or whose last load must be repeated, has none.
 function forgetScreenStamp() {
   delete screenRoot.dataset.revision;
-  loadWaitsForRequests = false;
 }
 
 function splitStamp(stamp) {
   const at = stamp.lastIndexOf(":");
   return { server: stamp.slice(0, at), revision: Number(stamp.slice(at + 1)) };
-}
-
-// The servers that the page has met, oldest first. A restart makes a newer server,
-// so a stamp of a server that is newer than the server of a wait ends that wait.
-const serversMet = [];
-
-function meetServer(stamp) {
-  const server = splitStamp(stamp).server;
-  if (!serversMet.includes(server)) serversMet.push(server);
 }
 
 function screenShows(stamp) {
@@ -239,24 +179,28 @@ function screenShows(stamp) {
 // An answer that carries the revision after its write is shown when the screen
 // holds that revision. The server id differs after a restart, and the revision of
 // the old server means nothing to the new one, so such a stamp is shown by the
-// next good load.
+// first good load that started after the wait began: a load that started earlier
+// may still carry the old server. Each load takes the next number when it starts,
+// and each wait records the number of the last load that had started.
+let loadsStarted = 0;
 const screenWaiters = [];
 
 function afterScreenShows(stamp) {
   if (!stamp) return Promise.resolve();
   if (screenShows(stamp)) return Promise.resolve();
-  meetServer(stamp);
-  return new Promise((resolve) => screenWaiters.push({ stamp: stamp, resolve: resolve }));
+  return new Promise((resolve) =>
+    screenWaiters.push({ stamp: stamp, loadsStartedBefore: loadsStarted, resolve: resolve }),
+  );
 }
 
-function resolveScreenWaiters() {
+function resolveScreenWaiters(loadNumber) {
   const shown = screenRoot.dataset.revision;
   const waiting = screenWaiters.splice(0);
   for (const waiter of waiting) {
     const restarted =
       !!shown &&
-      serversMet.indexOf(splitStamp(shown).server) >
-        serversMet.indexOf(splitStamp(waiter.stamp).server);
+      loadNumber > waiter.loadsStartedBefore &&
+      splitStamp(shown).server !== splitStamp(waiter.stamp).server;
     if (screenShows(waiter.stamp) || restarted) waiter.resolve();
     else screenWaiters.push(waiter);
   }
@@ -298,10 +242,6 @@ function clearScreenError() {
   fireScreenEvent("screen:error", { summary: "" });
 }
 
-// The count of Game changes that this page sent. A load that started before one
-// of them must not name its Game.
-let gameChanges = 0;
-
 // A load is for the tab that was visible when it started. An answer that arrives
 // after a tab change is dropped, and the tab change has already asked for the
 // visible tab.
@@ -309,9 +249,7 @@ async function loadScreen() {
   const section = visibleSection();
   const parts = visibleParts();
   const names = parts.map((part) => part.dataset.part);
-  skippedInFlightInLoad = false;
-  const gameChangesAtStart = gameChanges;
-  fireScreenEvent("screen:beforeload", { parts: names });
+  const number = (loadsStarted += 1);
   let response;
   let body;
   try {
@@ -328,13 +266,13 @@ async function loadScreen() {
   }
   if (visibleSection() !== section) return;
   try {
-    morphParts(parts, body, response, gameChangesAtStart);
+    morphParts(parts, body, response, number);
   } catch (error) {
     showScreenException("GET /screen", "could not be shown", error);
   }
 }
 
-function morphParts(parts, body, response, gameChangesAtStart) {
+function morphParts(parts, body, response, loadNumber) {
   const answer = document.createElement("template");
   answer.innerHTML = body;
   const templates = new Map(
@@ -353,20 +291,12 @@ function morphParts(parts, body, response, gameChangesAtStart) {
     htmx.process(part);
   });
   written.forEach((part, index) => applyFocusPlan(part, plans[index]));
-  // A Game change that this page sent while the load ran makes the Game of the
-  // answer the old one.
-  if (gameChanges === gameChangesAtStart) {
-    screenRoot.dataset.game = response.headers.get("X-Game") || "";
-  }
+  screenRoot.dataset.game = response.headers.get("X-Game") || "";
   const stamp = response.headers.get("X-Revision");
-  loadWaitsForRequests = skippedInFlightInLoad;
-  if (stamp && !skippedInFlightInLoad) {
-    screenRoot.dataset.revision = stamp;
-    meetServer(stamp);
-  }
+  if (stamp) screenRoot.dataset.revision = stamp;
   clearScreenError();
   fireScreenEvent("screen:loaded", { parts: names });
-  resolveScreenWaiters();
+  resolveScreenWaiters(loadNumber);
 }
 
 async function runAsk() {
@@ -393,7 +323,6 @@ async function runAsk() {
     clearScreenError();
     return;
   }
-  if (loadWaitsForRequests && aRequestOfThePageIsInFlight()) return;
   await loadScreen();
 }
 
@@ -468,35 +397,14 @@ document.body.addEventListener("htmx:configRequest", function (evt) {
   if (game && evt.detail.verb !== "get") evt.detail.headers[GAME_HEADER] = game;
 });
 
-// A create, a switch or a Reset that this tab sent makes the shown Game stale at
-// once, so the page names none until the next load has shown the new Game: the
-// next send acts on the active Game and meets no false refusal.
-const GAME_CHANGING_ROUTES = [/^\/games$/, /^\/games\/[^/]+\/switch$/, /^\/reset$/];
-
-function forgetShownGameAfterGameChange(evt) {
-  const path = evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
-  if (!evt.detail.successful || !path) return;
-  const route = path.split("?")[0];
-  if (GAME_CHANGING_ROUTES.some((pattern) => pattern.test(route))) {
-    gameChanges += 1;
-    delete screenRoot.dataset.game;
-  }
-}
-
-// The one way a script sends an action: the page asks as soon as the request
-// ends, so the result shows without waiting for the next ask of the timer.
+// The one way a script sends an action: the end of the request is the end of an
+// action, as for a request of htmx.
 function actionFetch(url, init) {
   const headers = new Headers((init && init.headers) || {});
   const game = screenRoot.dataset.game;
   if (game) headers.set(GAME_HEADER, game);
   return fetch(url, { ...init, headers }).finally(() => {
+    forgetScreenStamp();
     askNow();
   });
 }
-
-// Every request that ends is an action, or a view change that may follow one, and
-// the page asks at once.
-document.body.addEventListener("htmx:afterRequest", function (evt) {
-  forgetShownGameAfterGameChange(evt);
-  askNow();
-});

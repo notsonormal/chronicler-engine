@@ -4,11 +4,12 @@
 // that the status display has not shown yet.
 let checkInFlight = false;
 
-// The action area's own state between an accepted send and the first load of the
-// status display that follows it. The status display is a part of the screen: the
-// action area reads it and never writes it. This state shows in #action-status.
+// The action area's own state between an accepted request and the screen that
+// shows its effect. The status display is a part of the screen: the action area
+// reads it and never writes it. This state shows in #action-status. Each request
+// that begins it ends it with its own answer: when the screen shows the revision
+// of the answer, or at once when the engine did not take the request.
 let sendPending = false;
-let pendingLoadStarted = false;
 
 function renderActionStatus() {
   const own = document.getElementById("action-status");
@@ -20,15 +21,24 @@ function renderActionStatus() {
 
 function beginPending() {
   sendPending = true;
-  pendingLoadStarted = false;
   renderActionStatus();
 }
 
 function endPending() {
   sendPending = false;
-  pendingLoadStarted = false;
   renderActionStatus();
   syncActionState();
+}
+
+function endPendingWhenScreenShows(stamp) {
+  afterScreenShows(stamp).then(endPending);
+}
+
+// A request that the engine took begins the state, and the screen that shows the
+// revision of its answer ends it.
+function beginPendingUntilScreenShows(event) {
+  beginPending();
+  endPendingWhenScreenShows(event.detail.xhr.getResponseHeader("X-Revision"));
 }
 
 function statusShows(state) {
@@ -65,8 +75,8 @@ function deriveActionState() {
 
 // `data-state` on the action area is the browser's view state: a pending send, a
 // check in flight and an open preview are known to the page only. The server
-// renders the disabled state of every control, and a request disables its own
-// controls through `hx-disabled-elt`, so no script writes `disabled`.
+// renders the disabled state of every control, and a request disables only the
+// shell field of its form through `hx-disabled-elt`, so no script writes `disabled`.
 function applyActionState(state) {
   const area = document.getElementById("action-area");
   if (area) area.dataset.state = state;
@@ -95,39 +105,15 @@ function syncActionState() {
   previewWasOpen = open;
 }
 
-// The container's own class colours whatever it holds, and the failure line is a
-// server-rendered disclosure, so the state is read back off the answer's
-// `data-status` instead of being remembered. Only the state classes are
-// touched, so htmx's own transient classes survive.
-const STATUS_STATE_CLASSES = ["ready", "thinking", "error"];
-
-const STATUS_CLASS_OF_STATE = {
-  idle: "ready",
-  thinking: "thinking",
-  autoplay: "thinking",
-  failed: "error",
-};
-
-function statusDisplayState(statusDisplay) {
-  const answer = statusDisplay.querySelector("[data-status]");
-  const state = answer ? answer.dataset.status : "idle";
-  return STATUS_CLASS_OF_STATE[state] || "ready";
-}
-
-function syncStatusClass() {
-  const statusDisplay = document.getElementById("status-display");
-  if (!statusDisplay) return;
-  statusDisplay.classList.remove(...STATUS_STATE_CLASSES);
-  statusDisplay.classList.add(statusDisplayState(statusDisplay));
-}
-
 function writeLiveRegion(id, text) {
   const region = document.getElementById(id);
   if (!region || region.textContent === text) return;
   region.textContent = text;
 }
 
-let announcedStatusLabel = null;
+// The page starts at the label of an idle display, so a page that opens during a
+// Job announces the step at its first load, and an idle page announces nothing.
+let announcedStatusLabel = "Ready";
 
 function announceStatusDisplay() {
   const statusDisplay = document.getElementById("status-display");
@@ -136,10 +122,6 @@ function announceStatusDisplay() {
   }
   const label = statusDisplay.textContent.trim();
   if (label === "") return;
-  if (announcedStatusLabel === null) {
-    announcedStatusLabel = label;
-    return;
-  }
   if (label === announcedStatusLabel) return;
   announcedStatusLabel = label;
   writeLiveRegion("status-announcer", label);
@@ -156,7 +138,6 @@ function announceGenerationError(statusDisplay) {
 function applyStatusDisplay() {
   const statusDisplay = document.getElementById("status-display");
   if (!statusDisplay) return;
-  syncStatusClass();
   syncActionState();
   announceGenerationError(statusDisplay);
   announceStatusDisplay();
@@ -222,23 +203,9 @@ function updateToThinking() {
   syncActionState();
 }
 
-// The status display loads after each send the engine took. The first load that
-// starts after the send ends the action area's own state, because that load
-// reads the state the send caused.
-document.addEventListener("screen:beforeload", function (evt) {
-  if (sendPending && evt.detail.parts.includes("status-display")) {
-    pendingLoadStarted = true;
-  }
-});
-
-function readStatusDisplay() {
-  if (sendPending && pendingLoadStarted) endPending();
-  applyStatusDisplay();
-}
-
 document.addEventListener("screen:loaded", function (evt) {
   const parts = evt.detail.parts;
-  if (parts.includes("status-display")) readStatusDisplay();
+  if (parts.includes("status-display")) applyStatusDisplay();
   else syncActionState();
   if (parts.includes("story-log")) announceNewNarration();
   if (parts.includes("options-dock")) announceOptions();
@@ -294,7 +261,7 @@ function onCommandAfterRequest(event) {
     // The preview keeps the flagged command for editing, and a dispatched
     // command has been consumed, so clear the input.
     clearCommandInputAfterScreenShows(event, event.detail.requestConfig.parameters.command);
-    beginPending();
+    beginPendingUntilScreenShows(event);
   }
   syncActionState();
 }
@@ -317,7 +284,7 @@ function onPreviewSendAfterRequest(event) {
     reportRefusal(commandFormSlot(), "the command was not sent", refusal);
   } else if (requestSucceeded(event)) {
     clearCommandInputAfterScreenShows(event, previewSentText);
-    beginPending();
+    beginPendingUntilScreenShows(event);
   } else {
     reportConfirmFailure(event);
   }
@@ -335,8 +302,27 @@ function onAutoplayAfterRequest(event) {
       refusal,
     );
   } else if (requestSucceeded(event)) {
-    beginPending();
+    beginPendingUntilScreenShows(event);
     syncActionState();
+  }
+}
+
+// The new-options request begins the pending state before it is sent, from the
+// form's before-request handler. Its answer ends the state, and a refusal reports
+// in a slot of the form.
+function onNewOptionsAfterRequest(event) {
+  const refusal = answeredRefused(event);
+  if (refusal) {
+    reportRefusal(
+      inlineErrorSlotFor(event.detail.elt, true),
+      "the new options were not requested",
+      refusal,
+    );
+    endPending();
+  } else if (requestSucceeded(event)) {
+    endPendingWhenScreenShows(event.detail.xhr.getResponseHeader("X-Revision"));
+  } else {
+    endPending();
   }
 }
 
@@ -372,8 +358,3 @@ function editOption(btn) {
   input.value = optionBtn.textContent;
   input.focus();
 }
-
-document.addEventListener("DOMContentLoaded", function () {
-  // A page loaded mid-generation renders a thinking status span, so the reconciler must run at load.
-  applyStatusDisplay();
-});

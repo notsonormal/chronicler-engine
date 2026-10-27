@@ -48,7 +48,10 @@ function flagSaved(element, saved) {
   else flag.removeAttribute("data-saved");
 }
 
+// A form that reports its own refusal in its own after-request handler, such as
+// the new-options form of the dock, is not a saving form.
 function isSavingControl(element) {
+  if (element.hasAttribute("hx-on::after-request")) return false;
   return element.tagName === "FORM" || element.matches("input, textarea, select");
 }
 

@@ -1,11 +1,12 @@
-//! Stub-browser tests for the action controls: the disabled state that a check request gives its own controls, the view states of the action area, and the load that follows a request. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for the action controls: what a check request does to the controls of the action area, the view states of the action area, and the load that follows a request. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 
 use chronicler_engine::domain::model::state::generation_status::Step;
 
 use super::support::{
-    hold_requests_ending_with, read_command_input, release_held_requests_and_wait_for_answers,
+    eval_string, hold_requests_ending_with, hold_screen_loads, read_command_input,
+    release_held_requests_and_wait_for_answers, release_screen_loads, wait_for_held_screen_load,
     StubRunner,
 };
 use super::*;
@@ -44,13 +45,24 @@ async fn wait_for_controls(
     );
 }
 
+/// Send looks busy and takes no click while the form that it submits has a request in
+/// flight, though the part renders it enabled.
+async fn send_takes_clicks(page: &playwright_rs::Page) -> bool {
+    page.evaluate::<(), bool>(
+        "() => getComputedStyle(document.getElementById('submit-btn')).pointerEvents !== 'none'",
+        None,
+    )
+    .await
+    .unwrap()
+}
+
 async fn press_send(page: &playwright_rs::Page, command: &str) {
     fill_command_input(page, command).await;
     page.locator("#submit-btn").await.click(None).await.unwrap();
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.62
-async fn check_a_check_request_disables_send_and_the_input_until_it_ends(
+async fn check_a_check_request_disables_the_input_and_shows_send_as_busy_until_it_ends(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -61,18 +73,31 @@ async fn check_a_check_request_disables_send_and_the_input_until_it_ends(
 
     wait_for_controls(
         &page,
-        "the request disables Send and the Action input and the area is checking",
-        |(send, input, _, state)| *send && *input && state == "checking",
+        "the request disables the Action input and the area is checking",
+        |(_, input, _, state)| *input && state == "checking",
     )
     .await;
+    let (send_disabled, ..) = read_controls(&page).await;
+    assert!(
+        !send_disabled,
+        "no script and no request disables Send, the server renders it enabled"
+    );
+    assert!(
+        !send_takes_clicks(&page).await,
+        "Send looks busy and takes no click while its form has a request in flight"
+    );
 
     release_held_requests_and_wait_for_answers(&page).await;
     wait_for_controls(
         &page,
-        "the end of the request enables Send and the Action input",
+        "the end of the request enables the Action input",
         |(send, input, _, state)| !send && !input && state != "checking",
     )
     .await;
+    assert!(
+        send_takes_clicks(&page).await,
+        "Send takes clicks again when the request has ended"
+    );
     assert_eq!(
         read_command_input(&page).await,
         "look around",
@@ -140,41 +165,40 @@ async fn check_a_send_while_a_check_request_runs_is_not_sent_twice(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.64
-async fn check_a_load_during_a_check_request_leaves_the_controls_to_the_load_after_it(
+async fn check_a_load_during_a_check_request_renders_send_as_the_server_does(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     wait_for_screen_current(&page).await;
     hold_requests_ending_with(&page, "/action/check").await;
     press_send(&page, "look around").await;
-    wait_for_controls(&page, "the request disables Send", |(send, ..)| *send).await;
-
-    let screen_requests = stub.changes_handle().screen_requests().len();
-    stub.status_handle().set(StubStatus::Step(Step::Narrating));
-    let loaded = wait_for_condition_async(
-        Duration::from_secs(5),
-        Duration::from_millis(25),
-        || async { stub.changes_handle().screen_requests().len() > screen_requests },
+    wait_for_controls(
+        &page,
+        "the request disables the Action input",
+        |(_, input, ..)| *input,
     )
     .await;
-    assert!(loaded, "the page loads the screen while the request runs");
-    assert!(
-        read_controls(&page).await.0,
-        "Send is still disabled while the request runs"
-    );
+
+    stub.status_handle().set(StubStatus::Step(Step::Narrating));
+    wait_for_controls(
+        &page,
+        "the load that lands during the request renders Send as the server does",
+        |(send, _, label, _)| *send && label.contains("Generating"),
+    )
+    .await;
 
     release_held_requests_and_wait_for_answers(&page).await;
     wait_for_screen_current(&page).await;
     wait_for_controls(
         &page,
-        "the load after the request renders Send as the server does",
-        |(send, _, label, _)| *send && label.contains("Generating"),
+        "the end of the request leaves Send as the server renders it",
+        |(send, input, label, _)| *send && !input && label.contains("Generating"),
     )
     .await;
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.65
-async fn check_a_check_request_that_starts_with_send_rendered_disabled_leaves_it_disabled(
+async fn check_a_check_request_never_writes_disabled_on_send(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -184,6 +208,16 @@ async fn check_a_check_request_that_starts_with_send_rendered_disabled_leaves_it
         *send
     })
     .await;
+    page.evaluate::<(), ()>(
+        r#"() => {
+            window.__sendDisabledWrites = 0;
+            new MutationObserver((records) => { window.__sendDisabledWrites += records.length; })
+                .observe(document.getElementById('submit-btn'), { attributes: true, attributeFilter: ['disabled'] });
+        }"#,
+        None,
+    )
+    .await
+    .unwrap();
 
     fill_command_input(&page, "look around").await;
     page.evaluate::<(), ()>(
@@ -210,6 +244,13 @@ async fn check_a_check_request_that_starts_with_send_rendered_disabled_leaves_it
         |(send, _, label, _)| *send && label.contains("Generating"),
     )
     .await;
+    assert_eq!(
+        page.evaluate::<(), f64>("() => window.__sendDisabledWrites", None)
+            .await
+            .unwrap(),
+        0.0,
+        "the request wrote `disabled` on Send neither at its start nor at its end"
+    );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.66
@@ -303,10 +344,11 @@ async fn check_tab_follows_the_visual_order_of_the_action_controls(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.68
-async fn check_a_swap_that_throws_does_not_leave_the_loads_waiting(
+async fn check_a_swap_that_throws_leaves_the_command_form_dead_and_the_screen_loading(
     page: playwright_rs::Page,
-    _stub: StubServer,
+    stub: StubServer,
 ) {
+    let changes = stub.changes_handle();
     wait_for_screen_current(&page).await;
     // The engine refuses the command and changes nothing, so no change moves the
     // stamp: only the end of the failed request can ask for the load.
@@ -325,6 +367,7 @@ async fn check_a_swap_that_throws_does_not_leave_the_loads_waiting(
     )
     .await
     .unwrap();
+    let loads_before = changes.loads("/screen");
 
     press_send(&page, "look around").await;
     let failed = wait_for_condition_async(
@@ -343,12 +386,229 @@ async fn check_a_swap_that_throws_does_not_leave_the_loads_waiting(
         "the swap of the check answer throws, and htmx says so"
     );
 
-    wait_for_controls(
-        &page,
-        "a load after the failed swap renders Send enabled and the area leaves checking",
-        |(send, _, label, state)| !send && label == "Send" && state != "checking",
+    let loaded = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { changes.loads("/screen") > loads_before },
     )
     .await;
+    assert!(
+        loaded,
+        "the end of the failed request forgets the stamp, so the screen loads again with no change"
+    );
+    wait_for_screen_current(&page).await;
+    wait_for_controls(
+        &page,
+        "a load after the failed swap renders Send enabled, the area is not checking, and the Action input stays disabled",
+        |(send, input, label, state)| !send && *input && label == "Send" && state != "checking",
+    )
+    .await;
+    assert!(
+        !send_takes_clicks(&page).await,
+        "the form keeps its request, so Send still looks busy and takes no click"
+    );
+
+    page.evaluate::<(), ()>(
+        "() => document.getElementById('command-form').requestSubmit()",
+        None,
+    )
+    .await
+    .unwrap();
+    // A submit that the dead form let through would reach the stub within a few
+    // milliseconds; the window only has to outlast that.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        stub.action_handle().count(),
+        1,
+        "the dead form drops every later submit until the page reloads"
+    );
+}
+
+/// The requests that start the pending state of the action area, each from its own
+/// control. The retry and the retrigger share one path in the client, and each has
+/// its own control.
+#[derive(Clone, Copy, Debug)]
+enum PendingStarter {
+    /// The Send button of the command form.
+    Send,
+    /// Send Original in the text-check preview.
+    PreviewSend,
+    /// The Autoplay button.
+    AutoplayStart,
+    /// The Retry control of the last narration.
+    Retry,
+    /// The Retrigger control of the last narration.
+    Retrigger,
+    /// The New options button of the options dock.
+    NewOptions,
+}
+
+/// The starters that begin the pending state before the answer comes. The other
+/// three begin it only when the engine took the request, so a refusal leaves
+/// nothing to end.
+const STARTERS_BEFORE_THE_ANSWER: [PendingStarter; 3] = [
+    PendingStarter::Retry,
+    PendingStarter::Retrigger,
+    PendingStarter::NewOptions,
+];
+
+const PENDING_STARTERS: [PendingStarter; 6] = [
+    PendingStarter::Send,
+    PendingStarter::PreviewSend,
+    PendingStarter::AutoplayStart,
+    PendingStarter::Retry,
+    PendingStarter::Retrigger,
+    PendingStarter::NewOptions,
+];
+
+async fn start_pending_request(page: &playwright_rs::Page, starter: PendingStarter) {
+    match starter {
+        PendingStarter::Send => press_send(page, "look around").await,
+        PendingStarter::PreviewSend => {
+            press_send(page, "look at the casle").await;
+            wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
+            page.locator(".text-check-preview .btn-original")
+                .await
+                .click(None)
+                .await
+                .unwrap();
+        }
+        PendingStarter::AutoplayStart => {
+            page.locator("#autoplay-btn")
+                .await
+                .click(None)
+                .await
+                .unwrap();
+        }
+        PendingStarter::Retry => {
+            eval_string(
+                page,
+                "() => { document.querySelector(\".swipe-btn[title='Retry']\").click(); return ''; }",
+            )
+            .await;
+        }
+        PendingStarter::Retrigger => {
+            eval_string(
+                page,
+                "() => { document.querySelector('.log-entry.narration .retrigger-btn').click(); return ''; }",
+            )
+            .await;
+        }
+        PendingStarter::NewOptions => {
+            eval_string(
+                page,
+                "() => { document.querySelector('.options-regen-form button').click(); return ''; }",
+            )
+            .await;
+        }
+    }
+}
+
+/// The slot where the page reports the request that a starter sends, when the
+/// engine does not take it.
+fn refusal_slot_of(starter: PendingStarter) -> &'static str {
+    match starter {
+        PendingStarter::Retry | PendingStarter::Retrigger => "#story-log-error",
+        PendingStarter::NewOptions => ".options-regen-form [data-error-slot]",
+        other => panic!("{other:?} begins the pending state only when the engine took the request"),
+    }
+}
+
+async fn action_status_text(page: &playwright_rs::Page) -> String {
+    eval_string(
+        page,
+        "() => document.getElementById('action-status').textContent.trim()",
+    )
+    .await
+}
+
+async fn wait_for_action_status(page: &playwright_rs::Page, starter: PendingStarter, shows: &str) {
+    let reached = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { action_status_text(page).await == shows },
+    )
+    .await;
+    assert!(
+        reached,
+        "{starter:?}: #action-status must read {shows:?}, it reads {:?}",
+        action_status_text(page).await
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.69
+async fn check_a_pending_state_ends_when_the_screen_shows_the_answer_of_its_request(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    stub.save_handle().set_generation_requests_accepted(true);
+    wait_for_screen_current(&page).await;
+    hold_screen_loads(&page).await;
+    for starter in PENDING_STARTERS {
+        eval_string(
+            &page,
+            "() => { window.__holdScreen = true; window.__screenHeld = []; return ''; }",
+        )
+        .await;
+        start_pending_request(&page, starter).await;
+
+        wait_for_action_status(&page, starter, "Thinking...").await;
+        wait_for_held_screen_load(&page).await;
+        assert_eq!(
+            action_status_text(&page).await,
+            "Thinking...",
+            "{starter:?}: the screen has not shown the answer, so the action area keeps its own state"
+        );
+
+        release_screen_loads(&page).await;
+        wait_for_action_status(&page, starter, "").await;
+        wait_for_screen_current(&page).await;
+
+        stub.status_handle().set(StubStatus::Idle);
+        ask_once(&page).await;
+    }
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.70
+async fn check_a_pending_state_ends_at_once_when_the_engine_does_not_take_its_request(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    stub.save_handle().set_story_writes_refused_as_busy(true);
+    wait_for_screen_current(&page).await;
+    for starter in STARTERS_BEFORE_THE_ANSWER {
+        eval_string(
+            &page,
+            r#"() => {
+                document.querySelectorAll('[data-error-slot]').forEach((slot) => {
+                    slot.innerHTML = '';
+                    slot.hidden = true;
+                });
+                return '';
+            }"#,
+        )
+        .await;
+        start_pending_request(&page, starter).await;
+
+        wait_for_error_disclosure(
+            &page,
+            refusal_slot_of(starter),
+            "the request that the engine does not take is reported in its slot",
+        )
+        .await;
+        if matches!(starter, PendingStarter::NewOptions) {
+            let (_, line, _) = read_error_disclosure(&page, refusal_slot_of(starter)).await;
+            assert!(
+                line.contains("the new options were not requested"),
+                "the form reports its own refusal in its own words, got {line:?}"
+            );
+        }
+        assert_eq!(
+            action_status_text(&page).await,
+            "",
+            "{starter:?}: the engine did not take the request, so no pending state is left"
+        );
+    }
 }
 
 #[tokio::test]
@@ -357,7 +617,7 @@ async fn run_action_controls_checks() {
     runner
         .run(
             StubActionOutcome::Refused,
-            check_a_check_request_disables_send_and_the_input_until_it_ends,
+            check_a_check_request_disables_the_input_and_shows_send_as_busy_until_it_ends,
         )
         .await;
     runner
@@ -369,13 +629,13 @@ async fn run_action_controls_checks() {
     runner
         .run(
             StubActionOutcome::Refused,
-            check_a_load_during_a_check_request_leaves_the_controls_to_the_load_after_it,
+            check_a_load_during_a_check_request_renders_send_as_the_server_does,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Refused,
-            check_a_check_request_that_starts_with_send_rendered_disabled_leaves_it_disabled,
+            check_a_check_request_never_writes_disabled_on_send,
         )
         .await;
     runner
@@ -393,7 +653,19 @@ async fn run_action_controls_checks() {
     runner
         .run(
             StubActionOutcome::Refused,
-            check_a_swap_that_throws_does_not_leave_the_loads_waiting,
+            check_a_swap_that_throws_leaves_the_command_form_dead_and_the_screen_loading,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_pending_state_ends_when_the_screen_shows_the_answer_of_its_request,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Refused,
+            check_a_pending_state_ends_at_once_when_the_engine_does_not_take_its_request,
         )
         .await;
     runner.finish().await;

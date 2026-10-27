@@ -771,7 +771,7 @@ pub fn check_scripts_listen_no_part_swaps(
 /// A read (`if (input.disabled)`) is not a finding, and a comment is not read. Not
 /// covered: `Object.assign(control, { disabled: true })`, `setAttributeNS`, a name
 /// built at run time, markup strings that carry `disabled`, and inline handlers in
-/// the shell. A request disables its own controls through `hx-disabled-elt`.
+/// the shell. A request disables a field of the shell through `hx-disabled-elt`.
 pub fn check_scripts_write_no_disabled(path: &str, script: &str) -> Vec<Violation> {
     const QUOTED: &str = r#"["'`]disabled["'`]"#;
     const WRITE_OPERATOR: &str = r"\s*(?:\|\||&&|\?\?)?=(?:[^=]|$)";
@@ -810,7 +810,7 @@ pub fn check_scripts_write_no_disabled(path: &str, script: &str) -> Vec<Violatio
             Violation::error(
                 path,
                 line,
-                "a script writes `disabled`. The server renders every control state, and a request disables its own controls with `hx-disabled-elt`.",
+                "a script writes `disabled`. The server renders every control state, and a request disables a field of the shell with `hx-disabled-elt`.",
             )
         })
         .collect()

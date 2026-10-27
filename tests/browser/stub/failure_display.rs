@@ -749,14 +749,8 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
     );
 }
 
-fn carries_state(class_name: &str, state: &str) -> bool {
-    class_name.split_whitespace().any(|class| class == state)
-}
-
 #[derive(serde::Deserialize)]
 struct StatusState {
-    #[serde(rename = "className")]
-    class_name: String,
     #[serde(rename = "textColour")]
     text_colour: String,
     #[serde(rename = "paletteError")]
@@ -783,7 +777,6 @@ async fn read_status_state(page: &playwright_rs::Page) -> StatusState {
                     measured.neededHeight <= measured.boxHeight + 1;
             }
             return {
-                className: display.className,
                 textColour: text ? getComputedStyle(text).color : '',
                 paletteError,
                 fits: readable,
@@ -823,16 +816,15 @@ const MEASURE_CLAMPED_TEXT: &str = r#"
 "#;
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.41
-async fn check_generation_error_takes_the_error_class_and_reads_without_details(
+async fn check_generation_error_is_drawn_in_the_error_colour_and_reads_without_details(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let status = stub.status_handle();
     let ready = read_status_state(&page).await;
-    assert!(
-        carries_state(&ready.class_name, "ready") && !carries_state(&ready.class_name, "error"),
-        "an idle dashboard must carry the ready state, got {:?}",
-        ready.class_name
+    assert_ne!(
+        ready.text_colour, ready.palette_error,
+        "Ready is not drawn in the error colour"
     );
 
     status.set(StubStatus::Error(
@@ -844,25 +836,19 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async { read_status_state(&page).await.class_name.contains("error") },
+            || async {
+                let state = read_status_state(&page).await;
+                state.text_colour == state.palette_error
+            },
         )
         .await,
-        "a generation error must put the status display into its error state"
+        "a generation error must be drawn in the palette's error colour"
     );
 
     let error = read_status_state(&page).await;
-    assert!(
-        carries_state(&error.class_name, "error") && !carries_state(&error.class_name, "ready"),
-        "the error state must replace the ready state, not sit under it, got {:?}",
-        error.class_name
-    );
     assert_ne!(
         error.text_colour, ready.text_colour,
         "the error must not be drawn in the Ready colour"
-    );
-    assert_eq!(
-        error.text_colour, error.palette_error,
-        "the error must be drawn in the palette's error colour"
     );
     assert!(
         error.fits,
@@ -873,12 +859,6 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     load_screen_now(&page).await;
     wait_for_status_ready(&page).await;
     let recovered = read_status_state(&page).await;
-    assert!(
-        carries_state(&recovered.class_name, "ready")
-            && !carries_state(&recovered.class_name, "error"),
-        "returning to Ready must restore the ready state, got {:?}",
-        recovered.class_name
-    );
     assert_ne!(
         recovered.text_colour, error.palette_error,
         "Ready must not keep the error's colour"
@@ -1307,7 +1287,7 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_generation_error_takes_the_error_class_and_reads_without_details,
+            check_generation_error_is_drawn_in_the_error_colour_and_reads_without_details,
         )
         .await;
     runner
