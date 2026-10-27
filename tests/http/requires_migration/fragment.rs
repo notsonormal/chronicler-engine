@@ -449,7 +449,7 @@ async fn test_list_games_fragment_escapes_html() {
 #[tokio::test]
 async fn test_list_games_fragment_storage_error() {
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        StorageCall::ListGames,
+        StorageCall::ListSavedGames,
         TestOverride::config("list_games failed"),
     ));
 

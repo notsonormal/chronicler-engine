@@ -84,3 +84,40 @@ Then the dialog is closed, and its body is empty
 When the client opens the New Game form again
 Then the World select and the Persona select show their first options
 ```
+
+#### Scenario 27.8: Next and Previous move between the pages of saved Games
+
+```gherkin
+Given the engine holds 51 saved Games
+And the client opened the Games tab
+Then the Saved Games list shows 50 Games and the pager shows "Page 1 of 2"
+And the Previous control is disabled and the Next control is enabled
+When the client presses Next
+Then the Saved Games list shows one Game and the pager shows "Page 2 of 2"
+And the Next control is disabled and the Previous control is enabled
+When the engine changes and the page loads the screen
+Then the Saved Games list still shows page 2
+When the client presses Previous
+Then the Saved Games list shows 50 Games and the pager shows "Page 1 of 2"
+```
+
+#### Scenario 27.9: The page of saved Games resets when the client leaves the Games tab
+
+```gherkin
+Given the engine holds 51 saved Games
+And the client opened the Games tab and pressed Next, so the pager shows "Page 2 of 2"
+When the client opens the Worlds tab
+And the client opens the Games tab again
+Then the Saved Games list shows 50 Games and the pager shows "Page 1 of 2"
+```
+
+#### Scenario 27.10: A click on Next during a load drops the old answer
+
+```gherkin
+Given the engine holds 51 saved Games
+And the client opened the Games tab, which shows page 1
+And a load of the screen is in flight
+When the client presses Next, and the old answer arrives
+Then the old answer is dropped
+And the `games` part shows page 2
+```

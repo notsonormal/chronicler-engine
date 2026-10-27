@@ -4,5 +4,5 @@
 mod parts;
 mod screen;
 
-pub use self::parts::{screen_part_names, PartRenderer, SCREEN_PARTS};
+pub use self::parts::{screen_part_names, PartRenderer, ScreenView, SCREEN_PARTS};
 pub use self::screen::{screen_handler, ScreenQuery};

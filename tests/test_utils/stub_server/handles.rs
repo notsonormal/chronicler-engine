@@ -144,6 +144,19 @@ impl StubGamesHandle {
             .rename_failing = failing;
     }
 
+    /// The saved Games are `count` Games named "Saga 01", "Saga 02", ..., listed in
+    /// that order. The `games` number moves.
+    pub fn set_saved_games(&self, count: u64) {
+        self.state
+            .games
+            .lock()
+            .expect("stub games lock poisoned")
+            .saved = (1..=count)
+            .map(|number| (100 + number, format!("Saga {number:02}")))
+            .collect();
+        self.state.bump(&[ChangeKind::GAMES]);
+    }
+
     pub fn saved_names(&self) -> Vec<String> {
         self.state
             .games

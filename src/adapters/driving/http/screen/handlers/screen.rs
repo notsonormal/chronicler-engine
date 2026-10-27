@@ -7,7 +7,7 @@ use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::parts::{PartRenderer, SCREEN_PARTS};
+use super::parts::{PartRenderer, ScreenView, SCREEN_PARTS};
 use crate::adapters::driving::http::utils::error::render_error;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error};
 use crate::adapters::driving::http::AppState;
@@ -18,6 +18,19 @@ const GAME_HEADER: &str = "x-game";
 #[derive(Debug, Deserialize)]
 pub struct ScreenQuery {
     parts: Option<String>,
+    games_page: Option<String>,
+}
+
+/// The page of the Games part: page 1 when the request names none. A value that is not
+/// a whole number of at least 1 is a refusal that names it.
+fn games_page_named(value: Option<&str>) -> Result<u64, String> {
+    let Some(value) = value else { return Ok(1) };
+    match value.parse::<u64>() {
+        Ok(page) if page >= 1 => Ok(page),
+        _ => Err(format!(
+            "games_page \"{value}\" is not a page number: pages count from 1"
+        )),
+    }
 }
 
 /// The renderers of the named parts, in the order of the request. A missing,
@@ -53,12 +66,17 @@ pub async fn screen_handler(
         Ok(renderers) => renderers,
         Err(message) => return bad_request(render_error(&message)),
     };
+    let games_page = match games_page_named(query.games_page.as_deref()) {
+        Ok(page) => page,
+        Err(message) => return bad_request(render_error(&message)),
+    };
     let stamp = state.game_view_query.change_versions(None).stamp();
     let game = state.game_catalogue.active_game_id();
+    let view = ScreenView { game, games_page };
 
     let mut body = String::new();
     for (name, render) in renderers {
-        match render(&state, game) {
+        match render(&state, &view) {
             Ok(html) => body.push_str(&format!("<template data-part=\"{name}\">{html}</template>")),
             Err(error) => {
                 tracing::error!("screen part {name} failed: {error}");

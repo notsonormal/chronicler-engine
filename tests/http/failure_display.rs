@@ -242,7 +242,7 @@ async fn test_failed_panel_loads_answer_non_2xx_with_an_error_fragment() {
         ("/fragment/settings", StorageCall::GetSettings),
         ("/fragment/prompt-presets", StorageCall::GetSettings),
         ("/fragment/worlds", StorageCall::ListWorlds),
-        ("/fragment/games", StorageCall::ListGames),
+        ("/fragment/games", StorageCall::ListSavedGames),
     ] {
         let (storage, failures) = empty_sqlite_storage().with_test_failures();
         let (app, _state) = TestAppBuilder::default_test()

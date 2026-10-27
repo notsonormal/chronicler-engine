@@ -16,6 +16,29 @@ pub struct GameRowView {
     pub run_held: bool,
 }
 
+/// The pager of the saved Games. A list of one page has none.
+pub struct GamesPagerView {
+    pub page: u64,
+    pub page_count: u64,
+    pub previous_page: u64,
+    pub next_page: u64,
+    pub previous_disabled: bool,
+    pub next_disabled: bool,
+}
+
+impl GamesPagerView {
+    pub fn new(page: u64, page_count: u64) -> Option<Self> {
+        (page_count > 1).then(|| Self {
+            page,
+            page_count,
+            previous_page: page.saturating_sub(1).max(1),
+            next_page: (page + 1).min(page_count),
+            previous_disabled: page <= 1,
+            next_disabled: page >= page_count,
+        })
+    }
+}
+
 pub struct PersonaRowView {
     pub key: String,
     pub name: String,
@@ -76,6 +99,13 @@ pub struct PersonaRowView {
         {% endfor %}
         {% endif %}
     </div>
+    {% if let Some(pager) = pager %}
+    <nav class="games-pager" aria-label="Saved Games pages">
+        <button type="button" class="btn-cyan games-page-previous" data-page="{{ pager.previous_page }}"{% if pager.previous_disabled %} disabled{% endif %}>Previous</button>
+        <span class="games-page-position">Page {{ pager.page }} of {{ pager.page_count }}</span>
+        <button type="button" class="btn-cyan games-page-next" data-page="{{ pager.next_page }}"{% if pager.next_disabled %} disabled{% endif %}>Next</button>
+    </nav>
+    {% endif %}
 </div>
 "##,
     ext = "html"
@@ -83,6 +113,7 @@ pub struct PersonaRowView {
 pub struct GamesPanelTemplate {
     pub active_game: Option<GameRowView>,
     pub saved_games: Vec<GameRowView>,
+    pub pager: Option<GamesPagerView>,
     pub worlds: Vec<WorldCard>,
     pub personas: Vec<PersonaRowView>,
     /// Rendered before the panel, because the preset load behind it can fail on its own.

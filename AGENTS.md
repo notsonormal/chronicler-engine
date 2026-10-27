@@ -259,6 +259,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
       - `quantifier.rs` — The Quantifier result and the Character transitions the Game rules derive from it
+      - `saved_games_page.rs` — The pages of saved Games: the page size, and the rule that names the page a request gets.
       - `scenario.rs` — Scenario definitions and world data
       - `settings.rs` — Settings and configuration types
       - `story_window.rs` — The story window: the newest entries of the story, with the room each one shows, and the end-of-story facts that go with them

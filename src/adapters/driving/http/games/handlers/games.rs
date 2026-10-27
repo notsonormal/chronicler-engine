@@ -17,8 +17,8 @@ use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, Narra
 use crate::error::EngineError;
 
 use crate::adapters::driving::http::games::templates::games::{
-    GamePostureTemplate, GameRenameFormTemplate, GamesPanelTemplate, NewGameFormTemplate,
-    PersonaRowView,
+    GamePostureTemplate, GameRenameFormTemplate, GamesPagerView, GamesPanelTemplate,
+    NewGameFormTemplate, PersonaRowView,
 };
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
@@ -35,19 +35,29 @@ pub async fn list_games_fragment(
     let active_id = current.map(|CurrentGame(game_id)| game_id);
     render_fragment(
         &state,
-        |state| render_games_panel(state, active_id),
+        |state| render_games_panel(state, active_id, 1),
         "list_games_fragment",
     )
 }
 
-/// The Games panel for the given active Game, or the saved Games alone when no
-/// Game is active.
+/// The Games panel for the given active Game and the requested page of the saved
+/// Games, or the saved Games alone when no Game is active.
 pub fn render_games_panel(
     state: &AppState,
     active_id: Option<GameId>,
+    requested_page: u64,
 ) -> Result<String, EngineError> {
-    let (active_game, saved_games) =
-        current_and_saved_games(state, active_id).map_err(ApplicationError::into_engine_error)?;
+    let active_game = match active_id {
+        Some(game_id) => state
+            .game_catalogue
+            .game(game_id)
+            .map_err(ApplicationError::into_engine_error)?,
+        None => None,
+    };
+    let saved = state
+        .game_catalogue
+        .saved_games_page(active_id, requested_page)
+        .map_err(ApplicationError::into_engine_error)?;
 
     let posture_html = match &active_game {
         Some(game) => posture_controls_html(state, game)
@@ -60,7 +70,7 @@ pub fn render_games_panel(
         game_to_view(game, run_held)
     };
     let active_game = active_game.map(view_of);
-    let saved_games: Vec<_> = saved_games.into_iter().map(view_of).collect();
+    let saved_games: Vec<_> = saved.games.into_iter().map(view_of).collect();
 
     let worlds = state
         .world_catalogue
@@ -72,6 +82,7 @@ pub fn render_games_panel(
     GamesPanelTemplate {
         active_game,
         saved_games,
+        pager: GamesPagerView::new(saved.page, saved.page_count),
         worlds,
         personas,
         posture_html,
@@ -124,26 +135,6 @@ pub async fn new_game_form_handler(State(state): State<AppState>) -> Response<ax
         worlds,
         personas: persona_rows(&state),
     })
-}
-
-fn current_and_saved_games(
-    state: &AppState,
-    active_id: Option<GameId>,
-) -> Result<(Option<Game>, Vec<Game>), ApplicationError> {
-    let games = state.game_catalogue.list_games()?;
-    let mut active_game = None;
-    let saved_games = games
-        .into_iter()
-        .filter_map(|game| {
-            if Some(GameId(game.id)) == active_id {
-                active_game = Some(game);
-                None
-            } else {
-                Some(game)
-            }
-        })
-        .collect();
-    Ok((active_game, saved_games))
 }
 
 #[derive(Debug, serde::Deserialize)]

@@ -9,6 +9,7 @@ use crate::application::games::active::ActiveGame;
 use crate::adapters::driven::storage::worlds::WorldWithMap;
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::game::{ConfigChange, Game, GameId, NewGame, PresetSelection};
+use crate::domain::model::saved_games_page::{SavedGamesPage, SAVED_GAMES_PAGE_SIZE};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use crate::domain::model::utils::game_name::generate_game_name;
 use crate::adapters::driven::storage::Storage;
@@ -96,6 +97,31 @@ impl GameCatalogue {
 
     pub fn list_games(&self) -> Result<Vec<Game>, ApplicationError> {
         self.storage.list_games().map_err(Into::into)
+    }
+
+    /// The page of the Games other than the active one that the request names; a page
+    /// past the end is the last page.
+    pub fn saved_games_page(
+        &self,
+        active: Option<GameId>,
+        requested_page: u64,
+    ) -> Result<SavedGamesPage, ApplicationError> {
+        let total = self.storage.count_saved_games(active)?;
+        let page = SavedGamesPage::clamp_page(requested_page, total);
+        let games = self.storage.list_saved_games_page(
+            active,
+            SAVED_GAMES_PAGE_SIZE,
+            (page - 1) * SAVED_GAMES_PAGE_SIZE,
+        )?;
+        Ok(SavedGamesPage {
+            games,
+            page,
+            page_count: SavedGamesPage::page_count_of(total),
+        })
+    }
+
+    pub fn game(&self, id: GameId) -> Result<Option<Game>, ApplicationError> {
+        self.storage.get_game(id.0).map_err(Into::into)
     }
 
     pub fn newest_game_of_world(

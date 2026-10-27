@@ -131,7 +131,10 @@ async ({ timeoutMs }) => {
 
   async function diffPart(part) {
     const name = partName(part);
-    const route = "/screen?parts=" + name;
+    // The Games part shows the page that the page asks for.
+    const gamesPage = document.documentElement.dataset.gamesPage;
+    const route =
+      "/screen?parts=" + name + (name === "games" && gamesPage ? "&games_page=" + gamesPage : "");
     const response = await fetch(route, { cache: "no-store" });
     if (!response.ok) return "GET " + route + " answered " + response.status;
     const answer = document.createElement("template");

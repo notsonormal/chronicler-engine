@@ -239,3 +239,21 @@
     padding: 4px 6px;
     font-family: inherit;
 }
+
+.games-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+}
+
+.games-page-position {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.games-pager button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

@@ -34,9 +34,10 @@ use chronicler_engine::adapters::driving::http::worlds::templates::worlds::{
     WorldFormTemplate, WorldsPanelTemplate,
 };
 use chronicler_engine::adapters::driving::http::games::templates::games::{
-    GamePostureTemplate, GameRenameFormTemplate, GameRowView, GamesPanelTemplate,
+    GamePostureTemplate, GameRenameFormTemplate, GameRowView, GamesPagerView, GamesPanelTemplate,
     NewGameFormTemplate, PersonaRowView,
 };
+use chronicler_engine::domain::model::saved_games_page::{SavedGamesPage, SAVED_GAMES_PAGE_SIZE};
 use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, ConnectionTestDialogTemplate, ConnectionTestResultTemplate,
     SettingsTemplate,
@@ -160,8 +161,8 @@ fn llm_messages_html(count: usize) -> String {
 }
 
 /// The Games panel, rendered by the engine's own template over the games the
-/// stub holds: the active Game, and the saved Games that no delete removed.
-fn games_html(games: &StubGames) -> String {
+/// stub holds: the active Game, and the page of saved Games that no delete removed.
+fn games_html(games: &StubGames, requested_page: u64) -> String {
     use askama::Template;
 
     let preset = |id: &str| TestPromptPreset::system(id, "Default");
@@ -192,13 +193,18 @@ fn games_html(games: &StubGames) -> String {
         persona_name: "Test Player".to_string(),
         run_held: false,
     };
+    let total = games.saved.len() as u64;
+    let page = SavedGamesPage::clamp_page(requested_page, total);
     GamesPanelTemplate {
         active_game: Some(row(1, &games.active_name)),
         saved_games: games
             .saved
             .iter()
+            .skip(((page - 1) * SAVED_GAMES_PAGE_SIZE) as usize)
+            .take(SAVED_GAMES_PAGE_SIZE as usize)
             .map(|(id, name)| row(*id, name))
             .collect(),
+        pager: GamesPagerView::new(page, SavedGamesPage::page_count_of(total)),
         worlds: new_game_worlds(),
         personas: new_game_personas(),
         posture_html: posture,
@@ -996,7 +1002,7 @@ async fn switch_game(
 
 async fn games_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
     let games = state.games.lock().expect("stub games lock poisoned");
-    Html(games_html(&games))
+    Html(games_html(&games, 1))
 }
 
 async fn new_game_form_fragment() -> Html<String> {
@@ -1432,7 +1438,7 @@ async fn index() -> impl IntoResponse {
     )
 }
 
-async fn screen_part_html(state: &Arc<StubState>, name: &str) -> Option<String> {
+async fn screen_part_html(state: &Arc<StubState>, name: &str, games_page: u64) -> Option<String> {
     let state = || State(Arc::clone(state));
     Some(match name {
         "header" => header_html(),
@@ -1452,7 +1458,10 @@ async fn screen_part_html(state: &Arc<StubState>, name: &str) -> Option<String> 
         "settings" => settings_fragment(state()).await.0,
         "prompt-presets" => presets_fragment(state()).await.0,
         "worlds" => worlds_fragment(state()).await.0,
-        "games" => games_fragment(state()).await.0,
+        "games" => games_html(
+            &state().0.games.lock().expect("stub games lock poisoned"),
+            games_page,
+        ),
         "llm-messages" => llm_messages_fragment(state()).await.0,
         _ => return None,
     })
@@ -1468,6 +1477,10 @@ async fn screen_answer(
         .get("parts")
         .map(|parts| parts.split(',').map(str::to_string).collect())
         .unwrap_or_default();
+    let games_page = query
+        .get("games_page")
+        .and_then(|page| page.parse().ok())
+        .unwrap_or(1);
     let (stamp, game) = {
         let changes = state.changes.lock().expect("stub changes lock poisoned");
         (
@@ -1482,7 +1495,7 @@ async fn screen_answer(
         .push(names.clone());
     let mut body = String::new();
     for name in &names {
-        let Some(html) = screen_part_html(&state, name).await else {
+        let Some(html) = screen_part_html(&state, name, games_page).await else {
             return (StatusCode::BAD_REQUEST, format!("unknown part {name}")).into_response();
         };
         if let Some(part) = super::screen_part_table::PARTS

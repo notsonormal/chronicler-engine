@@ -10,6 +10,7 @@ mod fixtures;
 mod storage_ext;
 
 mod changes;
+mod games_pages_storage;
 mod llm_message_storage;
 mod preset_storage;
 mod story_storage;

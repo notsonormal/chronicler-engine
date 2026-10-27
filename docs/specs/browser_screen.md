@@ -7,7 +7,7 @@ The dashboard shows one **screen**: the header, the failure banner and the visib
 | Section | Parts |
 |---|---|
 | none | `header`, `failure-banner` |
-| Game | `story-log`, `visual-sidebar`, `options-dock`, `status-display` |
+| Game | `story-log`, `visual-sidebar`, `options-dock`, `send-control`, `autoplay-controls`, `status-display` |
 | Settings | `settings` |
 | Prompt Presets | `prompt-presets` |
 | Worlds | `worlds` |
@@ -16,7 +16,7 @@ The dashboard shows one **screen**: the header, the failure banner and the visib
 
 The page asks `GET /changes` (`docs/specs/changes.md`) while it is visible. The answer holds the `server` and the `revision` of the engine. The page shows the **stamp** `<server>:<revision>` of its last good load in `<html data-revision>`, and the id of the Game that the load showed in `<html data-game>`. When the stamp of the answer differs from the stamp of the page, one `GET /screen?parts=<names>` (`docs/specs/screen.md`) loads the header, the failure banner and the parts of the visible tab, and a direct morph writes each part. The interval of the ask is `<html data-poll-ms>`. While an ask or a load is in flight, `<html>` has the attribute `data-screen-busy`.
 
-A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes and loads the tab that opens. No part holds a draft: a form that waits for a Save is in the edit dialog, outside every part. A load keeps what it does not change, and it skips the one element that holds unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight. A load always records the stamp of what it rendered. The end of every action request forgets the stamp, so the next ask loads the screen once.
+A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes and loads the tab that opens. No part holds a draft: a form that waits for a Save is in the edit dialog, outside every part. A load keeps what it does not change, and it skips the one element that holds unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight. A load carries the tab that was visible and the page of the saved Games that was asked for (`<html data-games-page>`, `docs/specs/browser_games.md`) when it started; an answer for another tab or page is dropped. A load always records the stamp of what it rendered. The end of every action request forgets the stamp, so the next ask loads the screen once.
 
 A non-2xx answer of `GET /changes` or `GET /screen` shows in `#screen-error`, and every part keeps its content. Only a network error shows the Unreachable banner.
 

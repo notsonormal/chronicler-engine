@@ -15,40 +15,68 @@ The Chronicler Engine's dashboard inherits its interaction model from SillyTaver
 
 ## How the dashboard shows server data
 
-The server renders every region and panel, so domain content has one source. The HTMX runtime ships with the app's static assets, so a dashboard load reaches only the engine's own server.
+The server renders every part of the screen, so domain content has one source. The htmx runtime ships with the app's static assets, so a dashboard load reaches only the engine's own server.
 
-### The problem of the first design
+The design came from one rule: a draft, a focus or a scroll position must survive every load, and no part may stay old while another part shows new data. An earlier design gave each region its own poll, its own number and its own protection from loads. Most of its bugs were a swap that destroyed client state, or a region that was out of step with another region. Each fix was local to one region, so the fixes added mechanisms and faults of their own.
 
-The first design let seven regions poll their own fragment on a timer of 2 to 5 seconds, and most swapped their whole content. Actions also wrote into regions by their own paths: whole-panel answers, outer swaps, out-of-band swaps, script writes and page reloads. In 26 days, 19 bugs came from this design. In 13, a swap destroyed client state: an open rename form, typed text, or focus. In 6, a region was stale or out of step with another region. The 19 bugs got 12 different fix mechanisms, each local to one region. The fixes also caused faults of their own. A poll pause that saved the wrong trigger to restore stopped a panel from polling again.
+Two designs of the interface were then written from the requirements alone, by two models that had no access to the code. Both models belong to one family, so their agreement is weaker evidence than two families would give. Both kept the server half: the server renders, an action answers no screen content, and a change marks the screen old before the screen fetches and morphs. Both rejected a browser table that maps each kind of data to its regions. The design below follows what both required, and takes the one point that they left free, the dialog, because it removes a dirty check.
 
-The present design replaces the local fixes with one rule for every region.
+### One screen, loaded in one request
 
-### One version poll
+The screen is the header, the failure banner and the parts of the visible tab. Any change moves one engine-wide revision, and the page loads the whole visible screen in one request. All parts of one load come from one revision, so no part can lag behind another. The browser has no table of kinds and regions, so a new part needs no mapping and cannot be forgotten in one.
 
-The page asks one small endpoint, `GET /changes`, once a second while the page is visible. The design chose polling over WebSocket and SSE. The first decision record on this choice (ADR-002, since removed) found the htmx WebSocket extension unreliable in production and polling simpler and more stable. The ask answers only numbers, so it is cheap. A push transport can carry the same numbers later.
+The cost is that a change in data that no visible part shows still loads the screen. The morph keeps every node that did not change, so the player sees nothing. A local server makes the extra load cheap.
 
-### One number for each kind of data
+The browser names the parts that it wants, and the server holds one renderer for each part name. The shell is then the one source of the layout, and the server knows renderers, not tabs. A part that has no renderer fails at once, in every state.
 
-The server keeps a number for each kind of data, not for each region. A region shows a fixed set of kinds, so one comparison tells the browser whether a region needs to load. The table from kind to regions sits in the page, next to each region, so one look at a region tells what loads it. A load is precise: a World edit does not load the LLM Messages panel, and a step change in a Job does not load the Games panel.
+### One ask on a revision
 
-A number rises after its data is committed, and every save path raises its own kinds through the storage layer. A save path that names no kinds does not compile. So the dashboard needs no safety refresh that covers a forgotten path.
+The page asks one small endpoint, `GET /changes`, once a second while the page is visible. The answer holds only numbers, so it is cheap. Polling is simpler and more stable than the htmx WebSocket extension, which was unreliable in production. A push transport can carry the same revision later.
 
-The numbers are counters, not dates. A counter cannot repeat within a millisecond, and it does not depend on the system clock.
+The server still keeps one number for each kind of data. The numbers record which kind each write raises, and the browser compares only the revision. A number rises after its data is committed, and every save path raises its kinds through the storage layer. A save path that names no kinds does not compile, so the dashboard needs no safety refresh for a forgotten path. The numbers are counters, not dates, so they do not depend on the system clock.
 
-### One path into a region
+### An action answers its outcome
 
-Data flows one way: an action saves data, and the regions that show the data load it. A region has one path in, its own load. So two answers cannot write the same region in different shapes, and a region cannot lag behind another region that an action wrote directly. An action answers nothing on success, and its error appears in its own form. This costs one extra round trip after each action: the ask that follows it.
+An action saves data and answers a status code and the revision after its commit. The data reaches the screen only through a screen load, so two answers cannot write the same part in different shapes. An error appears in the form that sent the action.
 
-### View state survives a load, and a draft stays out of the regions
+The page shows "Saved", closes the dialog and clears the Action input only when the screen shows the revision of the answer. The confirmation and the screen then agree. A refusal is a status, `409`, and a client finds it by that status, not by the text of the answer.
 
-A change can arrive while the player works. A load must neither destroy what the player does nor wait forever.
+Each action carries the Game of the screen. The engine refuses an action from a page whose Game is no longer active, so a tab cannot send to a Game that another tab switched to a moment before. The refused text stays in the input.
 
-- A load morphs the region, so a node that the new fragment keeps stays the same node, with its focus, selection and scroll position.
-- View state, such as an open Details disclosure, an expanded LLM message or the active Settings sub-tab, lives in attributes that the server never sets. An element lists them in `data-keep`, and the load keeps them. The alternative was a region that waits while any disclosure is open. That region would show no new LLM message while a card is open, and an open error popover would hold the status display.
-- A form that waits for a Save opens in one modal dialog outside every region, so no load meets a draft. The alternative was to hold the whole region while a form inside it holds a draft, but one stuck draft then stops a whole panel from updating. Closing the dialog discards the form.
-- Two elements still hold unsaved input inside a region: a story-log entry in edit, and a control whose request is in flight. A load skips each one and shows the rest of the region. The player can edit a message while a Job runs, and the new narration arrives around the draft. The entry catches up with the engine when the edit ends.
+The cost is one extra round trip after each action: the ask that follows it.
 
-The tradeoff is the dialog: it takes the player out of the list for the time of the edit, and it shows the data as it was when the form opened.
+### A tab exists while it is open
+
+A tab's parts hold content only while the tab is open. Leaving a tab empties its parts, and opening a tab loads them. A closed tab cannot be stale, and no rule must decide when a hidden part loads. View state of the open tab, such as the page of the saved Games, ends with the tab.
+
+The cost is that leaving the Game tab loses the scroll position of the story and an open message edit. The Action input keeps its text, because it is in the shell.
+
+### View state survives a load, and a draft stays out of the screen
+
+A change can arrive while the player works. A load must neither destroy what the player does nor wait for it.
+
+- A load morphs each part, so a node that the new render keeps stays the same node, with its focus, selection and scroll position.
+- View state, such as an open Details disclosure or the active Settings sub-tab, lives in attributes that the server never sets. An element lists them in `data-keep`, and the load keeps them.
+- A form that waits for a Save opens in one modal dialog outside the screen, so no load meets a draft. A load never writes into a draft: both designs required it. The single dialog was free, and it was chosen because it needs no check of what counts as a draft. Closing the dialog discards the form.
+- Two elements still hold unsaved input inside a part: a story-log entry in edit, and a control whose request is in flight. A load skips each one and shows the rest of the part. The player can edit a message while a Job runs, and the new narration arrives around the draft.
+
+The tradeoff is the dialog. It takes the player out of the list for the time of the edit, and it shows the data as it was when the form opened. The last save wins.
+
+### The server renders every control state
+
+Whether a control is disabled is data, so the server renders it from the busy state of the Game. No script writes `disabled`, and each load corrects every control. A control that a script had disabled and no script re-enabled could stay disabled after a failure. The guardrails ban such a write.
+
+The cost is that a request shows its own busy state through CSS only. Assistive technology gets no signal in that time. A second submit of the form is dropped, and the engine refuses a second send with `409`.
+
+### A list sends short rows
+
+A list sends the header of each row. The full item loads when the player opens it, in the dialog. The LLM Messages record is the case: a record never changes, and the full texts of 50 records were the largest part of each load.
+
+A list with no natural limit has pages. The saved Games show 50 for each page. The page number is view state of the browser, not of the server, so two tabs can show different pages, and a tab change resets it.
+
+### The check that the screen converges
+
+Every browser check ends with a comparison of each visible part with a fresh render of the same part. A part that stayed old fails the check, so a stale part is found by one test and not fixed one part at a time.
 
 ## Palette
 
@@ -57,3 +85,4 @@ The dashboard's palette is built for long prose. Quoted dialogue differs from na
 ## Document References
 
 - [`../reference/frontend/dashboard.md`](../reference/frontend/dashboard.md) — the dashboard's parts and what owns what.
+- [`../reference/storage.md`](../reference/storage.md) — the revision and the change counters.

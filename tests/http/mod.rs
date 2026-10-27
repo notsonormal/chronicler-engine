@@ -14,6 +14,7 @@ mod games_config;
 mod games_create;
 mod games_delete;
 mod games_fragment;
+mod games_pages;
 mod games_rename;
 mod games_switch;
 mod llm_messages;

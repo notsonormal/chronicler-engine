@@ -147,6 +147,7 @@ impl ChangeCounters {
             | StorageCall::TouchGameUpdatedAt
             | StorageCall::UpdateGameDisplayName => &[EngineKind::Games],
             StorageCall::CountGamesUsingPreset
+            | StorageCall::CountSavedGames
             | StorageCall::DocksGet
             | StorageCall::GetCharacter
             | StorageCall::GetGame
@@ -161,6 +162,7 @@ impl ChangeCounters {
             | StorageCall::ListLatestLlmMessages
             | StorageCall::ListPersonas
             | StorageCall::ListPresets
+            | StorageCall::ListSavedGames
             | StorageCall::ListWorlds
             | StorageCall::NewestGameOfWorld
             | StorageCall::SeedPersona

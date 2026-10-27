@@ -242,18 +242,21 @@ function clearScreenError() {
   fireScreenEvent("screen:error", { summary: "" });
 }
 
-// A load is for the tab that was visible when it started. An answer that arrives
-// after a tab change is dropped, and the tab change has already asked for the
-// visible tab.
+// A load is for the tab that was visible and the page of the saved Games that was
+// asked for when it started. An answer that arrives after a tab change or a click
+// on Previous or Next is dropped, and that change has already asked again.
 async function loadScreen() {
   const section = visibleSection();
+  const gamesPage = screenRoot.dataset.gamesPage;
   const parts = visibleParts();
   const names = parts.map((part) => part.dataset.part);
   const number = (loadsStarted += 1);
   let response;
   let body;
   try {
-    response = await fetch("/screen?parts=" + names.join(","), { cache: "no-store" });
+    const query =
+      "parts=" + names.join(",") + (gamesPage ? "&games_page=" + gamesPage : "");
+    response = await fetch("/screen?" + query, { cache: "no-store" });
     clearUnreachable();
     if (!response.ok) {
       await showScreenFailure("GET /screen", response);
@@ -264,7 +267,7 @@ async function loadScreen() {
     markUnreachable();
     return;
   }
-  if (visibleSection() !== section) return;
+  if (visibleSection() !== section || screenRoot.dataset.gamesPage !== gamesPage) return;
   try {
     morphParts(parts, body, response, number);
   } catch (error) {
@@ -376,10 +379,22 @@ document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible") askNow();
 });
 
+// The page of the saved Games is view state of the Games tab: a Previous or Next
+// control carries the page that it goes to, and the loads ask for it until the
+// player leaves the tab.
+document.addEventListener("click", function (event) {
+  const control = event.target.closest('[data-part="games"] [data-page]');
+  if (!control || control.disabled) return;
+  screenRoot.dataset.gamesPage = control.dataset.page;
+  forgetScreenStamp();
+  askNow();
+});
+
 // A tab change empties each part of the tab that closes, and the tab that opens
 // loads at once.
 function leaveSection(section) {
   if (!section) return;
+  delete screenRoot.dataset.gamesPage;
   const cleared = [];
   section.querySelectorAll("[data-part]").forEach((part) => {
     part.replaceChildren();

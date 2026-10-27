@@ -31,6 +31,7 @@ pub enum Backend {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StorageCall {
     CountGamesUsingPreset,
+    CountSavedGames,
     CreateWorld,
     DeletePreset,
     DeleteWorld,
@@ -48,6 +49,7 @@ pub enum StorageCall {
     ListLatestLlmMessages,
     ListPersonas,
     ListPresets,
+    ListSavedGames,
     ListWorlds,
     NewestGameOfWorld,
     SaveLlmMessage,

@@ -1,11 +1,11 @@
 # Feature Spec: The screen load, action answers and the Game header
 
 Endpoints:
-- `GET /screen?parts=<names>`
+- `GET /screen?parts=<names>` and `GET /screen?parts=<names>&games_page=<n>`
 - every `POST` route
 - the Game-bound `POST` routes: `POST /action`, `POST /action/check`, `POST /action/confirm`, `POST /autoplay`, `POST /swipe/new`, `POST /retrigger`, `POST /reset`, `POST /message/:id/swipe/:index`, `POST /history/:id`, `POST /history/delete` and `POST /status/reset-busy`
 
-The screen is the header, the failure banner and the parts of the visible tab. `GET /screen` renders the parts that the page names, in one answer. The part names are `header`, `failure-banner`, `story-log`, `visual-sidebar`, `options-dock`, `status-display`, `settings`, `prompt-presets`, `worlds`, `games` and `llm-messages`.
+The screen is the header, the failure banner and the parts of the visible tab. `GET /screen` renders the parts that the page names, in one answer. The part names are `header`, `failure-banner`, `story-log`, `visual-sidebar`, `options-dock`, `send-control`, `autoplay-controls`, `status-display`, `settings`, `prompt-presets`, `worlds`, `games` and `llm-messages`.
 
 An action is a `POST` request. An action answers its outcome: a status code and the headers below. The client reads the data of an action from the screen, not from the answer.
 
@@ -200,3 +200,13 @@ These properties hold across every Game-bound route (the endpoints above) and ar
 - **I.3** A request without the `X-Chronicler-Game` header acts on the active Game.
 - **I.4** A request whose `X-Chronicler-Game` header does not name the active Game is refused with `409` and the line "The active Game changed". The answer carries `X-Refusal: game-changed`. The refusal writes nothing, and it comes before the handler runs.
 - **I.5** A `GET` route does not read the `X-Chronicler-Game` header.
+
+#### Scenario 45.15: A games_page that is not a whole number of at least 1 answers 400 and renders nothing
+
+```gherkin
+Given an engine with an active Game
+When the client GET /screen?parts=games&games_page=<value> for each of "0", "-1", "two" and ""
+Then each response status is "400 BAD_REQUEST"
+And each body is an error fragment that names games_page
+And no body holds a template
+```

@@ -14,6 +14,7 @@ pub mod map;
 pub mod message;
 pub mod prompt_preset;
 pub mod quantifier;
+pub mod saved_games_page;
 pub mod scenario;
 pub mod settings;
 pub mod state;

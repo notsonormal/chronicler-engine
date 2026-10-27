@@ -305,3 +305,62 @@ Then the response status is "200 OK"
 And the body says that no World is available
 And the body has no form
 ```
+
+### Pages of saved Games
+
+The Saved Games section lists 50 Games for each page, newest `updated_at` first, and a Game with the same `updated_at` as another lists after the Game with the greater id. The active Game is not in the list: it shows in the Active Game section above. The page is asked for with `games_page` on `GET /screen`; a request without it asks for page 1. A section with more than one page shows the pager with Previous, Next and the page position.
+
+#### Scenario 20.41: The first page lists 50 saved Games and offers the next page
+
+```gherkin
+Given an active Game and 51 saved Games
+When the client GET /screen?parts=games
+Then the response status is "200 OK"
+And the Saved Games section lists 50 Games, the newest first
+And the Active Game section lists the active Game, and the Saved Games section does not
+And the pager (`games-pager`) shows "Page 1 of 2"
+And the Previous control is disabled
+And the Next control is enabled and goes to page 2
+```
+
+#### Scenario 20.42: The last page lists the Games that remain and offers the previous page
+
+```gherkin
+Given an active Game and 51 saved Games
+When the client GET /screen?parts=games&games_page=2
+Then the response status is "200 OK"
+And the Saved Games section lists one Game, the oldest
+And the pager shows "Page 2 of 2"
+And the Next control is disabled
+And the Previous control is enabled and goes to page 1
+```
+
+#### Scenario 20.43: A Game moves to the first page when a write updates it
+
+```gherkin
+Given an active Game and 51 saved Games, where the oldest is on page 2
+When the client POST /games/{oldest_id}/rename with display_name="Renamed Oldest"
+And the client GET /screen?parts=games
+Then the first Game of the Saved Games section is "Renamed Oldest"
+When the client GET /screen?parts=games&games_page=2
+Then the Saved Games section lists the second-oldest Game
+```
+
+#### Scenario 20.44: A page past the end shows the last page
+
+```gherkin
+Given an active Game and 51 saved Games
+When the client GET /screen?parts=games&games_page=9
+Then the response status is "200 OK"
+And the pager shows "Page 2 of 2"
+And the Saved Games section lists one Game
+```
+
+#### Scenario 20.45: A list of 50 saved Games is one page with no pager
+
+```gherkin
+Given an active Game and 50 saved Games
+When the client GET /screen?parts=games
+Then the Saved Games section lists 50 Games
+And the body has no pager (`games-pager`)
+```
