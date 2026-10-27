@@ -17,7 +17,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **Evidence is re-checked, not trusted.** A finding is a hypothesis, and the tree moves. Re-check the cited `file:line` before deciding.
 - **Concurrency.** Other efforts edit this checkout at the same time. The user decides the scope of each commit.
 - **Skills.** `/grilling` and `/domain-modeling` for every ticket. `/writing-for-agents` for any skill or `AGENTS.md` edit. `/code-review` for an implementation ticket.
-- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 85.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
+- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 86.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
 - **Audit.** [`audit.md`](./audit.md) (2026-10-25) sorts the open tickets by whether the fix changes what the next agent does.
 
 ## Decisions so far
