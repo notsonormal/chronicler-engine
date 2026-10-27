@@ -3,49 +3,13 @@
 use std::time::Duration;
 
 use super::support::{
-    hold_requests_ending_with, release_held_requests_and_wait_for_answers, wait_until_focused,
+    dialog_body_is_empty, dialog_is_open, hold_requests_ending_with, open_settings,
+    release_held_requests_and_wait_for_answers, wait_until_dialog_closed, wait_until_focused,
     StubRunner,
 };
 use super::*;
 
 const DIALOG_WAIT: Duration = Duration::from_secs(5);
-
-async fn open_settings(page: &playwright_rs::Page) {
-    page.locator(r#"[data-tab="settings"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
-    wait_until_visible(page, "#subtab-connections", DIALOG_WAIT).await;
-}
-
-async fn dialog_is_open(page: &playwright_rs::Page) -> bool {
-    page.evaluate::<(), bool>(
-        "() => { const d = document.getElementById('edit-dialog'); return !!d && d.open && d.matches(':modal'); }",
-        None,
-    )
-    .await
-    .unwrap_or(false)
-}
-
-async fn dialog_body_is_empty(page: &playwright_rs::Page) -> bool {
-    page.evaluate::<(), bool>(
-        "() => { const b = document.getElementById('edit-dialog-body'); return !!b && b.childElementCount === 0 && b.textContent.trim() === ''; }",
-        None,
-    )
-    .await
-    .unwrap_or(false)
-}
-
-/// The `close` event comes after the dialog stops being open, and it is the event
-/// that discards the form, so the wait ends when the body is empty.
-async fn wait_until_dialog_closed(page: &playwright_rs::Page, why: &str) {
-    let closed = wait_for_condition_async(DIALOG_WAIT, Duration::from_millis(25), || async {
-        !dialog_is_open(page).await && dialog_body_is_empty(page).await
-    })
-    .await;
-    assert!(closed, "{why}");
-}
 
 async fn submit_dialog_form(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(

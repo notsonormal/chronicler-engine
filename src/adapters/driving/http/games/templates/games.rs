@@ -120,7 +120,6 @@ pub struct GamesPanelTemplate {
     pub posture_html: String,
 }
 
-/// The dialog form that renames one Game.
 #[derive(Template)]
 #[template(
     source = r##"
@@ -143,7 +142,6 @@ pub struct GameRenameFormTemplate {
     pub display_name: String,
 }
 
-/// The dialog form that starts a new Game from a World and a Persona.
 #[derive(Template)]
 #[template(
     source = r##"

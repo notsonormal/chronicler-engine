@@ -72,8 +72,9 @@ async fn test_options_use_click_submits_rendered_option_text() {
                 .unwrap();
             assert!(!option_text.is_empty(), "the dock must show an option");
 
-            // `useOption` submits `/action/check`, whose response is retargeted
-            // to `#status-display`, so that span is the POST's own swap.
+            // `useOption` submits `/action/check`. The status display is the part
+            // that the screen load writes once it shows the Job of the send, so
+            // its settle is the end of the send.
             click_and_settle(&page, first_option_btn, "#status-display").await;
             wait_for_status_ready(&page).await;
 

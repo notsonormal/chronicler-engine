@@ -145,6 +145,46 @@ pub(super) async fn open_section(page: &playwright_rs::Page, tab: &str, part: &s
     await_panel_ready(page, part).await.expect_settled(tab);
 }
 
+/// Opens the Settings tab and waits until its Connections sub-tab shows.
+pub(super) async fn open_settings(page: &playwright_rs::Page) {
+    page.locator(r#"[data-tab="settings"]"#)
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_visible(page, "#subtab-connections", Duration::from_secs(5)).await;
+}
+
+pub(super) async fn dialog_is_open(page: &playwright_rs::Page) -> bool {
+    page.evaluate::<(), bool>(
+        "() => { const d = document.getElementById('edit-dialog'); return !!d && d.open && d.matches(':modal'); }",
+        None,
+    )
+    .await
+    .unwrap_or(false)
+}
+
+pub(super) async fn dialog_body_is_empty(page: &playwright_rs::Page) -> bool {
+    page.evaluate::<(), bool>(
+        "() => { const b = document.getElementById('edit-dialog-body'); return !!b && b.childElementCount === 0 && b.textContent.trim() === ''; }",
+        None,
+    )
+    .await
+    .unwrap_or(false)
+}
+
+/// The `close` event comes after the dialog stops being open, and it is the event
+/// that empties the body, so closed means both.
+pub(super) async fn wait_until_dialog_closed(page: &playwright_rs::Page, why: &str) {
+    let closed = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { !dialog_is_open(page).await && dialog_body_is_empty(page).await },
+    )
+    .await;
+    assert!(closed, "{why}");
+}
+
 /// Makes the page ask as it does when the tab becomes visible, and returns at once.
 pub(super) async fn ask_once_without_waiting(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
@@ -340,8 +380,8 @@ pub(super) async fn active_element_is(page: &playwright_rs::Page, selector: &str
     .unwrap()
 }
 
-/// A delete's `swap:0.3s` delay removes its row after the click resolves, so the
-/// count the swap changes — not the click — is what says the swap has landed.
+/// A delete removes its row when the next load lands, after the click resolves, so
+/// the count the load changes — not the click — says the load has landed.
 /// A query that errors panics rather than counting as zero, so a wait for "none
 /// left" cannot pass on a failed query.
 pub(super) async fn wait_for_count(

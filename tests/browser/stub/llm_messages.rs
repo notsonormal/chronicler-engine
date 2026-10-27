@@ -5,7 +5,7 @@
 // list and the record with the engine's own templates, so a row holds what the
 // real list holds.
 //
-// The panel loads when the `llm` number moves. The page's timer stops in the
+// The panel loads when the revision moves. The page's timer stops in the
 // checks that move it, so each load is one the check asked for. Every assertion
 // polls the state it wants rather than sampling once, and reads the live DOM
 // rather than a Playwright element handle.
@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::change::ChangeKind;
 
-use super::support::{wait_until_focused, StubRunner};
+use super::support::{dialog_is_open, wait_until_dialog_closed, wait_until_focused, StubRunner};
 use super::*;
 
 const OPEN_CONTROL: &str = ".llm-message-open";
@@ -29,28 +29,6 @@ async fn open_llm_messages_tab(page: &playwright_rs::Page) {
         .await
         .unwrap();
     wait_until_visible(page, ".llm-message-card", Duration::from_millis(2000)).await;
-}
-
-async fn dialog_is_open(page: &playwright_rs::Page) -> bool {
-    page.evaluate::<(), bool>(
-        "() => { const d = document.getElementById('edit-dialog'); return !!d && d.open && d.matches(':modal'); }",
-        None,
-    )
-    .await
-    .unwrap_or(false)
-}
-
-async fn wait_until_dialog_closed(page: &playwright_rs::Page, why: &str) {
-    let closed = wait_for_condition_async(WAIT, Duration::from_millis(25), || async {
-        page.evaluate::<(), bool>(
-            "() => { const d = document.getElementById('edit-dialog'); return !d.open && d.querySelector('#edit-dialog-body').childElementCount === 0; }",
-            None,
-        )
-        .await
-        .unwrap_or(false)
-    })
-    .await;
-    assert!(closed, "{why}");
 }
 
 async fn text_of(page: &playwright_rs::Page, selector: &str) -> String {

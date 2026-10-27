@@ -15,8 +15,8 @@ use super::support::{
     start_current,
 };
 
-/// A failed action leaves Send locked until the next idle status load and swaps nothing
-/// on its 500, so this submits the form directly rather than clicking Send.
+/// A failed action swaps nothing on its 500, and the form is submitted directly so the
+/// check does not depend on the Send control.
 async fn submit_command(page: &playwright_rs::Page, command: &str) {
     fill_command_input(page, command).await;
     page.evaluate::<(), ()>(
@@ -1009,9 +1009,8 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
     }
 }
 
-// A panel loads when a number of its kinds moves, and a panel in a hidden section
-// waits until its section opens, so this test arms the stub and reloads rather
-// than waiting for a load that no number would start.
+// The stub fails every panel load from the start, so the first load of each tab
+// reports the failure.
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.33
 async fn check_failed_panel_load_reports_in_the_screen_error(
     page: playwright_rs::Page,

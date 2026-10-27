@@ -40,8 +40,6 @@ pub async fn list_games_fragment(
     )
 }
 
-/// The Games panel for the given active Game and the requested page of the saved
-/// Games, or the saved Games alone when no Game is active.
 pub fn render_games_panel(
     state: &AppState,
     active_id: Option<GameId>,
@@ -107,22 +105,19 @@ fn persona_rows(state: &AppState) -> Vec<PersonaRowView> {
     .collect()
 }
 
-/// The Rename form opens in the dialog. A Game that is gone, or a list that
+/// The Rename form opens in the dialog. A Game that is gone, or one that
 /// cannot be read, opens no dialog: the Rename control reports it in its own slot.
 pub async fn rename_game_form_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
 ) -> Response<axum::body::Body> {
-    let games = match state.game_catalogue.list_games() {
-        Ok(games) => games,
-        Err(e) => return action_failure_response(format!("Failed to list games: {e}")),
-    };
-    match games.into_iter().find(|game| game.id == id) {
-        Some(game) => render_response(&GameRenameFormTemplate {
+    match state.game_catalogue.game(GameId(id)) {
+        Ok(Some(game)) => render_response(&GameRenameFormTemplate {
             id: game.id,
             display_name: game.display_name,
         }),
-        None => action_refusal_response("Game not found"),
+        Ok(None) => action_refusal_response("Game not found"),
+        Err(e) => action_failure_response(format!("Failed to read game: {e}")),
     }
 }
 

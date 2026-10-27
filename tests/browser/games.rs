@@ -3,7 +3,7 @@
 use super::*;
 
 /// The browser-only question: does the `change` event on a posture select
-/// inside the swap-loaded fragment reach the server. The fragment render is
+/// inside the loaded Games part reach the server. The fragment render is
 /// covered at HTTP (`tests/http/games_fragment.rs` SCENARIO 20.8).
 // [docs/specs/browser_games.md] SCENARIO: 27.1
 #[tokio::test]
@@ -25,7 +25,7 @@ async fn test_games_posture_change_reaches_server() {
             )
             .await;
 
-            // Reload so the fragment re-renders from the persisted game.
+            // Reload so the Games part renders from the persisted game.
             page.reload(None)
                 .await
                 .expect("reload after the posture change");

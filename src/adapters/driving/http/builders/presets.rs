@@ -10,7 +10,6 @@ use crate::adapters::driving::http::view_models::SafeHtml;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{AppSettings, NarratorMode};
 
-/// The dialog that shows a default preset read-only.
 #[derive(Template)]
 #[template(
     source = r##"<div class="preset-form view-form" data-dialog-form>
@@ -59,8 +58,7 @@ pub fn preset_view_form_html(preset: &PromptPreset) -> String {
     })
 }
 
-/// The dialog form that edits a custom preset. An Options preset serves both
-/// modes, so it has no Allowed Modes.
+/// An Options preset serves both modes, so it has no Allowed Modes.
 #[derive(Template)]
 #[template(
     source = r##"<div class="preset-form edit-form" data-dialog-form>

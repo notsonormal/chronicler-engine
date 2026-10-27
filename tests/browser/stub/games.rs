@@ -60,7 +60,7 @@ async fn check_deleting_a_saved_game_keeps_keyboard_focus_in_the_panel(
     page.locator(last_delete).await.click(None).await.unwrap();
 
     // The clicked control is already inside the panel, so a focus wait is
-    // satisfied before the swap lands. Wait for the removal itself first.
+    // satisfied before the load lands. Wait for the removal itself first.
     let removed = wait_for_condition_async(
         Duration::from_secs(5),
         Duration::from_millis(25),

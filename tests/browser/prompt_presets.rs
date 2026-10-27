@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::*;
 
-/// The browser-only question: do the Duplicate click's panel swap, the Edit
+/// The browser-only question: do the Duplicate click's panel load, the Edit
 /// button's load of the form into the dialog, and the Save form posting the ticked
 /// mode flags to the card's own route all work through real clicks. The request chain is
 /// covered at HTTP (`tests/http/prompt_presets.rs` SCENARIO 21.27).
@@ -23,8 +23,8 @@ async fn test_preset_duplicate_edit_save_click_chain() {
             let seed_name = "Wiring Guard Preset";
             seed_system_preset(port, seed_name, "Seed instructions for the preset guard.").await;
 
-            // Reload so the `load`-triggered panel re-renders including the new
-            // card; `open_prompt_presets_tab` awaits that reload's settle.
+            // Reload so the first load of the tab shows the new card;
+            // `open_prompt_presets_tab` awaits that load.
             page.reload(None).await.expect("reload after seeding a preset");
             open_prompt_presets_tab(&page).await;
 

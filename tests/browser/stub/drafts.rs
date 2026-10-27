@@ -5,21 +5,13 @@ use std::time::Duration;
 use chronicler_engine::domain::model::change::ChangeKind;
 
 use super::support::{
-    hold_requests_ending_with, release_held_requests_and_wait_for_answers, StubRunner,
+    hold_requests_ending_with, open_settings, release_held_requests_and_wait_for_answers,
+    StubRunner,
 };
 use super::*;
 
 const WAIT: Duration = Duration::from_secs(5);
 const QUANTIFIER_SELECT: &str = "#role-select-quantifier";
-
-async fn open_settings(page: &playwright_rs::Page) {
-    page.locator(r#"[data-tab="settings"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
-    wait_until_visible(page, "#subtab-connections", WAIT).await;
-}
 
 async fn select_state(page: &playwright_rs::Page) -> (String, bool) {
     page.evaluate::<(), (String, bool)>(

@@ -4,18 +4,11 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::change::ChangeKind;
 
-use super::support::{wait_for_count, wait_until_focused};
-use super::support::StubRunner;
+use super::support::{
+    dialog_is_open, open_settings, wait_for_count, wait_until_dialog_closed, wait_until_focused,
+    StubRunner,
+};
 use super::*;
-
-async fn open_settings(page: &playwright_rs::Page) {
-    page.locator(r#"[data-tab="settings"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
-    wait_until_visible(page, "#subtab-connections", Duration::from_secs(5)).await;
-}
 
 // [docs/specs/browser_settings.md] SCENARIO: 40.1
 async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
@@ -194,34 +187,6 @@ async fn check_opening_and_closing_the_connection_dialog_keeps_keyboard_focus_wh
         wait_until_focused(&page, "#role-select-quantifier", Duration::from_secs(2)).await,
         "changing a role must keep focus on that role's select"
     );
-}
-
-async fn dialog_is_open(page: &playwright_rs::Page) -> bool {
-    page.evaluate::<(), bool>(
-        "() => { const d = document.getElementById('edit-dialog'); return !!d && d.open && d.matches(':modal'); }",
-        None,
-    )
-    .await
-    .unwrap_or(false)
-}
-
-async fn wait_until_dialog_closed(page: &playwright_rs::Page, why: &str) {
-    let closed = wait_for_condition_async(
-        Duration::from_secs(5),
-        Duration::from_millis(25),
-        || async {
-            !dialog_is_open(page).await
-                && page
-                    .locator("#edit-dialog-body > *")
-                    .await
-                    .count()
-                    .await
-                    .unwrap_or(1)
-                    == 0
-        },
-    )
-    .await;
-    assert!(closed, "{why}");
 }
 
 // [docs/specs/browser_settings.md] SCENARIO: 40.5

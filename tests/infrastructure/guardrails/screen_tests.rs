@@ -284,7 +284,7 @@ fn test_scripts_write_no_part_accepts_a_write_to_an_element_that_is_not_a_part()
 
 #[test]
 fn test_scripts_write_no_part_accepts_a_comparison_and_a_read() {
-    let script = "const region = document.getElementById(\"header\");\nif (region.innerHTML === \"\") {}\nconst html = region.innerHTML;";
+    let script = "const header = document.getElementById(\"header\");\nif (header.innerHTML === \"\") {}\nconst html = header.innerHTML;";
     assert!(check_scripts_write_no_part("assets/dashboard-x.js", script, &parts()).is_empty());
 }
 

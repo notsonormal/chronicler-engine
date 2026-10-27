@@ -23,8 +23,6 @@ where
     }
 }
 
-/// The answer of a part route that fails: a 500 with the error text. The screen
-/// loads the parts through `GET /screen`, which answers its own 500.
 pub(crate) fn failed_fragment_response(message: &str) -> Response<Body> {
     (
         StatusCode::INTERNAL_SERVER_ERROR,

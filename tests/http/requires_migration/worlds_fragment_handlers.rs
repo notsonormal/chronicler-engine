@@ -43,7 +43,7 @@ async fn test_list_worlds_fragment_returns_html() {
     );
     assert!(
         !body_str.contains("worlds-panel"),
-        "the shell's .worlds-panel is the region, so the fragment repeats no root: {body_str}"
+        "the shell's .worlds-panel is the part, so the fragment repeats no root: {body_str}"
     );
 }
 

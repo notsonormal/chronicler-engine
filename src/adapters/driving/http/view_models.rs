@@ -225,7 +225,6 @@ impl From<&LlmMessage> for LlmMessageRowView {
     }
 }
 
-/// The whole record of one attempt, for the dialog that opens from a row.
 #[derive(Debug, Clone)]
 pub struct LlmMessageRecordView {
     pub agent_name: String,

@@ -51,7 +51,7 @@ async fn check_deleting_a_world_keeps_keyboard_focus_in_the_panel(
     page.locator(last_delete).await.click(None).await.unwrap();
 
     // The clicked control sits inside the panel, so a focus wait is satisfied
-    // before the swap lands. Wait for the removal itself first.
+    // before the load lands. Wait for the removal itself first.
     assert!(
         wait_for_count(&page, rows, 0).await,
         "the last delete must remove the final world"

@@ -10,8 +10,8 @@ use super::error::render_error;
 use super::response::refused;
 use crate::adapters::driving::http::AppState;
 
-const REVISION_HEADER: &str = "x-revision";
-const GAME_HEADER: &str = "x-chronicler-game";
+pub const REVISION_HEADER: &str = "x-revision";
+const REQUEST_GAME_HEADER: &str = "x-chronicler-game";
 
 /// Puts `X-Revision: <server>:<revision>` on the answer of every `POST` route, a
 /// success and a refusal alike. The stamp is read after the handler has ended, so it
@@ -41,7 +41,7 @@ pub async fn refuse_stale_game(
     request: Request,
     next: Next,
 ) -> Response {
-    if let Some(named) = request.headers().get(GAME_HEADER) {
+    if let Some(named) = request.headers().get(REQUEST_GAME_HEADER) {
         let active = state.game_catalogue.active_game_id();
         let names_active =
             active.is_some_and(|game| named.to_str().is_ok_and(|named| named == game.to_string()));

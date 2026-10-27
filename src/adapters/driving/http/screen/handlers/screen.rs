@@ -8,12 +8,12 @@ use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
 use super::parts::{PartRenderer, ScreenView, SCREEN_PARTS};
+use crate::adapters::driving::http::utils::action_layers::REVISION_HEADER;
 use crate::adapters::driving::http::utils::error::render_error;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error};
 use crate::adapters::driving::http::AppState;
 
-const REVISION_HEADER: &str = "x-revision";
-const GAME_HEADER: &str = "x-game";
+const ANSWER_GAME_HEADER: &str = "x-game";
 
 #[derive(Debug, Deserialize)]
 pub struct ScreenQuery {
@@ -55,9 +55,8 @@ fn renderers_named(parts: Option<&str>) -> Result<Vec<(&'static str, PartRendere
     Ok(chosen)
 }
 
-/// `GET /screen?parts=a,b`: one `<template data-part>` for each named part, with the
-/// stamp of the revision read before the render and the Game the parts show. One
-/// part that fails to render fails the whole answer.
+/// The stamp is read before the render, so the parts show at least that revision.
+/// One part that fails to render fails the whole answer.
 pub async fn screen_handler(
     State(state): State<AppState>,
     Query(query): Query<ScreenQuery>,
@@ -92,7 +91,7 @@ pub async fn screen_handler(
     }
     let game_id = game.map_or_else(String::new, |game_id| game_id.to_string());
     if let Ok(value) = HeaderValue::from_str(&game_id) {
-        headers.insert(GAME_HEADER, value);
+        headers.insert(ANSWER_GAME_HEADER, value);
     }
     response
 }

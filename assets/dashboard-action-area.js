@@ -277,7 +277,6 @@ document.body.addEventListener("htmx:beforeRequest", function (evt) {
   previewSentText = input ? input.value : "";
 });
 
-// Both of the preview's send controls post a command the engine consumes.
 function onPreviewSendAfterRequest(event) {
   const refusal = answeredRefused(event);
   if (refusal) {

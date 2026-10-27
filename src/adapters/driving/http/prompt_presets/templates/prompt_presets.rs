@@ -88,8 +88,7 @@ impl PromptPresetsTemplate {
     }
 }
 
-/// The dialog form that adds a preset of one type. The Quantifier preset has no
-/// Writing Style.
+/// The Quantifier preset has no Writing Style.
 #[derive(Template)]
 #[template(
     source = r##"

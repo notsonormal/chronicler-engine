@@ -176,7 +176,6 @@ impl LlmMessagesTemplate {
     }
 }
 
-/// The dialog that shows the whole record of one LLM attempt, read-only.
 #[derive(Template)]
 #[template(
     source = r##"<div class="llm-message-record" data-dialog-form>

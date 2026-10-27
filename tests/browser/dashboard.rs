@@ -21,7 +21,7 @@ async fn test_form_stays_static_after_submission() {
             .await
             .unwrap();
 
-            // A command submit retargets to #status-display, so the form is
+            // A command submit swaps into #action-preview, so the form is
             // never re-registered and has no registering settle to race.
             send_action(&page, "look").await;
 

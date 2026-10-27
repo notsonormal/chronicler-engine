@@ -3,16 +3,7 @@
 use std::time::Duration;
 
 use super::*;
-use super::support::StubRunner;
-
-async fn open_settings_panel(page: &playwright_rs::Page) {
-    page.locator(r#"[data-tab="settings"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
-    wait_until_visible(page, "#subtab-connections", Duration::from_secs(5)).await;
-}
+use super::support::{open_settings, StubRunner};
 
 async fn connection_form_node_is_still_present(page: &playwright_rs::Page) -> bool {
     page.evaluate::<(), bool>(
@@ -61,7 +52,7 @@ async fn check_failed_connection_add_keeps_the_form_and_renders_inline(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
-    open_settings_panel(&page).await;
+    open_settings(&page).await;
 
     click_and_settle(&page, ".connection-add button", "#edit-dialog-body").await;
     wait_until_visible(
@@ -107,7 +98,7 @@ async fn check_failed_connection_edit_keeps_the_form_and_renders_inline(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
-    open_settings_panel(&page).await;
+    open_settings(&page).await;
 
     click_and_settle(
         &page,

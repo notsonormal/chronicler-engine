@@ -257,8 +257,8 @@ impl SettleOutcome {
 /// document, or only those past a baseline read.
 enum SettleScope {
     /// Every settle target recorded in the current document. A baseline-relative
-    /// wait cannot see an `hx-trigger="load"` swap: panels load at page load,
-    /// before any test arms a baseline. A `WholeDocument` wait runs at the
+    /// wait cannot see the first screen load: it ends before any test arms a
+    /// baseline. A `WholeDocument` wait runs at the
     /// start of a test; the recorded list is capped at 64 entries, so it is not
     /// a general search back through an arbitrary past.
     WholeDocument,

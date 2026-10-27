@@ -18,9 +18,8 @@ const AUTOPLAY_LABEL: &str =
     r##"<svg class="icon" aria-hidden="true"><use href="#i-play"></use></svg> Autoplay"##;
 const STOP_BUTTON: &str = r##"<button type="button" id="stop-btn" hx-post="/status/reset-busy" hx-swap="none" data-refusal-what="the run was not stopped"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> Stop</button>"##;
 
-/// The Send control for one busy state; `None` is a Game that accepts a send. A
-/// busy Game disables Send and labels it as a generating indicator. Send belongs
-/// to `#command-form`, which stays in the shell, through `form`.
+/// `None` is a Game that accepts a send. Send submits `#command-form`, which is in
+/// the shell, through `form`.
 pub fn send_control_answer(busy: Option<&Busy>) -> String {
     let (disabled, label) = if busy.is_some() {
         (" disabled", GENERATING_LABEL)
@@ -32,9 +31,8 @@ pub fn send_control_answer(busy: Option<&Busy>) -> String {
     )
 }
 
-/// The Autoplay and Stop controls for one busy state; `None` is a Game that
-/// accepts a send. A busy Game disables Autoplay, which belongs to
-/// `#autoplay-form` through `form`. Stop exists only while a run holds the Game.
+/// `None` is a Game that accepts a send. Autoplay submits `#autoplay-form`, which is
+/// in the shell, through `form`. Stop exists only while a run holds the Game.
 pub fn autoplay_controls_answer(busy: Option<&Busy>) -> String {
     let disabled = if busy.is_some() { " disabled" } else { "" };
     let stop = if matches!(busy, Some(Busy::Autoplay { .. })) {

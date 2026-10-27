@@ -83,3 +83,10 @@ function settleSave(evt) {
 }
 
 document.body.addEventListener("htmx:afterRequest", settleSave);
+
+// A failed Update World must not sit under green feedback from an earlier
+// auto-save of the posture selects in the same dialog.
+function clearPostureStatus() {
+  const status = document.getElementById("world-posture-status");
+  if (status) status.removeAttribute("data-saved");
+}
