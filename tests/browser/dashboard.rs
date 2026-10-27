@@ -108,13 +108,9 @@ async fn test_confirm_preview_leaves_form_ready_and_usable() {
             // Submit a misspelled command; the settle waits for the preview's
             // swap into #action-preview.
             fill_command_input(&page, "i recieve a letter").await;
-            click_and_settle(
-                &page,
-                "#command-form button[type=\"submit\"]",
-                "#action-preview",
-            )
-            .await
-            .expect_settled("submit intercepted command");
+            click_and_settle(&page, "#submit-btn", "#action-preview")
+                .await
+                .expect_settled("submit intercepted command");
             wait_until_visible(&page, ".text-check-preview", Duration::from_secs(5)).await;
 
             click_and_settle(

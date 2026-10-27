@@ -357,3 +357,17 @@ And the run ends
 Then the story log holds, after the opening Narration, an Impersonate Input, a Narration, an Impersonate Input and a Narration, in this order
 And the Game is idle
 ```
+
+#### Scenario 41.25: While a run holds the Game, the action controls render Send and Autoplay disabled and Stop present
+
+```gherkin
+Given a run that holds the Game before its first Job on the active Game
+When the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+Then #submit-btn and #autoplay-btn carry the disabled attribute
+And the autoplay answer holds #stop-btn, which posts to /status/reset-busy
+
+When the client POST /status/reset-busy
+And the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+Then #submit-btn and #autoplay-btn do not carry the disabled attribute
+And the autoplay answer holds no #stop-btn
+```

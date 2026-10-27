@@ -49,7 +49,7 @@ async fn submit_intercepted_command(page: &playwright_rs::Page) {
         r#"(() => {
             const input = document.querySelector('#command-form input[name="command"]');
             input.value = 'look at the casle';
-            document.querySelector('#command-form button[type="submit"]').click();
+            document.querySelector('#submit-btn').click();
         })()"#,
         None,
     )
@@ -643,11 +643,27 @@ async fn check_the_action_area_shows_its_own_state_until_the_status_display_show
         .await,
         "an accepted send shows Thinking... in the action area's own element"
     );
-    let (disabled, label) = read_submit_button(&page).await;
-    assert!(disabled, "Send locks while the send is pending");
+    let (state, send_takes_clicks) = page
+        .evaluate::<(), (String, bool)>(
+            r#"(() => {
+                const area = document.getElementById('action-area');
+                const send = document.getElementById('submit-btn');
+                return [
+                    area.dataset.state,
+                    getComputedStyle(send).pointerEvents !== 'none',
+                ];
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        state, "generating",
+        "the area's view state says that a send is pending"
+    );
     assert!(
-        label.contains("Generating"),
-        "the locked button reads as a generating indicator, got {label:?}"
+        !send_takes_clicks,
+        "Send takes no click while the send is pending: the part still renders it as idle"
     );
 
     changes.set_loads_failing(false);
@@ -662,8 +678,12 @@ async fn check_the_action_area_shows_its_own_state_until_the_status_display_show
         "Generating narration...",
         "the status display shows the label of the Job's step"
     );
-    let (disabled, _) = read_submit_button(&page).await;
+    let (disabled, label) = read_submit_button(&page).await;
     assert!(disabled, "Send stays locked while the Job runs");
+    assert!(
+        label.contains("Generating"),
+        "the server renders the locked button as a generating indicator, got {label:?}"
+    );
 }
 
 async fn wait_until_page_shows_game(page: &playwright_rs::Page, game: &str) {

@@ -53,19 +53,66 @@ function showsInlineError(node) {
 // seen, so a load must not overwrite it. The page counts the requests itself: the
 // htmx class `htmx-request` is not enough, because the settle of a swap that lands
 // during a request writes the old `class` back onto the element after the request
-// ended.
+// ended. A request also holds the controls that its `hx-disabled-elt` names: htmx
+// clears their `disabled` when the request ends, whatever the server rendered
+// there meanwhile. A load leaves them alone, and the end of the request asks for
+// the load that shows them.
 const requestsInFlight = new Map();
+const disabledByRequest = new WeakMap();
+
+function holdInFlight(node) {
+  requestsInFlight.set(node, (requestsInFlight.get(node) || 0) + 1);
+}
+
+function releaseInFlight(node) {
+  const count = requestsInFlight.get(node) || 0;
+  if (count > 1) requestsInFlight.set(node, count - 1);
+  else requestsInFlight.delete(node);
+}
+
+// The controls that htmx disables for a request: the elements that the
+// `hx-disabled-elt` of the request's element, or of its closest ancestor that has
+// one, selects. This reads plain CSS selectors only. htmx also takes `this`,
+// `closest …` and `find …`, which `querySelectorAll` does not read, so the shell
+// names its controls with plain selectors.
+function controlsDisabledBy(element) {
+  const holder = element.closest("[hx-disabled-elt]");
+  if (!holder) return [];
+  return Array.from(document.querySelectorAll(holder.getAttribute("hx-disabled-elt")));
+}
 
 document.body.addEventListener("htmx:beforeRequest", function (evt) {
   const element = evt.detail && evt.detail.elt;
-  if (element) requestsInFlight.set(element, (requestsInFlight.get(element) || 0) + 1);
+  if (!element) return;
+  holdInFlight(element);
+  const controls = controlsDisabledBy(element);
+  controls.forEach(holdInFlight);
+  disabledByRequest.set(evt.detail.xhr, {
+    controls: controls,
+    renderedDisabled: controls.some((control) => control.hasAttribute("disabled")),
+  });
 });
 
-document.body.addEventListener("htmx:afterRequest", function (evt) {
+function endRequest(evt) {
   const element = evt.detail && evt.detail.elt;
-  const count = element ? requestsInFlight.get(element) || 0 : 0;
-  if (count > 1) requestsInFlight.set(element, count - 1);
-  else requestsInFlight.delete(element);
+  if (element && requestsInFlight.has(element)) releaseInFlight(element);
+  const held = disabledByRequest.get(evt.detail.xhr);
+  if (!held) return;
+  disabledByRequest.delete(evt.detail.xhr);
+  held.controls.forEach(releaseInFlight);
+  // A control that the server rendered as disabled shows enabled once htmx
+  // clears it, so the screen must load again to render it as the server does.
+  if (held.renderedDisabled) forgetScreenStamp();
+}
+
+document.body.addEventListener("htmx:afterRequest", endRequest);
+
+// A swap that throws skips `htmx:afterRequest` and leaves `disabled` on the
+// controls of the request. The request is over all the same, so the loads stop
+// waiting for it, and the next load renders the controls of the parts again.
+document.body.addEventListener("htmx:onLoadError", function (evt) {
+  endRequest(evt);
+  forgetScreenStamp();
 });
 
 function requestIsInFlight(node) {

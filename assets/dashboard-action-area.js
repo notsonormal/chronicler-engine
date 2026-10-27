@@ -63,33 +63,13 @@ function deriveActionState() {
   return "idle";
 }
 
-// The CSS swaps the command form for Stop off `data-state`.
-function applyAutoplayControls(state) {
+// `data-state` on the action area is the browser's view state: a pending send, a
+// check in flight and an open preview are known to the page only. The server
+// renders the disabled state of every control, and a request disables its own
+// controls through `hx-disabled-elt`, so no script writes `disabled`.
+function applyActionState(state) {
   const area = document.getElementById("action-area");
   if (area) area.dataset.state = state;
-  const startable = state === "idle";
-  ["autoplay-btn", "autoplay-cycles"].forEach((id) => {
-    const control = document.getElementById(id);
-    if (control) control.disabled = !startable;
-  });
-}
-
-function applyActionState(state) {
-  applyAutoplayControls(state);
-  const btn = document.getElementById("submit-btn");
-  const input = document.querySelector('#command-form input[name="command"]');
-  if (btn) {
-    if (state === "generating") {
-      btn.innerHTML = '<svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"></use></svg> Generating…';
-      btn.disabled = true;
-    } else {
-      btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-send"></use></svg> Send';
-      btn.disabled = state === "checking";
-    }
-  }
-  if (input) {
-    input.disabled = state === "checking";
-  }
 }
 
 function focusCorrectedTextarea() {
@@ -295,6 +275,15 @@ function commandFormSlot() {
   return document.querySelector('#command-form [data-error-slot="action"]');
 }
 
+// A swap that throws skips the after-request event of the form, so the check is
+// over here: the area must not stay in the state "checking".
+document.body.addEventListener("htmx:onLoadError", function (evt) {
+  const path = evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
+  if (path !== "/action/check") return;
+  checkInFlight = false;
+  syncActionState();
+});
+
 function onCommandAfterRequest(event) {
   checkInFlight = false;
   const refusal = answeredRefused(event);
@@ -369,7 +358,7 @@ function closeActionPreview() {
 
 function useOption(btn) {
   const input = commandInput();
-  // The input is disabled only during a text check, so a generation in
+  // The input is disabled only while a check request runs, so a generation in
   // flight needs the explicit actionIsGenerating() guard.
   if (!input || input.disabled || actionIsGenerating()) return;
   input.value = btn.textContent;

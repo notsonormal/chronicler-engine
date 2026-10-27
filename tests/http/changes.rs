@@ -228,6 +228,8 @@ async fn test_a_read_moves_no_number() {
         "/fragment/story-log",
         "/fragment/visual-sidebar",
         "/fragment/options-dock",
+        "/fragment/send-control",
+        "/fragment/autoplay-controls",
         "/fragment/games",
         "/fragment/worlds",
         "/fragment/settings",

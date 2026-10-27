@@ -8,6 +8,7 @@ use super::{
     end_paused_run, pause_before_first_job, pause_between_two_jobs, FIRST_INPUT, FIRST_NARRATION,
     SECOND_NARRATION,
 };
+use crate::support::http_assertions::{assert_action_controls, ActionControls};
 use crate::support::app_wiring::{app_after_an_impersonate_with_a_failed_event, app_with_script};
 use crate::support::http_fixtures::{create_game_from, seed_offered_set, story_of_game};
 use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_settled};
@@ -339,4 +340,28 @@ async fn test_while_a_run_holds_the_game_its_config_controls_render_disabled() {
     end_paused_run(&app, &state, game, &pause).await;
     let after = fetch_body(&app, "/fragment/games").await;
     assert_config_selects(&after, false, "after the stop");
+}
+
+async fn fetch_action_controls(app: &axum::Router) -> ActionControls {
+    ActionControls {
+        send: fetch_body(app, "/fragment/send-control").await,
+        autoplay: fetch_body(app, "/fragment/autoplay-controls").await,
+    }
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.25
+#[tokio::test]
+async fn test_while_a_run_holds_the_game_the_action_controls_render_send_and_autoplay_disabled_and_stop_present()
+ {
+    let model = Arc::new(ScriptedModel::new().turn(FIRST_INPUT));
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
+    let game = active_game_of(&state);
+
+    let pause = pause_between_two_jobs(&app, &state, game).await;
+    let during = fetch_action_controls(&app).await;
+    assert_action_controls(&during, true, true, true, "a run holds the Game");
+
+    end_paused_run(&app, &state, game, &pause).await;
+    let after = fetch_action_controls(&app).await;
+    assert_action_controls(&after, false, false, false, "after the stop");
 }

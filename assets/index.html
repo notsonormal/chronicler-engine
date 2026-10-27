@@ -6,7 +6,7 @@
     <title>Chronicler Engine</title>
     <script src="/assets/htmx.min.js?v=1"></script>
     <script src="/assets/idiomorph-ext.min.js?v=1"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=18" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20" />
     <link rel="stylesheet" href="/assets/worlds.css?v=8" />
     <link rel="stylesheet" href="/assets/games.css?v=5" />
   </head>
@@ -121,6 +121,7 @@
           hx-target="#action-preview"
           hx-swap="innerHTML"
           hx-sync="this:drop"
+          hx-disabled-elt="#command-input, #submit-btn"
           hx-on::before-request="onCommandBeforeRequest()"
           hx-on::after-request="onCommandAfterRequest(event)"
         >
@@ -136,16 +137,16 @@
             aria-controls="slash-menu"
             aria-autocomplete="list"
           />
-          <button type="submit" id="submit-btn">
-            <svg class="icon" aria-hidden="true"><use href="#i-send" /></svg> Send
-          </button>
           <div class="inline-error-slot" data-error-slot="action" hidden></div>
         </form>
+        <!-- Send: the server renders its disabled state. Send submits the command form through its form attribute. -->
+        <div id="send-control" data-part="send-control"></div>
         <form
           id="autoplay-form"
           hx-post="/autoplay"
           hx-swap="none"
           hx-sync="this:drop"
+          hx-disabled-elt="#autoplay-btn, #autoplay-cycles"
           hx-on::after-request="onAutoplayAfterRequest(event)"
         >
           <label class="visually-hidden" for="autoplay-cycles">Autoplay cycles</label>
@@ -159,20 +160,10 @@
             step="1"
             title="Cycles to play"
           />
-          <button type="submit" id="autoplay-btn" title="Let the engine play the Persona for this many cycles">
-            <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg> Autoplay
-          </button>
           <div class="inline-error-slot" data-error-slot="autoplay" hidden></div>
         </form>
-        <button
-          type="button"
-          id="stop-btn"
-          hx-post="/status/reset-busy"
-          hx-swap="none"
-          data-refusal-what="the run was not stopped"
-        >
-          <svg class="icon" aria-hidden="true"><use href="#i-x" /></svg> Stop
-        </button>
+        <!-- Autoplay and Stop: the server renders their disabled state. Autoplay submits the Autoplay form through its form attribute. -->
+        <div id="autoplay-controls" data-part="autoplay-controls"></div>
         <!-- The action area's own state, next to the live status display that it never writes. -->
         <div class="status thinking" id="action-status"></div>
         <div
@@ -243,10 +234,10 @@
     </dialog>
 
 
-    <script src="/assets/dashboard-errors.js?v=9"></script>
-    <script src="/assets/dashboard-screen.js?v=2"></script>
+    <script src="/assets/dashboard-errors.js?v=11"></script>
+    <script src="/assets/dashboard-screen.js?v=5"></script>
     <script src="/assets/dashboard-saves.js?v=1"></script>
-    <script src="/assets/dashboard-action-area.js?v=10"></script>
+    <script src="/assets/dashboard-action-area.js?v=12"></script>
     <script src="/assets/dashboard-story-log.js?v=11"></script>
     <script src="/assets/dashboard-slash-menu.js?v=1"></script>
     <script src="/assets/dashboard-panels.js?v=9"></script>

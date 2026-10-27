@@ -16,7 +16,7 @@ impl Part {
     }
 }
 
-pub const PARTS: [Part; 11] = [
+pub const PARTS: [Part; 13] = [
     Part {
         selector: "#header",
         name: "header",
@@ -45,6 +45,18 @@ pub const PARTS: [Part; 11] = [
         selector: "#options-dock",
         name: "options-dock",
         path: "/fragment/options-dock",
+        section: "game",
+    },
+    Part {
+        selector: "#send-control",
+        name: "send-control",
+        path: "/fragment/send-control",
+        section: "game",
+    },
+    Part {
+        selector: "#autoplay-controls",
+        name: "autoplay-controls",
+        path: "/fragment/autoplay-controls",
         section: "game",
     },
     Part {

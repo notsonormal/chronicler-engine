@@ -271,7 +271,9 @@ pub(super) async fn release_screen_loads(page: &playwright_rs::Page) {
 
 /// Keeps each request whose URL ends with `suffix` in the page until
 /// `window.releaseHeldRequests()`, so it stays in flight while a check works.
-/// `window.heldRequestsAnswered` counts the held requests whose answer came back.
+/// `window.heldRequestsSeen` counts the requests that the page tried to send and the
+/// hold kept; `window.heldRequestsAnswered` counts the held requests whose answer
+/// came back.
 pub(super) async fn hold_requests_ending_with(page: &playwright_rs::Page, suffix: &str) {
     page.evaluate::<String, ()>(
         r#"(suffix) => {
@@ -279,12 +281,14 @@ pub(super) async fn hold_requests_ending_with(page: &playwright_rs::Page, suffix
             const send = XMLHttpRequest.prototype.send;
             const held = [];
             window.heldRequestsAnswered = 0;
+            window.heldRequestsSeen = 0;
             XMLHttpRequest.prototype.open = function (method, url) {
                 this.heldUrl = String(url);
                 return open.apply(this, arguments);
             };
             XMLHttpRequest.prototype.send = function (body) {
                 if (this.heldUrl.endsWith(suffix)) {
+                    window.heldRequestsSeen += 1;
                     this.addEventListener('loadend', () => { window.heldRequestsAnswered += 1; });
                     held.push(() => send.call(this, body));
                     return;

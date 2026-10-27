@@ -3,6 +3,7 @@
 #[allow(unused_imports)]
 pub use super::*;
 
+mod action_controls;
 mod announcements;
 mod autoplay;
 mod dashboard;

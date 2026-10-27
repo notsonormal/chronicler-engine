@@ -3,7 +3,9 @@
 
 use crate::adapters::driving::http::builders::headers::header_fragment_html;
 use crate::adapters::driving::http::games::handlers::render_games_panel;
-use crate::adapters::driving::http::layout::handlers::render_status_display;
+use crate::adapters::driving::http::layout::handlers::{
+    render_autoplay_controls, render_send_control, render_status_display,
+};
 use crate::adapters::driving::http::prompt_presets::handlers::render_prompt_presets_panel;
 use crate::adapters::driving::http::settings::handlers::render_settings_panel;
 use crate::adapters::driving::http::worlds::handlers::render_worlds_panel;
@@ -15,12 +17,17 @@ pub type PartRenderer = fn(&AppState, Option<GameId>) -> Result<String>;
 
 /// Every part of the screen, in the order of the shell, each with its renderer. A
 /// part has one name and one renderer, so a name with no renderer cannot exist.
-pub const SCREEN_PARTS: [(&str, PartRenderer); 11] = [
+pub const SCREEN_PARTS: [(&str, PartRenderer); 13] = [
     ("header", render_header_part as PartRenderer),
     ("failure-banner", render_failure_banner_part as PartRenderer),
     ("story-log", render_story_log_part as PartRenderer),
     ("visual-sidebar", render_visual_sidebar_part as PartRenderer),
     ("options-dock", render_options_dock_part as PartRenderer),
+    ("send-control", render_send_control_part as PartRenderer),
+    (
+        "autoplay-controls",
+        render_autoplay_controls_part as PartRenderer,
+    ),
     ("status-display", render_status_display_part as PartRenderer),
     ("settings", render_settings_part as PartRenderer),
     ("prompt-presets", render_prompt_presets_part as PartRenderer),
@@ -68,6 +75,14 @@ fn render_options_dock_part(state: &AppState, game: Option<GameId>) -> Result<St
         || Ok(String::new()),
         |game_id| state.render_options_dock(game_id),
     )
+}
+
+fn render_send_control_part(state: &AppState, game: Option<GameId>) -> Result<String> {
+    Ok(render_send_control(state, game))
+}
+
+fn render_autoplay_controls_part(state: &AppState, game: Option<GameId>) -> Result<String> {
+    Ok(render_autoplay_controls(state, game))
 }
 
 fn render_status_display_part(state: &AppState, game: Option<GameId>) -> Result<String> {

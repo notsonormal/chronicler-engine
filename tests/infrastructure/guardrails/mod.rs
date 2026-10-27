@@ -496,7 +496,9 @@ fn guardrails_stub_answers_the_parts_of_the_server() {
     );
 }
 
-fn dashboard_scripts() -> Vec<(String, String)> {
+/// The scripts of `assets/` whose file name `wanted` accepts, with their text,
+/// sorted by path.
+fn scripts_of_assets(wanted: impl Fn(&str) -> bool) -> Vec<(String, String)> {
     let mut scripts: Vec<(String, String)> = std::fs::read_dir("assets")
         .unwrap()
         .filter_map(|entry| entry.ok())
@@ -504,7 +506,7 @@ fn dashboard_scripts() -> Vec<(String, String)> {
         .filter(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
-                .map(|name| name.starts_with("dashboard-") && name.ends_with(".js"))
+                .map(&wanted)
                 .unwrap_or(false)
         })
         .map(|path| {
@@ -513,8 +515,18 @@ fn dashboard_scripts() -> Vec<(String, String)> {
         })
         .collect();
     scripts.sort();
-    assert!(!scripts.is_empty(), "no dashboard script found");
+    assert!(!scripts.is_empty(), "no matching script found in assets/");
     scripts
+}
+
+fn dashboard_scripts() -> Vec<(String, String)> {
+    scripts_of_assets(|name| name.starts_with("dashboard-") && name.ends_with(".js"))
+}
+
+/// Every script of `assets/` that this repo wrote: all but the vendored minified
+/// libraries.
+fn first_party_scripts() -> Vec<(String, String)> {
+    scripts_of_assets(|name| name.ends_with(".js") && !name.ends_with(".min.js"))
 }
 
 fn shell_parts() -> Vec<String> {
@@ -576,6 +588,18 @@ fn guardrails_scripts_listen_no_part_swaps() {
     assert_violations(
         &errors,
         "no dashboard script listens for the htmx swap of a part",
+    );
+}
+
+#[test]
+fn guardrails_scripts_write_no_disabled() {
+    let errors: Vec<Violation> = first_party_scripts()
+        .iter()
+        .flat_map(|(path, script)| check_scripts_write_no_disabled(path, script))
+        .collect();
+    assert_violations(
+        &errors,
+        "no first-party script writes `disabled`: the server renders every control state",
     );
 }
 

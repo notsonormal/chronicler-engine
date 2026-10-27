@@ -1,7 +1,13 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Layout route handlers (partials + status endpoints).
 
+mod action_controls;
 mod endpoints;
+
+pub use action_controls::{
+    autoplay_controls_answer, autoplay_controls_fragment, render_autoplay_controls,
+    render_send_control, send_control_answer, send_control_fragment,
+};
 
 pub use endpoints::{
     busy_answer, busy_status_handler, failure_answer, idle_answer, changes_handler,

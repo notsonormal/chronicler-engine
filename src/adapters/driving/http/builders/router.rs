@@ -99,6 +99,14 @@ pub fn build_router(app_state: AppState) -> Router {
         .route("/screen", get(screen::handlers::screen_handler))
         .route("/status/busy", get(layout::handlers::busy_status_handler))
         .route(
+            "/fragment/send-control",
+            get(layout::handlers::send_control_fragment),
+        )
+        .route(
+            "/fragment/autoplay-controls",
+            get(layout::handlers::autoplay_controls_fragment),
+        )
+        .route(
             "/fragment/llm-messages",
             get(layout::handlers::llm_messages_fragment),
         )

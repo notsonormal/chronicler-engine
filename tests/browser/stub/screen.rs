@@ -17,12 +17,14 @@ use super::support::{
 use super::*;
 use crate::test_utils::screen_part_table::PARTS;
 
-const GAME_TAB_PARTS: [&str; 6] = [
+const GAME_TAB_PARTS: [&str; 8] = [
     "header",
     "failure-banner",
     "story-log",
     "visual-sidebar",
     "options-dock",
+    "send-control",
+    "autoplay-controls",
     "status-display",
 ];
 
@@ -96,6 +98,12 @@ async fn check_an_action_asks_at_once_when_its_request_ends(
 ) {
     let changes = stub.changes_handle();
     start_current(&page).await;
+    stub.status_handle().set(StubStatus::Autoplay {
+        done: 1,
+        budget: 10,
+        step: None,
+    });
+    ask_once(&page).await;
 
     let asks = changes.asks();
     let status_loads = changes.loads("/status/busy");

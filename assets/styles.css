@@ -573,9 +573,11 @@ body {
     white-space: nowrap;
 }
 
-/* The submit control only: the form's inline-error slot injects a Details
-   toggle that must stay a small inline button, not a second Send button. */
-#command-form #submit-btn,
+/* The Send, Autoplay and Stop buttons come from the server-rendered
+   #send-control and #autoplay-controls parts. The Send rule names the button by id: the form's
+   inline-error slot injects a Details toggle that must stay a small inline
+   button, not a second Send button. */
+#submit-btn,
 #autoplay-btn,
 #stop-btn {
     background: linear-gradient(180deg, var(--color-button-send-start) 0%, var(--color-button-send-end) 100%);
@@ -597,28 +599,28 @@ body {
     gap: 6px;
 }
 
-#command-form #submit-btn .icon,
+#submit-btn .icon,
 #autoplay-btn .icon,
 #stop-btn .icon {
     width: 16px;
     height: 16px;
 }
 
-#command-form #submit-btn:hover:not(:disabled),
+#submit-btn:hover:not(:disabled),
 #autoplay-btn:hover:not(:disabled),
 #stop-btn:hover:not(:disabled) {
     background: var(--color-button-send-start);
     filter: brightness(1.15);
 }
 
-#command-form #submit-btn:active:not(:disabled),
+#submit-btn:active:not(:disabled),
 #autoplay-btn:active:not(:disabled),
 #stop-btn:active:not(:disabled) {
     background: var(--color-button-send-end);
     filter: none;
 }
 
-#command-form #submit-btn:disabled,
+#submit-btn:disabled,
 #autoplay-btn:disabled,
 #stop-btn:disabled {
     opacity: 0.5;
@@ -655,7 +657,6 @@ body {
 }
 
 #stop-btn {
-    display: none;
     background: var(--color-tint-red);
     border-color: var(--color-accent-red);
     color: var(--color-accent-red);
@@ -666,13 +667,30 @@ body {
     background: var(--color-tint-red);
 }
 
-.action-area[data-state="autoplay"] #command-form,
-.action-area[data-state="autoplay"] #autoplay-form {
+/* The Autoplay part renders Stop only while a run holds the Game, and then the
+   run's controls replace the command and Autoplay forms. */
+.action-area:has(#stop-btn) #command-form,
+.action-area:has(#stop-btn) #autoplay-form,
+.action-area:has(#stop-btn) #submit-btn,
+.action-area:has(#stop-btn) #autoplay-btn {
     display: none;
 }
 
-.action-area[data-state="autoplay"] #stop-btn {
-    display: flex;
+/* The two parts hold the buttons that the shell's two forms submit. A part is no
+   box of its own: its buttons are items of the action area's row, in the order of
+   the shell. */
+#send-control,
+#autoplay-controls {
+    display: contents;
+}
+
+/* Between an accepted send and the load that shows its Job, the part still
+   renders Send and Autoplay as idle. The state attribute of the area says that a
+   send is pending, and the buttons look and act as disabled. */
+.action-area[data-state="generating"] #submit-btn,
+.action-area[data-state="generating"] #autoplay-btn {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .status {
@@ -1793,7 +1811,7 @@ input[type="checkbox"]:focus {
     }
 
     #command-form input,
-    #command-form #submit-btn {
+    #submit-btn {
         width: 100%;
         min-width: unset;
     }

@@ -28,8 +28,10 @@ function errorDisclosureHtml(popoverId, message, rawText) {
   );
 }
 
+// The two action control parts are no container: a button in one of them, such as
+// Stop, reports in the command form's slot.
 const INLINE_ERROR_CONTAINERS =
-  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, [data-part]";
+  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, [data-part]:not(#send-control):not(#autoplay-controls)";
 
 let generatedErrorSlots = 0;
 const GENERATED_SLOT_PREFIX = "generated-";

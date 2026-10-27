@@ -98,6 +98,7 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | dialog fragments carry the title | Checks that a literal of a dialog fragment carries the title that names the | `tests/infrastructure/guardrails/screen.rs:679` |
 | draft control exceptions are used | Checks the exceptions of the draft-control rule against the files they name: a | `tests/infrastructure/guardrails/screen.rs:697` |
 | scripts listen no part swaps | Checks one `assets/dashboard-*.js` script. A direct morph writes each part, so an | `tests/infrastructure/guardrails/screen.rs:738` |
+| scripts write no disabled | Checks one first-party script of `assets/`. The server renders every control | `tests/infrastructure/guardrails/screen.rs:775` |
 | doc standards | Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files. | `tests/infrastructure/guardrails/structure.rs:38` |
 | mod purity | Enforces mod.rs purity: only module declarations, imports, and module docs are allowed. | `tests/infrastructure/guardrails/structure.rs:128` |
 | empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:204` |

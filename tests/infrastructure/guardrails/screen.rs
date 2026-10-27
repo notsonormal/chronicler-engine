@@ -757,3 +757,76 @@ pub fn check_scripts_listen_no_part_swaps(
     }
     violations
 }
+
+/// Checks one first-party script of `assets/`. The server renders every control
+/// state, so no script writes `disabled`. These are findings, read over the whole
+/// text so that a call split over lines is found, at the line where it starts:
+/// - a property write (`control.disabled = …`, also `||=`, `&&=`, `??=`);
+/// - a bracket write (`control["disabled"] = …`, in any quote style);
+/// - a call of `setAttribute`, `removeAttribute` or `toggleAttribute` that names
+///   `disabled`;
+/// - the same call or bracket write with a constant that a `const`, `let` or `var`
+///   in the script binds to `"disabled"`.
+///
+/// A read (`if (input.disabled)`) is not a finding, and a comment is not read. Not
+/// covered: `Object.assign(control, { disabled: true })`, `setAttributeNS`, a name
+/// built at run time, markup strings that carry `disabled`, and inline handlers in
+/// the shell. A request disables its own controls through `hx-disabled-elt`.
+pub fn check_scripts_write_no_disabled(path: &str, script: &str) -> Vec<Violation> {
+    const QUOTED: &str = r#"["'`]disabled["'`]"#;
+    const WRITE_OPERATOR: &str = r"\s*(?:\|\||&&|\?\?)?=(?:[^=]|$)";
+    const ATTRIBUTE_CALL: &str = r"\.(?:setAttribute|removeAttribute|toggleAttribute)\(\s*";
+    let code = blank_comments(script);
+    let constant_declaration = Regex::new(&format!(
+        r"(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*{QUOTED}"
+    ))
+    .expect("constant declaration pattern");
+    let mut names = vec![QUOTED.to_string()];
+    names.extend(
+        constant_declaration
+            .captures_iter(&code)
+            .map(|found| format!(r"{}\b", regex::escape(&found[1]))),
+    );
+    let mut patterns = vec![format!(r"\.disabled{WRITE_OPERATOR}")];
+    for name in &names {
+        patterns.push(format!(r"{ATTRIBUTE_CALL}{name}"));
+        patterns.push(format!(r"\[\s*{name}\s*\]{WRITE_OPERATOR}"));
+    }
+    let mut lines: Vec<usize> = patterns
+        .iter()
+        .flat_map(|pattern| {
+            let pattern = Regex::new(pattern).expect("disabled write pattern");
+            pattern
+                .find_iter(&code)
+                .map(|found| code[..found.start()].matches('\n').count() + 1)
+                .collect::<Vec<usize>>()
+        })
+        .collect();
+    lines.sort_unstable();
+    lines.dedup();
+    lines
+        .into_iter()
+        .map(|line| {
+            Violation::error(
+                path,
+                line,
+                "a script writes `disabled`. The server renders every control state, and a request disables its own controls with `hx-disabled-elt`.",
+            )
+        })
+        .collect()
+}
+
+/// The script with every block comment and every whole-line comment replaced by
+/// blanks, so that offsets and line numbers stay those of the script. A `//` after
+/// code stays, because it may sit in a string.
+fn blank_comments(script: &str) -> String {
+    let comment = Regex::new(r"(?s)/\*.*?\*/|(?m)^[ \t]*//[^\n]*").expect("comment pattern");
+    comment
+        .replace_all(script, |found: &regex::Captures| {
+            found[0]
+                .chars()
+                .map(|character| if character == '\n' { '\n' } else { ' ' })
+                .collect::<String>()
+        })
+        .into_owned()
+}

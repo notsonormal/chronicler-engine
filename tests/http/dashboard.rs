@@ -14,7 +14,9 @@ use chronicler_engine::test_support::{
     analysis_report, empty_sqlite_storage, ScriptedModel, TestAppBuilder,
 };
 
-use crate::support::http_assertions::{defined_icons, referenced_icons};
+use crate::support::http_assertions::{
+    assert_action_controls, defined_icons, referenced_icons, ActionControls,
+};
 use crate::support::http_fixtures::{seed_offered_set, story_of};
 use crate::support::http_requests::{
     fetch_status_label, fetch_body, fetch_busy_status, post_action, post_empty, response_body,
@@ -362,4 +364,117 @@ async fn status_with_no_active_game() {
         "Ready",
         "a status display with no active Game answers Ready"
     );
+}
+
+async fn fetch_action_controls(app: &axum::Router) -> ActionControls {
+    ActionControls {
+        send: fetch_body(app, "/fragment/send-control").await,
+        autoplay: fetch_body(app, "/fragment/autoplay-controls").await,
+    }
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.12
+#[tokio::test]
+async fn test_the_action_controls_render_send_and_autoplay_enabled_while_the_game_is_idle() {
+    let app = TestAppBuilder::default_app();
+
+    let controls = fetch_action_controls(&app).await;
+
+    assert_action_controls(&controls, false, false, false, "idle");
+    assert!(
+        controls.send.contains("Send") && !controls.send.contains("Generating"),
+        "an idle Game labels the primary button Send: {}",
+        controls.send
+    );
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.13
+#[tokio::test]
+async fn test_while_a_job_runs_send_renders_as_a_generating_indicator_and_autoplay_renders_disabled()
+ {
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(Role::Narrator);
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::clone(&model))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the held narrator call should reach the model"
+    );
+
+    let during = fetch_action_controls(&app).await;
+
+    assert_action_controls(&during, true, true, false, "a Job runs");
+    assert!(
+        during.send.contains("Generating…"),
+        "the primary button is the generating indicator: {}",
+        during.send
+    );
+
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the released Job should complete"
+    );
+    let after = fetch_action_controls(&app).await;
+    assert_action_controls(&after, false, false, false, "the Job ended");
+    assert!(
+        after.send.contains("Send") && !after.send.contains("Generating"),
+        "the primary button is labelled Send again: {}",
+        after.send
+    );
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.14
+#[tokio::test]
+async fn test_a_game_with_a_failure_line_is_not_busy_so_its_action_controls_render_enabled() {
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().failed(Role::Narrator)))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        fetch_busy_status(&app)
+            .await
+            .contains(r#"data-status="failed""#),
+        "the Game shows a failure line"
+    );
+
+    let controls = fetch_action_controls(&app).await;
+
+    assert_action_controls(&controls, false, false, false, "a failure line");
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.15
+#[tokio::test]
+async fn test_with_no_active_game_the_action_controls_render_as_for_an_idle_game() {
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(empty_sqlite_storage()))
+        .skip_seeding(true)
+        .build();
+
+    let controls = fetch_action_controls(&app).await;
+
+    assert_action_controls(&controls, false, false, false, "no active Game");
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.16
+#[tokio::test]
+async fn test_a_status_that_cannot_be_read_does_not_fail_the_action_controls() {
+    let (storage, failures) = empty_sqlite_storage().with_test_failures();
+    let app = TestAppBuilder::default_test()
+        .storage(Arc::new(storage))
+        .build();
+    failures.set(
+        StorageCall::GetGame,
+        TestOverride::internal("the Game is unreadable"),
+    );
+
+    let controls = fetch_action_controls(&app).await;
+
+    assert_action_controls(&controls, false, false, false, "an unreadable Game");
 }

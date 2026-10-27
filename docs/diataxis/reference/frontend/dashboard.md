@@ -33,16 +33,16 @@ The shell owns only client state:
 
 The page has a header, a failure banner, a tab bar, and the body of the active tab. The header shows the display name of the active Game.
 
-The Game tab has four parts of the screen: the story log, the visual sidebar, the options dock, and the status display. The action area holds the status display and the controls that are no part.
+The Game tab has six parts of the screen: the story log, the visual sidebar, the options dock, the send control, the autoplay controls, and the status display. The action area holds the last three and the controls that are no part: the Action input and the cycle budget.
 
 - **Story log** — the story window of the Game: its newest Messages, in order.
 - **Visual sidebar** — the image of the current room and the portraits of the Characters in it.
 - **Options dock** — the Options that the player can pick from, or the Options failure of the Game.
-- **Action area** — the Action input, the Autoplay control, the text-check preview, and the status display.
+- **Action area** — the Action input, the send control, the cycle budget, the autoplay controls, the text-check preview, and the status display.
 
 The action area is in one of five states: **Idle**, **Checking**, **Generating**, **Autoplay**, and **Preview**. When the text check is on, the text check sits between a typed send and the request to the engine. The status display shows the step of the running Job, or the failure line of the last Job. The action area reads the status display and writes nothing into it. The state of a send that no Job has shown yet (Generating before the status display moves) shows in `#action-status`.
 
-The Autoplay control holds a cycle budget and a start button. While an Autoplay run holds the Game, the action area is in the Autoplay state: it shows a Stop control in place of the Action input and the Autoplay control, and the status display shows the cycle of the run. The Game is view-only: the controls that change the story and the Game's config are disabled, and the Games list marks the Game. Reading, scrolling and the Game switch stay open.
+The action controls are two parts: `send-control` holds Send, and `autoplay-controls` holds Autoplay and Stop. The DOM order is the visual order, so Tab goes from the Action input to Send, the cycle budget, and Autoplay. The server renders Send and Autoplay as disabled while any Job or run holds the Game, and renders Stop only while an Autoplay run holds the Game. Send and Autoplay belong to the command form and the Autoplay form through their `form` attribute, and the forms stay in the shell. Autoplay takes clicks while the state is Checking or Preview, and the cycle budget is enabled while a plain Job runs. No script writes `disabled`: the server renders every control state, and a request disables its own controls through `hx-disabled-elt`. The Autoplay control holds a cycle budget and a start button. While an Autoplay run holds the Game, the action area is in the Autoplay state: it shows a Stop control in place of the Action input and the Autoplay control, and the status display shows the cycle of the run. The Game is view-only: the controls that change the story and the Game's config are disabled, and the Games list marks the Game. Reading, scrolling and the Game switch stay open.
 
 ## The Screen
 
@@ -51,7 +51,7 @@ The screen is the header, the failure banner and the parts of the visible tab. E
 | Section | Parts |
 |---|---|
 | none | `header`, `failure-banner` |
-| Game | `story-log`, `visual-sidebar`, `options-dock`, `status-display` |
+| Game | `story-log`, `visual-sidebar`, `options-dock`, `send-control`, `autoplay-controls`, `status-display` |
 | Settings | `settings` |
 | Prompt Presets | `prompt-presets` |
 | Worlds | `worlds` |
@@ -90,7 +90,7 @@ The edit dialog is one modal dialog of the shell (`#edit-dialog`), outside every
 | `data-error-slot` | On an inline error slot: its name. A slot that shows an error keeps it through a load. |
 | `data-unreachable` | On an inline error slot that shows the Unreachable text: it clears with the banner. |
 | `data-status` | On the status display answer: the machine state (`idle`, `thinking`, `autoplay`, `failed`). |
-| `data-state` | On the action area: its state, which the CSS reads. |
+| `data-state` | On the action area: its state, which the page derives from the status display, the check in flight, the pending send and the open preview. The CSS reads it for the states that only the page knows. |
 | `data-id` | On a story-log entry or a Games-list row: its record id. The focus rule takes it as a row id. |
 | `data-raw-text` | On a story-log entry: its raw text, which the edit form opens with. |
 | `data-tab` | On a tab button: the section it opens. |

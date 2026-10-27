@@ -2,6 +2,13 @@
 
 Endpoint: browser DOM.
 
+The action controls are two parts of the screen. `#send-control` holds Send, and `#autoplay-controls` holds Autoplay and Stop. The server renders their `disabled` state from the busy state of the Game, and no script writes `disabled`. The DOM order is the visual order: the Action input, Send, the cycles field, Autoplay.
+
+The disabled state follows the busy state of the Game and the request in flight, not the view states of the action area. Two differences from the script that wrote `disabled` before stage 7 are kept:
+
+- Autoplay takes clicks while the state of the action area is Checking or Preview, because the Game is idle then. A run can start while the preview stays open.
+- The cycles field is enabled while a Job runs, because only a request of its own form disables it. Enter in the field does not submit the form during a Job, because its default button, Autoplay, is disabled.
+
 ## Scenarios
 
 #### Scenario 16.5: Command form stays static after submission
@@ -23,14 +30,14 @@ Then #status-display text is not "Ready" within 500ms
 And #status-display text contains the label of the Job's step, "Generating narration..."
 ```
 
-#### Scenario 16.9: Primary button locks and unlocks with the status after confirming a preview
+#### Scenario 16.9: Primary button locks and unlocks with the screen after confirming a preview
 
 ```gherkin
 Given the client submitted a command the text-check preview intercepted, so the preview is open
 When the client confirms the preview, so a generation starts
 Then the primary button is disabled and labelled as a generating indicator
 And the command form is the same node as before
-When the status display loads idle and returns to Ready
+When the screen loads idle and the status display returns to Ready
 Then the primary button is enabled again with a "Send" label
 ```
 
@@ -211,13 +218,13 @@ And focus is still in its Details control
 And the banner is still up
 ```
 
-#### Scenario 16.28: A load of the status display that leaves generating re-enables Send
+#### Scenario 16.28: A screen load that leaves generating re-enables Send
 
 ```gherkin
-Given the dashboard is loaded and the status display loads a generation step
+Given the dashboard is loaded and the screen loads a generation step
 Then #status-display shows a generating state
 And #submit-btn is disabled
-When the status display loads idle
+When the screen loads idle
 Then #status-display returns to Ready
 And #submit-btn is enabled
 And pressing Enter in #command-form input[name="command"] submits the form
@@ -415,11 +422,12 @@ Given the dashboard is loaded and idle
 And the status display cannot load
 When the client submits a command the engine takes
 Then #action-status shows "Thinking..."
-And the primary button is disabled and labelled as a generating indicator
+And #action-area carries the state "generating"
+And the primary button takes no click
 When the status display can load and the page asks
 Then #action-status is empty
 And #status-display shows the label of the Job's step
-And the primary button is disabled
+And the primary button is disabled and labelled as a generating indicator
 ```
 
 #### Scenario 16.46: A swap into the dialog body opens the modal dialog
@@ -593,4 +601,77 @@ Given the text check shows a preview of the command in the Action input
 When the client presses Send Original, and types more text in the input while the request is in flight
 And the engine takes the command and the screen shows the send
 Then the Action input keeps the typed text
+```
+
+#### Scenario 16.62: A check request disables Send and the Action input until it ends
+
+```gherkin
+Given the dashboard is loaded and idle, and the engine holds the request that checks a command
+When the client submits a command
+Then #submit-btn and the Action input are disabled
+And #action-area carries the state "checking"
+When the engine answers the request
+Then #submit-btn and the Action input are enabled
+And #action-area no longer carries the state "checking"
+```
+
+#### Scenario 16.63: A Send while a check request runs is not sent twice
+
+```gherkin
+Given the dashboard is loaded and idle, and the engine holds the request that checks a command
+When the client submits a command
+And the client clicks Send, submits the command form, and presses Enter in the Action input
+Then the page sends no second request that checks a command
+When the engine answers the request
+Then the engine has received one request that checks a command
+```
+
+#### Scenario 16.64: A load that lands during a check request leaves the controls to the load that follows the request
+
+```gherkin
+Given the dashboard is loaded and idle, and the engine holds the request that checks a command
+When the client submits a command
+And the Game starts a Job, so the page loads the screen while the request runs
+Then #submit-btn is still disabled
+When the engine answers the request without a screen change
+Then #submit-btn is disabled and labelled as a generating indicator, as the server renders it
+```
+
+#### Scenario 16.65: A check request that starts while the server renders Send as disabled leaves it disabled
+
+```gherkin
+Given the dashboard shows a Job that runs, so #submit-btn is disabled
+When the client submits the command form and the engine answers the check
+Then #submit-btn is disabled and labelled as a generating indicator
+```
+
+#### Scenario 16.66: #action-area carries the state "preview" while the text-check preview is open
+
+```gherkin
+Given the text check returns a preview for a command
+When the client submits the command
+Then #action-area carries the state "preview"
+When the client sends the original command
+Then #action-area no longer carries the state "preview"
+```
+
+
+#### Scenario 16.67: Tab follows the visual order of the action controls
+
+```gherkin
+Given the dashboard is loaded and idle
+Then, from left to right, the controls are the Action input, Send, the cycles field, and Autoplay
+When the client focuses the Action input and presses Tab three times
+Then focus is on Send, then on the cycles field, then on Autoplay
+```
+
+#### Scenario 16.68: A check answer whose swap throws does not leave the page waiting for it
+
+```gherkin
+Given the dashboard is loaded and idle
+And the swap of the answer to a check request throws
+When the client submits a command
+Then htmx reports the load error
+And the loads of the screen do not wait for the request any more
+And a load of the screen renders Send enabled, and #action-area does not carry the state "checking"
 ```

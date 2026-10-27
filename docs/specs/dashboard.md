@@ -2,6 +2,8 @@
 
 Endpoints:
 - `GET /status/busy` (the status display)
+- `GET /fragment/send-control` (the Send control)
+- `GET /fragment/autoplay-controls` (the Autoplay and Stop controls)
 - `POST /status/reset-busy` (the stop)
 - `GET /fragment/options-dock`
 - `GET /debug/is_busy`
@@ -155,4 +157,61 @@ Then the stop answers "failed"
 Given no active Game
 When the client requests GET /status/busy
 Then the response body is a status element with data-status "idle" and the label "Ready"
+```
+
+#### Scenario 39.12: The action controls render Send and Autoplay enabled while the Game is idle
+
+The action controls are two parts of the screen: `send-control` holds Send, and `autoplay-controls` holds Autoplay and Stop. The server renders their `disabled` state from the busy state of the Game, and no script writes it. Send belongs to `#command-form` and Autoplay belongs to `#autoplay-form` through the `form` attribute, so each submits the form that stays in the shell. Each scenario below requests both routes.
+
+```gherkin
+Given a Game with no Job and no failure line
+When the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+Then the send answer holds #submit-btn with form "command-form" and the label "Send"
+And #submit-btn does not carry the disabled attribute
+And the autoplay answer holds #autoplay-btn with form "autoplay-form"
+And #autoplay-btn does not carry the disabled attribute
+And the autoplay answer holds no #stop-btn
+```
+
+#### Scenario 39.13: While a Job runs, Send renders disabled as a generating indicator and Autoplay renders disabled
+
+```gherkin
+Given a Game whose Job is at the narrator call of a Narration
+When the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+Then #submit-btn carries the disabled attribute and the label "Generating…"
+And #autoplay-btn carries the disabled attribute
+And the autoplay answer holds no #stop-btn
+
+When the Job ends
+And the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+Then #submit-btn does not carry the disabled attribute and has the label "Send"
+And #autoplay-btn does not carry the disabled attribute
+```
+
+#### Scenario 39.14: A Game with a failure line is not busy, so its action controls render enabled
+
+```gherkin
+Given a Game with no Job and a failure line
+When the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+Then #submit-btn and #autoplay-btn do not carry the disabled attribute
+And the autoplay answer holds no #stop-btn
+```
+
+#### Scenario 39.15: With no active Game, the action controls render as for an idle Game
+
+```gherkin
+Given no active Game
+When the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+Then the answer is 200
+And #submit-btn and #autoplay-btn do not carry the disabled attribute
+And the autoplay answer holds no #stop-btn
+```
+
+#### Scenario 39.16: A status that cannot be read does not fail the action controls
+
+```gherkin
+Given a Game whose record cannot be read
+When the client requests GET /fragment/send-control and GET /fragment/autoplay-controls
+Then the answer is 200
+And #submit-btn and #autoplay-btn do not carry the disabled attribute
 ```

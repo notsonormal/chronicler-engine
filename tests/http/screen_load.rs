@@ -14,12 +14,14 @@ use crate::support::app_wiring::two_game_app;
 use crate::support::http_requests::{post_form, response_body};
 use crate::SettingsTestGuard;
 
-const PART_ROUTES: [(&str, &str); 11] = [
+const PART_ROUTES: [(&str, &str); 13] = [
     ("header", "/fragment/header"),
     ("failure-banner", "/fragment/failure-banner"),
     ("story-log", "/fragment/story-log"),
     ("visual-sidebar", "/fragment/visual-sidebar"),
     ("options-dock", "/fragment/options-dock"),
+    ("send-control", "/fragment/send-control"),
+    ("autoplay-controls", "/fragment/autoplay-controls"),
     ("status-display", "/status/busy"),
     ("settings", "/fragment/settings"),
     ("prompt-presets", "/fragment/prompt-presets"),

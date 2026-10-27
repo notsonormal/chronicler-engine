@@ -42,7 +42,7 @@ use chronicler_engine::adapters::driving::http::settings::templates::{
     SettingsTemplate,
 };
 use chronicler_engine::adapters::driving::http::layout::handlers::{
-    busy_answer, failure_answer, idle_answer,
+    autoplay_controls_answer, busy_answer, failure_answer, idle_answer, send_control_answer,
 };
 use chronicler_engine::adapters::driving::http::utils::error::render_error;
 use chronicler_engine::application::generation::gate::{AutoplayProgress, Busy};
@@ -1438,6 +1438,8 @@ async fn screen_part_html(state: &Arc<StubState>, name: &str) -> Option<String> 
         "story-log" => story_log_fragment(state()).await.0,
         "visual-sidebar" => FIXTURE_VISUAL_SIDEBAR.to_string(),
         "options-dock" => options_dock_fragment(state()).await.0,
+        "send-control" => send_control_answer(stub_busy(&state().0).as_ref()),
+        "autoplay-controls" => autoplay_controls_answer(stub_busy(&state().0).as_ref()),
         "status-display" => {
             let answer = status_busy(state()).await;
             let bytes = axum::body::to_bytes(answer.into_body(), usize::MAX)
@@ -1562,24 +1564,37 @@ fn action_failure(command: &str) -> Response<Body> {
         .into_response()
 }
 
+/// The busy state that a stub status stands for: the status display and the
+/// action controls both read it. A failure line is not a busy state.
+fn busy_of(status: &StubStatus) -> Option<Busy> {
+    match status.clone() {
+        StubStatus::Step(step) => Some(Busy::Job(step)),
+        StubStatus::Autoplay { done, budget, step } => Some(Busy::Autoplay {
+            progress: AutoplayProgress { done, budget },
+            step,
+        }),
+        StubStatus::Idle | StubStatus::Error(..) => None,
+    }
+}
+
+fn stub_busy(state: &StubState) -> Option<Busy> {
+    busy_of(&state.status.lock().expect("stub status lock poisoned"))
+}
+
 async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
     let status = state
         .status
         .lock()
         .expect("stub status lock poisoned")
         .clone();
-    let body = match status {
-        StubStatus::Idle => idle_answer(),
-        StubStatus::Step(step) => busy_answer(&Busy::Job(step)),
-        StubStatus::Autoplay { done, budget, step } => busy_answer(&Busy::Autoplay {
-            progress: AutoplayProgress { done, budget },
-            step,
-        }),
-        StubStatus::Error(kind, raw) => failure_answer(&GenerationFailure {
+    let body = match (busy_of(&status), status) {
+        (Some(busy), _) => busy_answer(&busy),
+        (None, StubStatus::Error(kind, raw)) => failure_answer(&GenerationFailure {
             kind,
             named: raw.clone(),
             raw,
         }),
+        (None, _) => idle_answer(),
     };
     (
         StatusCode::OK,

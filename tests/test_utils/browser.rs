@@ -348,13 +348,30 @@ pub async fn fill_command_input(page: &playwright_rs::Page, command: &str) {
         .await;
 }
 
+/// The action controls are a part of the screen, so the Send button exists once the
+/// first screen load has shown it.
+async fn wait_for_send_button(page: &playwright_rs::Page) {
+    let shown = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            page.evaluate::<(), bool>("() => !!document.getElementById('submit-btn')", None)
+                .await
+                .unwrap_or(false)
+        },
+    )
+    .await;
+    assert!(shown, "the screen load shows the Send button within 5s");
+}
+
 pub async fn send_action(page: &playwright_rs::Page, text: &str) {
+    wait_for_send_button(page).await;
     fill_command_input(page, text).await;
     let _: Result<(), _> = page
         .evaluate::<(), ()>(
             r#"
             () => {
-                const btn = document.querySelector('#command-form button[type="submit"]');
+                const btn = document.querySelector('#submit-btn');
                 if (btn) {
                     btn.click();
                 }

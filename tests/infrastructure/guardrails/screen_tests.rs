@@ -5,9 +5,10 @@ use crate::screen::{
     check_draft_controls_only_in_dialog_forms, check_handler_headers, check_no_out_of_band_swaps,
     check_part_table_matches_shell, check_part_write_exceptions_are_used, check_parts_in_shell,
     check_scripts_listen_no_part_swaps, check_scripts_use_action_fetch,
-    check_scripts_write_no_part, check_shell_parts_match_the_server,
-    check_stub_answers_the_parts_of_the_server, check_template_targets, part_element_names,
-    DraftControlException, ListedPart, PartWriteException,
+    check_scripts_write_no_disabled, check_scripts_write_no_part,
+    check_shell_parts_match_the_server, check_stub_answers_the_parts_of_the_server,
+    check_template_targets, part_element_names, DraftControlException, ListedPart,
+    PartWriteException,
 };
 
 const GOOD_PART: &str = r#"<div class="tab-content" id="game-tab"><div id="story-log" data-part="story-log"></div></div>"#;
@@ -664,4 +665,161 @@ fn test_check_stub_answers_the_parts_of_the_server_fails_a_stub_without_the_func
         check_stub_answers_the_parts_of_the_server("stub.rs", "fn other() {}", &["header"]).len(),
         1
     );
+}
+
+#[test]
+fn test_scripts_write_no_disabled_rejects_a_property_write() {
+    for statement in [
+        "btn.disabled = true;",
+        "control.disabled = !startable;",
+        "document.getElementById(\"submit-btn\").disabled = state === \"checking\";",
+        "input.disabled=false;",
+        "input.disabled ||= busy;",
+    ] {
+        let script = format!("function sync() {{\n  {statement}\n}}");
+        let violations = check_scripts_write_no_disabled("assets/dashboard-x.js", &script);
+        assert_eq!(violations.len(), 1, "{statement}: {violations:?}");
+        assert!(
+            violations[0].message.contains("hx-disabled-elt"),
+            "{}",
+            violations[0].message
+        );
+    }
+}
+
+#[test]
+fn test_scripts_write_no_disabled_rejects_each_attribute_call_in_each_quote_style() {
+    for call in ["setAttribute", "removeAttribute", "toggleAttribute"] {
+        for quote in ['"', '\'', '`'] {
+            let script =
+                format!("function sync(btn) {{\n  btn.{call}({quote}disabled{quote}, \"\");\n}}");
+            let violations = check_scripts_write_no_disabled("assets/dashboard-x.js", &script);
+            assert_eq!(violations.len(), 1, "{call} with {quote}: {violations:?}");
+        }
+    }
+}
+
+#[test]
+fn test_scripts_write_no_disabled_rejects_a_bracket_write_in_each_quote_style() {
+    for quote in ['"', '\'', '`'] {
+        for operator in ["=", "||=", "&&=", "??="] {
+            let statement = format!("btn[{quote}disabled{quote}] {operator} true;");
+            let script = format!("function sync(btn) {{\n  {statement}\n}}");
+            let violations = check_scripts_write_no_disabled("assets/dashboard-x.js", &script);
+            assert_eq!(violations.len(), 1, "{statement}: {violations:?}");
+            assert_eq!(violations[0].line, 2, "{statement}");
+        }
+    }
+}
+
+#[test]
+fn test_scripts_write_no_disabled_rejects_an_attribute_call_split_over_lines() {
+    for script in [
+        "function sync(btn) {\n  btn.setAttribute(\n    \"disabled\",\n    \"\",\n  );\n}",
+        "function sync(btn) {\n  btn\n    .removeAttribute(\n      'disabled',\n    );\n}",
+        "function sync(btn) {\n  btn.toggleAttribute(\n    `disabled`, true);\n}",
+        "function sync(btn) {\n  btn.setAttribute( \"disabled\" , \"\");\n}",
+    ] {
+        let violations = check_scripts_write_no_disabled("assets/dashboard-x.js", script);
+        assert_eq!(violations.len(), 1, "{script}: {violations:?}");
+    }
+}
+
+#[test]
+fn test_scripts_write_no_disabled_names_the_line_where_a_split_call_starts() {
+    let script = "const a = 1;\nbtn\n  .setAttribute(\n    \"disabled\",\n    \"\");\nconst b = 2;";
+    let lines: Vec<usize> = check_scripts_write_no_disabled("assets/dashboard-x.js", script)
+        .iter()
+        .map(|violation| violation.line)
+        .collect();
+    assert_eq!(lines, [3]);
+}
+
+#[test]
+fn test_scripts_write_no_disabled_rejects_a_constant_that_holds_the_attribute_name() {
+    for declaration in ["const", "let", "var"] {
+        for quote in ['"', '\'', '`'] {
+            let script = format!(
+                "{declaration} LOCK = {quote}disabled{quote};\nfunction sync(btn) {{\n  btn.setAttribute(LOCK, \"\");\n  btn.removeAttribute(LOCK);\n  btn[LOCK] = true;\n}}"
+            );
+            let lines: Vec<usize> =
+                check_scripts_write_no_disabled("assets/dashboard-x.js", &script)
+                    .iter()
+                    .map(|violation| violation.line)
+                    .collect();
+            assert_eq!(lines, [3, 4, 5], "{declaration} with {quote}");
+        }
+    }
+}
+
+#[test]
+fn test_scripts_write_no_disabled_accepts_a_constant_that_holds_another_name() {
+    let script = "const HIDE = \"hidden\";\nconst LOCK = \"aria-disabled\";\nbtn.setAttribute(HIDE, \"\");\nbtn.setAttribute(LOCK, \"true\");\nbtn[HIDE] = true;";
+    assert!(check_scripts_write_no_disabled("assets/dashboard-x.js", script).is_empty());
+}
+
+#[test]
+fn test_scripts_write_no_disabled_accepts_a_bracket_read_and_a_block_comment() {
+    for source in [
+        "const locked = btn[\"disabled\"];",
+        "if (btn[\"disabled\"] === true) return;",
+        "/* btn.setAttribute(\"disabled\", \"\"); */",
+        "/*\n * btn.disabled = true;\n */",
+    ] {
+        assert!(
+            check_scripts_write_no_disabled("assets/dashboard-x.js", source).is_empty(),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn test_scripts_write_no_disabled_names_the_line_of_each_write() {
+    let script =
+        "const a = 1;\nbtn.disabled = true;\nconst b = 2;\ninput.removeAttribute(\"disabled\");";
+    let lines: Vec<usize> = check_scripts_write_no_disabled("assets/dashboard-x.js", script)
+        .iter()
+        .map(|violation| violation.line)
+        .collect();
+    assert_eq!(lines, [2, 4]);
+}
+
+#[test]
+fn test_scripts_write_no_disabled_accepts_a_read_of_disabled() {
+    for read in [
+        "if (!input || input.disabled || actionIsGenerating()) return;",
+        "const locked = control.disabled === true;",
+        "if (control.disabled == false) run();",
+        "if (control.disabled != true) run();",
+        "const busy = control.hasAttribute(\"disabled\");",
+        "const busy = control.getAttribute(\"disabled\");",
+        "if (control.matches(\":disabled\")) return;",
+    ] {
+        assert!(
+            check_scripts_write_no_disabled("assets/dashboard-x.js", read).is_empty(),
+            "{read}"
+        );
+    }
+}
+
+#[test]
+fn test_scripts_write_no_disabled_accepts_other_attributes_and_lookalike_names() {
+    for write in [
+        "btn.setAttribute(\"aria-disabled\", \"true\");",
+        "btn.removeAttribute(\"hidden\");",
+        "btn.isDisabled = true;",
+        "btn.disabledReason = \"busy\";",
+        "state_view.disabledAt = 3;",
+    ] {
+        assert!(
+            check_scripts_write_no_disabled("assets/dashboard-x.js", write).is_empty(),
+            "{write}"
+        );
+    }
+}
+
+#[test]
+fn test_scripts_write_no_disabled_does_not_read_a_comment_line() {
+    let script = "// A script must not write `btn.disabled = true` or btn.setAttribute(\"disabled\", \"\").\nconst x = 1;";
+    assert!(check_scripts_write_no_disabled("assets/dashboard-x.js", script).is_empty());
 }

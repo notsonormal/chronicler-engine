@@ -122,6 +122,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
         - **layout/**
           - `mod.rs` — Layout module (route handlers).
           - **handlers/**
+            - `action_controls.rs` — The action control parts: Send, and Autoplay with Stop, each rendered from the busy state of the Game
             - `endpoints.rs` — Fragment endpoints
             - `mod.rs` — Layout route handlers (partials + status endpoints).
         - **prompt_presets/**

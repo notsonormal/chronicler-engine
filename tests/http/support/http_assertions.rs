@@ -158,3 +158,74 @@ pub fn referenced_icons(html: &str) -> Vec<String> {
 pub fn defined_icons(shell: &str) -> Vec<String> {
     icon_ids(shell, "<symbol id=\"i-")
 }
+
+pub fn opening_tag_of_id(html: &str, id: &str) -> Option<String> {
+    let marker = format!("id=\"{id}\"");
+    let at = html.find(&marker)?;
+    let start = html[..at].rfind('<')?;
+    let end = at + html[at..].find('>')?;
+    Some(html[start..=end].to_string())
+}
+
+/// The two parts of the action controls, as the client fetches them: the body of
+/// `GET /fragment/send-control` and the body of `GET /fragment/autoplay-controls`.
+pub struct ActionControls {
+    pub send: String,
+    pub autoplay: String,
+}
+
+/// Asserts what the two action control parts render for one busy state: whether
+/// Send and Autoplay carry `disabled`, and whether Stop is rendered. Send belongs
+/// to `#command-form` and Autoplay to `#autoplay-form` through `form`. Send is the
+/// whole of the first part, and Autoplay and Stop are the whole of the second.
+pub fn assert_action_controls(
+    controls: &ActionControls,
+    send_disabled: bool,
+    autoplay_disabled: bool,
+    stop_rendered: bool,
+    label: &str,
+) {
+    let ActionControls { send, autoplay } = controls;
+    let send_tag = opening_tag_of_id(send, "submit-btn")
+        .unwrap_or_else(|| panic!("{label}: the send part renders #submit-btn: {send}"));
+    let autoplay_tag = opening_tag_of_id(autoplay, "autoplay-btn")
+        .unwrap_or_else(|| panic!("{label}: the autoplay part renders #autoplay-btn: {autoplay}"));
+    assert!(
+        send_tag.contains(r#"form="command-form""#),
+        "{label}: Send submits #command-form: {send_tag}"
+    );
+    assert!(
+        autoplay_tag.contains(r#"form="autoplay-form""#),
+        "{label}: Autoplay submits #autoplay-form: {autoplay_tag}"
+    );
+    assert_eq!(
+        send_tag.contains(" disabled"),
+        send_disabled,
+        "{label}: Send disabled: {send_tag}"
+    );
+    assert_eq!(
+        autoplay_tag.contains(" disabled"),
+        autoplay_disabled,
+        "{label}: Autoplay disabled: {autoplay_tag}"
+    );
+    assert!(
+        !send.contains("autoplay-btn") && !send.contains("stop-btn"),
+        "{label}: the send part holds only Send: {send}"
+    );
+    assert!(
+        !autoplay.contains("submit-btn"),
+        "{label}: the autoplay part holds no Send: {autoplay}"
+    );
+    let stop = opening_tag_of_id(autoplay, "stop-btn");
+    assert_eq!(
+        stop.is_some(),
+        stop_rendered,
+        "{label}: Stop rendered: {autoplay}"
+    );
+    if let Some(stop) = stop {
+        assert!(
+            stop.contains(r#"hx-post="/status/reset-busy""#),
+            "{label}: Stop posts to /status/reset-busy: {stop}"
+        );
+    }
+}

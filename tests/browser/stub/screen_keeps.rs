@@ -12,10 +12,6 @@ use super::support::{
 use super::*;
 use crate::test_utils::screen_part_table::PARTS;
 
-const STORY_LOG: usize = 2;
-const FAILURE_BANNER: usize = 1;
-const SETTINGS_PANEL: usize = 6;
-const LLM_PANEL: usize = 10;
 const GAMES_PANEL_KINDS: [ChangeKind; 3] = [
     ChangeKind::GAMES,
     ChangeKind::WORLDS,
@@ -194,7 +190,7 @@ async fn check_focus_moves_to_a_surviving_row_when_a_load_removes_the_focused_no
 /// nodes in `window`. `check` answers "" when the engaged state is as it was.
 /// `end` ends the edits the engaged state holds.
 struct Engaged {
-    part: usize,
+    part: &'static str,
     kinds: &'static [ChangeKind],
     engage: &'static str,
     check: &'static str,
@@ -206,7 +202,10 @@ async fn assert_engaged_state_survives(
     changes: &StubChangesHandle,
     engaged: &Engaged,
 ) {
-    let part = &PARTS[engaged.part];
+    let part = PARTS
+        .iter()
+        .find(|part| part.name == engaged.part)
+        .expect("the engaged part is in the table");
     let problem = eval_string(page, engaged.engage).await;
     assert_eq!(problem, "", "{}: engaging", part.selector);
 
@@ -231,7 +230,7 @@ async fn assert_engaged_state_survives(
 }
 
 const HEADER_ENGAGED: Engaged = Engaged {
-    part: 0,
+    part: "header",
     kinds: &[ChangeKind::GAMES],
     engage: "() => { window.__headerNode = document.querySelector('#header > *'); return ''; }",
     check: "() => document.querySelector('#header > *') === window.__headerNode ? '' : 'a new element'",
@@ -239,7 +238,7 @@ const HEADER_ENGAGED: Engaged = Engaged {
 };
 
 const STORY_LOG_ENGAGED: Engaged = Engaged {
-    part: STORY_LOG,
+    part: "story-log",
     kinds: &[
         ChangeKind::STORY,
         ChangeKind::BUSY_STATE,
@@ -251,7 +250,7 @@ const STORY_LOG_ENGAGED: Engaged = Engaged {
 };
 
 const SIDEBAR_ENGAGED: Engaged = Engaged {
-    part: 3,
+    part: "visual-sidebar",
     kinds: &[ChangeKind::STORY, ChangeKind::WORLDS],
     engage: r#"() => {
         const label = document.querySelector('.visual-sidebar .image-label');
@@ -272,7 +271,7 @@ const SIDEBAR_ENGAGED: Engaged = Engaged {
 };
 
 const OPTION_ENGAGED: Engaged = Engaged {
-    part: 4,
+    part: "options-dock",
     kinds: &[ChangeKind::OPTIONS, ChangeKind::BUSY_STATE],
     engage: r#"() => {
         const option = document.querySelector('#options-dock .option-btn');
@@ -289,7 +288,7 @@ const OPTION_ENGAGED: Engaged = Engaged {
 };
 
 const OPTIONS_FAILURE_ENGAGED: Engaged = Engaged {
-    part: 4,
+    part: "options-dock",
     kinds: &[ChangeKind::OPTIONS, ChangeKind::BUSY_STATE],
     engage: r#"() => {
         const details = document.querySelector('#options-dock details');
@@ -306,7 +305,7 @@ const OPTIONS_FAILURE_ENGAGED: Engaged = Engaged {
 };
 
 const STATUS_ENGAGED: Engaged = Engaged {
-    part: 5,
+    part: "status-display",
     kinds: &[ChangeKind::BUSY_STATE],
     engage: r#"() => {
         document.querySelector('#status-display .error-details-toggle').click();
@@ -323,7 +322,7 @@ const STATUS_ENGAGED: Engaged = Engaged {
 };
 
 const LLM_ENGAGED: Engaged = Engaged {
-    part: LLM_PANEL,
+    part: "llm-messages",
     kinds: &[ChangeKind::LLM_MESSAGES],
     engage: r#"() => {
         const open = document.querySelector('.llm-message-open');
@@ -355,7 +354,7 @@ macro_rules! after_settle {
 }
 
 const BANNER_ENGAGED: Engaged = Engaged {
-    part: FAILURE_BANNER,
+    part: "failure-banner",
     kinds: &[ChangeKind::SETTINGS, ChangeKind::LLM_MESSAGES],
     engage: r#"() => {
         const toggle = document.querySelector('#failure-banner-degraded .error-details-toggle');
@@ -379,7 +378,7 @@ const BANNER_ENGAGED: Engaged = Engaged {
 };
 
 const SUBTAB_ENGAGED: Engaged = Engaged {
-    part: SETTINGS_PANEL,
+    part: "settings",
     kinds: &[ChangeKind::SETTINGS, ChangeKind::LLM_MESSAGES],
     engage: r#"() => {
         const tab = document.getElementById('subtab-text-check');
