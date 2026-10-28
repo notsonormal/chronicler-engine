@@ -61,7 +61,7 @@ pub struct PersonaRowView {
         </div>
         <div class="game-actions">
             {{ rename_button(game.id) }}
-            <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" data-refusal-what="the game was not reset" title="Reset game" aria-label="Reset game"><svg class="icon" aria-hidden="true"><use href="#i-rotate-ccw"/></svg></button>
+            <button class="btn-reset-small" hx-post="/reset" hx-confirm="Reset the current game? All progress will be lost." hx-swap="none" title="Reset game" aria-label="Reset game"><svg class="icon" aria-hidden="true"><use href="#i-rotate-ccw"/></svg></button>
         </div>
     </div>
     {{ posture_html|safe }}
@@ -124,7 +124,7 @@ pub struct GamesPanelTemplate {
     source = r##"
 <div class="game-rename-form" data-dialog-form>
     <h2 id="edit-dialog-title">Rename game</h2>
-    <form hx-post="/games/{{ id }}/rename" hx-swap="none" data-refusal-what="the game was not renamed">
+    <form hx-post="/games/{{ id }}/rename" hx-swap="none">
         <input type="text" name="display_name" value="{{ display_name }}" required maxlength="120" aria-label="Game display name">
         <div class="inline-error-slot" data-error-slot="game-rename" hidden></div>
         <div class="form-actions">
@@ -152,7 +152,7 @@ pub struct GameRenameFormTemplate {
         <button type="button" class="btn-cyan" data-close-dialog>Close</button>
     </div>
     {% else %}
-    <form class="new-game-form" hx-post="/games" hx-swap="none" data-refusal-what="the game was not started">
+    <form class="new-game-form" hx-post="/games" hx-swap="none">
         <div class="form-row">
             <label for="new-game-world">World</label>
             <select id="new-game-world" name="world_key" required>

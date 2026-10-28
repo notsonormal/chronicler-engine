@@ -1,4 +1,4 @@
-// Failure surfaces: inline error slots, the failure banner, the details popovers and the htmx error hooks.
+// Failure surfaces: the one reader and reporter of an action answer, the form slots, the notice place, the failure banner and the details popovers.
 
 function escapeHtml(value) {
   const entities = {
@@ -26,28 +26,6 @@ function errorDisclosureHtml(popoverId, message, rawText) {
   );
 }
 
-// The two action control parts are no container: a button in one of them, such as
-// Stop, reports in the command form's slot.
-const INLINE_ERROR_CONTAINERS =
-  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .connection-row, .role-row, [data-part]:not(#send-control):not(#autoplay-controls)";
-
-let generatedErrorSlots = 0;
-const GENERATED_SLOT_PREFIX = "generated-";
-
-function inlineErrorSlotFor(elt, create) {
-  if (!elt || !elt.closest) return null;
-  const container = elt.closest(INLINE_ERROR_CONTAINERS);
-  if (!container) return null;
-  const existing = container.querySelector(":scope > [data-error-slot]");
-  if (existing || !create) return existing;
-  const slot = document.createElement("div");
-  slot.className = "inline-error-slot";
-  slot.dataset.errorSlot = GENERATED_SLOT_PREFIX + ++generatedErrorSlots;
-  slot.hidden = true;
-  container.appendChild(slot);
-  return slot;
-}
-
 function renderInlineError(slot, message, rawText) {
   if (!slot) return;
   const id = slot.dataset.errorSlot || "inline-error";
@@ -55,16 +33,17 @@ function renderInlineError(slot, message, rawText) {
   slot.hidden = false;
 }
 
-// A slot that the script made has no twin in the server's render, so clearing it
-// removes it, and the part shows the same markup as a fresh load.
 function clearInlineError(slot) {
   if (!slot) return;
-  if ((slot.dataset.errorSlot || "").startsWith(GENERATED_SLOT_PREFIX)) {
-    slot.remove();
-    return;
-  }
   slot.innerHTML = "";
   slot.hidden = true;
+}
+
+// The slot of a form with typed input is the slot that the server renders as a
+// direct child of the form, or of the group that holds the Save of a message edit.
+function formSlotOf(elt) {
+  const container = elt && elt.closest ? elt.closest("form, .edit-actions") : null;
+  return container ? container.querySelector(":scope > [data-error-slot]") : null;
 }
 
 function refreshFailureBanner() {
@@ -77,6 +56,9 @@ function refreshFailureBanner() {
   banner.hidden = !(degradedUp || unreachableUp);
   banner.classList.toggle("unreachable", unreachableUp);
   banner.setAttribute("role", unreachableUp ? "alert" : "status");
+  fireScreenEvent("banner:changed", {
+    text: unreachableUp ? unreachable.textContent.trim() : "",
+  });
 }
 
 function markUnreachable() {
@@ -93,64 +75,123 @@ function markUnreachable() {
   refreshFailureBanner();
 }
 
-// Any HTTP answer means the engine is reachable: the banner and every slot that a
-// transport failure wrote clear together.
+// Any HTTP answer means the engine is reachable.
 function clearUnreachable() {
-  clearUnreachableSlots();
   const unreachable = document.getElementById("failure-banner-unreachable");
   if (!unreachable || unreachable.innerHTML.trim() === "") return;
   unreachable.innerHTML = "";
   refreshFailureBanner();
 }
 
-// A transport failure's message is false the moment the engine answers again,
-// so every slot it wrote clears with the banner instead of at the surface's
-// next successful request.
-function clearUnreachableSlots() {
-  document
-    .querySelectorAll("[data-error-slot][data-unreachable]")
-    .forEach((slot) => {
-      delete slot.dataset.unreachable;
-      clearInlineError(slot);
-    });
-}
-
-// A server error body is an HTML fragment, so the disclosure shows its text.
+// The text of a server error body: an HTML fragment whose text is escaped, so the
+// parser gives the real characters, and the line break between two lines stays.
 function plainResponseText(body) {
-  return (body || "").replace(/<[^>]*>/g, "").trim();
+  if (!body) return "";
+  return new DOMParser().parseFromString(body, "text/html").body.textContent.trim();
 }
 
-// A refused request (4xx) carries the explanation the engine wrote for this
-// slot, so it leads the short line; any other failure keeps the generic line,
-// with the server's own text behind the disclosure.
-function refusalSummary(body, status) {
-  const detail =
-    status >= 400 && status < 500
-      ? plainResponseText(body).split("\n")[0].trim()
-      : "";
-  return detail ? "That action failed. " + detail : "That action failed.";
+// An action answers one of five outcomes, and the status chooses it: `done`
+// (below 400), `refused` (409), `invalid` (another 4xx), `failed` (5xx) and `none`
+// (status 0: the engine did not answer).
+const REFUSED_STATUS = 409;
+
+function outcomeOfStatus(status) {
+  if (status === 0) return "none";
+  if (status < 400) return "done";
+  if (status === REFUSED_STATUS) return "refused";
+  return status < 500 ? "invalid" : "failed";
 }
 
-function reportSlotFailure(slot, xhr) {
-  if (xhr && xhr.status !== 0) {
-    renderInlineError(
-      slot,
-      refusalSummary(xhr.responseText, xhr.status),
-      plainResponseText(xhr.responseText)
-    );
+function actionAnswer(event) {
+  const xhr = event && event.detail ? event.detail.xhr : null;
+  const status = xhr ? xhr.status : 0;
+  return {
+    outcome: outcomeOfStatus(status),
+    status: status,
+    stamp: xhr ? xhr.getResponseHeader("X-Revision") : null,
+    text: xhr ? plainResponseText(xhr.responseText) : "",
+  };
+}
+
+// The notice place of the shell holds one report: the latest wins. Its source says
+// which clear applies: a good screen load clears a report of a screen load, and
+// never the report of an action.
+function noticeElement() {
+  return document.getElementById("screen-error");
+}
+
+function noticeShows(place, summary, detail, source) {
+  if (place.hidden || place.dataset.source !== source) return false;
+  const shownSummary = place.querySelector(".error-disclosure-text");
+  const shownDetail = place.querySelector(".error-detail-raw");
+  return (
+    !!shownSummary &&
+    !!shownDetail &&
+    shownSummary.textContent === summary &&
+    shownDetail.textContent === detail
+  );
+}
+
+// A report that lasts is the same report at each load, so a notice that already
+// shows it writes nothing: an open Details stays open, and the alert does not fire
+// again. The dialog is modal, so it hears the summary through `notice:changed`.
+function showNotice(summary, detail, source) {
+  const place = noticeElement();
+  const report = place ? place.querySelector("[data-report]") : null;
+  if (!place || !report || noticeShows(place, summary, detail, source)) return;
+  renderInlineError(report, summary, detail);
+  place.dataset.source = source;
+  place.hidden = false;
+  fireScreenEvent("notice:changed", { summary: summary });
+}
+
+function clearNotice() {
+  const place = noticeElement();
+  if (!place || place.hidden) return;
+  clearInlineError(place.querySelector("[data-report]"));
+  delete place.dataset.source;
+  place.hidden = true;
+  fireScreenEvent("notice:changed", { summary: "" });
+}
+
+// The one reporter of an action answer. htmx dispatches `htmx:afterRequest` to the
+// body before it runs the handler of the control, so the sender is still in the
+// page when a network error arrives.
+function reportAnswer(event) {
+  const answer = actionAnswer(event);
+  if (answer.outcome === "none") {
+    markUnreachable();
     return;
   }
-  markUnreachable();
-  if (!slot) return;
-  renderInlineError(slot, "The engine is unreachable.", "No response from the server.");
-  slot.dataset.unreachable = "true";
+  clearUnreachable();
+  if (answer.outcome === "done") return;
+  const summary =
+    answer.text.split("\n")[0].trim() || "The server answered " + answer.status + ".";
+  const detail = answer.text || "No detail.";
+  const slot = answer.outcome === "invalid" ? formSlotOf(event.detail.elt) : null;
+  if (slot) renderInlineError(slot, summary, detail);
+  else showNotice(summary, detail, "action");
 }
 
-// A refusal answers 409: the engine took nothing and wrote nothing, and the refused
-// action says so in its own slot. The client finds a refusal by the status. The
-// `X-Refusal` header only chooses the words of the report: a busy Game, or a page
-// that shows a Game that is no longer active.
-const REFUSED_STATUS = 409;
+document.body.addEventListener("htmx:afterRequest", reportAnswer);
+
+// The next action clears the report of the last one: the notice, and the form slot
+// of the sender. A dialog opener counts as an action.
+document.body.addEventListener("htmx:beforeRequest", function (evt) {
+  clearNotice();
+  clearInlineError(formSlotOf(evt.detail.elt));
+});
+
+document.addEventListener("click", function (evt) {
+  const target = evt.target;
+  if (!(target instanceof Element) || !target.closest("[data-close-notice]")) return;
+  clearNotice();
+  const main = document.getElementById("main-content");
+  if (main) main.focus();
+});
+
+// The story-log requests are `fetch` chains until they become htmx controls. A
+// refusal answers 409, and the `X-Refusal` header chooses the words of its report.
 const REFUSAL_REPORTS = {
   busy: { reason: "The Game is busy", detail: "Still thinking..." },
   "game-changed": {
@@ -168,12 +209,6 @@ function refusalOfResponse(response) {
   return refusalOf(response.status, response.headers.get("X-Refusal"));
 }
 
-// The kind of refusal an htmx request got, or null when the engine took it.
-function answeredRefused(event) {
-  const xhr = event && event.detail ? event.detail.xhr : null;
-  return xhr ? refusalOf(xhr.status, xhr.getResponseHeader("X-Refusal")) : null;
-}
-
 function reportRefusal(slot, refusedWhat, refusal) {
   const report = REFUSAL_REPORTS[refusal];
   renderInlineError(slot, report.reason + ", so " + refusedWhat + ".", report.detail);
@@ -186,45 +221,6 @@ function throwServerDetail(response) {
     );
   });
 }
-
-// A button that sends its own request has no reporter besides this one: Stop,
-// Reset, and the row buttons. It reports in the inline slot of its container; a
-// button outside every container (Stop) reports in the command form's slot, where
-// the action area reports its own refusals. A form and a saving control report for
-// themselves.
-function reportRefusalOfButton(button, refusal) {
-  if (!button || button.tagName !== "BUTTON") return;
-  const slot =
-    inlineErrorSlotFor(button, true) ||
-    document.querySelector('#command-form [data-error-slot="action"]');
-  const what = button.getAttribute("data-refusal-what") || "the action was not done";
-  reportRefusal(slot, what, refusal);
-}
-
-document.body.addEventListener("htmx:responseError", function (evt) {
-  const refusal = answeredRefused(evt);
-  if (refusal) {
-    reportRefusalOfButton(evt.detail.elt, refusal);
-    return;
-  }
-  const slot = inlineErrorSlotFor(evt.detail.elt, true);
-  if (slot) reportSlotFailure(slot, evt.detail.xhr);
-});
-
-document.body.addEventListener("htmx:sendError", function (evt) {
-  reportSlotFailure(inlineErrorSlotFor(evt.detail.elt, true), null);
-});
-
-document.body.addEventListener("htmx:afterRequest", function (evt) {
-  // A refused action keeps its own message in this slot.
-  if (answeredRefused(evt)) {
-    clearUnreachable();
-    return;
-  }
-  if (!evt.detail.successful) return;
-  clearUnreachable();
-  clearInlineError(inlineErrorSlotFor(evt.detail.elt));
-});
 
 document.addEventListener("screen:loaded", refreshFailureBanner);
 

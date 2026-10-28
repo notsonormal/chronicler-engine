@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::state::generation_status::Step;
 
-use super::support::{assert_busy_refusal, StubRunner};
+use super::support::{assert_busy_refusal, StubRunner, NOTICE};
 use super::*;
 
 async fn show_status(page: &playwright_rs::Page, stub: &StubServer, status: StubStatus) {
@@ -209,7 +209,7 @@ async fn check_a_delete_refused_for_a_held_game_shows_the_busy_message(
 }
 
 // [docs/specs/browser_autoplay.md] SCENARIO: 42.6
-async fn check_a_start_refused_for_a_busy_game_reports_in_the_autoplay_form_slot(
+async fn check_a_start_refused_for_a_busy_game_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -219,13 +219,7 @@ async fn check_a_start_refused_for_a_busy_game_reports_in_the_autoplay_form_slot
         .await
         .unwrap();
 
-    let slot = r#"#autoplay-form [data-error-slot="autoplay"]"#;
-    assert_busy_refusal(
-        &page,
-        slot,
-        "the refused start reports in the Autoplay form's own slot",
-    )
-    .await;
+    assert_busy_refusal(&page, NOTICE, "the refused start reports in the notice").await;
     for selector in ["#command-input", "#autoplay-btn"] {
         assert!(
             is_enabled(&page, selector).await,
@@ -309,7 +303,7 @@ async fn run_autoplay_checks() {
     runner
         .run(
             StubActionOutcome::Refused,
-            check_a_start_refused_for_a_busy_game_reports_in_the_autoplay_form_slot,
+            check_a_start_refused_for_a_busy_game_reports_in_the_notice,
         )
         .await;
     runner

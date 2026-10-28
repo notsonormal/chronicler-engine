@@ -69,6 +69,10 @@ TAG_EXEMPT_DIRS = {
 }
 
 TAG_EXEMPT_FILES = {
+    Path("tests/browser/stub/htmx_events.rs"): (
+        "no spec link — probes of the vendored htmx event contract that the "
+        "one answer reader relies on; the test code is the definition"
+    ),
     Path("tests/browser/stub/layout.rs"): (
         "no spec link — computed-style and layout checks have no HTTP "
         "surface; the test code is the definition"

@@ -8,7 +8,7 @@ use super::screen_keeps::SUBTAB_ENGAGED;
 use super::support::{
     eval_string, open_section, start_current, dialog_body_is_empty, dialog_is_open,
     hold_requests_ending_with, open_settings, release_held_requests_and_wait_for_answers,
-    wait_until_dialog_closed, wait_until_focused, StubRunner,
+    wait_until_dialog_closed, wait_until_focused, StubRunner, NOTICE,
 };
 use super::*;
 
@@ -545,7 +545,7 @@ const OPEN_NEW_GAME_WITHOUT_CHOOSING: &str = concat!(
 );
 
 // [docs/specs/browser_screen.md] SCENARIO: 44.17
-async fn check_a_save_that_fails_keeps_the_dialog_open_with_its_typed_values(
+async fn check_a_save_that_fails_keeps_the_dialog_open_and_reports_in_the_notice(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -555,14 +555,28 @@ async fn check_a_save_that_fails_keeps_the_dialog_open_with_its_typed_values(
     stub.games_handle().set_rename_failing(true);
     assert_eq!(eval_string(&page, OPEN_RENAME).await, "");
     assert_eq!(eval_string(&page, SAVE_RENAME).await, "");
-    let (shown, line, raw) = read_error_disclosure(
-        &page,
-        "#edit-dialog .game-rename-form form [data-error-slot]",
-    )
-    .await;
-    assert!(shown, "a failed save must report in the form's own slot");
-    assert!(line.contains("action failed"), "got {line:?}");
+    wait_for_error_disclosure(&page, NOTICE, "a failed save must report in the notice").await;
+    let (_, line, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(line, "The Game was not renamed.", "got {line:?}");
     assert!(raw.contains("Stub rename failure"), "got {raw:?}");
+    assert_eq!(
+        eval_string(
+            &page,
+            "() => document.getElementById('edit-dialog-status').textContent.trim()"
+        )
+        .await,
+        "The Game was not renamed.",
+        "the dialog repeats the summary in its status line"
+    );
+    assert!(
+        !read_error_disclosure(
+            &page,
+            "#edit-dialog .game-rename-form form [data-error-slot]"
+        )
+        .await
+        .0,
+        "a failure shows in the notice, and the form's slot stays empty"
+    );
     assert_eq!(
         eval_string(&page, RENAME_IS_INTACT).await,
         "",
@@ -800,7 +814,7 @@ async fn run_dialog_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_save_that_fails_keeps_the_dialog_open_with_its_typed_values,
+            check_a_save_that_fails_keeps_the_dialog_open_and_reports_in_the_notice,
         )
         .await;
     runner

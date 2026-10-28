@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use super::support::{
-    StubRunner, accept_delete_confirmation, active_element_is, wait_for_count,
+    NOTICE, StubRunner, accept_delete_confirmation, active_element_is, wait_for_count,
     wait_until_focus_within, wait_until_focused,
 };
 use super::*;
@@ -63,9 +63,9 @@ async fn check_deleting_a_world_keeps_keyboard_focus_in_the_panel(
 }
 
 // A refused delete (the world still has games) answers a 400 error fragment,
-// which the world's own row reports in its inline slot.
+// which the notice reports.
 // [docs/specs/browser_worlds.md] SCENARIO: 29.5
-async fn check_a_refused_world_delete_reports_in_its_row_and_keeps_focus(
+async fn check_a_refused_world_delete_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -74,7 +74,6 @@ async fn check_a_refused_world_delete_reports_in_its_row_and_keeps_focus(
     open_worlds_tab(&page).await;
 
     let rows = ".worlds-list .world-item";
-    let slot = r#"#world-redmist_estate [data-error-slot="world-redmist_estate"]"#;
     let first_delete = "#world-redmist_estate .btn-danger";
     let row_before = page
         .evaluate::<(), bool>(
@@ -87,12 +86,12 @@ async fn check_a_refused_world_delete_reports_in_its_row_and_keeps_focus(
     page.locator(first_delete).await.focus().await.unwrap();
     page.locator(first_delete).await.click(None).await.unwrap();
 
-    wait_until_visible(&page, slot, Duration::from_secs(5)).await;
-    let (visible, message, raw) = read_error_disclosure(&page, slot).await;
-    assert!(visible, "the refusal shows in the world's own slot");
+    wait_for_error_disclosure(&page, NOTICE, "the refusal shows in the notice").await;
+    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
     assert!(
-        message.contains("action failed") && raw.contains("World still has games"),
-        "the slot must carry the refusal, got {message:?} / {raw:?}"
+        message == "The World \"Redmist Estate\" was not deleted: World still has games."
+            && raw.contains("World still has games"),
+        "the notice must carry the refusal, got {message:?} / {raw:?}"
     );
     assert_eq!(
         page.query_selector_all(rows)
@@ -179,7 +178,7 @@ async fn run_world_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_refused_world_delete_reports_in_its_row_and_keeps_focus,
+            check_a_refused_world_delete_reports_in_the_notice_and_keeps_focus,
         )
         .await;
     runner

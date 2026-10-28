@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use super::support::{StubRunner, accept_delete_confirmation, wait_for_count, wait_until_focused};
+use super::support::{
+    NOTICE, StubRunner, accept_delete_confirmation, wait_for_count, wait_until_focused,
+};
 use super::*;
 
 /// The focus moves a page has made, in order. `focusin` is synchronous with the
@@ -118,9 +120,9 @@ async fn check_deleting_a_preset_card_keeps_keyboard_focus_on_a_card(
 }
 
 // A card's Edit load that the engine refuses (a default preset) opens no dialog:
-// the card's own slot holds the refusal and the Edit control keeps focus.
+// the notice holds the refusal and the Edit control keeps focus.
 // [docs/specs/browser_prompt_presets.md] SCENARIO: 28.5
-async fn check_a_refused_editor_reports_in_the_cards_slot_and_keeps_focus(
+async fn check_a_refused_editor_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -143,13 +145,16 @@ async fn check_a_refused_editor_reports_in_the_cards_slot_and_keeps_focus(
     page.locator(edit).await.focus().await.unwrap();
     page.locator(edit).await.click(None).await.unwrap();
 
-    let slot = r#"#preset-card-custom_ref [data-error-slot="preset-custom_ref"]"#;
-    wait_until_visible(&page, slot, Duration::from_secs(5)).await;
-    let (visible, _, raw) = read_error_disclosure(&page, slot).await;
-    assert!(visible, "the refusal shows in the card's own slot");
+    wait_for_error_disclosure(&page, NOTICE, "the refusal shows in the notice").await;
+    let (visible, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert!(visible, "the refusal shows in the notice");
+    assert_eq!(
+        message, "The form was not opened: Cannot edit default presets.",
+        "the sentence names what was not done"
+    );
     assert!(
         raw.contains("Cannot edit default presets"),
-        "the slot carries the refusal, got {raw:?}"
+        "the notice carries the refusal, got {raw:?}"
     );
     let dialog_open = page
         .evaluate::<(), bool>("() => document.getElementById('edit-dialog').open", None)
@@ -228,7 +233,7 @@ async fn run_prompt_preset_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_refused_editor_reports_in_the_cards_slot_and_keeps_focus,
+            check_a_refused_editor_reports_in_the_notice_and_keeps_focus,
         )
         .await;
     runner

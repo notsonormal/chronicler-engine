@@ -1,15 +1,13 @@
 //! Tests for the screen guardrail.
 
 use crate::screen::{
-    check_after_request_form_rows_are_used, check_after_request_forms_are_listed,
     check_dialog_fragments_carry_the_title, check_draft_control_exceptions_are_used,
-    check_draft_controls_only_in_dialog_forms, check_handler_headers, check_no_out_of_band_swaps,
-    check_part_table_matches_shell, check_part_write_exceptions_are_used, check_parts_in_shell,
-    check_scripts_listen_no_part_swaps, check_scripts_use_action_fetch,
+    check_draft_controls_only_in_dialog_forms, check_handler_headers,
+    check_no_abort_or_timeout_source, check_no_out_of_band_swaps, check_part_table_matches_shell,
+    check_parts_in_shell, check_scripts_listen_no_part_swaps, check_scripts_use_action_fetch,
     check_scripts_write_no_disabled, check_scripts_write_no_part,
     check_shell_parts_match_the_server, check_stub_answers_the_parts_of_the_server,
     check_template_targets, part_element_names, DraftControlException, ListedPart,
-    without_exempt_functions, AfterRequestForm, PartWriteException,
 };
 
 const GOOD_PART: &str = r#"<div class="tab-content" id="game-tab"><div id="story-log" data-part="story-log"></div></div>"#;
@@ -254,76 +252,6 @@ fn test_scripts_write_no_part_follows_a_selector_constant_to_the_part_that_it_li
 fn test_scripts_write_no_part_accepts_a_selector_constant_that_lists_no_part() {
     let script = "const CONTAINERS = \"form, .row\";\nfunction put(elt, slot) {\n  const container = elt.closest(CONTAINERS);\n  container.appendChild(slot);\n}";
     assert!(check_scripts_write_no_part("assets/dashboard-x.js", script, &parts()).is_empty());
-}
-
-const EXEMPT_ROW: PartWriteException = PartWriteException {
-    path: "assets/dashboard-x.js",
-    function: "makeSlot",
-    reason: "a reason",
-};
-
-const EXEMPT_SCRIPT: &str = "function makeSlot() {\n  document.getElementById(\"header\").replaceChildren();\n}\nfunction other() {\n  const a = 1;\n}";
-
-fn script_of(content: &str) -> (String, String) {
-    ("assets/dashboard-x.js".to_string(), content.to_string())
-}
-
-#[test]
-fn test_part_write_exceptions_accept_a_function_that_writes_a_part() {
-    assert!(
-        check_part_write_exceptions_are_used(&[script_of(EXEMPT_SCRIPT)], &parts(), &[EXEMPT_ROW])
-            .is_empty()
-    );
-}
-
-#[test]
-fn test_part_write_exceptions_flag_a_function_that_writes_no_part() {
-    let quiet = "function makeSlot() {\n  const a = 1;\n}\nfunction other() {\n  document.getElementById(\"header\").replaceChildren();\n}";
-    assert_eq!(
-        check_part_write_exceptions_are_used(&[script_of(quiet)], &parts(), &[EXEMPT_ROW]).len(),
-        1,
-        "a write in another function does not keep the row alive"
-    );
-}
-
-#[test]
-fn test_part_write_exceptions_flag_a_function_that_is_missing() {
-    assert_eq!(
-        check_part_write_exceptions_are_used(&[script_of("const a = 1;")], &parts(), &[EXEMPT_ROW])
-            .len(),
-        1
-    );
-}
-
-#[test]
-fn test_the_exempt_function_hides_its_own_part_write_only() {
-    let exceptions = [EXEMPT_ROW];
-    let read = without_exempt_functions("assets/dashboard-x.js", EXEMPT_SCRIPT, &exceptions);
-    assert!(check_scripts_write_no_part("assets/dashboard-x.js", &read, &parts()).is_empty());
-
-    let with_another_write = format!(
-        "{EXEMPT_SCRIPT}\nfunction later() {{\n  document.getElementById(\"header\").innerHTML = x;\n}}"
-    );
-    let read = without_exempt_functions("assets/dashboard-x.js", &with_another_write, &exceptions);
-    let violations = check_scripts_write_no_part("assets/dashboard-x.js", &read, &parts());
-    assert_eq!(
-        violations.len(),
-        1,
-        "a part write outside the function fails"
-    );
-    assert_eq!(
-        violations[0].line, 8,
-        "the line numbers survive the blanking"
-    );
-}
-
-#[test]
-fn test_the_exempt_function_of_another_script_hides_nothing() {
-    let other = without_exempt_functions("assets/dashboard-y.js", EXEMPT_SCRIPT, &[EXEMPT_ROW]);
-    assert_eq!(
-        check_scripts_write_no_part("assets/dashboard-y.js", &other, &parts()).len(),
-        1
-    );
 }
 
 #[test]
@@ -880,56 +808,41 @@ fn test_scripts_write_no_disabled_does_not_read_a_comment_line() {
     assert!(check_scripts_write_no_disabled("assets/dashboard-x.js", script).is_empty());
 }
 
-const LISTED_FORM: AfterRequestForm = AfterRequestForm {
-    path: "adapters/x.rs",
-    marker: "own-form",
-    reason: "a reason",
-};
-
 #[test]
-fn test_after_request_forms_accept_a_listed_form_and_a_form_without_the_attribute() {
-    let content = r#"<form class="own-form" hx-post="/a" hx-on::after-request="done(event)"></form>
-<form class="plain" hx-post="/b"></form>"#;
-    assert!(
-        check_after_request_forms_are_listed("adapters/x.rs", content, &[LISTED_FORM]).is_empty()
-    );
-}
-
-#[test]
-fn test_after_request_forms_reject_an_unlisted_form_in_either_spelling() {
-    for attribute in ["hx-on::after-request", "hx-on:htmx:after-request"] {
-        let content = format!(
-            "<div></div>\n<form class=\"other\" hx-post=\"/a\" {attribute}=\"done()\"></form>"
+fn test_no_abort_or_timeout_source_rejects_each_source_of_status_zero() {
+    for source in [
+        "htmx.trigger(button, 'htmx:abort');",
+        r#"<form hx-sync="this:replace">"#,
+        r##"<form hx-sync="#form:abort">"##,
+        "htmx.config.timeout = 5000;",
+        r#"<form hx-request='{"timeout": 100}'>"#,
+        "<form hx-sync='this:replace'>",
+        r#"<meta name="htmx-config" content='{"timeout": 5000}'>"#,
+        "evt.detail.xhr.timeout = 50;",
+    ] {
+        assert_eq!(
+            check_no_abort_or_timeout_source("assets/dashboard-x.js", source).len(),
+            1,
+            "{source}"
         );
-        let violations =
-            check_after_request_forms_are_listed("adapters/x.rs", &content, &[LISTED_FORM]);
-        assert_eq!(violations.len(), 1, "{attribute}");
-        assert_eq!(violations[0].line, 2);
     }
 }
 
 #[test]
-fn test_after_request_forms_reject_a_listed_marker_in_another_file() {
-    let content = r#"<form class="own-form" hx-on::after-request="done()"></form>"#;
-    assert_eq!(
-        check_after_request_forms_are_listed("adapters/y.rs", content, &[LISTED_FORM]).len(),
-        1
-    );
+fn test_no_abort_or_timeout_source_accepts_the_drop_sync() {
+    let source = r#"<form hx-sync="this:drop" hx-post="/action/check">"#;
+    assert!(check_no_abort_or_timeout_source("assets/index.html", source).is_empty());
 }
 
 #[test]
-fn test_after_request_form_rows_flag_a_form_that_is_gone() {
-    let kept = (
-        "adapters/x.rs".to_string(),
-        r#"<form class="own-form" hx-on::after-request="done()"></form>"#.to_string(),
-    );
-    let gone = (
-        "adapters/x.rs".to_string(),
-        r#"<form class="own-form" hx-post="/a"></form>"#.to_string(),
-    );
-    assert!(check_after_request_form_rows_are_used(&[kept], &[LISTED_FORM]).is_empty());
-    assert_eq!(
-        check_after_request_form_rows_are_used(&[gone], &[LISTED_FORM]).len(),
-        1
-    );
+fn test_no_abort_or_timeout_source_accepts_a_compare_and_a_meta_without_a_timeout() {
+    for source in [
+        "if (xhr.timeout == 0) return;",
+        r#"<meta name="htmx-config" content='{"defaultSwapStyle": "none"}'>"#,
+    ] {
+        assert!(
+            check_no_abort_or_timeout_source("assets/index.html", source).is_empty(),
+            "{source}"
+        );
+    }
 }

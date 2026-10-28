@@ -300,8 +300,8 @@ async fn test_world_edit_form_renders_posture_selects_http() {
         "the posture status flag must be rendered: {html}"
     );
     assert!(
-        html.contains(r#"data-error-slot="world-posture""#),
-        "the posture group must carry its own error slot: {html}"
+        !html.contains(r#"data-error-slot="world-posture""#),
+        "the posture group is no form with typed input, so its report shows in the notice: {html}"
     );
     assert!(
         html.contains("data-dialog-form") && html.contains(r#"<h2 id="edit-dialog-title">"#),

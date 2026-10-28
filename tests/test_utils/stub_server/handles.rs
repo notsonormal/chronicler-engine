@@ -144,6 +144,16 @@ impl StubGamesHandle {
             .rename_failing = failing;
     }
 
+    /// The rename answers `409`, as a busy Game would. The engine has no such route
+    /// today, so this is the way to see the page take a refusal from a dialog form.
+    pub fn set_rename_refused(&self, refused: bool) {
+        self.state
+            .games
+            .lock()
+            .expect("stub games lock poisoned")
+            .rename_refused = refused;
+    }
+
     /// The saved Games are `count` Games named "Saga 01", "Saga 02", ..., listed in
     /// that order. The `games` number moves.
     pub fn set_saved_games(&self, count: u64) {

@@ -1,4 +1,4 @@
-// The controls that save on change: the rendered value of a control after its save, the "Saved" line, and the report of a refused save.
+// The controls that save on change: the rendered value of a control after its save, and the "Saved" line.
 
 const FIELD_WITHOUT_VALUE = "input[type=hidden], input[type=button], input[type=submit]";
 
@@ -48,38 +48,28 @@ function flagSaved(element, saved) {
   else flag.removeAttribute("data-saved");
 }
 
-// A form that reports its own refusal in its own after-request handler, such as
-// the new-options form of the dock, is not a saving form.
 function isSavingControl(element) {
-  if (element.hasAttribute("hx-on::after-request")) return false;
   return element.tagName === "FORM" || element.matches("input, textarea, select");
 }
 
 // A save that failed or was refused keeps the edit of a form, but puts a control
-// that saves on change back to its rendered value, so the error in its slot does
-// not contradict what the page shows. A save that went through shows "Saved" once
-// the screen shows it.
+// that saves on change back to its rendered value, so the report does not
+// contradict what the page shows. A save that went through shows "Saved" once the
+// screen shows it.
 function settleSave(evt) {
   const element = evt.detail && evt.detail.elt;
   if (!element || !element.closest) return;
   if (!element.closest("[data-part], #edit-dialog")) return;
   if (!isSavingControl(element)) return;
-  const refusal = answeredRefused(evt);
-  const saved = evt.detail.successful && !refusal;
-  if (saved) {
+  const answer = actionAnswer(evt);
+  if (answer.outcome === "done") {
     settleSavedFields(element);
-    afterScreenShows(evt.detail.xhr.getResponseHeader("X-Revision")).then(() =>
-      flagSaved(element, true),
-    );
+    afterScreenShows(answer.stamp).then(() => flagSaved(element, true));
     return;
   }
   flagSaved(element, false);
   if (element.tagName !== "FORM") restoreRenderedValue(element);
   else if (element.hasAttribute("data-autosave")) editFieldsOf(element).forEach(restoreRenderedValue);
-  if (refusal) {
-    const what = element.getAttribute("data-refusal-what") || "the change was not saved";
-    reportRefusal(inlineErrorSlotFor(element, true), what, refusal);
-  }
 }
 
 document.body.addEventListener("htmx:afterRequest", settleSave);

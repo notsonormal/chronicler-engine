@@ -231,7 +231,7 @@ each part element has the attributes of the shell, apart from the focus fallback
 the lock of the entry in edit.
 
 The comparison drops what a load keeps or skips by design: the attributes that
-`data-keep` names, the htmx classes, a showing inline error slot, and the story-log
+`data-keep` names, the htmx classes, and the story-log
 entry in edit (`data-editing`). It has no allow list.
 
 A check that leaves the page unable to match a fresh render on purpose, for
@@ -266,3 +266,8 @@ panel owns live in `docs/specs/browser_dashboard.md`.
 
 The validator scans `tests/http/` and `tests/browser/` only, so a tag belongs
 in one of those two folders.
+
+Two kinds of stub-tier file carry no tag: layout and computed-style checks
+(`layout.rs`), which have no HTTP surface, and probes of the vendored htmx
+event contract (`htmx_events.rs`), which pin the library the page relies on
+and not a scenario. The exemptions are in `TAG_EXEMPT_FILES`.

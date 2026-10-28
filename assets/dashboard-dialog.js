@@ -111,22 +111,29 @@ function returnFocusAfterClose() {
 // Each open of the dialog is one session. A save that waits for the screen closes
 // only the session that sent it, so it never closes a dialog that opened after it.
 let dialogSession = 0;
-let screenErrorSummary = "";
+let noticeSummary = "";
+let unreachableText = "";
 
-// The status line says that a save waits for the screen, and why the screen does
-// not show yet: the slot of the screen error is behind the modal.
+// The status line says that a save waits for the screen, and repeats what the modal
+// hides: the summary of the notice and the Unreachable text of the banner.
 function renderDialogStatus() {
   const status = document.getElementById("edit-dialog-status");
   if (!status) return;
   const lines = [];
   if (editDialog.hasAttribute("data-saving")) lines.push("Saving…");
-  if (editDialog.open && screenErrorSummary) lines.push(screenErrorSummary);
+  if (editDialog.open && noticeSummary) lines.push(noticeSummary);
+  if (editDialog.open && unreachableText) lines.push(unreachableText);
   const text = lines.join(" ");
   if (status.textContent !== text) status.textContent = text;
 }
 
-document.addEventListener("screen:error", function (evt) {
-  screenErrorSummary = evt.detail.summary;
+document.addEventListener("notice:changed", function (evt) {
+  noticeSummary = evt.detail.summary;
+  renderDialogStatus();
+});
+
+document.addEventListener("banner:changed", function (evt) {
+  unreachableText = evt.detail.text;
   renderDialogStatus();
 });
 
@@ -148,9 +155,8 @@ document.addEventListener("click", function (evt) {
 // A save closes the dialog when the engine accepts it and the screen shows the
 // save. The dialog says "Saving…" until then, and takes no second submit: the
 // form is still on screen, and a second save would repeat the write. A refused or
-// failed save keeps the dialog open with the typed values, and `settleSave` and
-// the error handlers report the failure or the busy refusal in the form's own
-// slot. The Test control of a form is a button, so it never closes the dialog.
+// failed save keeps the dialog open with the typed values, and the reporter shows
+// why. The Test control of a form is a button, so it never closes the dialog.
 document.body.addEventListener("htmx:confirm", function (evt) {
   const element = evt.detail && evt.detail.elt;
   if (!element || element.tagName !== "FORM") return;
@@ -162,11 +168,12 @@ document.body.addEventListener("htmx:confirm", function (evt) {
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   const form = evt.detail && evt.detail.elt;
   if (!form || form.tagName !== "FORM" || !editDialog.contains(form)) return;
-  if (!evt.detail.successful) return;
+  const answer = actionAnswer(evt);
+  if (answer.outcome !== "done") return;
   const session = dialogSession;
   editDialog.setAttribute("data-saving", "");
   renderDialogStatus();
-  afterScreenShows(evt.detail.xhr.getResponseHeader("X-Revision")).then(() => {
+  afterScreenShows(answer.stamp).then(() => {
     if (editDialog.open && session === dialogSession) editDialog.close();
   });
 });

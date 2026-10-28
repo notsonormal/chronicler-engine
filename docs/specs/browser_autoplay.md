@@ -83,12 +83,12 @@ Then the story log's error slot shows a line that names the busy Game
 And the story log still shows every entry it showed
 ```
 
-#### Scenario 42.6: A start that the busy Game refuses reports in the Autoplay form's slot
+#### Scenario 42.6: A start that the busy Game refuses reports in the notice
 
 ```gherkin
 Given a Job or a run holds the Game, so POST /autoplay answers 409 "Still thinking..."
 When the client presses #autoplay-btn
-Then the Autoplay form's own inline error slot says that the Game is busy
+Then #screen-error says "The Game is busy, so the Autoplay run did not start."
 And its Details disclosure holds the engine's answer
 And the command input and #autoplay-btn are enabled
 And #action-status is empty

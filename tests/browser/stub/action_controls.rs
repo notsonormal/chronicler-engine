@@ -5,7 +5,7 @@ use std::time::Duration;
 use chronicler_engine::domain::model::state::generation_status::Step;
 
 use super::support::{
-    eval_string, hold_requests_ending_with, hold_screen_loads, read_command_input,
+    NOTICE, eval_string, hold_requests_ending_with, hold_screen_loads, read_command_input,
     release_held_requests_and_wait_for_answers, release_screen_loads, wait_for_held_screen_load,
     StubRunner,
 };
@@ -509,7 +509,7 @@ async fn start_pending_request(page: &playwright_rs::Page, starter: PendingStart
 fn refusal_slot_of(starter: PendingStarter) -> &'static str {
     match starter {
         PendingStarter::Retry | PendingStarter::Retrigger => "#story-log-error",
-        PendingStarter::NewOptions => ".options-regen-form [data-error-slot]",
+        PendingStarter::NewOptions => NOTICE,
         other => panic!("{other:?} begins the pending state only when the engine took the request"),
     }
 }
@@ -599,8 +599,8 @@ async fn check_a_pending_state_ends_at_once_when_the_engine_does_not_take_its_re
         if matches!(starter, PendingStarter::NewOptions) {
             let (_, line, _) = read_error_disclosure(&page, refusal_slot_of(starter)).await;
             assert!(
-                line.contains("the new options were not requested"),
-                "the form reports its own refusal in its own words, got {line:?}"
+                line.contains("the Action was not sent"),
+                "the server words the refusal of the new-Options form, got {line:?}"
             );
         }
         assert_eq!(
@@ -612,7 +612,7 @@ async fn check_a_pending_state_ends_at_once_when_the_engine_does_not_take_its_re
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.71
-async fn check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report(
+async fn check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report_in_the_notice(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -630,7 +630,7 @@ async fn check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report(
                         }
                     }
                 }
-            }).observe(document.getElementById('options-dock'), { childList: true, subtree: true });
+            }).observe(document.getElementById('screen-error'), { childList: true, subtree: true });
             return '';
         }"#,
     )
@@ -639,7 +639,7 @@ async fn check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report(
     wait_for_error_disclosure(
         &page,
         refusal_slot_of(PendingStarter::NewOptions),
-        "the refused request is reported in the regen form's slot",
+        "the refused request is reported in the notice",
     )
     .await;
     wait_for_screen_current(&page).await;
@@ -647,13 +647,22 @@ async fn check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report(
     let (_, line, _) =
         read_error_disclosure(&page, refusal_slot_of(PendingStarter::NewOptions)).await;
     assert!(
-        line.contains("the new options were not requested"),
-        "the form reports in its own words, got {line:?}"
+        line.contains("the Action was not sent"),
+        "the server words the refusal, got {line:?}"
     );
     assert_eq!(
         eval_string(&page, "() => String(window.__reportsWritten)").await,
         "1",
-        "one refusal is one report: the saving-control reporter must leave the regen form to its own handler"
+        "one refusal is one report"
+    );
+    assert_eq!(
+        eval_string(
+            &page,
+            "() => String(document.querySelectorAll('#options-dock [data-error-slot], #options-dock .error-disclosure').length)"
+        )
+        .await,
+        "0",
+        "the options dock holds no report"
     );
 }
 
@@ -717,7 +726,7 @@ async fn run_action_controls_checks() {
     runner
         .run(
             StubActionOutcome::Refused,
-            check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report,
+            check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report_in_the_notice,
         )
         .await;
     runner.finish().await;

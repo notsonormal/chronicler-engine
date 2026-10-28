@@ -1,9 +1,9 @@
-//! Stub-browser tests for refused form actions: the form keeps its place and reports the failure inline. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for refused form actions: the form keeps its place, and an invalid answer shows in its slot while a refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 
 use super::*;
-use super::support::{open_settings, StubRunner};
+use super::support::{open_settings, StubRunner, NOTICE};
 
 async fn connection_form_node_is_still_present(page: &playwright_rs::Page) -> bool {
     page.evaluate::<(), bool>(
@@ -75,13 +75,9 @@ async fn check_failed_connection_add_keeps_the_form_and_renders_inline(
     );
     let (visible, message, raw) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
-    assert!(
-        message.contains("action failed"),
-        "the inline message should name the failed action, got {message:?}"
-    );
-    assert!(
-        message.contains("Unknown LLM backend"),
-        "the short line should quote the server's own refusal, got {message:?}"
+    assert_eq!(
+        message, "The Connection was not saved: Unknown LLM backend 'bogus_provider'.",
+        "the short line is the sentence that the server wrote, with the engine's explanation"
     );
     assert!(
         raw.contains("Unknown LLM backend"),
@@ -90,6 +86,10 @@ async fn check_failed_connection_add_keeps_the_form_and_renders_inline(
     assert!(
         connection_form_node_is_still_present(&page).await,
         "a refused connection add must leave the form in place in the dialog"
+    );
+    assert!(
+        !read_error_disclosure(&page, NOTICE).await.0,
+        "an invalid answer shows in the slot of the form, and the notice stays empty"
     );
 }
 
@@ -126,9 +126,9 @@ async fn check_failed_connection_edit_keeps_the_form_and_renders_inline(
     );
     let (visible, message, raw) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
-    assert!(
-        message.contains("action failed"),
-        "the inline message should name the failed action, got {message:?}"
+    assert_eq!(
+        message, "The Connection was not saved: Unknown LLM backend 'bogus_provider'.",
+        "the short line is the sentence that the server wrote, with the engine's explanation"
     );
     assert!(
         raw.contains("Unknown LLM backend"),
@@ -203,7 +203,7 @@ async fn check_failed_preset_add_keeps_the_dialog_and_renders_inline(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.31
-async fn check_failed_preset_edit_keeps_the_dialog_and_renders_inline(
+async fn check_failed_preset_edit_keeps_the_dialog_and_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -233,16 +233,22 @@ async fn check_failed_preset_edit_keeps_the_dialog_and_renders_inline(
     .await
     .unwrap();
 
-    let slot = r#"#edit-dialog [data-error-slot="preset-edit-custom_ref"]"#;
-    assert!(
-        wait_for_inline_slot(&page, slot).await,
-        "a failed preset edit should render into the form's inline slot"
-    );
-    let (visible, _, raw) = read_error_disclosure(&page, slot).await;
-    assert!(visible, "the inline slot should be shown");
+    wait_for_error_disclosure(&page, NOTICE, "a failed preset edit reports in the notice").await;
+    let (visible, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert!(visible, "the notice should be shown");
+    assert_eq!(message, "The preset was not saved.");
     assert!(
         raw.contains("preset save failure"),
         "the raw failure belongs in the disclosure, got {raw:?}"
+    );
+    assert!(
+        !read_error_disclosure(
+            &page,
+            r#"#edit-dialog [data-error-slot="preset-edit-custom_ref"]"#
+        )
+        .await
+        .0,
+        "a failure shows in the notice, and the form's slot stays empty"
     );
 
     let kept = page
@@ -263,7 +269,7 @@ async fn check_failed_preset_edit_keeps_the_dialog_and_renders_inline(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.32
-async fn check_refused_preset_delete_keeps_the_card_and_renders_inline(
+async fn check_refused_preset_delete_keeps_the_card_and_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -294,13 +300,18 @@ async fn check_refused_preset_delete_keeps_the_card_and_renders_inline(
     .await
     .unwrap();
 
-    let slot = r#"[data-error-slot="preset-custom_ref"]"#;
-    assert!(
-        wait_for_inline_slot(&page, slot).await,
-        "a refused preset delete should render into the card's inline slot"
+    wait_for_error_disclosure(
+        &page,
+        NOTICE,
+        "a refused preset delete reports in the notice",
+    )
+    .await;
+    let (visible, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert!(visible, "the notice should be shown");
+    assert_eq!(
+        message,
+        "The preset was not deleted: Preset is a mode default; change the default before deleting."
     );
-    let (visible, _, raw) = read_error_disclosure(&page, slot).await;
-    assert!(visible, "the inline slot should be shown");
     assert!(
         raw.contains("mode default"),
         "the raw refusal belongs in the disclosure, got {raw:?}"
@@ -346,13 +357,13 @@ async fn run_form_failures_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_preset_edit_keeps_the_dialog_and_renders_inline,
+            check_failed_preset_edit_keeps_the_dialog_and_reports_in_the_notice,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_refused_preset_delete_keeps_the_card_and_renders_inline,
+            check_refused_preset_delete_keeps_the_card_and_reports_in_the_notice,
         )
         .await;
     runner.finish().await;

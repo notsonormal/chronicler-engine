@@ -78,7 +78,7 @@ impl CharacterHeadshotsTemplate {
 /// An empty set of Options and no failure render an empty body.
 #[derive(Template)]
 #[template(
-    source = r##"{% if vm.failure.is_some() %}<div class="options-notice" role="status"><span class="options-notice-line">{{ vm.failure.as_ref().unwrap().reason }}</span><details class="options-notice-details" data-keep="open"><summary>Details</summary><pre>{{ vm.failure.as_ref().unwrap().raw }}</pre></details></div>{% else %}{% if !vm.options.is_empty() %}<div class="options-strip"><div class="options-label"><span>options — pick one, or type your own</span><form class="options-regen-form" hx-post="/action/check" hx-swap="none" hx-sync="this:drop" hx-on::before-request="updateToThinking()" hx-on::after-request="onNewOptionsAfterRequest(event)"><input type="hidden" name="command" value="/options" /><button type="submit" class="mini-btn" title="New options" aria-label="New options" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"/></svg></button></form></div>{% for option in vm.options %}<div class="option-item"><button type="button" class="option-btn" onclick="useOption(this)" {% if vm.is_busy %}disabled{% endif %}>{{ option }}</button><button type="button" class="mini-btn" onclick="editOption(this)" title="Edit before send" aria-label="Edit before send" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></div>{% endfor %}</div>{% endif %}{% endif %}"##,
+    source = r##"{% if vm.failure.is_some() %}<div class="options-notice" role="status"><span class="options-notice-line">{{ vm.failure.as_ref().unwrap().reason }}</span><details class="options-notice-details" data-keep="open"><summary>Details</summary><pre>{{ vm.failure.as_ref().unwrap().raw }}</pre></details></div>{% else %}{% if !vm.options.is_empty() %}<div class="options-strip"><div class="options-label"><span>options — pick one, or type your own</span><form class="options-regen-form" hx-post="/action/check" hx-swap="none" hx-sync="this:drop" hx-on::before-request="updateToThinking()" hx-on::after-request="endPendingAfterRequest(event)"><input type="hidden" name="command" value="/options" /><button type="submit" class="mini-btn" title="New options" aria-label="New options" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"/></svg></button></form></div>{% for option in vm.options %}<div class="option-item"><button type="button" class="option-btn" onclick="useOption(this)" {% if vm.is_busy %}disabled{% endif %}>{{ option }}</button><button type="button" class="mini-btn" onclick="editOption(this)" title="Edit before send" aria-label="Edit before send" {% if vm.is_busy %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-pencil"/></svg></button></div>{% endfor %}</div>{% endif %}{% endif %}"##,
     ext = "html"
 )]
 pub struct OptionsDockTemplate {
@@ -112,11 +112,11 @@ impl OptionsDockTemplate {
     </div>
     {# The corrections are suggestions the player opts into, so Send Original keeps the primary style. #}
     <div class="form-actions">
-        <form method="post" hx-post="/action/confirm" hx-swap="none" hx-on::after-request="onPreviewSendAfterRequest(event)">
+        <form method="post" hx-post="/action/confirm" hx-swap="none" hx-on::before-request="onPreviewBeforeRequest()" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <input type="hidden" name="command" value="{{ original }}" />
             <button type="submit" class="btn-primary btn-original">Send Original</button>
         </form>
-        <form method="post" hx-post="/action/confirm" hx-swap="none" hx-include="#corrected-textarea" hx-on::after-request="onPreviewSendAfterRequest(event)">
+        <form method="post" hx-post="/action/confirm" hx-swap="none" hx-include="#corrected-textarea" hx-on::before-request="onPreviewBeforeRequest()" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <button type="submit" class="btn-cyan">Send with edits</button>
         </form>
         <button type="button" class="btn-cyan preview-cancel" onclick="closeActionPreview()">Cancel</button>
@@ -155,7 +155,6 @@ impl TextCheckPreviewTemplate {
     {% if let Some(summary) = msg.error_summary %}
     <div class="llm-message-error-summary">{{ summary }}</div>
     {% endif %}
-    <div class="inline-error-slot" data-error-slot="llm-msg-{{ msg.id }}" hidden></div>
 </div>
 {% endfor %}
 {% if messages.is_empty() %}

@@ -116,24 +116,18 @@ async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
 
 // [docs/specs/settings.md] SCENARIO: 20.34
 #[tokio::test]
-async fn test_role_rows_and_connection_rows_report_failures_in_their_own_error_slots() {
+async fn test_role_rows_connection_rows_and_the_text_check_card_hold_no_error_slot() {
     let app = TestAppBuilder::default_app();
 
     let body = get_body(&app, "/fragment/settings").await;
 
-    for slot in [
-        "role-narrator",
-        "role-quantifier",
-        "connection-openrouter-gpt-4o-mini",
-    ] {
-        assert!(
-            body.contains(&format!(r#"data-error-slot="{slot}""#)),
-            "error slot {slot}: {body}"
-        );
-    }
     assert!(
-        body.contains(r#"data-error-slot="text-check-card""#),
-        "the text-check card has its own error slot: {body}"
+        body.contains("connection-openrouter-gpt-4o-mini") && body.contains("role-select-narrator"),
+        "the panel renders its rows: {body}"
+    );
+    assert!(
+        !body.contains("data-error-slot"),
+        "a report of the panel shows in the notice place, so no row or card holds a slot: {body}"
     );
 }
 
@@ -205,10 +199,6 @@ async fn test_connection_forms_answer_dialog_fragments() {
         assert!(
             form.contains(r#"data-error-slot="connection-form""#),
             "the form reports a refusal in its own slot: {form}"
-        );
-        assert!(
-            form.contains("data-refusal-what="),
-            "the form names what a busy refusal leaves unsaved: {form}"
         );
         assert!(
             !form.contains("data-close-editor") && !form.contains("data-work"),

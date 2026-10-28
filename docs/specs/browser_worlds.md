@@ -38,13 +38,13 @@ Then no world row remains
 And focus is on a control inside the worlds panel
 ```
 
-#### Scenario 29.5: A refused world delete reports in the row's own slot and keeps focus
+#### Scenario 29.5: A refused world delete reports in the notice and keeps focus
 
 ```gherkin
 Given the Worlds tab shows two worlds
 And the first world's Delete control has focus
 When the client confirms a delete the engine refuses because the world still has games
-Then that row's own inline slot holds the refusal message
+Then #screen-error shows `The World "Redmist Estate" was not deleted: World still has games.`
 And both rows stay in place, as the same elements
 And the Delete control keeps focus
 ```

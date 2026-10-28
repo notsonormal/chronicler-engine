@@ -115,25 +115,26 @@ When a later screen load succeeds
 Then #screen-error is hidden
 ```
 
-#### Scenario 16.19: A failed action renders its message in the form's inline slot
+#### Scenario 16.19: A failed action reports in the notice with the sentence of the server
 
 ```gherkin
 Given the dashboard is loaded and the action form is visible
 When the client submits a command and the server fails the action
-Then the form shows an inline error naming the action as failed
-And the inline error's short line carries no raw server text
-And the raw server text is reachable in that error's disclosure
-And the inline error is drawn as a message with a Details control, not as a second Send button
+Then #screen-error shows the first line of the server's answer, "The Action was not sent."
+And the short line carries no raw server text and no "That action failed." lead
+And the raw server text is reachable in that notice's disclosure
+And the notice is drawn as a message with a Details control, not as a second Send button
+And the form's inline slot is empty
 And the banner is not raised
 ```
 
-#### Scenario 16.20: A dead engine renders the same inline error for a pending action
+#### Scenario 16.20: A dead engine raises the banner for a pending action and nothing else
 
 ```gherkin
 Given the dashboard is loaded and the engine has stopped
 When the client submits a command
-Then the form shows an inline error saying the engine is unreachable
-And the banner is visible and reports the engine as unreachable
+Then the banner is visible and reports the engine as unreachable
+And no notice and no inline slot holds a report
 ```
 
 #### Scenario 16.21: A generation error clamps to one line with a popover
@@ -190,7 +191,7 @@ And neither is announced again while its content is unchanged
 ```gherkin
 Given the dashboard is loaded and a panel control's save cannot be stored
 When the client changes that control and the reachable engine fails the save
-Then the failure reports on its own surface
+Then the failure reports in the notice
 And the panel keeps the content it had
 And the banner is not raised
 ```
@@ -237,8 +238,7 @@ Given the edit dialog is open with the connection Add form
 And the form is the same node as before the submission
 When the client submits the form and the server refuses it
 Then the edit dialog is still open with the same form
-And the form shows an inline error naming the failure
-And that short line quotes the server's own explanation of the refusal
+And the form shows an inline error with the sentence of the server, "The Connection was not saved: <the engine's explanation>."
 And the raw server text is reachable in that error's disclosure
 ```
 
@@ -253,7 +253,7 @@ And the Add form shows an inline error naming the failure
 And the raw server text is reachable in that error's disclosure
 ```
 
-#### Scenario 16.31: A failed preset edit keeps its dialog and renders the failure inline
+#### Scenario 16.31: A failed preset edit keeps its dialog and reports in the notice
 
 ```gherkin
 Given the Prompt Presets panel shows a non-default preset card
@@ -261,19 +261,19 @@ And the client has opened that card's edit form in the edit dialog
 And the edit form is the same node as before the submission
 When the client submits the edit form and the server fails the save
 Then the edit dialog is still open with the same form
-And the form shows an inline error naming the failure
-And the raw server text is reachable in that error's disclosure
+And #screen-error shows "The preset was not saved." and the form's inline slot is empty
+And the raw server text is reachable in the notice's disclosure
 ```
 
-#### Scenario 16.32: A refused preset delete keeps its card and renders the failure inline
+#### Scenario 16.32: A refused preset delete keeps its card and reports in the notice
 
 ```gherkin
 Given the Prompt Presets panel shows a non-default preset card
 And the card is the same node as before the submission
 When the client deletes that preset and the server refuses it
 Then the card is still in the document
-And the card shows an inline error naming the refusal
-And the raw server text is reachable in that error's disclosure
+And #screen-error names what was not done and why
+And the raw server text is reachable in the notice's disclosure
 ```
 
 #### Scenario 16.33: A failed panel load reports in the screen error
@@ -287,17 +287,17 @@ And the panel holds no content
 And the banner is not raised
 ```
 
-#### Scenario 16.34: A failed row action reports in the row's own error slot
+#### Scenario 16.34: A failed row action reports in the notice
 
 ```gherkin
 Given the Worlds panel shows a world row and the Games panel shows a game row
 When the client confirms that world row's Delete and the server fails it
-Then the world row shows its own short failure message
+Then #screen-error shows `The World "Redmist Estate" was not deleted.`
 And its Details disclosure holds the raw server text
-And the world row is still in the list
+And the world row is still in the list and holds no report
 And its Delete control has keyboard focus
 When the client confirms that game row's Reset and the server fails it
-Then the game row shows its own short failure message
+Then #screen-error shows "The Game was not reset."
 And the game row's Reset control has keyboard focus
 And the banner is not raised
 ```
@@ -309,7 +309,7 @@ Given the edit dialog is open with a saved connection's Edit form
 And the form is the same node as before the submission
 When the client submits the form and the server refuses it
 Then the edit dialog is still open with the same form
-And the form shows an inline error naming the failure
+And the form shows an inline error with the sentence of the server, "The Connection was not saved: <the engine's explanation>."
 And the raw server text is reachable in that error's disclosure
 ```
 
@@ -332,18 +332,17 @@ Then the command input still holds the submitted text
 ```gherkin
 Given the dashboard is loaded and the engine has stopped
 When the client submits the typed command
-Then the form shows an inline error saying the engine is unreachable
+Then the banner reports the engine as unreachable
 And the command input still holds the typed command
 ```
 
-#### Scenario 16.38: The engine's recovery clears the form's inline error and the banner
+#### Scenario 16.38: The engine's recovery clears the banner
 
 ```gherkin
 Given the dashboard is loaded and the engine has stopped
-When the client submits a command and the form shows its inline error
+When the client submits a command and the banner reports the engine as unreachable
 And the engine answers again
-Then the inline error is gone
-And the banner is gone
+Then the banner is gone
 ```
 
 #### Scenario 16.39: The active tab survives a reload
@@ -355,14 +354,20 @@ And the page reloads
 Then the Worlds tab is the active tab and its panel is the visible one
 ```
 
-#### Scenario 16.40: A failed confirm reports on the command form's slot
+#### Scenario 16.40: A confirm that the engine fails or does not answer keeps the preview open
 
 ```gherkin
 Given the dashboard is loaded with text check enabled and the preview is open
 And the engine has stopped
 When the client confirms the preview
-Then the preview closes
-And the command form's own inline error slot reports the failure
+Then the banner reports the engine as unreachable
+And the preview stays open with the corrected text
+And the command input still holds the typed command
+
+Given the dashboard is loaded with text check enabled and the preview is open
+When the client confirms the preview and the server fails the action
+Then #screen-error shows "The Action was not sent." with the server's text behind Details
+And the preview stays open with the corrected text
 And the command input still holds the typed command
 ```
 
@@ -377,14 +382,14 @@ When the status returns to Ready
 Then Ready is drawn in its own colour
 ```
 
-#### Scenario 16.42: A refused concurrent send keeps the typed command and reports in the command form's slot
+#### Scenario 16.42: A refused concurrent send keeps the typed command and reports in the notice
 
 ```gherkin
 Given the dashboard is loaded
 And a generation is already in flight
 When the client submits a command the engine refuses
-Then the command form's own inline error slot says that the Game is busy
-And its Details disclosure holds the engine's answer
+Then #screen-error says "The Game is busy, so the Action was not sent."
+And its Details disclosure holds both lines of the answer
 And the status display keeps the state it had
 And the command input still holds the typed command
 And no preview is open
@@ -402,14 +407,14 @@ When the viewport width is 1024
 Then the whole sentence for every kind still reads in full
 ```
 
-#### Scenario 16.44: A confirm that the busy Game refuses reports on the command form's slot
+#### Scenario 16.44: A confirm that the busy Game refuses reports in the notice and keeps the preview
 
 ```gherkin
 Given the dashboard is loaded with text check enabled and the preview is open
 And a generation is already in flight
 When the client confirms the preview and the engine refuses the command
-Then the preview closes
-And the command form's own inline error slot says that the Game is busy
+Then the preview stays open with the corrected text
+And #screen-error says that the Game is busy
 And the command input still holds the typed command
 ```
 
@@ -517,14 +522,14 @@ When the client deletes the last message of the story log and confirms
 Then that request carries the header X-Chronicler-Game with the same id
 ```
 
-#### Scenario 16.54: A send for a Game that is no longer active keeps the typed command and reports in the command form's slot
+#### Scenario 16.54: A send for a Game that is no longer active keeps the typed command and reports in the notice
 
 ```gherkin
 Given the dashboard shows the active Game
 And the engine switched the active Game, and the page has not asked since
 When the client submits a command
-Then the engine refuses the command with 409 and "The active Game changed"
-And the command form's own inline error slot says that the active Game changed
+Then the engine refuses the command with 409 and "The active Game changed, so the Action was not sent."
+And #screen-error says that the active Game changed
 And the command input still holds the typed command
 And no preview is open
 ```
@@ -560,7 +565,7 @@ When the client presses Switch for the second Game and the engine accepts it
 Then the page still names Game 1 until the next load shows Game 2
 When the client sends the command before that load ends
 Then the engine refuses it with 409 and "The active Game changed"
-And the command form's own inline error slot says that the active Game changed
+And #screen-error says that the active Game changed
 And the Action input still holds the command
 When the load ends
 Then the page names the second Game
@@ -568,24 +573,24 @@ Then the page names the second Game
 
 A create and a Reset that this page sent do the same.
 
-#### Scenario 16.58: A Stop for a Game that is no longer active reports in the command form's slot
+#### Scenario 16.58: A Stop for a Game that is no longer active reports in the notice
 
 ```gherkin
 Given an Autoplay run holds the Game and Stop shows
 And the engine switched the active Game, and the page has not asked since
 When the client presses Stop
 Then the engine refuses it with 409 and "The active Game changed"
-And the command form's own inline error slot says that the run was not stopped because the active Game changed
+And #screen-error says "The active Game changed, so the Autoplay run was not stopped."
 ```
 
-#### Scenario 16.59: A Reset for a Game that is no longer active reports in the game row
+#### Scenario 16.59: A Reset for a Game that is no longer active reports in the notice
 
 ```gherkin
 Given the Games panel shows the active Game row
 And the engine switched the active Game, and the page has not asked since
 When the client confirms that row's Reset
 Then the engine refuses it with 409 and "The active Game changed"
-And the game row's own inline error slot says that the game was not reset because the active Game changed
+And #screen-error says "The active Game changed, so the Game was not reset."
 ```
 
 #### Scenario 16.61: A preview send clears the Action input only if it still holds the text that the preview sent
@@ -688,16 +693,95 @@ Then #action-status is empty
 ```gherkin
 Given the dashboard is loaded and idle
 When the client retries, retriggers, or asks for new options, and the engine refuses the request or it fails
-Then the slot of the request reports it
+Then the report shows: in the story log's error slot for a retry and a retrigger, in #screen-error for new options
 And #action-status is empty
 ```
 
-#### Scenario 16.71: A 409 on the Options regen form shows exactly one refusal report
+#### Scenario 16.71: A 409 on the Options regen form shows exactly one refusal report in the notice
 
 ```gherkin
 Given the dashboard is loaded and the options dock shows options
 When the client asks for new options and the engine refuses the request with 409
-Then the options dock shows one refusal report
-And the report says "the new options were not requested"
-And no report says "the change was not saved"
+Then #screen-error shows one refusal report
+And the report says "the Action was not sent"
+And the options dock holds no report
+```
+
+#### Scenario 16.72: The Close control of the notice hides it
+
+```gherkin
+Given the Worlds panel shows a world row and the server fails its Delete
+When the client confirms the Delete
+Then #screen-error shows the report, and its Close control has the accessible name "Close the notice"
+When the client presses Close
+Then #screen-error is hidden and its report is empty
+And focus is on #main-content
+```
+
+Where each kind of control reports a refusal or a failure is pinned by the scenarios of that control: 16.19 (the Action input), 16.25 and 44.18 (a control that saves on change), 16.29 (an invalid dialog form), 16.32 and 16.34 (row buttons), 16.40 (a preview confirm), 16.58 and 16.59 (a Game that is no longer active), 44.17 (a dialog form that fails), and 16.42 and 42.6 (the busy refusal, with both lines in Details). A failure with no lead and a refusal with both lines are pinned there too.
+
+#### Scenario 16.73: A refused dialog form reports in the notice, and an invalid answer of a form with typed input reports in that form
+
+```gherkin
+Given the Rename dialog of a Game is open with a typed name
+When the client saves the form and the engine refuses it with 409
+Then #screen-error shows "The Game is busy, so the Game was not renamed." with both lines in Details
+And that is the only report on the page, and the banner is not raised
+And the dialog stays open with its draft, and its status line repeats the sentence
+
+Given the dashboard is loaded
+When the engine answers the Action input with 400
+Then #command-form's slot shows "The Action was not sent: <the engine's message>."
+And #screen-error stays empty, and the typed command stays
+When the engine answers the Autoplay cycles with 400
+Then #autoplay-form's slot shows "The Autoplay run did not start: <the engine's message>."
+And #screen-error stays empty, and the typed cycles stay
+```
+
+No engine route answers a dialog form with 409 today. The first block guards the case for a future route.
+
+#### Scenario 16.74: A notice stays until the next action, until a failing screen load works again, or until Close
+
+```gherkin
+Given the dashboard shows a notice for a failed action
+When the revision moves and a screen load works
+Then the notice stays
+When the client changes the tab
+Then the notice stays
+When the client presses a dialog opener
+Then the notice clears
+When the client sends the next action
+Then the notice clears
+
+Given a screen load fails and #screen-error shows its report
+When a later screen load works
+Then #screen-error is hidden
+
+Given an invalid answer shows in the slot of a form
+When the client sends that form again
+Then the slot is empty when the request starts
+```
+
+#### Scenario 16.76: No answer raises the Unreachable banner and nothing else
+
+```gherkin
+Given the engine has stopped
+When the client presses a row button, changes a control that saves on change, or saves a dialog form
+Then the banner reports the engine as unreachable
+And no slot and no notice holds a report
+And a dialog stays open and repeats the Unreachable text in its status line
+When the engine answers again
+Then the banner is gone, and the dialog status line no longer says the engine is unreachable
+```
+
+A preview confirm with no answer is pinned by 16.40.
+
+#### Scenario 16.77: A load error of the new-Options form does not end a check that is in flight
+
+```gherkin
+Given a check request of the command form is in flight
+When htmx reports a load error for the new-Options form
+Then the action area is still checking
+When htmx reports a load error for #command-form
+Then the action area is no longer checking
 ```

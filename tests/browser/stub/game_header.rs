@@ -6,6 +6,7 @@ use super::support::{
     accept_delete_confirmation, ask_once_without_waiting, hold_requests_ending_with,
     hold_screen_loads, read_command_input, release_held_requests_and_wait_for_answers,
     release_screen_loads, submit_intercepted_command, wait_for_held_screen_load, StubRunner,
+    NOTICE,
 };
 use super::*;
 
@@ -93,13 +94,8 @@ async fn check_a_send_for_a_game_that_is_no_longer_active_keeps_the_typed_comman
     .await
     .unwrap();
 
-    let slot = r#"#command-form [data-error-slot="action"]"#;
-    wait_for_error_disclosure(
-        &page,
-        slot,
-        "the refused send reports in the command form's slot",
-    )
-    .await;
+    let slot = NOTICE;
+    wait_for_error_disclosure(&page, slot, "the refused send reports in the notice").await;
     let (_, line, _) = read_error_disclosure(&page, slot).await;
     assert!(
         line.contains("The active Game changed"),
@@ -231,11 +227,11 @@ async fn check_a_send_after_a_switch_from_this_page_gets_the_game_refusal_and_ke
     )
     .await
     .unwrap();
-    let slot = r#"#command-form [data-error-slot="action"]"#;
+    let slot = NOTICE;
     wait_for_error_disclosure(
         &page,
         slot,
-        "the send before the next load reports in the command form's slot",
+        "the send before the next load reports in the notice",
     )
     .await;
     let (_, line, _) = read_error_disclosure(&page, slot).await;
@@ -283,7 +279,7 @@ async fn check_a_preview_send_clears_the_input_only_if_it_still_holds_the_text_t
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.58
-async fn check_a_stop_for_a_game_that_is_no_longer_active_reports_in_the_command_form_slot(
+async fn check_a_stop_for_a_game_that_is_no_longer_active_reports_in_the_notice(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -298,22 +294,17 @@ async fn check_a_stop_for_a_game_that_is_no_longer_active_reports_in_the_command
     stub.changes_handle().set_game_of_actions(2);
     page.locator("#stop-btn").await.click(None).await.unwrap();
 
-    let slot = r#"#command-form [data-error-slot="action"]"#;
-    wait_for_error_disclosure(
-        &page,
-        slot,
-        "the refused Stop reports in the command form's slot",
-    )
-    .await;
+    let slot = NOTICE;
+    wait_for_error_disclosure(&page, slot, "the refused Stop reports in the notice").await;
     let (_, line, _) = read_error_disclosure(&page, slot).await;
-    assert!(
-        line.contains("The active Game changed") && line.contains("the run was not stopped"),
-        "the line says what was refused and why, got {line:?}"
+    assert_eq!(
+        line, "The active Game changed, so the Autoplay run was not stopped.",
+        "the line says what was refused and why"
     );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.59
-async fn check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_game_row(
+async fn check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_notice(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -329,12 +320,12 @@ async fn check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_game_r
     stub.changes_handle().set_game_of_actions(2);
     page.locator(reset).await.click(None).await.unwrap();
 
-    let slot = ".game-item.active > [data-error-slot]";
-    wait_for_error_disclosure(&page, slot, "the refused Reset reports in its game row").await;
+    let slot = NOTICE;
+    wait_for_error_disclosure(&page, slot, "the refused Reset reports in the notice").await;
     let (_, line, _) = read_error_disclosure(&page, slot).await;
-    assert!(
-        line.contains("The active Game changed") && line.contains("the game was not reset"),
-        "the line says what was refused and why, got {line:?}"
+    assert_eq!(
+        line, "The active Game changed, so the Game was not reset.",
+        "the line says what was refused and why"
     );
 }
 
@@ -380,13 +371,13 @@ async fn run_game_header_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_stop_for_a_game_that_is_no_longer_active_reports_in_the_command_form_slot,
+            check_a_stop_for_a_game_that_is_no_longer_active_reports_in_the_notice,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_game_row,
+            check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_notice,
         )
         .await;
     runner.finish().await;

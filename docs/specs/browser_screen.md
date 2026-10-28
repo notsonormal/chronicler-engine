@@ -200,7 +200,8 @@ And the `games` part holds no content
 ```gherkin
 Given the rename form of a saved Game is open in the edit dialog, with a changed name
 When the client presses Save and the engine answers 500
-Then the form's own error slot shows the failure
+Then #screen-error shows "The Game was not renamed."
+And the dialog status line repeats that sentence
 And the dialog is still open with the same form, the changed name and focus
 ```
 
@@ -210,19 +211,19 @@ And the dialog is still open with the same form, the changed name and focus
 Given the Tense select of #game-posture-controls shows "past"
 When the client changes it to "present", and the engine answers 500
 Then the Tense select shows "past" again
-And the error slot of #game-posture-controls shows the failure
+And #screen-error shows "The change was not saved."
 ```
 
-#### Scenario 44.19: A load keeps an inline error that is showing
+#### Scenario 44.19: A load keeps the notice of an action
 
 ```gherkin
 Given the `games` part is open
-And a failed action shows an error in an inline error slot inside the part
+And a failed action shows its report in #screen-error
 When the revision moves, and the page asks
 Then the `games` part loads
-And the inline error slot still shows the same error
-When the same action succeeds
-Then the inline error slot is empty and hidden
+And #screen-error still shows the same report
+When the client sends the next action
+Then #screen-error is hidden
 ```
 
 #### Scenario 44.20: A preset form in the dialog survives a Prompt Presets load, and Cancel sends no request
@@ -340,10 +341,9 @@ And the kept button, the same node, posts to "/changed"
 #### Scenario 44.31: A direct morph applies the keep rules
 
 ```gherkin
-Given a container holds an element with data-keep naming data-view, an inline error slot that shows an error, and a story-log entry in edit
+Given a container holds an element with data-keep naming data-view, and a story-log entry in edit
 When the screen script morphs the answer of the server into it
 Then the kept attribute keeps its value
-And the slot still shows its error
 And the entry in edit keeps its draft
 ```
 
@@ -479,4 +479,14 @@ And #screen-error shows the failure and the client opens its Details
 And the page makes more loads that fail with the same answer
 Then the Details of #screen-error stays open
 And the disclosure node in #screen-error is the node that showed before
+```
+
+#### Scenario 44.45: Each form with typed input renders one slot, and no other element holds a slot
+
+```gherkin
+Given the stub renders each tab and each dialog opener
+When the client loads each tab and opens each dialog opener
+Then every form of the edit dialog, #command-form and #autoplay-form holds one error slot as a direct child
+And every error slot is a direct child of such a form, or the report container of #screen-error
+And no other element holds an error slot, apart from the story-log strip until the story-log controls become htmx controls
 ```

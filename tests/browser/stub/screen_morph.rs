@@ -138,21 +138,16 @@ async fn check_a_direct_morph_applies_the_keep_rules(page: playwright_rs::Page, 
                 const host = document.getElementById('probe-host');
                 host.innerHTML =
                     '<div id="view" data-keep="data-view" data-view="open">View</div>'
-                    + '<div id="slot" data-error-slot="probe">Error shown</div>'
                     + '<div id="entry" data-editing>Draft</div>';
                 Idiomorph.morph(
                     host,
                     '<div id="view" data-keep="data-view" data-view="closed">View</div>'
-                    + '<div id="slot" data-error-slot="probe" hidden></div>'
                     + '<div id="entry">Server text</div>',
                     { morphStyle: 'innerHTML' },
                 );
-                const slot = document.getElementById('slot');
                 const entry = document.getElementById('entry');
                 return JSON.stringify({
                     view: document.getElementById('view').dataset.view,
-                    slotHidden: slot.hidden,
-                    slotText: slot.textContent.trim(),
                     entryEditing: entry.hasAttribute('data-editing'),
                     entryText: entry.textContent.trim(),
                 });
@@ -165,14 +160,6 @@ async fn check_a_direct_morph_applies_the_keep_rules(page: playwright_rs::Page, 
     assert_eq!(
         report["view"], "open",
         "data-keep keeps the view state: {answer}"
-    );
-    assert_eq!(
-        report["slotHidden"], false,
-        "a showing error slot stays: {answer}"
-    );
-    assert_eq!(
-        report["slotText"], "Error shown",
-        "its error stays: {answer}"
     );
     assert_eq!(
         report["entryEditing"], true,

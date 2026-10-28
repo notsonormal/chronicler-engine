@@ -14,8 +14,8 @@ carries no root element of its own. A World row shows a shortened description. T
 (`#edit-dialog-body`): the Create and Edit controls load it, and its root
 (`data-dialog-form`) carries the title of the dialog. A World save answers nothing on success:
 an empty 200. An invalid value answers a 400 error fragment, and a failure a 500 error
-fragment. The control that saved reports the error in its own slot. The saved
-World reaches the screen when the panel loads.
+fragment. The page shows the report of a save in the notice place, or in the form that
+holds the typed input. The saved World reaches the screen when the panel loads.
 
 ## Scenarios
 
@@ -64,7 +64,7 @@ Then the stored world's options_always_on is false
 
 ### World posture auto-save
 
-The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers an empty 200 for a saved change. The browser shows "Saved" in `#world-posture-status`, and a refused or failed save puts the select back to its rendered value, with the error in the posture group's own slot. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment, so the contract is verified at request level and the browser keeps only a wiring check.
+The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers an empty 200 for a saved change. The browser shows "Saved" in `#world-posture-status`, and a refused or failed save puts the select back to its rendered value, and the notice reports the failure. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment, so the contract is verified at request level and the browser keeps only a wiring check.
 
 #### Scenario 25.5: The posture endpoint patches and reports per outcome
 
@@ -94,7 +94,7 @@ And the narrator_mode select renders "interactive_fiction" selected
 And the narrative_perspective select renders "second" selected
 And the narrative_tense select renders "past" selected
 And the editor root is a dialog form (`data-dialog-form`) with the title `edit-dialog-title`, and carries no hx-target
-And the body contains the #world-posture-status flag and the posture group's own error slot
+And the body contains the #world-posture-status flag, and the posture group holds no error slot
 And the posture selects auto-save to /worlds/posture_world/posture
 ```
 

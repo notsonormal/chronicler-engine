@@ -44,7 +44,9 @@ use chronicler_engine::adapters::driving::http::settings::templates::{
 use chronicler_engine::adapters::driving::http::layout::handlers::{
     autoplay_controls_answer, busy_answer, failure_answer, idle_answer, send_control_answer,
 };
-use chronicler_engine::adapters::driving::http::utils::answer_words::{describe_answers, RefusalKind};
+use chronicler_engine::adapters::driving::http::utils::answer_words::{
+    describe_answers, item_named, naming_item, RefusalKind,
+};
 use chronicler_engine::adapters::driving::http::utils::error::{
     action_failure_response, action_invalid_response, action_not_found_response,
 };
@@ -351,9 +353,29 @@ impl StubPresets {
         presets
     }
 
+    fn quantifier_presets(&self) -> Vec<PromptPreset> {
+        vec![default_preset(
+            "quantifier_default",
+            "Default",
+            PresetType::Quantifier,
+            NarratorMode::Novel,
+        )]
+    }
+
+    fn impersonate_presets(&self) -> Vec<PromptPreset> {
+        vec![default_preset(
+            "impersonate_default",
+            "Default",
+            PresetType::Impersonate,
+            NarratorMode::Novel,
+        )]
+    }
+
     fn find(&self, id: &str) -> Option<PromptPreset> {
         self.system_presets()
             .into_iter()
+            .chain(self.quantifier_presets())
+            .chain(self.impersonate_presets())
             .find(|preset| preset.id == id)
     }
 }
@@ -363,18 +385,8 @@ fn presets_html(presets: &StubPresets) -> String {
 
     PromptPresetsTemplate {
         system_presets: presets.system_presets(),
-        quantifier_presets: vec![default_preset(
-            "quantifier_default",
-            "Default",
-            PresetType::Quantifier,
-            NarratorMode::Novel,
-        )],
-        impersonate_presets: vec![default_preset(
-            "impersonate_default",
-            "Default",
-            PresetType::Impersonate,
-            NarratorMode::Novel,
-        )],
+        quantifier_presets: presets.quantifier_presets(),
+        impersonate_presets: presets.impersonate_presets(),
         options_presets: Vec::new(),
         settings: presets.settings(),
     }
@@ -485,6 +497,9 @@ pub enum StubActionOutcome {
     /// A 409 that refuses the command: the engine answers its busy refusal
     /// because a generation is already in flight.
     Refused,
+    /// A 400 for a value the engine cannot use, as the Action input and the
+    /// Autoplay cycles receive it.
+    Invalid,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -555,6 +570,7 @@ struct StubGames {
     active_name: String,
     saved: Vec<(u64, String)>,
     rename_failing: bool,
+    rename_refused: bool,
     posture_saves_succeed: bool,
 }
 
@@ -567,6 +583,7 @@ impl StubGames {
                 (3, "Test Realm — 17 Sep 2026 (3)".to_string()),
             ],
             rename_failing: false,
+            rename_refused: false,
             posture_saves_succeed: false,
         }
     }
@@ -1108,6 +1125,9 @@ async fn rename_game(
 ) -> Response<Body> {
     {
         let mut games = state.games.lock().expect("stub games lock poisoned");
+        if games.rename_refused {
+            return refused(RefusalKind::Busy);
+        }
         if games.rename_failing {
             return action_failure_response("Stub rename failure");
         }
@@ -1532,8 +1552,12 @@ async fn action_check(
         StubActionOutcome::Pending => dispatched(&state),
         StubActionOutcome::Refused => refused(RefusalKind::Busy),
         StubActionOutcome::Error => action_failure(command),
+        StubActionOutcome::Invalid => action_invalid_response(INVALID_ACTION_MESSAGE),
     }
 }
+
+/// The engine's message for a value that an invalid outcome rejects.
+pub const INVALID_ACTION_MESSAGE: &str = "The value is not allowed";
 
 /// The engine answers nothing for a command it took, and its Job holds the
 /// Game, so the busy state moves.
@@ -1600,6 +1624,7 @@ async fn action_confirm(
         StubActionOutcome::Error => action_failure(command),
         StubActionOutcome::Refused => refused(RefusalKind::Busy),
         StubActionOutcome::Pending => dispatched(&state),
+        StubActionOutcome::Invalid => action_invalid_response(INVALID_ACTION_MESSAGE),
     }
 }
 
@@ -1648,6 +1673,7 @@ async fn start_autoplay(State(state): State<Arc<StubState>>) -> Response<Body> {
         }
         StubActionOutcome::Refused => refused(RefusalKind::Busy),
         StubActionOutcome::Error => action_failure_response("Stub autoplay failure"),
+        StubActionOutcome::Invalid => action_invalid_response(INVALID_ACTION_MESSAGE),
     }
 }
 
@@ -1845,8 +1871,16 @@ async fn delete_world(
     axum::extract::Path(key): axum::extract::Path<String>,
 ) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
+    let name = state
+        .worlds
+        .lock()
+        .expect("stub worlds lock poisoned")
+        .worlds
+        .iter()
+        .find(|world| world.key == key)
+        .and_then(|world| item_named(&world.name));
     if state.world_delete_refused.load(SeqCst) {
-        return action_invalid_response("World still has games");
+        return naming_item(action_invalid_response("World still has games"), name);
     }
     if state.row_deletes_succeed.load(SeqCst) {
         state
@@ -1858,7 +1892,7 @@ async fn delete_world(
         state.bump(&[ChangeKind::WORLDS]);
         (StatusCode::OK, "").into_response()
     } else {
-        action_failure_response("Stub world delete failure")
+        naming_item(action_failure_response("Stub world delete failure"), name)
     }
 }
 

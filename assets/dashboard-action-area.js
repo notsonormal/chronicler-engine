@@ -36,9 +36,9 @@ function endPendingWhenScreenShows(stamp) {
 
 // A request that the engine took begins the state, and the screen that shows the
 // revision of its answer ends it.
-function beginPendingUntilScreenShows(event) {
+function beginPendingUntilScreenShows(stamp) {
   beginPending();
-  endPendingWhenScreenShows(event.detail.xhr.getResponseHeader("X-Revision"));
+  endPendingWhenScreenShows(stamp);
 }
 
 function statusShows(state) {
@@ -216,17 +216,10 @@ function onCommandBeforeRequest() {
   syncActionState();
 }
 
-// htmx marks a transport failure and a non-2xx answer unsuccessful, so a
-// command the engine never took keeps the text the player typed.
-function requestSucceeded(event) {
-  return !!(event && event.detail && event.detail.successful);
-}
-
 // The input clears once the screen shows the command that it sent, and only if it
 // still holds the text that was sent: the player can type the next action before
 // the screen shows the last one.
-function clearCommandInputAfterScreenShows(event, sentText) {
-  const stamp = event.detail.xhr.getResponseHeader("X-Revision");
+function clearCommandInputAfterScreenShows(stamp, sentText) {
   afterScreenShows(stamp).then(() => {
     const input = commandInput();
     if (input && input.value === sentText) clearCommandInput();
@@ -238,30 +231,22 @@ function clearCommandInput() {
   if (form) form.reset();
 }
 
-function commandFormSlot() {
-  return document.querySelector('#command-form [data-error-slot="action"]');
-}
-
 // A swap that throws skips the after-request event of the form, so the check is
 // over here: the area must not stay in the state "checking".
-document.body.addEventListener("htmx:onLoadError", function (evt) {
-  const path = evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
-  if (path !== "/action/check") return;
+function onCommandLoadError() {
   checkInFlight = false;
   syncActionState();
-});
+}
 
+// A command that the engine did not take keeps its text in the input.
 function onCommandAfterRequest(event) {
   checkInFlight = false;
-  const refusal = answeredRefused(event);
-  if (refusal) {
-    // The engine did not take the command, so the input keeps it.
-    reportRefusal(commandFormSlot(), "the command was not sent", refusal);
-  } else if (requestSucceeded(event) && !previewIsOpen()) {
-    // The preview keeps the flagged command for editing, and a dispatched
-    // command has been consumed, so clear the input.
-    clearCommandInputAfterScreenShows(event, event.detail.requestConfig.parameters.command);
-    beginPendingUntilScreenShows(event);
+  const answer = actionAnswer(event);
+  // The preview keeps the flagged command for editing, and a dispatched command
+  // has been consumed, so clear the input.
+  if (answer.outcome === "done" && !previewIsOpen()) {
+    clearCommandInputAfterScreenShows(answer.stamp, event.detail.requestConfig.parameters.command);
+    beginPendingUntilScreenShows(answer.stamp);
   }
   syncActionState();
 }
@@ -270,69 +255,36 @@ function onCommandAfterRequest(event) {
 // request began: the player can type on while the request is in flight.
 let previewSentText = "";
 
-document.body.addEventListener("htmx:beforeRequest", function (evt) {
-  const path = evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
-  if (path !== "/action/confirm") return;
+function onPreviewBeforeRequest() {
   const input = commandInput();
   previewSentText = input ? input.value : "";
-});
+}
 
+// The preview closes only after a done answer, so a refused, invalid or failed
+// confirm leaves the corrected text to send again.
 function onPreviewSendAfterRequest(event) {
-  const refusal = answeredRefused(event);
-  if (refusal) {
-    reportRefusal(commandFormSlot(), "the command was not sent", refusal);
-  } else if (requestSucceeded(event)) {
-    clearCommandInputAfterScreenShows(event, previewSentText);
-    beginPendingUntilScreenShows(event);
-  } else {
-    reportConfirmFailure(event);
-  }
+  const answer = actionAnswer(event);
+  if (answer.outcome !== "done") return;
+  clearCommandInputAfterScreenShows(answer.stamp, previewSentText);
+  beginPendingUntilScreenShows(answer.stamp);
   closeActionPreview();
 }
 
-// The Autoplay start takes the budget and answers nothing. A refusal reports in
-// the form's own slot, and the run shows in the status display.
+// The Autoplay start takes the budget and answers nothing. The run shows in the
+// status display.
 function onAutoplayAfterRequest(event) {
-  const refusal = answeredRefused(event);
-  if (refusal) {
-    reportRefusal(
-      document.querySelector('#autoplay-form [data-error-slot="autoplay"]'),
-      "the run did not start",
-      refusal,
-    );
-  } else if (requestSucceeded(event)) {
-    beginPendingUntilScreenShows(event);
-    syncActionState();
-  }
+  const answer = actionAnswer(event);
+  if (answer.outcome !== "done") return;
+  beginPendingUntilScreenShows(answer.stamp);
+  syncActionState();
 }
 
-// The new-options request begins the pending state before it is sent, from the
-// form's before-request handler. Its answer ends the state, and a refusal reports
-// in a slot of the form.
-function onNewOptionsAfterRequest(event) {
-  const refusal = answeredRefused(event);
-  if (refusal) {
-    reportRefusal(
-      inlineErrorSlotFor(event.detail.elt, true),
-      "the new options were not requested",
-      refusal,
-    );
-    endPending();
-  } else if (requestSucceeded(event)) {
-    endPendingWhenScreenShows(event.detail.xhr.getResponseHeader("X-Revision"));
-  } else {
-    endPending();
-  }
-}
-
-// A confirm the engine never took reports on the command form's own slot: the
-// preview closes here, and a slot inside it would go with it. htmx fires this
-// request's sendError after this event, on a preview that is already gone.
-function reportConfirmFailure(event) {
-  reportSlotFailure(
-    commandFormSlot(),
-    event && event.detail ? event.detail.xhr : null,
-  );
+// The new-Options request begins the pending state before it is sent. The screen that shows the revision of the answer ends the state, and an
+// answer that is not done ends it at once.
+function endPendingAfterRequest(event) {
+  const answer = actionAnswer(event);
+  if (answer.outcome === "done") endPendingWhenScreenShows(answer.stamp);
+  else endPending();
 }
 
 function closeActionPreview() {

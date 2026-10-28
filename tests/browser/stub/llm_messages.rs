@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::change::ChangeKind;
 
-use super::support::{dialog_is_open, wait_until_dialog_closed, wait_until_focused, StubRunner};
+use super::support::{dialog_is_open, wait_until_dialog_closed, wait_until_focused, StubRunner, NOTICE};
 use super::*;
 
 const OPEN_CONTROL: &str = ".llm-message-open";
@@ -225,10 +225,10 @@ async fn check_an_open_record_stays_as_it_is_when_the_panel_loads(
 }
 
 // The record of a row can be gone when Open asks for it, because retention keeps
-// 50 records. The engine answers a 404: no dialog opens, the row's own slot holds
-// the refusal, and focus stays on the Open control.
+// 50 records. The engine answers a 404: no dialog opens, the notice holds the
+// report, and focus stays on the Open control.
 // [docs/specs/browser_llm_messages.md] SCENARIO: 35.6
-async fn check_a_missing_record_reports_in_the_rows_slot_and_keeps_focus(
+async fn check_a_missing_record_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -237,13 +237,15 @@ async fn check_a_missing_record_reports_in_the_rows_slot_and_keeps_focus(
     page.locator(OPEN_CONTROL).await.focus().await.unwrap();
     page.locator(OPEN_CONTROL).await.click(None).await.unwrap();
 
-    let slot = ".llm-message-card [data-error-slot]";
-    wait_until_visible(&page, slot, Duration::from_secs(5)).await;
-    let (shown, _, raw) = read_error_disclosure(&page, slot).await;
-    assert!(shown, "the refusal shows in the row's own slot");
+    wait_for_error_disclosure(&page, NOTICE, "the report shows in the notice").await;
+    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The form was not opened: LLM message not found.",
+        "the sentence names what was not done"
+    );
     assert!(
         raw.contains("LLM message not found"),
-        "the slot carries the refusal, got {raw:?}"
+        "the notice carries the report, got {raw:?}"
     );
     assert!(
         !dialog_is_open(&page).await,
@@ -291,7 +293,7 @@ async fn run_llm_messages_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_missing_record_reports_in_the_rows_slot_and_keeps_focus,
+            check_a_missing_record_reports_in_the_notice_and_keeps_focus,
         )
         .await;
     runner.finish().await;

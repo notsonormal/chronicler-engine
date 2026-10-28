@@ -40,7 +40,6 @@ pub struct RoleRowView {
                 {% for option in role.options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
             </select>
             <span class="role-health-slot" id="{{ role.health_cell_id }}">{{ role.health_html }}</span>
-            <div class="inline-error-slot" data-error-slot="role-{{ role.role }}" hidden></div>
         </div>
         {% endfor %}
     </div>
@@ -61,7 +60,6 @@ pub struct RoleRowView {
                 <button type="button" hx-post="/connections/{{ conn.id }}/test" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">Test</button>
                 <button type="button" hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-swap="none" class="btn-danger">Delete</button>
             </div>
-            <div class="inline-error-slot" data-error-slot="connection-{{ conn.id }}" hidden></div>
         </div>
         {% endfor %}
     </div>
@@ -142,7 +140,7 @@ impl SettingsTemplate {
     source = r##"
 <div class="connection-form" data-dialog-form>
     <h2 id="edit-dialog-title">{% if editing %}Edit {{ name }}{% else %}Add Connection{% endif %}</h2>
-    <form hx-post="{{ form_action }}" hx-swap="none" data-refusal-what="the connection was not saved">
+    <form hx-post="{{ form_action }}" hx-swap="none">
         <div class="form-group">
             <label for="conn_name">Name</label>
             <input type="text" id="conn_name" name="conn_name" value="{{ name }}" placeholder="My OpenRouter" />
@@ -312,7 +310,6 @@ pub struct ConnectionTestResultTemplate {
                 Check before sending to LLM
             </label>
         </div>
-        <div class="inline-error-slot" data-error-slot="text-check-card" hidden></div>
     </form>
 </div>
 "##,

@@ -32,7 +32,6 @@ pub struct WorldRowView {
                 <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-swap="none" class="btn-danger">Delete</button>
             </div>
             {{ world.description }}
-            <div class="inline-error-slot" data-error-slot="world-{{ world.key }}" hidden></div>
         </li>
         {% endfor %}
     </ul>
@@ -131,7 +130,6 @@ impl WorldsPanelTemplate {
         <legend>Posture — saves automatically</legend>
         {{ posture_selects(narrator_options, perspective_options, tense_options, auto_save_key) }}
         <span id="world-posture-status" class="posture-status saved-flag"></span>
-        <div class="inline-error-slot" data-error-slot="world-posture" hidden></div>
     </fieldset>
     {% endif %}
 </div>

@@ -83,14 +83,13 @@
       ></div>
       <div id="failure-banner-unreachable" class="failure-banner-unreachable"></div>
     </div>
-    <!-- A GET /changes or GET /screen that the engine answered with a failure. The parts keep their content. -->
-    <div
-      id="screen-error"
-      class="screen-error"
-      role="alert"
-      data-error-slot="screen"
-      hidden
-    ></div>
+    <!-- The notice place: a refusal, a failure, an invalid answer to a control that is no form with typed input, and a GET /changes or GET /screen that the engine answered with a failure. The parts keep their content. -->
+    <div id="screen-error" class="screen-error" role="alert" hidden>
+      <div class="screen-error-report" data-error-slot="screen" data-report></div>
+      <button type="button" class="notice-close" data-close-notice aria-label="Close the notice">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+      </button>
+    </div>
     <div class="tab-bar" role="tablist" aria-label="Dashboard sections">
       <button class="tab active" role="tab" id="tab-game" aria-controls="game-tab" aria-selected="true" data-tab="game">Game</button>
       <button class="tab" role="tab" id="tab-settings" aria-controls="settings-tab" aria-selected="false" data-tab="settings">Settings</button>
@@ -124,6 +123,7 @@
           hx-disabled-elt="#command-input"
           hx-on::before-request="onCommandBeforeRequest()"
           hx-on::after-request="onCommandAfterRequest(event)"
+          hx-on::on-load-error="onCommandLoadError()"
         >
           <label class="visually-hidden" for="command-input">Action</label>
           <input
@@ -232,13 +232,13 @@
     </dialog>
 
 
-    <script src="/assets/dashboard-errors.js?v=12"></script>
-    <script src="/assets/dashboard-screen.js?v=7"></script>
-    <script src="/assets/dashboard-saves.js?v=3"></script>
-    <script src="/assets/dashboard-action-area.js?v=15"></script>
+    <script src="/assets/dashboard-errors.js?v=13"></script>
+    <script src="/assets/dashboard-screen.js?v=8"></script>
+    <script src="/assets/dashboard-saves.js?v=4"></script>
+    <script src="/assets/dashboard-action-area.js?v=16"></script>
     <script src="/assets/dashboard-story-log.js?v=12"></script>
     <script src="/assets/dashboard-slash-menu.js?v=1"></script>
     <script src="/assets/dashboard-panels.js?v=9"></script>
-    <script src="/assets/dashboard-dialog.js?v=8"></script>
+    <script src="/assets/dashboard-dialog.js?v=9"></script>
   </body>
 </html>

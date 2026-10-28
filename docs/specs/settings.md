@@ -28,8 +28,9 @@ result of a connection Test open in the edit dialog, outside the panel, so a
 load of the panel never meets them.
 
 A save answers nothing on success: an empty 200. An invalid value answers a 400 error
-fragment, and a failure a 500 error fragment. The control that saved reports the
-error in its own slot. The change reaches the screen when the panel loads.
+fragment, and a failure a 500 error fragment. The page shows the report of a save in
+the notice place, or in the form that holds the typed input. The change reaches the
+screen when the panel loads.
 
 #### Scenario 20.1: Settings panel renders the Connections and Text Check sub-tabs
 
@@ -49,13 +50,13 @@ And the body contains no "Set as Narrator" or "Set as Quantifier" control
 And the body contains no always-open Add Connection form
 ```
 
-#### Scenario 20.34: Each role row and connection row reports a failure in its own error slot
+#### Scenario 20.34: A role row, a connection row and the text-check card hold no error slot
 
 ```gherkin
 Given a fresh app state with the default connections
 When the client GET /fragment/settings
-Then the Narrator and Quantifier role rows and each connection row hold an error slot of their own
-And the text-check card holds an error slot of its own
+Then the Narrator and Quantifier role rows and each connection row hold no error slot
+And the text-check card holds no error slot
 ```
 
 #### Scenario 20.35: The controls of the panel swap nothing into the panel
@@ -218,7 +219,6 @@ When the client GET /fragment/connections/{id}/edit for a saved connection
 Then the response is 200
 And the body is a dialog fragment titled with the connection's name, with a form that posts to /connections/{id}/edit
 And each form has a Cancel control, a Test control for the typed values, and its own error slot
-And each form names what a busy refusal leaves unsaved
 ```
 
 #### Scenario 20.24: The connection Edit form answers 404 for an unknown connection and opens no dialog

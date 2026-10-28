@@ -32,12 +32,9 @@ async ({ timeoutMs }) => {
     return [];
   }
 
-  // A load keeps these three kinds of state (`Idiomorph.defaults.callbacks` in
-  // dashboard-screen.js): the attributes that the element's `data-keep` names, an
-  // inline error slot that shows an error, and a story-log entry in edit
-  // (`data-editing`), which it skips.
-  const showsInlineError = (node) =>
-    node.nodeType === 1 && node.hasAttribute("data-error-slot") && !node.hidden;
+  // A load keeps these two kinds of state (`Idiomorph.defaults.callbacks` in
+  // dashboard-screen.js): the attributes that the element's `data-keep` names, and a
+  // story-log entry in edit (`data-editing`), which it skips.
 
   function comparableAttributes(element) {
     const keep = (element.getAttribute("data-keep") || "").split(/\s+/);
@@ -68,14 +65,7 @@ async ({ timeoutMs }) => {
       freshKids = freshKids.filter((node) => node.nodeType !== 1 || node.id !== entry.id);
     }
     liveKids = liveKids.filter((node) => !isBeingEdited(node));
-    for (const slot of liveKids.filter(showsInlineError)) {
-      const name = slot.getAttribute("data-error-slot");
-      const at = freshKids.findIndex(
-        (node) => node.nodeType === 1 && node.getAttribute("data-error-slot") === name,
-      );
-      if (at >= 0) freshKids = freshKids.filter((_, index) => index !== at);
-    }
-    return [liveKids.filter((node) => !showsInlineError(node)), freshKids];
+    return [liveKids, freshKids];
   }
 
   function diffChildren(allLiveKids, allFreshKids, path) {

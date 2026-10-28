@@ -55,12 +55,12 @@ Then the panel lists the new LLM message
 And the dialog is still open with the same record
 ```
 
-#### Scenario 35.6: A record that the engine no longer holds reports in the row's own slot
+#### Scenario 35.6: A record that the engine no longer holds reports in the notice
 
 ```gherkin
 Given the LLM Messages panel shows an LLM attempt whose record the engine has removed
 When the client activates the attempt's Open control
 Then no dialog opens
-And the row's own error slot shows the engine's refusal
+And #screen-error shows "The form was not opened: LLM message not found."
 And the focus stays on the Open control
 ```

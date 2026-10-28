@@ -8,7 +8,7 @@ use chronicler_engine::domain::model::state::generation_status::Step;
 
 use super::*;
 use super::support::{
-    StubRunner, active_element_is, assert_busy_refusal, read_banner, read_command_input,
+    NOTICE, StubRunner, active_element_is, assert_busy_refusal, read_banner, read_command_input,
     submit_intercepted_command,
 };
 
@@ -87,7 +87,10 @@ async fn check_primary_button_locks_and_unlocks_after_confirm(
     stub: StubServer,
 ) {
     let status = stub.status_handle();
-    // Keep the stub generating so no load unlocks the button before the assertion reads it.
+    // The page timer would load the generating status into the button between the
+    // `set` and the click, and a click on a disabled button sends nothing. The
+    // action itself still makes the page ask.
+    stop_page_timer(&page).await;
     status.set(StubStatus::Step(Step::Narrating));
     stash_action_area_nodes(&page).await;
 
@@ -519,7 +522,7 @@ async fn check_confirmed_preview_consumes_the_command_text(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.42
-async fn check_refused_concurrent_send_keeps_the_command_and_reports_in_the_form_slot(
+async fn check_refused_concurrent_send_keeps_the_command_and_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -533,11 +536,10 @@ async fn check_refused_concurrent_send_keeps_the_command_and_reports_in_the_form
     .await
     .unwrap();
 
-    let slot = r#"#command-form [data-error-slot="action"]"#;
     assert_busy_refusal(
         &page,
-        slot,
-        "a refused concurrent send must report in the command form's own slot",
+        NOTICE,
+        "a refused concurrent send must report in the notice",
     )
     .await;
     assert_eq!(
@@ -561,7 +563,7 @@ async fn check_refused_concurrent_send_keeps_the_command_and_reports_in_the_form
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.44
-async fn check_confirm_refused_for_a_busy_game_reports_on_the_command_form_slot(
+async fn check_confirm_refused_for_a_busy_game_reports_in_the_notice_and_keeps_the_preview(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -571,15 +573,18 @@ async fn check_confirm_refused_for_a_busy_game_reports_on_the_command_form_slot(
         .click(None)
         .await
         .unwrap();
-    wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
 
-    let slot = r#"#command-form [data-error-slot="action"]"#;
-    assert_busy_refusal(
-        &page,
-        slot,
-        "a refused confirm must report in the command form's own slot",
-    )
-    .await;
+    assert_busy_refusal(&page, NOTICE, "a refused confirm must report in the notice").await;
+    wait_until_visible(&page, ".text-check-preview", Duration::from_secs(5)).await;
+    assert_eq!(
+        page.locator("#corrected-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "look at the castle",
+        "the preview stays open with the corrected text"
+    );
     assert_eq!(
         read_command_input(&page).await,
         "look at the casle",
@@ -710,13 +715,13 @@ async fn run_dashboard_action_area_checks() {
     runner
         .run(
             StubActionOutcome::Refused,
-            check_confirm_refused_for_a_busy_game_reports_on_the_command_form_slot,
+            check_confirm_refused_for_a_busy_game_reports_in_the_notice_and_keeps_the_preview,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Refused,
-            check_refused_concurrent_send_keeps_the_command_and_reports_in_the_form_slot,
+            check_refused_concurrent_send_keeps_the_command_and_reports_in_the_notice,
         )
         .await;
     runner.finish().await;

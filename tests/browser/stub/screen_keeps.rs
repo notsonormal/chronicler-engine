@@ -1,4 +1,4 @@
-//! Stub-browser tests for what a screen load keeps: the story-log entry in edit, the engaged state of each part, and an inline error that shows. Tagged against `docs/specs/browser_screen.md`.
+//! Stub-browser tests for what a screen load keeps: the story-log entry in edit, the engaged state of each part. Tagged against `docs/specs/browser_screen.md`.
 
 use std::time::Duration;
 
@@ -7,7 +7,7 @@ use chronicler_engine::domain::model::state::generation_status::GenerationFailur
 
 use super::support::{
     ask_once_without_waiting, eval_string, hold_screen_loads, open_section, read_banner,
-    release_screen_loads, start_current, wait_for_held_screen_load, StubRunner,
+    release_screen_loads, start_current, wait_for_held_screen_load, StubRunner, NOTICE,
 };
 use super::*;
 use crate::test_utils::screen_part_table::PARTS;
@@ -460,38 +460,33 @@ async fn check_a_control_that_saves_on_change_goes_back_to_its_rendered_value_wh
         "past",
         "the Tense select must show the rendered value again"
     );
-    let (shown, line, _) =
-        read_error_disclosure(&page, "#game-posture-controls [data-error-slot]").await;
-    assert!(shown && line.contains("action failed"), "got {line:?}");
+    let (shown, line, _) = read_error_disclosure(&page, NOTICE).await;
+    assert!(shown && line == "The change was not saved.", "got {line:?}");
     ask_once(&page).await;
 }
 
 // [docs/specs/browser_screen.md] SCENARIO: 44.19
-async fn check_a_load_keeps_an_inline_error_that_is_showing(
-    page: playwright_rs::Page,
-    stub: StubServer,
-) {
+async fn check_a_load_keeps_the_notice_of_an_action(page: playwright_rs::Page, stub: StubServer) {
     let changes = stub.changes_handle();
     start_current(&page).await;
     open_section(&page, "games", ".games-panel").await;
 
-    let slot = "#game-posture-controls [data-error-slot]";
     eval_string(&page, TYPE_TENSE).await;
-    let (shown, _, raw) = read_error_disclosure(&page, slot).await;
-    assert!(shown, "the failed save must report in the control's slot");
+    let (shown, _, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert!(shown, "the failed save must report in the notice");
 
     let before = changes.loads("games");
     changes.bump(ChangeKind::GAMES);
     ask_once(&page).await;
     assert_eq!(changes.loads("games"), before + 1, "the panel loads");
-    let (still_shown, _, still_raw) = read_error_disclosure(&page, slot).await;
-    assert!(still_shown, "a load must keep the error that is showing");
+    let (still_shown, _, still_raw) = read_error_disclosure(&page, NOTICE).await;
+    assert!(still_shown, "a load must keep the notice of an action");
     assert_eq!(still_raw, raw);
 
     stub.games_handle().set_posture_saves_succeed(true);
     eval_string(&page, SAVE_TENSE_UNCHANGED).await;
-    let (shown, _, _) = read_error_disclosure(&page, slot).await;
-    assert!(!shown, "a save that goes through clears the error");
+    let (shown, _, _) = read_error_disclosure(&page, NOTICE).await;
+    assert!(!shown, "the next action clears the notice");
 }
 
 #[tokio::test]
@@ -527,7 +522,7 @@ async fn run_screen_keep_checks() {
         .await;
     runner.run(outcome, check_a_control_that_saves_on_change_goes_back_to_its_rendered_value_when_the_save_fails).await;
     runner
-        .run(outcome, check_a_load_keeps_an_inline_error_that_is_showing)
+        .run(outcome, check_a_load_keeps_the_notice_of_an_action)
         .await;
     runner.finish().await;
 }

@@ -1,4 +1,4 @@
-//! Stub-browser tests for the failure display: the banner, the in-place slots and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for the failure display: the banner, the notice and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
 
 // A failing action route answers 500, so htmx fires `htmx:responseError` with no
 // dispatched event.
@@ -61,9 +61,9 @@ async fn read_inline_error_sizes(page: &playwright_rs::Page) -> InlineErrorSizes
         r#"() => {
             const submit = document.getElementById('submit-btn');
             const toggle = document.querySelector(
-                '#command-form .inline-error-slot .error-details-toggle');
+                '#screen-error .error-details-toggle');
             const message = document.querySelector(
-                '#command-form .inline-error-slot .error-disclosure-message');
+                '#screen-error .error-disclosure-message');
             const size = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
             return {
                 sendHeight: submit ? submit.getBoundingClientRect().height : 0,
@@ -202,32 +202,30 @@ async fn check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_scree
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.19
-async fn check_failed_action_renders_inline_slot(page: playwright_rs::Page, _stub: StubServer) {
+async fn check_failed_action_renders_in_the_notice(page: playwright_rs::Page, _stub: StubServer) {
     submit_command(&page, "Internal server error").await;
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
-        )
-        .await,
-        "a failed action should render into the form's inline slot"
-    );
-    let (visible, message, raw) =
-        read_error_disclosure(&page, "#command-form [data-error-slot]").await;
-    assert!(visible, "the inline slot should be shown");
-    assert!(
-        message.contains("action failed"),
-        "the inline message should name the failed action, got {message:?}"
+    wait_for_error_disclosure(
+        &page,
+        "#screen-error",
+        "a failed action shows in the notice",
+    )
+    .await;
+    let (visible, message, raw) = read_error_disclosure(&page, "#screen-error").await;
+    assert!(visible, "the notice should be shown");
+    assert_eq!(
+        message, "The Action was not sent.",
+        "the short line is the sentence that the server wrote"
     );
     assert!(
         raw.contains("Failed to process action"),
         "the raw server text belongs in the disclosure, got {raw:?}"
+    );
+    assert!(
+        !read_error_disclosure(&page, "#command-form [data-error-slot]")
+            .await
+            .0,
+        "a failure shows in the notice, not in the form"
     );
     let (banner_visible, _, _) = read_banner(&page).await;
     assert!(
@@ -286,28 +284,18 @@ async fn check_failed_action_does_not_raise_unreachable_banner(
     .await
     .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(8),
-            Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#game-posture-controls [data-error-slot]")
-                    .await
-                    .0
-            },
-        )
-        .await,
-        "a failed posture save must report in the posture controls' own slot"
-    );
+    wait_for_error_disclosure(
+        &page,
+        "#screen-error",
+        "a failed posture save shows in the notice",
+    )
+    .await;
     let (slot_visible, slot_message, slot_raw) =
-        read_error_disclosure(&page, "#game-posture-controls [data-error-slot]").await;
-    assert!(
-        slot_visible,
-        "a failed action must report on its own surface"
-    );
-    assert!(
-        slot_message.contains("action failed"),
-        "the slot carries a short line, got {slot_message:?}"
+        read_error_disclosure(&page, "#screen-error").await;
+    assert!(slot_visible, "a failed action must report in the notice");
+    assert_eq!(
+        slot_message, "The change was not saved.",
+        "the notice carries the sentence that the server wrote"
     );
     assert!(
         slot_raw.contains("Failed to save posture"),
@@ -490,7 +478,7 @@ async fn check_banner_details_popover_survives_a_banner_load(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.20
-async fn check_dead_engine_renders_inline_error_for_pending_action(
+async fn check_dead_engine_shows_only_the_banner_for_a_pending_action(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -503,25 +491,17 @@ async fn check_dead_engine_renders_inline_error_for_pending_action(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { read_banner(&page).await.0 },
         )
         .await,
-        "a dead engine should still render the form's inline error"
-    );
-    let (visible, message, raw) =
-        read_error_disclosure(&page, "#command-form [data-error-slot]").await;
-    assert!(visible, "the inline slot should be shown");
-    assert!(
-        message.contains("unreachable"),
-        "the inline message should say the engine is unreachable, got {message:?}"
+        "a dead engine raises the banner"
     );
     assert!(
-        raw.contains("No response"),
-        "a dead engine's request has no response body, got {raw:?}"
+        !read_error_disclosure(&page, "#screen-error").await.0
+            && !read_error_disclosure(&page, "#command-form [data-error-slot]")
+                .await
+                .0,
+        "no answer shows in the banner only: no notice and no slot holds a report"
     );
 
     let (banner_visible, role, _) = read_banner(&page).await;
@@ -533,7 +513,7 @@ async fn check_dead_engine_renders_inline_error_for_pending_action(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.40
-async fn check_failed_confirm_reports_on_the_command_form_slot(
+async fn check_a_confirm_with_no_answer_raises_the_banner_and_keeps_the_preview(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -550,31 +530,35 @@ async fn check_failed_confirm_reports_on_the_command_form_slot(
         .click(None)
         .await
         .unwrap();
-    wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
 
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { read_banner(&page).await.0 },
         )
         .await,
-        "a confirm that cannot reach the engine must report on the command form's slot"
-    );
-    let (visible, message, raw) =
-        read_error_disclosure(&page, "#command-form [data-error-slot]").await;
-    assert!(visible, "the command form's slot should be shown");
-    assert!(
-        message.contains("unreachable"),
-        "the slot should say the engine is unreachable, got {message:?}"
+        "a confirm that cannot reach the engine raises the banner"
     );
     assert!(
-        raw.contains("No response"),
-        "a dead engine's request has no response body, got {raw:?}"
+        read_banner(&page).await.2.contains("unreachable"),
+        "the banner says the engine is unreachable"
+    );
+    assert!(
+        !read_error_disclosure(&page, "#screen-error").await.0
+            && !read_error_disclosure(&page, "#command-form [data-error-slot]")
+                .await
+                .0,
+        "no notice and no slot holds a report"
+    );
+    assert_eq!(
+        page.locator("#corrected-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "look at the castle",
+        "the preview stays open with the corrected text"
     );
     assert_eq!(
         read_command_input(&page).await,
@@ -584,7 +568,7 @@ async fn check_failed_confirm_reports_on_the_command_form_slot(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.40
-async fn check_refused_confirm_reports_on_the_command_form_slot(
+async fn check_a_failed_confirm_reports_in_the_notice_and_keeps_the_preview(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -596,41 +580,42 @@ async fn check_refused_confirm_reports_on_the_command_form_slot(
         .click(None)
         .await
         .unwrap();
-    wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(10),
-            Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
-        )
-        .await,
-        "a refused confirm must report on the command form's slot"
+    wait_for_error_disclosure(
+        &page,
+        "#screen-error",
+        "a failed confirm reports in the notice",
+    )
+    .await;
+    let (visible, message, raw) = read_error_disclosure(&page, "#screen-error").await;
+    assert!(visible, "the notice should be shown");
+    assert_eq!(
+        message, "The Action was not sent.",
+        "the short line is the sentence that the server wrote"
     );
-    let (visible, message, _) =
-        read_error_disclosure(&page, "#command-form [data-error-slot]").await;
-    assert!(visible, "the command form's slot should be shown");
-    assert!(
-        message.contains("action failed"),
-        "the short line names the failed action, got {message:?}"
-    );
-    assert!(
-        !message.contains("Failed to process action"),
-        "a 500's server text stays behind the disclosure, got {message:?}"
-    );
-    let (_, _, raw) = read_error_disclosure(&page, "#command-form [data-error-slot]").await;
     assert!(
         raw.contains("Failed to process action"),
         "the server's own text belongs in the disclosure, got {raw:?}"
     );
+    assert!(
+        !read_error_disclosure(&page, "#command-form [data-error-slot]")
+            .await
+            .0,
+        "the form's slot holds no report"
+    );
+    assert_eq!(
+        page.locator("#corrected-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "look at the castle",
+        "the preview stays open with the corrected text"
+    );
     assert_eq!(
         read_command_input(&page).await,
         "look at the casle",
-        "a refused confirm must keep the typed command"
+        "a failed confirm must keep the typed command"
     );
 }
 
@@ -1067,23 +1052,28 @@ async fn check_failed_panel_load_reports_in_the_screen_error(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.34
-async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _stub: StubServer) {
+async fn check_failed_row_action_reports_in_the_notice(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
     page.on_dialog(|dialog| async move { dialog.accept(None).await })
         .await
         .unwrap();
 
-    for (tab, row, control, failure) in [
+    for (tab, row, control, failure, sentence) in [
         (
             "worlds",
             ".world-item",
             ".worlds-list .world-item:first-child .btn-danger",
             "Stub world delete failure",
+            "The World \"Redmist Estate\" was not deleted.",
         ),
         (
             "games",
             ".game-item",
             ".game-item.active .btn-reset-small",
             "Stub reset failure",
+            "The Game was not reset.",
         ),
     ] {
         page.locator(&format!(r#"[data-tab="{tab}"]"#))
@@ -1102,17 +1092,22 @@ async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _
             .await
             .unwrap_or_else(|e| panic!("click '{control}' failed: {e}"));
 
-        let slot = format!("{row} > [data-error-slot]");
         wait_for_error_disclosure(
             &page,
-            &slot,
-            "a failed action in a {tab} row must report in that row",
+            "#screen-error",
+            "a failed action in a row must report in the notice",
         )
         .await;
-        let (_, message, raw) = read_error_disclosure(&page, &slot).await;
+        let (_, message, raw) = read_error_disclosure(&page, "#screen-error").await;
         assert!(
-            !message.is_empty() && !message.contains(failure),
-            "the row shows a short line, got {message:?}"
+            message == sentence,
+            "the notice shows the sentence of the server, got {message:?}"
+        );
+        assert!(
+            !read_error_disclosure(&page, &format!("{row} > [data-error-slot]"))
+                .await
+                .0,
+            "the row holds no report"
         );
         assert!(
             raw.contains(failure),
@@ -1146,14 +1141,10 @@ async fn check_dead_engine_keeps_the_typed_command(page: playwright_rs::Page, st
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { read_banner(&page).await.0 },
         )
         .await,
-        "a dead engine should still render the form's inline error"
+        "a dead engine raises the banner"
     );
     assert_eq!(
         read_command_input(&page).await,
@@ -1163,10 +1154,7 @@ async fn check_dead_engine_keeps_the_typed_command(page: playwright_rs::Page, st
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.38
-async fn check_engine_recovery_clears_the_inline_error_and_banner(
-    page: playwright_rs::Page,
-    stub: StubServer,
-) {
+async fn check_engine_recovery_clears_the_banner(page: playwright_rs::Page, stub: StubServer) {
     let lifecycle = stub.lifecycle_handle();
     lifecycle.stop();
     wait_until_port_closed(lifecycle.addr()).await;
@@ -1176,14 +1164,10 @@ async fn check_engine_recovery_clears_the_inline_error_and_banner(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { read_banner(&page).await.0 },
         )
         .await,
-        "a dead engine must render the form's inline error before the recovery"
+        "a dead engine raises the banner before the recovery"
     );
 
     lifecycle.restart().await;
@@ -1192,18 +1176,10 @@ async fn check_engine_recovery_clears_the_inline_error_and_banner(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                !read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { !read_banner(&page).await.0 },
         )
         .await,
-        "the engine's recovery must clear the inline error"
-    );
-    assert!(
-        !read_banner(&page).await.0,
-        "the inline error and the banner must clear together"
+        "the engine's recovery must clear the banner"
     );
     assert_eq!(
         read_command_input(&page).await,
@@ -1248,7 +1224,7 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Error,
-            check_failed_action_renders_inline_slot,
+            check_failed_action_renders_in_the_notice,
         )
         .await;
     runner
@@ -1261,20 +1237,20 @@ async fn run_failure_display_slot_checks() {
         .run_without_convergence(
             "the engine stays stopped",
             StubActionOutcome::Pending,
-            check_dead_engine_renders_inline_error_for_pending_action,
+            check_dead_engine_shows_only_the_banner_for_a_pending_action,
         )
         .await;
     runner
         .run_without_convergence(
             "the engine stays stopped",
             StubActionOutcome::Pending,
-            check_failed_confirm_reports_on_the_command_form_slot,
+            check_a_confirm_with_no_answer_raises_the_banner_and_keeps_the_preview,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Error,
-            check_refused_confirm_reports_on_the_command_form_slot,
+            check_a_failed_confirm_reports_in_the_notice_and_keeps_the_preview,
         )
         .await;
     runner
@@ -1305,7 +1281,7 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_row_action_reports_in_the_row,
+            check_failed_row_action_reports_in_the_notice,
         )
         .await;
     runner
@@ -1318,7 +1294,7 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_engine_recovery_clears_the_inline_error_and_banner,
+            check_engine_recovery_clears_the_banner,
         )
         .await;
     runner.finish().await;

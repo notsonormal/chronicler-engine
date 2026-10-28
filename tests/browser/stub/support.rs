@@ -459,6 +459,10 @@ pub(super) async fn install_story_load_counter(page: &playwright_rs::Page) {
     .unwrap();
 }
 
+/// The notice place under the header: a refusal, a failure and an invalid answer to
+/// a control that is no form with typed input show here.
+pub(super) const NOTICE: &str = "#screen-error";
+
 /// Waits until `slot` shows the refusal of a busy Game, and checks that its line
 /// names the busy Game and its details carry the engine's answer. `shows` is the
 /// failure message of the wait.
@@ -470,9 +474,16 @@ pub(super) async fn assert_busy_refusal(page: &playwright_rs::Page, slot: &str, 
         "the line names the busy Game, got {line:?}"
     );
     assert!(
-        detail.contains("Still thinking..."),
+        detail.ends_with("Still thinking..."),
         "the details carry the engine's answer, got {detail:?}"
     );
+    if slot == NOTICE {
+        assert_eq!(
+            detail,
+            format!("{line}\nStill thinking..."),
+            "the notice holds both lines of the answer"
+        );
+    }
 }
 
 pub(super) async fn submit_intercepted_command(page: &playwright_rs::Page) {

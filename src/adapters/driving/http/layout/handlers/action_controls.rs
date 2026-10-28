@@ -11,7 +11,7 @@ const SEND_LABEL: &str =
 const GENERATING_LABEL: &str = r##"<svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"></use></svg> Generating…"##;
 const AUTOPLAY_LABEL: &str =
     r##"<svg class="icon" aria-hidden="true"><use href="#i-play"></use></svg> Autoplay"##;
-const STOP_BUTTON: &str = r##"<button type="button" id="stop-btn" hx-post="/status/reset-busy" hx-swap="none" data-refusal-what="the run was not stopped"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> Stop</button>"##;
+const STOP_BUTTON: &str = r##"<button type="button" id="stop-btn" hx-post="/status/reset-busy" hx-swap="none"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> Stop</button>"##;
 
 /// `None` is a Game that accepts a send. Send submits `#command-form`, which is in
 /// the shell, through `form`.

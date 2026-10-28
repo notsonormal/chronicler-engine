@@ -94,7 +94,7 @@ impl PromptPresetsTemplate {
     source = r##"
 <div class="preset-add-form" data-dialog-form>
     <h2 id="edit-dialog-title">Add {{ title }} Preset</h2>
-    <form hx-post="/prompt-presets" hx-swap="none" data-refusal-what="the preset was not saved">
+    <form hx-post="/prompt-presets" hx-swap="none">
         <input type="hidden" name="preset_type" value="{{ preset_type }}" />
         <div class="form-group">
             <label for="{{ preset_type }}-preset-name">Name</label>

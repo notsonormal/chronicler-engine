@@ -17,12 +17,12 @@ not change. The panel holds no form that waits for a Save. The Add control of ea
 type, and the Edit and View controls of a card, load a form into the edit dialog
 (`#edit-dialog-body`). The root of each such form (`data-dialog-form`) carries the
 title of the dialog (`edit-dialog-title`). A form fragment that cannot open answers a
-non-2xx error fragment, which the control that asked shows in its own slot.
+non-2xx error fragment, which the page shows in the notice place.
 
 A create, an update, a delete, a duplicate and an activate answer nothing on
 success: an empty 200. An invalid value answers a 400 error fragment, and a failure a
-500 error fragment. The control that saved reports the error in its own slot.
-The change reaches the screen when the panel loads.
+500 error fragment. The page shows the report of an action in the notice place, or in the
+form that holds the typed input. The change reaches the screen when the panel loads.
 
 ## Scenarios
 

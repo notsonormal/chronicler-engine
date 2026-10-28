@@ -28,10 +28,9 @@ function visibleParts() {
 }
 
 // A part is not written while its element holds a state that the server does not
-// know: a request in flight, a story-log entry in edit, or an inline error that
-// shows. View state lives in attributes that the server never changes; an element
-// lists them in `data-keep`, and a load keeps their values on the element it
-// morphs.
+// know: a request in flight or a story-log entry in edit. View state lives in
+// attributes that the server never changes; an element lists them in
+// `data-keep`, and a load keeps their values on the element it morphs.
 Idiomorph.defaults.callbacks.beforeAttributeUpdated = function (
   attributeName,
   node,
@@ -39,15 +38,6 @@ Idiomorph.defaults.callbacks.beforeAttributeUpdated = function (
   const keep = node.getAttribute ? node.getAttribute("data-keep") : null;
   if (keep && keep.split(/\s+/).includes(attributeName)) return false;
 };
-
-function showsInlineError(node) {
-  return (
-    !!node &&
-    node.nodeType === 1 &&
-    node.hasAttribute("data-error-slot") &&
-    !node.hidden
-  );
-}
 
 // A control whose request is in flight holds a value that the engine has not
 // seen, so a load must not overwrite it. The page counts the requests itself: the
@@ -99,7 +89,7 @@ function isBeingEdited(node) {
 }
 
 function loadKeeps(node) {
-  return isBeingEdited(node) || requestIsInFlight(node) || showsInlineError(node);
+  return isBeingEdited(node) || requestIsInFlight(node);
 }
 
 Idiomorph.defaults.callbacks.beforeNodeMorphed = function (oldNode) {
@@ -206,33 +196,10 @@ function resolveScreenWaiters(loadNumber) {
   }
 }
 
-function screenErrorSlot() {
-  return document.getElementById("screen-error");
-}
-
-// An answer that the page cannot use shows in one shell slot, and the parts keep
-// their content. The dialog is modal, so it also hears the summary: the slot is
-// behind it. An empty summary says that the slot is clear.
-// A failure that lasts is the same failure at each load, so a report that the slot
-// already shows writes nothing: an open Details stays open, and the alert does not
-// fire again.
-function screenErrorShows(slot, summary, detail) {
-  if (!slot || slot.hidden) return false;
-  const shownSummary = slot.querySelector(".error-disclosure-text");
-  const shownDetail = slot.querySelector(".error-detail-raw");
-  return (
-    !!shownSummary &&
-    !!shownDetail &&
-    shownSummary.textContent === summary &&
-    shownDetail.textContent === detail
-  );
-}
-
+// An answer that the page cannot use shows in the notice place of the shell, and
+// the parts keep their content.
 function reportScreenError(summary, detail) {
-  const slot = screenErrorSlot();
-  if (screenErrorShows(slot, summary, detail)) return;
-  renderInlineError(slot, summary, detail);
-  fireScreenEvent("screen:error", { summary: summary });
+  showNotice(summary, detail, "screen");
 }
 
 // The engine answered, so it is reachable.
@@ -252,11 +219,11 @@ function showScreenException(request, outcome, error) {
   );
 }
 
+// A load that works clears the report of a failed load, and never the report of an
+// action.
 function clearScreenError() {
-  const slot = screenErrorSlot();
-  if (!slot || slot.hidden) return;
-  clearInlineError(slot);
-  fireScreenEvent("screen:error", { summary: "" });
+  const place = noticeElement();
+  if (place && place.dataset.source === "screen") clearNotice();
 }
 
 // A load is for the tab that was visible and the page of the saved Games that was
