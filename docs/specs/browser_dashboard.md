@@ -541,7 +541,7 @@ Given the dashboard shows the active Game and an entry of the story log is in ed
 And the engine switched the active Game, and the page has not asked since
 When the client presses Save
 Then the engine refuses the save with 409 and "The active Game changed"
-And the story log's error slot says that the active Game changed
+And #screen-error says that the active Game changed
 And the editor is still open and holds the typed text
 ```
 
@@ -693,7 +693,7 @@ Then #action-status is empty
 ```gherkin
 Given the dashboard is loaded and idle
 When the client retries, retriggers, or asks for new options, and the engine refuses the request or it fails
-Then the report shows: in the story log's error slot for a retry and a retrigger, in #screen-error for new options
+Then the report shows in #screen-error
 And #action-status is empty
 ```
 
@@ -766,9 +766,10 @@ Then the slot is empty when the request starts
 
 ```gherkin
 Given the engine has stopped
-When the client presses a row button, changes a control that saves on change, or saves a dialog form
+When the client presses a row button, changes a control that saves on change, saves a dialog form, or saves a story-log edit
 Then the banner reports the engine as unreachable
 And no slot and no notice holds a report
+And a story-log edit that gets no answer is reverted
 And a dialog stays open and repeats the Unreachable text in its status line
 When the engine answers again
 Then the banner is gone, and the dialog status line no longer says the engine is unreachable

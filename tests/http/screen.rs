@@ -339,14 +339,6 @@ async fn test_a_busy_refusal_answers_409_with_the_wait_line_and_writes_nothing()
     let refused = post_action(&app, "listen").await;
     assert_eq!(refused.status(), StatusCode::CONFLICT);
     assert_eq!(revision_header_of(&refused, "the busy refusal"), before);
-    assert_eq!(
-        refused
-            .headers()
-            .get("x-refusal")
-            .map(|value| value.as_bytes()),
-        Some(b"busy".as_slice()),
-        "the refusal names its kind"
-    );
     let body = response_body(refused).await;
     assert_still_thinking(&body);
     assert_eq!(
@@ -430,14 +422,6 @@ async fn test_a_stale_game_header_is_refused_on_each_game_bound_route() {
             "POST {route} with a stale Game header is refused"
         );
         revision_header_of(&response, route);
-        assert_eq!(
-            response
-                .headers()
-                .get("x-refusal")
-                .map(|value| value.as_bytes()),
-            Some(b"game-changed".as_slice()),
-            "POST {route}: the refusal names its kind"
-        );
         let text = response_body(response).await;
         let lines = error_lines_of(route, &text);
         assert!(

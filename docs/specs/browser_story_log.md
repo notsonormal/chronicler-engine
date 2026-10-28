@@ -39,7 +39,7 @@ And the entry in edit carries data-editing, and #story-log carries data-editing-
 Given edit mode is active (#edit-textarea visible) on a .log-entry
 And the textarea text has been modified
 When the client clicks .save-btn and the save request fails
-Then #story-log-error shows a short failure message
+Then #screen-error shows the first line of the server's answer, "The edit was not saved."
 And its Details disclosure holds the raw server text
 And #edit-textarea is removed from the DOM
 And .log-entry .text inner text is restored to the original
@@ -47,12 +47,12 @@ And the entry's pre-edit action controls are available again
 And no .log-entry carries data-editing, and #story-log does not carry data-editing-entry
 ```
 
-#### Scenario 30.5: A failed retry reports in the story log's error slot and re-enables Send
+#### Scenario 30.5: A failed retry reports in the notice and re-enables Send
 
 ```gherkin
 Given the dashboard is idle and #submit-btn is enabled
 When the client clicks the retry swipe button and the retry request fails
-Then #story-log-error shows a short failure message for the retry
+Then #screen-error shows "The Retry was not started."
 And the raw error text is not visible until the client opens the Details disclosure
 And the status display does not show "Thinking..."
 And #submit-btn is enabled
@@ -87,7 +87,10 @@ And the edit button still has focus after the load that the end of the edit allo
 Given edit mode is active (#edit-textarea visible)
 And the textarea text has been modified
 When the client presses Ctrl+Enter (or Cmd+Enter) in #edit-textarea
-Then the client sends the save request for the entry
+Then the client sends the save request for the entry, with the text of #edit-textarea
+When a save has succeeded and the load that shows it has not run yet
+And the client presses Ctrl+Enter in the old #edit-textarea
+Then the client sends no second save request
 ```
 
 #### Scenario 30.9: Editing locks the entry's swipe controls
@@ -107,7 +110,7 @@ And its swipe controls work again
 Given the dashboard is idle with Send enabled
 And a retrigger control is available on the last narration
 When the client clicks the retrigger control and the retrigger request fails
-Then #story-log-error shows a short failure message for the retrigger
+Then #screen-error shows "The retrigger was not started."
 And the raw error text is not visible until the client opens the Details disclosure
 And the client sent the request to the retrigger endpoint
 And the status display does not show "Thinking..."
@@ -187,22 +190,22 @@ And the swipe controls stay locked while the entry still shows its editor
 And the load that follows the save re-renders the log and removes data-editing-entry
 ```
 
-#### Scenario 30.18: A failed delete reports in the story log's error slot
+#### Scenario 30.18: A failed delete reports in the notice
 
 ```gherkin
 Given a story log with more than one .log-entry rendered
 When the client deletes the last entry and the server fails the delete
-Then #story-log-error shows a short failure message
+Then #screen-error shows "The Message was not deleted."
 And its Details disclosure holds the raw server text
 And the story log still shows the entries it showed before
 ```
 
-#### Scenario 30.19: A failed swipe switch reports in the story log's error slot
+#### Scenario 30.19: A failed swipe switch reports in the notice
 
 ```gherkin
 Given a story log whose last entry offers a previous-swipe control
 When the client activates that control and the server fails the switch
-Then #story-log-error shows a short failure message
+Then #screen-error shows "The Swipe was not switched."
 And its Details disclosure holds the raw server text
 And the story log still shows the entry it showed before
 ```
@@ -259,4 +262,18 @@ When the status display shows Ready (data-status "idle")
 Then the Save control shows as enabled
 When the status display shows a failure (data-status "failed")
 Then the Save control shows as enabled
+```
+
+#### Scenario 30.25: An invalid answer to a Save reports in the slot of the entry and keeps the draft
+
+```gherkin
+Given edit mode is active on one entry, with a typed text
+And the engine answers the save with 400
+When the client clicks the Save of the entry in edit
+Then the slot of the entry in edit shows "The edit was not saved: " and the engine's message
+And #screen-error shows no report
+And #edit-textarea holds the typed text
+And the entry carries data-editing, and #story-log carries data-editing-entry
+When the client clicks the Cancel of the entry in edit
+Then the slot of the entry holds no report
 ```

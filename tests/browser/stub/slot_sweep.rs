@@ -10,8 +10,7 @@ const WAIT: Duration = Duration::from_secs(5);
 /// The forms that DS3 lists: each form in the dialog, the Action input and the
 /// Autoplay cycles, and each `.edit-actions` group of a message edit. The rule:
 /// each of them holds one slot as a direct child, and a slot is a direct child of
-/// one of them, or the report container of the notice. The slot of the story-log
-/// strip is allowed until the story-log controls become htmx controls.
+/// one of them, or the report container of the notice.
 const SWEEP: &str = r#"() => {
     const places = '#edit-dialog form, #command-form, #autoplay-form, .edit-actions';
     const problems = [];
@@ -27,14 +26,14 @@ const SWEEP: &str = r#"() => {
         const parent = slot.parentElement;
         const inPlace = !!parent && parent.matches(places);
         const report = !!parent && parent.id === 'screen-error' && slot.hasAttribute('data-report');
-        const storyLog = slot.dataset.errorSlot === 'story-log';
-        if (!inPlace && !report && !storyLog) {
+        if (!inPlace && !report) {
             const holder = parent ? (parent.id || parent.className || parent.tagName) : 'nothing';
             problems.push('the slot "' + slot.dataset.errorSlot + '" sits in ' + holder + ', not in a form of the list');
         }
     }
     const dialogForms = document.querySelectorAll('#edit-dialog form').length;
-    return JSON.stringify({ examined, dialogForms, problems });
+    const editActions = document.querySelectorAll('.edit-actions').length;
+    return JSON.stringify({ examined, dialogForms, editActions, problems });
 }"#;
 
 const OPENERS: &str = r##"[hx-target="#edit-dialog-body"]"##;
@@ -44,13 +43,15 @@ struct Sweep {
     examined: usize,
     #[serde(rename = "dialogForms")]
     dialog_forms: usize,
+    #[serde(rename = "editActions")]
+    edit_actions: usize,
     problems: Vec<String>,
 }
 
-async fn sweep(page: &playwright_rs::Page, problems: &mut Vec<String>) -> (usize, usize) {
+async fn sweep(page: &playwright_rs::Page, problems: &mut Vec<String>) -> (usize, usize, usize) {
     let found: Sweep = serde_json::from_str(&eval_string(page, SWEEP).await).unwrap();
     problems.extend(found.problems);
-    (found.examined, found.dialog_forms)
+    (found.examined, found.dialog_forms, found.edit_actions)
 }
 
 /// The dialogs that hold no form: the View of a preset, the record of an LLM message
@@ -108,6 +109,7 @@ async fn check_each_form_with_typed_input_renders_one_slot_and_no_other_element_
     let mut examined = 0;
     let mut dialogs = 0;
     let mut dialog_forms = 0;
+    let mut edit_groups = 0;
     let mut dialogs_that_lack_a_form = Vec::new();
     for (tab, part) in [
         ("game", "#story-log"),
@@ -118,10 +120,26 @@ async fn check_each_form_with_typed_input_renders_one_slot_and_no_other_element_
         ("llm-messages", ".llm-messages-panel"),
     ] {
         open_section(&page, tab, part).await;
-        examined += sweep(&page, &mut problems).await.0;
+        let (swept, _, groups) = sweep(&page, &mut problems).await;
+        examined += swept;
+        edit_groups += groups;
+        if tab == "game" {
+            page.locator(".log-entry.narration .edit-btn")
+                .await
+                .click(None)
+                .await
+                .unwrap();
+            wait_until_visible(&page, "#edit-textarea", WAIT).await;
+            examined += sweep(&page, &mut problems).await.0;
+            page.locator("[data-editing] .cancel-btn")
+                .await
+                .click(None)
+                .await
+                .unwrap();
+        }
         for index in 0..opener_count(&page).await {
             let opener = open_dialog_through(&page, index).await;
-            let (swept, forms) = sweep(&page, &mut problems).await;
+            let (swept, forms, _) = sweep(&page, &mut problems).await;
             examined += swept;
             dialog_forms += forms;
             dialogs += 1;
@@ -140,6 +158,10 @@ async fn check_each_form_with_typed_input_renders_one_slot_and_no_other_element_
     assert!(
         dialogs_that_lack_a_form.is_empty(),
         "each opener of a dialog with a form reaches a form that the sweep examines, but these did not: {dialogs_that_lack_a_form:?} ({dialog_forms} dialog forms in {dialogs} dialogs, {examined} forms examined)"
+    );
+    assert!(
+        edit_groups > 0,
+        "the Game tab renders the edit group of each story-log entry, and the sweep examines them"
     );
     problems.sort();
     problems.dedup();

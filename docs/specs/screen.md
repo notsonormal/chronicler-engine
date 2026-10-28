@@ -51,7 +51,6 @@ Then the response status is 409
 And the first line of the response body is "The Game is busy, so the Action was not sent."
 And the second line of the response body is "Still thinking..."
 And the response body holds no status markup
-And the header X-Refusal is "busy"
 And the `server:revision` of GET /changes is the same before and after the request
 ```
 
@@ -63,7 +62,6 @@ When the client sends each Game-bound POST route with the header X-Chronicler-Ga
 Then each response status is 409
 And the first line of each response body begins "The active Game changed, so "
 And the second line of each response body is "The page showed a Game that is no longer active."
-And the header X-Refusal of each answer is "game-changed"
 And each answer carries X-Revision
 And the `server:revision` of GET /changes is the same before and after each request
 And the story log holds the Messages it held before
@@ -196,12 +194,12 @@ These properties hold across every `POST` route and are observable through HTTP.
 Drift indicates a regression even if all scenarios pass.
 
 - **I.1** The answer carries `X-Revision: <server>:<revision>`. `<server>` and `<revision>` are the `server` and the `revision` of `GET /changes` (`docs/specs/changes.md`), read after the handler has ended. A success, a refusal and a failure all carry it. An action that wrote nothing carries the current stamp.
-- **I.2** A Game that a Job or a run holds refuses a write with `409`. The first line of the body is "The Game is busy, so <the words of the route>." and the second line is "Still thinking...". The answer carries `X-Refusal: busy`. The refusal writes nothing.
+- **I.2** A Game that a Job or a run holds refuses a write with `409`. The first line of the body is "The Game is busy, so <the words of the route>." and the second line is "Still thinking...". The refusal writes nothing.
 
 These properties hold across every Game-bound route (the endpoints above) and are observable through HTTP.
 
 - **I.3** A request without the `X-Chronicler-Game` header acts on the active Game.
-- **I.4** A request whose `X-Chronicler-Game` header does not name the active Game is refused with `409`. The first line of the body is "The active Game changed, so <the words of the route>." and the second line is "The page showed a Game that is no longer active.". The answer carries `X-Refusal: game-changed`. The refusal writes nothing, and it comes before the handler runs.
+- **I.4** A request whose `X-Chronicler-Game` header does not name the active Game is refused with `409`. The first line of the body is "The active Game changed, so <the words of the route>." and the second line is "The page showed a Game that is no longer active.". The refusal writes nothing, and it comes before the handler runs.
 - **I.5** A `GET` route does not read the `X-Chronicler-Game` header.
 
 #### Scenario 45.15: A games_page that is not a whole number of at least 1 answers 400 and renders nothing

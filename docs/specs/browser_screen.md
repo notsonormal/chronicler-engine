@@ -172,11 +172,11 @@ When an htmx request ends, for example the Stop control
 Then the page sends GET /changes at once
 And the screen loads and shows what the action changed
 
-When a script action ends, for example the Delete control of the story log
+When the Delete control of the story log ends
 Then the page sends GET /changes at once
 And the story log no longer shows the deleted entry
 
-When a script action ends that wrote nothing, for example a Retrigger that fails
+When an action ends that wrote nothing, for example a Retrigger that fails
 Then the page sends GET /changes at once
 And the screen loads once
 ```
@@ -488,5 +488,6 @@ Given the stub renders each tab and each dialog opener
 When the client loads each tab and opens each dialog opener
 Then every form of the edit dialog, #command-form and #autoplay-form holds one error slot as a direct child
 And every error slot is a direct child of such a form, or the report container of #screen-error
-And no other element holds an error slot, apart from the story-log strip until the story-log controls become htmx controls
+And every `.edit-actions` group of a story-log entry holds one error slot as a direct child, also while an entry is in edit
+And no other element holds an error slot
 ```

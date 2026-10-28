@@ -142,22 +142,21 @@ async fn check_an_action_asks_at_once_when_its_request_ends(
         "the story log loads at once and no longer shows the deleted entry"
     );
 
-    // A script action that wrote nothing moves no revision: the page forgets its
+    // An action that wrote nothing moves no revision: the page forgets its
     // stamp when the request ends, so the screen still loads.
     let loads = changes.loads("/screen");
     let asks = changes.asks();
-    page.evaluate::<(), ()>(
-        "async () => { await actionFetch('/retrigger', { method: 'POST' }); }",
-        None,
-    )
-    .await
-    .unwrap();
+    page.locator(".retrigger-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
     wait_for_asks(&changes, asks + 1).await;
     wait_for_screen_current(&page).await;
     assert_eq!(
         changes.loads("/screen"),
         loads + 1,
-        "the script action wrote nothing, and its end loads the screen once"
+        "the Retrigger wrote nothing, and its end loads the screen once"
     );
 }
 

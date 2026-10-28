@@ -584,15 +584,14 @@ fn guardrails_scripts_write_no_disabled() {
 }
 
 #[test]
-fn guardrails_scripts_use_action_fetch() {
+fn guardrails_scripts_fetch_only_the_screen_reads() {
     let errors: Vec<Violation> = dashboard_scripts()
         .iter()
-        .filter(|(path, _)| !path.ends_with("dashboard-screen.js"))
-        .flat_map(|(path, script)| check_scripts_use_action_fetch(path, script))
+        .flat_map(|(path, script)| check_scripts_fetch_only_the_screen_reads(path, script))
         .collect();
     assert_violations(
         &errors,
-        "dashboard scripts send actions through actionFetch",
+        "no dashboard script calls `fetch(` except the two reads of dashboard-screen.js",
     );
 }
 

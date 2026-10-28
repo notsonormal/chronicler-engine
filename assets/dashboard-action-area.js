@@ -279,8 +279,9 @@ function onAutoplayAfterRequest(event) {
   syncActionState();
 }
 
-// The new-Options request begins the pending state before it is sent. The screen that shows the revision of the answer ends the state, and an
-// answer that is not done ends it at once.
+// Retry, Retrigger and the new-Options request begin the pending state before they are
+// sent. The screen that shows the revision of the answer ends the state, and an answer
+// that is not done ends it at once.
 function endPendingAfterRequest(event) {
   const answer = actionAnswer(event);
   if (answer.outcome === "done") endPendingWhenScreenShows(answer.stamp);

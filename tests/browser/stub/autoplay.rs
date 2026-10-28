@@ -99,18 +99,13 @@ async fn check_a_save_refused_for_a_held_game_keeps_the_editor_open(
         .fill("Text typed before the run started", None)
         .await
         .unwrap();
-    page.locator(".log-entry.narration .save-btn")
+    page.locator("[data-editing] .save-btn")
         .await
         .click(None)
         .await
         .unwrap();
 
-    assert_busy_refusal(
-        &page,
-        "#story-log-error",
-        "the refused save reports in the story log's error slot",
-    )
-    .await;
+    assert_busy_refusal(&page, NOTICE, "the refused save reports in the notice").await;
     let textarea = page.locator("#edit-textarea").await;
     assert_eq!(
         textarea.input_value(None).await.unwrap(),
@@ -125,6 +120,20 @@ async fn check_a_save_refused_for_a_held_game_keeps_the_editor_open(
         .await
         .unwrap();
     assert!(editing, "the entry stays in edit while the editor is open");
+    let locked: bool = page
+        .evaluate::<(), bool>(
+            "(() => document.getElementById('story-log').hasAttribute('data-editing-entry'))()",
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(locked, "the lock stays while the editor is open");
+    assert!(
+        !read_error_disclosure(&page, "[data-editing] .edit-actions > [data-error-slot]")
+            .await
+            .0,
+        "a refusal shows in the notice, not in the slot of the entry"
+    );
 }
 
 // [docs/specs/browser_autoplay.md] SCENARIO: 42.5
@@ -155,12 +164,7 @@ async fn check_a_swipe_switch_refused_for_a_held_game_shows_the_busy_message(
         .await
         .unwrap();
 
-    assert_busy_refusal(
-        &page,
-        "#story-log-error",
-        "the refused write reports in the story log's error slot",
-    )
-    .await;
+    assert_busy_refusal(&page, NOTICE, "the refused write reports in the notice").await;
     assert_eq!(
         page.locator(counter)
             .await
@@ -195,12 +199,7 @@ async fn check_a_delete_refused_for_a_held_game_shows_the_busy_message(
         .await
         .unwrap();
 
-    assert_busy_refusal(
-        &page,
-        "#story-log-error",
-        "the refused write reports in the story log's error slot",
-    )
-    .await;
+    assert_busy_refusal(&page, NOTICE, "the refused write reports in the notice").await;
     assert_eq!(
         count_log_entries(&page).await,
         entries_before,
@@ -243,7 +242,7 @@ async fn own_state_text(page: &playwright_rs::Page) -> String {
 }
 
 // [docs/specs/browser_autoplay.md] SCENARIO: 42.7
-async fn check_a_retry_refused_for_a_busy_game_reports_in_the_story_log_slot(
+async fn check_a_retry_refused_for_a_busy_game_reports_in_the_notice(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -254,12 +253,7 @@ async fn check_a_retry_refused_for_a_busy_game_reports_in_the_story_log_slot(
         .await
         .unwrap();
 
-    assert_busy_refusal(
-        &page,
-        "#story-log-error",
-        "the refused write reports in the story log's error slot",
-    )
-    .await;
+    assert_busy_refusal(&page, NOTICE, "the refused write reports in the notice").await;
     assert_eq!(
         own_state_text(&page).await,
         "",
@@ -309,7 +303,7 @@ async fn run_autoplay_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_retry_refused_for_a_busy_game_reports_in_the_story_log_slot,
+            check_a_retry_refused_for_a_busy_game_reports_in_the_notice,
         )
         .await;
     runner.finish().await;

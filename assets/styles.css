@@ -1348,18 +1348,6 @@ body {
     font-size: var(--font-size-small);
 }
 
-/* The story log sits in a column flex parent, so this slot sizes to its text
-   instead of taking the full height .inline-error-slot claims for its row. */
-.story-log-error {
-    flex-shrink: 0;
-    padding: 0 var(--spacing-md);
-    font-size: var(--font-size-small);
-}
-
-.story-log-error[hidden] {
-    display: none;
-}
-
 .screen-error {
     display: flex;
     align-items: flex-start;
@@ -1445,6 +1433,31 @@ body {
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+}
+
+/* Every entry renders its Save, Cancel and edit slot. They show only while the entry
+   is in edit, and the controls of an entry that is not in edit show again after it. */
+.edit-actions {
+    display: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+}
+
+.log-entry[data-editing] .message-actions > :not(.edit-actions) {
+    display: none;
+}
+
+.log-entry[data-editing] .edit-actions {
+    display: flex;
+}
+
+.edit-actions .inline-error-slot {
+    flex: 0 0 100%;
+    width: 22rem;
+    max-width: 60vw;
+    font-size: var(--font-size-small);
 }
 
 .action-btn {

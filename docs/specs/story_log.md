@@ -177,3 +177,18 @@ When the client POST /history/:id with the id of that Message and a new text
 Then the response is 200 with an empty body
 And the client GET /fragment/story-log shows the new text on that Message
 ```
+
+#### Scenario 8.16: The story log sends its requests through htmx and renders the controls of an edit
+
+```gherkin
+Given a Game whose story ends on an Impersonate Input that offers Retrigger
+When the client GET /fragment/story-log
+Then each .log-entry renders .edit-actions with a .save-btn, a .cancel-btn and one error slot
+And each .save-btn sends the edit of its Message with the text of #edit-textarea
+And the last .log-entry renders .delete-btn, .retrigger-btn and the Retry control as htmx requests
+And .delete-btn asks the player to confirm before it sends
+When the last Message has two Swipes
+Then the Previous swipe control and the Next swipe control are htmx requests that name the switch
+And no button of the log calls a script that sends a request
+```
+

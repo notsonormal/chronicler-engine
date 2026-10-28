@@ -535,6 +535,8 @@ struct StubState {
     newest_narration: std::sync::Mutex<Option<String>>,
     extra_oldest: std::sync::atomic::AtomicBool,
     save_succeeds: std::sync::atomic::AtomicBool,
+    save_invalid: std::sync::atomic::AtomicBool,
+    saved_texts: std::sync::Mutex<Vec<String>>,
     connection_saves_succeed: std::sync::atomic::AtomicBool,
     role_saves_keep_stored_value: std::sync::atomic::AtomicBool,
     role_save_answers_held: std::sync::atomic::AtomicBool,
@@ -701,6 +703,8 @@ impl StubServer {
             newest_narration: std::sync::Mutex::new(None),
             extra_oldest: std::sync::atomic::AtomicBool::new(false),
             save_succeeds: std::sync::atomic::AtomicBool::new(false),
+            save_invalid: std::sync::atomic::AtomicBool::new(false),
+            saved_texts: std::sync::Mutex::new(Vec::new()),
             connection_saves_succeed: std::sync::atomic::AtomicBool::new(false),
             role_saves_keep_stored_value: std::sync::atomic::AtomicBool::new(false),
             role_save_answers_held: std::sync::atomic::AtomicBool::new(false),
@@ -1682,6 +1686,12 @@ async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body>
         .retrigger_requests
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     if state
+        .story_writes_refused_as_busy
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return refused(RefusalKind::Busy);
+    }
+    if state
         .generation_requests_accepted
         .load(std::sync::atomic::Ordering::SeqCst)
     {
@@ -1896,12 +1906,29 @@ async fn delete_world(
     }
 }
 
-async fn save_message(State(state): State<Arc<StubState>>) -> Response<Body> {
+#[derive(serde::Deserialize)]
+struct SaveMessageForm {
+    text: String,
+}
+
+/// Records the text of each save that carries one, so a test can check what the page sent.
+async fn save_message(
+    State(state): State<Arc<StubState>>,
+    Form(form): Form<SaveMessageForm>,
+) -> Response<Body> {
+    state
+        .saved_texts
+        .lock()
+        .expect("stub saved texts lock poisoned")
+        .push(form.text);
     if state
         .story_writes_refused_as_busy
         .load(std::sync::atomic::Ordering::SeqCst)
     {
         return refused(RefusalKind::Busy);
+    }
+    if state.save_invalid.load(std::sync::atomic::Ordering::SeqCst) {
+        return action_invalid_response(INVALID_ACTION_MESSAGE);
     }
     if state
         .save_succeeds

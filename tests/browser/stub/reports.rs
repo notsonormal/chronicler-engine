@@ -480,6 +480,23 @@ async fn check_no_answer_raises_the_banner_and_no_slot_or_notice_holds_a_report(
         "the next answer clears the status line"
     );
     cancel_dialog(&page).await;
+
+    open_section(&page, "game", "#story-log").await;
+    page.locator(".log-entry.narration .edit-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_visible(&page, "#edit-textarea", WAIT).await;
+    let lifecycle = stop_engine(&stub).await;
+    page.locator("[data-editing] .save-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    assert_unreachable_and_nothing_else(&page, "a story-log Save").await;
+    wait_until_hidden(&page, "#edit-textarea", WAIT).await;
+    restart_and_wait_for_the_banner_to_clear(&page, &lifecycle, "a story-log Save").await;
 }
 
 const SWAPS_THAT_THROW: &str = r#"() => {

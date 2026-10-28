@@ -679,17 +679,24 @@ async fn check_a_world_form_in_the_dialog_survives_a_game_rename_that_raises_gam
     let renamed = eval_string(
         &page,
         r#"async () => {
-            const response = await actionFetch('/games/2/rename', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'display_name=Renamed+elsewhere',
+            const answered = new Promise((resolve) => {
+                document.body.addEventListener(
+                    'htmx:afterRequest',
+                    (evt) => resolve(String(evt.detail.xhr.status)),
+                    { once: true },
+                );
             });
+            await htmx.ajax('POST', '/games/2/rename', {
+                swap: 'none',
+                values: { display_name: 'Renamed elsewhere' },
+            });
+            const status = await answered;
             await window.__waitForScreen();
-            return response.ok ? '' : 'the rename failed';
+            return status;
         }"#,
     )
     .await;
-    assert_eq!(renamed, "");
+    assert_eq!(renamed, "200", "the rename went through");
 
     assert_eq!(
         eval_string(&page, WORLD_EDITOR_IS_INTACT).await,

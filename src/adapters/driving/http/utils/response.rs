@@ -5,10 +5,6 @@ use axum::{body::Body, http::StatusCode, response::Response};
 
 use super::answer_words::{ErrorAnswer, RefusalKind, answer_response};
 
-/// The header that names why a `409` refused a request. The client finds a refusal by
-/// its status and reads this header only to choose the words of its report.
-pub const REFUSAL_HEADER: &str = "x-refusal";
-
 #[allow(clippy::expect_used)]
 fn status_response(status: StatusCode, body: impl Into<String>) -> Response<Body> {
     Response::builder()

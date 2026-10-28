@@ -396,15 +396,3 @@ document.body.addEventListener("htmx:configRequest", function (evt) {
   const game = screenRoot.dataset.game;
   if (game && evt.detail.verb !== "get") evt.detail.headers[GAME_HEADER] = game;
 });
-
-// The one way a script sends an action: the end of the request is the end of an
-// action, as for a request of htmx.
-function actionFetch(url, init) {
-  const headers = new Headers((init && init.headers) || {});
-  const game = screenRoot.dataset.game;
-  if (game) headers.set(GAME_HEADER, game);
-  return fetch(url, { ...init, headers }).finally(() => {
-    forgetScreenStamp();
-    askNow();
-  });
-}

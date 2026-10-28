@@ -82,7 +82,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `slash_menu.rs` — Stub-browser tests for the slash menu: the client-side command palette rendered from the shipped shell's `input` listener. Tagged against `docs/specs/browser_slash_menu.md`.
       - `slot_sweep.rs` — Stub-browser sweep of the places that hold a report: each form with typed input renders one slot, and no other element but the report container of the notice holds a slot. Tagged against `docs/specs/browser_screen.md`.
       - `story_log.rs` — Stub-browser tests for the story log's load: the morph that keeps selection, focus, scroll position and the surviving entries. Tagged against `docs/specs/browser_story_log.md`.
-      - `story_log_edit.rs` — Stub-browser tests for the story log's edit flow: edit mode, the entry locks and the failure slots. Tagged against `docs/specs/browser_story_log.md`.
+      - `story_log_edit.rs` — Stub-browser tests for the story log's edit flow: edit mode, the entry locks and where a failed request shows. Tagged against `docs/specs/browser_story_log.md`.
       - `support.rs` — Shared stub-browser helpers: the check runner, page probes and node reads used by more than one stub test module.
       - `swipes.rs` — Stub-browser test for switching swipes: the client's restore handling and the dock it leaves behind.
       - `worlds.rs` — Stub-browser tests for the Worlds panel: the keyboard-focus landing after a world row delete. Tagged against `docs/specs/browser_worlds.md`.

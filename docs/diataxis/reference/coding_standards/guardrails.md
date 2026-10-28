@@ -92,16 +92,16 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | stub answers the parts of the server | Checks the source of the stub server against the names that the server renders | `tests/infrastructure/guardrails/screen.rs:192` |
 | part table matches shell | Checks a hand-written table of parts against the parts of the shell: each part of | `tests/infrastructure/guardrails/screen.rs:242` |
 | scripts write no part | Checks one `assets/dashboard-*.js` script other than `dashboard-screen.js`, the | `tests/infrastructure/guardrails/screen.rs:354` |
-| scripts use action fetch | Checks one `assets/dashboard-*.js` script other than `dashboard-screen.js`. A | `tests/infrastructure/guardrails/screen.rs:395` |
-| no abort or timeout source | Checks one first-party script or template source. The answer reader takes status 0 | `tests/infrastructure/guardrails/screen.rs:418` |
-| handler headers | Checks one handler file of the HTTP adapter. A handler answers its own element | `tests/infrastructure/guardrails/screen.rs:458` |
-| template targets | Checks one template source: a file of the HTTP adapter that renders markup, or | `tests/infrastructure/guardrails/screen.rs:491` |
-| no out of band swaps | Checks one template source for out-of-band swaps. An element that shows data | `tests/infrastructure/guardrails/screen.rs:551` |
-| draft controls only in dialog forms | Checks one source file of the HTTP adapter. A draft control is a form control | `tests/infrastructure/guardrails/screen.rs:644` |
-| dialog fragments carry the title | Checks that a literal of a dialog fragment carries the title that names the | `tests/infrastructure/guardrails/screen.rs:688` |
-| draft control exceptions are used | Checks the exceptions of the draft-control rule against the files they name: a | `tests/infrastructure/guardrails/screen.rs:706` |
-| scripts listen no part swaps | Checks one `assets/dashboard-*.js` script. A direct morph writes each part, so an | `tests/infrastructure/guardrails/screen.rs:747` |
-| scripts write no disabled | Checks one first-party script of `assets/`. The server renders every control | `tests/infrastructure/guardrails/screen.rs:784` |
+| scripts fetch only the screen reads | Checks one `assets/dashboard-*.js` script. An action is an htmx request, so the one | `tests/infrastructure/guardrails/screen.rs:395` |
+| no abort or timeout source | Checks one first-party script or template source. The answer reader takes status 0 | `tests/infrastructure/guardrails/screen.rs:423` |
+| handler headers | Checks one handler file of the HTTP adapter. A handler answers its own element | `tests/infrastructure/guardrails/screen.rs:463` |
+| template targets | Checks one template source: a file of the HTTP adapter that renders markup, or | `tests/infrastructure/guardrails/screen.rs:496` |
+| no out of band swaps | Checks one template source for out-of-band swaps. An element that shows data | `tests/infrastructure/guardrails/screen.rs:556` |
+| draft controls only in dialog forms | Checks one source file of the HTTP adapter. A draft control is a form control | `tests/infrastructure/guardrails/screen.rs:649` |
+| dialog fragments carry the title | Checks that a literal of a dialog fragment carries the title that names the | `tests/infrastructure/guardrails/screen.rs:693` |
+| draft control exceptions are used | Checks the exceptions of the draft-control rule against the files they name: a | `tests/infrastructure/guardrails/screen.rs:711` |
+| scripts listen no part swaps | Checks one `assets/dashboard-*.js` script. A direct morph writes each part, so an | `tests/infrastructure/guardrails/screen.rs:752` |
+| scripts write no disabled | Checks one first-party script of `assets/`. The server renders every control | `tests/infrastructure/guardrails/screen.rs:789` |
 | doc standards | Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files. | `tests/infrastructure/guardrails/structure.rs:38` |
 | mod purity | Enforces mod.rs purity: only module declarations, imports, and module docs are allowed. | `tests/infrastructure/guardrails/structure.rs:128` |
 | empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:204` |

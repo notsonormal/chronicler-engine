@@ -3,12 +3,11 @@
 
 use axum::body::{Body, to_bytes};
 use axum::extract::{MatchedPath, Request};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{StatusCode, header};
 use axum::middleware::Next;
 use axum::response::Response;
 
 use super::error::error_fragment;
-use super::response::REFUSAL_HEADER;
 use crate::application::generation::gate::Refusal;
 
 const UNBUILT_TEXT_LIMIT_BYTES: usize = 64 * 1024;
@@ -35,13 +34,6 @@ impl RefusalKind {
         match self {
             Self::Busy => Refusal::StillThinking.line(),
             Self::GameChanged => "The page showed a Game that is no longer active.".to_string(),
-        }
-    }
-
-    fn header_value(self) -> &'static str {
-        match self {
-            Self::Busy => "busy",
-            Self::GameChanged => "game-changed",
         }
     }
 }
@@ -279,30 +271,20 @@ fn body_of(answer: &ErrorAnswer, words: &RouteWords) -> String {
 }
 
 /// The layer of the words: after routing, it writes the body of each answer of status 400
-/// or higher on a route with a row, and sets `X-Refusal` on a refusal. An answer that no
-/// constructor built keeps its text as the second line. A `409` that no constructor built
-/// keeps its body, because the layer cannot know its reason.
+/// or higher on a route with a row. An answer that no constructor built keeps its text as
+/// the second line. A `409` that no constructor built keeps its body, because the layer
+/// cannot know its reason.
 pub async fn describe_answers(request: Request, next: Next) -> Response {
     let words = request
         .extensions()
         .get::<MatchedPath>()
         .and_then(|matched| words_of_route(matched.as_str()));
-    let mut response = next.run(request).await;
+    let response = next.run(request).await;
     let status = response.status();
     if !(status.is_client_error() || status.is_server_error()) {
         return response;
     }
     let built = response.extensions().get::<ErrorAnswer>().cloned();
-    if let Some(ErrorAnswer {
-        outcome: AnswerOutcome::Refused(kind),
-        ..
-    }) = &built
-    {
-        response.headers_mut().insert(
-            REFUSAL_HEADER,
-            HeaderValue::from_static(kind.header_value()),
-        );
-    }
     let Some(words) = words else {
         return response;
     };

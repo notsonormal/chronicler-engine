@@ -389,21 +389,26 @@ pub fn check_scripts_write_no_part(path: &str, script: &str, parts: &[String]) -
     violations
 }
 
-/// Checks one `assets/dashboard-*.js` script other than `dashboard-screen.js`. A
-/// script sends an action with `actionFetch`, which asks for the changes when the
-/// request ends, so the result reaches the screen without waiting for the timer.
-pub fn check_scripts_use_action_fetch(path: &str, script: &str) -> Vec<Violation> {
+/// Checks one `assets/dashboard-*.js` script. An action is an htmx request, so the one
+/// answer reader hears it and the end of the request asks for the changes. The only
+/// `fetch(` calls are the two reads of `dashboard-screen.js`: `/screen` and `/changes`.
+pub fn check_scripts_fetch_only_the_screen_reads(path: &str, script: &str) -> Vec<Violation> {
     let raw_fetch = Regex::new(r"(^|[^\w$.])fetch\(").expect("fetch pattern");
+    let screen_read = Regex::new(r#"fetch\("/(screen\?|changes")"#).expect("read pattern");
+    let is_screen_script = path.ends_with("dashboard-screen.js");
     script
         .lines()
         .enumerate()
         .filter(|(_, line)| !line.trim_start().starts_with("//"))
-        .filter(|(_, line)| raw_fetch.is_match(line))
+        .filter(|(_, line)| {
+            let is_screen_read = is_screen_script && screen_read.is_match(line);
+            raw_fetch.is_match(line) && !is_screen_read
+        })
         .map(|(index, _)| {
             Violation::error(
                 path,
                 index + 1,
-                "a script calls `fetch(` directly. Send an action with `actionFetch(`, so the page asks for the changes when the request ends.",
+                "a script calls `fetch(`. Send an action as an htmx request, so the one reader hears its answer and the page asks for the changes when it ends.",
             )
         })
         .collect()

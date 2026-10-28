@@ -134,19 +134,14 @@ async fn check_an_edit_saved_for_a_game_that_is_no_longer_active_stays_open(
         .await
         .unwrap();
     stub.changes_handle().set_game_of_actions(2);
-    page.locator(".log-entry.narration .save-btn")
+    page.locator("[data-editing] .save-btn")
         .await
         .click(None)
         .await
         .unwrap();
 
-    wait_for_error_disclosure(
-        &page,
-        "#story-log-error",
-        "the refused save reports in the story log",
-    )
-    .await;
-    let (_, line, _) = read_error_disclosure(&page, "#story-log-error").await;
+    wait_for_error_disclosure(&page, NOTICE, "the refused save reports in the notice").await;
+    let (_, line, _) = read_error_disclosure(&page, NOTICE).await;
     assert!(
         line.contains("The active Game changed"),
         "the line says the Game changed, got {line:?}"

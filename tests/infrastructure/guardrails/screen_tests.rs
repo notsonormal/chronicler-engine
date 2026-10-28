@@ -4,10 +4,11 @@ use crate::screen::{
     check_dialog_fragments_carry_the_title, check_draft_control_exceptions_are_used,
     check_draft_controls_only_in_dialog_forms, check_handler_headers,
     check_no_abort_or_timeout_source, check_no_out_of_band_swaps, check_part_table_matches_shell,
-    check_parts_in_shell, check_scripts_listen_no_part_swaps, check_scripts_use_action_fetch,
-    check_scripts_write_no_disabled, check_scripts_write_no_part,
-    check_shell_parts_match_the_server, check_stub_answers_the_parts_of_the_server,
-    check_template_targets, part_element_names, DraftControlException, ListedPart,
+    check_parts_in_shell, check_scripts_listen_no_part_swaps,
+    check_scripts_fetch_only_the_screen_reads, check_scripts_write_no_disabled,
+    check_scripts_write_no_part, check_shell_parts_match_the_server,
+    check_stub_answers_the_parts_of_the_server, check_template_targets, part_element_names,
+    DraftControlException, ListedPart,
 };
 
 const GOOD_PART: &str = r#"<div class="tab-content" id="game-tab"><div id="story-log" data-part="story-log"></div></div>"#;
@@ -273,17 +274,26 @@ fn test_scripts_write_no_part_accepts_a_comparison_and_a_read() {
 }
 
 #[test]
-fn test_scripts_use_action_fetch_rejects_a_raw_fetch() {
+fn test_scripts_fetch_only_the_screen_reads_rejects_a_fetch_of_an_action() {
     let script = "function save() {\n  fetch(\"/history/1\", { method: \"POST\" });\n}";
-    let violations = check_scripts_use_action_fetch("assets/dashboard-x.js", script);
+    let violations = check_scripts_fetch_only_the_screen_reads("assets/dashboard-x.js", script);
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].line, 2);
 }
 
 #[test]
-fn test_scripts_use_action_fetch_accepts_the_wrapper_and_a_comment() {
-    let script = "// A raw fetch(url) answers nothing to the page.\nactionFetch(\"/history/1\", { method: \"POST\" });\nwindow.fetchCount += 1;";
-    assert!(check_scripts_use_action_fetch("assets/dashboard-x.js", script).is_empty());
+fn test_scripts_fetch_only_the_screen_reads_accepts_the_two_reads_and_a_comment() {
+    let script = "// A raw fetch(url) answers nothing to the page.\nresponse = await fetch(\"/screen?\" + query, { cache: \"no-store\" });\nresponse = await fetch(\"/changes\", { cache: \"no-store\" });\nwindow.fetchCount += 1;";
+    assert!(
+        check_scripts_fetch_only_the_screen_reads("assets/dashboard-screen.js", script).is_empty()
+    );
+}
+
+#[test]
+fn test_scripts_fetch_only_the_screen_reads_rejects_the_reads_outside_the_screen_script() {
+    let script = "response = await fetch(\"/changes\", { cache: \"no-store\" });";
+    let violations = check_scripts_fetch_only_the_screen_reads("assets/dashboard-x.js", script);
+    assert_eq!(violations.len(), 1);
 }
 
 #[test]

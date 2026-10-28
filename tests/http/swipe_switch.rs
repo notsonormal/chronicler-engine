@@ -17,24 +17,24 @@ use crate::support::http_requests::{
 };
 
 fn first_switch_target(log_fragment: &str) -> (u64, usize) {
-    let marker = "switchSwipe(";
+    let marker = r#"hx-post="/message/"#;
     let start = log_fragment
         .find(marker)
         .expect("the log must render an enabled swipe switch")
         + marker.len();
     let rest = &log_fragment[start..];
-    let end = rest.find(')').expect("the switch call must close");
-    let mut args = rest[..end].split(',').map(str::trim);
-    let id = args
+    let end = rest.find('"').expect("the switch route must close");
+    let mut parts = rest[..end].split("/swipe/");
+    let id = parts
         .next()
-        .expect("switch call has an id")
+        .expect("switch route has an id")
         .parse::<u64>()
-        .expect("switch call id is numeric");
-    let index = args
+        .expect("switch route id is numeric");
+    let index = parts
         .next()
-        .expect("switch call has an index")
+        .expect("switch route has an index")
         .parse::<usize>()
-        .expect("switch call index is numeric");
+        .expect("switch route index is numeric");
     (id, index)
 }
 

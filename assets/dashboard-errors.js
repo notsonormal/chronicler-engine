@@ -190,38 +190,6 @@ document.addEventListener("click", function (evt) {
   if (main) main.focus();
 });
 
-// The story-log requests are `fetch` chains until they become htmx controls. A
-// refusal answers 409, and the `X-Refusal` header chooses the words of its report.
-const REFUSAL_REPORTS = {
-  busy: { reason: "The Game is busy", detail: "Still thinking..." },
-  "game-changed": {
-    reason: "The active Game changed",
-    detail: "The page showed a Game that is no longer active.",
-  },
-};
-
-function refusalOf(status, kind) {
-  if (status !== REFUSED_STATUS) return null;
-  return kind === "game-changed" ? "game-changed" : "busy";
-}
-
-function refusalOfResponse(response) {
-  return refusalOf(response.status, response.headers.get("X-Refusal"));
-}
-
-function reportRefusal(slot, refusedWhat, refusal) {
-  const report = REFUSAL_REPORTS[refusal];
-  renderInlineError(slot, report.reason + ", so " + refusedWhat + ".", report.detail);
-}
-
-function throwServerDetail(response) {
-  return response.text().then((body) => {
-    throw new Error(
-      plainResponseText(body) || `The server answered ${response.status}.`
-    );
-  });
-}
-
 document.addEventListener("screen:loaded", refreshFailureBanner);
 
 // The open state lives in `hidden` and the position `style` of the popover, and

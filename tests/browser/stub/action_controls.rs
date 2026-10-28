@@ -504,16 +504,6 @@ async fn start_pending_request(page: &playwright_rs::Page, starter: PendingStart
     }
 }
 
-/// The slot where the page reports the request that a starter sends, when the
-/// engine does not take it.
-fn refusal_slot_of(starter: PendingStarter) -> &'static str {
-    match starter {
-        PendingStarter::Retry | PendingStarter::Retrigger => "#story-log-error",
-        PendingStarter::NewOptions => NOTICE,
-        other => panic!("{other:?} begins the pending state only when the engine took the request"),
-    }
-}
-
 async fn action_status_text(page: &playwright_rs::Page) -> String {
     eval_string(
         page,
@@ -577,32 +567,14 @@ async fn check_a_pending_state_ends_at_once_when_the_engine_does_not_take_its_re
     stub.save_handle().set_story_writes_refused_as_busy(true);
     wait_for_screen_current(&page).await;
     for starter in STARTERS_BEFORE_THE_ANSWER {
-        eval_string(
-            &page,
-            r#"() => {
-                document.querySelectorAll('[data-error-slot]').forEach((slot) => {
-                    slot.innerHTML = '';
-                    slot.hidden = true;
-                });
-                return '';
-            }"#,
-        )
-        .await;
         start_pending_request(&page, starter).await;
 
         wait_for_error_disclosure(
             &page,
-            refusal_slot_of(starter),
-            "the request that the engine does not take is reported in its slot",
+            NOTICE,
+            "the request that the engine does not take is reported in the notice",
         )
         .await;
-        if matches!(starter, PendingStarter::NewOptions) {
-            let (_, line, _) = read_error_disclosure(&page, refusal_slot_of(starter)).await;
-            assert!(
-                line.contains("the Action was not sent"),
-                "the server words the refusal of the new-Options form, got {line:?}"
-            );
-        }
         assert_eq!(
             action_status_text(&page).await,
             "",
@@ -638,14 +610,13 @@ async fn check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report_
     start_pending_request(&page, PendingStarter::NewOptions).await;
     wait_for_error_disclosure(
         &page,
-        refusal_slot_of(PendingStarter::NewOptions),
+        NOTICE,
         "the refused request is reported in the notice",
     )
     .await;
     wait_for_screen_current(&page).await;
 
-    let (_, line, _) =
-        read_error_disclosure(&page, refusal_slot_of(PendingStarter::NewOptions)).await;
+    let (_, line, _) = read_error_disclosure(&page, NOTICE).await;
     assert!(
         line.contains("the Action was not sent"),
         "the server words the refusal, got {line:?}"

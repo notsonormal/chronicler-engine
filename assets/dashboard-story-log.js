@@ -1,4 +1,4 @@
-// The story log: edit mode, its entry lock, the swipe/retry/delete requests, the follow-new-entries scroll and its own error slot.
+// The story log: edit mode, its entry lock, what follows the swipe, retry, retrigger and delete requests, and the follow-new-entries scroll.
 
 const noticeClearTimers = new WeakMap();
 
@@ -12,14 +12,6 @@ function scheduleNoticeClear(element, onClear, delayMs) {
       onClear();
     }, delayMs)
   );
-}
-
-function storyLogErrorSlot() {
-  return document.getElementById("story-log-error");
-}
-
-function showStoryLogError(message, rawText) {
-  renderInlineError(storyLogErrorSlot(), message, rawText);
 }
 
 let editState = null;
@@ -69,7 +61,7 @@ document.addEventListener(
 
 function showEditForm(id) {
   if (editState !== null) return;
-  editState = { id: id, text: null, actions: null };
+  editState = { id: id, text: null };
   const entry = document.querySelector(`[data-id="${id}"]`);
   if (entry) {
     const textSpan = entry.querySelector(".text");
@@ -81,6 +73,7 @@ function showEditForm(id) {
     textSpan.innerHTML = "";
     const textarea = document.createElement("textarea");
     textarea.id = "edit-textarea";
+    textarea.name = "text";
     textarea.className = "edit-textarea";
     textarea.textContent = rawText;
     textSpan.appendChild(textarea);
@@ -95,15 +88,11 @@ function showEditForm(id) {
         cancelEdit();
       } else if (evt.key === "Enter" && (evt.ctrlKey || evt.metaKey)) {
         evt.preventDefault();
-        submitEdit();
+        if (editState === null) return;
+        entry.querySelector(".save-btn").click();
       }
     });
 
-    const actionsContainer = entry.querySelector(".message-actions");
-    if (actionsContainer) {
-      editState.actions = actionsContainer.innerHTML;
-      actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save" aria-label="Save"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel" aria-label="Cancel"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>`;
-    }
     // A load skips the entry in edit, so new narration shows around the draft.
     entry.setAttribute("data-editing", "");
     lockEditing();
@@ -126,10 +115,6 @@ function revertEdit() {
   if (entry) {
     const textSpan = entry.querySelector(".text");
     textSpan.innerHTML = editState.text;
-    const actionsContainer = entry.querySelector(".message-actions");
-    if (actionsContainer && editState.actions !== null) {
-      actionsContainer.innerHTML = editState.actions;
-    }
   }
   clearEditState();
   unlockEditing();
@@ -144,81 +129,21 @@ function cancelEdit() {
   if (editBtn) editBtn.focus();
 }
 
-// The engine refuses a story write with 409: a Job or an Autoplay run holds the
-// Game, or the page shows a Game that is no longer active. True when the response
-// is a refusal; the story-log error then says what the refused action was
-// (`refusedWhat`, for example "the edit was not saved").
-function reportedRefusal(response, refusedWhat) {
-  const refusal = refusalOfResponse(response);
-  if (!refusal) return false;
-  reportRefusal(storyLogErrorSlot(), refusedWhat, refusal);
-  return true;
-}
-
-function submitEdit() {
+// The Save of an entry is an htmx request, and the one reader has reported its answer. A
+// refused or invalid Save keeps the draft and the lock. A Save that fails in another
+// way, or gets no answer, reverts the entry and releases the lock. The lock of a done
+// Save stays until the screen shows the saved entry, so a second editor cannot open on a
+// stale textarea.
+function onEditSaved(event) {
   if (editState === null) return;
-  clearInlineError(storyLogErrorSlot());
-  const newText = document.getElementById("edit-textarea").value;
-  const formData = new URLSearchParams();
-  formData.append("text", newText);
-  // Kept set until the outcome is known, so a failed save can restore the entry.
-  actionFetch(`/history/${editState.id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: formData,
-  })
-    .then((response) => {
-      if (reportedRefusal(response, "the edit was not saved")) return;
-      if (!response.ok) return throwServerDetail(response);
-      // The lock stays until the screen shows the saved entry, so a second
-      // editor cannot open on a stale textarea.
-      clearEditState();
-      afterScreenShows(response.headers.get("X-Revision")).then(unlockEditing);
-    })
-    .catch((err) => {
-      console.error("Failed to save message:", err);
-      revertEdit();
-      showStoryLogError("Failed to save the message.", err.message);
-    });
-}
-
-// Retry and retrigger answer nothing when the engine takes them, and the Job
-// they start shows in the status display. The action area's own state, which
-// begins before the request, ends when the screen shows the answer's revision. A
-// refusal or a failure reports in the story log's error slot and ends it at once.
-function submitGenerationRequest(url, failureMessage, refusedWhat) {
-  clearInlineError(storyLogErrorSlot());
-  updateToThinking();
-  actionFetch(url, { method: "POST" })
-    .then((response) => {
-      if (reportedRefusal(response, refusedWhat)) {
-        endPending();
-        return;
-      }
-      if (!response.ok) return throwServerDetail(response);
-      endPendingWhenScreenShows(response.headers.get("X-Revision"));
-    })
-    .catch((err) => {
-      console.error(`${failureMessage}:`, err);
-      endPending();
-      showStoryLogError(failureMessage, err.message);
-    });
-}
-
-function submitNewSwipe() {
-  submitGenerationRequest(
-    "/swipe/new",
-    "Failed to generate a new swipe",
-    "the retry was not started",
-  );
-}
-
-function submitRetrigger() {
-  submitGenerationRequest(
-    "/retrigger",
-    "Failed to retrigger the event",
-    "the retrigger was not started",
-  );
+  const answer = actionAnswer(event);
+  if (answer.outcome === "refused" || answer.outcome === "invalid") return;
+  if (answer.outcome !== "done") {
+    revertEdit();
+    return;
+  }
+  clearEditState();
+  afterScreenShows(answer.stamp).then(unlockEditing);
 }
 
 // A restored swipe leaves no state signal, so the restore is announced explicitly.
@@ -233,20 +158,11 @@ function announceSwipeRestore() {
   }, 4000);
 }
 
-function switchSwipe(messageId, index) {
-  clearInlineError(storyLogErrorSlot());
-  actionFetch(`/message/${messageId}/swipe/${index}`, { method: "POST" })
-    .then((response) => {
-      if (reportedRefusal(response, "the swipe was not switched")) return;
-      if (!response.ok) return throwServerDetail(response);
-      // The story log shows the restored Swipe once the screen holds the
-      // revision of the switch, and the restore is announced then.
-      return afterScreenShows(response.headers.get("X-Revision")).then(announceSwipeRestore);
-    })
-    .catch((err) => {
-      console.error("Swipe switch failed:", err);
-      showStoryLogError("Failed to switch the swipe.", err.message);
-    });
+// The story log shows the restored Swipe once the screen holds the revision of the
+// switch, and the restore is announced then.
+function onSwipeSwitched(event) {
+  const answer = actionAnswer(event);
+  if (answer.outcome === "done") afterScreenShows(answer.stamp).then(announceSwipeRestore);
 }
 
 // The Delete control lives on the last entry, so the swap replaces the node that
@@ -261,19 +177,9 @@ function focusAfterLogDelete() {
   if (landing) landing.focus();
 }
 
-function deleteMessage() {
-  if (!confirm("Delete this message?")) return;
-  clearInlineError(storyLogErrorSlot());
-  actionFetch("/history/delete", { method: "POST" })
-    .then((response) => {
-      if (reportedRefusal(response, "the message was not deleted")) return;
-      if (!response.ok) return throwServerDetail(response);
-      return afterScreenShows(response.headers.get("X-Revision")).then(focusAfterLogDelete);
-    })
-    .catch((err) => {
-      console.error("Delete failed:", err);
-      showStoryLogError("Failed to delete the message.", err.message);
-    });
+function onMessageDeleted(event) {
+  const answer = actionAnswer(event);
+  if (answer.outcome === "done") afterScreenShows(answer.stamp).then(focusAfterLogDelete);
 }
 
 // A load morphs the log in place, so its scroll position survives the swap and

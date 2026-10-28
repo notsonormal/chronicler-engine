@@ -70,16 +70,17 @@ Then no item carries a `.run-badge`
 Given a Job or a run holds the Game, so each story write answers 409 "Still thinking..."
 
 When the client opens the editor of a story-log entry, types a new text and presses Save
-Then the story log's error slot shows a line that names the busy Game
+Then #screen-error shows a line that names the busy Game
 And the editor is still open and holds the typed text
-And the entry stays in edit (`data-editing`) while the editor is open
+And the entry stays in edit (`data-editing`) and #story-log keeps `data-editing-entry` while the editor is open
+And the slot of the entry in edit holds no report
 
 When the client presses the Previous swipe control
-Then the story log's error slot shows a line that names the busy Game
+Then #screen-error shows a line that names the busy Game
 And the story log still shows the Swipe it showed
 
 When the client presses the Delete control and confirms
-Then the story log's error slot shows a line that names the busy Game
+Then #screen-error shows a line that names the busy Game
 And the story log still shows every entry it showed
 ```
 
@@ -94,12 +95,12 @@ And the command input and #autoplay-btn are enabled
 And #action-status is empty
 ```
 
-#### Scenario 42.7: A retry that the busy Game refuses reports in the story log's error slot
+#### Scenario 42.7: A retry that the busy Game refuses reports in the notice
 
 ```gherkin
 Given a Job or a run holds the Game, so POST /swipe/new answers 409 "Still thinking..."
 When the client presses the Retry control
-Then the story log's error slot shows a line that names the busy Game
+Then #screen-error shows a line that names the busy Game
 And #action-status is empty
 And the command input and #submit-btn are enabled
 ```

@@ -265,6 +265,22 @@ impl StubSaveHandle {
             .store(succeeds, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// The texts that the message saves posted, in order.
+    pub fn saved_texts(&self) -> Vec<String> {
+        self.state
+            .saved_texts
+            .lock()
+            .expect("stub saved texts lock poisoned")
+            .clone()
+    }
+
+    /// The message save answers `400` instead of its failure.
+    pub fn set_save_invalid(&self, invalid: bool) {
+        self.state
+            .save_invalid
+            .store(invalid, std::sync::atomic::Ordering::SeqCst);
+    }
+
     /// A connection Add or Edit refuses until armed, so the tests that drive a
     /// refused save keep their outcome.
     pub fn set_connection_saves_succeed(&self, succeeds: bool) {

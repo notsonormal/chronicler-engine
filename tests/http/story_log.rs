@@ -12,7 +12,7 @@ use chronicler_engine::test_support::{
     TestDataBuilder, TestCharacter,
 };
 
-use crate::support::app_wiring::app_after_an_impersonate_with_a_failed_event;
+use crate::support::app_wiring::{app_after_an_impersonate_with_a_failed_event, app_with_script};
 use crate::support::http_assertions::{
     icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
 };
@@ -512,4 +512,122 @@ async fn test_edit_answers_nothing_and_the_log_shows_the_new_text_http() {
         log.contains("The room is silent."),
         "the story log shows the edited text: {log}"
     );
+}
+
+/// The opening tag of the first element whose markup holds `marker`.
+fn tag_holding<'a>(markup: &'a str, marker: &str) -> &'a str {
+    let at = markup
+        .find(marker)
+        .unwrap_or_else(|| panic!("the markup holds no {marker}: {markup}"));
+    let start = markup[..at].rfind('<').expect("the marker sits in a tag");
+    let end = at + markup[at..].find('>').expect("the tag closes");
+    &markup[start..=end]
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.16
+#[tokio::test]
+async fn test_the_story_log_sends_its_requests_through_htmx_and_renders_the_edit_controls() {
+    let (app, _state) = app_after_an_impersonate_with_a_failed_event().await;
+
+    let body = fetch_body(&app, "/fragment/story-log").await;
+
+    let entries = log_entries(&body);
+    assert!(
+        entries.len() > 1,
+        "the fixture shows an entry with Delete: {body}"
+    );
+    for (id, entry) in &entries {
+        let save = tag_holding(entry, r#"class="save-btn""#);
+        assert!(
+            save.contains(&format!(r#"hx-post="/history/{id}""#))
+                && save.contains(r##"hx-include="#edit-textarea""##),
+            "entry {id} renders a Save that sends the textarea: {save}"
+        );
+        assert!(
+            tag_holding(entry, r#"class="cancel-btn""#).contains(r#"aria-label="Cancel""#),
+            "entry {id} renders a Cancel"
+        );
+        assert_eq!(
+            entry.matches("data-error-slot=").count(),
+            1,
+            "entry {id} renders one slot"
+        );
+        assert!(
+            entry.contains(&format!(
+                r#"data-error-slot="edit-{id}" hidden></div></div>"#
+            )),
+            "the slot of entry {id} closes the edit group, hidden: {entry}"
+        );
+    }
+    let (_, last) = entries.last().expect("the last .log-entry");
+    let delete = tag_holding(last, "delete-btn");
+    assert!(
+        delete.contains(r#"hx-post="/history/delete""#)
+            && delete.contains(r#"hx-confirm="Delete this message?""#),
+        "Delete asks first: {delete}"
+    );
+    let retrigger = tag_holding(last, "retrigger-btn");
+    let retry = tag_holding(last, r#"title="Retry""#);
+    assert!(retrigger.contains(r#"hx-post="/retrigger""#), "{retrigger}");
+    assert!(retry.contains(r#"hx-post="/swipe/new""#), "{retry}");
+    assert_buttons_send_through_htmx(&body);
+}
+
+/// Every button of the fragment is an htmx request, or one of the two edit controls
+/// that send nothing, or disabled.
+fn assert_buttons_send_through_htmx(fragment: &str) {
+    let buttons: Vec<&str> = fragment
+        .split("<button")
+        .skip(1)
+        .map(|rest| &rest[..rest.find('>').expect("the button tag closes")])
+        .collect();
+    assert!(!buttons.is_empty(), "the fragment renders buttons");
+    for tag in buttons {
+        let sends_nothing = tag.contains(r#"onclick="showEditForm("#)
+            || tag.contains(r#"onclick="cancelEdit()""#)
+            || tag.contains("disabled");
+        assert!(
+            tag.contains("hx-post=") || sends_nothing,
+            "a button of the log sends through htmx, or sends nothing: {tag}"
+        );
+        assert!(
+            !tag.contains("hx-post=") || !tag.contains("onclick"),
+            "an htmx button calls no script that sends the request: {tag}"
+        );
+    }
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.16
+#[tokio::test]
+async fn test_the_swipe_controls_of_the_story_log_send_through_htmx() {
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .turn("You look around again."),
+    );
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 1000).await);
+    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(wait_settled(&state, 1000).await);
+    let message_id = story_of(&state).last().expect("the story is not empty").id;
+
+    let second_swipe = fetch_body(&app, "/fragment/story-log").await;
+    assert!(
+        second_swipe.contains(&format!(r#"hx-post="/message/{message_id}/swipe/0""#)),
+        "the Previous swipe control posts the switch: {second_swipe}"
+    );
+    assert_buttons_send_through_htmx(&second_swipe);
+
+    assert!(
+        post_empty(&app, &format!("/message/{message_id}/swipe/0"))
+            .await
+            .status()
+            .is_success()
+    );
+    let first_swipe = fetch_body(&app, "/fragment/story-log").await;
+    assert!(
+        first_swipe.contains(&format!(r#"hx-post="/message/{message_id}/swipe/1""#)),
+        "the Next swipe control posts the switch: {first_swipe}"
+    );
+    assert_buttons_send_through_htmx(&first_swipe);
 }
