@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use super::parts::{PartRenderer, ScreenView, SCREEN_PARTS};
 use crate::adapters::driving::http::utils::action_layers::REVISION_HEADER;
-use crate::adapters::driving::http::utils::error::render_error;
+use crate::adapters::driving::http::utils::error::error_fragment;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error};
 use crate::adapters::driving::http::AppState;
 
@@ -63,11 +63,11 @@ pub async fn screen_handler(
 ) -> Response<Body> {
     let renderers = match renderers_named(query.parts.as_deref()) {
         Ok(renderers) => renderers,
-        Err(message) => return bad_request(render_error(&message)),
+        Err(message) => return bad_request(error_fragment(message)),
     };
     let games_page = match games_page_named(query.games_page.as_deref()) {
         Ok(page) => page,
-        Err(message) => return bad_request(render_error(&message)),
+        Err(message) => return bad_request(error_fragment(message)),
     };
     let stamp = state.game_view_query.change_versions(None).stamp();
     let game = state.game_catalogue.active_game_id();
@@ -79,7 +79,7 @@ pub async fn screen_handler(
             Ok(html) => body.push_str(&format!("<template data-part=\"{name}\">{html}</template>")),
             Err(error) => {
                 tracing::error!("screen part {name} failed: {error}");
-                return internal_error(render_error(&format!("Failed to render {name}: {error}")));
+                return internal_error(error_fragment(format!("Failed to render {name}: {error}")));
             }
         }
     }

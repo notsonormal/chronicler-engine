@@ -98,6 +98,18 @@ And the body contains the #world-posture-status flag and the posture group's own
 And the posture selects auto-save to /worlds/posture_world/posture
 ```
 
+### World edit form
+
+#### Scenario 25.14: The World Edit form answers 404 for an unknown World and opens no dialog
+
+```gherkin
+Given a fresh app state
+When the client GET /worlds/does-not-exist/edit
+Then the response is a 404
+And the body says the World was not found
+And the body carries no World form
+```
+
 ### World creation refuses an existing identifier
 
 #### Scenario 25.7: Creating a World whose identifier already exists is refused

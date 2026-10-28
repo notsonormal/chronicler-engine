@@ -6,7 +6,7 @@ use axum::http::{HeaderValue, Method};
 use axum::middleware::Next;
 use axum::response::Response;
 
-use super::error::render_error;
+use super::error::error_fragment;
 use super::response::refused;
 use crate::adapters::driving::http::AppState;
 
@@ -46,7 +46,7 @@ pub async fn refuse_stale_game(
         let names_active =
             active.is_some_and(|game| named.to_str().is_ok_and(|named| named == game.to_string()));
         if !names_active {
-            return refused("game-changed", render_error("The active Game changed"));
+            return refused("game-changed", error_fragment("The active Game changed"));
         }
     }
     next.run(request).await

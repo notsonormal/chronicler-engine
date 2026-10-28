@@ -188,7 +188,7 @@ async fn test_edit_connection_form_not_found() {
     let response =
         edit_connection_form(axum::extract::State(app_state), Path("missing".into())).await;
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert!(body_text(response).await.contains("Connection not found"));
 }
 

@@ -6,7 +6,7 @@ use std::str::FromStr;
 use askama::Template;
 use axum::{
     extract::{Form, Path, State},
-    response::{IntoResponse, Response},
+    response::Response,
 };
 
 use crate::adapters::driving::http::AppState;
@@ -23,7 +23,7 @@ use crate::adapters::driving::http::games::templates::games::{
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::adapters::driving::http::utils::error::{
-    action_error_response, action_failure_response, action_not_found_response,
+    AnswerPolicy, action_failure_response, action_not_found_response, answer_for_error,
 };
 use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
@@ -148,7 +148,7 @@ pub async fn create_game_handler(
 pub async fn switch_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
     match state.game_catalogue.switch_game(id) {
         Ok(()) => ok(""),
-        Err(e) => action_error_response(e, "Failed to switch game"),
+        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
     }
 }
 
@@ -243,8 +243,7 @@ pub async fn update_game_presets_handler(
 fn config_save_result(result: Result<Game, ApplicationError>) -> Response {
     match result {
         Ok(_) => ok(""),
-        Err(ApplicationError::Refused(refusal)) => refusal.into_response(),
-        Err(e) => action_error_response(e, "Failed to save the setting"),
+        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
     }
 }
 

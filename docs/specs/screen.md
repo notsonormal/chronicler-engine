@@ -3,6 +3,7 @@
 Endpoints:
 - `GET /screen?parts=<names>` and `GET /screen?parts=<names>&games_page=<n>`
 - every `POST` route
+- the `GET` routes that open a dialog, for a record that is gone: `GET /fragment/games/:id/rename`, `GET /fragment/prompt-presets/:id/edit`, `GET /fragment/prompt-presets/:id/view`
 - the Game-bound `POST` routes: `POST /action`, `POST /action/check`, `POST /action/confirm`, `POST /autoplay`, `POST /swipe/new`, `POST /retrigger`, `POST /reset`, `POST /message/:id/swipe/:index`, `POST /history/:id`, `POST /history/delete` and `POST /status/reset-busy`
 
 The screen is the header, the failure banner and the parts of the visible tab. `GET /screen` renders the parts that the page names, in one answer. The part names are `header`, `failure-banner`, `story-log`, `visual-sidebar`, `options-dock`, `send-control`, `autoplay-controls`, `status-display`, `settings`, `prompt-presets`, `worlds`, `games` and `llm-messages`.
@@ -220,4 +221,30 @@ When the client GET /screen?parts=failure-banner, /screen?parts=settings and /sc
 Then each response status is 500
 And each body names the failure of the read
 And no body calls the failure a configuration error
+```
+
+#### Scenario 45.18: Each kind of failed action answers its status and one body
+
+```gherkin
+Given an engine with an active Game and a second saved Game
+When the client POST /games/:id/rename with an empty name
+Then the response is a 400
+
+When the client POST /history/:id for a Message that does not exist
+Then the response is a 400
+
+When the client GET /fragment/games/:id/rename, GET /fragment/prompt-presets/:id/edit and GET /fragment/prompt-presets/:id/view for a record that does not exist
+Then each response is a 404
+
+When the client POST /reset with the header X-Chronicler-Game set to the id of the second Game
+Then the response is a 409
+
+When the client POST /worlds/:key/delete for a World that still has Games
+Then the response is a 400 that holds the refusal "Cannot delete world with 1 game"
+
+When the client POST /prompt-presets and the storage fails on save
+Then the response is a 500 that holds the text of the failure
+
+And each body is one `error-message` element
+And no body starts with "Error: "
 ```

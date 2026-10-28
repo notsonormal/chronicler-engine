@@ -125,7 +125,7 @@ async fn test_duplicate_preset_storage_error_returns_error() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(body.contains("Duplicate failed"));
+    assert!(body.contains("injected save failure"), "{body}");
 }
 
 #[tokio::test]
@@ -249,7 +249,7 @@ async fn test_activate_preset_does_not_update_memory_when_save_fails() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(body.contains("Save failed"));
+    assert!(body.contains("injected save failure"), "{body}");
 
     let active_id = app_state
         .settings()
@@ -294,31 +294,6 @@ fn make_test_app_state_with_failing_storage(
 }
 
 #[tokio::test]
-async fn test_save_preset_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        crate::test_support::TestPromptPreset::system("x", "X"),
-        |h| {
-            h.set(
-                StorageCall::SavePreset,
-                TestOverride::config("injected save failure"),
-            )
-        },
-    );
-    let response = save_preset_handler(
-        axum::extract::State(app_state),
-        axum::extract::Form(PresetForm {
-            name: "Test".into(),
-            instructions: Some("Test.".into()),
-            preset_type: "system".into(),
-            ..Default::default()
-        }),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Save failed"));
-}
-
-#[tokio::test]
 async fn test_edit_preset_storage_error_returns_error() {
     let app_state = make_test_app_state_with_failing_storage(
         PromptPreset {
@@ -341,63 +316,6 @@ async fn test_edit_preset_storage_error_returns_error() {
     .await;
     let body = body_text(response).await;
     assert!(body.contains("Load failed"));
-}
-
-#[tokio::test]
-async fn test_update_preset_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        PromptPreset {
-            id: "custom".into(),
-            name: "Custom".into(),
-            instructions: Some("Custom.".into()),
-            ..Default::default()
-        },
-        |h| {
-            h.set(
-                StorageCall::SavePreset,
-                TestOverride::config("injected save failure"),
-            )
-        },
-    );
-    let response = update_preset_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("custom".to_string()),
-        axum::extract::Form(PresetForm {
-            name: "Updated".into(),
-            instructions: Some("Updated.".into()),
-            preset_type: "system".into(),
-            allowed_mode_novel: true,
-            ..Default::default()
-        }),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Update failed"));
-}
-
-#[tokio::test]
-async fn test_delete_preset_delete_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        PromptPreset {
-            id: "custom".into(),
-            name: "Custom".into(),
-            instructions: Some("Custom.".into()),
-            ..Default::default()
-        },
-        |h| {
-            h.set(
-                StorageCall::DeletePreset,
-                TestOverride::config("injected delete failure"),
-            )
-        },
-    );
-    let response = delete_preset_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("custom".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Delete failed"));
 }
 
 fn preset_with_modes(id: &str, modes: Vec<NarratorMode>) -> PromptPreset {

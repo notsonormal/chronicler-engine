@@ -183,12 +183,12 @@ Then the response is 422 Unprocessable Entity (axum Form rejection)
 Given an app state whose preset storage fails on save
 When the client POST /prompt-presets with valid name and preset_type="system" fields
 Then the response is a 500
-And the response body contains `<div class="error-message">Save failed:` (a non-2xx so htmx leaves the panel in place and the client renders the failure into the form's inline slot)
+And the response body is one `<div class="error-message">` that holds the text of the failure (a non-2xx so htmx leaves the panel in place)
 ```
 
 The same failure shape applies to `POST /prompt-presets/{id}` (update) and
 `POST /{id}/delete` — a non-2xx carrying a
-`<div class="error-message">{Update|Delete} failed: …</div>` fragment. Not
+`<div class="error-message">…</div>` fragment that holds the text of the failure. Not
 enumerated as separate scenarios; this one covers the shape.
 
 ### POST /prompt-presets/{id} — update

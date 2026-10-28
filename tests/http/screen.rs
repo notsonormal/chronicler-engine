@@ -552,3 +552,102 @@ async fn test_a_header_that_names_no_game_is_refused_and_a_read_ignores_the_head
         "a header names a Game and no Game is active"
     );
 }
+
+/// An error body is one `error-message` element whose text has no `Error: ` prefix.
+fn error_text_of(label: &str, body: &str) -> String {
+    const OPEN: &str = "<div class=\"error-message\">";
+    let text = body
+        .strip_prefix(OPEN)
+        .and_then(|rest| rest.strip_suffix("</div>"))
+        .unwrap_or_else(|| panic!("{label}: the body is one error-message element: {body}"));
+    assert!(
+        !text.starts_with("Error: "),
+        "{label}: the text carries no prefix: {text}"
+    );
+    text.to_string()
+}
+
+async fn get_status_and_body(app: &axum::Router, uri: &str) -> (StatusCode, String) {
+    let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    let status = response.status();
+    (status, response_body(response).await)
+}
+
+// [docs/specs/screen.md] SCENARIO: 45.18
+#[tokio::test]
+async fn test_each_kind_of_failed_action_answers_its_status_and_one_body() {
+    let (app, state, _storage, second) = two_game_app();
+    let active = active_game_of(&state).0;
+
+    let invalid_value = post_form(&app, &format!("/games/{active}/rename"), "display_name=").await;
+    assert_eq!(
+        invalid_value.status(),
+        StatusCode::BAD_REQUEST,
+        "an invalid value"
+    );
+    error_text_of("an invalid value", &response_body(invalid_value).await);
+
+    let gone_by_post = post_form(&app, "/history/999999", "text=Changed.").await;
+    assert_eq!(
+        gone_by_post.status(),
+        StatusCode::BAD_REQUEST,
+        "a POST that names a gone Message"
+    );
+    let text = error_text_of("a gone Message", &response_body(gone_by_post).await);
+    assert!(text.contains("Message not found"), "{text}");
+
+    for uri in [
+        "/fragment/games/999999/rename",
+        "/fragment/prompt-presets/no-such-preset/edit",
+        "/fragment/prompt-presets/no-such-preset/view",
+    ] {
+        let (status, body) = get_status_and_body(&app, uri).await;
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "GET {uri}: an opener for a gone record"
+        );
+        error_text_of(uri, &body);
+    }
+
+    let stale = second.to_string();
+    let refused =
+        post_form_with_headers(&app, "/reset", "", &[(GAME_HEADER, stale.as_str())]).await;
+    assert_eq!(refused.status(), StatusCode::CONFLICT, "a refusal");
+    let text = error_text_of("a refusal", &response_body(refused).await);
+    assert!(text.contains("The active Game changed"), "{text}");
+
+    let (world_app, _state) = TestAppBuilder::default_test().build_with_state();
+    let state_refusal = post_form(&world_app, "/worlds/test/delete", "").await;
+    assert_eq!(
+        state_refusal.status(),
+        StatusCode::BAD_REQUEST,
+        "a World that still has Games"
+    );
+    let text = error_text_of("a World with Games", &response_body(state_refusal).await);
+    assert!(text.contains("Cannot delete world with 1 game"), "{text}");
+
+    let (failing_storage, failures) =
+        chronicler_engine::test_support::empty_sqlite_storage().with_test_failures();
+    let (failing_app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::new(failing_storage))
+        .build_with_state();
+    failures.set(
+        chronicler_engine::adapters::driven::storage::StorageCall::SavePreset,
+        chronicler_engine::adapters::driven::storage::TestOverride::internal("preset save failure"),
+    );
+    let failed = post_form(
+        &failing_app,
+        "/prompt-presets",
+        "name=Fail+Preset&instructions=Will+fail.&preset_type=system",
+    )
+    .await;
+    assert_eq!(
+        failed.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "an engine failure"
+    );
+    let text = error_text_of("an engine failure", &response_body(failed).await);
+    assert!(text.contains("preset save failure"), "{text}");
+}

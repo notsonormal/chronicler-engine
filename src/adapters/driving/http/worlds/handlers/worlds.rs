@@ -15,7 +15,8 @@ use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
 
 use crate::adapters::driving::http::utils::error::{
-    action_error_response, action_failure_response, action_refusal_response,
+    AnswerPolicy, action_failure_response, action_not_found_response, action_refusal_response,
+    answer_for_error,
 };
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::application::errors::ApplicationError;
@@ -131,7 +132,7 @@ pub async fn create_world_handler(
 
     match state.world_catalogue.create_world(world_card, map) {
         Ok(_) => ok(""),
-        Err(e) => action_error_response(e, "Failed to create world"),
+        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
     }
 }
 
@@ -145,7 +146,7 @@ pub async fn edit_world_form_handler(
 ) -> Response<axum::body::Body> {
     let (_, world_card, map) = match state.world_catalogue.get_world(&key) {
         Ok(Some(w)) => w,
-        Ok(None) => return action_refusal_response(format!("World '{key}' not found")),
+        Ok(None) => return action_not_found_response(format!("World '{key}' not found")),
         Err(e) => return action_failure_response(format!("Failed to load world: {e}")),
     };
 
@@ -211,8 +212,7 @@ pub async fn delete_world_handler(
 ) -> Response<axum::body::Body> {
     match state.world_catalogue.delete_world(&key) {
         Ok(()) => ok(""),
-        Err(e) if e.is_user_displayable() => action_refusal_response(e),
-        Err(e) => action_failure_response(e),
+        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
     }
 }
 

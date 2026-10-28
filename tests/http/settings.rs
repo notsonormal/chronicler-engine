@@ -349,7 +349,7 @@ async fn test_failed_settings_panel_load_reports_inside_the_panel() {
 
 // [docs/specs/settings.md] SCENARIO: 20.24
 #[tokio::test]
-async fn test_unknown_connection_edit_form_is_refused_and_opens_no_dialog() {
+async fn test_unknown_connection_edit_form_answers_not_found_and_opens_no_dialog() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
@@ -360,8 +360,8 @@ async fn test_unknown_connection_edit_form_is_refused_and_opens_no_dialog() {
     let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(
         response.status(),
-        StatusCode::BAD_REQUEST,
-        "a refusal answers non-2xx, so no dialog opens"
+        StatusCode::NOT_FOUND,
+        "a gone record answers non-2xx, so no dialog opens"
     );
     let body = body_text(response).await;
 

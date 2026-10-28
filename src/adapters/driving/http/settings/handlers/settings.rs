@@ -12,8 +12,8 @@ use crate::adapters::driving::http::settings::templates::settings::{
     SettingsTemplate,
 };
 use crate::adapters::driving::http::utils::error::{
-    action_error_response, action_failure_response, action_refusal_response, error_disclosure,
-    raw_error_detail, refusal_message_without_layer_prefix_for_validation_and_config,
+    AnswerPolicy, action_failure_response, action_not_found_response, action_refusal_response,
+    answer_for_error, error_disclosure, raw_error_detail,
 };
 use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_or_error_fragment};
@@ -38,19 +38,6 @@ pub fn render_settings_panel(app_state: &AppState) -> Result<String, EngineError
     SettingsTemplate::from_settings(&settings, &roles)
         .render()
         .map_err(|e| EngineError::Template(e.to_string()))
-}
-
-/// A save the settings refuse answers a non-2xx error fragment, which the control
-/// reports in its own slot. A refusal is a 400 and a storage failure a 500.
-fn settings_save_failure(error: EngineError) -> Response<Body> {
-    match error {
-        EngineError::Validation(_) | EngineError::Config(_) => action_refusal_response(
-            refusal_message_without_layer_prefix_for_validation_and_config(&error),
-        ),
-        other => action_failure_response(
-            refusal_message_without_layer_prefix_for_validation_and_config(&other),
-        ),
-    }
 }
 
 fn roles_using(settings: &AppSettings, connection_id: &str) -> Vec<&'static str> {
@@ -208,7 +195,7 @@ pub async fn edit_connection_form(
             Some(conn),
         )))
         .into_response(),
-        None => action_refusal_response("Connection not found"),
+        None => action_not_found_response("Connection not found"),
     }
 }
 
@@ -223,7 +210,7 @@ pub async fn add_connection_handler(
 
     match app_state.settings_service.add_connection(connection) {
         Ok(_) => ok(""),
-        Err(e) => action_error_response(e, "Error"),
+        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
     }
 }
 
@@ -248,7 +235,7 @@ pub async fn edit_connection_handler(
 
     match outcome {
         Ok(_) => ok(""),
-        Err(e) => action_error_response(e, "Error"),
+        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
     }
 }
 
@@ -368,7 +355,7 @@ pub async fn delete_connection_handler(
 
     match outcome {
         Ok(()) => ok(""),
-        Err(e) => settings_save_failure(e),
+        Err(e) => answer_for_error(e.into(), AnswerPolicy::SettingsSave),
     }
 }
 
@@ -387,7 +374,7 @@ async fn set_role(
 
     match outcome {
         Ok(()) => ok(""),
-        Err(e) => settings_save_failure(e),
+        Err(e) => answer_for_error(e.into(), AnswerPolicy::SettingsSave),
     }
 }
 

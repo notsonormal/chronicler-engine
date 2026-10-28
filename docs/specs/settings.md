@@ -221,12 +221,12 @@ And each form has a Cancel control, a Test control for the typed values, and its
 And each form names what a busy refusal leaves unsaved
 ```
 
-#### Scenario 20.24: The connection Edit form refuses an unknown connection and opens no dialog
+#### Scenario 20.24: The connection Edit form answers 404 for an unknown connection and opens no dialog
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/connections/does-not-exist/edit
-Then the response is a 400
+Then the response is a 404
 And the body says the connection was not found
 And the body carries no connection form
 ```

@@ -341,6 +341,7 @@ The tests that name a deleted symbol change in stage 4: `tests/browser/stub/stor
 | Stage | File | Change |
 |---|---|---|
 | 1 | `src/adapters/driving/http/utils/response_tests.rs:61-78` | The three `render_error` tests call `error_fragment`. The `Error:` assert goes. |
+| 1 | `docs/specs/prompt_presets.md` Scenario 21.13 and its follow-on sentence; `tests/http/prompt_presets.rs` (three tests); `src/adapters/driving/http/prompt_presets/handlers/prompt_presets_tests.rs` (legacy tests that repeat 21.13 are deleted); the connection Edit opener tests in `settings_tests.rs` and `tests/http/requires_migration/connections.rs` | The body loses the prefixes `Save failed:`, `Update failed:` and `Delete failed:`, because `answer_for_error` takes no prefix (A5). The opener tests expect `404` (A2). Stage 2 changes these bodies again. Found in stage 1. |
 | 1 | `src/adapters/driving/http/utils/fragment.rs:29,37` | The try-render wrapper calls `error_fragment`. A part failure text loses its `Error:` prefix. This is a visible change. |
 | 1 | `tests/test_utils/stub_server.rs:1079, 1236, 1247, 1576, 1647, 1943, 1952`; `tests/test_utils/stub_action_layers.rs:99` | The stub calls `error_fragment` (made `pub`) in place of `render_error`. Stage 2 moves its error answers to the engine's constructors (A21). |
 | 1 | `src/adapters/driving/http/error_tests.rs` | The displayable-engine test changes its status in place. No route reaches it. |
@@ -484,6 +485,7 @@ The client does not change in this stage. It builds its own words, and it ignore
 5. The stub: mount the engine's layer (A21). Make the engine's constructors `pub`, and build the stub's error answers (`client_failure`, `client_refusal`, `tests/test_utils/stub_server.rs:1930-1955`) through them. Replace the stale-Game refusal (`tests/test_utils/stub_action_layers.rs:99`) and the busy refusal (`tests/test_utils/stub_server.rs:1317-1320`) with `refused(kind)`. Keep `GAME_BOUND_ROUTES`, `is_game_bound` and the comparison of Scenario 45.4 (`tests/http/screen.rs:399-412`).
 6. Delete Scenario 40.6 and the stub flag `connection_saves_refused_as_busy` (O10).
 7. Specs and tests: section 6, stage 2 rows.
+8. Rename `action_refusal_response` to a name that says it builds an invalid answer (`400`). A1 keeps the word "refusal" for `409` (stage 1 review L1).
 
 ### Stage 3 — The one reader and the places
 
@@ -530,7 +532,7 @@ The review scope is the branch from the commit that adds this plan to its last s
 | Stage | Commit | Gate | Dashboard JS lines | Checks | Differences from the plan |
 |---|---|---|---|---|---|
 | Baseline | `82531b0b` | none | 1,995 (`wc -l assets/dashboard-*.js`, checked 2026-10-27) | none | none |
-| 1 | | Review | | | |
+| 1 | (this commit) | Review | 1,995 (no client change) | Full gate `logs/build_20261028_193239.log` (297 guardrail, 1501 integration, 2 skipped, 41 browser). Red logs `tmp/aa-stage1/logs/` (45.18, 20.24, 25.14, the displayable-engine unit test). `rg 'render_error\|action_error_response\|is_user_displayable' src tests` finds nothing; `rg '"Error: ' src` finds nothing. Review `tmp/review/aa-stage1/review.md`: no High; M1, M3, L2–L9 fixed; M2 and L1 are plan edits. | Specs and tests that pinned the old prefixes (21.13, the preset tests, the connection opener tests) were not in section 6; added there (review M2). `AnswerPolicy` is an enum: `EngineText` keeps the full engine text ("Database error: …"), `SettingsSave` keeps the short text and the `400` of the old `settings_save_failure`, `GenericText` keeps the `IntoResponse` text; so stage 1 changes no failure text that the plan does not name (review M3). `ApplicationError::is_user_displayable` deleted (no caller). `AppState::render_error_context` renamed `template_failure_context`, so the exit grep holds literally. Three legacy preset unit tests that repeat 21.13 deleted; the duplicate and edit-opener failure tests stay (no tier-1 cover). The `500` row of 45.18 uses `POST /prompt-presets`, not the World path of 25.12. 25.14 sits under a new heading "World edit form". Stage 2 step 8 added: rename `action_refusal_response` (review L1). |
 | 2 | | Review | | | |
 | 3 | | **Milestone A** | | | |
 | 4 | | **Milestone B** | | | |

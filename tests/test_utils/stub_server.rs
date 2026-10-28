@@ -45,7 +45,7 @@ use chronicler_engine::adapters::driving::http::settings::templates::{
 use chronicler_engine::adapters::driving::http::layout::handlers::{
     autoplay_controls_answer, busy_answer, failure_answer, idle_answer, send_control_answer,
 };
-use chronicler_engine::adapters::driving::http::utils::error::render_error;
+use chronicler_engine::adapters::driving::http::utils::error::error_fragment;
 use chronicler_engine::application::generation::gate::{AutoplayProgress, Busy};
 use chronicler_engine::application::games::view_query::RoleHealth;
 use chronicler_engine::domain::model::agent::Role;
@@ -1076,7 +1076,7 @@ async fn llm_message_record_fragment(
         None => (
             StatusCode::NOT_FOUND,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            render_error("LLM message not found"),
+            error_fragment("LLM message not found"),
         )
             .into_response(),
     }
@@ -1233,7 +1233,7 @@ async fn count_and_fail_reads_middleware(
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            render_error("panel load failed"),
+            error_fragment("panel load failed"),
         )
             .into_response();
     }
@@ -1244,7 +1244,7 @@ async fn count_and_fail_reads_middleware(
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            render_error("read failed"),
+            error_fragment("read failed"),
         )
             .into_response();
     }
@@ -1573,7 +1573,7 @@ fn action_failure(command: &str) -> Response<Body> {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        render_error(&format!("Failed to process action: {command}")),
+        error_fragment(format!("Failed to process action: {command}")),
     )
         .into_response()
 }
@@ -1644,7 +1644,7 @@ async fn game_posture_save(State(state): State<Arc<StubState>>) -> Response<Body
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        render_error("Failed to save posture"),
+        error_fragment("Failed to save posture"),
     )
         .into_response()
 }
@@ -1940,7 +1940,7 @@ fn client_not_found(message: &str) -> Response<Body> {
     (
         StatusCode::NOT_FOUND,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        render_error(message),
+        error_fragment(message),
     )
         .into_response()
 }
@@ -1949,7 +1949,7 @@ fn client_refusal(message: &str) -> Response<Body> {
     (
         StatusCode::BAD_REQUEST,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        render_error(message),
+        error_fragment(message),
     )
         .into_response()
 }

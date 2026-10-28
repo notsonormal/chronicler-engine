@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::utils::error::render_error;
+use crate::adapters::driving::http::utils::error::error_fragment;
 use crate::adapters::driving::http::utils::response::ok;
 
 pub fn render_fragment<F>(state: &AppState, render: F, name: &str) -> Response<Body>
@@ -26,7 +26,7 @@ where
 pub(crate) fn failed_fragment_response(message: &str) -> Response<Body> {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
-        Html(render_error(message)),
+        Html(error_fragment(message)),
     )
         .into_response()
 }
@@ -34,7 +34,7 @@ pub(crate) fn failed_fragment_response(message: &str) -> Response<Body> {
 pub fn render_or_error_fragment(template: &impl Template) -> String {
     template.render().unwrap_or_else(|e| {
         tracing::error!("template render failed: {e}");
-        render_error(&format!("Template error: {e}"))
+        error_fragment(format!("Template error: {e}"))
     })
 }
 

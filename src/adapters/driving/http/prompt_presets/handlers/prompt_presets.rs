@@ -13,8 +13,8 @@ use crate::application::prompt_preset_service::{PresetEdit, PromptPresetService}
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{preset_edit_form_html, preset_view_form_html};
 use crate::adapters::driving::http::utils::error::{
-    action_error_response, action_failure_response, action_not_found_response,
-    action_refusal_response,
+    AnswerPolicy, action_failure_response, action_not_found_response, action_refusal_response,
+    answer_for_error,
 };
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
@@ -184,7 +184,7 @@ pub async fn save_preset_handler(
     let preset = form.into_preset(generate_storage_id("preset"), preset_type, allowed_modes);
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
-        return action_error_response(e, "Save failed");
+        return answer_for_error(e, AnswerPolicy::EngineText);
     }
 
     ok("")
@@ -196,7 +196,7 @@ pub async fn edit_preset_form_handler(
 ) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
     if let Err(e) = PromptPresetService::ensure_editable(&preset) {
-        return action_error_response(e, "Load failed");
+        return answer_for_error(e, AnswerPolicy::EngineText);
     }
     Html(preset_edit_form_html(&preset, preset.preset_type.as_str())).into_response()
 }
@@ -222,7 +222,7 @@ pub async fn update_preset_handler(
 
     match app_state.prompt_preset_service.edit_preset(&id, edit) {
         Ok(_) => ok(""),
-        Err(e) => action_error_response(e, "Update failed"),
+        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
     }
 }
 
@@ -231,7 +231,7 @@ pub async fn delete_preset_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Response<Body> {
     if let Err(e) = app_state.prompt_preset_service.delete_preset(&id) {
-        return action_error_response(e, "Delete failed");
+        return answer_for_error(e, AnswerPolicy::EngineText);
     }
 
     ok("")
@@ -247,12 +247,12 @@ pub async fn duplicate_preset_handler(
     copy.id = generate_storage_id("preset");
     copy.name = match app_state.prompt_preset_service.next_copy_name(&preset) {
         Ok(name) => name,
-        Err(e) => return action_error_response(e, "Duplicate failed"),
+        Err(e) => return answer_for_error(e, AnswerPolicy::EngineText),
     };
     copy.is_default = false;
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&copy) {
-        return action_error_response(e, "Duplicate failed");
+        return answer_for_error(e, AnswerPolicy::EngineText);
     }
 
     ok("")

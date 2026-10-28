@@ -21,6 +21,20 @@ use crate::support::app_wiring::two_game_app;
 use crate::support::http_requests::{fetch_body, post_form};
 use crate::SettingsTestGuard;
 
+/// The body is one `error-message` element that holds the text of the failure.
+fn assert_one_error_message_holding(body: &str, failure_text: &str) {
+    assert!(
+        body.starts_with(r#"<div class="error-message">"#)
+            && body.ends_with("</div>")
+            && body.matches("<div").count() == 1,
+        "the body is one error-message element: {body}"
+    );
+    assert!(
+        body.contains(failure_text),
+        "the body holds the text of the failure: {body}"
+    );
+}
+
 fn get_request(uri: &str) -> Request<Body> {
     Request::builder()
         .uri(uri)
@@ -439,7 +453,7 @@ async fn test_create_preset_reports_save_failure() {
     .await;
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="error-message">Save failed:"#));
+    assert_one_error_message_holding(&body, "preset save failure");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.14
@@ -722,10 +736,7 @@ async fn test_delete_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
         .unwrap();
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_text(response).await;
-    assert!(
-        body.contains(r#"<div class="error-message">Delete failed:"#),
-        "the failure must reach the client for its inline slot: {body}"
-    );
+    assert_one_error_message_holding(&body, "preset delete failure");
 
     failures.clear(StorageCall::DeletePreset);
 
@@ -1458,10 +1469,7 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
         "a failed update must answer non-2xx, not a 200 card replacement"
     );
     let body = body_text(response).await;
-    assert!(
-        body.contains(r#"<div class="error-message">Update failed:"#),
-        "the failure must reach the client for its inline slot: {body}"
-    );
+    assert_one_error_message_holding(&body, "preset save failure");
     assert!(
         !body.contains("preset-card"),
         "a failed update must not swap the card into the response: {body}"

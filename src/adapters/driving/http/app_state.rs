@@ -78,7 +78,7 @@ impl AppState {
         &self.text_check_service
     }
 
-    fn render_error_context(name: &str, e: impl std::fmt::Display) -> String {
+    fn template_failure_context(name: &str, e: impl std::fmt::Display) -> String {
         format!("Failed to render {name}: {e}")
     }
 
@@ -110,7 +110,7 @@ impl AppState {
         let view_only = self.game_view_query.autoplay_holds(game_id);
         NarrationLogTemplate::new(&window.entries, window.retrigger_allowed, view_only)
             .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("story log", e)))
+            .map_err(|e| EngineError::Template(Self::template_failure_context("story log", e)))
     }
 
     pub fn render_visual_sidebar(&self, game_id: GameId) -> Result<String> {
@@ -133,7 +133,7 @@ impl AppState {
         let template = VisualSidebarTemplate::new(vm);
         template
             .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("visual sidebar", e)))
+            .map_err(|e| EngineError::Template(Self::template_failure_context("visual sidebar", e)))
     }
 
     pub fn render_options_dock(&self, game_id: GameId) -> Result<String> {
@@ -148,7 +148,7 @@ impl AppState {
         let template = OptionsDockTemplate::new(vm);
         template
             .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("options dock", e)))
+            .map_err(|e| EngineError::Template(Self::template_failure_context("options dock", e)))
     }
 
     pub fn render_character_headshots(&self, game_id: GameId) -> Result<String> {
@@ -164,7 +164,7 @@ impl AppState {
 
         let template = CharacterHeadshotsTemplate::new(character_portraits);
         template.render().map_err(|e| {
-            EngineError::Template(Self::render_error_context("character headshots", e))
+            EngineError::Template(Self::template_failure_context("character headshots", e))
         })
     }
 
@@ -177,7 +177,7 @@ impl AppState {
         let template = LlmMessagesTemplate::new(&messages);
         template
             .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("LLM messages", e)))
+            .map_err(|e| EngineError::Template(Self::template_failure_context("LLM messages", e)))
     }
 
     /// `None` when no record has this id: retention removes the oldest records.
@@ -191,7 +191,7 @@ impl AppState {
                 LlmMessageRecordTemplate::new(&message)
                     .render()
                     .map_err(|e| {
-                        EngineError::Template(Self::render_error_context("LLM message", e))
+                        EngineError::Template(Self::template_failure_context("LLM message", e))
                     })
             })
             .transpose()

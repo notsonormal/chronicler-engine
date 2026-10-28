@@ -38,15 +38,6 @@ impl ApplicationError {
             Self::Engine(error) => error,
         }
     }
-
-    /// Returns true for validation errors and `EngineError::WorldHasGames`.
-    /// `WorldHasGames` surfaces as user-actionable (e.g. cannot delete world with active games).
-    pub fn is_user_displayable(&self) -> bool {
-        matches!(
-            self,
-            Self::Validation(_) | Self::Engine(EngineError::WorldHasGames { .. })
-        )
-    }
 }
 
 impl std::fmt::Display for ApplicationError {

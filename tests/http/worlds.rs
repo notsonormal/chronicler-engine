@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure.
+//! HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure, and the Edit form of an unknown World.
 
 use std::sync::Arc;
 
@@ -550,6 +550,34 @@ async fn test_world_delete_storage_failure_renders_error_fragment_http() {
     assert!(
         body.contains("error-message") && body.contains("delete_world failure"),
         "the error fragment must name the storage failure: {body:?}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.14
+#[tokio::test]
+async fn test_unknown_world_edit_form_answers_not_found_and_opens_no_dialog_http() {
+    let (app, _state) = TestAppBuilder::default_test().build_with_state();
+
+    let request = http::Request::builder()
+        .uri("/worlds/does-not-exist/edit")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp = tower::util::ServiceExt::oneshot(app.clone(), request)
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::NOT_FOUND,
+        "a gone record answers non-2xx, so no dialog opens"
+    );
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("does-not-exist") && body.contains("not found"),
+        "the body names the unknown World: {body}"
+    );
+    assert!(
+        !body.contains("<form"),
+        "an unknown World must not render an edit form: {body}"
     );
 }
 

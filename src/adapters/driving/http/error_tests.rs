@@ -17,10 +17,10 @@ async fn validation_into_response_returns_400_with_message() {
 }
 
 #[tokio::test]
-async fn engine_displayable_into_response_returns_500_with_engine_message() {
+async fn engine_displayable_into_response_returns_400_with_engine_message() {
     let resp =
         ApplicationError::Engine(EngineError::WorldHasGames { game_count: 1 }).into_response();
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let body = body_text(resp).await;
     assert!(!body.contains("Internal Server Error"), "body: {body}");
     assert!(
