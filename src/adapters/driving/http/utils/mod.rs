@@ -2,6 +2,7 @@
 //! HTTP utility modules.
 
 pub mod action_layers;
+pub mod answer_words;
 pub mod current_game;
 pub mod error;
 pub mod fragment;

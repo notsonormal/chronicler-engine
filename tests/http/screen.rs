@@ -8,7 +8,9 @@ use axum::http::{Request, StatusCode};
 use serde_json::Value;
 use tower::util::ServiceExt;
 
+use chronicler_engine::adapters::driving::http::utils::answer_words::REFUSAL_WORDS;
 use chronicler_engine::domain::model::agent::Role;
+use chronicler_engine::domain::model::settings::{NarrativePerspective, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{active_game_of, ScriptedModel, TestAppBuilder};
 
@@ -16,11 +18,12 @@ use crate::support::app_wiring::{app_with_model, two_game_app};
 use crate::support::http_assertions::assert_still_thinking;
 use crate::support::http_fixtures::story_of;
 use crate::support::http_requests::{
-    post_action, post_form, post_form_with_headers, response_body, wait_settled,
+    post_action, post_form, post_form_with_headers, response_body, wait_for_jobs, wait_settled,
 };
 
 const GAME_HEADER: &str = "x-chronicler-game";
 const REVISION_HEADER: &str = "x-revision";
+const STALE_GAME_LINE: &str = "The page showed a Game that is no longer active.";
 
 async fn stamp_of_changes(app: &axum::Router) -> String {
     let request = Request::builder()
@@ -346,6 +349,14 @@ async fn test_a_busy_refusal_answers_409_with_the_wait_line_and_writes_nothing()
     );
     let body = response_body(refused).await;
     assert_still_thinking(&body);
+    assert_eq!(
+        error_lines_of("the busy refusal", &body),
+        [
+            "The Game is busy, so the Action was not sent.",
+            "Still thinking..."
+        ],
+        "the first line says what was not done, the second is the engine's line"
+    );
     assert!(
         !body.contains("<span"),
         "the refusal carries no status markup: {body}"
@@ -428,9 +439,14 @@ async fn test_a_stale_game_header_is_refused_on_each_game_bound_route() {
             "POST {route}: the refusal names its kind"
         );
         let text = response_body(response).await;
+        let lines = error_lines_of(route, &text);
         assert!(
-            text.contains("The active Game changed"),
+            lines[0].starts_with("The active Game changed, so "),
             "POST {route} says why: {text}"
+        );
+        assert_eq!(
+            lines[1], STALE_GAME_LINE,
+            "POST {route} carries the engine's line"
         );
         assert_eq!(
             stamp_of_changes(&app).await,
@@ -650,4 +666,245 @@ async fn test_each_kind_of_failed_action_answers_its_status_and_one_body() {
     );
     let text = error_text_of("an engine failure", &response_body(failed).await);
     assert!(text.contains("preset save failure"), "{text}");
+}
+
+/// The lines of one error body: the sentence, then the engine's own text.
+fn error_lines_of(label: &str, body: &str) -> Vec<String> {
+    error_text_of(label, body)
+        .split('\n')
+        .map(str::to_string)
+        .collect()
+}
+
+/// What the words table says was not done on one route, as a sentence part.
+fn words_of(route: &str) -> String {
+    let row = REFUSAL_WORDS
+        .iter()
+        .find(|row| row.route == route)
+        .unwrap_or_else(|| panic!("the words table has a row for {route}"));
+    format!("the {} {}", row.noun, row.predicate)
+}
+
+// [docs/specs/screen.md] SCENARIO: 45.17
+#[tokio::test]
+async fn test_a_refusal_names_what_was_not_done() {
+    let (app, state, _storage, second) = two_game_app();
+    let message = story_of(&state).last().expect("a story").id;
+    let stale = second.to_string();
+    for (route, uri, body) in game_bound_rows(message) {
+        let response =
+            post_form_with_headers(&app, &uri, body, &[(GAME_HEADER, stale.as_str())]).await;
+        assert_eq!(response.status(), StatusCode::CONFLICT, "stale {route}");
+        assert_eq!(
+            error_lines_of(route, &response_body(response).await),
+            [
+                format!("The active Game changed, so {}.", words_of(route)),
+                STALE_GAME_LINE.to_string()
+            ],
+            "stale {route}"
+        );
+    }
+
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let hold = model.hold(Role::Narrator);
+    let (busy_app, busy_state) = app_with_model(Arc::clone(&model));
+    assert!(post_action(&busy_app, "look").await.status().is_success());
+    assert!(hold.wait_started(1000), "the Job reaches its narrator call");
+    let busy_message = story_of(&busy_state).last().expect("a story").id;
+    let busy_rows = [
+        ("/action", "/action".to_string(), "command=listen"),
+        (
+            "/action/check",
+            "/action/check".to_string(),
+            "command=/options",
+        ),
+        (
+            "/action/confirm",
+            "/action/confirm".to_string(),
+            "command=listen",
+        ),
+        ("/autoplay", "/autoplay".to_string(), "cycles=1"),
+        ("/swipe/new", "/swipe/new".to_string(), ""),
+        ("/retrigger", "/retrigger".to_string(), ""),
+        (
+            "/history/:id",
+            format!("/history/{busy_message}"),
+            "text=Edited",
+        ),
+        ("/history/delete", "/history/delete".to_string(), ""),
+        (
+            "/message/:id/swipe/:index",
+            format!("/message/{busy_message}/swipe/0"),
+            "",
+        ),
+    ];
+    for (route, uri, body) in busy_rows {
+        let response = post_form(&busy_app, &uri, body).await;
+        assert_eq!(response.status(), StatusCode::CONFLICT, "busy {route}");
+        assert_eq!(
+            error_lines_of(route, &response_body(response).await),
+            [
+                format!("The Game is busy, so {}.", words_of(route)),
+                "Still thinking...".to_string()
+            ],
+            "busy {route}"
+        );
+    }
+    hold.release();
+    assert!(wait_settled(&busy_state, 2000).await, "the held Job ends");
+
+    let (run_app, run_state, _storage, _second) = two_game_app();
+    let game = active_game_of(&run_state);
+    let pause = run_state.job_deps.pause.hold(game);
+    assert!(
+        post_form(&run_app, "/autoplay", "cycles=2")
+            .await
+            .status()
+            .is_success()
+    );
+    assert!(
+        pause.wait_paused(5000),
+        "the run reaches its pause before its first Job"
+    );
+    let before = run_state
+        .game_catalogue
+        .active_game()
+        .expect("the Game reads back")
+        .expect("the active Game exists");
+    let other_mode = match before.narrator_mode {
+        NarratorMode::Novel => NarratorMode::InteractiveFiction,
+        NarratorMode::InteractiveFiction => NarratorMode::Novel,
+    };
+    let other_perspective = match before.narrative_perspective {
+        NarrativePerspective::Second => NarrativePerspective::Third,
+        NarrativePerspective::Third => NarrativePerspective::Second,
+    };
+    let config_writes = [
+        (
+            "/games/:id/mode",
+            format!("narrator_mode={}", other_mode.as_str()),
+        ),
+        (
+            "/games/:id/posture",
+            format!(
+                "narrative_perspective={}&narrative_tense={}",
+                other_perspective.as_str(),
+                before.narrative_tense.as_str()
+            ),
+        ),
+        (
+            "/games/:id/presets",
+            format!(
+                "system_preset_id={}&quantifier_preset_id={}&impersonate_preset_id={}&options_preset_id={}",
+                before.active_system_prompt_preset_id,
+                before.active_quantifier_prompt_preset_id,
+                before.active_impersonate_prompt_preset_id,
+                before.active_options_prompt_preset_id,
+            ),
+        ),
+    ];
+    for (route, body) in config_writes {
+        let uri = route.replace(":id", &game.0.to_string());
+        let response = post_form(&run_app, &uri, &body).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::CONFLICT,
+            "{route} while the run holds the Game"
+        );
+        assert_eq!(
+            error_lines_of(route, &response_body(response).await),
+            [
+                "The Game is busy, so the change was not saved.".to_string(),
+                "Still thinking...".to_string()
+            ],
+            "{route} while the run holds the Game"
+        );
+    }
+    post_form(&run_app, "/status/reset-busy", "").await;
+    pause.release();
+    assert!(wait_for_jobs(&run_state, 5000).await, "the run ends");
+}
+
+// [docs/specs/screen.md] SCENARIO: 45.19
+#[tokio::test]
+async fn test_the_first_line_of_a_failed_answer_says_what_was_not_done() {
+    let (app, state, _storage, _second) = two_game_app();
+    let active = active_game_of(&state).0;
+
+    let invalid_value = post_form(&app, &format!("/games/{active}/rename"), "display_name=").await;
+    assert_eq!(invalid_value.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        error_lines_of("an invalid value", &response_body(invalid_value).await),
+        ["The Game was not renamed: Display name cannot be empty."],
+        "an invalid answer keeps the engine's message in its one line"
+    );
+
+    let active_game = state
+        .game_catalogue
+        .game(chronicler_engine::domain::model::game::GameId(active))
+        .expect("read the Game")
+        .expect("the active Game exists");
+    let row_button = post_form(&app, &format!("/games/{active}/delete"), "").await;
+    assert_eq!(row_button.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        error_lines_of("a row button", &response_body(row_button).await),
+        [format!(
+            "The Game &quot;{}&quot; was not deleted: Cannot delete the active game.",
+            active_game.display_name
+        )],
+        "a row button handler reads the name of its item on its failure path"
+    );
+
+    let message_action = post_form(&app, "/history/999999", "text=Changed.").await;
+    assert_eq!(message_action.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        error_lines_of("a Message action", &response_body(message_action).await),
+        ["The edit was not saved: Message not found."],
+        "a Message action names no item"
+    );
+
+    let (status, body) = get_status_and_body(&app, "/fragment/games/999999/rename").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        error_lines_of("an opener", &body),
+        ["The form was not opened: Game not found."]
+    );
+
+    let (failing_storage, failures) =
+        chronicler_engine::test_support::empty_sqlite_storage().with_test_failures();
+    let (failing_app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::new(failing_storage))
+        .build_with_state();
+    failures.set(
+        chronicler_engine::adapters::driven::storage::StorageCall::SavePreset,
+        chronicler_engine::adapters::driven::storage::TestOverride::internal("preset save failure"),
+    );
+    let failed = post_form(
+        &failing_app,
+        "/prompt-presets",
+        "name=Fail+%3Cb%3E&instructions=Will+fail.&preset_type=system",
+    )
+    .await;
+    assert_eq!(failed.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let lines = error_lines_of("a failure", &response_body(failed).await);
+    assert_eq!(
+        lines[0], "The preset &quot;Fail &lt;b&gt;&quot; was not saved.",
+        "a failure says what was not done, with the item as escaped text"
+    );
+    assert!(
+        lines[1].contains("preset save failure"),
+        "the engine's text is the second line: {lines:?}"
+    );
+
+    let rejected = post_form(&app, "/games/abc/rename", "display_name=Renamed").await;
+    assert_eq!(rejected.status(), StatusCode::BAD_REQUEST);
+    let lines = error_lines_of("a rejection", &response_body(rejected).await);
+    assert_eq!(
+        lines[0], "The Game was not renamed.",
+        "an answer that no constructor built also gets the words of its route"
+    );
+    assert!(
+        lines[1].contains("abc"),
+        "the text of the rejection is the second line: {lines:?}"
+    );
 }

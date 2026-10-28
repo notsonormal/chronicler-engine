@@ -6,7 +6,7 @@ use axum::http::{HeaderValue, Method};
 use axum::middleware::Next;
 use axum::response::Response;
 
-use chronicler_engine::adapters::driving::http::utils::error::error_fragment;
+use chronicler_engine::adapters::driving::http::utils::answer_words::RefusalKind;
 use chronicler_engine::adapters::driving::http::utils::response::refused;
 
 /// The routes of the engine whose handler acts on the active Game, as the router
@@ -96,7 +96,7 @@ impl StubActionLayers {
             .or(read_changes().1);
         let stale = named.is_some_and(|named| Some(named) != active.map(|game| game.to_string()));
         let mut response = if stale && is_game_bound(&path) {
-            refused("game-changed", error_fragment("The active Game changed"))
+            refused(RefusalKind::GameChanged)
         } else {
             next.run(request).await
         };

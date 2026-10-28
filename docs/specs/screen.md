@@ -48,7 +48,8 @@ And the X-Revision of the answer equals the `server:revision` that GET /changes 
 Given a Game whose Job is running, held inside its narrator call
 When the client POST /action with command="listen"
 Then the response status is 409
-And the response body carries "Still thinking..."
+And the first line of the response body is "The Game is busy, so the Action was not sent."
+And the second line of the response body is "Still thinking..."
 And the response body holds no status markup
 And the header X-Refusal is "busy"
 And the `server:revision` of GET /changes is the same before and after the request
@@ -60,7 +61,8 @@ And the `server:revision` of GET /changes is the same before and after the reque
 Given an active Game and a second saved Game
 When the client sends each Game-bound POST route with the header X-Chronicler-Game set to the id of the second Game
 Then each response status is 409
-And each response body carries "The active Game changed"
+And the first line of each response body begins "The active Game changed, so "
+And the second line of each response body is "The page showed a Game that is no longer active."
 And the header X-Refusal of each answer is "game-changed"
 And each answer carries X-Revision
 And the `server:revision` of GET /changes is the same before and after each request
@@ -194,12 +196,12 @@ These properties hold across every `POST` route and are observable through HTTP.
 Drift indicates a regression even if all scenarios pass.
 
 - **I.1** The answer carries `X-Revision: <server>:<revision>`. `<server>` and `<revision>` are the `server` and the `revision` of `GET /changes` (`docs/specs/changes.md`), read after the handler has ended. A success, a refusal and a failure all carry it. An action that wrote nothing carries the current stamp.
-- **I.2** A Game that a Job or a run holds refuses a write with `409` and the line "Still thinking...". The answer carries `X-Refusal: busy`. The refusal writes nothing.
+- **I.2** A Game that a Job or a run holds refuses a write with `409`. The first line of the body is "The Game is busy, so <the words of the route>." and the second line is "Still thinking...". The answer carries `X-Refusal: busy`. The refusal writes nothing.
 
 These properties hold across every Game-bound route (the endpoints above) and are observable through HTTP.
 
 - **I.3** A request without the `X-Chronicler-Game` header acts on the active Game.
-- **I.4** A request whose `X-Chronicler-Game` header does not name the active Game is refused with `409` and the line "The active Game changed". The answer carries `X-Refusal: game-changed`. The refusal writes nothing, and it comes before the handler runs.
+- **I.4** A request whose `X-Chronicler-Game` header does not name the active Game is refused with `409`. The first line of the body is "The active Game changed, so <the words of the route>." and the second line is "The page showed a Game that is no longer active.". The answer carries `X-Refusal: game-changed`. The refusal writes nothing, and it comes before the handler runs.
 - **I.5** A `GET` route does not read the `X-Chronicler-Game` header.
 
 #### Scenario 45.15: A games_page that is not a whole number of at least 1 answers 400 and renders nothing
@@ -247,4 +249,57 @@ Then the response is a 500 that holds the text of the failure
 
 And each body is one `error-message` element
 And no body starts with "Error: "
+```
+
+#### Scenario 45.17: A refusal names what was not done
+
+```gherkin
+Given an engine with an active Game and a second saved Game
+When the client sends each Game-bound POST route with the header X-Chronicler-Game set to the id of the second Game
+Then each response status is 409
+And the first line of each body is "The active Game changed, so <the words of the route>."
+And the second line of each body is "The page showed a Game that is no longer active."
+
+Given a Job holds the Game, inside its narrator call
+When the client POST /action, /action/confirm, /autoplay, /swipe/new, /retrigger, /history/:id, /history/delete and /message/:id/swipe/:index
+Then each response status is 409
+And the first line of each body is "The Game is busy, so <the words of the route>."
+And the second line of each body is "Still thinking..."
+
+Given an Autoplay run holds the Game
+When the client POST /games/:id/mode, /games/:id/posture and /games/:id/presets for that Game
+Then each response status is 409
+And the first line of each body is "The Game is busy, so the change was not saved."
+And the second line of each body is "Still thinking..."
+```
+
+#### Scenario 45.19: The first line of a failed answer says what was not done
+
+```gherkin
+Given an engine with an active Game and a second saved Game
+When the client POST /games/:id/rename with an empty name
+Then the response is a 400
+And the body is one line, "The Game was not renamed: Display name cannot be empty."
+
+When the client POST /games/:id/delete for the active Game
+Then the response is a 400
+And the first line of the body is "The Game "<its Display name>" was not deleted: Cannot delete the active game."
+
+When the client POST /history/:id for a Message that does not exist
+Then the first line of the body is "The edit was not saved: Message not found."
+And the sentence names no item
+
+When the client GET /fragment/games/:id/rename for a Game that does not exist
+Then the response is a 404
+And the first line of the body is "The form was not opened: Game not found."
+
+When the client POST /prompt-presets with the name "Fail <b>" and the storage fails on save
+Then the response is a 500
+And the first line of the body is `The preset "Fail <b>" was not saved.`, with the name as escaped text
+And the second line of the body holds the text of the failure
+
+When the client POST /games/abc/rename
+Then the response is a 400
+And the first line of the body is "The Game was not renamed."
+And the second line of the body holds the text of the rejection
 ```

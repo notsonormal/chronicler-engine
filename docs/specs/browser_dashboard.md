@@ -462,7 +462,7 @@ When the client saves and the engine accepts the save
 Then the edit dialog is closed and its body is empty
 ```
 
-A save that the engine refuses keeps the dialog open: see Scenarios 16.29, 16.35 and 40.6.
+A save that the engine refuses keeps the dialog open: see Scenarios 16.29 and 16.35.
 
 #### Scenario 16.49: An answer that comes from outside never replaces the form of the open dialog
 

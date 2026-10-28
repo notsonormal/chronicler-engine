@@ -20,6 +20,7 @@ use crate::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GameRenameFormTemplate, GamesPagerView, GamesPanelTemplate,
     NewGameFormTemplate, PersonaRowView,
 };
+use crate::adapters::driving::http::utils::answer_words::naming_item;
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::adapters::driving::http::utils::error::{
@@ -145,10 +146,24 @@ pub async fn create_game_handler(
     Ok(ok(""))
 }
 
+/// The display name of the Game that a failed row button named, read on the failure
+/// path only. A Game that is gone or unreadable has no name to give.
+fn display_name_of_game(state: &AppState, id: u64) -> Option<String> {
+    state
+        .game_catalogue
+        .game(GameId(id))
+        .ok()
+        .flatten()
+        .map(|game| game.display_name)
+}
+
 pub async fn switch_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
     match state.game_catalogue.switch_game(id) {
         Ok(()) => ok(""),
-        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
+        Err(e) => naming_item(
+            answer_for_error(e, AnswerPolicy::EngineText),
+            display_name_of_game(&state, id),
+        ),
     }
 }
 
@@ -166,12 +181,14 @@ pub async fn rename_game_handler(
     Ok(ok(""))
 }
 
-pub async fn delete_game_handler(
-    State(state): State<AppState>,
-    Path(id): Path<u64>,
-) -> Result<Response, ApplicationError> {
-    state.game_catalogue.delete_game(id)?;
-    Ok(ok(""))
+pub async fn delete_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
+    match state.game_catalogue.delete_game(id) {
+        Ok(()) => ok(""),
+        Err(e) => naming_item(
+            answer_for_error(e, AnswerPolicy::GenericText),
+            display_name_of_game(&state, id),
+        ),
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]

@@ -241,46 +241,6 @@ async fn check_the_test_result_of_a_saved_connection_opens_in_the_dialog_and_sur
     );
 }
 
-// [docs/specs/browser_settings.md] SCENARIO: 40.6
-async fn check_a_busy_refused_connection_save_shows_its_refusal_in_the_dialog(
-    page: playwright_rs::Page,
-    stub: StubServer,
-) {
-    stub.save_handle()
-        .set_connection_saves_refused_as_busy(true);
-    open_settings(&page).await;
-    click_and_settle(&page, ".connection-add button", "#edit-dialog-body").await;
-    page.locator("#conn_name")
-        .await
-        .fill("Typed while Autoplay runs", None)
-        .await
-        .unwrap();
-
-    page.evaluate::<(), ()>(
-        "() => document.querySelector('#edit-dialog form').requestSubmit()",
-        None,
-    )
-    .await
-    .unwrap();
-
-    let slot = r#"#edit-dialog [data-error-slot="connection-form"]"#;
-    wait_for_error_disclosure(&page, slot, "a busy refusal shows in the form's own slot").await;
-    let (_, message, _) = read_error_disclosure(&page, slot).await;
-    assert!(
-        message.contains("The Game is busy"),
-        "the refusal names the busy Game, got {message:?}"
-    );
-    assert!(
-        dialog_is_open(&page).await,
-        "a refused save keeps the dialog open"
-    );
-    let typed = page
-        .evaluate::<(), String>("() => document.getElementById('conn_name').value", None)
-        .await
-        .unwrap();
-    assert_eq!(typed, "Typed while Autoplay runs", "the draft stays");
-}
-
 // [docs/specs/browser_settings.md] SCENARIO: 40.4
 async fn check_a_saved_text_check_change_shows_the_saved_line(
     page: playwright_rs::Page,
@@ -340,12 +300,6 @@ async fn run_settings_checks() {
         .run(
             StubActionOutcome::Pending,
             check_the_test_result_of_a_saved_connection_opens_in_the_dialog_and_survives_a_load,
-        )
-        .await;
-    runner
-        .run(
-            StubActionOutcome::Pending,
-            check_a_busy_refused_connection_save_shows_its_refusal_in_the_dialog,
         )
         .await;
     runner.finish().await;

@@ -263,14 +263,6 @@ impl StubSaveHandle {
             .store(succeeds, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// A connection Add or Edit answers the busy refusal, the way the engine
-    /// refuses a Settings save while Autoplay holds the Game.
-    pub fn set_connection_saves_refused_as_busy(&self, refused: bool) {
-        self.state
-            .connection_saves_refused_as_busy
-            .store(refused, std::sync::atomic::Ordering::SeqCst);
-    }
-
     /// A role save answers 200 but the engine keeps the value it had, so the next
     /// render differs from the player's choice.
     pub fn set_role_saves_keep_stored_value(&self, keeps: bool) {

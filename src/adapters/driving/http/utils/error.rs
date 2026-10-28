@@ -2,11 +2,11 @@
 //! Error rendering helpers for HTTP fragments.
 
 use axum::body::Body;
+use axum::http::StatusCode;
 use axum::response::Response;
 
-use crate::adapters::driving::http::utils::response::{
-    bad_request, html_escape, internal_error, not_found, refused,
-};
+use crate::adapters::driving::http::utils::answer_words::{ErrorAnswer, RefusalKind, answer_response};
+use crate::adapters::driving::http::utils::response::{html_escape, refused};
 use crate::application::errors::ApplicationError;
 use crate::application::generation::gate::Refusal;
 use crate::error::EngineError;
@@ -38,21 +38,25 @@ pub fn raw_error_detail(raw: &str) -> String {
     format!("<pre class=\"error-detail-raw\">{}</pre>", html_escape(raw))
 }
 
-/// A non-2xx so htmx never swaps the element the failure describes.
-pub(crate) fn action_refusal_response(message: impl std::fmt::Display) -> Response<Body> {
-    bad_request(error_fragment(message))
+/// An invalid answer (`400`): a value or a record that the request named and the engine
+/// cannot use. The status is non-2xx, so htmx never swaps the element the failure describes.
+pub fn action_invalid_response(message: impl std::fmt::Display) -> Response<Body> {
+    answer_response(StatusCode::BAD_REQUEST, ErrorAnswer::invalid(message))
 }
 
-/// A 404 for a dialog that names a record the engine does not hold; the opener
-/// reports it in its own slot.
-pub(crate) fn action_not_found_response(message: impl std::fmt::Display) -> Response<Body> {
-    not_found(error_fragment(message))
+/// A 404 for a dialog that names a record the engine does not hold. It is an invalid
+/// answer like a `400`.
+pub fn action_not_found_response(message: impl std::fmt::Display) -> Response<Body> {
+    answer_response(StatusCode::NOT_FOUND, ErrorAnswer::invalid(message))
 }
 
 /// A 500 for an error the request cannot correct; htmx still never swaps the
 /// element the failure describes.
-pub(crate) fn action_failure_response(message: impl std::fmt::Display) -> Response<Body> {
-    internal_error(error_fragment(message))
+pub fn action_failure_response(detail: impl std::fmt::Display) -> Response<Body> {
+    answer_response(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        ErrorAnswer::failed(detail),
+    )
 }
 
 /// How `answer_for_error` words and classifies an engine error.
@@ -82,15 +86,11 @@ fn short_reason(error: &EngineError) -> String {
 /// for a failure.
 pub(crate) fn answer_for_error(error: ApplicationError, policy: AnswerPolicy) -> Response<Body> {
     match error {
-        ApplicationError::Validation(message) => bad_request(error_fragment(message)),
-        ApplicationError::Refused(Refusal::StillThinking) => {
-            refused("busy", error_fragment(Refusal::StillThinking.line()))
-        }
-        ApplicationError::Refused(Refusal::BadRequest(message)) => {
-            bad_request(error_fragment(message))
-        }
+        ApplicationError::Validation(message) => action_invalid_response(message),
+        ApplicationError::Refused(Refusal::StillThinking) => refused(RefusalKind::Busy),
+        ApplicationError::Refused(Refusal::BadRequest(message)) => action_invalid_response(message),
         ApplicationError::Refused(Refusal::Failed(failure)) => {
-            internal_error(error_fragment(failure.line()))
+            action_failure_response(failure.line())
         }
         ApplicationError::Engine(engine) => {
             let invalid = match &engine {
@@ -107,9 +107,9 @@ pub(crate) fn answer_for_error(error: ApplicationError, policy: AnswerPolicy) ->
                 AnswerPolicy::GenericText => GENERIC_FAILURE_TEXT.to_string(),
             };
             if invalid {
-                bad_request(error_fragment(text))
+                action_invalid_response(text)
             } else {
-                internal_error(error_fragment(text))
+                action_failure_response(text)
             }
         }
     }

@@ -19,6 +19,7 @@ use crate::adapters::driving::http::prompt_presets;
 use crate::adapters::driving::http::screen;
 use crate::adapters::driving::http::settings;
 use crate::adapters::driving::http::utils::action_layers::{refuse_stale_game, stamp_action_answers};
+use crate::adapters::driving::http::utils::answer_words::describe_answers;
 use crate::adapters::driving::http::worlds;
 
 /// The routes whose handler acts on the active Game. One layer checks the Game
@@ -245,6 +246,7 @@ pub fn build_router(app_state: AppState) -> Router {
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/data", ServeDir::new("data"))
         .fallback_service(ServeDir::new("assets"))
+        .layer(middleware::from_fn(describe_answers))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
             stamp_action_answers,

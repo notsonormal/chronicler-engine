@@ -236,7 +236,7 @@ async fn test_prompt_preset_add_form_of_an_unknown_type_is_refused() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Invalid preset type</div>"
+        "<div class=\"error-message\">The form was not opened: Invalid preset type.</div>"
     );
 }
 
@@ -298,7 +298,10 @@ async fn test_prompt_preset_edit_form_missing_returns_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The form was not opened: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.6
@@ -315,7 +318,7 @@ async fn test_prompt_preset_edit_form_default_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Cannot edit default presets</div>"
+        "<div class=\"error-message\">The form was not opened: Cannot edit default presets.</div>"
     );
 }
 
@@ -359,7 +362,10 @@ async fn test_prompt_preset_view_form_missing_returns_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The form was not opened: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.9
@@ -414,7 +420,7 @@ async fn test_create_preset_invalid_type_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Invalid preset type</div>"
+        "<div class=\"error-message\">The preset was not saved: Invalid preset type.</div>"
     );
 }
 
@@ -498,7 +504,10 @@ async fn test_update_missing_preset_returns_error() {
     .await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The preset was not saved: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.16
@@ -550,7 +559,7 @@ async fn test_update_default_preset_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Cannot edit default presets</div>"
+        "<div class=\"error-message\">The preset &quot;Default Test System&quot; was not saved: Cannot edit default presets.</div>"
     );
 }
 
@@ -598,7 +607,10 @@ async fn test_delete_missing_preset_returns_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The preset was not deleted: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.20
@@ -615,7 +627,7 @@ async fn test_delete_default_preset_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Cannot delete default presets</div>"
+        "<div class=\"error-message\">The preset &quot;Default Test System&quot; was not deleted: Cannot delete default presets.</div>"
     );
 }
 
@@ -789,7 +801,7 @@ async fn test_delete_refuses_a_preset_that_a_game_uses_and_names_the_count() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         body_text(response).await,
-        "<div class=\"error-message\">Cannot delete preset used by 1 game</div>"
+        "<div class=\"error-message\">The preset &quot;Game Ref&quot; was not deleted: Cannot delete preset used by 1 game.</div>"
     );
 
     let active = games.iter().find(|game| game.id != other_id).unwrap();
@@ -802,7 +814,7 @@ async fn test_delete_refuses_a_preset_that_a_game_uses_and_names_the_count() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         body_text(response).await,
-        "<div class=\"error-message\">Cannot delete preset used by 2 games</div>"
+        "<div class=\"error-message\">The preset &quot;Game Ref&quot; was not deleted: Cannot delete preset used by 2 games.</div>"
     );
     assert!(
         state
@@ -854,7 +866,10 @@ async fn test_duplicate_missing_preset_returns_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The preset was not duplicated: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.23
@@ -908,7 +923,10 @@ async fn test_activate_missing_preset_returns_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The preset was not activated: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.26
@@ -943,7 +961,7 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Preset not allowed for novel mode</div>"
+        "<div class=\"error-message\">The preset &quot;IF Only&quot; was not activated: Preset not allowed for novel mode.</div>"
     );
 }
 

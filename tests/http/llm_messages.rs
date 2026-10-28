@@ -311,6 +311,6 @@ async fn test_llm_message_record_of_a_missing_id_is_a_404_http() {
     let body = response_body(response).await;
     assert_eq!(
         body,
-        r#"<div class="error-message">LLM message not found</div>"#
+        r#"<div class="error-message">The form was not opened: LLM message not found.</div>"#
     );
 }

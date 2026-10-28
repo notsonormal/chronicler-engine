@@ -72,6 +72,9 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 
 | Rule | Description | Source |
 |------|-------------|--------|
+| post routes have words | Fails for a `post` route of the router that has no row in the words table. | `tests/infrastructure/guardrails/answer_words.rs:15` |
+| words rows are router routes | Fails for a row of the words table that is no route of the router. | `tests/infrastructure/guardrails/answer_words.rs:46` |
+| action paths have words | Fails for an `hx-get` or `hx-post` path of a template or the shell that matches no row. | `tests/infrastructure/guardrails/answer_words.rs:97` |
 | enum variant docs | Requires every enum variant to have a `///` doc unless the enum is marked `/// [TRIVIAL_ENUM]`. | `tests/infrastructure/guardrails/enums.rs:119` |
 | free fn location | Restricts top-level free functions to allowlisted category folders or exempt paths. | `tests/infrastructure/guardrails/free_fn.rs:31` |
 | inherent impl locality | Checks all files in `src/` for inherent impls that violate the module-per-type rule. | `tests/infrastructure/guardrails/inherent_impl.rs:15` |

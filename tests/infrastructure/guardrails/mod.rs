@@ -1,5 +1,6 @@
 //! Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
 
+pub mod answer_words;
 pub mod enums;
 pub mod free_fn;
 pub mod inherent_impl;
@@ -18,6 +19,7 @@ pub mod walkers;
 #[path = "../../test_utils/screen_part_table.rs"]
 mod screen_part_table;
 
+pub use answer_words::*;
 pub use inherent_impl::*;
 pub use enums::*;
 pub use free_fn::*;
@@ -31,6 +33,9 @@ pub use location::*;
 pub use unit_test_allowlist::*;
 pub use walker_rows::*;
 pub use walkers::*;
+
+#[cfg(test)]
+mod answer_words_tests;
 
 #[cfg(test)]
 mod inherent_impl_tests;
@@ -796,4 +801,44 @@ fn guardrails_unit_test_allowlist() {
     let files = src_snapshot();
     let errors = check_unit_test_allowlist(&files, LEGACY_UNIT_TEST_FILES, SEAM_CONTRACT_FILES);
     assert_violations(&errors, "legacy unit-test allowlist");
+}
+
+fn routes_with_words() -> Vec<&'static str> {
+    chronicler_engine::adapters::driving::http::utils::answer_words::REFUSAL_WORDS
+        .iter()
+        .map(|row| row.route)
+        .collect()
+}
+
+#[test]
+fn guardrails_post_routes_have_words() {
+    let path = "src/adapters/driving/http/builders/router.rs";
+    let source = std::fs::read_to_string(path).unwrap();
+    let errors = check_post_routes_have_words(path, &source, &routes_with_words());
+    assert_violations(&errors, "every post route has a row in the words table");
+}
+
+#[test]
+fn guardrails_words_rows_are_router_routes() {
+    let router = std::fs::read_to_string("src/adapters/driving/http/builders/router.rs").unwrap();
+    let words_path = "src/adapters/driving/http/utils/answer_words.rs";
+    let words = std::fs::read_to_string(words_path).unwrap();
+    let errors = check_words_rows_are_router_routes(&router, words_path, &words);
+    assert_violations(
+        &errors,
+        "every row of the words table is a route of the router",
+    );
+}
+
+#[test]
+fn guardrails_action_paths_have_words() {
+    let rows = routes_with_words();
+    let errors: Vec<Violation> = template_sources()
+        .iter()
+        .flat_map(|(path, content)| check_action_paths_have_words(path, content, &rows))
+        .collect();
+    assert_violations(
+        &errors,
+        "every hx-get and hx-post path of a template matches a row of the words table",
+    );
 }

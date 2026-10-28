@@ -17,8 +17,8 @@ use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::error_fragment;
-use crate::adapters::driving::http::utils::response::{internal_error, ok};
+use crate::adapters::driving::http::utils::error::action_failure_response;
+use crate::adapters::driving::http::utils::response::ok;
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
@@ -96,7 +96,7 @@ pub async fn action_check_handler(
             let template = TextCheckPreviewTemplate::from_check_result(&check_result);
             match template.render() {
                 Ok(html) => ok(html),
-                Err(e) => internal_error(error_fragment(format!("Template error: {e}"))),
+                Err(e) => action_failure_response(format!("Template error: {e}")),
             }
         }
         None => dispatch_action(&state, game_id, command),

@@ -66,13 +66,3 @@ When the client presses Escape
 Then the edit dialog is closed
 And the Test control has keyboard focus
 ```
-
-#### Scenario 40.6: A connection save that the busy Game refuses shows its refusal in the dialog
-
-```gherkin
-Given the edit dialog is open with the connection Add form, and a typed name
-And the Game is busy, so the engine refuses a Settings save
-When the client saves
-Then the form shows an inline error in its own slot that says the Game is busy
-And the edit dialog is still open, and the name keeps the typed value
-```

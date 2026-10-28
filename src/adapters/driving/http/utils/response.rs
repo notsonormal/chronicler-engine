@@ -3,6 +3,8 @@
 
 use axum::{body::Body, http::StatusCode, response::Response};
 
+use super::answer_words::{ErrorAnswer, RefusalKind, answer_response};
+
 /// The header that names why a `409` refused a request. The client finds a refusal by
 /// its status and reads this header only to choose the words of its report.
 pub const REFUSAL_HEADER: &str = "x-refusal";
@@ -23,18 +25,10 @@ pub fn bad_request(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::BAD_REQUEST, body)
 }
 
-/// A request the engine refused and did nothing for. `kind` is the value of
-/// `REFUSAL_HEADER`.
-pub fn refused(kind: &'static str, body: impl Into<String>) -> Response<Body> {
-    let mut response = status_response(StatusCode::CONFLICT, body);
-    response
-        .headers_mut()
-        .insert(REFUSAL_HEADER, axum::http::HeaderValue::from_static(kind));
-    response
-}
-
-pub fn not_found(body: impl Into<String>) -> Response<Body> {
-    status_response(StatusCode::NOT_FOUND, body)
+/// A request the engine refused and did nothing for. The body stays empty: the words
+/// layer writes it from the kind and the route.
+pub fn refused(kind: RefusalKind) -> Response<Body> {
+    answer_response(StatusCode::CONFLICT, ErrorAnswer::refused(kind))
 }
 
 pub fn internal_error(body: impl Into<String>) -> Response<Body> {

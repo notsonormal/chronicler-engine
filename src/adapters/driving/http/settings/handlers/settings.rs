@@ -11,8 +11,9 @@ use crate::adapters::driving::http::settings::templates::settings::{
     ConnectionFormTemplate, ConnectionTestDialogTemplate, ConnectionTestResultTemplate,
     SettingsTemplate,
 };
+use crate::adapters::driving::http::utils::answer_words::{item_named, naming_item};
 use crate::adapters::driving::http::utils::error::{
-    AnswerPolicy, action_failure_response, action_not_found_response, action_refusal_response,
+    AnswerPolicy, action_failure_response, action_not_found_response, action_invalid_response,
     answer_for_error, error_disclosure, raw_error_detail,
 };
 use crate::adapters::driving::http::utils::response::ok;
@@ -205,12 +206,14 @@ pub async fn add_connection_handler(
 ) -> Response<Body> {
     let connection = match form.into_config(generate_storage_id("conn")) {
         Ok(connection) => connection,
-        Err(message) => return action_refusal_response(message),
+        Err(message) => return action_invalid_response(message),
     };
+
+    let name = item_named(&connection.name);
 
     match app_state.settings_service.add_connection(connection) {
         Ok(_) => ok(""),
-        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
+        Err(e) => naming_item(answer_for_error(e, AnswerPolicy::EngineText), name),
     }
 }
 
@@ -221,7 +224,7 @@ pub async fn edit_connection_handler(
 ) -> Response<Body> {
     let replacement = match form.into_config(id.clone()) {
         Ok(connection) => connection,
-        Err(message) => return action_refusal_response(message),
+        Err(message) => return action_invalid_response(message),
     };
     let outcome = app_state
         .settings_service
@@ -235,7 +238,14 @@ pub async fn edit_connection_handler(
 
     match outcome {
         Ok(_) => ok(""),
-        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
+        Err(e) => {
+            let name = app_state.settings().ok().and_then(|settings| {
+                settings
+                    .find_connection(&id)
+                    .and_then(|c| item_named(&c.name))
+            });
+            naming_item(answer_for_error(e, AnswerPolicy::EngineText), name)
+        }
     }
 }
 
@@ -355,7 +365,14 @@ pub async fn delete_connection_handler(
 
     match outcome {
         Ok(()) => ok(""),
-        Err(e) => answer_for_error(e.into(), AnswerPolicy::SettingsSave),
+        Err(e) => {
+            let name = app_state.settings().ok().and_then(|settings| {
+                settings
+                    .find_connection(&id)
+                    .and_then(|c| item_named(&c.name))
+            });
+            naming_item(answer_for_error(e.into(), AnswerPolicy::SettingsSave), name)
+        }
     }
 }
 
