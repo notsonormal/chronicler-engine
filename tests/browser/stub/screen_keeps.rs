@@ -466,7 +466,7 @@ async fn check_a_control_that_saves_on_change_goes_back_to_its_rendered_value_wh
 }
 
 // [docs/specs/browser_screen.md] SCENARIO: 44.19
-async fn check_a_load_keeps_the_notice_of_an_action(page: playwright_rs::Page, stub: StubServer) {
+async fn check_a_load_keeps_the_notice_of_a_request(page: playwright_rs::Page, stub: StubServer) {
     let changes = stub.changes_handle();
     start_current(&page).await;
     open_section(&page, "games", ".games-panel").await;
@@ -480,13 +480,13 @@ async fn check_a_load_keeps_the_notice_of_an_action(page: playwright_rs::Page, s
     ask_once(&page).await;
     assert_eq!(changes.loads("games"), before + 1, "the panel loads");
     let (still_shown, _, still_raw) = read_error_disclosure(&page, NOTICE).await;
-    assert!(still_shown, "a load must keep the notice of an action");
+    assert!(still_shown, "a load must keep the notice of a request");
     assert_eq!(still_raw, raw);
 
     stub.games_handle().set_posture_saves_succeed(true);
     eval_string(&page, SAVE_TENSE_UNCHANGED).await;
     let (shown, _, _) = read_error_disclosure(&page, NOTICE).await;
-    assert!(!shown, "the next action clears the notice");
+    assert!(!shown, "the next request clears the notice");
 }
 
 #[tokio::test]
@@ -522,7 +522,7 @@ async fn run_screen_keep_checks() {
         .await;
     runner.run(outcome, check_a_control_that_saves_on_change_goes_back_to_its_rendered_value_when_the_save_fails).await;
     runner
-        .run(outcome, check_a_load_keeps_the_notice_of_an_action)
+        .run(outcome, check_a_load_keeps_the_notice_of_a_request)
         .await;
     runner.finish().await;
 }

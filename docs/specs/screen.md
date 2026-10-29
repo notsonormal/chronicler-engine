@@ -1,4 +1,4 @@
-# Feature Spec: The screen load, action answers and the Game header
+# Feature Spec: The screen load, request answers and the Game header
 
 Endpoints:
 - `GET /screen?parts=<names>` and `GET /screen?parts=<names>&games_page=<n>`
@@ -8,11 +8,11 @@ Endpoints:
 
 The screen is the header, the failure banner and the parts of the visible tab. `GET /screen` renders the parts that the page names, in one answer. The part names are `header`, `failure-banner`, `story-log`, `visual-sidebar`, `options-dock`, `send-control`, `autoplay-controls`, `status-display`, `settings`, `prompt-presets`, `worlds`, `games` and `llm-messages`.
 
-An action is a `POST` request. An action answers its outcome: a status code and the headers below. The client reads the data of an action from the screen, not from the answer.
+A request that a control sends is a `POST` request, or a `GET` that opens a dialog. A `POST` answers its outcome: a status code and the headers below. The client reads the data of a request from the screen, not from the answer.
 
 ## Scenarios
 
-#### Scenario 45.1: Every action route answers with the revision stamp
+#### Scenario 45.1: Every POST route answers with the revision stamp
 
 ```gherkin
 Given an engine with an active Game and a second saved Game
@@ -38,7 +38,7 @@ Then the response status is 200
 And the X-Revision of the answer equals the `server:revision` that GET /changes answered before the request
 
 When the client POST /games/:id/rename with an empty name
-Then the response is a refusal
+Then the response is a 400
 And the X-Revision of the answer equals the `server:revision` that GET /changes answers right after
 ```
 
@@ -193,7 +193,7 @@ And the body holds no template
 These properties hold across every `POST` route and are observable through HTTP.
 Drift indicates a regression even if all scenarios pass.
 
-- **I.1** The answer carries `X-Revision: <server>:<revision>`. `<server>` and `<revision>` are the `server` and the `revision` of `GET /changes` (`docs/specs/changes.md`), read after the handler has ended. A success, a refusal and a failure all carry it. An action that wrote nothing carries the current stamp.
+- **I.1** The answer carries `X-Revision: <server>:<revision>`. `<server>` and `<revision>` are the `server` and the `revision` of `GET /changes` (`docs/specs/changes.md`), read after the handler has ended. A success, a refusal and a failure all carry it. A request that wrote nothing carries the current stamp.
 - **I.2** A Game that a Job or a run holds refuses a write with `409`. The first line of the body is "The Game is busy, so <the words of the route>." and the second line is "Still thinking...". The refusal writes nothing.
 
 These properties hold across every Game-bound route (the endpoints above) and are observable through HTTP.
@@ -223,7 +223,7 @@ And each body names the failure of the read
 And no body calls the failure a configuration error
 ```
 
-#### Scenario 45.18: Each kind of failed action answers its status and one body
+#### Scenario 45.18: Each kind of failed request answers its status and one body
 
 ```gherkin
 Given an engine with an active Game and a second saved Game
@@ -240,7 +240,7 @@ When the client POST /reset with the header X-Chronicler-Game set to the id of t
 Then the response is a 409
 
 When the client POST /worlds/:key/delete for a World that still has Games
-Then the response is a 400 that holds the refusal "Cannot delete world with 1 game"
+Then the response is a 400 that holds the text "Cannot delete world with 1 game"
 
 When the client POST /prompt-presets and the storage fails on save
 Then the response is a 500 that holds the text of the failure
@@ -309,5 +309,45 @@ Given an engine with an active Game whose story holds an Input and its Narration
 When the client POST /history/delete, /swipe/new and /retrigger with no field message
 Then each response is a 400
 And the body is one line: "The Message was not deleted: The request names no Message.", "The Retry was not started: The request names no Message." and "The retrigger was not started: The request names no Message."
+And the story log still holds every Message
+```
+
+#### Scenario 45.21: Each row of the words table words its route
+
+```gherkin
+Given an engine with an active Game
+When the client sends each route of the words table a request that the route does not take: GET to each POST route, and POST to each GET opener
+Then each response is a 405
+And the body is one line, the sentence of that route: for example "The Game was not renamed." for /games/{id}/rename, "The Action was not sent." for /action and "The form was not opened." for /fragment/games/new
+```
+
+#### Scenario 45.22: The second line of a failed answer holds only the engine's text
+
+```gherkin
+Given an engine whose storage fails one call at a time
+When the client sends the text-check save, the LLM record opener, the preset View opener, the preset Duplicate, the preset Activate, the Rename opener, the New Game opener, the World Edit opener, the World update and the World posture save, each with the call that it needs failing
+Then each response is a 500
+And the second line of each body is the text of the engine error and nothing more
+```
+
+#### Scenario 45.23: A message that is not a number answers 422 with the words of its route
+
+```gherkin
+Given an engine with an active Game
+When the client POST /history/delete, /swipe/new and /retrigger with the field message set to "latest"
+Then each response is a 422
+And the first line of each body is the sentence of its route
+And the second line holds the text of the form rejection
+And the story log still holds every Message
+```
+
+#### Scenario 45.24: A form POST with no Content-Type answers 415 with the words of its route
+
+```gherkin
+Given an engine with an active Game
+When the client POST /history/delete and /games/{id}/rename with a body and no Content-Type header
+Then each response is a 415
+And the first line of each body is the sentence of its route
+And the second line holds the text of the rejection, which names Content-Type
 And the story log still holds every Message
 ```

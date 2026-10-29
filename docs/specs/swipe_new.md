@@ -73,7 +73,7 @@ Then the story log contains at least one Narration entry that carries an event h
 
 ```gherkin
 Given a fresh game state
-And a quantifier backend that returns no movement for both the action and the retry prompt
+And a quantifier backend that returns no movement for both the Action and the retry prompt
 When the client sends POST /action with command="walk around"
 And the Game is no longer busy
 And the client sends POST /swipe/new

@@ -122,7 +122,7 @@ async fn check_deleting_a_preset_card_keeps_keyboard_focus_on_a_card(
 // A default preset refuses its Edit load, so the page takes a refusal from a dialog
 // opener.
 // [docs/specs/browser_prompt_presets.md] SCENARIO: 28.5
-async fn check_a_refused_editor_reports_in_the_notice_and_keeps_focus(
+async fn check_an_invalid_editor_open_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -146,15 +146,11 @@ async fn check_a_refused_editor_reports_in_the_notice_and_keeps_focus(
     page.locator(edit).await.click(None).await.unwrap();
 
     wait_for_error_disclosure(&page, NOTICE, "the refusal shows in the notice").await;
-    let (visible, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    let (visible, message, _) = read_error_disclosure(&page, NOTICE).await;
     assert!(visible, "the refusal shows in the notice");
     assert_eq!(
         message, "The form was not opened: Cannot edit default presets.",
-        "the sentence names what was not done"
-    );
-    assert!(
-        raw.contains("Cannot edit default presets"),
-        "the notice carries the refusal, got {raw:?}"
+        "the sentence names what was not done, with the engine's explanation"
     );
     let dialog_open = page
         .evaluate::<(), bool>("() => document.getElementById('edit-dialog').open", None)
@@ -233,7 +229,7 @@ async fn run_prompt_preset_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_refused_editor_reports_in_the_notice_and_keeps_focus,
+            check_an_invalid_editor_open_reports_in_the_notice_and_keeps_focus,
         )
         .await;
     runner

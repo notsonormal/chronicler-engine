@@ -51,6 +51,6 @@ async fn test_edit_history_handler_ok() {
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
-        "an edit of a Message the story does not hold is refused as a bad request"
+        "an edit of a Message the story does not hold answers 400 as a bad request"
     );
 }

@@ -25,7 +25,7 @@ pub async fn edit_history_handler(
 ) -> Response {
     match state.game_writer.edit(game_id, id, &form.text) {
         Ok(()) => ok(""),
-        Err(refusal) => refusal.into_response(),
+        Err(not_accepted) => not_accepted.into_response(),
     }
 }
 
@@ -39,6 +39,6 @@ pub async fn delete_history_handler(
     };
     match state.game_writer.delete_last(game_id, message) {
         Ok(()) => ok(""),
-        Err(refusal) => refusal.into_response(),
+        Err(not_accepted) => not_accepted.into_response(),
     }
 }

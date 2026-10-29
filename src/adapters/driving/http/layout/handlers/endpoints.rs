@@ -10,7 +10,7 @@ use axum::{
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::{
-    action_failure_response, action_not_found_response, error_disclosure, raw_error_detail,
+    failed_answer, not_found_answer, error_disclosure, raw_error_detail,
 };
 use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::utils::response::html_escape;
@@ -85,15 +85,15 @@ pub async fn llm_messages_fragment(State(state): State<AppState>) -> Response<Bo
 }
 
 /// The dialog opens only on a 2xx answer: a missing record answers a 404 and a failed
-/// read a 500, and the Open control reports either in the row's own slot.
+/// read a 500, and the notice reports either.
 pub async fn llm_message_record_fragment(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Response<Body> {
     match state.render_llm_message_record(id) {
         Ok(Some(html)) => Html(html).into_response(),
-        Ok(None) => action_not_found_response("LLM message not found"),
-        Err(e) => action_failure_response(format!("Load failed: {e}")),
+        Ok(None) => not_found_answer("LLM message not found"),
+        Err(e) => failed_answer(e),
     }
 }
 

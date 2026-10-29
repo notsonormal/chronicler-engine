@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! The two route layers of the action answers: the revision stamp, and the Game header check.
+//! The two route layers of the request answers: the revision stamp, and the Game header check.
 
 use axum::extract::{Request, State};
 use axum::http::{HeaderValue, Method};
@@ -16,14 +16,14 @@ const REQUEST_GAME_HEADER: &str = "x-chronicler-game";
 /// Puts `X-Revision: <server>:<revision>` on the answer of every `POST` route, a
 /// success and a refusal alike. The stamp is read after the handler has ended, so it
 /// holds at least the revision of the handler's own commit.
-pub async fn stamp_action_answers(
+pub async fn stamp_request_answers(
     State(state): State<AppState>,
     request: Request,
     next: Next,
 ) -> Response {
-    let is_action = request.method() == Method::POST;
+    let is_post = request.method() == Method::POST;
     let mut response = next.run(request).await;
-    if is_action {
+    if is_post {
         let stamp = state.game_view_query.change_versions(None).stamp();
         if let Ok(value) = HeaderValue::from_str(&stamp) {
             response.headers_mut().insert(REVISION_HEADER, value);

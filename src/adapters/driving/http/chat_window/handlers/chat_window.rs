@@ -26,7 +26,7 @@ pub async fn reset_handler(
 ) -> Response<Body> {
     match state.game_catalogue.reset(game_id) {
         Ok(()) => ok(""),
-        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
+        Err(e) => answer_for_error(e, None, AnswerPolicy::EngineText),
     }
 }
 
@@ -55,7 +55,7 @@ pub async fn retry_handler(
 fn start_job(state: &AppState, game_id: GameId, request: JobRequest) -> Response<Body> {
     match Job::start(&state.game_writer, state.job_deps.clone(), game_id, request) {
         Ok(()) => ok(""),
-        Err(refusal) => refusal.into_response(),
+        Err(not_accepted) => not_accepted.into_response(),
     }
 }
 
@@ -69,6 +69,6 @@ pub async fn switch_swipe_handler(
         .switch_swipe(game_id, message_id, swipe_index)
     {
         Ok(()) => ok(""),
-        Err(refusal) => refusal.into_response(),
+        Err(not_accepted) => not_accepted.into_response(),
     }
 }

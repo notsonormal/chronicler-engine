@@ -79,13 +79,13 @@ And no response carries HX-Reswap
 
 `GET /screen` fails the same way when a part cannot be read: Scenario 45.11 (`docs/specs/screen.md`).
 
-#### Scenario 38.4: A failed user action is not a failed load
+#### Scenario 38.4: A failed request is not a failed load
 
 ```gherkin
 Given an active Game whose posture auto-save cannot be stored
 When the client posts the posture change
 Then the response is non-2xx
-And the failure text reaches the client for it to render on the action's own surface
+And the failure text reaches the client for it to render on the surface of the request
 And the response does not ask the client to swap nothing
 ```
 
@@ -115,7 +115,7 @@ And the raw text naming the missing preset is reachable only inside the response
 Given a Game whose last generation failed because the model spent its whole token budget before writing an answer
 When the client GET /status/busy
 Then the response carries the spent-token-budget line, not the unreadable-answer line or the line for an unnamed failure
-And that line names the model's reasoning and only an action the dashboard offers
+And that line names the model's reasoning and only a remedy the dashboard offers
 And the raw text naming the completion and reasoning token counts is reachable only inside the response's disclosure
 ```
 
@@ -143,11 +143,11 @@ And the story log holds that Action's Narration text
 And the raw internal message appears once, inside that response's disclosure
 ```
 
-#### Scenario 38.11: A refused save keeps its own line and saves no Narrations
+#### Scenario 38.11: A failed save keeps its own line and saves no Narrations
 
 ```gherkin
 Given a running Job whose Narration call is held
-And the storage refuses the write of a Narration's text while the call is held
+And the storage fails the write of a Narration's text while the call is held
 When the call is released and the Job ends
 And the client GET /status/busy
 Then the status response carries the save-failed line, not the line for an unnamed failure
@@ -202,7 +202,7 @@ Examples:
 | the World, at the first step | the world | the opening only |
 ```
 
-#### Scenario 38.15: A start state that cannot be read refuses the request with the missing-data line
+#### Scenario 38.15: A start state that cannot be read fails the request with the missing-data line
 
 ```gherkin
 Given a Game whose start state cannot be read
@@ -234,10 +234,10 @@ Examples:
 | the Quantifier's | the opening and the Narration of the Action |
 ```
 
-#### Scenario 38.17: A refused state update shows the contradiction line and keeps the text
+#### Scenario 38.17: A failed state update shows the contradiction line and keeps the text
 
 ```gherkin
-Given a Game whose storage refuses the write of a state update
+Given a Game whose storage fails the write of a state update
 And a narrator backend that answers the narration prompt
 When the client POST /action with command="look"
 And the Job ends

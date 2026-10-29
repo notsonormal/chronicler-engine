@@ -10,7 +10,7 @@ use super::wait::wait_for_condition_async;
 const SCREEN_CURRENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// A poll interval that no check reaches: the page keeps its timer, and it asks
-/// only when a check or an action makes it ask.
+/// only when a check or a request makes it ask.
 const PAUSED_POLL_MS: &str = "3600000";
 
 const SCREEN_IS_CURRENT: &str = r#"async () => {

@@ -1,4 +1,4 @@
-//! Answer-words guardrails: every action route of the router has a row in the words table, and every request path that a template or the shell names matches a row.
+//! Answer-words guardrails: every `post` route of the router has a row in the words table, and every request path that a template or the shell names matches a row.
 
 use regex::Regex;
 
@@ -27,7 +27,7 @@ pub fn check_post_routes_have_words(path: &str, source: &str, rows: &[&str]) -> 
                 path,
                 line_of(source, start),
                 format!(
-                    "the `post` route `{route}` has no row in `REFUSAL_WORDS`. A new action adds its row in the same commit."
+                    "the `post` route `{route}` has no row in `ANSWER_WORDS`. A new route adds its row in the same commit."
                 ),
             ));
         }
@@ -55,7 +55,7 @@ pub fn check_words_rows_are_router_routes(
                 words_path,
                 line_of(words_source, found.get(0).expect("whole match").start()),
                 format!(
-                    "the row `{}` of `REFUSAL_WORDS` is no route of the router, so the layer never finds it.",
+                    "the row `{}` of `ANSWER_WORDS` is no route of the router, so the layer never finds it.",
                     &found[1]
                 ),
             )
@@ -83,7 +83,7 @@ fn path_matches_row(path: &str, row: &str, placeholder: &Regex) -> bool {
 
 /// A value that is wholly a placeholder names its route in a Rust string, so only the
 /// `post` route check covers it.
-pub fn check_action_paths_have_words(path: &str, content: &str, rows: &[&str]) -> Vec<Violation> {
+pub fn check_request_paths_have_words(path: &str, content: &str, rows: &[&str]) -> Vec<Violation> {
     let attribute = Regex::new(r#"hx-(get|post)=\\?"([^"\\]*)\\?""#).expect("hx attribute");
     let placeholder = Regex::new(r"\{\{[^}]*\}\}").expect("placeholder");
     attribute
@@ -99,7 +99,7 @@ pub fn check_action_paths_have_words(path: &str, content: &str, rows: &[&str]) -
                     path,
                     line_of(content, found.get(0).expect("whole match").start()),
                     format!(
-                        "the `hx-{}` path `{value}` matches no row of `REFUSAL_WORDS`. A control that sends a request needs the words of its failure.",
+                        "the `hx-{}` path `{value}` matches no row of `ANSWER_WORDS`. A control that sends a request needs the words of its failure.",
                         &found[1]
                     ),
                 )

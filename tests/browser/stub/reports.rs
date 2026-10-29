@@ -12,7 +12,7 @@ use super::support::{
 };
 use super::*;
 
-const NOTICE_CLOSE: &str = "#screen-error [data-close-notice]";
+const NOTICE_CLOSE: &str = "#notice [data-close-notice]";
 const WAIT: Duration = Duration::from_secs(5);
 
 async fn wait_for_notice(page: &playwright_rs::Page, why: &str) {
@@ -26,7 +26,7 @@ async fn notice_is_shown(page: &playwright_rs::Page) -> bool {
 async fn notice_source(page: &playwright_rs::Page) -> String {
     eval_string(
         page,
-        "() => document.getElementById('screen-error').dataset.source || ''",
+        "() => document.getElementById('notice').dataset.source || ''",
     )
     .await
 }
@@ -35,7 +35,7 @@ async fn slots_showing_outside_the_notice(page: &playwright_rs::Page) -> String 
     eval_string(
         page,
         r#"() => Array.from(document.querySelectorAll('[data-error-slot]'))
-            .filter((slot) => !slot.hidden && !slot.closest('#screen-error'))
+            .filter((slot) => !slot.hidden && !slot.closest('#notice'))
             .map((slot) => slot.dataset.errorSlot)
             .join(',')"#,
     )
@@ -77,7 +77,7 @@ async fn assert_reported_in_the_notice(
         "",
         "{what}: no slot beside a control shows a report"
     );
-    assert_eq!(notice_source(page).await, "action", "{what}: the source");
+    assert_eq!(notice_source(page).await, "request", "{what}: the source");
     assert!(!read_banner(page).await.0, "{what}: the engine answered");
 }
 
@@ -107,11 +107,11 @@ async fn check_the_close_control_of_the_notice_hides_it(
 ) {
     open_worlds_and_games_ready(&page).await;
     click_first_world_delete(&page).await;
-    wait_for_notice(&page, "a failed row action shows a notice").await;
+    wait_for_notice(&page, "a failed row button shows a notice").await;
 
     let close_name = eval_string(
         &page,
-        "() => document.querySelector('#screen-error [data-close-notice]').getAttribute('aria-label') || ''",
+        "() => document.querySelector('#notice [data-close-notice]').getAttribute('aria-label') || ''",
     )
     .await;
     assert_eq!(
@@ -133,7 +133,7 @@ async fn check_the_close_control_of_the_notice_hides_it(
     assert_eq!(
         eval_string(
             &page,
-            "() => document.querySelector('#screen-error [data-report]').innerHTML.trim()"
+            "() => document.querySelector('#notice [data-report]').innerHTML.trim()"
         )
         .await,
         "",
@@ -219,9 +219,8 @@ async fn check_an_invalid_answer_of_a_form_with_typed_input_reports_in_that_form
     .unwrap();
     let action = "#command-form [data-error-slot]";
     wait_for_error_disclosure(&page, action, "an invalid Action reports in its form").await;
-    let (_, line, raw) = read_error_disclosure(&page, action).await;
+    let (_, line, _) = read_error_disclosure(&page, action).await;
     assert_eq!(line, "The Action was not sent: The value is not allowed.");
-    assert!(raw.contains("The value is not allowed"), "got {raw:?}");
     assert!(!notice_is_shown(&page).await, "the notice stays empty");
     assert_eq!(
         read_command_input(&page).await,
@@ -258,8 +257,39 @@ async fn check_an_invalid_answer_of_a_form_with_typed_input_reports_in_that_form
     );
 }
 
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.79
+async fn check_a_report_whose_sentence_is_the_whole_text_has_no_details(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    wait_for_screen_current(&page).await;
+    fill_command_input(&page, "look around").await;
+    page.evaluate::<(), ()>(
+        "() => { document.getElementById('command-form').requestSubmit(); }",
+        None,
+    )
+    .await
+    .unwrap();
+    let slot = "#command-form [data-error-slot]";
+    wait_for_error_disclosure(&page, slot, "an invalid Action reports in its form").await;
+
+    let (_, line, _) = read_error_disclosure(&page, slot).await;
+    assert_eq!(line, "The Action was not sent: The value is not allowed.");
+    assert_eq!(
+        eval_string(
+            &page,
+            &format!(
+                "() => String(document.querySelectorAll('{slot} .error-details-toggle, {slot} .error-detail-popover').length)"
+            ),
+        )
+        .await,
+        "0",
+        "the sentence is the whole report, so the slot holds no Details control and no text that repeats it"
+    );
+}
+
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.74
-async fn check_a_notice_stays_until_the_next_action_a_failing_load_works_again_or_close(
+async fn check_a_notice_stays_until_the_next_request_a_failing_load_works_again_or_close(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -280,9 +310,9 @@ async fn check_a_notice_stays_until_the_next_action_a_failing_load_works_again_o
     );
     assert!(
         notice_is_shown(&page).await,
-        "a good load after an action does not erase the report of that action"
+        "a good load after a request does not erase the report of that request"
     );
-    assert_eq!(notice_source(&page).await, "action");
+    assert_eq!(notice_source(&page).await, "request");
 
     open_section(&page, "games", ".games-panel").await;
     assert!(
@@ -583,8 +613,14 @@ async fn run_report_checks() {
         .await;
     runner
         .run(
+            StubActionOutcome::Invalid,
+            check_a_report_whose_sentence_is_the_whole_text_has_no_details,
+        )
+        .await;
+    runner
+        .run(
             pending,
-            check_a_notice_stays_until_the_next_action_a_failing_load_works_again_or_close,
+            check_a_notice_stays_until_the_next_request_a_failing_load_works_again_or_close,
         )
         .await;
     runner

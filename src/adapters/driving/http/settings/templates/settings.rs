@@ -243,7 +243,7 @@ impl ConnectionFormTemplate {
 }
 
 /// The dialog that shows the answer of the Test of a saved connection: the
-/// result is the answer of an action, so it opens outside the Settings screen.
+/// result is the answer of a request, so it opens outside the Settings screen.
 #[derive(Template)]
 #[template(
     source = r##"

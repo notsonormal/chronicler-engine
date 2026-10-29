@@ -241,7 +241,7 @@ And the client started a run B on the same Game, whose first Job is held at its 
 When the model answer of run A arrives
 And run A ends
 Then the status display answers with the progress of run B
-And a typed action answers 409 with "Still thinking..."
+And a typed Action answers 409 with "Still thinking..."
 When the model answer of run B arrives
 And run B ends
 Then the story log holds the Messages of run B's budget

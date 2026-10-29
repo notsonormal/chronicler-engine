@@ -52,14 +52,14 @@ Then the edit dialog opens with the edit form
 And the form's Name field is the only control the opening moved focus to
 ```
 
-#### Scenario 28.5: A refused preset editor reports in the notice and keeps focus
+#### Scenario 28.5: An invalid preset editor open reports in the notice and keeps focus
 
 ```gherkin
 Given the Prompt Presets tab shows its preset cards
 And a non-default card's Edit control has focus
-When the client clicks Edit and the engine refuses to open that card's editor
+When the client clicks Edit and the engine answers 400 for that card's editor
 Then no dialog opens
-And #screen-error shows "The form was not opened: <the engine's message>."
+And #notice shows "The form was not opened: <the engine's message>."
 And every card stays in place, as the same element
 And the Edit control keeps focus
 ```

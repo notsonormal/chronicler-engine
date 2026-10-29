@@ -11,7 +11,7 @@ use crate::adapters::driven::storage::Storage;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
 use crate::application::generation::gate::{
-    AcceptedJob, GameWriter, JobFailure, JobWriter, OptionsResult, Refusal, SavedText,
+    AcceptedJob, GameWriter, JobFailure, JobWriter, OptionsResult, NotAccepted, SavedText,
 };
 use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
@@ -75,7 +75,7 @@ impl Job {
         deps: JobDeps,
         game: GameId,
         request: JobRequest,
-    ) -> Result<(), Refusal> {
+    ) -> Result<(), NotAccepted> {
         let AcceptedJob {
             writer: job_writer,
             plan,

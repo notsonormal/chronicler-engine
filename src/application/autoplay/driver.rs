@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::application::autoplay::budget::Budget;
 use crate::application::generation::gate::{
-    AutoplayAccept, AutoplayProgress, AutoplayRunId, Decision, GameWriter, Refusal,
+    AutoplayAccept, AutoplayProgress, AutoplayRunId, Decision, GameWriter, NotAccepted,
 };
 use crate::application::pipeline::job::{Job, JobDeps, JobEnd};
 use crate::domain::model::game::GameId;
@@ -19,9 +19,9 @@ enum RunEnd {
     BudgetReached,
     /// A Job ended with a failure line, and no later accept clears it.
     JobFailed,
-    /// The accept of a Job refused its request, or could not read the story. A
-    /// refusal that has a failure line wrote it.
-    Refused,
+    /// The accept of a Job did not accept its request, or could not read the story. An
+    /// outcome that carries a failure line was written to the Game.
+    NotAccepted,
     /// A stop, a reset or a delete removed the holder.
     Stopped,
 }
@@ -44,7 +44,7 @@ impl AutoplayRun {
         deps: JobDeps,
         game: GameId,
         budget: Budget,
-    ) -> Result<(), Refusal> {
+    ) -> Result<(), NotAccepted> {
         let run = writer.reserve_for_autoplay(
             game,
             AutoplayProgress {
@@ -83,9 +83,9 @@ impl AutoplayRun {
                 });
             let accepted_job = match accepted {
                 AutoplayAccept::Ended => return RunEnd::Stopped,
-                AutoplayAccept::Refused(refusal) => {
-                    tracing::warn!(game = %self.game, run = ?self.run, "the run's Job was refused: {refusal:?}");
-                    return RunEnd::Refused;
+                AutoplayAccept::NotAccepted(not_accepted) => {
+                    tracing::warn!(game = %self.game, run = ?self.run, "the run's Job was not accepted: {not_accepted:?}");
+                    return RunEnd::NotAccepted;
                 }
                 AutoplayAccept::Finished(progress) => {
                     self.log_cycles(done, progress);

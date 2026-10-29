@@ -6,9 +6,9 @@ use axum::http::StatusCode;
 use axum::response::Response;
 
 use crate::adapters::driving::http::utils::answer_words::{ErrorAnswer, RefusalKind, answer_response};
-use crate::adapters::driving::http::utils::response::{html_escape, refused};
+use crate::adapters::driving::http::utils::response::html_escape;
 use crate::application::errors::ApplicationError;
-use crate::application::generation::gate::Refusal;
+use crate::application::generation::gate::NotAccepted;
 use crate::error::EngineError;
 
 pub fn error_fragment(message: impl std::fmt::Display) -> String {
@@ -37,16 +37,16 @@ pub fn raw_error_detail(raw: &str) -> String {
 }
 
 /// The status is non-2xx, so htmx never swaps the element the failure describes.
-pub fn action_invalid_response(message: impl std::fmt::Display) -> Response<Body> {
+pub fn invalid_answer(message: impl std::fmt::Display) -> Response<Body> {
     answer_response(StatusCode::BAD_REQUEST, ErrorAnswer::invalid(message))
 }
 
 /// Counts as an invalid answer, as a `400` does.
-pub fn action_not_found_response(message: impl std::fmt::Display) -> Response<Body> {
+pub fn not_found_answer(message: impl std::fmt::Display) -> Response<Body> {
     answer_response(StatusCode::NOT_FOUND, ErrorAnswer::invalid(message))
 }
 
-pub fn action_failure_response(detail: impl std::fmt::Display) -> Response<Body> {
+pub fn failed_answer(detail: impl std::fmt::Display) -> Response<Body> {
     answer_response(
         StatusCode::INTERNAL_SERVER_ERROR,
         ErrorAnswer::failed(detail),
@@ -57,8 +57,7 @@ pub fn action_failure_response(detail: impl std::fmt::Display) -> Response<Body>
 pub(crate) enum AnswerPolicy {
     /// The full text of the engine error, such as "Database error: ...".
     EngineText,
-    /// A settings save: `EngineError::Validation` and `EngineError::Config` are
-    /// invalid values (`400`), and the text of every error is the short reason.
+    /// A settings save: the text of every error is the short reason.
     SettingsSave,
     /// The generic text of an error that no handler classified.
     GenericText,
@@ -68,42 +67,52 @@ const GENERIC_FAILURE_TEXT: &str = "Internal Server Error";
 
 fn short_reason(error: &EngineError) -> String {
     match error {
-        EngineError::Validation(message) | EngineError::Config(message) => message.clone(),
+        EngineError::Config(message) => message.clone(),
         EngineError::Database { context, source } => format!("{context}: {source}"),
         other => other.to_string(),
     }
 }
 
-pub(crate) fn answer_for_error(error: ApplicationError, policy: AnswerPolicy) -> Response<Body> {
-    match error {
-        ApplicationError::Validation(message) => action_invalid_response(message),
-        ApplicationError::Refused(Refusal::StillThinking) => refused(RefusalKind::Busy),
-        ApplicationError::Refused(Refusal::LastMessageChanged) => {
-            refused(RefusalKind::LastMessageChanged)
+/// The status follows the error: a validation or a bad request is `400`, a
+/// refusal is `409`, and every other error is `500`. `WorldHasGames` is `400`:
+/// the World's state does not allow the delete. `item` names the record the
+/// request acted on.
+pub(crate) fn answer_for_error(
+    error: ApplicationError,
+    item: Option<String>,
+    policy: AnswerPolicy,
+) -> Response<Body> {
+    let (status, answer) = match error {
+        ApplicationError::Validation(message)
+        | ApplicationError::Engine(EngineError::Validation(message)) => {
+            (StatusCode::BAD_REQUEST, ErrorAnswer::invalid(message))
         }
-        ApplicationError::Refused(Refusal::BadRequest(message)) => action_invalid_response(message),
-        ApplicationError::Refused(Refusal::Failed(failure)) => {
-            action_failure_response(failure.line())
+        ApplicationError::NotAccepted(NotAccepted::StillThinking) => (
+            StatusCode::CONFLICT,
+            ErrorAnswer::refused(RefusalKind::Busy),
+        ),
+        ApplicationError::NotAccepted(NotAccepted::LastMessageChanged) => (
+            StatusCode::CONFLICT,
+            ErrorAnswer::refused(RefusalKind::LastMessageChanged),
+        ),
+        ApplicationError::NotAccepted(NotAccepted::BadRequest(message)) => {
+            (StatusCode::BAD_REQUEST, ErrorAnswer::invalid(message))
+        }
+        ApplicationError::NotAccepted(NotAccepted::Failed(failure)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorAnswer::failed(failure.line()),
+        ),
+        ApplicationError::Engine(engine @ EngineError::WorldHasGames { .. }) => {
+            (StatusCode::BAD_REQUEST, ErrorAnswer::invalid(engine))
         }
         ApplicationError::Engine(engine) => {
-            let invalid = match &engine {
-                EngineError::WorldHasGames { .. } => true,
-                EngineError::Validation(_) | EngineError::Config(_) => {
-                    matches!(policy, AnswerPolicy::SettingsSave)
-                }
-                _ => false,
-            };
             let text = match policy {
                 AnswerPolicy::EngineText => engine.to_string(),
                 AnswerPolicy::SettingsSave => short_reason(&engine),
-                AnswerPolicy::GenericText if invalid => engine.to_string(),
                 AnswerPolicy::GenericText => GENERIC_FAILURE_TEXT.to_string(),
             };
-            if invalid {
-                action_invalid_response(text)
-            } else {
-                action_failure_response(text)
-            }
+            (StatusCode::INTERNAL_SERVER_ERROR, ErrorAnswer::failed(text))
         }
-    }
+    };
+    answer_response(status, answer.with_item(item))
 }

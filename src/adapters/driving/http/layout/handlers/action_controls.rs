@@ -41,7 +41,7 @@ pub fn autoplay_controls_answer(busy: Option<&Busy>) -> String {
 }
 
 /// The busy state that the controls render. A failure line is not busy. A Game
-/// that cannot be read, or no Game, is idle: the engine refuses an action that it
+/// that cannot be read, or no Game, is idle: the engine refuses a request that it
 /// cannot take, and the status display reports the unreadable Game.
 fn busy_of_game(state: &AppState, game: Option<GameId>) -> Option<Busy> {
     game.and_then(|game_id| match state.game_view_query.status(game_id) {

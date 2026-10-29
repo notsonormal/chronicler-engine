@@ -20,12 +20,9 @@ use crate::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GameRenameFormTemplate, GamesPagerView, GamesPanelTemplate,
     NewGameFormTemplate, PersonaRowView,
 };
-use crate::adapters::driving::http::utils::answer_words::naming_item;
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
-use crate::adapters::driving::http::utils::error::{
-    AnswerPolicy, action_failure_response, action_not_found_response, answer_for_error,
-};
+use crate::adapters::driving::http::utils::error::{AnswerPolicy, not_found_answer, answer_for_error};
 use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
 
@@ -104,7 +101,7 @@ fn persona_rows(state: &AppState) -> Vec<PersonaRowView> {
 }
 
 /// The Rename form opens in the dialog. A Game that is gone, or one that
-/// cannot be read, opens no dialog: the Rename control reports it in its own slot.
+/// cannot be read, opens no dialog: the notice reports it.
 pub async fn rename_game_form_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,
@@ -114,15 +111,15 @@ pub async fn rename_game_form_handler(
             id: game.id,
             display_name: game.display_name,
         }),
-        Ok(None) => action_not_found_response("Game not found"),
-        Err(e) => action_failure_response(format!("Failed to read game: {e}")),
+        Ok(None) => not_found_answer("Game not found"),
+        Err(e) => answer_for_error(e, None, AnswerPolicy::EngineText),
     }
 }
 
 pub async fn new_game_form_handler(State(state): State<AppState>) -> Response<axum::body::Body> {
     let worlds = match state.world_catalogue.list_worlds() {
         Ok(worlds) => worlds,
-        Err(e) => return action_failure_response(format!("Failed to list worlds: {e}")),
+        Err(e) => return answer_for_error(e, None, AnswerPolicy::EngineText),
     };
     render_response(&NewGameFormTemplate {
         worlds,
@@ -159,9 +156,10 @@ fn display_name_of_game(state: &AppState, id: u64) -> Option<String> {
 pub async fn switch_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
     match state.game_catalogue.switch_game(id) {
         Ok(()) => ok(""),
-        Err(e) => naming_item(
-            answer_for_error(e, AnswerPolicy::EngineText),
+        Err(e) => answer_for_error(
+            e,
             display_name_of_game(&state, id),
+            AnswerPolicy::EngineText,
         ),
     }
 }
@@ -183,9 +181,10 @@ pub async fn rename_game_handler(
 pub async fn delete_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
     match state.game_catalogue.delete_game(id) {
         Ok(()) => ok(""),
-        Err(e) => naming_item(
-            answer_for_error(e, AnswerPolicy::GenericText),
+        Err(e) => answer_for_error(
+            e,
             display_name_of_game(&state, id),
+            AnswerPolicy::GenericText,
         ),
     }
 }
@@ -254,12 +253,11 @@ pub async fn update_game_presets_handler(
 }
 
 /// A saved config answers nothing: the Games panel loads the new value. A refusal
-/// or a failure answers a non-2xx error fragment, which the control reports in its
-/// own slot.
+/// or a failure answers a non-2xx error fragment, which the notice reports.
 fn config_save_result(result: Result<Game, ApplicationError>) -> Response {
     match result {
         Ok(_) => ok(""),
-        Err(e) => answer_for_error(e, AnswerPolicy::EngineText),
+        Err(e) => answer_for_error(e, None, AnswerPolicy::EngineText),
     }
 }
 

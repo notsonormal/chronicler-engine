@@ -12,10 +12,10 @@ use crate::error::EngineError;
 use crate::application::prompt_preset_service::{PresetEdit, PromptPresetService};
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::presets::{preset_edit_form_html, preset_view_form_html};
-use crate::adapters::driving::http::utils::answer_words::{item_named, naming_item};
+use crate::adapters::driving::http::utils::answer_words::item_named;
+use crate::application::errors::ApplicationError;
 use crate::adapters::driving::http::utils::error::{
-    AnswerPolicy, action_failure_response, action_not_found_response, action_invalid_response,
-    answer_for_error,
+    AnswerPolicy, failed_answer, not_found_answer, invalid_answer, answer_for_error,
 };
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
@@ -53,23 +53,23 @@ fn presets_template(app_state: &AppState, settings: &AppSettings) -> PromptPrese
 }
 
 /// The dialog forms open only on a 2xx answer: a missing preset answers a 404 and a
-/// failed read a 500, and the control that asked reports either in its own slot.
+/// failed read a 500, and the notice reports either.
 macro_rules! require_preset {
     ($storage:expr, $id:expr) => {
         match $storage.get_preset($id) {
             Ok(Some(p)) => p,
-            Ok(None) => return action_not_found_response("Preset not found"),
-            Err(e) => return action_failure_response(format!("Load failed: {e}")),
+            Ok(None) => return not_found_answer("Preset not found"),
+            Err(e) => return failed_answer(e),
         }
     };
 }
 
-macro_rules! require_preset_action {
+macro_rules! require_preset_or_invalid {
     ($storage:expr, $id:expr) => {
         match $storage.get_preset($id) {
             Ok(Some(p)) => p,
-            Ok(None) => return action_invalid_response("Preset not found"),
-            Err(e) => return action_failure_response(format!("Load failed: {e}")),
+            Ok(None) => return invalid_answer("Preset not found"),
+            Err(e) => return failed_answer(e),
         }
     };
 }
@@ -94,7 +94,7 @@ pub async fn new_preset_form_handler(
 ) -> Response<Body> {
     match PresetType::try_from(query.preset_type.as_str()) {
         Ok(preset_type) => render_response(&PresetAddFormTemplate::for_type(preset_type)),
-        Err(_) => action_invalid_response("Invalid preset type"),
+        Err(_) => invalid_answer("Invalid preset type"),
     }
 }
 
@@ -171,7 +171,7 @@ pub async fn save_preset_handler(
 ) -> Response<Body> {
     let preset_type = match PresetType::try_from(form.preset_type.as_str()).ok() {
         Some(pt) => pt,
-        None => return action_invalid_response("Invalid preset type"),
+        None => return invalid_answer("Invalid preset type"),
     };
 
     // Create forms render no checkboxes; both-false means "flags not
@@ -185,10 +185,7 @@ pub async fn save_preset_handler(
     let preset = form.into_preset(generate_storage_id("preset"), preset_type, allowed_modes);
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&preset) {
-        return naming_item(
-            answer_for_error(e, AnswerPolicy::EngineText),
-            item_named(&preset.name),
-        );
+        return answer_for_error(e, item_named(&preset.name), AnswerPolicy::EngineText);
     }
 
     ok("")
@@ -200,7 +197,7 @@ pub async fn edit_preset_form_handler(
 ) -> Response<Body> {
     let preset = require_preset!(app_state.prompt_preset_service, &id);
     if let Err(e) = PromptPresetService::ensure_editable(&preset) {
-        return answer_for_error(e, AnswerPolicy::EngineText);
+        return answer_for_error(e, None, AnswerPolicy::EngineText);
     }
     Html(preset_edit_form_html(&preset, preset.preset_type.as_str())).into_response()
 }
@@ -227,7 +224,7 @@ pub async fn update_preset_handler(
 
     match app_state.prompt_preset_service.edit_preset(&id, edit) {
         Ok(_) => ok(""),
-        Err(e) => naming_item(answer_for_error(e, AnswerPolicy::EngineText), name),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -242,7 +239,7 @@ pub async fn delete_preset_handler(
             .ok()
             .flatten()
             .and_then(|preset| item_named(&preset.name));
-        return naming_item(answer_for_error(e, AnswerPolicy::EngineText), name);
+        return answer_for_error(e, name, AnswerPolicy::EngineText);
     }
 
     ok("")
@@ -252,19 +249,19 @@ pub async fn duplicate_preset_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Response<Body> {
-    let preset = require_preset_action!(app_state.prompt_preset_service, &id);
+    let preset = require_preset_or_invalid!(app_state.prompt_preset_service, &id);
 
     let name = item_named(&preset.name);
     let mut copy = preset.clone();
     copy.id = generate_storage_id("preset");
     copy.name = match app_state.prompt_preset_service.next_copy_name(&preset) {
         Ok(copy_name) => copy_name,
-        Err(e) => return naming_item(answer_for_error(e, AnswerPolicy::EngineText), name),
+        Err(e) => return answer_for_error(e, name, AnswerPolicy::EngineText),
     };
     copy.is_default = false;
 
     if let Err(e) = app_state.prompt_preset_service.save_preset(&copy) {
-        return naming_item(answer_for_error(e, AnswerPolicy::EngineText), name);
+        return answer_for_error(e, name, AnswerPolicy::EngineText);
     }
 
     ok("")
@@ -280,19 +277,20 @@ pub async fn activate_preset_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     axum::extract::Query(query): axum::extract::Query<ActivateQuery>,
 ) -> Response<Body> {
-    let preset = require_preset_action!(app_state.prompt_preset_service, &id);
+    let preset = require_preset_or_invalid!(app_state.prompt_preset_service, &id);
 
     // Absent or invalid mode falls back to Novel (the single panel button).
     // An Options preset is mode-agnostic, so its flags do not gate activation.
     let mode = NarratorMode::parse_or_default(query.mode.as_deref().unwrap_or("novel"));
     let name = item_named(&preset.name);
 
-    // Refuse before any write so a rejected activation leaves settings
+    // Answer `400` before any write so a rejected activation leaves settings
     // untouched.
     if preset.preset_type.is_mode_tagged() && !preset.allows(mode) {
-        return naming_item(
-            action_invalid_response(format!("Preset not allowed for {} mode", mode.as_str())),
+        return answer_for_error(
+            ApplicationError::validation(format!("Preset not allowed for {} mode", mode.as_str())),
             name,
+            AnswerPolicy::EngineText,
         );
     }
 
@@ -303,6 +301,6 @@ pub async fn activate_preset_handler(
 
     match outcome {
         Ok(_) => ok(""),
-        Err(e) => naming_item(action_failure_response(format!("Save failed: {e}")), name),
+        Err(e) => answer_for_error(e.into(), name, AnswerPolicy::EngineText),
     }
 }

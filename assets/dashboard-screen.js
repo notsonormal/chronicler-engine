@@ -1,4 +1,4 @@
-// The screen: the ask loop, the screen load of the visible tab, the keep rules of a load, the stamp that says what the page shows, and the Game header of an action.
+// The screen: the ask loop, the screen load of the visible tab, the keep rules of a load, the stamp that says what the page shows, and the Game header of a request.
 
 const DEFAULT_POLL_MS = 1000;
 const GAME_HEADER = "X-Chronicler-Game";
@@ -61,9 +61,9 @@ document.body.addEventListener("htmx:beforeRequest", function (evt) {
   if (element) holdInFlight(element);
 });
 
-// The end of an action leaves the screen stale in a way that the revision may not
-// show: a load that skipped the control of the request recorded the stamp, and an
-// action that wrote nothing moves no revision. So the end of every request that is
+// The end of a request leaves the screen stale in a way that the revision may not
+// show: a load that skipped the control of the request recorded the stamp, and a
+// request that wrote nothing moves no revision. So the end of every request that is
 // not a read forgets the stamp, and the page asks at once. A swap that throws
 // skips `htmx:afterRequest`, so `htmx:onLoadError` is the end of that request.
 function endRequest(evt) {
@@ -205,7 +205,7 @@ async function showScreenFailure(request, response) {
   const body = await response.text();
   reportScreenError(
     request + " answered " + response.status + ". The screen was not updated.",
-    plainResponseText(body) || "No detail.",
+    plainResponseText(body),
   );
 }
 
@@ -385,9 +385,9 @@ function leaveSection(section) {
   fireScreenEvent("screen:cleared", { parts: cleared });
 }
 
-// The Game of the screen goes with every action that is not a read, so the engine
-// can refuse an action from a page that shows a Game that is no longer active. A
-// page that shows no Game names none, and its action acts on the active Game.
+// The Game of the screen goes with every request that is not a read, so the engine
+// can refuse a request from a page that shows a Game that is no longer active. A
+// page that shows no Game names none, and its request acts on the active Game.
 document.body.addEventListener("htmx:configRequest", function (evt) {
   const game = screenRoot.dataset.game;
   if (game && evt.detail.verb !== "get") evt.detail.headers[GAME_HEADER] = game;

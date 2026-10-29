@@ -17,11 +17,13 @@ use chronicler_engine::test_support::{
 use crate::support::app_wiring::{
     app_with_a_triggered_character, app_with_model, app_with_model_and_storage,
 };
-use crate::support::http_assertions::{assert_still_thinking, status_error_message};
+use crate::support::http_assertions::{
+    assert_a_stale_message_is_refused, assert_still_thinking, status_error_message,
+};
 use crate::support::http_fixtures::{break_start_room, room_header_of, story_of};
 use crate::support::http_requests::{
     fetch_status_label, assert_answers_nothing, fetch_busy_status, post_action, post_empty,
-    post_form, post_on_message, response_body, wait_settled, post_on_last_message,
+    post_form, wait_settled, post_on_last_message,
 };
 
 fn story_log_counts(state: &AppState) -> (usize, usize) {
@@ -1612,32 +1614,9 @@ async fn test_guided_retry_shows_the_room_its_redo_arrives_in_http() {
 // [docs/specs/swipe_new.md] SCENARIO: 12.2
 #[tokio::test]
 async fn test_retry_that_names_a_message_that_is_not_the_last_is_refused_http() {
-    let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let (app, state) = app_with_model(Arc::clone(&model));
-    assert!(post_action(&app, "look").await.status().is_success());
-    assert!(wait_settled(&state, 2000).await, "the Job settles");
-    let input = story_of(&state)
-        .iter()
-        .find(|message| message.message_type == MessageType::Input)
-        .expect("the story holds the Input")
-        .id;
-    let swipes_before = newest_swipes(&state, MessageType::Narration);
-
-    let resp = post_on_message(&app, "/swipe/new", input).await;
-
-    assert_eq!(resp.status(), StatusCode::CONFLICT);
-    let body = response_body(resp).await;
-    assert!(
-        body.contains("The last Message changed, so the Retry was not started."),
-        "{body}"
-    );
-    assert!(
-        body.contains("The page showed a Message that is no longer the last one."),
-        "{body}"
-    );
-    assert_eq!(
-        newest_swipes(&state, MessageType::Narration),
-        swipes_before,
-        "no Swipe is added"
-    );
+    assert_a_stale_message_is_refused(
+        "/swipe/new",
+        "The last Message changed, so the Retry was not started.",
+    )
+    .await;
 }

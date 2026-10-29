@@ -17,7 +17,7 @@ checks outside the tier model.
 | `tests/http/requires_migration/` | tier 1, quarantine | as `tests/http/` | as `tests/http/` | legacy tests that wait for a spec; untagged, size pinned |
 | `tests/http/support/` | support for tier 1 | — | — | request builders, seeding fixtures, HTML assertions, app wiring |
 | `tests/browser/stub/` | **Stub browser (tier 2)** | the whole engine | stub server (real shell, real or canned fragments) + browser, a fresh page per test | client-side behaviour of the shipped JS |
-| `tests/browser/` | **Full-stack browser (tier 3)** | LLM | browser + engine server | the full-stack hop: a client action whose effect is server state |
+| `tests/browser/` | **Full-stack browser (tier 3)** | LLM | browser + engine server | the full-stack hop: a client request whose effect is server state |
 | `tests/storage/` | **Driven-adapter** | nothing | SQLite | the storage seam: CRUD, errors, referential integrity, queries |
 | `tests/bootstrap/` | bootstrap smoke | nothing | `bootstrap::run()` | startup branches |
 | `tests/llm/` | real provider | nothing | an LLM provider | provider flows; `#[ignore]`d, run with `--llm-only` |

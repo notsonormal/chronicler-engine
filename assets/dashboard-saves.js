@@ -57,7 +57,7 @@ function settleSave(evt) {
   if (!element || !element.closest) return;
   if (!element.closest("[data-part], #edit-dialog")) return;
   if (!isSavingControl(element)) return;
-  const answer = actionAnswer(evt);
+  const answer = requestAnswer(evt);
   if (answer.outcome === "done") {
     settleSavedFields(element);
     afterScreenShows(answer.stamp).then(() => flagSaved(element, true));

@@ -198,7 +198,7 @@ async fn test_connection_forms_answer_dialog_fragments() {
         );
         assert!(
             form.contains(r#"data-error-slot="connection-form""#),
-            "the form reports a refusal in its own slot: {form}"
+            "the form holds a slot for an invalid answer: {form}"
         );
         assert!(
             !form.contains("data-close-editor") && !form.contains("data-work"),
@@ -761,6 +761,111 @@ async fn test_connection_edit_failure_names_the_typed_name() {
     assert!(
         !body.contains("Beta"),
         "the sentence does not name the stored name: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.47
+#[tokio::test]
+async fn test_a_gone_connection_is_invalid_and_a_setup_fault_is_a_failure() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let edit = post_form(
+        &app,
+        "/connections/no-such/edit",
+        "conn_name=Alpha&conn_provider=mock&conn_model=m&conn_api_key=&conn_base_url=",
+    )
+    .await;
+    assert_eq!(
+        edit.status(),
+        StatusCode::BAD_REQUEST,
+        "the Edit of a gone Connection is invalid"
+    );
+    let body = body_text(edit).await;
+    assert!(body.contains("Connection not found"), "body: {body}");
+
+    let delete = post_form(&app, "/connections/no-such/delete", "").await;
+    assert_eq!(
+        delete.status(),
+        StatusCode::BAD_REQUEST,
+        "the Delete of a gone Connection is invalid"
+    );
+    let body = body_text(delete).await;
+    assert!(body.contains("Connection not found"), "body: {body}");
+
+    let (single_app, _state, _storage) =
+        app_with_production_graph(single_mock_settings("only-one", "only-model"));
+    let last = post_form(&single_app, "/connections/only-one/delete", "").await;
+    assert_eq!(
+        last.status(),
+        StatusCode::BAD_REQUEST,
+        "the last Connection cannot be deleted"
+    );
+    let body = body_text(last).await;
+    assert!(
+        body.contains("Cannot delete the last connection"),
+        "body: {body}"
+    );
+
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        StorageCall::UpdateSettings,
+        TestOverride::config("settings setup fault"),
+    ));
+    let faulty_app = TestAppBuilder::default_test().storage(storage).build();
+    let fault = post_form(
+        &faulty_app,
+        "/connections/openrouter-gpt-4o-mini/delete",
+        "",
+    )
+    .await;
+    assert_eq!(
+        fault.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "a configuration fault of the engine is a failure, not an invalid value"
+    );
+    let body = body_text(fault).await;
+    assert!(body.contains("settings setup fault"), "body: {body}");
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.48
+#[tokio::test]
+async fn test_connection_edit_with_an_invalid_form_names_the_typed_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let response = post_form(
+        &app,
+        "/connections/any-id/edit",
+        "conn_name=Typed&conn_provider=bogus_provider&conn_model=m&conn_api_key=&conn_base_url=",
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = body_text(response).await;
+    assert!(
+        body.contains("The Connection &quot;Typed&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.49
+#[tokio::test]
+async fn test_connection_add_with_an_invalid_form_names_the_typed_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let response = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Typed&conn_provider=bogus_provider&conn_model=m&conn_api_key=&conn_base_url=",
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = body_text(response).await;
+    assert!(
+        body.contains("The Connection &quot;Typed&quot; was not saved"),
+        "the sentence names the typed name: {body}"
     );
 }
 

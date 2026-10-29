@@ -64,8 +64,8 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `dialog.rs` — Stub-browser tests for the edit dialog: an htmx swap into its body opens it, Cancel and Escape close it and return focus to the opener, a save closes it only when the engine accepts it and the screen shows it, an answer from outside never replaces its form, and the dialog forms that a screen load never reaches. Tagged against `docs/specs/browser_dashboard.md`, `docs/specs/browser_games.md` and `docs/specs/browser_screen.md`.
       - `drafts.rs` — Stub-browser tests for the rules that keep a draft out of a part: a load skips a control whose request is in flight, and no part of any tab holds a form that waits for a Save. Tagged against `docs/specs/browser_screen.md`.
       - `failure_display.rs` — Stub-browser tests for the failure display: the banner, the notice and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
-      - `form_failures.rs` — Stub-browser tests for refused form actions: the form keeps its place, and an invalid answer shows in its slot while a refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
-      - `game_header.rs` — Stub-browser tests for the Game header of an action: the page names the Game it shows, and the engine refuses an action for a Game that is no longer active. Tagged against `docs/specs/browser_dashboard.md`.
+      - `form_failures.rs` — Stub-browser tests for failed form requests: the form keeps its place, and an invalid answer shows in its slot while a refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
+      - `game_header.rs` — Stub-browser tests for the Game header of a request: the page names the Game it shows, and the engine refuses a request for a Game that is no longer active. Tagged against `docs/specs/browser_dashboard.md`.
       - `games.rs` — Stub-browser tests for the Games panel: the keyboard-focus landing after a saved-game delete, and the pages of saved Games. Tagged against `docs/specs/browser_games.md`.
       - `htmx_events.rs` — Probes of the vendored htmx (declared exemption in the spec-coverage validator): the order and the reach of the events that the one answer reader relies on. No spec link: the probes pin the contract of the library, and the scenarios of `docs/specs/browser_dashboard.md` rely on it.
       - `layout.rs` — Layout checks (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Twelve checks share one browser through the shared runner; each runs on a fresh page against its own stub server, with panic isolation and a per-check timing summary.
@@ -91,6 +91,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
+    - `answer_words.rs` — HTTP E2E tests for the words of a failed answer: every row of the words table pinned by a hand-written sentence, the second line that holds only the engine's text, and the two answers that an extractor writes (`415` and `422`). Tagged against `docs/specs/screen.md`.
     - `changes.rs` — HTTP E2E tests for the change numbers (`GET /changes`): which numbers each save path moves, and which numbers a read, a failed save and a rolled-back transaction leave as they were. Tagged against `docs/specs/changes.md`.
     - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite, the busy-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
     - `failure_display.rs` — HTTP E2E tests for the failure display, tagged against `docs/specs/failure_display.md`.
@@ -109,10 +110,10 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `races.rs` — HTTP E2E tests for the write path while a Job runs: the races (actions.md 3.4, 3.5; options.md 24.21), the stop at each model call (dashboard.md 39.4, 39.5), the reset (reset.md 7.3), the Job of another Game (games.md 18.4), the edit, delete and swipe switch (story_log.md 8.7; swipe_switch.md 36.3), and the preset an event Narration uses (actions.md 6.4).
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).
     - `retrigger.rs` — HTTP E2E tests for the retrigger endpoint (POST /retrigger).
-    - `screen.rs` — HTTP E2E tests for what every action answer carries: the `X-Revision` stamp, the busy refusal as `409`, and the Game header that a page sends with a Game-bound action. Tagged against `docs/specs/screen.md`.
+    - `screen.rs` — HTTP E2E tests for what every request answer carries: the `X-Revision` stamp, the busy refusal as `409`, and the Game header that a page sends with a Game-bound request. Tagged against `docs/specs/screen.md`.
     - `screen_load.rs` — HTTP E2E tests for the screen load (`GET /screen?parts=`): the templates it answers, its stamp and Game, its refusals, and the failure of one part. Tagged against `docs/specs/screen.md`.
     - `settings.rs` — HTTP E2E tests for the settings endpoints: sub-tabs, role rows, and the text-check auto-save.
-    - `settings_connection_form.rs` — HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test actions take.
+    - `settings_connection_form.rs` — HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test requests take.
     - `story_log.rs` — HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
@@ -142,7 +143,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
 - **infrastructure/**
     - `architecture.rs` — Architecture guardrail tests using arch-lint — fail the build on any violation defined in `arch-lint.toml`; run with `cargo nextest run --test architecture`.
     - **guardrails/**
-      - `answer_words.rs` — Answer-words guardrails: every action route of the router has a row in the words table, and every request path that a template or the shell names matches a row.
+      - `answer_words.rs` — Answer-words guardrails: every `post` route of the router has a row in the words table, and every request path that a template or the shell names matches a row.
       - `answer_words_tests.rs` — Detection tests for the answer-words guardrails.
       - `enums.rs` — Enum variant doc guardrail: every enum variant must carry `///` doc, OR the enum must be marked `/// [TRIVIAL_ENUM]` with all variants bare.
       - `free_fn.rs` — Free fn location guardrail: top-level free fns must live in a folder named `mappers`, `utils`, `builders`, `test_support`, `bootstrap`, or `handlers`.
@@ -185,12 +186,12 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `convergence.rs` — The convergence check: once the page is quiet, each visible part equals a fresh `GET /screen` of that part, apart from the story-log entry in edit; the parts of a closed tab are empty; and each part element has the attributes of the shell. The stub and the full-stack browser tests run it at the end of each check.
     - `html.rs` — HTML slicing helpers for panel markup — locate a region by a stable anchor string.
     - `htmx_settle.rs` — htmx settle harness primitive: a counter of `htmx:afterSettle` and `screen:loaded` installed at page load, and a target-scoped wait for an interaction's own swap or the screen load that shows it.
-    - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `screen`, `server`, `settings_guard`, `stub_action_layers`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
+    - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `screen`, `server`, `settings_guard`, `stub_request_layers`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
     - `screen.rs` — Waits on the stamp of the page: the page shows the screen of the server when `<html data-revision>` equals the `server:revision` of `GET /changes` and no ask or load is in flight.
     - `screen_part_table.rs` — The parts of the dashboard screen, as the stub-browser tests list them: the selector, the name, and its section. The guardrails check the table against `assets/index.html` and `SCREEN_PARTS`.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.
     - `settings_guard.rs` — `SettingsTestGuard` — serializes tests that mutate global settings state via a process-wide `Mutex`.
-    - `stub_action_layers.rs` — What the engine's two action layers do, for the stub server: record the Game header of each `POST`, refuse a Game-bound one that names another Game, and stamp the answer with `X-Revision`.
+    - `stub_request_layers.rs` — What the engine's two request layers do, for the stub server: record the Game header of each `POST`, refuse a Game-bound one that names another Game, and stamp the answer with `X-Revision`.
     - `stub_server.rs` — Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
     - `wait.rs` — Polling helpers: `wait_for_llm_idle`, `wait_for_status_ready`, and `wait_for_element_children` — retry-based waits used by browser and HTTP tests.
     - **stub_server/**

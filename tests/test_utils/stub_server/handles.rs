@@ -68,13 +68,13 @@ impl StubChangesHandle {
 
     /// The `X-Chronicler-Game` header of each `POST` to `path`, in arrival order.
     pub fn game_headers(&self, path: &str) -> Vec<Option<String>> {
-        self.state.action_layers.game_headers(path)
+        self.state.request_layers.game_headers(path)
     }
 
-    /// Makes the action routes treat `game` as the active Game while `GET /changes`
+    /// Makes the Game-bound routes treat `game` as the active Game while `GET /changes`
     /// still names the old one: the page that has not asked since a switch.
-    pub fn set_game_of_actions(&self, game: u64) {
-        self.state.action_layers.set_game_of_actions(game);
+    pub fn set_game_of_requests(&self, game: u64) {
+        self.state.request_layers.set_game_of_requests(game);
     }
 
     pub fn asks(&self) -> usize {

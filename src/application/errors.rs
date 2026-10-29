@@ -1,15 +1,15 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! ApplicationError — the error envelope of the application services.
 
-use crate::application::generation::gate::Refusal;
+use crate::application::generation::gate::NotAccepted;
 use crate::error::EngineError;
 
 pub enum ApplicationError {
     /// Input failed domain validation; payload is the user-facing reason.
     Validation(String),
-    /// A refusal of the writer rule, kept as it is so the HTTP layer answers it as
-    /// it answers any refusal.
-    Refused(Refusal),
+    /// A request the writer rule did not accept, kept as it is so the HTTP layer
+    /// answers each of its outcomes by its own status.
+    NotAccepted(NotAccepted),
     /// Engine-layer failure surfaced through the application service.
     Engine(EngineError),
 }
@@ -19,7 +19,7 @@ impl ApplicationError {
         Self::Validation(msg.into())
     }
 
-    /// Lifts an engine error, keeping a domain refusal on the variant the HTTP
+    /// Lifts an engine error, keeping a domain validation on the variant the HTTP
     /// layer renders as a user-facing rejection. Distinct from the `From`
     /// impl, which keeps every engine error on `Engine` for a `?` conversion.
     pub fn from_engine_error(error: EngineError) -> Self {
@@ -30,11 +30,13 @@ impl ApplicationError {
     }
 
     /// The engine error of a caller that has no use for the envelope: a validation or
-    /// a refusal keeps its kind as `EngineError::Validation`.
+    /// a request that was not accepted keeps its kind as `EngineError::Validation`.
     pub fn into_engine_error(self) -> EngineError {
         match self {
             Self::Validation(message) => EngineError::Validation(message),
-            refused @ Self::Refused(_) => EngineError::Validation(refused.to_string()),
+            not_accepted @ Self::NotAccepted(_) => {
+                EngineError::Validation(not_accepted.to_string())
+            }
             Self::Engine(error) => error,
         }
     }
@@ -44,7 +46,7 @@ impl std::fmt::Display for ApplicationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Validation(msg) => write!(f, "{msg}"),
-            Self::Refused(refusal) => write!(f, "{}", refusal.line()),
+            Self::NotAccepted(not_accepted) => write!(f, "{}", not_accepted.line()),
             Self::Engine(e) => write!(f, "{e}"),
         }
     }

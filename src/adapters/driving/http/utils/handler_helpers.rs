@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::response::Response;
 use uuid::Uuid;
 
-use super::error::action_invalid_response;
+use super::error::invalid_answer;
 
 /// An omitted id is an invalid answer, not a form rejection: the field is optional here.
 #[derive(serde::Deserialize)]
@@ -21,7 +21,7 @@ impl LastMessageForm {
 }
 
 pub fn names_no_message() -> Response<Body> {
-    action_invalid_response("The request names no Message")
+    invalid_answer("The request names no Message")
 }
 
 pub(crate) fn opt_string(value: &str) -> Option<String> {

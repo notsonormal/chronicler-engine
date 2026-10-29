@@ -1,4 +1,4 @@
-//! Stub-browser tests for the Game header of an action: the page names the Game it shows, and the engine refuses an action for a Game that is no longer active. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for the Game header of a request: the page names the Game it shows, and the engine refuses a request for a Game that is no longer active. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 
@@ -26,7 +26,7 @@ async fn wait_until_page_shows_game(page: &playwright_rs::Page, game: &str) {
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.53
-async fn check_each_action_carries_the_game_the_page_shows(
+async fn check_each_request_carries_the_game_the_page_shows(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -85,7 +85,7 @@ async fn check_a_send_for_a_game_that_is_no_longer_active_keeps_the_typed_comman
     stub: StubServer,
 ) {
     wait_until_page_shows_game(&page, "1").await;
-    stub.changes_handle().set_game_of_actions(2);
+    stub.changes_handle().set_game_of_requests(2);
     fill_command_input(&page, "look around").await;
     page.evaluate::<(), ()>(
         r#"() => document.getElementById('command-form').requestSubmit()"#,
@@ -133,7 +133,7 @@ async fn check_an_edit_saved_for_a_game_that_is_no_longer_active_stays_open(
         .fill("Text typed before the switch", None)
         .await
         .unwrap();
-    stub.changes_handle().set_game_of_actions(2);
+    stub.changes_handle().set_game_of_requests(2);
     page.locator("[data-editing] .save-btn")
         .await
         .click(None)
@@ -286,7 +286,7 @@ async fn check_a_stop_for_a_game_that_is_no_longer_active_reports_in_the_notice(
     });
     load_screen_now(&page).await;
     wait_until_visible(&page, "#stop-btn", Duration::from_secs(5)).await;
-    stub.changes_handle().set_game_of_actions(2);
+    stub.changes_handle().set_game_of_requests(2);
     page.locator("#stop-btn").await.click(None).await.unwrap();
 
     let slot = NOTICE;
@@ -312,7 +312,7 @@ async fn check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_notice
         .unwrap();
     let reset = ".game-item.active .btn-reset-small";
     wait_until_visible(&page, reset, Duration::from_secs(5)).await;
-    stub.changes_handle().set_game_of_actions(2);
+    stub.changes_handle().set_game_of_requests(2);
     page.locator(reset).await.click(None).await.unwrap();
 
     let slot = NOTICE;
@@ -330,7 +330,7 @@ async fn run_game_header_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_each_action_carries_the_game_the_page_shows,
+            check_each_request_carries_the_game_the_page_shows,
         )
         .await;
     runner

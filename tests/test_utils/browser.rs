@@ -20,7 +20,7 @@ use super::wait::wait_for_action_acknowledged;
 pub use super::wait::wait_for_story_log;
 
 /// Counts the requests that the page sends from now on, except the asks of
-/// `GET /changes`: both `XMLHttpRequest` (htmx) and `fetch` (the action scripts).
+/// `GET /changes`: both `XMLHttpRequest` (htmx) and `fetch` (the screen script).
 pub async fn start_counting_requests(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"() => {

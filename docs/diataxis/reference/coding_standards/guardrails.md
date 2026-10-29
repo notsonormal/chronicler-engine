@@ -74,7 +74,7 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 |------|-------------|--------|
 | post routes have words | A route without a row would answer a failure with no sentence of what was not done. | `tests/infrastructure/guardrails/answer_words.rs:12` |
 | words rows are router routes | The layer finds a row by the matched route, written as the router writes it: a row with | `tests/infrastructure/guardrails/answer_words.rs:40` |
-| action paths have words | A value that is wholly a placeholder names its route in a Rust string, so only the | `tests/infrastructure/guardrails/answer_words.rs:86` |
+| request paths have words | A value that is wholly a placeholder names its route in a Rust string, so only the | `tests/infrastructure/guardrails/answer_words.rs:86` |
 | enum variant docs | Requires every enum variant to have a `///` doc unless the enum is marked `/// [TRIVIAL_ENUM]`. | `tests/infrastructure/guardrails/enums.rs:119` |
 | free fn location | Restricts top-level free functions to allowlisted category folders or exempt paths. | `tests/infrastructure/guardrails/free_fn.rs:31` |
 | inherent impl locality | Checks all files in `src/` for inherent impls that violate the module-per-type rule. | `tests/infrastructure/guardrails/inherent_impl.rs:15` |
@@ -92,7 +92,7 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | stub answers the parts of the server | Checks the source of the stub server against the names that the server renders | `tests/infrastructure/guardrails/screen.rs:192` |
 | part table matches shell | Checks a hand-written table of parts against the parts of the shell: each part of | `tests/infrastructure/guardrails/screen.rs:242` |
 | scripts write no part | Checks one `assets/dashboard-*.js` script other than `dashboard-screen.js`, the | `tests/infrastructure/guardrails/screen.rs:354` |
-| scripts fetch only the screen reads | An action is an htmx request, so the one answer reader hears it and the end of the | `tests/infrastructure/guardrails/screen.rs:394` |
+| scripts fetch only the screen reads | A control sends its request through htmx, so the one answer reader hears it and the end of the | `tests/infrastructure/guardrails/screen.rs:394` |
 | no abort or timeout source | htmx fires `htmx:afterRequest` with status 0 for an abort and a timeout as well as for | `tests/infrastructure/guardrails/screen.rs:418` |
 | handler headers | Checks one handler file of the HTTP adapter. A handler answers its own element | `tests/infrastructure/guardrails/screen.rs:458` |
 | template targets | Checks one template source: a file of the HTTP adapter that renders markup, or | `tests/infrastructure/guardrails/screen.rs:491` |

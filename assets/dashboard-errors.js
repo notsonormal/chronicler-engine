@@ -1,4 +1,4 @@
-// Failure surfaces: the one reader and reporter of an action answer, the form slots, the notice place, the failure banner and the details popovers.
+// Failure surfaces: the one reader and reporter of a request answer, the form slots, the notice place, the failure banner and the details popovers.
 
 function escapeHtml(value) {
   const entities = {
@@ -11,18 +11,21 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => entities[ch]);
 }
 
-// Mirrors the server's disclosure shape for a request with no response body:
-// the short line carries its own text element, which the status column's line
-// clamp is applied to.
+// Mirrors the server's disclosure shape: the short line carries its own text
+// element, which the status column's line clamp is applied to. A report with no
+// text beyond its short line has no Details.
 function errorDisclosureHtml(popoverId, message, rawText) {
+  const details = rawText
+    ? '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
+      escapeHtml(popoverId) + '" data-keep="aria-expanded">Details</button>' +
+      '<div class="error-detail-popover" id="' + escapeHtml(popoverId) + '" hidden data-keep="hidden style">' +
+      '<pre class="error-detail-raw">' + escapeHtml(rawText) + "</pre></div>"
+    : "";
   return (
     '<div class="error-disclosure">' +
     '<span class="error-disclosure-message">' +
     '<span class="error-disclosure-text">' + escapeHtml(message) + "</span></span>" +
-    '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
-    escapeHtml(popoverId) + '" data-keep="aria-expanded">Details</button>' +
-    '<div class="error-detail-popover" id="' + escapeHtml(popoverId) + '" hidden data-keep="hidden style">' +
-    '<pre class="error-detail-raw">' + escapeHtml(rawText) + "</pre></div></div>"
+    details + "</div>"
   );
 }
 
@@ -96,21 +99,20 @@ function outcomeOfStatus(status) {
   return status < 500 ? "invalid" : "failed";
 }
 
-function actionAnswer(event) {
+function requestAnswer(event) {
   const xhr = event && event.detail ? event.detail.xhr : null;
   const status = xhr ? xhr.status : 0;
   return {
     outcome: outcomeOfStatus(status),
     status: status,
     stamp: xhr ? xhr.getResponseHeader("X-Revision") : null,
-    text: xhr ? plainResponseText(xhr.responseText) : "",
   };
 }
 
 // The place holds one report, and its `data-source` decides which clear applies:
-// a screen load never clears the report of an action.
+// a screen load never clears the report of a request.
 function noticeElement() {
-  return document.getElementById("screen-error");
+  return document.getElementById("notice");
 }
 
 function noticeShows(place, summary, detail, source) {
@@ -119,9 +121,8 @@ function noticeShows(place, summary, detail, source) {
   const shownDetail = place.querySelector(".error-detail-raw");
   return (
     !!shownSummary &&
-    !!shownDetail &&
     shownSummary.textContent === summary &&
-    shownDetail.textContent === detail
+    (shownDetail ? shownDetail.textContent : "") === detail
   );
 }
 
@@ -150,19 +151,19 @@ function clearNotice() {
 // htmx dispatches `htmx:afterRequest` to the body before it runs the handler of the
 // control, so the sender is still in the page when a network error arrives.
 function reportAnswer(event) {
-  const answer = actionAnswer(event);
+  const answer = requestAnswer(event);
   if (answer.outcome === "none") {
     markUnreachable();
     return;
   }
   clearUnreachable();
   if (answer.outcome === "done") return;
-  const summary =
-    answer.text.split("\n")[0].trim() || "The server answered " + answer.status + ".";
-  const detail = answer.text || "No detail.";
+  const text = plainResponseText(event.detail.xhr.responseText);
+  const summary = text.split("\n")[0].trim() || "The server answered " + answer.status + ".";
+  const detail = text === summary ? "" : text;
   const slot = answer.outcome === "invalid" ? formSlotOf(event.detail.elt) : null;
   if (slot) renderInlineError(slot, summary, detail);
-  else showNotice(summary, detail, "action");
+  else showNotice(summary, detail, "request");
 }
 
 document.body.addEventListener("htmx:afterRequest", reportAnswer);

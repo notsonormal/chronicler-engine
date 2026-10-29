@@ -17,7 +17,7 @@ use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::action_failure_response;
+use crate::adapters::driving::http::utils::error::failed_answer;
 use crate::adapters::driving::http::utils::response::ok;
 
 #[derive(Deserialize, Serialize)]
@@ -34,7 +34,7 @@ fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Respon
     };
     match Job::start(&state.game_writer, state.job_deps.clone(), game_id, request) {
         Ok(()) => ok(""),
-        Err(refusal) => refusal.into_response(),
+        Err(not_accepted) => not_accepted.into_response(),
     }
 }
 
@@ -96,7 +96,7 @@ pub async fn action_check_handler(
             let template = TextCheckPreviewTemplate::from_check_result(&check_result);
             match template.render() {
                 Ok(html) => ok(html),
-                Err(e) => action_failure_response(format!("Template error: {e}")),
+                Err(e) => failed_answer(format!("Template error: {e}")),
             }
         }
         None => dispatch_action(&state, game_id, command),

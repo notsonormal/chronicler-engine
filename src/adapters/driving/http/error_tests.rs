@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 
 use crate::application::errors::ApplicationError;
-use crate::application::generation::gate::Refusal;
+use crate::application::generation::gate::NotAccepted;
 use crate::error::EngineError;
 use crate::test_support::body_text;
 
@@ -70,7 +70,7 @@ fn validation_into_engine_error_keeps_the_reason_as_validation() {
 
 #[test]
 fn refused_into_engine_error_keeps_the_refusal_line_as_validation() {
-    let error = ApplicationError::Refused(Refusal::StillThinking).into_engine_error();
+    let error = ApplicationError::NotAccepted(NotAccepted::StillThinking).into_engine_error();
     assert!(
         matches!(&error, EngineError::Validation(line) if line == "Still thinking..."),
         "got: {error:?}"

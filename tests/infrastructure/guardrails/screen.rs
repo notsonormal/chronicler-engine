@@ -389,7 +389,7 @@ pub fn check_scripts_write_no_part(path: &str, script: &str, parts: &[String]) -
     violations
 }
 
-/// An action is an htmx request, so the one answer reader hears it and the end of the
+/// A control sends its request through htmx, so the one answer reader hears it and the end of the
 /// request asks for the changes. `dashboard-screen.js` alone may call `fetch(`.
 pub fn check_scripts_fetch_only_the_screen_reads(path: &str, script: &str) -> Vec<Violation> {
     let raw_fetch = Regex::new(r"(^|[^\w$.])fetch\(").expect("fetch pattern");
@@ -407,7 +407,7 @@ pub fn check_scripts_fetch_only_the_screen_reads(path: &str, script: &str) -> Ve
             Violation::error(
                 path,
                 index + 1,
-                "a script calls `fetch(`. Send an action as an htmx request, so the one reader hears its answer and the page asks for the changes when it ends.",
+                "a script calls `fetch(`. Send the request through htmx, so the one reader hears its answer and the page asks for the changes when it ends.",
             )
         })
         .collect()
@@ -480,7 +480,7 @@ pub fn check_handler_headers(path: &str, source: &str, parts: &[String]) -> Vec<
 }
 
 /// Checks one template source: a file of the HTTP adapter that renders markup, or
-/// the shell. An action changes only the element it acts on, so:
+/// the shell. A request changes only the element it acts on, so:
 /// - no `hx-target` names a part element (`#story-log`, `.games-panel`, …);
 /// - no `outerHTML` swap replaces a part element: an element that swaps
 ///   `outerHTML` and names a part as its target, or has no target and is itself a
@@ -523,7 +523,7 @@ pub fn check_template_targets(path: &str, content: &str, parts: &[String]) -> Ve
                 path,
                 line,
                 format!(
-                    "`hx-target=\"{}\"` names a part element. An action changes only the element it acts on, or its own editor slot: the screen load writes the data.",
+                    "`hx-target=\"{}\"` names a part element. A request changes only the element it acts on, or its own editor slot: the screen load writes the data.",
                     target.unwrap_or("")
                 ),
             ));

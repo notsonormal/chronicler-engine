@@ -1,4 +1,4 @@
-//! Stub-browser tests for refused form actions: the form keeps its place, and an invalid answer shows in its slot while a refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for failed form requests: the form keeps its place, and an invalid answer shows in its slot while a refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 
@@ -71,21 +71,17 @@ async fn check_failed_connection_add_keeps_the_form_and_renders_inline(
     let slot = r#"#edit-dialog .connection-form [data-error-slot="connection-form"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
-        "a refused connection add should render into the form's inline slot"
+        "an invalid connection add should render into the form's inline slot"
     );
-    let (visible, message, raw) = read_error_disclosure(&page, slot).await;
+    let (visible, message, _) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
     assert_eq!(
         message, "The Connection was not saved: Unknown LLM backend 'bogus_provider'.",
         "the short line is the sentence that the server wrote, with the engine's explanation"
     );
     assert!(
-        raw.contains("Unknown LLM backend"),
-        "the raw refusal belongs in the disclosure, got {raw:?}"
-    );
-    assert!(
         connection_form_node_is_still_present(&page).await,
-        "a refused connection add must leave the form in place in the dialog"
+        "an invalid connection add must leave the form in place in the dialog"
     );
     assert!(
         !read_error_disclosure(&page, NOTICE).await.0,
@@ -122,21 +118,17 @@ async fn check_failed_connection_edit_keeps_the_form_and_renders_inline(
     let slot = r#"#edit-dialog .connection-form [data-error-slot="connection-form"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
-        "a refused connection edit should render into the form's inline slot"
+        "an invalid connection edit should render into the form's inline slot"
     );
-    let (visible, message, raw) = read_error_disclosure(&page, slot).await;
+    let (visible, message, _) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
     assert_eq!(
         message, "The Connection was not saved: Unknown LLM backend 'bogus_provider'.",
         "the short line is the sentence that the server wrote, with the engine's explanation"
     );
     assert!(
-        raw.contains("Unknown LLM backend"),
-        "the raw refusal belongs in the disclosure, got {raw:?}"
-    );
-    assert!(
         connection_form_node_is_still_present(&page).await,
-        "a refused connection edit must leave the form in place in the dialog"
+        "an invalid connection edit must leave the form in place in the dialog"
     );
 }
 
@@ -175,13 +167,13 @@ async fn check_failed_preset_add_keeps_the_dialog_and_renders_inline(
     let slot = r#"#edit-dialog form [data-error-slot="preset-add-system"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
-        "a refused preset add should render into the form's inline slot"
+        "an invalid preset add should render into the form's inline slot"
     );
-    let (visible, _, raw) = read_error_disclosure(&page, slot).await;
+    let (visible, message, _) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
     assert!(
-        raw.contains("Invalid preset type"),
-        "the raw refusal belongs in the disclosure, got {raw:?}"
+        message.contains("Invalid preset type"),
+        "the sentence carries the engine's explanation, got {message:?}"
     );
 
     let kept = page
@@ -198,7 +190,7 @@ async fn check_failed_preset_add_keeps_the_dialog_and_renders_inline(
         .unwrap();
     assert!(
         kept,
-        "a refused preset add must leave the dialog open with the same form and its typed text"
+        "an invalid preset add must leave the dialog open with the same form and its typed text"
     );
 }
 
@@ -269,7 +261,7 @@ async fn check_failed_preset_edit_keeps_the_dialog_and_reports_in_the_notice(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.32
-async fn check_refused_preset_delete_keeps_the_card_and_reports_in_the_notice(
+async fn check_an_invalid_preset_delete_keeps_the_card_and_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -303,18 +295,14 @@ async fn check_refused_preset_delete_keeps_the_card_and_reports_in_the_notice(
     wait_for_error_disclosure(
         &page,
         NOTICE,
-        "a refused preset delete reports in the notice",
+        "an invalid preset delete reports in the notice",
     )
     .await;
-    let (visible, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    let (visible, message, _) = read_error_disclosure(&page, NOTICE).await;
     assert!(visible, "the notice should be shown");
     assert_eq!(
         message,
         "The preset was not deleted: Preset is a mode default; change the default before deleting."
-    );
-    assert!(
-        raw.contains("mode default"),
-        "the raw refusal belongs in the disclosure, got {raw:?}"
     );
 
     let kept = page
@@ -330,7 +318,10 @@ async fn check_refused_preset_delete_keeps_the_card_and_reports_in_the_notice(
             )
             .await
             .unwrap();
-    assert!(kept, "a refused preset delete must leave the card in place");
+    assert!(
+        kept,
+        "an invalid preset delete must leave the card in place"
+    );
 }
 
 #[tokio::test]
@@ -363,7 +354,7 @@ async fn run_form_failures_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_refused_preset_delete_keeps_the_card_and_reports_in_the_notice,
+            check_an_invalid_preset_delete_keeps_the_card_and_reports_in_the_notice,
         )
         .await;
     runner.finish().await;

@@ -37,6 +37,7 @@ use chronicler_engine::adapters::driving::http::games::templates::games::{
     NewGameFormTemplate, PersonaRowView,
 };
 use chronicler_engine::domain::model::saved_games_page::{SavedGamesPage, SAVED_GAMES_PAGE_SIZE};
+use chronicler_engine::adapters::driving::http::settings::handlers::connection_test_failure_html;
 use chronicler_engine::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, ConnectionTestDialogTemplate, ConnectionTestResultTemplate,
     SettingsTemplate,
@@ -45,10 +46,10 @@ use chronicler_engine::adapters::driving::http::layout::handlers::{
     autoplay_controls_answer, busy_answer, failure_answer, idle_answer, send_control_answer,
 };
 use chronicler_engine::adapters::driving::http::utils::answer_words::{
-    describe_answers, item_named, naming_item, RefusalKind,
+    answer_response, describe_answers, item_named, ErrorAnswer, RefusalKind,
 };
 use chronicler_engine::adapters::driving::http::utils::error::{
-    action_failure_response, action_invalid_response, action_not_found_response,
+    failed_answer, invalid_answer, not_found_answer,
 };
 use chronicler_engine::adapters::driving::http::utils::handler_helpers::{
     names_no_message, LastMessageForm,
@@ -69,7 +70,7 @@ use chronicler_engine::domain::model::state::message_types::{StoryRow, MessageTy
 use chronicler_engine::test_support::{default_story_row, TestPromptPreset};
 
 use super::server::{get_config_port, release_port_lock};
-use super::stub_action_layers::StubActionLayers;
+use super::stub_request_layers::StubRequestLayers;
 use super::CONFIG_PATH;
 
 mod handles;
@@ -546,7 +547,7 @@ struct StubState {
     role_save_answer_permits: tokio::sync::Semaphore,
     story_writes_refused_as_busy: std::sync::atomic::AtomicBool,
     generation_requests_accepted: std::sync::atomic::AtomicBool,
-    action_layers: StubActionLayers,
+    request_layers: StubRequestLayers,
     delete_succeeds: std::sync::atomic::AtomicBool,
     deleted: std::sync::atomic::AtomicBool,
     header_degraded: std::sync::atomic::AtomicBool,
@@ -714,7 +715,7 @@ impl StubServer {
             role_save_answer_permits: tokio::sync::Semaphore::new(0),
             story_writes_refused_as_busy: std::sync::atomic::AtomicBool::new(false),
             generation_requests_accepted: std::sync::atomic::AtomicBool::new(false),
-            action_layers: StubActionLayers::default(),
+            request_layers: StubRequestLayers::default(),
             delete_succeeds: std::sync::atomic::AtomicBool::new(false),
             deleted: std::sync::atomic::AtomicBool::new(false),
             header_degraded: std::sync::atomic::AtomicBool::new(false),
@@ -909,11 +910,11 @@ fn stub_router(state: Arc<StubState>) -> Router {
         .route("/connections/:id/test", post(test_saved_connection))
         .route(
             "/prompt-presets",
-            post(|| async { action_invalid_response("Invalid preset type") }),
+            post(|| async { invalid_answer("Invalid preset type") }),
         )
         .route(
             "/prompt-presets/:id",
-            post(|| async { action_failure_response("preset save failure") }),
+            post(|| async { failed_answer("preset save failure") }),
         )
         .route("/prompt-presets/:id/delete", post(delete_preset))
         .route("/prompt-presets/:id/activate", post(activate_preset))
@@ -933,7 +934,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         // row's own error slot rather than the panel's.
         .route(
             "/reset",
-            post(|| async { action_failure_response("Stub reset failure") }),
+            post(|| async { failed_answer("Stub reset failure") }),
         )
         .route("/worlds/:key/delete", post(delete_world))
         .route("/history/delete", post(delete_message))
@@ -1005,7 +1006,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
         ))
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&state),
-            action_answers_middleware,
+            request_answers_middleware,
         ))
         .layer(axum::middleware::from_fn(describe_answers))
         .with_state(state)
@@ -1066,7 +1067,7 @@ async fn rename_game_form_fragment(
                 .expect("render the Rename form"),
         )
         .into_response(),
-        None => action_not_found_response("Game not found"),
+        None => not_found_answer("Game not found"),
     }
 }
 
@@ -1099,7 +1100,7 @@ async fn llm_message_record_fragment(
                 .expect("render the LLM message record"),
         )
         .into_response(),
-        None => action_not_found_response("LLM message not found"),
+        None => not_found_answer("LLM message not found"),
     }
 }
 
@@ -1136,7 +1137,7 @@ async fn rename_game(
             return refused(RefusalKind::Busy);
         }
         if games.rename_failing {
-            return action_failure_response("Stub rename failure");
+            return failed_answer("Stub rename failure");
         }
         if id == 1 {
             games.active_name = form.display_name;
@@ -1214,7 +1215,7 @@ const PANEL_LOAD_PATHS: [&str; 4] = [
     "/fragment/prompt-presets",
 ];
 
-async fn action_answers_middleware(
+async fn request_answers_middleware(
     State(state): State<Arc<StubState>>,
     request: axum::extract::Request,
     next: axum::middleware::Next,
@@ -1227,7 +1228,7 @@ async fn action_answers_middleware(
         )
     };
     state
-        .action_layers
+        .request_layers
         .answer(request, next, read_changes)
         .await
 }
@@ -1265,13 +1266,13 @@ async fn count_and_fail_reads_middleware(
                 .iter()
                 .any(|part| names_part(part)));
     if is_panel_load && state.panel_loads_failing.load(SeqCst) {
-        return action_failure_response("panel load failed");
+        return failed_answer("panel load failed");
     }
     let is_read = is_load || path == "/changes";
     let failing =
         state.asks_and_loads_failing.load(SeqCst) || (is_load && state.loads_failing.load(SeqCst));
     if is_read && failing {
-        return action_failure_response("read failed");
+        return failed_answer("read failed");
     }
     next.run(request).await
 }
@@ -1335,7 +1336,23 @@ async fn test_saved_connection(
     )
 }
 
-async fn test_connection_form() -> Html<String> {
+/// The typed model that makes the stub's form Test fail, so a test can open the
+/// Details of a failed Test in the dialog.
+pub const FAILING_TEST_MODEL: &str = "failing-model";
+
+#[derive(serde::Deserialize)]
+struct ConnectionTestForm {
+    #[serde(default)]
+    conn_model: String,
+}
+
+async fn test_connection_form(Form(form): Form<ConnectionTestForm>) -> Html<String> {
+    if form.conn_model == FAILING_TEST_MODEL {
+        return Html(connection_test_failure_html(
+            "connection-test-form-popover",
+            "The stub provider failed the test.",
+        ));
+    }
     Html(connection_test_result_html("typed-model"))
 }
 
@@ -1347,7 +1364,7 @@ async fn save_connection(State(state): State<Arc<StubState>>) -> Response<Body> 
     {
         return (StatusCode::OK, "").into_response();
     }
-    action_invalid_response("Unknown LLM backend 'bogus_provider'")
+    invalid_answer("Unknown LLM backend 'bogus_provider'")
 }
 
 async fn save_text_check(
@@ -1401,7 +1418,7 @@ async fn switch_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
         return refused(RefusalKind::Busy);
     }
     if state.switch_fails.load(SeqCst) {
-        return action_failure_response("Stub swipe switch failure");
+        return failed_answer("Stub swipe switch failure");
     }
     state.switched.store(true, SeqCst);
     state.dock_options_live.store(false, SeqCst);
@@ -1570,7 +1587,7 @@ async fn action_check(
         StubActionOutcome::Pending => dispatched(&state),
         StubActionOutcome::Refused => refused(RefusalKind::Busy),
         StubActionOutcome::Error => action_failure(command),
-        StubActionOutcome::Invalid => action_invalid_response(INVALID_ACTION_MESSAGE),
+        StubActionOutcome::Invalid => invalid_answer(INVALID_ACTION_MESSAGE),
     }
 }
 
@@ -1587,7 +1604,7 @@ fn dispatched(state: &StubState) -> Response<Body> {
 /// The 500 a failing engine action produces: the engine's own error render
 /// naming the command, so the disclosure's raw text is the server's response.
 fn action_failure(command: &str) -> Response<Body> {
-    action_failure_response(format!("Failed to process action: {command}"))
+    failed_answer(format!("Failed to process action: {command}"))
 }
 
 /// The busy state that a stub status stands for: the status display and the
@@ -1641,7 +1658,7 @@ async fn action_confirm(
         StubActionOutcome::Error => action_failure(command),
         StubActionOutcome::Refused => refused(RefusalKind::Busy),
         StubActionOutcome::Pending => dispatched(&state),
-        StubActionOutcome::Invalid => action_invalid_response(INVALID_ACTION_MESSAGE),
+        StubActionOutcome::Invalid => invalid_answer(INVALID_ACTION_MESSAGE),
     }
 }
 
@@ -1654,7 +1671,7 @@ async fn game_posture_save(State(state): State<Arc<StubState>>) -> Response<Body
     {
         return (StatusCode::OK, "").into_response();
     }
-    action_failure_response("Failed to save posture")
+    failed_answer("Failed to save posture")
 }
 
 /// The retry route: a refusal while the Game is busy, else the 500 the retry
@@ -1681,7 +1698,7 @@ async fn retry_swipe(
     {
         return dispatched(&state);
     }
-    action_failure_response("Stub retry failure")
+    failed_answer("Stub retry failure")
 }
 
 /// The Autoplay start answers by the action outcome: it takes the budget and the
@@ -1698,8 +1715,8 @@ async fn start_autoplay(State(state): State<Arc<StubState>>) -> Response<Body> {
             (StatusCode::OK, "").into_response()
         }
         StubActionOutcome::Refused => refused(RefusalKind::Busy),
-        StubActionOutcome::Error => action_failure_response("Stub autoplay failure"),
-        StubActionOutcome::Invalid => action_invalid_response(INVALID_ACTION_MESSAGE),
+        StubActionOutcome::Error => failed_answer("Stub autoplay failure"),
+        StubActionOutcome::Invalid => invalid_answer(INVALID_ACTION_MESSAGE),
     }
 }
 
@@ -1728,7 +1745,7 @@ async fn record_retrigger(
     {
         return dispatched(&state);
     }
-    action_failure_response("Stub retrigger failure")
+    failed_answer("Stub retrigger failure")
 }
 
 async fn presets_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
@@ -1755,7 +1772,7 @@ async fn delete_preset(
         state.bump(&[ChangeKind::PROMPT_PRESETS]);
         (StatusCode::OK, "").into_response()
     } else {
-        action_invalid_response("Preset is a mode default; change the default before deleting")
+        invalid_answer("Preset is a mode default; change the default before deleting")
     }
 }
 
@@ -1789,7 +1806,7 @@ async fn duplicate_preset(
     {
         let mut presets = state.presets.lock().expect("stub presets lock poisoned");
         let Some(source) = presets.find(&id) else {
-            return action_invalid_response("Preset not found");
+            return invalid_answer("Preset not found");
         };
         presets.copies += 1;
         let number = presets.copies;
@@ -1820,24 +1837,24 @@ async fn preset_add_form_fragment(
             )
             .into_response()
         }
-        None => action_invalid_response("Invalid preset type"),
+        None => invalid_answer("Invalid preset type"),
     }
 }
 
 /// The card's Edit control: the engine refuses the edit of a default preset with
-/// a non-2xx answer, and the card reports it in its own slot.
+/// a non-2xx answer, and the notice reports it.
 async fn preset_edit_form_fragment(
     State(state): State<Arc<StubState>>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
     if state.preset_card_refused.load(SeqCst) {
-        return action_invalid_response("Cannot edit default presets");
+        return invalid_answer("Cannot edit default presets");
     }
     let presets = state.presets.lock().expect("stub presets lock poisoned");
     match presets.find(&id) {
         Some(preset) => Html(preset_edit_form_html(&preset, "system")).into_response(),
-        None => action_not_found_response("Preset not found"),
+        None => not_found_answer("Preset not found"),
     }
 }
 
@@ -1848,7 +1865,7 @@ async fn preset_view_form_fragment(
     let presets = state.presets.lock().expect("stub presets lock poisoned");
     match presets.find(&id) {
         Some(preset) => Html(preset_view_form_html(&preset)).into_response(),
-        None => action_not_found_response("Preset not found"),
+        None => not_found_answer("Preset not found"),
     }
 }
 
@@ -1864,7 +1881,7 @@ async fn edit_world_form_fragment(
     let worlds = state.worlds.lock().expect("stub worlds lock poisoned");
     match worlds.worlds.iter().find(|world| world.key == key) {
         Some(world) => Html(world_form_html(Some(world))).into_response(),
-        None => action_not_found_response("World not found"),
+        None => not_found_answer("World not found"),
     }
 }
 
@@ -1899,7 +1916,7 @@ async fn save_world_posture(State(state): State<Arc<StubState>>) -> Response<Bod
         .expect("stub worlds lock poisoned")
         .posture_failing
     {
-        return action_invalid_response("Unknown narrator mode");
+        return invalid_answer("Unknown narrator mode");
     }
     state.bump(&[ChangeKind::WORLDS]);
     (StatusCode::OK, "").into_response()
@@ -1921,7 +1938,10 @@ async fn delete_world(
         .find(|world| world.key == key)
         .and_then(|world| item_named(&world.name));
     if state.world_delete_refused.load(SeqCst) {
-        return naming_item(action_invalid_response("World still has games"), name);
+        return answer_response(
+            StatusCode::BAD_REQUEST,
+            ErrorAnswer::invalid("World still has games").with_item(name),
+        );
     }
     if state.row_deletes_succeed.load(SeqCst) {
         state
@@ -1933,7 +1953,10 @@ async fn delete_world(
         state.bump(&[ChangeKind::WORLDS]);
         (StatusCode::OK, "").into_response()
     } else {
-        naming_item(action_failure_response("Stub world delete failure"), name)
+        answer_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorAnswer::failed("Stub world delete failure").with_item(name),
+        )
     }
 }
 
@@ -1958,7 +1981,7 @@ async fn save_message(
         return refused(RefusalKind::Busy);
     }
     if state.save_invalid.load(std::sync::atomic::Ordering::SeqCst) {
-        return action_invalid_response(INVALID_ACTION_MESSAGE);
+        return invalid_answer(INVALID_ACTION_MESSAGE);
     }
     if state
         .save_succeeds
@@ -1967,7 +1990,7 @@ async fn save_message(
         state.bump(&[ChangeKind::STORY]);
         (StatusCode::OK, "").into_response()
     } else {
-        action_failure_response("Stub save failure")
+        failed_answer("Stub save failure")
     }
 }
 
@@ -1986,7 +2009,7 @@ async fn delete_message(
         return refusal;
     }
     if !state.delete_succeeds.load(SeqCst) {
-        return action_failure_response("Stub delete failure");
+        return failed_answer("Stub delete failure");
     }
     state.deleted.store(true, SeqCst);
     state.bump(&[ChangeKind::STORY]);

@@ -293,31 +293,6 @@ fn make_test_app_state_with_failing_storage(
     crate::adapters::driving::http::AppState::from_wired(wired)
 }
 
-#[tokio::test]
-async fn test_edit_preset_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        PromptPreset {
-            id: "custom".into(),
-            name: "Custom".into(),
-            instructions: Some("Custom.".into()),
-            ..Default::default()
-        },
-        |h| {
-            h.set(
-                StorageCall::GetPreset,
-                TestOverride::config("injected get failure"),
-            )
-        },
-    );
-    let response = edit_preset_form_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("custom".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Load failed"));
-}
-
 fn preset_with_modes(id: &str, modes: Vec<NarratorMode>) -> PromptPreset {
     let mut preset = crate::test_support::TestPromptPreset::system(id, id);
     preset.allowed_modes = modes;

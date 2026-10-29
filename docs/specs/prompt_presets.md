@@ -21,7 +21,7 @@ non-2xx error fragment, which the page shows in the notice place.
 
 A create, an update, a delete, a duplicate and an activate answer nothing on
 success: an empty 200. An invalid value answers a 400 error fragment, and a failure a
-500 error fragment. The page shows the report of an action in the notice place, or in the
+500 error fragment. The page shows the report of a request in the notice place, or in the
 form that holds the typed input. The change reaches the screen when the panel loads.
 
 ## Scenarios
@@ -69,7 +69,7 @@ And the form has an input named writing_style for every type except quantifier
 And the form has an error slot for that type and a Cancel control that closes the dialog
 ```
 
-#### Scenario 21.43: The Add form of an unknown type is refused
+#### Scenario 21.43: The Add form of an unknown type answers 400
 
 ```gherkin
 Given a fresh app state
@@ -104,7 +104,7 @@ Then the response is a 404
 And the response body is `<div class="error-message">Preset not found</div>`
 ```
 
-#### Scenario 21.6: Edit form for a default preset is refused
+#### Scenario 21.6: Edit form for a default preset answers 400
 
 ```gherkin
 Given a fresh app state with a seeded default system preset
@@ -285,7 +285,7 @@ Then the response is a 400
 And the response body is `<div class="error-message">Cannot delete default presets</div>`
 ```
 
-#### Scenario 21.37: Delete a preset referenced as a mode default is refused
+#### Scenario 21.37: Delete a preset referenced as a mode default answers 400
 
 ```gherkin
 Given a fresh app state with a non-default system preset referenced as the Interactive Fiction bundle's system default
@@ -295,7 +295,7 @@ And the response body contains "Preset is a mode default; change the default bef
 And the preset is not deleted
 ```
 
-#### Scenario 21.38: Delete the active settings-level Options preset is refused
+#### Scenario 21.38: Delete the active settings-level Options preset answers 400
 
 ```gherkin
 Given a fresh app state with a non-default Options preset set as the settings-level Options default
@@ -305,7 +305,7 @@ And the response body contains "Preset is the default Options preset; change the
 And the preset is not deleted
 ```
 
-#### Scenario 21.40: Delete a preset that a Game uses is refused with the count of Games
+#### Scenario 21.40: Delete a preset that a Game uses answers 400 with the count of Games
 
 ```gherkin
 Given a fresh app state with a non-default system preset
@@ -407,7 +407,7 @@ And storage reports the copy's allowed_modes as ["novel", "interactive_fiction"]
 
 ### Duplicate names
 
-#### Scenario 21.29: Creating a preset whose name already exists in its category is refused
+#### Scenario 21.29: Creating a preset whose name already exists in its category answers 400
 
 ```gherkin
 Given a fresh app state with a System preset named "Alpha"
@@ -416,7 +416,7 @@ Then the response is a 400
 And the body names "Alpha" and says a system preset with that name already exists
 ```
 
-#### Scenario 21.30: Creating a preset differing only in case and surrounding space is refused
+#### Scenario 21.30: Creating a preset differing only in case and surrounding space answers 400
 
 ```gherkin
 Given a fresh app state with a System preset named "Alpha"
@@ -456,7 +456,7 @@ And a following GET /fragment/prompt-presets contains the copy name "Original (C
 And it still contains the first copy name "Original (Copy)"
 ```
 
-#### Scenario 21.34: Renaming a preset onto a same-category sibling's name is refused
+#### Scenario 21.34: Renaming a preset onto a same-category sibling's name answers 400
 
 ```gherkin
 Given a fresh app state with a System preset named "Alpha"

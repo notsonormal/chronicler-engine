@@ -61,6 +61,6 @@ And the dialog is still open with the same record
 Given the LLM Messages panel shows an LLM attempt whose record the engine has removed
 When the client activates the attempt's Open control
 Then no dialog opens
-And #screen-error shows "The form was not opened: LLM message not found."
+And #notice shows "The form was not opened: LLM message not found."
 And the focus stays on the Open control
 ```

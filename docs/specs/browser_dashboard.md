@@ -108,19 +108,19 @@ And a label names the command input "Action"
 ```gherkin
 Given the dashboard is loaded and the story log shows its entries
 When a screen load fails with a non-2xx answer
-Then #screen-error shows "GET /screen answered 500" with the server's text behind its Details control
+Then #notice shows "GET /screen answered 500" with the server's text behind its Details control
 And the banner is not visible, because the engine answered
 And the story log still shows the same entries
 When a later screen load succeeds
-Then #screen-error is hidden
+Then #notice is hidden
 ```
 
-#### Scenario 16.19: A failed action reports in the notice with the sentence of the server
+#### Scenario 16.19: A failed Action reports in the notice with the sentence of the server
 
 ```gherkin
-Given the dashboard is loaded and the action form is visible
-When the client submits a command and the server fails the action
-Then #screen-error shows the first line of the server's answer, "The Action was not sent."
+Given the dashboard is loaded and the Action form is visible
+When the client submits an Action and the server fails it
+Then #notice shows the first line of the server's answer, "The Action was not sent."
 And the short line carries no raw server text and no "That action failed." lead
 And the raw server text is reachable in that notice's disclosure
 And the notice is drawn as a message with a Details control, not as a second Send button
@@ -186,7 +186,7 @@ And the new options are announced once
 And neither is announced again while its content is unchanged
 ```
 
-#### Scenario 16.25: A failed action on a reachable server never reports the engine unreachable
+#### Scenario 16.25: A failed request on a reachable server never reports the engine unreachable
 
 ```gherkin
 Given the dashboard is loaded and a panel control's save cannot be stored
@@ -236,10 +236,10 @@ And pressing Enter in #command-form input[name="command"] submits the form
 ```gherkin
 Given the edit dialog is open with the connection Add form
 And the form is the same node as before the submission
-When the client submits the form and the server refuses it
+When the client submits the form and the server answers 400
 Then the edit dialog is still open with the same form
 And the form shows an inline error with the sentence of the server, "The Connection was not saved: <the engine's explanation>."
-And the raw server text is reachable in that error's disclosure
+And that error has no Details control
 ```
 
 #### Scenario 16.30: A failed preset add keeps its dialog and renders the failure inline
@@ -247,10 +247,10 @@ And the raw server text is reachable in that error's disclosure
 ```gherkin
 Given the edit dialog is open with a preset Add form
 And the form is the same node as before the submission
-When the client submits the Add form and the server refuses it
+When the client submits the Add form and the server answers 400
 Then the edit dialog is still open with the same form and its typed text
 And the Add form shows an inline error naming the failure
-And the raw server text is reachable in that error's disclosure
+And that error has no Details control
 ```
 
 #### Scenario 16.31: A failed preset edit keeps its dialog and reports in the notice
@@ -261,19 +261,19 @@ And the client has opened that card's edit form in the edit dialog
 And the edit form is the same node as before the submission
 When the client submits the edit form and the server fails the save
 Then the edit dialog is still open with the same form
-And #screen-error shows "The preset was not saved." and the form's inline slot is empty
+And #notice shows "The preset was not saved." and the form's inline slot is empty
 And the raw server text is reachable in the notice's disclosure
 ```
 
-#### Scenario 16.32: A refused preset delete keeps its card and reports in the notice
+#### Scenario 16.32: An invalid preset delete keeps its card and reports in the notice
 
 ```gherkin
 Given the Prompt Presets panel shows a non-default preset card
 And the card is the same node as before the submission
-When the client deletes that preset and the server refuses it
+When the client deletes that preset and the server answers 400
 Then the card is still in the document
-And #screen-error names what was not done and why
-And the raw server text is reachable in the notice's disclosure
+And #notice names what was not done and why
+And the report has no Details control
 ```
 
 #### Scenario 16.33: A failed panel load reports in the screen error
@@ -281,36 +281,36 @@ And the raw server text is reachable in the notice's disclosure
 ```gherkin
 Given the dashboard loads and the Worlds, Games, Settings and Prompt Presets panel renders fail
 When the client opens each of those tabs
-Then #screen-error shows a short failure message
+Then #notice shows a short failure message
 And its Details disclosure holds the raw server text
 And the panel holds no content
 And the banner is not raised
 ```
 
-#### Scenario 16.34: A failed row action reports in the notice
+#### Scenario 16.34: A failed row button reports in the notice
 
 ```gherkin
 Given the Worlds panel shows a world row and the Games panel shows a game row
 When the client confirms that world row's Delete and the server fails it
-Then #screen-error shows `The World "Redmist Estate" was not deleted.`
+Then #notice shows `The World "Redmist Estate" was not deleted.`
 And its Details disclosure holds the raw server text
 And the world row is still in the list and holds no report
 And its Delete control has keyboard focus
 When the client confirms that game row's Reset and the server fails it
-Then #screen-error shows "The Game was not reset."
+Then #notice shows "The Game was not reset."
 And the game row's Reset control has keyboard focus
 And the banner is not raised
 ```
 
-#### Scenario 16.35: A refused connection edit keeps its dialog and renders the failure inline
+#### Scenario 16.35: An invalid connection edit keeps its dialog and renders the failure inline
 
 ```gherkin
 Given the edit dialog is open with a saved connection's Edit form
 And the form is the same node as before the submission
-When the client submits the form and the server refuses it
+When the client submits the form and the server answers 400
 Then the edit dialog is still open with the same form
 And the form shows an inline error with the sentence of the server, "The Connection was not saved: <the engine's explanation>."
-And the raw server text is reachable in that error's disclosure
+And that error has no Details control
 ```
 
 #### Scenario 16.36: A confirmed preview consumes the command text
@@ -365,8 +365,8 @@ And the preview stays open with the corrected text
 And the command input still holds the typed command
 
 Given the dashboard is loaded with text check enabled and the preview is open
-When the client confirms the preview and the server fails the action
-Then #screen-error shows "The Action was not sent." with the server's text behind Details
+When the client confirms the preview and the server fails the Action
+Then #notice shows "The Action was not sent." with the server's text behind Details
 And the preview stays open with the corrected text
 And the command input still holds the typed command
 ```
@@ -388,7 +388,7 @@ Then Ready is drawn in its own colour
 Given the dashboard is loaded
 And a generation is already in flight
 When the client submits a command the engine refuses
-Then #screen-error says "The Game is busy, so the Action was not sent."
+Then #notice says "The Game is busy, so the Action was not sent."
 And its Details disclosure holds both lines of the answer
 And the status display keeps the state it had
 And the command input still holds the typed command
@@ -414,7 +414,7 @@ Given the dashboard is loaded with text check enabled and the preview is open
 And a generation is already in flight
 When the client confirms the preview and the engine refuses the command
 Then the preview stays open with the corrected text
-And #screen-error says that the Game is busy
+And #notice says that the Game is busy
 And the command input still holds the typed command
 ```
 
@@ -469,7 +469,7 @@ When the client saves and the engine accepts the save
 Then the edit dialog is closed and its body is empty
 ```
 
-A save that the engine refuses keeps the dialog open: see Scenarios 16.29 and 16.35.
+A save that the engine answers with 400 keeps the dialog open: see Scenarios 16.29 and 16.35.
 
 #### Scenario 16.49: An answer that comes from outside never replaces the form of the open dialog
 
@@ -486,7 +486,7 @@ And the result of the Test is not shown
 
 ```gherkin
 Given the edit dialog is open with a form, and a typed value in a field
-And a refused save shows its error with the Details open
+And a failed Test of the form shows its error with the Details open
 When the client presses Escape
 Then the error detail is closed
 And the edit dialog is still open, and the field keeps the typed value
@@ -513,7 +513,7 @@ Then the dialog is centred horizontally in the viewport
 And the dialog is centred vertically, with its top edge below the top of the viewport
 ```
 
-#### Scenario 16.53: Each action carries the Game that the page shows
+#### Scenario 16.53: Each request carries the Game that the page shows
 
 ```gherkin
 Given the dashboard has loaded the Game that GET /changes names
@@ -531,7 +531,7 @@ Given the dashboard shows the active Game
 And the engine switched the active Game, and the page has not asked since
 When the client submits a command
 Then the engine refuses the command with 409 and "The active Game changed, so the Action was not sent."
-And #screen-error says that the active Game changed
+And #notice says that the active Game changed
 And the command input still holds the typed command
 And no preview is open
 ```
@@ -543,7 +543,7 @@ Given the dashboard shows the active Game and an entry of the story log is in ed
 And the engine switched the active Game, and the page has not asked since
 When the client presses Save
 Then the engine refuses the save with 409 and "The active Game changed"
-And #screen-error says that the active Game changed
+And #notice says that the active Game changed
 And the editor is still open and holds the typed text
 ```
 
@@ -567,7 +567,7 @@ When the client presses Switch for the second Game and the engine accepts it
 Then the page still names Game 1 until the next load shows Game 2
 When the client sends the command before that load ends
 Then the engine refuses it with 409 and "The active Game changed"
-And #screen-error says that the active Game changed
+And #notice says that the active Game changed
 And the Action input still holds the command
 When the load ends
 Then the page names the second Game
@@ -582,7 +582,7 @@ Given an Autoplay run holds the Game and Stop shows
 And the engine switched the active Game, and the page has not asked since
 When the client presses Stop
 Then the engine refuses it with 409 and "The active Game changed"
-And #screen-error says "The active Game changed, so the Autoplay run was not stopped."
+And #notice says "The active Game changed, so the Autoplay run was not stopped."
 ```
 
 #### Scenario 16.59: A Reset for a Game that is no longer active reports in the notice
@@ -592,7 +592,7 @@ Given the Games panel shows the active Game row
 And the engine switched the active Game, and the page has not asked since
 When the client confirms that row's Reset
 Then the engine refuses it with 409 and "The active Game changed"
-And #screen-error says "The active Game changed, so the Game was not reset."
+And #notice says "The active Game changed, so the Game was not reset."
 ```
 
 #### Scenario 16.61: A preview send clears the Action input only if it still holds the text that the preview sent
@@ -695,7 +695,7 @@ Then #action-status is empty
 ```gherkin
 Given the dashboard is loaded and idle
 When the client retries, retriggers, or asks for new options, and the engine refuses the request or it fails
-Then the report shows in #screen-error
+Then the report shows in #notice
 And #action-status is empty
 ```
 
@@ -704,7 +704,7 @@ And #action-status is empty
 ```gherkin
 Given the dashboard is loaded and the options dock shows options
 When the client asks for new options and the engine refuses the request with 409
-Then #screen-error shows one refusal report
+Then #notice shows one refusal report
 And the report says "the Action was not sent"
 And the options dock holds no report
 ```
@@ -714,9 +714,9 @@ And the options dock holds no report
 ```gherkin
 Given the Worlds panel shows a world row and the server fails its Delete
 When the client confirms the Delete
-Then #screen-error shows the report, and its Close control has the accessible name "Close the notice"
+Then #notice shows the report, and its Close control has the accessible name "Close the notice"
 When the client presses Close
-Then #screen-error is hidden and its report is empty
+Then #notice is hidden and its report is empty
 And focus is on #main-content
 ```
 
@@ -727,37 +727,37 @@ Where each kind of control reports a refusal or a failure is pinned by the scena
 ```gherkin
 Given the Rename dialog of a Game is open with a typed name
 When the client saves the form and the engine refuses it with 409
-Then #screen-error shows "The Game is busy, so the Game was not renamed." with both lines in Details
+Then #notice shows "The Game is busy, so the Game was not renamed." with both lines in Details
 And that is the only report on the page, and the banner is not raised
 And the dialog stays open with its draft, and its status line repeats the sentence
 
 Given the dashboard is loaded
 When the engine answers the Action input with 400
 Then #command-form's slot shows "The Action was not sent: <the engine's message>."
-And #screen-error stays empty, and the typed command stays
+And #notice stays empty, and the typed command stays
 When the engine answers the Autoplay cycles with 400
 Then #autoplay-form's slot shows "The Autoplay run did not start: <the engine's message>."
-And #screen-error stays empty, and the typed cycles stay
+And #notice stays empty, and the typed cycles stay
 ```
 
 No engine route answers a dialog form with 409 today. The first block guards the case for a future route.
 
-#### Scenario 16.74: A notice stays until the next action, until a failing screen load works again, or until Close
+#### Scenario 16.74: A notice stays until the next request, until a failing screen load works again, or until Close
 
 ```gherkin
-Given the dashboard shows a notice for a failed action
+Given the dashboard shows a notice for a failed request
 When the revision moves and a screen load works
 Then the notice stays
 When the client changes the tab
 Then the notice stays
 When the client presses a dialog opener
 Then the notice clears
-When the client sends the next action
+When the client sends the next request
 Then the notice clears
 
-Given a screen load fails and #screen-error shows its report
+Given a screen load fails and #notice shows its report
 When a later screen load works
-Then #screen-error is hidden
+Then #notice is hidden
 
 Given an invalid answer shows in the slot of a form
 When the client sends that form again
@@ -789,7 +789,7 @@ When htmx reports a load error for #command-form
 Then the action area is no longer checking
 ```
 
-#### Scenario 16.78: An opener keeps its id through a load, and an opener that is gone leaves focus on the body
+#### Scenario 16.78: An opener keeps its id through a load, and an opener that is gone takes no focus
 
 ```gherkin
 Given the edit dialog is open, and a control of a saved Game in the Games panel opened it
@@ -798,5 +798,14 @@ When the client activates Cancel
 Then focus is on the control that has the id of the control that opened the dialog
 When the client opens the dialog again, and a load of the panel removes the row of the control that opened it
 And the client activates Cancel
-Then focus is on the body
+Then the dialog gives focus to no control, and focus is on the body
+```
+
+#### Scenario 16.79: A report whose sentence is the whole text has no Details
+
+```gherkin
+Given the dashboard is loaded
+When the engine answers the Action input with 400, and the body is one line
+Then #command-form's slot shows that line
+And the slot holds no Details control and no text that repeats the line
 ```

@@ -459,7 +459,7 @@ pub(super) async fn install_story_load_counter(page: &playwright_rs::Page) {
     .unwrap();
 }
 
-pub(super) const NOTICE: &str = "#screen-error";
+pub(super) const NOTICE: &str = "#notice";
 
 /// Waits until `slot` shows the refusal of a busy Game, and checks that its line
 /// names the busy Game and its details carry the engine's answer. `shows` is the

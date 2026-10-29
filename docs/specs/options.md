@@ -18,7 +18,7 @@ And the Game is no longer busy
 Then GET /fragment/options-dock renders the options strip with one button per generated option
 ```
 
-#### Scenario 24.2: /options on a Game with no story text is refused
+#### Scenario 24.2: /options on a Game with no story text answers 400
 
 ```gherkin
 Given a Game whose story holds no text (its opening Narration has none)
@@ -154,7 +154,7 @@ And the status names the event narration failure
 
 ```gherkin
 Given a world with the always-on toggle on and an options agent
-And storage that refuses the write of a state update
+And storage that fails the write of a state update
 When the client POST /games creates a game from that world
 And the client POST /action with command="look"
 And the Game is no longer busy
@@ -168,7 +168,7 @@ And the status carries the contradiction line
 ```gherkin
 Given a world with the always-on toggle on and an options agent
 And a Character whose Trigger fires on the next Action
-And storage that refuses the write of a new Message once the Narration that fired the Trigger is saved
+And storage that fails the write of a new Message once the Narration that fired the Trigger is saved
 When the client POST /games creates a game from that world
 And the client POST /action with command="examine the character"
 And the Game is no longer busy

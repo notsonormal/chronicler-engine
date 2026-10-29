@@ -417,8 +417,8 @@ async fn test_world_create_existing_key_is_refused_http() {
 }
 
 // A storage failure is not a client refusal: the create handler answers the
-// shared error fragment with a 500, so the client reports it in the world
-// form's own slot rather than swapping it into the panel it describes.
+// shared error fragment with a 500, so the client reports it in the notice
+// rather than swapping it into the panel it describes.
 // [docs/specs/worlds.md] SCENARIO: 25.9
 #[tokio::test]
 async fn test_world_create_storage_failure_renders_error_fragment_http() {
@@ -620,6 +620,133 @@ async fn test_world_update_storage_failure_names_the_typed_name_http() {
     assert!(
         body.contains("update_world failure"),
         "the engine text follows: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.16
+#[tokio::test]
+async fn test_world_update_of_a_gone_world_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+    let typed = WorldCard {
+        key: "no_such_world".to_string(),
+        name: "Typed Name".to_string(),
+        ..posture_world()
+    };
+
+    let resp = post_form(
+        &app,
+        "/worlds/no_such_world",
+        &world_form_body(&typed, &TestMap::single_room("start")),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+/// The field of a World form that holds text that is not JSON.
+enum BrokenField {
+    /// The map field holds text that is not JSON.
+    Map,
+    /// The Scenarios field holds text that is not JSON.
+    Scenarios,
+}
+
+/// A World form whose map or Scenarios field holds text that is not JSON.
+fn world_form_with_broken(field: BrokenField) -> String {
+    let broken = "{broken".to_string();
+    let valid_map = serde_json::to_string(&TestMap::single_room("start")).expect("map serializes");
+    let (map, scenarios) = match field {
+        BrokenField::Map => (broken, "[]".to_string()),
+        BrokenField::Scenarios => (valid_map, broken),
+    };
+    serde_urlencoded::to_string([
+        ("key", "posture_world"),
+        ("name", "Typed Name"),
+        ("description", "d"),
+        ("global_rules", ""),
+        ("map_json", map.as_str()),
+        ("scenarios_json", scenarios.as_str()),
+    ])
+    .expect("form serializes")
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.17
+#[tokio::test]
+async fn test_world_update_with_a_map_that_does_not_parse_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+
+    let resp = post_form(
+        &app,
+        "/worlds/posture_world",
+        &world_form_with_broken(BrokenField::Map),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not saved: Invalid map JSON"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.18
+#[tokio::test]
+async fn test_world_update_with_scenarios_that_do_not_parse_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+
+    let resp = post_form(
+        &app,
+        "/worlds/posture_world",
+        &world_form_with_broken(BrokenField::Scenarios),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not saved: Invalid scenarios JSON"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.19
+#[tokio::test]
+async fn test_world_create_with_a_map_that_does_not_parse_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+
+    let resp = post_form(&app, "/worlds", &world_form_with_broken(BrokenField::Map)).await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not created: Invalid map JSON"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.20
+#[tokio::test]
+async fn test_world_create_with_scenarios_that_do_not_parse_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+
+    let resp = post_form(
+        &app,
+        "/worlds",
+        &world_form_with_broken(BrokenField::Scenarios),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not created: Invalid scenarios JSON"),
+        "the sentence names the typed name: {body}"
     );
 }
 

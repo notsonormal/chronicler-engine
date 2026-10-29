@@ -11,10 +11,10 @@ use crate::adapters::driving::http::settings::templates::settings::{
     ConnectionFormTemplate, ConnectionTestDialogTemplate, ConnectionTestResultTemplate,
     SettingsTemplate,
 };
-use crate::adapters::driving::http::utils::answer_words::{item_named, naming_item};
+use crate::adapters::driving::http::utils::answer_words::item_named;
 use crate::adapters::driving::http::utils::error::{
-    AnswerPolicy, action_failure_response, action_not_found_response, action_invalid_response,
-    answer_for_error, error_disclosure, raw_error_detail,
+    AnswerPolicy, failed_answer, not_found_answer, answer_for_error, error_disclosure,
+    raw_error_detail,
 };
 use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_or_error_fragment};
@@ -81,7 +81,7 @@ pub struct ConnectionForm {
 
 impl ConnectionForm {
     /// A blank field follows the provider default: `resolve_max_context_tokens`
-    /// decides it. Anything but a positive whole number is refused.
+    /// decides it. Anything but a positive whole number is invalid.
     fn resolved_max_context_tokens(&self) -> Result<Option<u32>, String> {
         let typed = self.conn_max_context_tokens.trim();
         if typed.is_empty() {
@@ -98,7 +98,7 @@ impl ConnectionForm {
     }
 
     /// A blank field sends no reasoning field, so the model default applies.
-    /// Anything but a listed effort is refused.
+    /// Anything but a listed effort is invalid.
     fn resolved_reasoning_effort(&self) -> Result<Option<ReasoningEffort>, String> {
         let typed = self.conn_reasoning_effort.trim();
         if typed.is_empty() {
@@ -172,7 +172,7 @@ pub async fn save_text_check_handler(
 
     match outcome {
         Ok(_) => ok(""),
-        Err(e) => action_failure_response(format!("Save failed: {e}")),
+        Err(e) => answer_for_error(e.into(), None, AnswerPolicy::EngineText),
     }
 }
 
@@ -180,15 +180,15 @@ pub async fn new_connection_form(State(_app_state): State<AppState>) -> Html<Str
     Html(render_or_error_fragment(&ConnectionFormTemplate::new(None)))
 }
 
-/// A non-2xx opens no dialog: the connection list stays on screen and the Edit
-/// control reports the failure in its own slot.
+/// A non-2xx opens no dialog: the connection list stays on screen, and the
+/// notice reports the failure.
 pub async fn edit_connection_form(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Response<Body> {
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => return action_failure_response(e.to_string()),
+        Err(e) => return failed_answer(e.to_string()),
     };
 
     match settings.find_connection(&id) {
@@ -196,7 +196,7 @@ pub async fn edit_connection_form(
             Some(conn),
         )))
         .into_response(),
-        None => action_not_found_response("Connection not found"),
+        None => not_found_answer("Connection not found"),
     }
 }
 
@@ -204,16 +204,21 @@ pub async fn add_connection_handler(
     State(app_state): State<AppState>,
     Form(form): Form<ConnectionForm>,
 ) -> Response<Body> {
+    let name = item_named(&form.conn_name);
     let connection = match form.into_config(generate_storage_id("conn")) {
         Ok(connection) => connection,
-        Err(message) => return action_invalid_response(message),
+        Err(message) => {
+            return answer_for_error(
+                ApplicationError::validation(message),
+                name,
+                AnswerPolicy::EngineText,
+            );
+        }
     };
-
-    let name = item_named(&connection.name);
 
     match app_state.settings_service.add_connection(connection) {
         Ok(_) => ok(""),
-        Err(e) => naming_item(answer_for_error(e, AnswerPolicy::EngineText), name),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -222,11 +227,17 @@ pub async fn edit_connection_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<ConnectionForm>,
 ) -> Response<Body> {
+    let name = item_named(&form.conn_name);
     let replacement = match form.into_config(id.clone()) {
         Ok(connection) => connection,
-        Err(message) => return action_invalid_response(message),
+        Err(message) => {
+            return answer_for_error(
+                ApplicationError::validation(message),
+                name,
+                AnswerPolicy::EngineText,
+            );
+        }
     };
-    let name = item_named(&replacement.name);
     let outcome = app_state
         .settings_service
         .update_connection(&id, move |connection| {
@@ -239,7 +250,7 @@ pub async fn edit_connection_handler(
 
     match outcome {
         Ok(_) => ok(""),
-        Err(e) => naming_item(answer_for_error(e, AnswerPolicy::EngineText), name),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -262,11 +273,17 @@ impl ConnectionTestSurface<'_> {
 
 /// A failed test answers 200, so htmx swaps the disclosure into its target: the result slot of the form for the form Test, and the dialog body for a saved connection, where the caller wraps it.
 fn connection_test_error(message: &str, surface: ConnectionTestSurface<'_>) -> Html<String> {
-    Html(error_disclosure(
-        &surface.popover_id(),
+    Html(connection_test_failure_html(&surface.popover_id(), message))
+}
+
+/// The disclosure of a failed connection test: the sentence, and the engine's text
+/// behind Details.
+pub fn connection_test_failure_html(popover_id: &str, message: &str) -> String {
+    error_disclosure(
+        popover_id,
         "The connection test failed.",
         &raw_error_detail(message),
-    ))
+    )
 }
 
 fn connection_test_success(result: &ConnectionTestResult) -> Html<String> {
@@ -339,11 +356,11 @@ pub async fn delete_connection_handler(
 ) -> Response<Body> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         let Some(idx) = settings.connections.iter().position(|c| c.id == id) else {
-            return Err(EngineError::Config("Connection not found".to_string()));
+            return Err(EngineError::Validation("Connection not found".to_string()));
         };
 
         if settings.connections.len() <= 1 {
-            return Err(EngineError::Config(
+            return Err(EngineError::Validation(
                 "Cannot delete the last connection".to_string(),
             ));
         }
@@ -365,7 +382,7 @@ pub async fn delete_connection_handler(
                     .find_connection(&id)
                     .and_then(|c| item_named(&c.name))
             });
-            naming_item(answer_for_error(e.into(), AnswerPolicy::SettingsSave), name)
+            answer_for_error(e.into(), name, AnswerPolicy::SettingsSave)
         }
     }
 }
@@ -377,7 +394,7 @@ async fn set_role(
 ) -> Response<Body> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         if settings.find_connection(connection_id).is_none() {
-            return Err(EngineError::Config("Connection not found".to_string()));
+            return Err(EngineError::Validation("Connection not found".to_string()));
         }
         assign(settings, connection_id);
         Ok(())
@@ -385,7 +402,7 @@ async fn set_role(
 
     match outcome {
         Ok(()) => ok(""),
-        Err(e) => answer_for_error(e.into(), AnswerPolicy::SettingsSave),
+        Err(e) => answer_for_error(e.into(), None, AnswerPolicy::SettingsSave),
     }
 }
 

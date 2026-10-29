@@ -155,7 +155,7 @@ And the Quantifier role now uses the second connection
 
 ### POST /connections/{id}/delete — delete
 
-#### Scenario 20.15: Deleting a connection a role uses is refused
+#### Scenario 20.15: Deleting a connection a role uses answers 400
 
 ```gherkin
 Given an app state whose Narrator role uses a connection and whose Quantifier role uses another
@@ -173,7 +173,7 @@ And the connection list no longer holds it
 
 ### POST /connections/add — create
 
-#### Scenario 20.9: Adding a Connection whose name already exists is refused
+#### Scenario 20.9: Adding a Connection whose name already exists answers 400
 
 ```gherkin
 Given a fresh app state with a Connection named "Duplicate Probe"
@@ -183,7 +183,7 @@ And the body names "Duplicate Probe" and says a connection with that name alread
 And the Connection list still holds exactly one Connection named "Duplicate Probe"
 ```
 
-#### Scenario 20.10: Adding a Connection differing only in case and surrounding space is refused
+#### Scenario 20.10: Adding a Connection differing only in case and surrounding space answers 400
 
 ```gherkin
 Given a fresh app state with a Connection named "Alpha"
@@ -262,6 +262,47 @@ And the first line of the body is `The Connection "Alpha" was not saved`, with t
 And the body does not name "Beta"
 ```
 
+#### Scenario 20.47: A Connection that is gone is invalid, and a setup fault of the engine is a failure
+
+```gherkin
+Given a fresh app state with the default connections
+When the client edits a Connection that does not exist
+Then the response is a 400
+And the body says that the Connection was not found
+
+When the client POST /connections/{id}/delete for a Connection that does not exist
+Then the response is a 400
+And the body says that the Connection was not found
+
+Given an app state with one Connection
+When the client POST /connections/{id}/delete for that Connection
+Then the response is a 400
+And the body says that the last Connection cannot be deleted
+
+Given a storage whose settings write fails with a configuration fault
+When the client POST /connections/{id}/delete for a Connection
+Then the response is a 500
+And the body holds the text of the fault
+```
+
+#### Scenario 20.48: A Connection edit with an invalid form names the typed name
+
+```gherkin
+Given a fresh app state
+When the client edits a Connection with the name "Typed" and a provider that does not exist
+Then the response is a 400
+And the first line of the body starts with `The Connection "Typed" was not saved`, with the name typed in the form
+```
+
+#### Scenario 20.49: A Connection add with an invalid form names the typed name
+
+```gherkin
+Given a fresh app state
+When the client adds a Connection with the name "Typed" and a provider that does not exist
+Then the response is a 400
+And the first line of the body starts with `The Connection "Typed" was not saved`, with the name typed in the form
+```
+
 #### Scenario 20.25: The context window field sets the window the next narration uses
 
 ```gherkin
@@ -292,7 +333,7 @@ And the stored Connection still holds the explicit value
 And a following GET /fragment/connections/{id}/edit renders the explicit value in the context window field
 ```
 
-#### Scenario 20.28: A context window that is not a positive whole number is refused
+#### Scenario 20.28: A context window that is not a positive whole number answers 400
 
 ```gherkin
 Given a fresh app state with a Connection named "Alpha"
@@ -326,7 +367,7 @@ And the stored Connection holds no reasoning effort
 And a following GET /fragment/connections/{id}/edit renders "Provider default" as the selected reasoning effort option
 ```
 
-#### Scenario 20.31: An unknown reasoning effort is refused
+#### Scenario 20.31: An unknown reasoning effort answers 400
 
 ```gherkin
 Given a fresh app state with a Connection whose reasoning effort is "high"

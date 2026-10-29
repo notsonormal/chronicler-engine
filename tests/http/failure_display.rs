@@ -342,7 +342,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
     );
     assert!(
         !body.contains("Max Tokens"),
-        "the line must name only an action the dashboard offers: {body}"
+        "the line must name only a remedy the dashboard offers: {body}"
     );
     assert!(
         !body.contains("The engine failed with an internal error."),
@@ -365,7 +365,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 
 // [docs/specs/failure_display.md] SCENARIO: 38.4
 #[tokio::test]
-async fn test_failed_user_action_is_not_a_failed_load() {
+async fn test_a_failed_request_is_not_a_failed_load() {
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
     failures.set_write(
         TxWrite::SetGameConfig,
@@ -386,11 +386,11 @@ async fn test_failed_user_action_is_not_a_failed_load() {
     assert_eq!(
         response.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
-        "a failed user action answers non-2xx"
+        "a failed request answers non-2xx"
     );
     assert!(
         response.headers().get("HX-Reswap").is_none(),
-        "a failed user action must not ask the client to swap nothing"
+        "a failed request must not ask the client to swap nothing"
     );
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await

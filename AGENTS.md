@@ -148,13 +148,13 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
             - `mod.rs` — Settings askama templates.
             - `settings.rs` — Settings templates
         - **utils/**
-          - `action_layers.rs` — The two route layers of the action answers: the revision stamp, and the Game header check.
-          - `answer_words.rs` — The words of an action answer: one table of routes, and the layer that writes the first line of every failed answer.
+          - `answer_words.rs` — The words of a failed answer: one table of routes, and the layer that writes the first line of every failed answer.
           - `current_game.rs` — `CurrentGame` — the request's Game, read once per request.
           - `error.rs` — Error rendering helpers for HTTP fragments.
           - `fragment.rs` — Fragment-rendering glue: the try-render wrapper for AppState renderers and the template render helpers.
           - `handler_helpers.rs` — Handler-level utilities: option string and storage-id helpers, and the form of a control that names the last Message.
           - `mod.rs` — HTTP utility modules.
+          - `request_layers.rs` — The two route layers of the request answers: the revision stamp, and the Game header check.
           - `response.rs` — HTTP response helpers
           - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`
           - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.

@@ -123,9 +123,54 @@ And the first line of the body is `The World "Typed Name" was not saved`, with t
 And the body does not name "Posture World"
 ```
 
-### World creation refuses an existing identifier
+#### Scenario 25.16: A World update for a World that is gone names the typed name
 
-#### Scenario 25.7: Creating a World whose identifier already exists is refused
+```gherkin
+Given a fresh app state
+When the client POST /worlds/{key} for a key that no World holds, with the full form and the name "Typed Name"
+Then the response status is "400 Bad Request"
+And the first line of the body is `The World "Typed Name" was not saved`, with the name typed in the form
+```
+
+#### Scenario 25.17: A World update whose map is not JSON names the typed name
+
+```gherkin
+Given a seeded World
+When the client POST /worlds/{key} with the name "Typed Name" and a map field that is not JSON
+Then the response status is "400 Bad Request"
+And the first line of the body starts with `The World "Typed Name" was not saved: Invalid map JSON`
+```
+
+#### Scenario 25.18: A World update whose Scenarios are not JSON names the typed name
+
+```gherkin
+Given a seeded World
+When the client POST /worlds/{key} with the name "Typed Name" and a Scenarios field that is not JSON
+Then the response status is "400 Bad Request"
+And the first line of the body starts with `The World "Typed Name" was not saved: Invalid scenarios JSON`
+```
+
+#### Scenario 25.19: A World create whose map is not JSON names the typed name
+
+```gherkin
+Given an app with no World of the typed key
+When the client POST /worlds with the name "Typed Name" and a map field that is not JSON
+Then the response status is "400 Bad Request"
+And the first line of the body starts with `The World "Typed Name" was not created: Invalid map JSON`
+```
+
+#### Scenario 25.20: A World create whose Scenarios are not JSON names the typed name
+
+```gherkin
+Given an app with no World of the typed key
+When the client POST /worlds with the name "Typed Name" and a Scenarios field that is not JSON
+Then the response status is "400 Bad Request"
+And the first line of the body starts with `The World "Typed Name" was not created: Invalid scenarios JSON`
+```
+
+### World creation answers 400 for an existing identifier
+
+#### Scenario 25.7: Creating a World whose identifier already exists answers 400
 
 ```gherkin
 Given a seeded world with identifier "posture_world", a description and a room map
@@ -174,16 +219,16 @@ And the row does not show the end of the description
 
 ### World delete
 
-#### Scenario 25.10: The refusal of a World delete pluralises the game count
+#### Scenario 25.10: The 400 of a World delete pluralises the game count
 
 ```gherkin
 Given a seeded World with exactly one game
 When the client POST /worlds/{key}/delete
-Then the response is a 400 that holds the refusal "Cannot delete world with 1 game"
-And the refusal does not read "1 games"
+Then the response is a 400 that holds the text "Cannot delete world with 1 game"
+And the text does not read "1 games"
 When a second game is created in that World
 And the client POST /worlds/{key}/delete
-Then the refusal reads "Cannot delete world with 2 games"
+Then the text reads "Cannot delete world with 2 games"
 And the World is still stored
 ```
 

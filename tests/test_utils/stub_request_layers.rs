@@ -1,4 +1,4 @@
-//! What the engine's two action layers do, for the stub server: record the Game header of each `POST`, refuse a Game-bound one that names another Game, and stamp the answer with `X-Revision`.
+//! What the engine's two request layers do, for the stub server: record the Game header of each `POST`, refuse a Game-bound one that names another Game, and stamp the answer with `X-Revision`.
 
 use axum::body::Body;
 use axum::extract::Request;
@@ -41,15 +41,15 @@ fn is_game_bound(path: &str) -> bool {
 }
 
 #[derive(Default)]
-pub struct StubActionLayers {
+pub struct StubRequestLayers {
     /// The `X-Chronicler-Game` header of each `POST`, by path, in arrival order.
     headers: std::sync::Mutex<Vec<(String, Option<String>)>>,
-    /// The Game that the action routes treat as active. `None` means the Game of
+    /// The Game that the Game-bound routes treat as active. `None` means the Game of
     /// `GET /changes`.
-    game_of_actions: std::sync::Mutex<Option<u64>>,
+    game_of_requests: std::sync::Mutex<Option<u64>>,
 }
 
-impl StubActionLayers {
+impl StubRequestLayers {
     pub fn game_headers(&self, path: &str) -> Vec<Option<String>> {
         self.headers
             .lock()
@@ -60,11 +60,11 @@ impl StubActionLayers {
             .collect()
     }
 
-    pub fn set_game_of_actions(&self, game: u64) {
+    pub fn set_game_of_requests(&self, game: u64) {
         *self
-            .game_of_actions
+            .game_of_requests
             .lock()
-            .expect("stub action game lock poisoned") = Some(game);
+            .expect("stub request game lock poisoned") = Some(game);
     }
 
     /// `read_changes` gives the stamp and the active Game of the stub's `GET /changes`
@@ -90,9 +90,9 @@ impl StubActionLayers {
             .expect("stub game headers lock poisoned")
             .push((path.clone(), named.clone()));
         let active = self
-            .game_of_actions
+            .game_of_requests
             .lock()
-            .expect("stub action game lock poisoned")
+            .expect("stub request game lock poisoned")
             .or(read_changes().1);
         let stale = named.is_some_and(|named| Some(named) != active.map(|game| game.to_string()));
         let mut response = if stale && is_game_bound(&path) {

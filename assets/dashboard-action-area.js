@@ -240,7 +240,7 @@ function onCommandLoadError() {
 
 function onCommandAfterRequest(event) {
   checkInFlight = false;
-  const answer = actionAnswer(event);
+  const answer = requestAnswer(event);
   if (answer.outcome === "done" && !previewIsOpen()) {
     clearCommandInputAfterScreenShows(answer.stamp, event.detail.requestConfig.parameters.command);
     beginPendingUntilScreenShows(answer.stamp);
@@ -258,7 +258,7 @@ function onPreviewBeforeRequest() {
 }
 
 function onPreviewSendAfterRequest(event) {
-  const answer = actionAnswer(event);
+  const answer = requestAnswer(event);
   if (answer.outcome !== "done") return;
   clearCommandInputAfterScreenShows(answer.stamp, previewSentText);
   beginPendingUntilScreenShows(answer.stamp);
@@ -266,14 +266,14 @@ function onPreviewSendAfterRequest(event) {
 }
 
 function onAutoplayAfterRequest(event) {
-  const answer = actionAnswer(event);
+  const answer = requestAnswer(event);
   if (answer.outcome !== "done") return;
   beginPendingUntilScreenShows(answer.stamp);
   syncActionState();
 }
 
 function endPendingAfterRequest(event) {
-  const answer = actionAnswer(event);
+  const answer = requestAnswer(event);
   if (answer.outcome === "done") endPendingWhenScreenShows(answer.stamp);
   else endPending();
 }

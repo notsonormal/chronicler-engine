@@ -39,7 +39,7 @@ And the entry in edit carries data-editing, and #story-log carries data-editing-
 Given edit mode is active (#edit-textarea visible) on a .log-entry
 And the textarea text has been modified
 When the client clicks .save-btn and the save request fails
-Then #screen-error shows the first line of the server's answer, "The edit was not saved."
+Then #notice shows the first line of the server's answer, "The edit was not saved."
 And its Details disclosure holds the raw server text
 And #edit-textarea is removed from the DOM
 And .log-entry .text inner text is restored to the original
@@ -52,7 +52,7 @@ And no .log-entry carries data-editing, and #story-log does not carry data-editi
 ```gherkin
 Given the dashboard is idle and #submit-btn is enabled
 When the client clicks the retry swipe button and the retry request fails
-Then #screen-error shows "The Retry was not started."
+Then #notice shows "The Retry was not started."
 And the raw error text is not visible until the client opens the Details disclosure
 And the status display does not show "Thinking..."
 And #submit-btn is enabled
@@ -110,7 +110,7 @@ And its swipe controls work again
 Given the dashboard is idle with Send enabled
 And a retrigger control is available on the last narration
 When the client clicks the retrigger control and the retrigger request fails
-Then #screen-error shows "The retrigger was not started."
+Then #notice shows "The retrigger was not started."
 And the raw error text is not visible until the client opens the Details disclosure
 And the client sent the request to the retrigger endpoint
 And the status display does not show "Thinking..."
@@ -195,7 +195,7 @@ And the load that follows the save re-renders the log and removes data-editing-e
 ```gherkin
 Given a story log with more than one .log-entry rendered
 When the client deletes the last entry and the server fails the delete
-Then #screen-error shows "The Message was not deleted."
+Then #notice shows "The Message was not deleted."
 And its Details disclosure holds the raw server text
 And the story log still shows the entries it showed before
 ```
@@ -205,7 +205,7 @@ And the story log still shows the entries it showed before
 ```gherkin
 Given a story log whose last entry offers a previous-swipe control
 When the client activates that control and the server fails the switch
-Then #screen-error shows "The Swipe was not switched."
+Then #notice shows "The Swipe was not switched."
 And its Details disclosure holds the raw server text
 And the story log still shows the entry it showed before
 ```
@@ -271,7 +271,7 @@ Given edit mode is active on one entry, with a typed text
 And the engine answers the save with 400
 When the client clicks the Save of the entry in edit
 Then the slot of the entry in edit shows "The edit was not saved: " and the engine's message
-And #screen-error shows no report
+And #notice shows no report
 And #edit-textarea holds the typed text
 And the entry carries data-editing, and #story-log carries data-editing-entry
 When the client clicks the Cancel of the entry in edit
@@ -284,7 +284,7 @@ Then the slot of the entry holds no report
 Given a story log with more than one .log-entry rendered
 And a Narration was added after that render
 When the client deletes the last entry of the render and the engine refuses the delete as stale
-Then #screen-error shows "The last Message changed, so the Message was not deleted."
+Then #notice shows "The last Message changed, so the Message was not deleted."
 And its Details disclosure holds the engine's line
 And the next load shows the added Narration and every entry of before
 ```

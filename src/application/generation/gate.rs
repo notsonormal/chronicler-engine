@@ -13,7 +13,7 @@ use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::agent::Kind;
 use crate::domain::model::change::{EngineKind, GameKind};
 use crate::domain::model::generation::{
-    GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanRefusal, Place, StoryEnd,
+    GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanError, Place, StoryEnd,
 };
 use crate::domain::model::message::{Maker, Message, Swipe, SwipeAt};
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
@@ -23,7 +23,7 @@ use crate::domain::model::tail::Tail;
 use crate::error::EngineError;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Refusal {
+pub enum NotAccepted {
     /// The Game is busy: `409` "Still thinking...".
     StillThinking,
     /// The Message that the request names is no longer the last one: `409`.
@@ -36,8 +36,8 @@ pub enum Refusal {
     Failed(GenerationFailure),
 }
 
-impl Refusal {
-    /// The line the user reads for the refusal, also when it surfaces as an error
+impl NotAccepted {
+    /// The line the user reads for the request that was not accepted, also when it surfaces as an error
     /// outside the HTTP answer.
     pub fn line(&self) -> String {
         match self {
@@ -303,10 +303,10 @@ pub enum AutoplayAccept {
     /// The holder of the Game is gone or holds another run's id: a stop, a reset or
     /// a delete ended the run. Nothing is written.
     Ended,
-    /// The accept refused and wrote the Game's failure line if the refusal has one.
-    /// A refusal of the plan or of the story read removed the holder; the run's own
+    /// The accept did not accept and wrote the Game's failure line if the outcome is `Failed`.
+    /// A plan error or a failed story read removed the holder; the run's own
     /// Job in flight (unreachable) leaves it for `end_autoplay`.
-    Refused(Refusal),
+    NotAccepted(NotAccepted),
 }
 
 pub struct AcceptedJob {
@@ -354,18 +354,18 @@ impl GameWriter {
 
     /// The busy rule: a Game with a holder answers "Still thinking..." before any
     /// other check.
-    fn require_idle(holders: &Holders, game: GameId) -> Result<(), Refusal> {
+    fn require_idle(holders: &Holders, game: GameId) -> Result<(), NotAccepted> {
         if holders.contains_key(&game) {
-            return Err(Refusal::StillThinking);
+            return Err(NotAccepted::StillThinking);
         }
         Ok(())
     }
 
-    pub fn accept(&self, game: GameId, request: JobRequest) -> Result<AcceptedJob, Refusal> {
+    pub fn accept(&self, game: GameId, request: JobRequest) -> Result<AcceptedJob, NotAccepted> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
             let job_id = self.next_job_id();
-            let story = self.story_end_or_refuse(game, opener)?;
+            let story = self.story_end_or_not_accepted(game, opener)?;
             let (plan, step) = self.plan_and_start(opener, game, story, &request)?;
             holders.insert(game, Holder::Job(JobEntry { id: job_id, step }));
             Ok(self.accepted(game, job_id, plan))
@@ -390,11 +390,11 @@ impl GameWriter {
                 None => return AutoplayAccept::Ended,
                 // The loop accepts one Job at a time, so its own Job in flight is
                 // unreachable; the Game is busy, and nothing is written.
-                Some(false) => return AutoplayAccept::Refused(Refusal::StillThinking),
+                Some(false) => return AutoplayAccept::NotAccepted(NotAccepted::StillThinking),
                 Some(true) => {}
             }
             let accepted = self.accept_in_autoplay_hold(holders, opener, game, run, decide);
-            if matches!(accepted, AutoplayAccept::Refused(_)) {
+            if matches!(accepted, AutoplayAccept::NotAccepted(_)) {
                 holders.remove(&game);
             }
             accepted
@@ -410,9 +410,9 @@ impl GameWriter {
         decide: impl FnOnce(&StoryEnd) -> Decision,
     ) -> AutoplayAccept {
         let job_id = self.next_job_id();
-        let story = match self.story_end_or_refuse(game, opener) {
+        let story = match self.story_end_or_not_accepted(game, opener) {
             Ok(story) => story,
-            Err(refusal) => return AutoplayAccept::Refused(refusal),
+            Err(not_accepted) => return AutoplayAccept::NotAccepted(not_accepted),
         };
         let (progress, request) = match decide(&story) {
             Decision::Finish(progress) => {
@@ -423,7 +423,7 @@ impl GameWriter {
         };
         let (plan, step) = match self.plan_and_start(opener, game, story, &request) {
             Ok(started) => started,
-            Err(refusal) => return AutoplayAccept::Refused(refusal),
+            Err(not_accepted) => return AutoplayAccept::NotAccepted(not_accepted),
         };
         holders.insert(
             game,
@@ -445,11 +445,11 @@ impl GameWriter {
         game: GameId,
         story: StoryEnd,
         request: &JobRequest,
-    ) -> Result<(JobPlan, Step), Refusal> {
-        let plan = JobPlan::for_request(request, story).map_err(|refusal| match refusal {
-            PlanRefusal::BadRequest(line) => Refusal::BadRequest(line),
-            PlanRefusal::Missing(record) => self.missing(game, record, opener),
-            PlanRefusal::LastMessageChanged => Refusal::LastMessageChanged,
+    ) -> Result<(JobPlan, Step), NotAccepted> {
+        let plan = JobPlan::for_request(request, story).map_err(|plan_error| match plan_error {
+            PlanError::BadRequest(line) => NotAccepted::BadRequest(line),
+            PlanError::Missing(record) => self.missing(game, record, opener),
+            PlanError::LastMessageChanged => NotAccepted::LastMessageChanged,
         })?;
         self.require_records(game, &plan, opener)?;
         let step = plan.first_step();
@@ -473,7 +473,7 @@ impl GameWriter {
         &self,
         game: GameId,
         progress: AutoplayProgress,
-    ) -> Result<AutoplayRunId, Refusal> {
+    ) -> Result<AutoplayRunId, NotAccepted> {
         let run = self.next_autoplay_run_id();
         self.hold(|holders, _opener| {
             Self::require_idle(holders, game)?;
@@ -507,7 +507,7 @@ impl GameWriter {
     pub fn save_config(&self, game: GameId, change: &ConfigChange) -> Result<(), ApplicationError> {
         self.hold(|holders, opener| {
             if matches!(holders.get(&game), Some(Holder::Autoplay { .. })) {
-                return Err(ApplicationError::Refused(Refusal::StillThinking));
+                return Err(ApplicationError::NotAccepted(NotAccepted::StillThinking));
             }
             opener.open(game, |tx| tx.set_game_config(change))?;
             Ok(())
@@ -531,19 +531,26 @@ impl GameWriter {
         })
     }
 
-    pub fn switch_swipe(&self, game: GameId, message: u64, index: usize) -> Result<(), Refusal> {
+    pub fn switch_swipe(
+        &self,
+        game: GameId,
+        message: u64,
+        index: usize,
+    ) -> Result<(), NotAccepted> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
-            let tail = self.tail_or_refuse(game, opener)?;
+            let tail = self.tail_or_not_accepted(game, opener)?;
             let last =
-                tail.ok_or_else(|| Refusal::BadRequest("No message to switch".to_string()))?;
+                tail.ok_or_else(|| NotAccepted::BadRequest("No message to switch".to_string()))?;
             if last.last.id != message {
-                return Err(Refusal::BadRequest(
+                return Err(NotAccepted::BadRequest(
                     "Only the last message can be swiped".to_string(),
                 ));
             }
             if index >= last.last.swipes.len() {
-                return Err(Refusal::BadRequest("Swipe index out of bounds".to_string()));
+                return Err(NotAccepted::BadRequest(
+                    "Swipe index out of bounds".to_string(),
+                ));
             }
             let at = SwipeAt {
                 message,
@@ -558,12 +565,12 @@ impl GameWriter {
         })
     }
 
-    pub fn edit(&self, game: GameId, message: u64, text: &str) -> Result<(), Refusal> {
+    pub fn edit(&self, game: GameId, message: u64, text: &str) -> Result<(), NotAccepted> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
             let at = match self.storage.stories().active_swipe(game, message) {
                 Ok(Some(at)) => at,
-                Ok(None) => return Err(Refusal::BadRequest("Message not found".to_string())),
+                Ok(None) => return Err(NotAccepted::BadRequest("Message not found".to_string())),
                 Err(error) => return Err(self.unreadable(game, Record::Message, &error, opener)),
             };
             opener
@@ -572,17 +579,17 @@ impl GameWriter {
         })
     }
 
-    pub fn delete_last(&self, game: GameId, named: u64) -> Result<(), Refusal> {
+    pub fn delete_last(&self, game: GameId, named: u64) -> Result<(), NotAccepted> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
-            let tail = self.tail_or_refuse(game, opener)?;
+            let tail = self.tail_or_not_accepted(game, opener)?;
             let last =
-                tail.ok_or_else(|| Refusal::BadRequest("No message to delete".to_string()))?;
+                tail.ok_or_else(|| NotAccepted::BadRequest("No message to delete".to_string()))?;
             if last.last.id != named {
-                return Err(Refusal::LastMessageChanged);
+                return Err(NotAccepted::LastMessageChanged);
             }
             if !last.can_delete() {
-                return Err(Refusal::BadRequest(
+                return Err(NotAccepted::BadRequest(
                     "The story keeps its last message".to_string(),
                 ));
             }
@@ -649,7 +656,11 @@ impl GameWriter {
         Ok(self.storage.docks().get(game)?.unwrap_or_default())
     }
 
-    fn tail_or_refuse(&self, game: GameId, opener: &TxOpener) -> Result<Option<Tail>, Refusal> {
+    fn tail_or_not_accepted(
+        &self,
+        game: GameId,
+        opener: &TxOpener,
+    ) -> Result<Option<Tail>, NotAccepted> {
         self.storage
             .stories()
             .tail(game)
@@ -658,8 +669,8 @@ impl GameWriter {
 
     /// A record the request needs that the engine has no row for: the failure line
     /// names it.
-    fn missing(&self, game: GameId, record: Record, opener: &TxOpener) -> Refusal {
-        self.refuse(game, GenerationFailure::missing(record), opener)
+    fn missing(&self, game: GameId, record: Record, opener: &TxOpener) -> NotAccepted {
+        self.not_accepted_with_failure(game, GenerationFailure::missing(record), opener)
     }
 
     /// A record the request needs that the engine cannot read: the line names it,
@@ -670,23 +681,28 @@ impl GameWriter {
         record: Record,
         error: &EngineError,
         opener: &TxOpener,
-    ) -> Refusal {
-        self.refuse(game, GenerationFailure::unreadable(record, error), opener)
+    ) -> NotAccepted {
+        self.not_accepted_with_failure(game, GenerationFailure::unreadable(record, error), opener)
     }
 
     /// The write the request asked for failed: the line is the design's save line,
     /// and the disclosure holds the error behind it.
-    fn save_failed(&self, game: GameId, error: &EngineError, opener: &TxOpener) -> Refusal {
-        self.refuse(game, GenerationFailure::save_failed(error), opener)
+    fn save_failed(&self, game: GameId, error: &EngineError, opener: &TxOpener) -> NotAccepted {
+        self.not_accepted_with_failure(game, GenerationFailure::save_failed(error), opener)
     }
 
-    /// The one refusal path of a request that cannot run: the Game's failure line
+    /// The one not-accepted path of a request that cannot run: the Game's failure line
     /// and the answer come from the same failure.
-    fn refuse(&self, game: GameId, failure: GenerationFailure, opener: &TxOpener) -> Refusal {
+    fn not_accepted_with_failure(
+        &self,
+        game: GameId,
+        failure: GenerationFailure,
+        opener: &TxOpener,
+    ) -> NotAccepted {
         if let Err(error) = opener.open(game, |tx| tx.set_game_failure(Some(&failure))) {
             tracing::error!("accept: writing the failure line failed: {error}");
         }
-        Refusal::Failed(failure)
+        NotAccepted::Failed(failure)
     }
 
     /// The Game row, the Persona and the start state that the plan names: the
@@ -696,7 +712,7 @@ impl GameWriter {
         game: GameId,
         plan: &JobPlan,
         opener: &TxOpener,
-    ) -> Result<(), Refusal> {
+    ) -> Result<(), NotAccepted> {
         let row = match self.storage.get_game(game.0) {
             Ok(Some(row)) => row,
             Ok(None) => return Err(self.missing(game, Record::Game, opener)),
@@ -716,8 +732,12 @@ impl GameWriter {
         }
     }
 
-    fn story_end_or_refuse(&self, game: GameId, opener: &TxOpener) -> Result<StoryEnd, Refusal> {
-        let tail = self.tail_or_refuse(game, opener)?;
+    fn story_end_or_not_accepted(
+        &self,
+        game: GameId,
+        opener: &TxOpener,
+    ) -> Result<StoryEnd, NotAccepted> {
+        let tail = self.tail_or_not_accepted(game, opener)?;
         let has_text = self.story_has_text(game, opener)?;
         Ok(StoryEnd { tail, has_text })
     }
@@ -729,7 +749,7 @@ impl GameWriter {
         tx.put_dock(record)
     }
 
-    fn accept_in_tx(&self, game: GameId, opener: &TxOpener) -> Result<(), Refusal> {
+    fn accept_in_tx(&self, game: GameId, opener: &TxOpener) -> Result<(), NotAccepted> {
         opener
             .open(game, |tx| tx.set_game_failure(None))
             .map_err(|error| self.save_failed(game, &error, opener))
@@ -737,7 +757,7 @@ impl GameWriter {
 
     /// `/options` needs a story with text to work from, which is a question about
     /// every Message.
-    fn story_has_text(&self, game: GameId, opener: &TxOpener) -> Result<bool, Refusal> {
+    fn story_has_text(&self, game: GameId, opener: &TxOpener) -> Result<bool, NotAccepted> {
         self.storage
             .stories()
             .has_text(game)

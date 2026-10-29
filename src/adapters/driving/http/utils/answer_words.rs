@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! The words of an action answer: one table of routes, and the layer that writes the first line of every failed answer.
+//! The words of a failed answer: one table of routes, and the layer that writes the first line of every failed answer.
 
 use axum::body::{Body, to_bytes};
 use axum::extract::{MatchedPath, Request};
@@ -8,7 +8,7 @@ use axum::middleware::Next;
 use axum::response::Response;
 
 use super::error::error_fragment;
-use crate::application::generation::gate::Refusal;
+use crate::application::generation::gate::NotAccepted;
 
 const UNBUILT_TEXT_LIMIT_BYTES: usize = 64 * 1024;
 
@@ -34,9 +34,9 @@ impl RefusalKind {
     /// Written as the second line of the body.
     fn engine_line(self) -> String {
         match self {
-            Self::Busy => Refusal::StillThinking.line(),
+            Self::Busy => NotAccepted::StillThinking.line(),
             Self::GameChanged => "The page showed a Game that is no longer active.".to_string(),
-            Self::LastMessageChanged => Refusal::LastMessageChanged.line(),
+            Self::LastMessageChanged => NotAccepted::LastMessageChanged.line(),
         }
     }
 }
@@ -79,6 +79,12 @@ impl ErrorAnswer {
             detail: Some(detail.to_string()),
             item: None,
         }
+    }
+
+    /// The sentence then reads correctly away from the control that failed.
+    pub fn with_item(mut self, item: Option<String>) -> Self {
+        self.item = item;
+        self
     }
 
     pub fn refused(kind: RefusalKind) -> Self {
@@ -127,14 +133,6 @@ pub fn item_named(name: &str) -> Option<String> {
     (!name.is_empty()).then(|| name.to_string())
 }
 
-/// The sentence then reads correctly away from the control that failed.
-pub fn naming_item(mut response: Response<Body>, item: Option<String>) -> Response<Body> {
-    if let Some(answer) = response.extensions_mut().get_mut::<ErrorAnswer>() {
-        answer.item = item;
-    }
-    response
-}
-
 pub struct RouteWords {
     pub route: &'static str,
     pub noun: &'static str,
@@ -152,7 +150,7 @@ impl RouteWords {
 }
 
 /// Each `post` route of the router, and each `GET` route that a dialog opener names.
-pub const REFUSAL_WORDS: &[RouteWords] = &[
+pub const ANSWER_WORDS: &[RouteWords] = &[
     RouteWords::new("/action", "Action", "was not sent"),
     RouteWords::new("/action/check", "Action", "was not sent"),
     RouteWords::new("/action/confirm", "Action", "was not sent"),
@@ -225,7 +223,7 @@ pub const REFUSAL_WORDS: &[RouteWords] = &[
 ];
 
 fn words_of_route(route: &str) -> Option<&'static RouteWords> {
-    REFUSAL_WORDS.iter().find(|row| row.route == route)
+    ANSWER_WORDS.iter().find(|row| row.route == route)
 }
 
 fn capitalised(sentence: &str) -> String {
@@ -264,7 +262,6 @@ fn body_of(answer: &ErrorAnswer, words: &RouteWords) -> String {
     }
 }
 
-/// A `409` that no constructor built keeps its body: the layer cannot know its reason.
 pub async fn describe_answers(request: Request, next: Next) -> Response {
     let words = request
         .extensions()
@@ -282,7 +279,6 @@ pub async fn describe_answers(request: Request, next: Next) -> Response {
     let (mut parts, body) = response.into_parts();
     let answer = match built {
         Some(answer) => answer,
-        None if status == StatusCode::CONFLICT => return Response::from_parts(parts, body),
         None => {
             let bytes = to_bytes(body, UNBUILT_TEXT_LIMIT_BYTES)
                 .await

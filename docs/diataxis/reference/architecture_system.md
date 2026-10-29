@@ -55,7 +55,7 @@ An inherent `impl` of a type lives in the file that defines the type, or in a fo
 
 ## Deployment Contract
 
-- **HTTP port** — binds a single HTTP port (configurable); serves the dashboard, the fragment and action endpoints, and `GET /changes`, which the page asks every second. TLS termination and reverse proxying are workspace-operator concerns.
+- **HTTP port** — binds a single HTTP port (configurable); serves the dashboard, the fragment and `POST` endpoints, and `GET /changes`, which the page asks every second. TLS termination and reverse proxying are workspace-operator concerns.
 - **SQLite database** — one file per instance (e.g. `chronicler_3000.db`); auto-created on first access.
 - **File system** — reads JSON seeds from `data/`; writes the SQLite database file. Prompt presets and settings are database rows.
 - **Outbound LLM calls** — HTTPS to the configured backend (OpenRouter / DeepSeek / Ollama); endpoint URL configurable.

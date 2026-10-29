@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test actions take.
+//! HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test requests take.
 
 use std::sync::{Arc, Mutex};
 

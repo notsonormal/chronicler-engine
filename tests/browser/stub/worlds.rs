@@ -64,7 +64,7 @@ async fn check_deleting_a_world_keeps_keyboard_focus_in_the_panel(
 
 // The world still has games, so the delete is refused.
 // [docs/specs/browser_worlds.md] SCENARIO: 29.5
-async fn check_a_refused_world_delete_reports_in_the_notice_and_keeps_focus(
+async fn check_an_invalid_world_delete_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -86,11 +86,10 @@ async fn check_a_refused_world_delete_reports_in_the_notice_and_keeps_focus(
     page.locator(first_delete).await.click(None).await.unwrap();
 
     wait_for_error_disclosure(&page, NOTICE, "the refusal shows in the notice").await;
-    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
-    assert!(
-        message == "The World \"Redmist Estate\" was not deleted: World still has games."
-            && raw.contains("World still has games"),
-        "the notice must carry the refusal, got {message:?} / {raw:?}"
+    let (_, message, _) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The World \"Redmist Estate\" was not deleted: World still has games.",
+        "the notice must carry the refusal"
     );
     assert_eq!(
         page.query_selector_all(rows)
@@ -177,7 +176,7 @@ async fn run_world_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_refused_world_delete_reports_in_the_notice_and_keeps_focus,
+            check_an_invalid_world_delete_reports_in_the_notice_and_keeps_focus,
         )
         .await;
     runner

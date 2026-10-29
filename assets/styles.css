@@ -1348,7 +1348,7 @@ body {
     font-size: var(--font-size-small);
 }
 
-.screen-error {
+.notice {
     display: flex;
     align-items: flex-start;
     gap: var(--spacing-sm);
@@ -1356,11 +1356,11 @@ body {
     font-size: var(--font-size-small);
 }
 
-.screen-error[hidden] {
+.notice[hidden] {
     display: none;
 }
 
-.screen-error-report {
+.notice-report {
     flex: 1 1 auto;
     min-width: 0;
 }

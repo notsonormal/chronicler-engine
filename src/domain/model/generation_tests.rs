@@ -2,7 +2,7 @@
 
 use super::agent::Kind;
 use super::generation::{
-    Generation, GenerationOrder, JobPlan, JobRequest, OptionsRun, PlanRefusal, Place, StoryEnd,
+    Generation, GenerationOrder, JobPlan, JobRequest, OptionsRun, PlanError, Place, StoryEnd,
 };
 use super::message::{Maker, Message, Swipe, SwipeAt};
 use super::prompt_preset::PresetType;
@@ -101,11 +101,11 @@ fn story_of(tail: Tail) -> StoryEnd {
     }
 }
 
-fn plan(request: JobRequest, tail: Tail) -> Result<JobPlan, PlanRefusal> {
+fn plan(request: JobRequest, tail: Tail) -> Result<JobPlan, PlanError> {
     JobPlan::for_request(&request, story_of(tail))
 }
 
-fn first_order(plan: Result<JobPlan, PlanRefusal>) -> GenerationOrder {
+fn first_order(plan: Result<JobPlan, PlanError>) -> GenerationOrder {
     plan.expect("the request has a plan")
         .first
         .expect("the plan has a generation")
@@ -235,12 +235,12 @@ fn plan_retry_no_story() {
 
     assert_eq!(
         JobPlan::for_request(&JobRequest::Retry(0), story),
-        Err(PlanRefusal::BadRequest("No input to retry".to_string()))
+        Err(PlanError::BadRequest("No input to retry".to_string()))
     );
 }
 
 #[test]
-fn plan_retrigger_refused() {
+fn plan_retrigger_without_a_record_is_a_bad_request() {
     let with_context = |kind: MessageKind| {
         let mut tail = tail_after_one_message(kind);
         tail.last.swipes[1].state = state_in("room3", Some(event_record()));
@@ -261,10 +261,27 @@ fn plan_retrigger_refused() {
     for (case, tail) in rows {
         assert_eq!(
             plan(JobRequest::Retrigger(tail.last.id), tail),
-            Err(PlanRefusal::BadRequest(
+            Err(PlanError::BadRequest(
                 "No event record available".to_string()
             )),
             "a Retrigger with {case}"
+        );
+    }
+}
+
+#[test]
+fn plan_names_a_message_that_is_not_the_last_one() {
+    for request in [
+        JobRequest::Retry as fn(u64) -> JobRequest,
+        JobRequest::Retrigger as fn(u64) -> JobRequest,
+    ] {
+        let tail = tail_after_one_message(MessageKind::Narration);
+        let stale = tail.last.id + 1;
+
+        assert_eq!(
+            plan(request(stale), tail),
+            Err(PlanError::LastMessageChanged),
+            "a request that names a Message that is not the last one changes nothing"
         );
     }
 }
@@ -278,7 +295,7 @@ fn plan_retrigger_no_story() {
 
     assert!(matches!(
         JobPlan::for_request(&JobRequest::Retrigger(0), story),
-        Err(PlanRefusal::BadRequest(_))
+        Err(PlanError::BadRequest(_))
     ));
 }
 
@@ -312,7 +329,7 @@ fn plan_action_no_story() {
 
     assert_eq!(
         JobPlan::for_request(&JobRequest::Action("look".to_string()), story),
-        Err(PlanRefusal::Missing(Record::Story))
+        Err(PlanError::Missing(Record::Story))
     );
 }
 
@@ -397,7 +414,7 @@ fn plan_options_no_text() {
 
     assert_eq!(
         JobPlan::for_request(&JobRequest::Options, story),
-        Err(PlanRefusal::BadRequest(
+        Err(PlanError::BadRequest(
             "No scene to generate options for yet".to_string()
         ))
     );

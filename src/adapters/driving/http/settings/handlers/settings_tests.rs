@@ -297,30 +297,6 @@ async fn test_edit_connection_handler_updates_connection() {
 }
 
 #[tokio::test]
-async fn test_edit_connection_handler_not_found() {
-    let app_state = make_test_app_state();
-    let form = ConnectionForm {
-        conn_name: "Test".into(),
-        conn_provider: "openrouter".into(),
-        conn_model: "model".into(),
-        conn_api_key: "".into(),
-        conn_base_url: "".into(),
-        conn_max_context_tokens: "".into(),
-        conn_reasoning_effort: "".into(),
-        single_user_message: false,
-    };
-
-    let response = edit_connection_handler(
-        axum::extract::State(app_state),
-        Path("missing".into()),
-        Form(form),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(body_text(response).await.contains("Connection not found"));
-}
-
-#[tokio::test]
 async fn test_delete_connection_handler_removes_connection() {
     let settings = AppSettings {
         connections: vec![

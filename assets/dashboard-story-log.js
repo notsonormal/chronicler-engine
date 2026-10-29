@@ -133,7 +133,7 @@ function cancelEdit() {
 // second editor cannot open on a stale textarea.
 function onEditSaved(event) {
   if (editState === null) return;
-  const answer = actionAnswer(event);
+  const answer = requestAnswer(event);
   if (answer.outcome === "refused" || answer.outcome === "invalid") return;
   if (answer.outcome !== "done") {
     revertEdit();
@@ -156,7 +156,7 @@ function announceSwipeRestore() {
 }
 
 function onSwipeSwitched(event) {
-  const answer = actionAnswer(event);
+  const answer = requestAnswer(event);
   if (answer.outcome === "done") afterScreenShows(answer.stamp).then(announceSwipeRestore);
 }
 
@@ -173,7 +173,7 @@ function focusAfterLogDelete() {
 }
 
 function onMessageDeleted(event) {
-  const answer = actionAnswer(event);
+  const answer = requestAnswer(event);
   if (answer.outcome === "done") afterScreenShows(answer.stamp).then(focusAfterLogDelete);
 }
 

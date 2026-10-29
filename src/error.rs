@@ -223,7 +223,7 @@ impl From<std::io::Error> for EngineError {
 }
 
 impl EngineError {
-    /// "1 game" or "2 games": the count with its noun, as the refusals of a delete show it.
+    /// "1 game" or "2 games": the count with its noun, as the `400` of a delete shows it.
     pub fn count_of_games(count: usize) -> String {
         format!("{count} {}", if count == 1 { "game" } else { "games" })
     }

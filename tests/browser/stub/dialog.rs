@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::change::ChangeKind;
 
+use crate::test_utils::stub_server::FAILING_TEST_MODEL;
+
 use super::screen_keeps::SUBTAB_ENGAGED;
 use super::support::{
     eval_string, open_section, start_current, dialog_body_is_empty, dialog_is_open,
@@ -46,6 +48,7 @@ async fn submit_dialog_form(page: &playwright_rs::Page) {
 
 const EDIT_BUTTON: &str = r#"#connection-openrouter-gpt-4o-mini button[hx-get$="/edit"]"#;
 const ADD_BUTTON: &str = ".connection-add button";
+const TEST_BUTTON: &str = "#edit-dialog .form-actions button:has-text('Test')";
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.46
 async fn check_a_swap_into_the_dialog_body_opens_the_modal_dialog(
@@ -238,12 +241,22 @@ async fn check_escape_closes_an_open_error_detail_before_it_closes_the_dialog(
     click_and_settle(&page, ADD_BUTTON, "#edit-dialog-body").await;
     page.locator("#conn_name")
         .await
-        .fill("Typed before the refusal", None)
+        .fill("Typed before the failure", None)
         .await
         .unwrap();
-    submit_dialog_form(&page).await;
-    let slot = r#"#edit-dialog [data-error-slot="connection-form"]"#;
-    wait_for_error_disclosure(&page, slot, "a refused save reports in the form's own slot").await;
+    page.locator("#conn_model")
+        .await
+        .fill(FAILING_TEST_MODEL, None)
+        .await
+        .unwrap();
+    click_and_settle(&page, TEST_BUTTON, ".connection-test-slot").await;
+    let slot = "#edit-dialog .connection-test-slot";
+    wait_for_error_disclosure(
+        &page,
+        slot,
+        "a failed Test reports in the form's result slot",
+    )
+    .await;
     page.locator(&format!("{slot} .error-details-toggle"))
         .await
         .click(None)
@@ -265,7 +278,7 @@ async fn check_escape_closes_an_open_error_detail_before_it_closes_the_dialog(
         .evaluate::<(), String>("() => document.getElementById('conn_name').value", None)
         .await
         .unwrap();
-    assert_eq!(typed, "Typed before the refusal", "the draft stays");
+    assert_eq!(typed, "Typed before the failure", "the draft stays");
 
     page.keyboard().press("Escape", None).await.unwrap();
     wait_until_dialog_closed(&page, "a second Escape closes the dialog").await;
@@ -364,7 +377,7 @@ async fn check_closing_the_dialog_focuses_the_opener_by_its_id_after_a_load_rewr
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.78
-async fn check_an_opener_keeps_its_id_through_a_load_that_removes_a_row_above_it_and_a_gone_opener_leaves_focus_on_the_body(
+async fn check_an_opener_keeps_its_id_through_a_load_that_removes_a_row_above_it_and_a_gone_opener_takes_no_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -420,7 +433,7 @@ async fn check_an_opener_keeps_its_id_through_a_load_that_removes_a_row_above_it
         )
         .await,
         "",
-        "an opener that is gone leaves focus on the body"
+        "an opener that is gone takes no focus, so focus is on the body"
     );
 }
 
@@ -908,7 +921,7 @@ async fn run_dialog_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_an_opener_keeps_its_id_through_a_load_that_removes_a_row_above_it_and_a_gone_opener_leaves_focus_on_the_body,
+            check_an_opener_keeps_its_id_through_a_load_that_removes_a_row_above_it_and_a_gone_opener_takes_no_focus,
         )
         .await;
     runner

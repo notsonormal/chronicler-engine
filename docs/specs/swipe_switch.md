@@ -48,7 +48,7 @@ Then the player stands in "room_1"
 And the story log shows no room on that Narration
 ```
 
-#### Scenario 36.5: A swipe index past the last Swipe is refused
+#### Scenario 36.5: A swipe index past the last Swipe answers 400
 
 ```gherkin
 Given a Game whose last Message has two Swipes

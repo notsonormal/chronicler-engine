@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
 use super::parts::{PartRenderer, ScreenView, SCREEN_PARTS};
-use crate::adapters::driving::http::utils::action_layers::REVISION_HEADER;
+use crate::adapters::driving::http::utils::request_layers::REVISION_HEADER;
 use crate::adapters::driving::http::utils::error::error_fragment;
 use crate::adapters::driving::http::utils::response::{bad_request, internal_error};
 use crate::adapters::driving::http::AppState;
@@ -22,7 +22,7 @@ pub struct ScreenQuery {
 }
 
 /// The page of the Games part: page 1 when the request names none. A value that is not
-/// a whole number of at least 1 is a refusal that names it.
+/// a whole number of at least 1 is a `400` that names it.
 fn games_page_named(value: Option<&str>) -> Result<u64, String> {
     let Some(value) = value else { return Ok(1) };
     match value.parse::<u64>() {
@@ -34,7 +34,7 @@ fn games_page_named(value: Option<&str>) -> Result<u64, String> {
 }
 
 /// The renderers of the named parts, in the order of the request. A missing,
-/// unknown or repeated name is a refusal that names it.
+/// unknown or repeated name is a `400` that names it.
 fn renderers_named(parts: Option<&str>) -> Result<Vec<(&'static str, PartRenderer)>, String> {
     let names: Vec<&str> = parts
         .map(|list| list.split(',').map(str::trim).collect())

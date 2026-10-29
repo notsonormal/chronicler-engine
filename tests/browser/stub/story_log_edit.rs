@@ -258,7 +258,7 @@ async fn check_failed_retry_reports_in_the_notice_and_re_enables_send(
     let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
     assert_eq!(
         message, "The Retry was not started.",
-        "the notice names the failed action"
+        "the notice names the failed request"
     );
     assert!(
         raw.contains("Stub retry failure"),
@@ -719,7 +719,7 @@ async fn check_failed_retrigger_posts_to_retrigger_and_recovers(
     let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
     assert_eq!(
         message, "The retrigger was not started.",
-        "the notice names the failed action"
+        "the notice names the failed request"
     );
     assert!(
         raw.contains("Stub retrigger failure"),
@@ -991,7 +991,7 @@ async fn check_failed_delete_reports_in_the_notice(page: playwright_rs::Page, _s
     let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
     assert_eq!(
         message, "The Message was not deleted.",
-        "the notice names the failed action"
+        "the notice names the failed request"
     );
     assert!(
         raw.contains("Stub delete failure"),
@@ -1100,7 +1100,7 @@ async fn check_failed_swipe_switch_reports_in_the_notice(
     let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
     assert_eq!(
         message, "The Swipe was not switched.",
-        "the notice names the failed action"
+        "the notice names the failed request"
     );
     assert!(
         raw.contains("Stub swipe switch failure"),

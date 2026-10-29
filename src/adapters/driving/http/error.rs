@@ -6,16 +6,16 @@ use axum::response::{IntoResponse, Response};
 use super::utils::error::{AnswerPolicy, answer_for_error};
 
 use crate::application::errors::ApplicationError;
-use crate::application::generation::gate::Refusal;
+use crate::application::generation::gate::NotAccepted;
 
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
-        answer_for_error(self, AnswerPolicy::GenericText)
+        answer_for_error(self, None, AnswerPolicy::GenericText)
     }
 }
 
-impl IntoResponse for Refusal {
+impl IntoResponse for NotAccepted {
     fn into_response(self) -> Response {
-        ApplicationError::Refused(self).into_response()
+        ApplicationError::NotAccepted(self).into_response()
     }
 }

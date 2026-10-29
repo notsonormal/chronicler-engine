@@ -236,14 +236,10 @@ async fn check_a_missing_record_reports_in_the_notice_and_keeps_focus(
     page.locator(OPEN_CONTROL).await.click(None).await.unwrap();
 
     wait_for_error_disclosure(&page, NOTICE, "the report shows in the notice").await;
-    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    let (_, message, _) = read_error_disclosure(&page, NOTICE).await;
     assert_eq!(
         message, "The form was not opened: LLM message not found.",
-        "the sentence names what was not done"
-    );
-    assert!(
-        raw.contains("LLM message not found"),
-        "the notice carries the report, got {raw:?}"
+        "the sentence names what was not done, with the engine's explanation"
     );
     assert!(
         !dialog_is_open(&page).await,

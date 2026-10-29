@@ -14,10 +14,9 @@ use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, Narra
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
 
-use crate::adapters::driving::http::utils::answer_words::{item_named, naming_item};
+use crate::adapters::driving::http::utils::answer_words::item_named;
 use crate::adapters::driving::http::utils::error::{
-    AnswerPolicy, action_failure_response, action_not_found_response, action_invalid_response,
-    answer_for_error,
+    AnswerPolicy, not_found_answer, invalid_answer, answer_for_error,
 };
 use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
 use crate::application::errors::ApplicationError;
@@ -126,15 +125,21 @@ pub async fn create_world_handler(
     State(state): State<AppState>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
+    let name = item_named(&form.name);
     let (world_card, map) = match form.into_world_card() {
         Ok(w) => w,
-        Err(e) => return action_invalid_response(e),
+        Err(message) => {
+            return answer_for_error(
+                ApplicationError::validation(message),
+                name,
+                AnswerPolicy::EngineText,
+            );
+        }
     };
-    let name = item_named(&world_card.name);
 
     match state.world_catalogue.create_world(world_card, map) {
         Ok(_) => ok(""),
-        Err(e) => naming_item(answer_for_error(e, AnswerPolicy::EngineText), name),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -148,8 +153,8 @@ pub async fn edit_world_form_handler(
 ) -> Response<axum::body::Body> {
     let (_, world_card, map) = match state.world_catalogue.get_world(&key) {
         Ok(Some(w)) => w,
-        Ok(None) => return action_not_found_response(format!("World '{key}' not found")),
-        Err(e) => return action_failure_response(format!("Failed to load world: {e}")),
+        Ok(None) => return not_found_answer(format!("World '{key}' not found")),
+        Err(e) => return answer_for_error(e, None, AnswerPolicy::EngineText),
     };
 
     render_response(&WorldFormTemplate::from_world_data(
@@ -164,19 +169,27 @@ pub async fn update_world_handler(
     Path(key): Path<String>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
+    let name = item_named(&form.name);
+    let invalid = |message: String| {
+        answer_for_error(
+            ApplicationError::validation(message),
+            name.clone(),
+            AnswerPolicy::EngineText,
+        )
+    };
     let (world_id, mut world_card, _) = match state.world_catalogue.get_world(&key) {
         Ok(Some(w)) => w,
-        Ok(None) => return action_invalid_response(format!("World '{key}' not found")),
-        Err(e) => return action_failure_response(format!("Failed to load world: {e}")),
+        Ok(None) => return invalid(format!("World '{key}' not found")),
+        Err(e) => return answer_for_error(e, name, AnswerPolicy::EngineText),
     };
 
     let map = match form.parse_map() {
         Ok(m) => m,
-        Err(e) => return action_invalid_response(e),
+        Err(e) => return invalid(e),
     };
     let scenarios = match form.parse_scenarios() {
         Ok(s) => s,
-        Err(e) => return action_invalid_response(e),
+        Err(e) => return invalid(e),
     };
 
     world_card.default_scenario_id = world_card
@@ -184,7 +197,6 @@ pub async fn update_world_handler(
         .filter(|id| scenarios.iter().any(|s| &s.id == id));
     world_card.scenarios = scenarios;
     world_card.global_rules = form.global_rules_list();
-    let name = item_named(&form.name);
     world_card.name = form.name;
     world_card.description = form.description;
     world_card.default_room_image = form.default_room_image.filter(|s| !s.is_empty());
@@ -205,10 +217,7 @@ pub async fn update_world_handler(
         .update_world(world_id, world_card, map)
     {
         Ok(()) => ok(""),
-        Err(e) => naming_item(
-            action_failure_response(format!("Failed to update world: {e}")),
-            name,
-        ),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -225,7 +234,7 @@ pub async fn delete_world_handler(
                 .ok()
                 .flatten()
                 .and_then(|(_, card, _)| item_named(&card.name));
-            naming_item(answer_for_error(e, AnswerPolicy::EngineText), name)
+            answer_for_error(e, name, AnswerPolicy::EngineText)
         }
     }
 }
@@ -262,14 +271,14 @@ pub async fn update_world_posture_handler(
     let (mode, perspective, tense) = match parsed {
         (Ok(mode), Ok(perspective), Ok(tense)) => (mode, perspective, tense),
         (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
-            return action_invalid_response(e);
+            return invalid_answer(e);
         }
     };
 
     let (world_id, mut world_card, map) = match state.world_catalogue.get_world(&key) {
         Ok(Some(w)) => w,
-        Ok(None) => return action_invalid_response(format!("World '{key}' not found")),
-        Err(e) => return action_failure_response(format!("Failed to load world: {e}")),
+        Ok(None) => return invalid_answer(format!("World '{key}' not found")),
+        Err(e) => return answer_for_error(e, None, AnswerPolicy::EngineText),
     };
 
     if let Some(mode) = mode {
@@ -287,6 +296,6 @@ pub async fn update_world_posture_handler(
         .update_world(world_id, world_card, map)
     {
         Ok(()) => ok(""),
-        Err(e) => action_failure_response(format!("Failed to update world posture: {e}")),
+        Err(e) => answer_for_error(e, None, AnswerPolicy::EngineText),
     }
 }

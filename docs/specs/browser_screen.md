@@ -16,9 +16,9 @@ The dashboard shows one **screen**: the header, the failure banner and the visib
 
 The page asks `GET /changes` (`docs/specs/changes.md`) while it is visible. The answer holds the `server` and the `revision` of the engine. The page shows the **stamp** `<server>:<revision>` of its last good load in `<html data-revision>`, and the id of the Game that the load showed in `<html data-game>`. When the stamp of the answer differs from the stamp of the page, one `GET /screen?parts=<names>` (`docs/specs/screen.md`) loads the header, the failure banner and the parts of the visible tab, and a direct morph writes each part. The interval of the ask is `<html data-poll-ms>`. While an ask or a load is in flight, `<html>` has the attribute `data-screen-busy`.
 
-A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes and loads the tab that opens. No part holds a draft: a form that waits for a Save is in the edit dialog, outside every part. A load keeps what it does not change, and it skips the one element that holds unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight. A load carries the tab that was visible and the page of the saved Games that was asked for (`<html data-games-page>`, `docs/specs/browser_games.md`) when it started; an answer for another tab or page is dropped. A load always records the stamp of what it rendered. The end of every action request forgets the stamp, so the next ask loads the screen once.
+A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes and loads the tab that opens. No part holds a draft: a form that waits for a Save is in the edit dialog, outside every part. A load keeps what it does not change, and it skips the two kinds of element that hold unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight. A load carries the tab that was visible and the page of the saved Games that was asked for (`<html data-games-page>`, `docs/specs/browser_games.md`) when it started; an answer for another tab or page is dropped. A load always records the stamp of what it rendered. The end of every request that is not a read forgets the stamp, so the next ask loads the screen once.
 
-A non-2xx answer of `GET /changes` or `GET /screen` shows in `#screen-error`, and every part keeps its content. Only a network error shows the Unreachable banner.
+A non-2xx answer of `GET /changes` or `GET /screen` shows in `#notice`, and every part keeps its content. Only a network error shows the Unreachable banner.
 
 The scenarios start on the Game tab, with the page quiet: the stamp of the page equals the stamp of the engine and no ask or load is in flight.
 
@@ -75,10 +75,10 @@ Then #failure-banner is hidden
 ```gherkin
 Given the dashboard is loaded and the page is quiet
 When GET /changes answers 500 and the page asks
-Then #screen-error shows "GET /changes answered 500"
+Then #notice shows "GET /changes answered 500"
 And #failure-banner is hidden, because the engine answered
 When GET /changes answers again and the page asks
-Then #screen-error is hidden
+Then #notice is hidden
 ```
 
 #### Scenario 44.7: A hidden page does not ask
@@ -164,19 +164,19 @@ And one GET /screen names the header, the failure banner and the parts of the Ga
 And each part of another section holds no content
 ```
 
-#### Scenario 44.15: An action asks at once when its request ends
+#### Scenario 44.15: A request asks at once when it ends
 
 ```gherkin
 Given the dashboard is loaded, the page is quiet, and the timer of the page does not run
 When an htmx request ends, for example the Stop control
 Then the page sends GET /changes at once
-And the screen loads and shows what the action changed
+And the screen loads and shows what the request changed
 
 When the Delete control of the story log ends
 Then the page sends GET /changes at once
 And the story log no longer shows the deleted entry
 
-When an action ends that wrote nothing, for example a Retrigger that fails
+When a request ends that wrote nothing, for example a Retrigger that fails
 Then the page sends GET /changes at once
 And the screen loads once
 ```
@@ -200,7 +200,7 @@ And the `games` part holds no content
 ```gherkin
 Given the rename form of a saved Game is open in the edit dialog, with a changed name
 When the client presses Save and the engine answers 500
-Then #screen-error shows "The Game was not renamed."
+Then #notice shows "The Game was not renamed."
 And the dialog status line repeats that sentence
 And the dialog is still open with the same form, the changed name and focus
 ```
@@ -211,19 +211,19 @@ And the dialog is still open with the same form, the changed name and focus
 Given the Tense select of #game-posture-controls shows "past"
 When the client changes it to "present", and the engine answers 500
 Then the Tense select shows "past" again
-And #screen-error shows "The change was not saved."
+And #notice shows "The change was not saved."
 ```
 
-#### Scenario 44.19: A load keeps the notice of an action
+#### Scenario 44.19: A load keeps the notice of a request
 
 ```gherkin
 Given the `games` part is open
-And a failed action shows its report in #screen-error
+And a failed request shows its report in #notice
 When the revision moves, and the page asks
 Then the `games` part loads
-And #screen-error still shows the same report
-When the client sends the next action
-Then #screen-error is hidden
+And #notice still shows the same report
+When the client sends the next request
+Then #notice is hidden
 ```
 
 #### Scenario 44.20: A preset form in the dialog survives a Prompt Presets load, and Cancel sends no request
@@ -428,7 +428,7 @@ Then the screen loads once more, and the stamp of the page is the stamp of the e
 
 ```gherkin
 Given a screen load is in flight and the page shows a stamp of server A
-And an action answer carries a stamp of server B
+And a request answer carries a stamp of server B
 When the page starts to wait for the stamp of server B, and the load that was in flight ends and shows server A
 Then the wait is not over
 When the engine answers as server B and the screen loads
@@ -440,13 +440,13 @@ Then the wait is over
 ```gherkin
 Given the dashboard is loaded and the page is quiet
 When the answer of GET /changes is not JSON, and the page asks
-Then #screen-error names GET /changes
+Then #notice names GET /changes
 When the answer of GET /changes is good again, and the page asks
-Then #screen-error is empty
+Then #notice is empty
 When the morph of a screen load throws, and the page asks
-Then #screen-error names GET /screen
+Then #notice names GET /screen
 When the morph works again, and the page asks
-Then #screen-error is empty
+Then #notice is empty
 ```
 
 #### Scenario 44.42: A restart of the engine before the load of a save closes the dialog
@@ -464,10 +464,10 @@ And the dialog closes
 ```gherkin
 Given the rename form is open in the edit dialog, and a screen load is held
 When the client presses Save, and the held load answers with a failure
-Then #screen-error names GET /screen
+Then #notice names GET /screen
 And the dialog says "Saving…" and names the failure, and stays open
 When the next load is good
-Then the dialog closes, and #screen-error is empty
+Then the dialog closes, and #notice is empty
 ```
 
 #### Scenario 44.44: A screen failure that lasts keeps its open Details and its node
@@ -475,10 +475,10 @@ Then the dialog closes, and #screen-error is empty
 ```gherkin
 Given the dashboard is loaded and the page is quiet
 When each load of the screen fails with the same answer
-And #screen-error shows the failure and the client opens its Details
+And #notice shows the failure and the client opens its Details
 And the page makes more loads that fail with the same answer
-Then the Details of #screen-error stays open
-And the disclosure node in #screen-error is the node that showed before
+Then the Details of #notice stays open
+And the disclosure node in #notice is the node that showed before
 ```
 
 #### Scenario 44.45: Each form with typed input renders one slot, and no other element holds a slot
@@ -487,7 +487,7 @@ And the disclosure node in #screen-error is the node that showed before
 Given the stub renders each tab and each dialog opener
 When the client loads each tab and opens each dialog opener
 Then every form of the edit dialog, #command-form and #autoplay-form holds one error slot as a direct child
-And every error slot is a direct child of such a form, or the report container of #screen-error
+And every error slot is a direct child of such a form, or the report container of #notice
 And every `.edit-actions` group of a story-log entry holds one error slot as a direct child, also while an entry is in edit
 And no other element holds an error slot
 ```

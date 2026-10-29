@@ -14,12 +14,13 @@ use chronicler_engine::test_support::{
 
 use crate::support::app_wiring::{app_after_an_impersonate_with_a_failed_event, app_with_script};
 use crate::support::http_assertions::{
-    icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
+    assert_a_stale_message_is_refused, icon_buttons_without_matching_name,
+    svgs_not_hidden_from_assistive_technology,
 };
 use crate::support::http_fixtures::{append_narrations, story_of};
 use crate::support::http_requests::{
     fetch_status_label, assert_answers_nothing, fetch_body, post_action, post_empty, post_form,
-    post_on_message, response_body, wait_settled, post_on_last_message,
+    response_body, wait_settled, post_on_last_message,
 };
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
@@ -262,31 +263,11 @@ fn long_story_app() -> (
 // [docs/specs/story_log.md] SCENARIO: 8.17
 #[tokio::test]
 async fn test_a_delete_that_names_a_message_that_is_not_the_last_is_refused() {
-    let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let (app, state, _storage) = app_with_script(model);
-    assert!(post_action(&app, "look").await.status().is_success());
-    assert!(wait_settled(&state, 1000).await, "the Job settles");
-    let before: Vec<u64> = story_of(&state).iter().map(|message| message.id).collect();
-    let input = story_of(&state)
-        .iter()
-        .find(|message| message.message_type == MessageType::Input)
-        .expect("the story holds the Input")
-        .id;
-
-    let response = post_on_message(&app, "/history/delete", input).await;
-
-    assert_eq!(response.status(), StatusCode::CONFLICT);
-    let body = response_body(response).await;
-    assert!(
-        body.contains("The last Message changed, so the Message was not deleted."),
-        "{body}"
-    );
-    assert!(
-        body.contains("The page showed a Message that is no longer the last one."),
-        "{body}"
-    );
-    let after: Vec<u64> = story_of(&state).iter().map(|message| message.id).collect();
-    assert_eq!(after, before, "the refused delete wrote nothing");
+    assert_a_stale_message_is_refused(
+        "/history/delete",
+        "The last Message changed, so the Message was not deleted.",
+    )
+    .await;
 }
 
 // [docs/specs/story_log.md] SCENARIO: 8.11

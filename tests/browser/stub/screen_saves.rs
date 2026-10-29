@@ -12,7 +12,7 @@ use super::*;
 const DIALOG_IS_OPEN: &str = "() => document.getElementById('edit-dialog').open ? 'open' : ''";
 
 const SCREEN_ERROR_TEXT: &str = r#"() => {
-    const slot = document.getElementById('screen-error');
+    const slot = document.getElementById('notice');
     return slot.hidden ? '' : slot.textContent.trim();
 }"#;
 
@@ -175,7 +175,7 @@ async fn check_a_save_followed_by_a_failed_load_keeps_the_dialog_at_saving_until
             }
         )
         .await,
-        "the failed load shows in #screen-error, got {:?}",
+        "the failed load shows in #notice, got {:?}",
         eval_string(&page, SCREEN_ERROR_TEXT).await
     );
     let status = eval_string(&page, DIALOG_STATUS).await;

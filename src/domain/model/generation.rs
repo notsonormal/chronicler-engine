@@ -221,7 +221,7 @@ impl StoryEnd {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PlanRefusal {
+pub enum PlanError {
     /// The request is wrong; the line says why.
     BadRequest(String),
     /// A record the request needs is missing; the failure line names it.
@@ -231,10 +231,10 @@ pub enum PlanRefusal {
 }
 
 impl JobPlan {
-    pub fn for_request(request: &JobRequest, story: StoryEnd) -> Result<Self, PlanRefusal> {
+    pub fn for_request(request: &JobRequest, story: StoryEnd) -> Result<Self, PlanError> {
         let StoryEnd { tail, has_text } = story;
         match request {
-            JobRequest::Options if !has_text => Err(PlanRefusal::BadRequest(
+            JobRequest::Options if !has_text => Err(PlanError::BadRequest(
                 "No scene to generate options for yet".to_string(),
             )),
             JobRequest::Options => Ok(Self {
@@ -244,15 +244,15 @@ impl JobPlan {
             }),
             JobRequest::Retry(named) => {
                 let tail =
-                    tail.ok_or_else(|| PlanRefusal::BadRequest("No input to retry".to_string()))?;
+                    tail.ok_or_else(|| PlanError::BadRequest("No input to retry".to_string()))?;
                 Self::require_last(&tail, *named)?;
                 Ok(Self::of_one(Self::redo(&tail), None))
             }
             JobRequest::Retrigger(named) => {
-                let refused = || PlanRefusal::BadRequest("No event record available".to_string());
-                let tail = tail.ok_or_else(refused)?;
+                let bad_request = || PlanError::BadRequest("No event record available".to_string());
+                let tail = tail.ok_or_else(bad_request)?;
                 Self::require_last(&tail, *named)?;
-                let record = tail.retrigger_record().ok_or_else(refused)?.clone();
+                let record = tail.retrigger_record().ok_or_else(bad_request)?.clone();
                 Ok(Self::of_one(
                     GenerationOrder::event_after(tail.current_at(), record),
                     None,
@@ -279,11 +279,11 @@ impl JobPlan {
         }
     }
 
-    fn require_last(tail: &Tail, named: u64) -> Result<(), PlanRefusal> {
+    fn require_last(tail: &Tail, named: u64) -> Result<(), PlanError> {
         if tail.last.id == named {
             Ok(())
         } else {
-            Err(PlanRefusal::LastMessageChanged)
+            Err(PlanError::LastMessageChanged)
         }
     }
 
@@ -308,10 +308,10 @@ impl JobPlan {
         tail: Option<&Tail>,
         generation: Generation,
         input: Option<String>,
-    ) -> Result<Self, PlanRefusal> {
+    ) -> Result<Self, PlanError> {
         let start = tail
             .map(Tail::current_at)
-            .ok_or(PlanRefusal::Missing(Record::Story))?;
+            .ok_or(PlanError::Missing(Record::Story))?;
         Ok(Self::of_one(
             GenerationOrder {
                 generation,

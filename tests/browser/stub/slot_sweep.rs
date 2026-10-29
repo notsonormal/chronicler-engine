@@ -23,7 +23,7 @@ const SWEEP: &str = r#"() => {
     for (const slot of document.querySelectorAll('[data-error-slot]')) {
         const parent = slot.parentElement;
         const inPlace = !!parent && parent.matches(places);
-        const report = !!parent && parent.id === 'screen-error' && slot.hasAttribute('data-report');
+        const report = !!parent && parent.id === 'notice' && slot.hasAttribute('data-report');
         if (!inPlace && !report) {
             const holder = parent ? (parent.id || parent.className || parent.tagName) : 'nothing';
             problems.push('the slot "' + slot.dataset.errorSlot + '" sits in ' + holder + ', not in a form of the list');

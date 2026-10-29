@@ -1,6 +1,6 @@
 //! Stub-browser tests for the failure display: the banner, the notice and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
 
-// A failing action route answers 500, so htmx fires `htmx:responseError` with no
+// A failing request answers 500, so htmx fires `htmx:responseError` with no
 // dispatched event.
 
 use std::time::Duration;
@@ -15,7 +15,7 @@ use super::support::{
     start_current,
 };
 
-/// A failed action swaps nothing on its 500, and the form is submitted directly so the
+/// A failed request swaps nothing on its 500, and the form is submitted directly so the
 /// check does not depend on the Send control.
 async fn submit_command(page: &playwright_rs::Page, command: &str) {
     fill_command_input(page, command).await;
@@ -61,9 +61,9 @@ async fn read_inline_error_sizes(page: &playwright_rs::Page) -> InlineErrorSizes
         r#"() => {
             const submit = document.getElementById('submit-btn');
             const toggle = document.querySelector(
-                '#screen-error .error-details-toggle');
+                '#notice .error-details-toggle');
             const message = document.querySelector(
-                '#screen-error .error-disclosure-message');
+                '#notice .error-disclosure-message');
             const size = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
             return {
                 sendHeight: submit ? submit.getBoundingClientRect().height : 0,
@@ -163,7 +163,7 @@ async fn check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_scree
         .append_narration("A line that arrives late.");
     changes.bump(ChangeKind::STORY);
     ask_once_without_waiting(&page).await;
-    let shown = || async { read_error_disclosure(&page, "#screen-error").await };
+    let shown = || async { read_error_disclosure(&page, "#notice").await };
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -196,7 +196,7 @@ async fn check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_scree
     changes.set_loads_failing(false);
     ask_once(&page).await;
     assert!(
-        !read_error_disclosure(&page, "#screen-error").await.0,
+        !read_error_disclosure(&page, "#notice").await.0,
         "a later successful load should clear the screen error"
     );
 }
@@ -205,13 +205,8 @@ async fn check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_scree
 async fn check_failed_action_renders_in_the_notice(page: playwright_rs::Page, _stub: StubServer) {
     submit_command(&page, "Internal server error").await;
 
-    wait_for_error_disclosure(
-        &page,
-        "#screen-error",
-        "a failed action shows in the notice",
-    )
-    .await;
-    let (visible, message, raw) = read_error_disclosure(&page, "#screen-error").await;
+    wait_for_error_disclosure(&page, "#notice", "a failed Action shows in the notice").await;
+    let (visible, message, raw) = read_error_disclosure(&page, "#notice").await;
     assert!(visible, "the notice should be shown");
     assert_eq!(
         message, "The Action was not sent.",
@@ -230,7 +225,7 @@ async fn check_failed_action_renders_in_the_notice(page: playwright_rs::Page, _s
     let (banner_visible, _, _) = read_banner(&page).await;
     assert!(
         !banner_visible,
-        "an action failure with the server up must not raise the banner"
+        "a failed Action with the server up must not raise the banner"
     );
 
     let sizes = read_inline_error_sizes(&page).await;
@@ -254,7 +249,7 @@ async fn check_failed_action_renders_in_the_notice(page: playwright_rs::Page, _s
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.25
-async fn check_failed_action_does_not_raise_unreachable_banner(
+async fn check_failed_request_does_not_raise_unreachable_banner(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -286,13 +281,12 @@ async fn check_failed_action_does_not_raise_unreachable_banner(
 
     wait_for_error_disclosure(
         &page,
-        "#screen-error",
+        "#notice",
         "a failed posture save shows in the notice",
     )
     .await;
-    let (slot_visible, slot_message, slot_raw) =
-        read_error_disclosure(&page, "#screen-error").await;
-    assert!(slot_visible, "a failed action must report in the notice");
+    let (slot_visible, slot_message, slot_raw) = read_error_disclosure(&page, "#notice").await;
+    assert!(slot_visible, "a failed request must report in the notice");
     assert_eq!(
         slot_message, "The change was not saved.",
         "the notice carries the sentence that the server wrote"
@@ -305,7 +299,7 @@ async fn check_failed_action_does_not_raise_unreachable_banner(
     let (banner_visible, role, banner_text) = read_banner(&page).await;
     assert!(
         !banner_visible,
-        "a failed action on a reachable server must not raise the banner, got {banner_text:?} ({role})"
+        "a failed request on a reachable server must not raise the banner, got {banner_text:?} ({role})"
     );
 
     let part_kept = page
@@ -318,7 +312,7 @@ async fn check_failed_action_does_not_raise_unreachable_banner(
         )
         .await
         .unwrap();
-    assert!(part_kept, "a failed action must leave its part in place");
+    assert!(part_kept, "a failed request must leave its part in place");
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.26
@@ -478,7 +472,7 @@ async fn check_banner_details_popover_survives_a_banner_load(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.20
-async fn check_dead_engine_shows_only_the_banner_for_a_pending_action(
+async fn check_dead_engine_shows_only_the_banner_for_a_pending_request(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -497,7 +491,7 @@ async fn check_dead_engine_shows_only_the_banner_for_a_pending_action(
         "a dead engine raises the banner"
     );
     assert!(
-        !read_error_disclosure(&page, "#screen-error").await.0
+        !read_error_disclosure(&page, "#notice").await.0
             && !read_error_disclosure(&page, "#command-form [data-error-slot]")
                 .await
                 .0,
@@ -545,7 +539,7 @@ async fn check_a_confirm_with_no_answer_raises_the_banner_and_keeps_the_preview(
         "the banner says the engine is unreachable"
     );
     assert!(
-        !read_error_disclosure(&page, "#screen-error").await.0
+        !read_error_disclosure(&page, "#notice").await.0
             && !read_error_disclosure(&page, "#command-form [data-error-slot]")
                 .await
                 .0,
@@ -581,13 +575,8 @@ async fn check_a_failed_confirm_reports_in_the_notice_and_keeps_the_preview(
         .await
         .unwrap();
 
-    wait_for_error_disclosure(
-        &page,
-        "#screen-error",
-        "a failed confirm reports in the notice",
-    )
-    .await;
-    let (visible, message, raw) = read_error_disclosure(&page, "#screen-error").await;
+    wait_for_error_disclosure(&page, "#notice", "a failed confirm reports in the notice").await;
+    let (visible, message, raw) = read_error_disclosure(&page, "#notice").await;
     assert!(visible, "the notice should be shown");
     assert_eq!(
         message, "The Action was not sent.",
@@ -1020,11 +1009,11 @@ async fn check_failed_panel_load_reports_in_the_screen_error(
 
         wait_for_error_disclosure(
             &page,
-            "#screen-error",
+            "#notice",
             "a failed {tab} panel load must report in the screen error",
         )
         .await;
-        let (_, message, raw) = read_error_disclosure(&page, "#screen-error").await;
+        let (_, message, raw) = read_error_disclosure(&page, "#notice").await;
         assert!(
             message.contains("GET /screen answered 500") && !message.contains("panel load failed"),
             "the slot shows a short line, got {message:?}"
@@ -1052,7 +1041,7 @@ async fn check_failed_panel_load_reports_in_the_screen_error(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.34
-async fn check_failed_row_action_reports_in_the_notice(
+async fn check_failed_row_button_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -1094,11 +1083,11 @@ async fn check_failed_row_action_reports_in_the_notice(
 
         wait_for_error_disclosure(
             &page,
-            "#screen-error",
-            "a failed action in a row must report in the notice",
+            "#notice",
+            "a failed request in a row must report in the notice",
         )
         .await;
-        let (_, message, raw) = read_error_disclosure(&page, "#screen-error").await;
+        let (_, message, raw) = read_error_disclosure(&page, "#notice").await;
         assert!(
             message == sentence,
             "the notice shows the sentence of the server, got {message:?}"
@@ -1230,14 +1219,14 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_action_does_not_raise_unreachable_banner,
+            check_failed_request_does_not_raise_unreachable_banner,
         )
         .await;
     runner
         .run_without_convergence(
             "the engine stays stopped",
             StubActionOutcome::Pending,
-            check_dead_engine_shows_only_the_banner_for_a_pending_action,
+            check_dead_engine_shows_only_the_banner_for_a_pending_request,
         )
         .await;
     runner
@@ -1281,7 +1270,7 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_row_action_reports_in_the_notice,
+            check_failed_row_button_reports_in_the_notice,
         )
         .await;
     runner

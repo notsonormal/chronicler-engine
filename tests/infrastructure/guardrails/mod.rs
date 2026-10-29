@@ -744,7 +744,7 @@ fn guardrails_unit_test_allowlist() {
 }
 
 fn routes_with_words() -> Vec<&'static str> {
-    chronicler_engine::adapters::driving::http::utils::answer_words::REFUSAL_WORDS
+    chronicler_engine::adapters::driving::http::utils::answer_words::ANSWER_WORDS
         .iter()
         .map(|row| row.route)
         .collect()
@@ -771,11 +771,11 @@ fn guardrails_words_rows_are_router_routes() {
 }
 
 #[test]
-fn guardrails_action_paths_have_words() {
+fn guardrails_request_paths_have_words() {
     let rows = routes_with_words();
     let errors: Vec<Violation> = template_sources()
         .iter()
-        .flat_map(|(path, content)| check_action_paths_have_words(path, content, &rows))
+        .flat_map(|(path, content)| check_request_paths_have_words(path, content, &rows))
         .collect();
     assert_violations(
         &errors,

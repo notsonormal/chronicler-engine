@@ -92,10 +92,7 @@ async fn wait_for_asks(changes: &StubChangesHandle, expected: usize) {
 }
 
 // [docs/specs/browser_screen.md] SCENARIO: 44.15
-async fn check_an_action_asks_at_once_when_its_request_ends(
-    page: playwright_rs::Page,
-    stub: StubServer,
-) {
+async fn check_a_request_asks_at_once_when_it_ends(page: playwright_rs::Page, stub: StubServer) {
     let changes = stub.changes_handle();
     start_current(&page).await;
     stub.status_handle().set(StubStatus::Autoplay {
@@ -284,7 +281,7 @@ async fn check_a_network_error_shows_unreachable_and_any_answer_clears_it(
 }
 
 const SCREEN_ERROR_TEXT: &str = r#"() => {
-    const slot = document.getElementById('screen-error');
+    const slot = document.getElementById('notice');
     return slot.hidden ? '' : slot.textContent.trim();
 }"#;
 
@@ -735,7 +732,7 @@ async fn wait_for_screen_error(page: &playwright_rs::Page, naming: &str) {
             || async { eval_string(page, SCREEN_ERROR_TEXT).await.contains(naming) }
         )
         .await,
-        "#screen-error must name {naming}, got {:?}",
+        "#notice must name {naming}, got {:?}",
         eval_string(page, SCREEN_ERROR_TEXT).await
     );
 }
@@ -813,7 +810,7 @@ async fn check_a_screen_failure_that_lasts_keeps_its_open_details_and_its_node(
     changes.bump(ChangeKind::STORY);
     ask_once_without_waiting(&page).await;
     wait_for_screen_error(&page, "GET /screen answered 500").await;
-    page.locator("#screen-error .error-details-toggle")
+    page.locator("#notice .error-details-toggle")
         .await
         .click(None)
         .await
@@ -821,7 +818,7 @@ async fn check_a_screen_failure_that_lasts_keeps_its_open_details_and_its_node(
     eval_string(
         &page,
         r#"() => {
-            document.querySelector('#screen-error .error-disclosure').dataset.shownBefore = 'yes';
+            document.querySelector('#notice .error-disclosure').dataset.shownBefore = 'yes';
             return '';
         }"#,
     )
@@ -853,8 +850,8 @@ async fn check_a_screen_failure_that_lasts_keeps_its_open_details_and_its_node(
         eval_string(
             &page,
             r#"() => {
-                const disclosure = document.querySelector('#screen-error .error-disclosure');
-                const popover = document.querySelector('#screen-error .error-detail-popover');
+                const disclosure = document.querySelector('#notice .error-disclosure');
+                const popover = document.querySelector('#notice .error-detail-popover');
                 return (disclosure ? disclosure.dataset.shownBefore || 'replaced' : 'gone') +
                     '/' + (popover && !popover.hidden ? 'open' : 'closed');
             }"#
@@ -879,7 +876,7 @@ async fn run_screen_checks() {
         )
         .await;
     runner
-        .run(outcome, check_an_action_asks_at_once_when_its_request_ends)
+        .run(outcome, check_a_request_asks_at_once_when_it_ends)
         .await;
     runner
         .run(

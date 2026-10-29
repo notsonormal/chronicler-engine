@@ -602,7 +602,7 @@ async fn check_a_409_on_the_options_regen_form_shows_exactly_one_refusal_report_
                         }
                     }
                 }
-            }).observe(document.getElementById('screen-error'), { childList: true, subtree: true });
+            }).observe(document.getElementById('notice'), { childList: true, subtree: true });
             return '';
         }"#,
     )

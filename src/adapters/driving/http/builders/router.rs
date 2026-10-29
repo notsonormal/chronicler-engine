@@ -18,7 +18,7 @@ use crate::adapters::driving::http::layout;
 use crate::adapters::driving::http::prompt_presets;
 use crate::adapters::driving::http::screen;
 use crate::adapters::driving::http::settings;
-use crate::adapters::driving::http::utils::action_layers::{refuse_stale_game, stamp_action_answers};
+use crate::adapters::driving::http::utils::request_layers::{refuse_stale_game, stamp_request_answers};
 use crate::adapters::driving::http::utils::answer_words::describe_answers;
 use crate::adapters::driving::http::worlds;
 
@@ -249,7 +249,7 @@ pub fn build_router(app_state: AppState) -> Router {
         .layer(middleware::from_fn(describe_answers))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
-            stamp_action_answers,
+            stamp_request_answers,
         ))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(app_state)

@@ -15,13 +15,15 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::app_wiring::{
-    app_ready_to_retrigger_after_a_failed_event, app_with_a_triggered_character, app_with_script,
+    app_ready_to_retrigger_after_a_failed_event, app_with_a_triggered_character,
 };
-use crate::support::http_assertions::{assert_still_thinking, assert_story_log_ends_with_message};
+use crate::support::http_assertions::{
+    assert_a_stale_message_is_refused, assert_still_thinking, assert_story_log_ends_with_message,
+};
 use crate::support::http_fixtures::{story_of, OFFERED_SET};
 use crate::support::http_requests::{
     fetch_status_label, assert_answers_nothing, fetch_body, fetch_busy_status, post_action,
-    post_on_message, response_body, wait_settled, post_on_last_message,
+    wait_settled, post_on_last_message,
 };
 
 fn story_log_holds_event_narration(state: &AppState) -> bool {
@@ -496,32 +498,9 @@ async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
 // [docs/specs/retrigger.md] SCENARIO: 15.2
 #[tokio::test]
 async fn test_retrigger_that_names_a_message_that_is_not_the_last_is_refused_http() {
-    let model = Arc::new(ScriptedModel::new().turn("You look around."));
-    let (app, state, _storage) = app_with_script(model);
-    assert!(post_action(&app, "look").await.status().is_success());
-    assert!(wait_settled(&state, 2000).await, "the Job settles");
-    let input = story_of(&state)
-        .iter()
-        .find(|message| message.message_type == MessageType::Input)
-        .expect("the story holds the Input")
-        .id;
-    let before = story_of(&state).len();
-
-    let response = post_on_message(&app, "/retrigger", input).await;
-
-    assert_eq!(response.status(), StatusCode::CONFLICT);
-    let body = response_body(response).await;
-    assert!(
-        body.contains("The last Message changed, so the retrigger was not started."),
-        "{body}"
-    );
-    assert!(
-        body.contains("The page showed a Message that is no longer the last one."),
-        "{body}"
-    );
-    assert_eq!(
-        story_of(&state).len(),
-        before,
-        "no event Narration is added"
-    );
+    assert_a_stale_message_is_refused(
+        "/retrigger",
+        "The last Message changed, so the retrigger was not started.",
+    )
+    .await;
 }

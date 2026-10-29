@@ -1,7 +1,8 @@
 //! Detection tests for the answer-words guardrails.
 
 use crate::answer_words::{
-    check_action_paths_have_words, check_post_routes_have_words, check_words_rows_are_router_routes,
+    check_request_paths_have_words, check_post_routes_have_words,
+    check_words_rows_are_router_routes,
 };
 
 const ROWS: [&str; 4] = [
@@ -45,41 +46,41 @@ fn test_check_post_routes_have_words_ignores_a_get_route() {
 }
 
 #[test]
-fn test_check_action_paths_have_words_accepts_a_parameter_a_query_and_a_suffix_placeholder() {
+fn test_check_request_paths_have_words_accepts_a_parameter_a_query_and_a_suffix_placeholder() {
     let template = r#"
         <button hx-post="/games/{{ id }}/rename">Rename</button>
         <button hx-get="/fragment/prompt-presets/new?type=system">Add</button>
         <button hx-post=\"/prompt-presets/{{ preset.id }}/activate{{ button.mode_query }}\">Use</button>
     "#;
-    assert!(check_action_paths_have_words("template.rs", template, &ROWS).is_empty());
+    assert!(check_request_paths_have_words("template.rs", template, &ROWS).is_empty());
 }
 
 #[test]
-fn test_check_action_paths_have_words_rejects_a_path_with_no_row() {
+fn test_check_request_paths_have_words_rejects_a_path_with_no_row() {
     let template = r#"<button hx-post="/games/{{ id }}/archive">Archive</button>"#;
-    let violations = check_action_paths_have_words("template.rs", template, &ROWS);
+    let violations = check_request_paths_have_words("template.rs", template, &ROWS);
     assert_eq!(violations.len(), 1, "{violations:?}");
     assert!(violations[0].message.contains("/games/{{ id }}/archive"));
 }
 
 #[test]
-fn test_check_action_paths_have_words_rejects_a_suffix_that_names_another_route() {
+fn test_check_request_paths_have_words_rejects_a_suffix_that_names_another_route() {
     let template =
         r#"<button hx-post="/prompt-presets/{{ id }}/delete{{ query }}">Delete</button>"#;
-    let violations = check_action_paths_have_words("template.rs", template, &ROWS);
+    let violations = check_request_paths_have_words("template.rs", template, &ROWS);
     assert_eq!(violations.len(), 1, "{violations:?}");
 }
 
 #[test]
-fn test_check_action_paths_have_words_skips_a_value_that_is_wholly_a_placeholder() {
+fn test_check_request_paths_have_words_skips_a_value_that_is_wholly_a_placeholder() {
     let template = r#"<form hx-post="{{ form_action }}"></form>"#;
-    assert!(check_action_paths_have_words("template.rs", template, &ROWS).is_empty());
+    assert!(check_request_paths_have_words("template.rs", template, &ROWS).is_empty());
 }
 
 #[test]
-fn test_check_action_paths_have_words_rejects_a_literal_segment_that_differs() {
+fn test_check_request_paths_have_words_rejects_a_literal_segment_that_differs() {
     let template = r#"<button hx-get="/fragment/prompt-presets/old">Add</button>"#;
-    let violations = check_action_paths_have_words("template.rs", template, &ROWS);
+    let violations = check_request_paths_have_words("template.rs", template, &ROWS);
     assert_eq!(violations.len(), 1, "{violations:?}");
 }
 

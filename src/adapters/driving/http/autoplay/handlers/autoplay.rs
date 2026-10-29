@@ -25,10 +25,10 @@ pub async fn start_autoplay_handler(
 ) -> Response {
     let budget = match Budget::parse(&form.cycles) {
         Ok(budget) => budget,
-        Err(refusal) => return refusal.into_response(),
+        Err(not_accepted) => return not_accepted.into_response(),
     };
     match AutoplayRun::start(&state.game_writer, state.job_deps.clone(), game_id, budget) {
         Ok(()) => ok(""),
-        Err(refusal) => refusal.into_response(),
+        Err(not_accepted) => not_accepted.into_response(),
     }
 }

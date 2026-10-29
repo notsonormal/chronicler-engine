@@ -1,4 +1,4 @@
-// The edit dialog: the one modal that holds a form that waits for a Save, or the answer of an action. A swap into its body opens it, Cancel, Escape and an accepted save close it, and closing discards the form.
+// The edit dialog: the one modal that holds a form that waits for a Save, or the answer of a request. A swap into its body opens it, Cancel, Escape and an accepted save close it, and closing discards the form.
 
 const editDialog = document.getElementById("edit-dialog");
 const editDialogBody = document.getElementById("edit-dialog-body");
@@ -47,8 +47,8 @@ document.body.addEventListener("htmx:beforeSwap", function (evt) {
   evt.detail.shouldSwap = false;
 });
 
-// `showModal()` returns focus to the node that had it when the dialog opened, and a
-// load can have replaced that node, so focus is given to the control that is there now.
+// The dialog finds its opener by the id that the server renders on it, so focus
+// returns also when the opener had no focus at the click.
 function returnFocusAfterClose() {
   const opener = document.getElementById(dialogOpenerId);
   dialogOpenerId = "";
@@ -115,7 +115,7 @@ document.body.addEventListener("htmx:confirm", function (evt) {
 document.body.addEventListener("htmx:afterRequest", function (evt) {
   const form = evt.detail && evt.detail.elt;
   if (!form || form.tagName !== "FORM" || !editDialog.contains(form)) return;
-  const answer = actionAnswer(evt);
+  const answer = requestAnswer(evt);
   if (answer.outcome !== "done") return;
   const session = dialogSession;
   editDialog.setAttribute("data-saving", "");

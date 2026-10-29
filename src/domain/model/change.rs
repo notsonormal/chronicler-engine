@@ -147,7 +147,7 @@ pub struct ChangeVersions {
 }
 
 impl ChangeVersions {
-    /// `<server>:<revision>`: the stamp that an action answer carries and a client
+    /// `<server>:<revision>`: the stamp that a request answer carries and a client
     /// compares by value.
     pub fn stamp(&self) -> String {
         format!("{}:{}", self.server, self.revision)
