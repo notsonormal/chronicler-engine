@@ -39,8 +39,6 @@ function clearInlineError(slot) {
   slot.hidden = true;
 }
 
-// The slot of a form with typed input is the slot that the server renders as a
-// direct child of the form, or of the group that holds the Save of a message edit.
 function formSlotOf(elt) {
   const container = elt && elt.closest ? elt.closest("form, .edit-actions") : null;
   return container ? container.querySelector(":scope > [data-error-slot]") : null;
@@ -75,7 +73,6 @@ function markUnreachable() {
   refreshFailureBanner();
 }
 
-// Any HTTP answer means the engine is reachable.
 function clearUnreachable() {
   const unreachable = document.getElementById("failure-banner-unreachable");
   if (!unreachable || unreachable.innerHTML.trim() === "") return;
@@ -83,16 +80,13 @@ function clearUnreachable() {
   refreshFailureBanner();
 }
 
-// The text of a server error body: an HTML fragment whose text is escaped, so the
-// parser gives the real characters, and the line break between two lines stays.
+// The body is escaped HTML, so only a parse gives the real characters and keeps
+// the line break between the two lines.
 function plainResponseText(body) {
   if (!body) return "";
   return new DOMParser().parseFromString(body, "text/html").body.textContent.trim();
 }
 
-// An action answers one of five outcomes, and the status chooses it: `done`
-// (below 400), `refused` (409), `invalid` (another 4xx), `failed` (5xx) and `none`
-// (status 0: the engine did not answer).
 const REFUSED_STATUS = 409;
 
 function outcomeOfStatus(status) {
@@ -113,9 +107,8 @@ function actionAnswer(event) {
   };
 }
 
-// The notice place of the shell holds one report: the latest wins. Its source says
-// which clear applies: a good screen load clears a report of a screen load, and
-// never the report of an action.
+// The place holds one report, and its `data-source` decides which clear applies:
+// a screen load never clears the report of an action.
 function noticeElement() {
   return document.getElementById("screen-error");
 }
@@ -132,9 +125,9 @@ function noticeShows(place, summary, detail, source) {
   );
 }
 
-// A report that lasts is the same report at each load, so a notice that already
-// shows it writes nothing: an open Details stays open, and the alert does not fire
-// again. The dialog is modal, so it hears the summary through `notice:changed`.
+// Rewriting the report would close an open Details and fire the alert again, so a
+// notice that already shows it is left alone. The dialog is modal, so it hears the
+// summary through `notice:changed`.
 function showNotice(summary, detail, source) {
   const place = noticeElement();
   const report = place ? place.querySelector("[data-report]") : null;
@@ -154,9 +147,8 @@ function clearNotice() {
   fireScreenEvent("notice:changed", { summary: "" });
 }
 
-// The one reporter of an action answer. htmx dispatches `htmx:afterRequest` to the
-// body before it runs the handler of the control, so the sender is still in the
-// page when a network error arrives.
+// htmx dispatches `htmx:afterRequest` to the body before it runs the handler of the
+// control, so the sender is still in the page when a network error arrives.
 function reportAnswer(event) {
   const answer = actionAnswer(event);
   if (answer.outcome === "none") {
@@ -175,8 +167,6 @@ function reportAnswer(event) {
 
 document.body.addEventListener("htmx:afterRequest", reportAnswer);
 
-// The next action clears the report of the last one: the notice, and the form slot
-// of the sender. A dialog opener counts as an action.
 document.body.addEventListener("htmx:beforeRequest", function (evt) {
   clearNotice();
   clearInlineError(formSlotOf(evt.detail.elt));

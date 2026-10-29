@@ -146,8 +146,7 @@ pub async fn create_game_handler(
     Ok(ok(""))
 }
 
-/// The display name of the Game that a failed row button named, read on the failure
-/// path only. A Game that is gone or unreadable has no name to give.
+/// Read on the failure path only: the row button named a Game that may be gone.
 fn display_name_of_game(state: &AppState, id: u64) -> Option<String> {
     state
         .game_catalogue

@@ -224,9 +224,7 @@ async fn check_an_open_record_stays_as_it_is_when_the_panel_loads(
     );
 }
 
-// The record of a row can be gone when Open asks for it, because retention keeps
-// 50 records. The engine answers a 404: no dialog opens, the notice holds the
-// report, and focus stays on the Open control.
+// Retention keeps 50 records, so the record of a row can be gone when Open asks for it.
 // [docs/specs/browser_llm_messages.md] SCENARIO: 35.6
 async fn check_a_missing_record_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,

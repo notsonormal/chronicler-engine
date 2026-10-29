@@ -1186,7 +1186,6 @@ fn story_entries(state: &StubState) -> Vec<StoryRow> {
     entries
 }
 
-/// A Delete, a Retry or a Retrigger that names a Message other than the last is refused.
 /// The busy Game refuses first, and a request that names no Message is invalid before both.
 fn refuse_unless_last_message(state: &StubState, named: u64) -> Option<Response<Body>> {
     let last = story_entries(state).last().map(|entry| entry.id);
@@ -1575,7 +1574,6 @@ async fn action_check(
     }
 }
 
-/// The engine's message for a value that an invalid outcome rejects.
 pub const INVALID_ACTION_MESSAGE: &str = "The value is not allowed";
 
 /// The engine answers nothing for a command it took, and its Job holds the
@@ -1944,7 +1942,6 @@ struct SaveMessageForm {
     text: String,
 }
 
-/// Records the text of each save that carries one, so a test can check what the page sent.
 async fn save_message(
     State(state): State<Arc<StubState>>,
     Form(form): Form<SaveMessageForm>,

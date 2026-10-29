@@ -1435,8 +1435,6 @@ body {
     flex-shrink: 0;
 }
 
-/* Every entry renders its Save, Cancel and edit slot. They show only while the entry
-   is in edit, and the controls of an entry that is not in edit show again after it. */
 .edit-actions {
     display: none;
     flex-wrap: wrap;

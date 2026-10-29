@@ -564,7 +564,6 @@ async fn test_a_header_that_names_no_game_is_refused_and_a_read_ignores_the_head
     );
 }
 
-/// An error body is one `error-message` element whose text has no `Error: ` prefix.
 fn error_text_of(label: &str, body: &str) -> String {
     const OPEN: &str = "<div class=\"error-message\">";
     let text = body
@@ -663,7 +662,6 @@ async fn test_each_kind_of_failed_action_answers_its_status_and_one_body() {
     assert!(text.contains("preset save failure"), "{text}");
 }
 
-/// The lines of one error body: the sentence, then the engine's own text.
 fn error_lines_of(label: &str, body: &str) -> Vec<String> {
     error_text_of(label, body)
         .split('\n')
@@ -671,7 +669,6 @@ fn error_lines_of(label: &str, body: &str) -> Vec<String> {
         .collect()
 }
 
-/// What the words table says was not done on one route, as a sentence part.
 fn words_of(route: &str) -> String {
     let row = REFUSAL_WORDS
         .iter()

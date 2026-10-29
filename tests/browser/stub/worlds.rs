@@ -62,8 +62,7 @@ async fn check_deleting_a_world_keeps_keyboard_focus_in_the_panel(
     );
 }
 
-// A refused delete (the world still has games) answers a 400 error fragment,
-// which the notice reports.
+// The world still has games, so the delete is refused.
 // [docs/specs/browser_worlds.md] SCENARIO: 29.5
 async fn check_a_refused_world_delete_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,

@@ -21,8 +21,7 @@ pub fn bad_request(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::BAD_REQUEST, body)
 }
 
-/// A request the engine refused and did nothing for. The body stays empty: the words
-/// layer writes it from the kind and the route.
+/// The body is empty: the words layer writes it from the kind and the route.
 pub fn refused(kind: RefusalKind) -> Response<Body> {
     answer_response(StatusCode::CONFLICT, ErrorAnswer::refused(kind))
 }

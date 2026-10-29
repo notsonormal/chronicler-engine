@@ -12,7 +12,6 @@ use crate::application::generation::gate::Refusal;
 
 const UNBUILT_TEXT_LIMIT_BYTES: usize = 64 * 1024;
 
-/// Why the engine refused an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RefusalKind {
     /// A Job or an Autoplay run holds the Game.
@@ -32,7 +31,7 @@ impl RefusalKind {
         }
     }
 
-    /// The engine's own line of the refusal: the second line of the body.
+    /// Written as the second line of the body.
     fn engine_line(self) -> String {
         match self {
             Self::Busy => Refusal::StillThinking.line(),
@@ -42,7 +41,6 @@ impl RefusalKind {
     }
 }
 
-/// How an action answered, apart from a done answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AnswerOutcome {
     /// `409`: the engine did nothing for the request.
@@ -53,8 +51,7 @@ pub(crate) enum AnswerOutcome {
     Failed,
 }
 
-/// What a handler knows of a failed answer. The response carries it as an extension,
-/// and `describe_answers` writes the body from it and from the words of the route.
+/// Carried as a response extension; `describe_answers` writes the body from it.
 #[derive(Clone, Debug)]
 pub struct ErrorAnswer {
     outcome: AnswerOutcome,
@@ -64,7 +61,7 @@ pub struct ErrorAnswer {
 }
 
 impl ErrorAnswer {
-    /// The engine's message says what to fix, so it joins the first line.
+    /// The message names what to fix, so it joins the first line.
     pub fn invalid(message: impl std::fmt::Display) -> Self {
         Self {
             outcome: AnswerOutcome::Invalid,
@@ -74,7 +71,7 @@ impl ErrorAnswer {
         }
     }
 
-    /// The engine's text stays behind Details, as the second line.
+    /// Hidden behind Details, as the second line of the body.
     pub fn failed(detail: impl std::fmt::Display) -> Self {
         Self {
             outcome: AnswerOutcome::Failed,
@@ -93,7 +90,6 @@ impl ErrorAnswer {
         }
     }
 
-    /// An answer that no constructor built: the text it carried becomes the second line.
     fn unbuilt(status: StatusCode, text: &str) -> Self {
         let outcome = if status.is_server_error() {
             AnswerOutcome::Failed
@@ -109,7 +105,6 @@ impl ErrorAnswer {
         }
     }
 
-    /// The body that a route with no row keeps.
     fn fallback_body(&self) -> String {
         match (&self.outcome, &self.message, &self.detail) {
             (AnswerOutcome::Refused(_), _, _) => String::new(),
@@ -120,7 +115,6 @@ impl ErrorAnswer {
     }
 }
 
-/// The response of a failed action, with the status and the answer that the layer reads.
 pub fn answer_response(status: StatusCode, answer: ErrorAnswer) -> Response<Body> {
     let mut response = Response::new(Body::from(answer.fallback_body()));
     *response.status_mut() = status;
@@ -128,14 +122,12 @@ pub fn answer_response(status: StatusCode, answer: ErrorAnswer) -> Response<Body
     response
 }
 
-/// The item of an answer, from the name that a handler holds. A blank name names nothing.
 pub fn item_named(name: &str) -> Option<String> {
     let name = name.trim();
     (!name.is_empty()).then(|| name.to_string())
 }
 
-/// Names the item of a failed answer, so its sentence reads correctly away from the
-/// control. A handler that could not read the name of its item names none.
+/// The sentence then reads correctly away from the control that failed.
 pub fn naming_item(mut response: Response<Body>, item: Option<String>) -> Response<Body> {
     if let Some(answer) = response.extensions_mut().get_mut::<ErrorAnswer>() {
         answer.item = item;
@@ -143,7 +135,6 @@ pub fn naming_item(mut response: Response<Body>, item: Option<String>) -> Respon
     response
 }
 
-/// One row of the words table: what was not done on one route.
 pub struct RouteWords {
     pub route: &'static str,
     pub noun: &'static str,
@@ -160,8 +151,7 @@ impl RouteWords {
     }
 }
 
-/// The words of every action route: each `post` route of the router, and each `GET`
-/// route that a dialog opener names. A new action adds its row in the same commit.
+/// Each `post` route of the router, and each `GET` route that a dialog opener names.
 pub const REFUSAL_WORDS: &[RouteWords] = &[
     RouteWords::new("/action", "Action", "was not sent"),
     RouteWords::new("/action/check", "Action", "was not sent"),
@@ -274,10 +264,7 @@ fn body_of(answer: &ErrorAnswer, words: &RouteWords) -> String {
     }
 }
 
-/// The layer of the words: after routing, it writes the body of each answer of status 400
-/// or higher on a route with a row. An answer that no constructor built keeps its text as
-/// the second line. A `409` that no constructor built keeps its body, because the layer
-/// cannot know its reason.
+/// A `409` that no constructor built keeps its body: the layer cannot know its reason.
 pub async fn describe_answers(request: Request, next: Next) -> Response {
     let words = request
         .extensions()

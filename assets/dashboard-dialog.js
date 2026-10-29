@@ -24,8 +24,8 @@ function focusInto(root) {
   return focusFirstIn(root, FOCUSABLE_FIELD) || focusFirstIn(root, FOCUSABLE);
 }
 
-// The id of the control that opened the dialog. A load can replace that node, but
-// the server renders the same id on the control that replaces it.
+// A load can replace the opener node, but the server renders the same id on the
+// control that replaces it.
 let dialogOpenerId = "";
 
 document.body.addEventListener("htmx:afterSwap", function (evt) {
@@ -48,7 +48,7 @@ document.body.addEventListener("htmx:beforeSwap", function (evt) {
 });
 
 // `showModal()` returns focus to the node that had it when the dialog opened, and a
-// load can have replaced that node. The id names the control that is there now.
+// load can have replaced that node, so focus is given to the control that is there now.
 function returnFocusAfterClose() {
   const opener = document.getElementById(dialogOpenerId);
   dialogOpenerId = "";
@@ -61,8 +61,8 @@ let dialogSession = 0;
 let noticeSummary = "";
 let unreachableText = "";
 
-// The status line says that a save waits for the screen, and repeats what the modal
-// hides: the summary of the notice and the Unreachable text of the banner.
+// The modal hides the banner, so the status line repeats the summary of the notice
+// and the Unreachable text of the banner.
 function renderDialogStatus() {
   const status = document.getElementById("edit-dialog-status");
   if (!status) return;
@@ -102,8 +102,8 @@ document.addEventListener("click", function (evt) {
 // A save closes the dialog when the engine accepts it and the screen shows the
 // save. The dialog says "Saving…" until then, and takes no second submit: the
 // form is still on screen, and a second save would repeat the write. A refused or
-// failed save keeps the dialog open with the typed values, and the reporter shows
-// why. The Test control of a form is a button, so it never closes the dialog.
+// failed save keeps the dialog open with the typed values. The Test control of a form
+// is a button, so it never closes the dialog.
 document.body.addEventListener("htmx:confirm", function (evt) {
   const element = evt.detail && evt.detail.elt;
   if (!element || element.tagName !== "FORM") return;

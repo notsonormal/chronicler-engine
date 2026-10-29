@@ -31,7 +31,6 @@ async fn notice_source(page: &playwright_rs::Page) -> String {
     .await
 }
 
-/// The ids of the slots that show a report outside the notice place.
 async fn slots_showing_outside_the_notice(page: &playwright_rs::Page) -> String {
     eval_string(
         page,
@@ -43,8 +42,7 @@ async fn slots_showing_outside_the_notice(page: &playwright_rs::Page) -> String 
     .await
 }
 
-/// The reports that the whole page shows: a second one in a slot, a row or a dock
-/// beside the notice makes this more than one.
+/// More than one means a second report shows beside the notice.
 async fn reports_on_the_page(page: &playwright_rs::Page) -> String {
     eval_string(
         page,
@@ -53,8 +51,6 @@ async fn reports_on_the_page(page: &playwright_rs::Page) -> String {
     .await
 }
 
-/// Waits for the notice, and checks that it holds the report with this first line,
-/// that the page shows no other report, and that the Unreachable banner is not raised.
 async fn assert_reported_in_the_notice(
     page: &playwright_rs::Page,
     summary: &str,
@@ -384,7 +380,6 @@ async fn check_a_form_report_clears_when_its_form_sends_again(
     );
 }
 
-/// Stops the engine, and returns once the port is closed.
 async fn stop_engine(stub: &StubServer) -> StubLifecycleHandle {
     let lifecycle = stub.lifecycle_handle();
     lifecycle.stop();

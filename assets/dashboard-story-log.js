@@ -129,11 +129,8 @@ function cancelEdit() {
   if (editBtn) editBtn.focus();
 }
 
-// The Save of an entry is an htmx request, and the one reader has reported its answer. A
-// refused or invalid Save keeps the draft and the lock. A Save that fails in another
-// way, or gets no answer, reverts the entry and releases the lock. The lock of a done
-// Save stays until the screen shows the saved entry, so a second editor cannot open on a
-// stale textarea.
+// The lock of a done Save is released only once the screen shows the saved entry, so a
+// second editor cannot open on a stale textarea.
 function onEditSaved(event) {
   if (editState === null) return;
   const answer = actionAnswer(event);
@@ -158,8 +155,6 @@ function announceSwipeRestore() {
   }, 4000);
 }
 
-// The story log shows the restored Swipe once the screen holds the revision of the
-// switch, and the restore is announced then.
 function onSwipeSwitched(event) {
   const answer = actionAnswer(event);
   if (answer.outcome === "done") afterScreenShows(answer.stamp).then(announceSwipeRestore);

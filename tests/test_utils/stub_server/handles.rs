@@ -144,8 +144,8 @@ impl StubGamesHandle {
             .rename_failing = failing;
     }
 
-    /// The rename answers `409`, as a busy Game would. The engine has no such route
-    /// today, so this is the way to see the page take a refusal from a dialog form.
+    /// The engine has no route that refuses a rename, so this is the way to see a page take
+    /// a refusal from a dialog form.
     pub fn set_rename_refused(&self, refused: bool) {
         self.state
             .games
@@ -265,7 +265,6 @@ impl StubSaveHandle {
             .store(succeeds, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// The texts that the message saves posted, in order.
     pub fn saved_texts(&self) -> Vec<String> {
         self.state
             .saved_texts
@@ -274,7 +273,6 @@ impl StubSaveHandle {
             .clone()
     }
 
-    /// The message save answers `400` instead of its failure.
     pub fn set_save_invalid(&self, invalid: bool) {
         self.state
             .save_invalid

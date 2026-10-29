@@ -52,10 +52,6 @@ function isSavingControl(element) {
   return element.tagName === "FORM" || element.matches("input, textarea, select");
 }
 
-// A save that failed or was refused keeps the edit of a form, but puts a control
-// that saves on change back to its rendered value, so the report does not
-// contradict what the page shows. A save that went through shows "Saved" once the
-// screen shows it.
 function settleSave(evt) {
   const element = evt.detail && evt.detail.elt;
   if (!element || !element.closest) return;

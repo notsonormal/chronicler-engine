@@ -11,8 +11,6 @@ use crate::application::errors::ApplicationError;
 use crate::application::generation::gate::Refusal;
 use crate::error::EngineError;
 
-/// The body of every error that the server renders: a failed action, a failed form
-/// answer and a failed screen load.
 pub fn error_fragment(message: impl std::fmt::Display) -> String {
     format!(
         "<div class=\"error-message\">{}</div>",
@@ -38,20 +36,16 @@ pub fn raw_error_detail(raw: &str) -> String {
     format!("<pre class=\"error-detail-raw\">{}</pre>", html_escape(raw))
 }
 
-/// An invalid answer (`400`): a value or a record that the request named and the engine
-/// cannot use. The status is non-2xx, so htmx never swaps the element the failure describes.
+/// The status is non-2xx, so htmx never swaps the element the failure describes.
 pub fn action_invalid_response(message: impl std::fmt::Display) -> Response<Body> {
     answer_response(StatusCode::BAD_REQUEST, ErrorAnswer::invalid(message))
 }
 
-/// A 404 for a dialog that names a record the engine does not hold. It is an invalid
-/// answer like a `400`.
+/// Counts as an invalid answer, as a `400` does.
 pub fn action_not_found_response(message: impl std::fmt::Display) -> Response<Body> {
     answer_response(StatusCode::NOT_FOUND, ErrorAnswer::invalid(message))
 }
 
-/// A 500 for an error the request cannot correct; htmx still never swaps the
-/// element the failure describes.
 pub fn action_failure_response(detail: impl std::fmt::Display) -> Response<Body> {
     answer_response(
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -59,7 +53,6 @@ pub fn action_failure_response(detail: impl std::fmt::Display) -> Response<Body>
     )
 }
 
-/// How `answer_for_error` words and classifies an engine error.
 #[derive(Clone, Copy)]
 pub(crate) enum AnswerPolicy {
     /// The full text of the engine error, such as "Database error: ...".
@@ -81,9 +74,6 @@ fn short_reason(error: &EngineError) -> String {
     }
 }
 
-/// The one classifier of an application error: a `400` for an invalid value or a
-/// change the record's state does not allow, a `409` for a busy Game, and a `500`
-/// for a failure.
 pub(crate) fn answer_for_error(error: ApplicationError, policy: AnswerPolicy) -> Response<Body> {
     match error {
         ApplicationError::Validation(message) => action_invalid_response(message),

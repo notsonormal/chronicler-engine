@@ -7,10 +7,8 @@ use super::*;
 
 const WAIT: Duration = Duration::from_secs(5);
 
-/// The forms that DS3 lists: each form in the dialog, the Action input and the
-/// Autoplay cycles, and each `.edit-actions` group of a message edit. The rule:
-/// each of them holds one slot as a direct child, and a slot is a direct child of
-/// one of them, or the report container of the notice.
+/// Each place holds one slot as a direct child, and a slot is a direct child of one of
+/// them, or the report container of the notice.
 const SWEEP: &str = r#"() => {
     const places = '#edit-dialog form, #command-form, #autoplay-form, .edit-actions';
     const problems = [];
@@ -54,8 +52,6 @@ async fn sweep(page: &playwright_rs::Page, problems: &mut Vec<String>) -> (usize
     (found.examined, found.dialog_forms, found.edit_actions)
 }
 
-/// The dialogs that hold no form: the View of a preset, the record of an LLM message
-/// and the Test result of a connection.
 fn opens_a_dialog_without_a_form(opener: &str) -> bool {
     opener.ends_with("/view") || opener.contains("/llm-messages/") || opener.ends_with("/test")
 }
@@ -172,7 +168,6 @@ async fn check_each_form_with_typed_input_renders_one_slot_and_no_other_element_
     );
 }
 
-/// Each opener, with its id, in the parts of the open tab.
 const OPENER_IDS: &str = r##"() => JSON.stringify(
     Array.from(document.querySelectorAll('[data-part] [hx-target="#edit-dialog-body"]'))
         .map((opener) => ({ request: opener.getAttribute('hx-get') || opener.getAttribute('hx-post'), id: opener.id }))

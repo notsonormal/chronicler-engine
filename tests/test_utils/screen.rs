@@ -78,10 +78,12 @@ pub async fn load_screen_now(page: &Page) {
 }
 
 /// The page asks only when a check makes it ask, and waits until the asks and
-/// loads that are in flight have ended.
+/// loads that are in flight have ended. The tick that the old interval scheduled still
+/// runs once; a page timer of the old interval fires after it, because timers fire in
+/// the order of their due time.
 pub async fn stop_page_timer(page: &Page) {
     page.evaluate::<String, ()>(
-        "(ms) => { document.documentElement.dataset.pollMs = ms; }",
+        "async (ms) => { const root = document.documentElement; const old = Number(root.dataset.pollMs) || 1000; root.dataset.pollMs = ms; if (old < Number(ms)) await new Promise((resolve) => setTimeout(resolve, old)); }",
         Some(&PAUSED_POLL_MS.to_string()),
     )
     .await

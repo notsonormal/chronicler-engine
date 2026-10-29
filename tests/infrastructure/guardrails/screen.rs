@@ -389,9 +389,8 @@ pub fn check_scripts_write_no_part(path: &str, script: &str, parts: &[String]) -
     violations
 }
 
-/// Checks one `assets/dashboard-*.js` script. An action is an htmx request, so the one
-/// answer reader hears it and the end of the request asks for the changes. The only
-/// `fetch(` calls are the two reads of `dashboard-screen.js`: `/screen` and `/changes`.
+/// An action is an htmx request, so the one answer reader hears it and the end of the
+/// request asks for the changes. `dashboard-screen.js` alone may call `fetch(`.
 pub fn check_scripts_fetch_only_the_screen_reads(path: &str, script: &str) -> Vec<Violation> {
     let raw_fetch = Regex::new(r"(^|[^\w$.])fetch\(").expect("fetch pattern");
     let screen_read = Regex::new(r#"fetch\("/(screen\?|changes")"#).expect("read pattern");
@@ -414,12 +413,8 @@ pub fn check_scripts_fetch_only_the_screen_reads(path: &str, script: &str) -> Ve
         .collect()
 }
 
-/// Checks one first-party script or template source. The answer reader takes status 0
-/// of `htmx:afterRequest` for "no answer", and htmx also fires it for an abort and a
-/// timeout. So no source may abort a request or give one a timeout: no `htmx:abort`, no
-/// `hx-sync` with `replace` or `abort`, no `htmx.config.timeout`, no `htmx-config`
-/// meta with a `timeout`, no `hx-request` with a `timeout`, and no `xhr.timeout`
-/// assignment.
+/// htmx fires `htmx:afterRequest` with status 0 for an abort and a timeout as well as for
+/// no answer, so no source may abort a request or give one a timeout.
 pub fn check_no_abort_or_timeout_source(path: &str, content: &str) -> Vec<Violation> {
     let sources = [
         ("htmx:abort", r"htmx:abort"),

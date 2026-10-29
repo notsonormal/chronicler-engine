@@ -572,7 +572,6 @@ impl GameWriter {
         })
     }
 
-    /// Deletes the last Message, when it is the Message that the request names.
     pub fn delete_last(&self, game: GameId, named: u64) -> Result<(), Refusal> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;

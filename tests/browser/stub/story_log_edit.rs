@@ -507,9 +507,7 @@ const SWIPE_CONTROLS_ARE_LOCKED: &str = r#"(() => {
         && Array.from(buttons).every((b) => getComputedStyle(b).pointerEvents === 'none');
 })()"#;
 
-/// A click on the Retry control of the entry, and the number of retry requests that
-/// htmx began. The click guard of the story log stops a click on a locked control
-/// before htmx sees it.
+/// The click guard of the story log stops a click on a locked control before htmx sees it.
 const CLICK_RETRY_AND_COUNT: &str = r#"(() => {
     if (window.__retries === undefined) {
         window.__retries = 0;
@@ -1022,6 +1020,9 @@ async fn check_a_delete_of_a_message_that_is_no_longer_last_reports_in_the_notic
         entries_before > 1,
         "the fixture must show an entry that carries a delete control"
     );
+    // A load after the append would show the new Narration and its Delete, which names
+    // the true last Message.
+    stop_page_timer(&page).await;
     stub.story_log_handle()
         .append_narration("A Narration that another tab added.");
 

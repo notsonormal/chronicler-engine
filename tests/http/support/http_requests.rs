@@ -138,8 +138,7 @@ pub async fn post_empty(app: &axum::Router, uri: &str) -> axum::response::Respon
     app.clone().oneshot(req).await.unwrap()
 }
 
-/// A POST of a control that acts on the last Message, sent as the page sends it: the form
-/// field `message` names the Message that the page rendered the control on.
+/// Sent as the page sends it: `message` names the Message the control was rendered on.
 pub async fn post_on_message(
     app: &axum::Router,
     uri: &str,
@@ -148,8 +147,8 @@ pub async fn post_on_message(
     post_form(app, uri, &format!("message={message}")).await
 }
 
-/// The same POST, for the last Message that the story log of the Game shows now. With no
-/// entry the field names the Message 0, which no story holds.
+/// Names the last Message that the story log shows now; with no entry it names the
+/// Message 0, which no story holds.
 pub async fn post_on_last_message(app: &axum::Router, uri: &str) -> axum::response::Response<Body> {
     let story_log = fetch_part(app, "story-log").await;
     let last = Regex::new(r#"data-id="(\d+)""#)

@@ -238,12 +238,9 @@ function onCommandLoadError() {
   syncActionState();
 }
 
-// A command that the engine did not take keeps its text in the input.
 function onCommandAfterRequest(event) {
   checkInFlight = false;
   const answer = actionAnswer(event);
-  // The preview keeps the flagged command for editing, and a dispatched command
-  // has been consumed, so clear the input.
   if (answer.outcome === "done" && !previewIsOpen()) {
     clearCommandInputAfterScreenShows(answer.stamp, event.detail.requestConfig.parameters.command);
     beginPendingUntilScreenShows(answer.stamp);
@@ -260,8 +257,6 @@ function onPreviewBeforeRequest() {
   previewSentText = input ? input.value : "";
 }
 
-// The preview closes only after a done answer, so a refused, invalid or failed
-// confirm leaves the corrected text to send again.
 function onPreviewSendAfterRequest(event) {
   const answer = actionAnswer(event);
   if (answer.outcome !== "done") return;
@@ -270,8 +265,6 @@ function onPreviewSendAfterRequest(event) {
   closeActionPreview();
 }
 
-// The Autoplay start takes the budget and answers nothing. The run shows in the
-// status display.
 function onAutoplayAfterRequest(event) {
   const answer = actionAnswer(event);
   if (answer.outcome !== "done") return;
@@ -279,9 +272,6 @@ function onAutoplayAfterRequest(event) {
   syncActionState();
 }
 
-// Retry, Retrigger and the new-Options request begin the pending state before they are
-// sent. The screen that shows the revision of the answer ends the state, and an answer
-// that is not done ends it at once.
 function endPendingAfterRequest(event) {
   const answer = actionAnswer(event);
   if (answer.outcome === "done") endPendingWhenScreenShows(answer.stamp);

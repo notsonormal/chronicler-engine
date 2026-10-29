@@ -459,8 +459,6 @@ pub(super) async fn install_story_load_counter(page: &playwright_rs::Page) {
     .unwrap();
 }
 
-/// The notice place under the header: a refusal, a failure and an invalid answer to
-/// a control that is no form with typed input show here.
 pub(super) const NOTICE: &str = "#screen-error";
 
 /// Waits until `slot` shows the refusal of a busy Game, and checks that its line

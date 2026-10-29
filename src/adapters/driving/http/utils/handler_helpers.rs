@@ -7,8 +7,7 @@ use uuid::Uuid;
 
 use super::error::action_invalid_response;
 
-/// The form of Delete, Retry and Retrigger: the id of the Message that the page rendered the
-/// control on. A poster that omits it gets an invalid answer, not a form rejection.
+/// An omitted id is an invalid answer, not a form rejection: the field is optional here.
 #[derive(serde::Deserialize)]
 pub struct LastMessageForm {
     #[serde(default)]
@@ -21,7 +20,6 @@ impl LastMessageForm {
     }
 }
 
-/// The answer to a request that names no Message.
 pub fn names_no_message() -> Response<Body> {
     action_invalid_response("The request names no Message")
 }

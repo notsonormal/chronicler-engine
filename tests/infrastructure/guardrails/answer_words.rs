@@ -8,10 +8,7 @@ fn line_of(content: &str, offset: usize) -> usize {
     content[..offset].matches('\n').count() + 1
 }
 
-/// Fails for a `post` route of the router that has no row in the words table.
-///
 /// A route without a row would answer a failure with no sentence of what was not done.
-/// The check finds a `post` handler also in a chain such as `get(a).post(b)`.
 pub fn check_post_routes_have_words(path: &str, source: &str, rows: &[&str]) -> Vec<Violation> {
     let post_handler = Regex::new(r"\bpost\(").expect("post handler");
     let mut offset = 0;
@@ -38,11 +35,8 @@ pub fn check_post_routes_have_words(path: &str, source: &str, rows: &[&str]) -> 
     violations
 }
 
-/// Fails for a row of the words table that is no route of the router.
-///
-/// The layer finds a row by the matched route, written as the router writes it. A row with
-/// another parameter name, or for a route that is gone, is never found. The violation names
-/// the line of the row in the words source.
+/// The layer finds a row by the matched route, written as the router writes it: a row with
+/// another parameter name, or for a route that is gone, is never found.
 pub fn check_words_rows_are_router_routes(
     router_source: &str,
     words_path: &str,
@@ -69,9 +63,7 @@ pub fn check_words_rows_are_router_routes(
         .collect()
 }
 
-/// A path segment as the matcher compares it: `None` for a segment that is wholly a
-/// `{{ … }}` placeholder, which stands for any parameter, and the literal text with
-/// each placeholder dropped for any other segment.
+/// `None` for a segment that is wholly a placeholder, which stands for any parameter.
 fn comparable_segment(segment: &str, placeholder: &Regex) -> Option<String> {
     let literal = placeholder.replace_all(segment, "");
     (!literal.is_empty() || segment.is_empty()).then(|| literal.into_owned())
@@ -89,11 +81,8 @@ fn path_matches_row(path: &str, row: &str, placeholder: &Regex) -> bool {
         })
 }
 
-/// Fails for an `hx-get` or `hx-post` path of a template or the shell that matches no row.
-///
-/// A `{{ … }}` in a path counts as a parameter, and a query string is dropped. A value that
-/// is wholly a placeholder names its route in a Rust string, so only the `post` route check
-/// covers it.
+/// A value that is wholly a placeholder names its route in a Rust string, so only the
+/// `post` route check covers it.
 pub fn check_action_paths_have_words(path: &str, content: &str, rows: &[&str]) -> Vec<Violation> {
     let attribute = Regex::new(r#"hx-(get|post)=\\?"([^"\\]*)\\?""#).expect("hx attribute");
     let placeholder = Regex::new(r"\{\{[^}]*\}\}").expect("placeholder");

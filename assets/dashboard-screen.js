@@ -196,8 +196,6 @@ function resolveScreenWaiters(loadNumber) {
   }
 }
 
-// An answer that the page cannot use shows in the notice place of the shell, and
-// the parts keep their content.
 function reportScreenError(summary, detail) {
   showNotice(summary, detail, "screen");
 }
@@ -219,8 +217,6 @@ function showScreenException(request, outcome, error) {
   );
 }
 
-// A load that works clears the report of a failed load, and never the report of an
-// action.
 function clearScreenError() {
   const place = noticeElement();
   if (place && place.dataset.source === "screen") clearNotice();

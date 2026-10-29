@@ -5,9 +5,7 @@ use std::time::Duration;
 use super::support::{eval_string, StubRunner};
 use super::*;
 
-/// Records each event of a request on `window.__events`: the name, the status of
-/// the request, and whether the element that the event names is in the page. A
-/// listener on the body records an event only when it reaches the body.
+/// A listener on the body records an event only when it reaches the body.
 const RECORD_EVENTS: &str = r#"() => {
     window.__events = [];
     for (const name of ['htmx:afterRequest', 'htmx:sendError', 'htmx:sendAbort', 'htmx:timeout', 'htmx:onLoadError']) {
@@ -76,8 +74,6 @@ fn names(seen: &[serde_json::Value]) -> Vec<String> {
         .collect()
 }
 
-// A swap that throws fires `htmx:onLoadError`, the kebab-case
-// twin of that event reaches `hx-on::on-load-error`, and no `htmx:afterRequest` follows.
 async fn check_a_swap_that_throws_runs_the_load_error_attribute(
     page: playwright_rs::Page,
     _stub: StubServer,
@@ -121,8 +117,6 @@ async fn check_a_swap_that_throws_runs_the_load_error_attribute(
         .unwrap();
 }
 
-// `htmx:afterRequest` fires with status 0 for an abort, a
-// timeout and a network error, and `htmx:sendError` fires for the network error only.
 async fn check_after_request_fires_with_status_zero_for_every_request_that_got_no_answer(
     page: playwright_rs::Page,
     stub: StubServer,
@@ -179,9 +173,8 @@ async fn check_after_request_fires_with_status_zero_for_every_request_that_got_n
     assert_eq!(seen[0]["status"], 0, "a network error has status 0");
 }
 
-// The `htmx:afterRequest` of a network error reaches the body
-// while the sender is in the page. A site handler that detaches the sender then hides
-// `htmx:sendError` from the body, although the element itself still hears it.
+// A site handler that detaches the sender hides `htmx:sendError` from the body, although
+// the element itself still hears it.
 async fn check_a_send_error_on_a_detached_sender_misses_the_body(
     page: playwright_rs::Page,
     stub: StubServer,

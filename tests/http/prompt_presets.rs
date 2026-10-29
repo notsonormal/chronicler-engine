@@ -21,7 +21,6 @@ use crate::support::app_wiring::two_game_app;
 use crate::support::http_requests::{fetch_body, post_form};
 use crate::SettingsTestGuard;
 
-/// The body is one `error-message` element that holds the text of the failure.
 fn assert_one_error_message_holding(body: &str, failure_text: &str) {
     assert!(
         body.starts_with(r#"<div class="error-message">"#)

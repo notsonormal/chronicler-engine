@@ -119,8 +119,8 @@ async fn check_deleting_a_preset_card_keeps_keyboard_focus_on_a_card(
     );
 }
 
-// A card's Edit load that the engine refuses (a default preset) opens no dialog:
-// the notice holds the refusal and the Edit control keeps focus.
+// A default preset refuses its Edit load, so the page takes a refusal from a dialog
+// opener.
 // [docs/specs/browser_prompt_presets.md] SCENARIO: 28.5
 async fn check_a_refused_editor_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,

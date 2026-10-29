@@ -544,7 +544,6 @@ async fn test_edit_answers_nothing_and_the_log_shows_the_new_text_http() {
     );
 }
 
-/// The opening tag of the first element whose markup holds `marker`.
 fn tag_holding<'a>(markup: &'a str, marker: &str) -> &'a str {
     let at = markup
         .find(marker)
@@ -616,8 +615,6 @@ async fn test_the_story_log_sends_its_requests_through_htmx_and_renders_the_edit
     assert_buttons_send_through_htmx(&body);
 }
 
-/// Every button of the fragment is an htmx request, or one of the two edit controls
-/// that send nothing, or disabled.
 fn assert_buttons_send_through_htmx(fragment: &str) {
     let buttons: Vec<&str> = fragment
         .split("<button")
