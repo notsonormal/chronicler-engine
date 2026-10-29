@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use super::*;
-use super::support::{open_settings, StubRunner, NOTICE};
+use super::support::{eval_string, open_settings, StubRunner, NOTICE};
 
 async fn connection_form_node_is_still_present(page: &playwright_rs::Page) -> bool {
     page.evaluate::<(), bool>(
@@ -324,6 +324,85 @@ async fn check_an_invalid_preset_delete_keeps_the_card_and_reports_in_the_notice
     );
 }
 
+// A one-line sentence is the whole report: it has no Details, so the sentence is the only
+// place that holds its end. It wraps onto more lines instead of being cut.
+const LONG_SENTENCE: &str = "The World \"Typed Name\" was not created: Invalid scenarios JSON: invalid type: map, expected a sequence at line 1 column 0, so the Scenarios field holds text that no World can read and the player must see all of this sentence to fix it.";
+
+/// Whether the sentence of the report in `place` is drawn whole: no cut at the right edge, no
+/// ellipsis, and more than one line, because the sentence is longer than the place is wide.
+async fn sentence_reads_in_full(page: &playwright_rs::Page, place: &str) -> String {
+    eval_string(
+        page,
+        &format!(
+            r#"() => {{
+                const message = document.querySelector('{place} .error-disclosure-message');
+                const text = document.querySelector('{place} .error-disclosure-text');
+                if (!message || !text) return 'no report in {place}';
+                const style = getComputedStyle(message);
+                const lineHeight = parseFloat(getComputedStyle(text).lineHeight) || 16;
+                const cut = message.scrollWidth > message.clientWidth
+                    || text.scrollWidth > text.clientWidth
+                    || message.scrollHeight > message.clientHeight + 1;
+                if (cut) return 'cut: scrollWidth ' + message.scrollWidth + ' clientWidth ' + message.clientWidth;
+                if (style.textOverflow === 'ellipsis') return 'ellipsis';
+                if (text.getBoundingClientRect().height < lineHeight * 1.5) return 'one line: ' + text.getBoundingClientRect().height;
+                return 'ok';
+            }}"#
+        ),
+    )
+    .await
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.80
+async fn check_a_long_sentence_without_details_reads_in_full(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_settings(&page).await;
+    click_and_settle(&page, ".connection-add button", "#edit-dialog-body").await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
+
+    eval_string(
+        &page,
+        &format!(
+            r#"() => {{
+                const slot = document.querySelector('#edit-dialog .connection-form [data-error-slot="connection-form"]');
+                renderInlineError(slot, {LONG_SENTENCE:?}, '');
+                showNotice({LONG_SENTENCE:?}, '', 'request');
+                return '';
+            }}"#
+        ),
+    )
+    .await;
+
+    for width in [1280, 1024] {
+        page.set_viewport_size(playwright_rs::Viewport { width, height: 800 })
+            .await
+            .unwrap();
+        for place in [
+            r#"#edit-dialog .connection-form [data-error-slot="connection-form"]"#,
+            NOTICE,
+        ] {
+            let outcome = wait_for_condition_async(
+                Duration::from_secs(2),
+                Duration::from_millis(50),
+                || async { sentence_reads_in_full(&page, place).await == "ok" },
+            )
+            .await;
+            assert!(
+                outcome,
+                "at {width} px the sentence in {place} reads in full, got {}",
+                sentence_reads_in_full(&page, place).await
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn run_form_failures_checks() {
     let mut runner = StubRunner::launch().await;
@@ -355,6 +434,12 @@ async fn run_form_failures_checks() {
         .run(
             StubActionOutcome::Pending,
             check_an_invalid_preset_delete_keeps_the_card_and_reports_in_the_notice,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_long_sentence_without_details_reads_in_full,
         )
         .await;
     runner.finish().await;

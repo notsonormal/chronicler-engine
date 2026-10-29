@@ -809,3 +809,13 @@ When the engine answers the Action input with 400, and the body is one line
 Then #command-form's slot shows that line
 And the slot holds no Details control and no text that repeats the line
 ```
+
+#### Scenario 16.80: A long sentence without Details reads in full
+
+```gherkin
+Given the Add form of a Connection is open in the edit dialog
+And a report whose sentence is the whole text and is longer than its place is wide
+When the report shows in the slot of the form and in the notice, at 1280 and at 1024 pixels
+Then each place draws the whole sentence on more than one line
+And no place cuts the sentence or ends it with an ellipsis
+```

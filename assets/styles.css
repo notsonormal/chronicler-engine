@@ -1260,6 +1260,15 @@ body {
     white-space: nowrap;
 }
 
+.error-disclosure-plain,
+.error-disclosure-plain .error-disclosure-message {
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+}
+
 .error-details-toggle {
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.08);

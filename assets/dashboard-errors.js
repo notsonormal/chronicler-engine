@@ -13,7 +13,8 @@ function escapeHtml(value) {
 
 // Mirrors the server's disclosure shape: the short line carries its own text
 // element, which the status column's line clamp is applied to. A report with no
-// text beyond its short line has no Details.
+// text beyond its short line has no Details, and its sentence wraps instead of
+// ending in an ellipsis, because nothing else holds the end of it.
 function errorDisclosureHtml(popoverId, message, rawText) {
   const details = rawText
     ? '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
@@ -22,7 +23,7 @@ function errorDisclosureHtml(popoverId, message, rawText) {
       '<pre class="error-detail-raw">' + escapeHtml(rawText) + "</pre></div>"
     : "";
   return (
-    '<div class="error-disclosure">' +
+    '<div class="error-disclosure' + (rawText ? "" : " error-disclosure-plain") + '">' +
     '<span class="error-disclosure-message">' +
     '<span class="error-disclosure-text">' + escapeHtml(message) + "</span></span>" +
     details + "</div>"
