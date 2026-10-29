@@ -13,7 +13,7 @@ use crate::support::app_wiring::app_with_script;
 use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
 use crate::support::http_requests::{
     assert_answers_nothing, fetch_body, fetch_status_label, post_action, post_empty, response_body,
-    wait_settled,
+    wait_settled, post_on_last_message,
 };
 
 fn first_switch_target(log_fragment: &str) -> (u64, usize) {
@@ -42,7 +42,12 @@ async fn last_message_with_two_swipes(app: &axum::Router, state: &AppState) -> (
     assert!(post_action(app, "look").await.status().is_success());
     assert!(wait_settled(state, 1000).await, "the turn should complete");
 
-    assert!(post_empty(app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(state, 1000).await, "the retry should complete");
 
     let log = fetch_body(app, "/fragment/story-log").await;

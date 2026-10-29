@@ -19,6 +19,8 @@ pub enum RefusalKind {
     Busy,
     /// The page named a Game that is no longer active.
     GameChanged,
+    /// The page named a Message that is no longer the last one.
+    LastMessageChanged,
 }
 
 impl RefusalKind {
@@ -26,6 +28,7 @@ impl RefusalKind {
         match self {
             Self::Busy => "The Game is busy",
             Self::GameChanged => "The active Game changed",
+            Self::LastMessageChanged => "The last Message changed",
         }
     }
 
@@ -34,6 +37,7 @@ impl RefusalKind {
         match self {
             Self::Busy => Refusal::StillThinking.line(),
             Self::GameChanged => "The page showed a Game that is no longer active.".to_string(),
+            Self::LastMessageChanged => Refusal::LastMessageChanged.line(),
         }
     }
 }

@@ -30,6 +30,7 @@ use crate::support::http_fixtures::{create_game_from, story_of_game};
 use crate::support::http_requests::{
     assert_answers_nothing, fetch_body, fetch_busy_status, post_action, post_empty, post_form,
     response_body, wait_for_jobs, wait_for_jobs_running_at_most, wait_settled,
+    post_on_last_message,
 };
 
 // [docs/specs/autoplay.md] SCENARIO: 41.1
@@ -582,7 +583,12 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 2000).await, "the first Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(&state, 2000).await, "the Retry settles");
     let swiped = story_of_game(&state, game);
     let narration = swiped
@@ -600,7 +606,7 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
 
     let writes = [
         post_action(&app, "look").await,
-        post_empty(&app, "/swipe/new").await,
+        post_on_last_message(&app, "/swipe/new").await,
         post_empty(
             &app,
             &format!("/message/{}/swipe/{other_swipe}", narration.id),
@@ -612,7 +618,7 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
             "text=Rewritten",
         )
         .await,
-        post_empty(&app, "/history/delete").await,
+        post_on_last_message(&app, "/history/delete").await,
     ];
     for response in writes {
         assert_eq!(response.status(), StatusCode::CONFLICT);

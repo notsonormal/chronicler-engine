@@ -10,7 +10,7 @@ use chronicler_engine::domain::model::change::ChangeKind;
 use super::*;
 use super::support::{
     NOTICE, StubRunner, hold_screen_loads, install_story_load_counter, release_screen_loads,
-    story_load_count,
+    start_current, story_load_count,
 };
 
 /// An open editor marks its entry `data-editing` and the root of the story log
@@ -1006,6 +1006,49 @@ async fn check_failed_delete_reports_in_the_notice(page: playwright_rs::Page, _s
     );
 }
 
+// The page keeps the Delete of the entry it rendered until the next load. The stub
+// adds a Narration after that render, so the Delete names a Message that is no longer last.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.26
+async fn check_a_delete_of_a_message_that_is_no_longer_last_reports_in_the_notice(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    page.on_dialog(|dialog| async move { dialog.accept(None).await })
+        .await
+        .unwrap();
+    start_current(&page).await;
+    let entries_before = count_log_entries(&page).await;
+    assert!(
+        entries_before > 1,
+        "the fixture must show an entry that carries a delete control"
+    );
+    stub.story_log_handle()
+        .append_narration("A Narration that another tab added.");
+
+    page.locator("#story-log .log-entry:last-child .delete-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    wait_for_error_disclosure(&page, NOTICE, "a stale delete should report in the notice").await;
+    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The last Message changed, so the Message was not deleted.",
+        "the notice names the changed Message"
+    );
+    assert!(
+        raw.contains("The page showed a Message that is no longer the last one."),
+        "the engine's line belongs in the disclosure, got {raw:?}"
+    );
+    load_screen_now(&page).await;
+    assert_eq!(
+        count_log_entries(&page).await,
+        entries_before + 1,
+        "the refused delete removed nothing, and the load shows the added Narration"
+    );
+}
+
 // The stub answers a swipe switch with a 500 once the test asks for the failure
 // path, so the shipped previous-swipe click runs the real client path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.19
@@ -1284,6 +1327,12 @@ async fn run_story_log_edit_failure_checks() {
         .run(
             StubActionOutcome::Pending,
             check_failed_delete_reports_in_the_notice,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_delete_of_a_message_that_is_no_longer_last_reports_in_the_notice,
         )
         .await;
     runner

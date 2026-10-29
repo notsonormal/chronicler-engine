@@ -506,7 +506,7 @@ async fn test_update_missing_preset_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">The preset was not saved: Preset not found.</div>"
+        "<div class=\"error-message\">The preset &quot;Updated&quot; was not saved: Preset not found.</div>"
     );
 }
 
@@ -559,7 +559,7 @@ async fn test_update_default_preset_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">The preset &quot;Default Test System&quot; was not saved: Cannot edit default presets.</div>"
+        "<div class=\"error-message\">The preset &quot;Changed&quot; was not saved: Cannot edit default presets.</div>"
     );
 }
 
@@ -1488,6 +1488,14 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
     );
     let body = body_text(response).await;
     assert_one_error_message_holding(&body, "preset save failure");
+    assert!(
+        body.contains("The preset &quot;Changed&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+    assert!(
+        !body.contains("Original"),
+        "the sentence does not name the stored name: {body}"
+    );
     assert!(
         !body.contains("preset-card"),
         "a failed update must not swap the card into the response: {body}"

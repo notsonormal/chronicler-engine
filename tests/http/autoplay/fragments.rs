@@ -11,7 +11,9 @@ use super::{
 use crate::support::http_assertions::{assert_action_controls, ActionControls};
 use crate::support::app_wiring::{app_after_an_impersonate_with_a_failed_event, app_with_script};
 use crate::support::http_fixtures::{create_game_from, seed_offered_set, story_of_game};
-use crate::support::http_requests::{fetch_body, fetch_part, post_action, post_empty, wait_settled};
+use crate::support::http_requests::{
+    fetch_body, fetch_part, post_action, post_empty, wait_settled, post_on_last_message,
+};
 
 fn button_tags_with_class(html: &str, class: &str) -> Vec<String> {
     html.split("<button")
@@ -85,7 +87,12 @@ async fn test_while_a_run_holds_the_game_the_story_log_renders_its_controls_disa
     let game = active_game_of(&state);
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 2000).await, "the Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(&state, 2000).await, "the Retry settles");
     seed_offered_set(&state, &["Ask the bartender"]);
 
@@ -138,7 +145,12 @@ async fn test_between_two_jobs_of_a_run_the_story_log_and_the_dock_render_disabl
     let game = active_game_of(&state);
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 2000).await, "the Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(&state, 2000).await, "the Retry settles");
     seed_offered_set(&state, &["Ask the bartender"]);
 
@@ -228,7 +240,12 @@ async fn test_while_a_run_holds_the_game_next_swipe_renders_disabled() {
     let game = active_game_of(&state);
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 2000).await, "the Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(&state, 2000).await, "the Retry settles");
     let narration = story_of_game(&state, game)
         .pop()

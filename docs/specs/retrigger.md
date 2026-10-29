@@ -1,6 +1,6 @@
 # Feature Spec: Retrigger (POST /retrigger)
 
-Endpoint: `POST /retrigger`
+Endpoint: `POST /retrigger`, with the form field `message`: the id of the Message that the page rendered the control on
 
 ## Scenarios
 
@@ -117,6 +117,17 @@ Then the response is 400 Bad Request
 Given a Game whose Job is running
 When the client sends POST /retrigger
 Then the response is 409 with the "Still thinking..." line
+And no event Narration is added
+```
+
+#### Scenario 15.2: A Retrigger that names a Message that is not the last one is refused
+
+```gherkin
+Given a Game whose story holds an Input and the Narration that answers it
+When the client sends POST /retrigger with the field message set to the id of the Input
+Then the response is 409
+And the first line of the body is "The last Message changed, so the retrigger was not started."
+And the second line of the body is "The page showed a Message that is no longer the last one."
 And no event Narration is added
 ```
 

@@ -19,7 +19,7 @@ use crate::support::http_assertions::{
 use crate::support::http_fixtures::{append_narrations, story_of};
 use crate::support::http_requests::{
     fetch_status_label, assert_answers_nothing, fetch_body, post_action, post_empty, post_form,
-    response_body, wait_settled,
+    post_on_message, response_body, wait_settled, post_on_last_message,
 };
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
@@ -44,7 +44,7 @@ async fn test_delete_last_between_actions_http() {
         .next_back()
         .expect("narration A should be persisted");
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     let resp = post_action(&app, "look around").await;
@@ -96,7 +96,7 @@ async fn test_delete_mid_sequence_http() {
         .next_back()
         .expect("narration B should be the latest narration");
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     let _ = post_action(&app, "check door").await;
@@ -152,7 +152,7 @@ async fn test_delete_of_the_only_message_is_refused_http() {
         "the seeded Game holds only its opening Narration"
     );
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let body = response_body(resp).await;
     assert!(
@@ -184,10 +184,10 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
     assert!(wait_settled(&state, 1000).await);
 
     // The delete leaves an Input with no anchor narration.
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_ne!(
         resp.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -216,7 +216,7 @@ async fn test_delete_removes_entry_from_fragment_http() {
         "the fragment must render at least 2 entries to delete one: {before}"
     );
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_answers_nothing(resp).await;
 
     let after = fetch_body(&app, "/fragment/story-log").await;
@@ -257,6 +257,36 @@ fn long_story_app() -> (
     });
     assert_eq!(story_of(&state).len(), 53, "the story holds 53 Messages");
     (app, state)
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.17
+#[tokio::test]
+async fn test_a_delete_that_names_a_message_that_is_not_the_last_is_refused() {
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let (app, state, _storage) = app_with_script(model);
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 1000).await, "the Job settles");
+    let before: Vec<u64> = story_of(&state).iter().map(|message| message.id).collect();
+    let input = story_of(&state)
+        .iter()
+        .find(|message| message.message_type == MessageType::Input)
+        .expect("the story holds the Input")
+        .id;
+
+    let response = post_on_message(&app, "/history/delete", input).await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = response_body(response).await;
+    assert!(
+        body.contains("The last Message changed, so the Message was not deleted."),
+        "{body}"
+    );
+    assert!(
+        body.contains("The page showed a Message that is no longer the last one."),
+        "{body}"
+    );
+    let after: Vec<u64> = story_of(&state).iter().map(|message| message.id).collect();
+    assert_eq!(after, before, "the refused delete wrote nothing");
 }
 
 // [docs/specs/story_log.md] SCENARIO: 8.11
@@ -302,7 +332,7 @@ async fn test_delete_last_in_a_long_story_removes_the_entry_the_player_sees() {
     let before = fetch_body(&app, "/fragment/story-log").await;
     assert_eq!(log_entries(&before).len(), 50);
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     let after = fetch_body(&app, "/fragment/story-log").await;
@@ -559,17 +589,30 @@ async fn test_the_story_log_sends_its_requests_through_htmx_and_renders_the_edit
             "the slot of entry {id} closes the edit group, hidden: {entry}"
         );
     }
-    let (_, last) = entries.last().expect("the last .log-entry");
+    let (last_id, last) = entries.last().expect("the last .log-entry");
+    let names_the_last_message = format!(r#"hx-vals='{{"message": {last_id}}}'"#);
     let delete = tag_holding(last, "delete-btn");
     assert!(
         delete.contains(r#"hx-post="/history/delete""#)
             && delete.contains(r#"hx-confirm="Delete this message?""#),
         "Delete asks first: {delete}"
     );
+    assert!(
+        delete.contains(&names_the_last_message),
+        "Delete names its Message: {delete}"
+    );
     let retrigger = tag_holding(last, "retrigger-btn");
     let retry = tag_holding(last, r#"title="Retry""#);
     assert!(retrigger.contains(r#"hx-post="/retrigger""#), "{retrigger}");
     assert!(retry.contains(r#"hx-post="/swipe/new""#), "{retry}");
+    assert!(
+        retrigger.contains(&names_the_last_message),
+        "Retrigger names its Message: {retrigger}"
+    );
+    assert!(
+        retry.contains(&names_the_last_message),
+        "Retry names its Message: {retry}"
+    );
     assert_buttons_send_through_htmx(&body);
 }
 
@@ -607,7 +650,12 @@ async fn test_the_swipe_controls_of_the_story_log_send_through_htmx() {
     );
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 1000).await);
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(&state, 1000).await);
     let message_id = story_of(&state).last().expect("the story is not empty").id;
 

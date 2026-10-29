@@ -1,7 +1,7 @@
 # Feature Spec: Story Log
 
 Endpoints:
-- `POST /history/delete`
+- `POST /history/delete`, with the form field `message`: the id of the Message that the page rendered the control on
 - `POST /history/:id`
 - `GET /fragment/story-log`
 
@@ -187,8 +187,19 @@ Then each .log-entry renders .edit-actions with a .save-btn, a .cancel-btn and o
 And each .save-btn sends the edit of its Message with the text of #edit-textarea
 And the last .log-entry renders .delete-btn, .retrigger-btn and the Retry control as htmx requests
 And .delete-btn asks the player to confirm before it sends
+And .delete-btn, .retrigger-btn and the Retry control name the last Message in the field message
 When the last Message has two Swipes
 Then the Previous swipe control and the Next swipe control are htmx requests that name the switch
 And no button of the log calls a script that sends a request
 ```
 
+#### Scenario 8.17: A delete that names a Message that is not the last one is refused
+
+```gherkin
+Given a Game whose story holds an Input and the Narration that answers it
+When the client POST /history/delete with the field message set to the id of the Input
+Then the response is 409
+And the first line of the body is "The last Message changed, so the Message was not deleted."
+And the second line of the body is "The page showed a Message that is no longer the last one."
+And the story log still holds every Message
+```

@@ -18,7 +18,7 @@ pub struct WorldRowView {
 #[derive(Template)]
 #[template(
     source = r##"
-<button class="btn-primary btn-new-world" hx-get="/fragment/worlds/new" hx-target="#edit-dialog-body" hx-swap="innerHTML">Create New World</button>
+<button class="btn-primary btn-new-world" id="world-new-open" hx-get="/fragment/worlds/new" hx-target="#edit-dialog-body" hx-swap="innerHTML">Create New World</button>
 
     {% if worlds.is_empty() %}
     <p>No worlds defined. Create your first world to get started.</p>
@@ -28,7 +28,7 @@ pub struct WorldRowView {
         <li class="world-item" id="world-{{ world.key }}">
             <div class="world-item-head">
                 <strong>{{ world.name }}</strong> <em>({{ world.game_count }} {% if world.game_count == 1 %}game{% else %}games{% endif %})</em>
-                <button class="btn-cyan" hx-get="/worlds/{{ world.key }}/edit" hx-target="#edit-dialog-body" hx-swap="innerHTML">Edit</button>
+                <button class="btn-cyan" id="world-edit-open-{{ world.key }}" hx-get="/worlds/{{ world.key }}/edit" hx-target="#edit-dialog-body" hx-swap="innerHTML">Edit</button>
                 <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-swap="none" class="btn-danger">Delete</button>
             </div>
             {{ world.description }}

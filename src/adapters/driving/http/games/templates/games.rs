@@ -48,7 +48,7 @@ pub struct PersonaRowView {
 #[template(
     source = r##"
 {% macro run_badge(run_held) %}{% if run_held %}<span class="run-badge" title="An Autoplay run holds this game"><svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"/></svg> Autoplay</span>{% endif %}{% endmacro %}
-{% macro rename_button(id) %}<button type="button" class="btn-cyan" hx-get="/fragment/games/{{ id }}/rename" hx-target="#edit-dialog-body" hx-swap="innerHTML">Rename</button>{% endmacro %}
+{% macro rename_button(id) %}<button type="button" class="btn-cyan" id="game-rename-open-{{ id }}" hx-get="/fragment/games/{{ id }}/rename" hx-target="#edit-dialog-body" hx-swap="innerHTML">Rename</button>{% endmacro %}
 <div class="games-section">
     <h2>Active Game</h2>
     {% match active_game %}
@@ -75,7 +75,7 @@ pub struct PersonaRowView {
     <h2>New Game</h2>
     <div class="games-empty">No worlds available. Create a world first.</div>
     {% else %}
-    <button type="button" class="btn-cyan" hx-get="/fragment/games/new" hx-target="#edit-dialog-body" hx-swap="innerHTML">New Game</button>
+    <button type="button" class="btn-cyan" id="game-new-open" hx-get="/fragment/games/new" hx-target="#edit-dialog-body" hx-swap="innerHTML">New Game</button>
     {% endif %}
 </div>
 

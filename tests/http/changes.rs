@@ -22,7 +22,7 @@ use chronicler_engine::domain::model::message::{Maker, Swipe, SwipeAt};
 use crate::support::app_wiring::{app_with_model, app_with_script, two_game_app};
 use crate::support::http_fixtures::{append_narrations, create_game_from, story_of, world_form_body};
 use crate::support::http_requests::{
-    post_action, post_form, response_body, wait_for_jobs, wait_settled,
+    post_action, post_form, post_on_last_message, response_body, wait_for_jobs, wait_settled,
 };
 use crate::SettingsTestGuard;
 
@@ -579,7 +579,7 @@ async fn test_a_transaction_whose_later_write_fails_moves_none_of_its_own_number
     );
 
     let before = fetch_changes(&app).await;
-    let response = post_form(&app, "/history/delete", "").await;
+    let response = post_on_last_message(&app, "/history/delete").await;
     assert_ne!(
         response.status(),
         StatusCode::OK,
@@ -773,24 +773,24 @@ async fn test_a_save_of_the_story_log_moves_the_story_and_a_delete_also_the_game
             })
             .expect("the second Swipe saves");
 
-        let (uri, body, moves): (String, &str, &[&str]) = match row {
+        let (uri, body, moves): (String, String, &[&str]) = match row {
             "edit" => (
                 format!("/history/{}", last.id),
-                "text=An+edited+text",
+                "text=An+edited+text".to_string(),
                 &["story"],
             ),
             "switch" => (
                 format!("/message/{}/swipe/1", last.id),
-                "",
+                String::new(),
                 &["story", "options", "busy"],
             ),
             _ => (
                 "/history/delete".to_string(),
-                "",
+                format!("message={}", last.id),
                 &["story", "games", "options", "busy"],
             ),
         };
-        assert_save_moves(&app, &uri, body, moves, row).await;
+        assert_save_moves(&app, &uri, &body, moves, row).await;
     }
 }
 

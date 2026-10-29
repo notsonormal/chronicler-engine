@@ -26,6 +26,8 @@ use crate::error::EngineError;
 pub enum Refusal {
     /// The Game is busy: `409` "Still thinking...".
     StillThinking,
+    /// The Message that the request names is no longer the last one: `409`.
+    LastMessageChanged,
     /// The request itself is wrong: `400`, with the reason line.
     BadRequest(String),
     /// The request could not run: `500`, carrying the failure's own line. The
@@ -40,6 +42,9 @@ impl Refusal {
     pub fn line(&self) -> String {
         match self {
             Self::StillThinking => "Still thinking...".to_string(),
+            Self::LastMessageChanged => {
+                "The page showed a Message that is no longer the last one.".to_string()
+            }
             Self::BadRequest(line) => line.clone(),
             Self::Failed(failure) => failure.line(),
         }
@@ -444,6 +449,7 @@ impl GameWriter {
         let plan = JobPlan::for_request(request, story).map_err(|refusal| match refusal {
             PlanRefusal::BadRequest(line) => Refusal::BadRequest(line),
             PlanRefusal::Missing(record) => self.missing(game, record, opener),
+            PlanRefusal::LastMessageChanged => Refusal::LastMessageChanged,
         })?;
         self.require_records(game, &plan, opener)?;
         let step = plan.first_step();
@@ -566,12 +572,16 @@ impl GameWriter {
         })
     }
 
-    pub fn delete_last(&self, game: GameId) -> Result<(), Refusal> {
+    /// Deletes the last Message, when it is the Message that the request names.
+    pub fn delete_last(&self, game: GameId, named: u64) -> Result<(), Refusal> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
             let tail = self.tail_or_refuse(game, opener)?;
             let last =
                 tail.ok_or_else(|| Refusal::BadRequest("No message to delete".to_string()))?;
+            if last.last.id != named {
+                return Err(Refusal::LastMessageChanged);
+            }
             if !last.can_delete() {
                 return Err(Refusal::BadRequest(
                     "The story keeps its last message".to_string(),

@@ -9,6 +9,7 @@ use axum::{
 use crate::adapters::driving::http::AppState;
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
+use crate::adapters::driving::http::utils::handler_helpers::{LastMessageForm, names_no_message};
 use crate::adapters::driving::http::utils::response::ok;
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -31,8 +32,12 @@ pub async fn edit_history_handler(
 pub async fn delete_history_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
+    Form(form): Form<LastMessageForm>,
 ) -> Response {
-    match state.game_writer.delete_last(game_id) {
+    let Some(message) = form.named() else {
+        return names_no_message();
+    };
+    match state.game_writer.delete_last(game_id, message) {
         Ok(()) => ok(""),
         Err(refusal) => refusal.into_response(),
     }

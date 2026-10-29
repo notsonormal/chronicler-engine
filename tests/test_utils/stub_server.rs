@@ -50,6 +50,9 @@ use chronicler_engine::adapters::driving::http::utils::answer_words::{
 use chronicler_engine::adapters::driving::http::utils::error::{
     action_failure_response, action_invalid_response, action_not_found_response,
 };
+use chronicler_engine::adapters::driving::http::utils::handler_helpers::{
+    names_no_message, LastMessageForm,
+};
 use chronicler_engine::adapters::driving::http::utils::response::refused;
 use chronicler_engine::application::generation::gate::{AutoplayProgress, Busy};
 use chronicler_engine::application::games::view_query::RoleHealth;
@@ -1146,6 +1149,11 @@ async fn rename_game(
 }
 
 async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
+    Html(story_log_html(&story_entries(&state)))
+}
+
+/// The entries of the story that the stub holds now, oldest first.
+fn story_entries(state: &StubState) -> Vec<StoryRow> {
     use std::sync::atomic::Ordering::SeqCst;
     let mut entries = if state.two_swipes.load(SeqCst) {
         if state.switched.load(SeqCst) {
@@ -1175,7 +1183,14 @@ async fn story_log_fragment(State(state): State<Arc<StubState>>) -> Html<String>
     if state.deleted.load(SeqCst) {
         entries.pop();
     }
-    Html(story_log_html(&entries))
+    entries
+}
+
+/// A Delete, a Retry or a Retrigger that names a Message other than the last is refused.
+/// The busy Game refuses first, and a request that names no Message is invalid before both.
+fn refuse_unless_last_message(state: &StubState, named: u64) -> Option<Response<Body>> {
+    let last = story_entries(state).last().map(|entry| entry.id);
+    (last != Some(named)).then(|| refused(RefusalKind::LastMessageChanged))
 }
 
 fn story_log_entries_with_extra_oldest() -> Vec<StoryRow> {
@@ -1646,12 +1661,21 @@ async fn game_posture_save(State(state): State<Arc<StubState>>) -> Response<Body
 
 /// The retry route: a refusal while the Game is busy, else the 500 the retry
 /// failure scenario drives.
-async fn retry_swipe(State(state): State<Arc<StubState>>) -> Response<Body> {
+async fn retry_swipe(
+    State(state): State<Arc<StubState>>,
+    Form(form): Form<LastMessageForm>,
+) -> Response<Body> {
+    let Some(named) = form.named() else {
+        return names_no_message();
+    };
     if state
         .story_writes_refused_as_busy
         .load(std::sync::atomic::Ordering::SeqCst)
     {
         return refused(RefusalKind::Busy);
+    }
+    if let Some(refusal) = refuse_unless_last_message(&state, named) {
+        return refusal;
     }
     if state
         .generation_requests_accepted
@@ -1681,15 +1705,24 @@ async fn start_autoplay(State(state): State<Arc<StubState>>) -> Response<Body> {
     }
 }
 
-async fn record_retrigger(State(state): State<Arc<StubState>>) -> Response<Body> {
+async fn record_retrigger(
+    State(state): State<Arc<StubState>>,
+    Form(form): Form<LastMessageForm>,
+) -> Response<Body> {
     state
         .retrigger_requests
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let Some(named) = form.named() else {
+        return names_no_message();
+    };
     if state
         .story_writes_refused_as_busy
         .load(std::sync::atomic::Ordering::SeqCst)
     {
         return refused(RefusalKind::Busy);
+    }
+    if let Some(refusal) = refuse_unless_last_message(&state, named) {
+        return refusal;
     }
     if state
         .generation_requests_accepted
@@ -1941,10 +1974,19 @@ async fn save_message(
     }
 }
 
-async fn delete_message(State(state): State<Arc<StubState>>) -> Response<Body> {
+async fn delete_message(
+    State(state): State<Arc<StubState>>,
+    Form(form): Form<LastMessageForm>,
+) -> Response<Body> {
     use std::sync::atomic::Ordering::SeqCst;
+    let Some(named) = form.named() else {
+        return names_no_message();
+    };
     if state.story_writes_refused_as_busy.load(SeqCst) {
         return refused(RefusalKind::Busy);
+    }
+    if let Some(refusal) = refuse_unless_last_message(&state, named) {
+        return refusal;
     }
     if !state.delete_succeeds.load(SeqCst) {
         return action_failure_response("Stub delete failure");

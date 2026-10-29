@@ -153,10 +153,12 @@ pub enum JobRequest {
     Impersonate(Option<String>),
     /// `/options`: the Options run alone.
     Options,
-    /// A Retry of the last Message, of the kind the last Message holds.
-    Retry,
-    /// A Retrigger of the Trigger the last Message holds.
-    Retrigger,
+    /// A Retry of the last Message, of the kind the last Message holds. The id is the
+    /// Message that the player's page showed as the last one.
+    Retry(u64),
+    /// A Retrigger of the Trigger the last Message holds. The id is the Message that
+    /// the player's page showed as the last one.
+    Retrigger(u64),
 }
 
 impl JobRequest {
@@ -224,6 +226,8 @@ pub enum PlanRefusal {
     BadRequest(String),
     /// A record the request needs is missing; the failure line names it.
     Missing(Record),
+    /// The Message that the request names is no longer the last one.
+    LastMessageChanged,
 }
 
 impl JobPlan {
@@ -238,14 +242,16 @@ impl JobPlan {
                 first: None,
                 options: OptionsRun::OnDemand,
             }),
-            JobRequest::Retry => {
+            JobRequest::Retry(named) => {
                 let tail =
                     tail.ok_or_else(|| PlanRefusal::BadRequest("No input to retry".to_string()))?;
+                Self::require_last(&tail, *named)?;
                 Ok(Self::of_one(Self::redo(&tail), None))
             }
-            JobRequest::Retrigger => {
+            JobRequest::Retrigger(named) => {
                 let refused = || PlanRefusal::BadRequest("No event record available".to_string());
                 let tail = tail.ok_or_else(refused)?;
+                Self::require_last(&tail, *named)?;
                 let record = tail.retrigger_record().ok_or_else(refused)?.clone();
                 Ok(Self::of_one(
                     GenerationOrder::event_after(tail.current_at(), record),
@@ -270,6 +276,14 @@ impl JobPlan {
                 },
                 None,
             ),
+        }
+    }
+
+    fn require_last(tail: &Tail, named: u64) -> Result<(), PlanRefusal> {
+        if tail.last.id == named {
+            Ok(())
+        } else {
+            Err(PlanRefusal::LastMessageChanged)
         }
     }
 

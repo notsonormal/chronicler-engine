@@ -162,7 +162,7 @@ fn plan_retry_by_last_kind() {
     ];
 
     for (last, tail, generation, start) in rows {
-        let order = first_order(plan(JobRequest::Retry, tail));
+        let order = first_order(plan(JobRequest::Retry(tail.last.id), tail));
 
         assert_eq!(order.generation, generation, "a Retry of {last}");
         assert_eq!(order.place, Place::NewSwipeOnLast, "a Retry of {last}");
@@ -178,7 +178,7 @@ fn plan_retry_keeps_the_guide_of_a_narration() {
     let mut tail = tail_after_one_message(MessageKind::Narration);
     tail.last.swipes[1].guide_text = Some("go north".to_string());
 
-    let order = first_order(plan(JobRequest::Retry, tail));
+    let order = first_order(plan(JobRequest::Retry(tail.last.id), tail));
 
     assert_eq!(
         order.generation,
@@ -193,7 +193,7 @@ fn plan_retry_of_the_opening_applies_no_guide() {
     let mut tail = tail_of_the_opening();
     tail.last.swipes[1].guide_text = Some("go north".to_string());
 
-    let order = first_order(plan(JobRequest::Retry, tail));
+    let order = first_order(plan(JobRequest::Retry(tail.last.id), tail));
 
     assert_eq!(order.generation, Generation::Narration { guide: None });
 }
@@ -203,7 +203,7 @@ fn plan_retry_bare_impersonate() {
     let mut tail = tail_after_one_message(MessageKind::ImpersonateInput);
     tail.last.swipes[1].impersonated = true;
 
-    let order = first_order(plan(JobRequest::Retry, tail));
+    let order = first_order(plan(JobRequest::Retry(tail.last.id), tail));
 
     assert_eq!(
         order.generation,
@@ -216,7 +216,7 @@ fn plan_retry_keeps_the_direction_of_an_impersonate_input() {
     let mut tail = tail_after_one_message(MessageKind::ImpersonateInput);
     tail.last.swipes[1].impersonate_direction = Some("be bold".to_string());
 
-    let order = first_order(plan(JobRequest::Retry, tail));
+    let order = first_order(plan(JobRequest::Retry(tail.last.id), tail));
 
     assert_eq!(
         order.generation,
@@ -234,7 +234,7 @@ fn plan_retry_no_story() {
     };
 
     assert_eq!(
-        JobPlan::for_request(&JobRequest::Retry, story),
+        JobPlan::for_request(&JobRequest::Retry(0), story),
         Err(PlanRefusal::BadRequest("No input to retry".to_string()))
     );
 }
@@ -260,7 +260,7 @@ fn plan_retrigger_refused() {
 
     for (case, tail) in rows {
         assert_eq!(
-            plan(JobRequest::Retrigger, tail),
+            plan(JobRequest::Retrigger(tail.last.id), tail),
             Err(PlanRefusal::BadRequest(
                 "No event record available".to_string()
             )),
@@ -277,7 +277,7 @@ fn plan_retrigger_no_story() {
     };
 
     assert!(matches!(
-        JobPlan::for_request(&JobRequest::Retrigger, story),
+        JobPlan::for_request(&JobRequest::Retrigger(0), story),
         Err(PlanRefusal::BadRequest(_))
     ));
 }
@@ -289,7 +289,7 @@ fn plan_retrigger_copies_record() {
         tail.last.swipes[1].state = state_in("room3", Some(event_record()));
         let current = tail.current_at();
 
-        let order = first_order(plan(JobRequest::Retrigger, tail));
+        let order = first_order(plan(JobRequest::Retrigger(tail.last.id), tail));
 
         assert_eq!(
             order,
@@ -416,7 +416,7 @@ fn plan_options_runs_alone() {
 fn plan_first_step_of_an_event_retry_is_the_event_step() {
     let tail = tail_after_one_message(MessageKind::EventNarration(event_record()));
 
-    let job = plan(JobRequest::Retry, tail).expect("a Retry plans");
+    let job = plan(JobRequest::Retry(tail.last.id), tail).expect("a Retry plans");
 
     assert_eq!(job.first_step(), Step::GeneratingEvent);
 }
@@ -425,7 +425,7 @@ fn plan_first_step_of_an_event_retry_is_the_event_step() {
 fn plan_input_retry_not_analysed() {
     let tail = tail_after_one_message(MessageKind::TypedInput);
 
-    let order = first_order(plan(JobRequest::Retry, tail));
+    let order = first_order(plan(JobRequest::Retry(tail.last.id), tail));
 
     assert!(
         !order.is_analysed(),
@@ -442,10 +442,8 @@ fn plan_other_kinds_are_analysed() {
     ];
 
     for kind in rows {
-        let order = first_order(plan(
-            JobRequest::Retry,
-            tail_after_one_message(kind.clone()),
-        ));
+        let tail = tail_after_one_message(kind.clone());
+        let order = first_order(plan(JobRequest::Retry(tail.last.id), tail));
 
         assert!(order.is_analysed(), "a Retry of {kind:?} is analysed");
     }

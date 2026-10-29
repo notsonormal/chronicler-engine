@@ -22,7 +22,7 @@ use crate::support::http_fixtures::{
 };
 use crate::support::http_requests::{
     fetch_body, fetch_status_label, post_action, post_empty, post_form, response_body,
-    wait_for_jobs, wait_idle, wait_settled,
+    wait_for_jobs, wait_idle, wait_settled, post_on_last_message,
 };
 
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
@@ -333,7 +333,7 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
     let edit_body = response_body(edit).await;
     assert_still_thinking(&edit_body);
 
-    let delete = post_empty(&app, "/history/delete").await;
+    let delete = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(delete.status(), StatusCode::CONFLICT);
     let delete_body = response_body(delete).await;
     assert_still_thinking(&delete_body);
@@ -371,7 +371,12 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 1000).await, "the first Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(&state, 1000).await, "the retry settles");
 
     let narration = story_of_game(&state, game)
@@ -829,14 +834,19 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             assert!(post_action(&app, ACTION_INPUT).await.status().is_success());
             assert!(wait_settled(&state, 2000).await, "the first Job settles");
             assert!(
-                post_empty(&app, "/history/delete")
+                post_on_last_message(&app, "/history/delete")
                     .await
                     .status()
                     .is_success()
             );
             let story_before = story_of_game(&state, game);
             let hold = model.hold(row.held);
-            assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+            assert!(
+                post_on_last_message(&app, "/swipe/new")
+                    .await
+                    .status()
+                    .is_success()
+            );
             StopJob {
                 app,
                 state,

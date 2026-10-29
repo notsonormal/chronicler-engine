@@ -215,6 +215,7 @@ pub async fn update_preset_handler(
     // distinguish "unchecked all" from "field omitted", so preserve.
     let allowed_modes = (form.allowed_mode_novel || form.allowed_mode_if)
         .then(|| form_allowed_modes(form.allowed_mode_novel, form.allowed_mode_if));
+    let name = item_named(&form.name);
     let edit = PresetEdit {
         name: form.name,
         role: form.role,
@@ -226,15 +227,7 @@ pub async fn update_preset_handler(
 
     match app_state.prompt_preset_service.edit_preset(&id, edit) {
         Ok(_) => ok(""),
-        Err(e) => {
-            let name = app_state
-                .prompt_preset_service
-                .get_preset(&id)
-                .ok()
-                .flatten()
-                .and_then(|preset| item_named(&preset.name));
-            naming_item(answer_for_error(e, AnswerPolicy::EngineText), name)
-        }
+        Err(e) => naming_item(answer_for_error(e, AnswerPolicy::EngineText), name),
     }
 }
 

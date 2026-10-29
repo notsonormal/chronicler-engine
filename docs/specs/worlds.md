@@ -110,6 +110,19 @@ And the body says the World was not found
 And the body carries no World form
 ```
 
+### A failed World update
+
+#### Scenario 25.15: A storage failure during a World update names the typed name
+
+```gherkin
+Given a seeded World named "Posture World"
+And a storage that rejects the World update
+When the client POST /worlds/{key} with the full form and the name "Typed Name"
+Then the response status is "500 Internal Server Error"
+And the first line of the body is `The World "Typed Name" was not saved`, with the name typed in the form
+And the body does not name "Posture World"
+```
+
 ### World creation refuses an existing identifier
 
 #### Scenario 25.7: Creating a World whose identifier already exists is refused

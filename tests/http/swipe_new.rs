@@ -21,7 +21,7 @@ use crate::support::http_assertions::{assert_still_thinking, status_error_messag
 use crate::support::http_fixtures::{break_start_room, room_header_of, story_of};
 use crate::support::http_requests::{
     fetch_status_label, assert_answers_nothing, fetch_busy_status, post_action, post_empty,
-    post_form, wait_settled,
+    post_form, post_on_message, response_body, wait_settled, post_on_last_message,
 };
 
 fn story_log_counts(state: &AppState) -> (usize, usize) {
@@ -111,7 +111,7 @@ async fn test_retry_replaces_narration_with_new_swipe_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 2000).await, "action should complete");
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_answers_nothing(resp).await;
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -163,7 +163,7 @@ async fn test_retry_reruns_quantifier_moves_player_http() {
         assert_eq!(room, "room_1", "first action: stay");
     }
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
     let room = state
@@ -207,7 +207,7 @@ async fn test_retry_preserves_input_message_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 2000).await);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -244,7 +244,7 @@ async fn test_retry_uses_edited_input_text_http() {
     let edit = post_form(&app, &format!("/history/{input_id}"), "text=sprint+forward").await;
     assert_eq!(edit.status(), StatusCode::OK, "the edit should succeed");
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -305,7 +305,7 @@ async fn test_retry_reevaluates_triggers_http() {
         assert_eq!(events, 0, "first action: no trigger (player not in room2)");
     }
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
     let events = story_of(&state)
@@ -332,7 +332,7 @@ async fn test_retry_completes_when_quantifier_returns_no_movement_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 2000).await);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -378,7 +378,7 @@ async fn test_retry_swipe_without_movement_shows_no_room_http() {
         "the first Swipe arrived in room2"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -438,7 +438,7 @@ async fn test_event_retry_replaces_event_narration_with_new_swipe_http() {
         "the Action that fires the Trigger should complete"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -519,7 +519,7 @@ async fn test_event_retry_does_not_move_the_player_http() {
         .current_room_id;
     assert_eq!(room_before, "room2", "the Action moved the player");
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -568,7 +568,7 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
         "the Action should settle after its failed continuation"
     );
 
-    let resp = post_empty(&app, "/retrigger").await;
+    let resp = post_on_last_message(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -583,7 +583,7 @@ async fn test_event_retry_after_retrigger_adds_a_swipe_http() {
         "retrigger should append an event narration"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -621,7 +621,7 @@ async fn test_event_retry_does_not_carry_the_previous_swipes_encounter_http() {
         "the event's own reconciliation meets Gabriella"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -738,11 +738,11 @@ async fn test_event_retry_after_a_deleted_action_keeps_its_own_trigger_http() {
     // The delete loop below leaves the first event last again; its own record is
     // the Trigger the retry must reuse.
     while story_of(&state).len() > seeded_count {
-        let resp = post_empty(&app, "/history/delete").await;
+        let resp = post_on_last_message(&app, "/history/delete").await;
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -777,7 +777,7 @@ async fn test_event_retry_matches_with_a_prior_swipe_switch_http() {
     let resp = post_empty(&app, &format!("/message/{event_id}/swipe/0")).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -818,7 +818,7 @@ async fn test_event_retry_keeps_the_room_name_off_the_event_swipe_http() {
         "the movement into \"room2\" must show that room's display name"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -891,7 +891,7 @@ async fn test_retry_llm_failure_sets_failed_http() {
 
     let swipes_before = newest_swipes(&state, MessageType::Narration);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -925,7 +925,7 @@ async fn test_retry_empty_narration_sets_failed_http() {
 
     let swipes_before = newest_swipes(&state, MessageType::Narration);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -961,7 +961,7 @@ async fn test_retry_room_not_found_sets_failed_http() {
     );
     break_start_room(&storage, active_game_of(&state), "non_existent_room");
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -1017,7 +1017,7 @@ async fn test_event_retry_trigger_narration_failure_sets_failed_http() {
     );
     let messages_before = story_of(&state).len();
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -1092,7 +1092,7 @@ async fn test_failed_retry_does_not_roll_the_movement_back_http() {
         .current_room_id;
     assert_eq!(room_moved, "room2", "the Action moved the player");
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -1145,7 +1145,7 @@ async fn test_retry_that_wrote_its_narration_keeps_that_world_http() {
         "the Action should complete"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -1181,7 +1181,7 @@ async fn test_retry_concurrent_generation_returns_still_thinking_http() {
         "the held narration call should reach the model"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     let body = axum::body::to_bytes(resp.into_body(), 16384)
         .await
@@ -1245,7 +1245,7 @@ async fn test_retry_re_impersonate_generates_input_swipe_http() {
 
     let swipes_before = newest_swipes(&state, MessageType::Input);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -1304,7 +1304,7 @@ async fn test_retry_of_a_bare_impersonate_runs_http() {
         "the bare impersonate turn should complete"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -1351,7 +1351,7 @@ async fn test_retry_typed_input_generates_input_swipe_http() {
         wait_settled(&state, 2000).await,
         "the Action should complete"
     );
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK, "the delete should accept");
     let room_before = state
         .game_view_query
@@ -1361,7 +1361,7 @@ async fn test_retry_typed_input_generates_input_swipe_http() {
 
     let swipes_before = newest_swipes(&state, MessageType::Input);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -1424,7 +1424,7 @@ async fn test_retry_re_impersonate_preserves_record_http() {
         "the impersonate turn should complete"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -1494,7 +1494,7 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
             .expect("update impersonate preset content");
     }
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -1577,7 +1577,7 @@ async fn test_guided_retry_shows_the_room_its_redo_arrives_in_http() {
         "a guided Narration that stayed put must not repeat the previous Action's room"
     );
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -1606,5 +1606,38 @@ async fn test_guided_retry_shows_the_room_its_redo_arrives_in_http() {
         room_header_of(&state, guided.id),
         None,
         "after a switch to the first Swipe, the guided Narration shows no room"
+    );
+}
+
+// [docs/specs/swipe_new.md] SCENARIO: 12.2
+#[tokio::test]
+async fn test_retry_that_names_a_message_that_is_not_the_last_is_refused_http() {
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let (app, state) = app_with_model(Arc::clone(&model));
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job settles");
+    let input = story_of(&state)
+        .iter()
+        .find(|message| message.message_type == MessageType::Input)
+        .expect("the story holds the Input")
+        .id;
+    let swipes_before = newest_swipes(&state, MessageType::Narration);
+
+    let resp = post_on_message(&app, "/swipe/new", input).await;
+
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The last Message changed, so the Retry was not started."),
+        "{body}"
+    );
+    assert!(
+        body.contains("The page showed a Message that is no longer the last one."),
+        "{body}"
+    );
+    assert_eq!(
+        newest_swipes(&state, MessageType::Narration),
+        swipes_before,
+        "no Swipe is added"
     );
 }

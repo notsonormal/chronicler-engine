@@ -55,7 +55,7 @@ async fn check_opening_a_preset_editor_moves_focus_straight_into_the_form(
     assert_eq!(
         focus_landings(&page).await,
         vec![
-            "/fragment/prompt-presets/custom_ref/edit".to_string(),
+            "preset-edit-open-custom_ref".to_string(),
             "edit-name-custom_ref".to_string(),
         ],
         "the editor must claim focus once, with no other control in between"

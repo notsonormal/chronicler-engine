@@ -457,6 +457,8 @@ When the client activates Cancel
 Then the edit dialog is closed and its body is empty
 And the control that opened it has keyboard focus
 And closing the dialog sent no request
+When a click that does not focus its control opens the dialog, and the client activates Cancel
+Then the control that opened it has keyboard focus
 ```
 
 #### Scenario 16.48: A save that the engine accepts closes the dialog
@@ -492,14 +494,14 @@ When the client presses Escape again
 Then the edit dialog is closed
 ```
 
-#### Scenario 16.51: Closing the dialog focuses the control that sends the opener's request
+#### Scenario 16.51: Closing the dialog focuses the opener by its id
 
 ```gherkin
 Given the edit dialog is open, and a Prompt Presets card control opened it
-And a load of the panel has rewritten that control in place into another control
+And a load of the panel has rewritten the card of that control
 When the client activates Cancel
 Then the edit dialog is closed
-And focus is on the control of the panel that sends the request of the control that opened the dialog
+And focus is on the control that has the id of the control that opened the dialog
 ```
 
 #### Scenario 16.52: The open dialog is centred in the viewport
@@ -785,4 +787,16 @@ When htmx reports a load error for the new-Options form
 Then the action area is still checking
 When htmx reports a load error for #command-form
 Then the action area is no longer checking
+```
+
+#### Scenario 16.78: An opener keeps its id through a load, and an opener that is gone leaves focus on the body
+
+```gherkin
+Given the edit dialog is open, and a control of a saved Game in the Games panel opened it
+And a load of the panel has removed the row above that control
+When the client activates Cancel
+Then focus is on the control that has the id of the control that opened the dialog
+When the client opens the dialog again, and a load of the panel removes the row of the control that opened it
+And the client activates Cancel
+Then focus is on the body
 ```

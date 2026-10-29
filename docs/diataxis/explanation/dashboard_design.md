@@ -42,7 +42,7 @@ An action saves data and answers a status code and the revision after its commit
 Every answer is one of five outcomes, and each outcome asks the player for a different next step:
 
 - **Done**: a `2xx` with the revision. The player goes on.
-- **Refused**: a `409`. The Game is busy, or another Game is active now. The player waits, or looks at the other Game.
+- **Refused**: a `409`. The Game is busy, another Game is active now, or the last Message is no longer the one that the page showed. The player waits, or looks at what changed.
 - **Invalid**: a `400`, or a `404` for a dialog that opens a record that is gone. The input is bad, or the data does not allow the change. The player fixes the input, or reads why.
 - **Failed**: a `500`. A fault in the engine stopped the action.
 - **No answer**: the engine is unreachable. The player waits for it.
@@ -52,6 +52,8 @@ The status chooses the outcome, and the text tells the player what happened. The
 The page shows "Saved", closes the dialog and clears the Action input only when the screen shows the revision of the answer. The confirmation and the screen then agree. The cost is one extra round trip after each action: the ask that follows it.
 
 Each action carries the Game of the screen. The engine refuses an action from a page whose Game is no longer active, so a tab cannot send to a Game that another tab switched to a moment before. The refused text stays in the input.
+
+Delete, Retry and Retrigger act on the last Message, so each also carries the Message that its page rendered it on. The engine refuses the request when that Message is no longer the last one. An entry stops being last when, for example, another browser tab added or deleted a Message, an Autoplay run added one, or the page was last loaded before a Job ended. The engine makes the check in the same step as the busy check, so no write lands between the check and the act.
 
 ### A report shows where the player can act on it
 
@@ -81,7 +83,7 @@ A change can arrive while the player works. A load must neither destroy what the
 
 - A load morphs each part, so a node that the new render keeps stays the same node, with its focus, selection and scroll position.
 - View state, such as an open Details disclosure or the active Settings sub-tab, lives in attributes that the server never sets. An element lists them in `data-keep`, and the load keeps them.
-- A form that waits for a Save opens in one modal dialog outside the screen, so no load meets a draft. A load never writes into a draft: both designs required it. The single dialog was free, and it was chosen because it needs no check of what counts as a draft. Closing the dialog discards the form, and focus returns to the control that opened it.
+- A form that waits for a Save opens in one modal dialog outside the screen, so no load meets a draft. A load never writes into a draft: both designs required it. The single dialog was free, and it was chosen because it needs no check of what counts as a draft. Closing the dialog discards the form, and focus returns to the control that opened it. The server renders an id on each such control, and the dialog finds the control by that id, so a load that rewrote the list does not lose it.
 - Two elements still hold unsaved input inside a part: a story-log entry in edit, and a control whose request is in flight. A load skips each one and shows the rest of the part. The player can edit a message while a Job runs, and the new narration arrives around the draft.
 
 The tradeoff is the dialog. It takes the player out of the list for the time of the edit, and it shows the data as it was when the form opened. The last save wins.

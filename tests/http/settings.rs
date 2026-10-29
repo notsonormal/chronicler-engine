@@ -717,6 +717,53 @@ async fn test_connection_edit_unknown_provider_answers_non_2xx() {
     );
 }
 
+// [docs/specs/settings.md] SCENARIO: 20.46
+#[tokio::test]
+async fn test_connection_edit_failure_names_the_typed_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let added = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
+    assert_eq!(added.status(), StatusCode::OK);
+    let panel = get_body(&app, "/fragment/settings").await;
+    let alpha = added_connection_id(&panel);
+
+    let added = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Beta&conn_provider=mock&conn_model=beta-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
+    assert_eq!(added.status(), StatusCode::OK);
+    let panel = get_body(&app, "/fragment/settings").await;
+    let beta = panel
+        .match_indices("hx-get=\"/fragment/connections/conn-")
+        .map(|(at, _)| added_connection_id(&panel[at..]))
+        .find(|candidate| candidate != &alpha)
+        .expect("the second connection edit link");
+    let renamed = post_form(
+        &app,
+        &format!("/connections/{beta}/edit"),
+        "conn_name=Alpha&conn_provider=mock&conn_model=beta-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
+    assert_eq!(renamed.status(), StatusCode::BAD_REQUEST);
+    let body = body_text(renamed).await;
+    assert!(
+        body.contains("The Connection &quot;Alpha&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+    assert!(
+        !body.contains("Beta"),
+        "the sentence does not name the stored name: {body}"
+    );
+}
+
 /// One Mock connection serving both roles, so the production graph can resolve
 /// its eager boot check.
 fn single_mock_settings(id: &str, model: &str) -> AppSettings {

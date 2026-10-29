@@ -3,13 +3,14 @@
 
 use axum::{
     body::Body,
-    extract::{Path, State},
+    extract::{Form, Path, State},
     response::{Html, IntoResponse, Response},
 };
 
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::{AnswerPolicy, answer_for_error};
+use crate::adapters::driving::http::utils::handler_helpers::{LastMessageForm, names_no_message};
 use crate::adapters::driving::http::utils::response::ok;
 use crate::domain::model::generation::JobRequest;
 use crate::application::pipeline::job::Job;
@@ -32,15 +33,23 @@ pub async fn reset_handler(
 pub async fn retrigger_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
+    Form(form): Form<LastMessageForm>,
 ) -> Response<Body> {
-    start_job(&state, game_id, JobRequest::Retrigger)
+    match form.named() {
+        Some(message) => start_job(&state, game_id, JobRequest::Retrigger(message)),
+        None => names_no_message(),
+    }
 }
 
 pub async fn retry_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
+    Form(form): Form<LastMessageForm>,
 ) -> Response<Body> {
-    start_job(&state, game_id, JobRequest::Retry)
+    match form.named() {
+        Some(message) => start_job(&state, game_id, JobRequest::Retry(message)),
+        None => names_no_message(),
+    }
 }
 
 fn start_job(state: &AppState, game_id: GameId, request: JobRequest) -> Response<Body> {

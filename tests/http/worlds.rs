@@ -581,6 +581,48 @@ async fn test_unknown_world_edit_form_answers_not_found_and_opens_no_dialog_http
     );
 }
 
+// [docs/specs/worlds.md] SCENARIO: 25.15
+#[tokio::test]
+async fn test_world_update_storage_failure_names_the_typed_name_http() {
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        StorageCall::UpdateWorld,
+        TestOverride::internal("update_world failure"),
+    ));
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    let world = posture_world();
+    storage
+        .seed_world(&world, &TestMap::single_room("start"))
+        .expect("seed posture world");
+
+    let typed = WorldCard {
+        name: "Typed Name".to_string(),
+        ..world
+    };
+    let resp = post_form(
+        &app,
+        "/worlds/posture_world",
+        &world_form_body(&typed, &TestMap::single_room("start")),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+    assert!(
+        !body.contains("Posture World"),
+        "the sentence does not name the stored name: {body}"
+    );
+    assert!(
+        body.contains("update_world failure"),
+        "the engine text follows: {body}"
+    );
+}
+
 // [docs/specs/worlds.md] SCENARIO: 25.13
 #[tokio::test]
 async fn test_world_row_shows_a_shortened_description_http() {

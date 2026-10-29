@@ -252,6 +252,16 @@ And the body carries the unknown-backend failure text
 And a following GET /fragment/settings still renders the Connection named "Alpha"
 ```
 
+#### Scenario 20.46: A failed connection edit names the name typed in the form
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha" and a Connection named "Beta"
+When the client edits "Beta" with the name "Alpha", which another Connection holds
+Then the response is a 400
+And the first line of the body is `The Connection "Alpha" was not saved`, with the name typed in the form
+And the body does not name "Beta"
+```
+
 #### Scenario 20.25: The context window field sets the window the next narration uses
 
 ```gherkin

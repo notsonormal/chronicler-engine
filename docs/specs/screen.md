@@ -301,3 +301,13 @@ Then the response is a 400
 And the first line of the body is "The Game was not renamed."
 And the second line of the body holds the text of the rejection
 ```
+
+#### Scenario 45.20: A request that names no last Message is invalid on each route that needs one
+
+```gherkin
+Given an engine with an active Game whose story holds an Input and its Narration
+When the client POST /history/delete, /swipe/new and /retrigger with no field message
+Then each response is a 400
+And the body is one line: "The Message was not deleted: The request names no Message.", "The Retry was not started: The request names no Message." and "The retrigger was not started: The request names no Message."
+And the story log still holds every Message
+```

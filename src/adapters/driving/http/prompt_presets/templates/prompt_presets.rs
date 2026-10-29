@@ -18,7 +18,7 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <button type="button" class="btn-cyan" hx-get="/fragment/prompt-presets/new?type=system" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add System Prompt Preset</button>
+        <button type="button" class="btn-cyan" id="preset-add-open-system" hx-get="/fragment/prompt-presets/new?type=system" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add System Prompt Preset</button>
     </div>
 
     <div class="preset-section">
@@ -28,7 +28,7 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <button type="button" class="btn-cyan" hx-get="/fragment/prompt-presets/new?type=quantifier" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Quantifier Prompt Preset</button>
+        <button type="button" class="btn-cyan" id="preset-add-open-quantifier" hx-get="/fragment/prompt-presets/new?type=quantifier" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Quantifier Prompt Preset</button>
     </div>
 
     <div class="preset-section">
@@ -38,7 +38,7 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <button type="button" class="btn-cyan" hx-get="/fragment/prompt-presets/new?type=impersonate" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Impersonate Prompt Preset</button>
+        <button type="button" class="btn-cyan" id="preset-add-open-impersonate" hx-get="/fragment/prompt-presets/new?type=impersonate" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Impersonate Prompt Preset</button>
     </div>
 
     <div class="preset-section">
@@ -48,7 +48,7 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <button type="button" class="btn-cyan" hx-get="/fragment/prompt-presets/new?type=options" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Options Prompt Preset</button>
+        <button type="button" class="btn-cyan" id="preset-add-open-options" hx-get="/fragment/prompt-presets/new?type=options" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Options Prompt Preset</button>
     </div>
 "##,
     ext = "html"

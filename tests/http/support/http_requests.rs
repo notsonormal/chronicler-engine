@@ -4,6 +4,7 @@ use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::test_support::STRAY_CALL_MARKER;
 use axum::body::Body;
 use axum::http::{self, Method, Request};
+use regex::Regex;
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driving::http::AppState;
@@ -135,6 +136,28 @@ pub async fn post_empty(app: &axum::Router, uri: &str) -> axum::response::Respon
         .body(Body::empty())
         .unwrap();
     app.clone().oneshot(req).await.unwrap()
+}
+
+/// A POST of a control that acts on the last Message, sent as the page sends it: the form
+/// field `message` names the Message that the page rendered the control on.
+pub async fn post_on_message(
+    app: &axum::Router,
+    uri: &str,
+    message: u64,
+) -> axum::response::Response<Body> {
+    post_form(app, uri, &format!("message={message}")).await
+}
+
+/// The same POST, for the last Message that the story log of the Game shows now. With no
+/// entry the field names the Message 0, which no story holds.
+pub async fn post_on_last_message(app: &axum::Router, uri: &str) -> axum::response::Response<Body> {
+    let story_log = fetch_part(app, "story-log").await;
+    let last = Regex::new(r#"data-id="(\d+)""#)
+        .expect("entry id")
+        .captures_iter(&story_log)
+        .last()
+        .map_or(0, |entry| entry[1].parse().expect("entry id is a number"));
+    post_on_message(app, uri, last).await
 }
 
 pub async fn post_form_with_hx(

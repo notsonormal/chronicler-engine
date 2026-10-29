@@ -184,7 +184,7 @@ pub async fn update_world_handler(
         .filter(|id| scenarios.iter().any(|s| &s.id == id));
     world_card.scenarios = scenarios;
     world_card.global_rules = form.global_rules_list();
-    let name = item_named(&world_card.name);
+    let name = item_named(&form.name);
     world_card.name = form.name;
     world_card.description = form.description;
     world_card.default_room_image = form.default_room_image.filter(|s| !s.is_empty());

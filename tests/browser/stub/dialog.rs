@@ -131,6 +131,43 @@ async fn check_closing_the_dialog_returns_focus_to_its_opener(
         1,
         "closing the dialog sends no request: the only request was the one that opened it"
     );
+
+    // A click that does not focus its control (Safari and Firefox on macOS do not
+    // focus a button on click) leaves the body focused when the dialog opens, so
+    // the browser has no control to return focus to.
+    page.evaluate::<(), ()>(
+        "() => document.activeElement && document.activeElement.blur()",
+        None,
+    )
+    .await
+    .unwrap();
+    page.evaluate::<(), ()>(
+        &format!("() => document.querySelector('{EDIT_BUTTON}').click()"),
+        None,
+    )
+    .await
+    .unwrap();
+    let opened = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { dialog_is_open(&page).await },
+    )
+    .await;
+    assert!(
+        opened,
+        "a click that does not focus its control opens the dialog"
+    );
+    page.locator("#edit-dialog [data-close-dialog]")
+        .await
+        .first()
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_dialog_closed(&page, "Cancel must close the dialog").await;
+    assert!(
+        wait_until_focused(&page, EDIT_BUTTON, Duration::from_secs(2)).await,
+        "Cancel must return keyboard focus to the Edit control, also when it had no focus at the click"
+    );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.48
@@ -263,10 +300,10 @@ async fn check_the_open_dialog_is_centred_in_the_viewport(
     );
 }
 
-const PRESET_EDIT_REQUEST: &str = r#"button[hx-get="/fragment/prompt-presets/custom_ref/edit"]"#;
+const PRESET_EDIT_OPENER: &str = "#preset-edit-open-custom_ref";
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.51
-async fn check_closing_the_dialog_focuses_the_control_with_the_openers_request_after_a_load_rewrote_its_card(
+async fn check_closing_the_dialog_focuses_the_opener_by_its_id_after_a_load_rewrote_its_card(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -278,23 +315,21 @@ async fn check_closing_the_dialog_focuses_the_control_with_the_openers_request_a
         .unwrap();
     wait_until_visible(&page, "#preset-card-custom_ref", DIALOG_WAIT).await;
 
-    page.locator(PRESET_EDIT_REQUEST)
+    page.locator(PRESET_EDIT_OPENER)
         .await
         .focus()
         .await
         .unwrap();
-    click_and_settle(&page, PRESET_EDIT_REQUEST, "#edit-dialog-body").await;
+    click_and_settle(&page, PRESET_EDIT_OPENER, "#edit-dialog-body").await;
     assert!(dialog_is_open(&page).await, "Edit opens the dialog");
-    page.evaluate::<(), ()>(
-        "() => { window.__openerNode = document.querySelector('button[hx-get=\"/fragment/prompt-presets/custom_ref/edit\"]'); }",
-        None,
-    )
-    .await
-    .unwrap();
+    let activate_buttons = r#"() => document.querySelectorAll('#preset-card-custom_ref button[hx-post*="/activate"]').length"#;
+    let before = page
+        .evaluate::<(), usize>(activate_buttons, None)
+        .await
+        .unwrap();
 
     // Set Active leaves the card with one activate button fewer, so the load
-    // morphs the buttons of the card in place: the node that opened the dialog is
-    // another control afterwards.
+    // rewrites the card around the opener.
     let loads = changes.loads("prompt-presets");
     page.evaluate::<(), ()>(
         "() => { fetch('/prompt-presets/custom_ref/activate?mode=novel', { method: 'POST' }); }",
@@ -305,17 +340,14 @@ async fn check_closing_the_dialog_focuses_the_control_with_the_openers_request_a
     let rewritten = wait_for_condition_async(DIALOG_WAIT, Duration::from_millis(25), || async {
         changes.loads("prompt-presets") > loads
             && page
-                .evaluate::<(), bool>(
-                    "() => window.__openerNode.isConnected && window.__openerNode.getAttribute('hx-get') !== '/fragment/prompt-presets/custom_ref/edit'",
-                    None,
-                )
+                .evaluate::<(), usize>(activate_buttons, None)
                 .await
-                .unwrap_or(false)
+                .is_ok_and(|now| now < before)
     })
     .await;
     assert!(
         rewritten,
-        "a load of the panel rewrites the node that opened the dialog into another control"
+        "a load of the panel rewrites the card of the opener"
     );
 
     page.locator("#edit-dialog [data-close-dialog]")
@@ -326,8 +358,69 @@ async fn check_closing_the_dialog_focuses_the_control_with_the_openers_request_a
         .unwrap();
     wait_until_dialog_closed(&page, "Cancel must close the dialog").await;
     assert!(
-        wait_until_focused(&page, PRESET_EDIT_REQUEST, Duration::from_secs(2)).await,
-        "focus goes to the control that sends the opener's request, not to the node that was rewritten"
+        wait_until_focused(&page, PRESET_EDIT_OPENER, Duration::from_secs(2)).await,
+        "focus goes to the control with the id of the opener"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.78
+async fn check_an_opener_keeps_its_id_through_a_load_that_removes_a_row_above_it_and_a_gone_opener_leaves_focus_on_the_body(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    open_section(&page, "games", ".games-panel").await;
+    let rename_of_game_3 = "#game-rename-open-3";
+    let remove_game = |id: u32| {
+        let script = format!("() => {{ fetch('/games/{id}/delete', {{ method: 'POST' }}); }}");
+        let page = page.clone();
+        let changes = changes.clone();
+        async move {
+            let loads = changes.loads("games");
+            page.evaluate::<(), ()>(&script, None).await.unwrap();
+            let loaded =
+                wait_for_condition_async(DIALOG_WAIT, Duration::from_millis(25), || async {
+                    changes.loads("games") > loads
+                })
+                .await;
+            assert!(loaded, "the panel loads after the delete of Game {id}");
+        }
+    };
+
+    page.locator(rename_of_game_3).await.focus().await.unwrap();
+    click_and_settle(&page, rename_of_game_3, "#edit-dialog-body").await;
+    assert!(dialog_is_open(&page).await, "Rename opens the dialog");
+    remove_game(2).await;
+    page.locator("#edit-dialog [data-close-dialog]")
+        .await
+        .first()
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_dialog_closed(&page, "Cancel must close the dialog").await;
+    assert!(
+        wait_until_focused(&page, rename_of_game_3, Duration::from_secs(2)).await,
+        "the opener keeps its id through a load that removes the row above it, and focus returns to it"
+    );
+
+    click_and_settle(&page, rename_of_game_3, "#edit-dialog-body").await;
+    assert!(dialog_is_open(&page).await, "Rename opens the dialog again");
+    remove_game(3).await;
+    page.locator("#edit-dialog [data-close-dialog]")
+        .await
+        .first()
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_dialog_closed(&page, "Cancel must close the dialog").await;
+    assert_eq!(
+        eval_string(
+            &page,
+            "() => document.activeElement === document.body ? '' : 'focus is on ' + document.activeElement.outerHTML.slice(0, 80)"
+        )
+        .await,
+        "",
+        "an opener that is gone leaves focus on the body"
     );
 }
 
@@ -809,7 +902,13 @@ async fn run_dialog_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_closing_the_dialog_focuses_the_control_with_the_openers_request_after_a_load_rewrote_its_card,
+            check_closing_the_dialog_focuses_the_opener_by_its_id_after_a_load_rewrote_its_card,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_an_opener_keeps_its_id_through_a_load_that_removes_a_row_above_it_and_a_gone_opener_leaves_focus_on_the_body,
         )
         .await;
     runner

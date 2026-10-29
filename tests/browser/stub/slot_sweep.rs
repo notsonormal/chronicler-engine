@@ -1,4 +1,4 @@
-//! Stub-browser sweep of the places that hold a report: each form with typed input renders one slot, and no other element but the report container of the notice holds a slot. Tagged against `docs/specs/browser_screen.md`.
+//! Stub-browser sweeps of the server's markup: each form with typed input renders one slot, no other element but the report container of the notice holds a slot, and each control that opens the dialog renders an id. Tagged against `docs/specs/browser_screen.md`.
 
 use std::time::Duration;
 
@@ -172,6 +172,62 @@ async fn check_each_form_with_typed_input_renders_one_slot_and_no_other_element_
     );
 }
 
+/// Each opener, with its id, in the parts of the open tab.
+const OPENER_IDS: &str = r##"() => JSON.stringify(
+    Array.from(document.querySelectorAll('[data-part] [hx-target="#edit-dialog-body"]'))
+        .map((opener) => ({ request: opener.getAttribute('hx-get') || opener.getAttribute('hx-post'), id: opener.id }))
+)"##;
+
+#[derive(serde::Deserialize)]
+struct OpenerId {
+    request: String,
+    id: String,
+}
+
+// [docs/specs/browser_screen.md] SCENARIO: 44.46
+async fn check_each_control_that_opens_the_dialog_renders_a_unique_id(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    let mut seen = Vec::new();
+    let mut problems = Vec::new();
+    for (tab, part) in [
+        ("settings", ".settings-panel"),
+        ("prompt-presets", ".prompt-presets-panel"),
+        ("worlds", ".worlds-panel"),
+        ("games", ".games-panel"),
+        ("llm-messages", ".llm-messages-panel"),
+    ] {
+        open_section(&page, tab, part).await;
+        let openers: Vec<OpenerId> =
+            serde_json::from_str(&eval_string(&page, OPENER_IDS).await).unwrap();
+        assert!(
+            !openers.is_empty(),
+            "the {tab} tab renders a control that opens the dialog"
+        );
+        for opener in openers {
+            if opener.id.is_empty() {
+                problems.push(format!(
+                    "the opener `{}` of the {tab} tab has no id",
+                    opener.request
+                ));
+            } else if seen.contains(&opener.id) {
+                problems.push(format!(
+                    "the id `{}` of the {tab} tab names two openers",
+                    opener.id
+                ));
+            }
+            seen.push(opener.id);
+        }
+    }
+    assert!(
+        problems.is_empty(),
+        "each opener renders its own id ({} openers examined):\n{}",
+        seen.len(),
+        problems.join("\n")
+    );
+}
+
 #[tokio::test]
 async fn run_slot_sweep() {
     let mut runner = StubRunner::launch().await;
@@ -179,6 +235,12 @@ async fn run_slot_sweep() {
         .run(
             StubActionOutcome::Pending,
             check_each_form_with_typed_input_renders_one_slot_and_no_other_element_holds_one,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_each_control_that_opens_the_dialog_renders_a_unique_id,
         )
         .await;
     runner.finish().await;

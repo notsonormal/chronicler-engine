@@ -15,13 +15,13 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::app_wiring::{
-    app_ready_to_retrigger_after_a_failed_event, app_with_a_triggered_character,
+    app_ready_to_retrigger_after_a_failed_event, app_with_a_triggered_character, app_with_script,
 };
 use crate::support::http_assertions::{assert_still_thinking, assert_story_log_ends_with_message};
 use crate::support::http_fixtures::{story_of, OFFERED_SET};
 use crate::support::http_requests::{
     fetch_status_label, assert_answers_nothing, fetch_body, fetch_busy_status, post_action,
-    post_empty, wait_settled,
+    post_on_message, response_body, wait_settled, post_on_last_message,
 };
 
 fn story_log_holds_event_narration(state: &AppState) -> bool {
@@ -57,7 +57,7 @@ async fn test_retrigger_creates_new_event_narration_no_rollback_http() {
     );
     let n = story_of(&state).len();
 
-    let resp = post_empty(&app, "/retrigger").await;
+    let resp = post_on_last_message(&app, "/retrigger").await;
     assert_answers_nothing(resp).await;
     assert!(
         wait_settled(&state, 2000).await,
@@ -115,7 +115,7 @@ async fn test_retrigger_does_not_move_the_player_http() {
         .current_room_id;
     assert_eq!(room_before, "room2", "the Action moved the player");
 
-    let resp = post_empty(&app, "/retrigger").await;
+    let resp = post_on_last_message(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -166,7 +166,7 @@ async fn test_retrigger_sends_the_rendered_direction_to_the_model_http() {
         "the Action should settle after its failed continuation"
     );
 
-    let resp = post_empty(&app, "/retrigger").await;
+    let resp = post_on_last_message(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 2000).await,
@@ -204,7 +204,7 @@ async fn test_retrigger_on_an_impersonate_input_runs_http() {
     let (app, state) = app_ready_to_retrigger_after_a_failed_event().await;
     let before = story_of(&state).len();
 
-    let resp = post_empty(&app, "/retrigger").await;
+    let resp = post_on_last_message(&app, "/retrigger").await;
 
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
@@ -233,7 +233,7 @@ async fn test_retrigger_no_event_record_returns_400_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
     let before = story_of(&state);
 
-    let resp = post_empty(&app, "/retrigger").await;
+    let resp = post_on_last_message(&app, "/retrigger").await;
     assert_eq!(
         resp.status(),
         StatusCode::BAD_REQUEST,
@@ -283,7 +283,7 @@ async fn test_retrigger_last_message_is_a_typed_input_returns_400_http() {
         wait_settled(&state, 2000).await,
         "the second Action should complete"
     );
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK, "the delete should accept");
     let last = story_of(&state).pop().expect("the story is not empty");
     assert_eq!(
@@ -305,7 +305,7 @@ async fn test_retrigger_last_message_is_a_typed_input_returns_400_http() {
     );
 
     let before = story_of(&state).len();
-    let response = post_empty(&app, "/retrigger").await;
+    let response = post_on_last_message(&app, "/retrigger").await;
 
     assert_eq!(
         response.status(),
@@ -344,7 +344,7 @@ async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
         "the Action's Trigger fires, so an event Narration lands"
     );
 
-    let response = post_empty(&app, "/retrigger").await;
+    let response = post_on_last_message(&app, "/retrigger").await;
 
     assert_eq!(
         response.status(),
@@ -383,7 +383,7 @@ async fn test_retrigger_trigger_narration_failure_sets_failed_http() {
         "the Action should settle after its failed continuation"
     );
 
-    let resp = post_empty(&app, "/retrigger").await;
+    let resp = post_on_last_message(&app, "/retrigger").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(
         wait_settled(&state, 1000).await,
@@ -473,12 +473,7 @@ async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
         "the held options call should reach the model"
     );
 
-    let req = axum::http::Request::builder()
-        .uri("/retrigger")
-        .method(axum::http::Method::POST)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = post_on_last_message(&app, "/retrigger").await;
 
     assert_eq!(response.status(), StatusCode::CONFLICT);
     let body = axum::body::to_bytes(response.into_body(), 16384)
@@ -495,5 +490,38 @@ async fn test_retrigger_concurrent_generation_returns_still_thinking_http() {
     assert!(
         !story_log_holds_event_narration(&state),
         "no retrigger was started: its event Narration never lands"
+    );
+}
+
+// [docs/specs/retrigger.md] SCENARIO: 15.2
+#[tokio::test]
+async fn test_retrigger_that_names_a_message_that_is_not_the_last_is_refused_http() {
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let (app, state, _storage) = app_with_script(model);
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job settles");
+    let input = story_of(&state)
+        .iter()
+        .find(|message| message.message_type == MessageType::Input)
+        .expect("the story holds the Input")
+        .id;
+    let before = story_of(&state).len();
+
+    let response = post_on_message(&app, "/retrigger", input).await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = response_body(response).await;
+    assert!(
+        body.contains("The last Message changed, so the retrigger was not started."),
+        "{body}"
+    );
+    assert!(
+        body.contains("The page showed a Message that is no longer the last one."),
+        "{body}"
+    );
+    assert_eq!(
+        story_of(&state).len(),
+        before,
+        "no event Narration is added"
     );
 }

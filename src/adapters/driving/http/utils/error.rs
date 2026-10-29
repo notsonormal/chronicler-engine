@@ -88,6 +88,9 @@ pub(crate) fn answer_for_error(error: ApplicationError, policy: AnswerPolicy) ->
     match error {
         ApplicationError::Validation(message) => action_invalid_response(message),
         ApplicationError::Refused(Refusal::StillThinking) => refused(RefusalKind::Busy),
+        ApplicationError::Refused(Refusal::LastMessageChanged) => {
+            refused(RefusalKind::LastMessageChanged)
+        }
         ApplicationError::Refused(Refusal::BadRequest(message)) => action_invalid_response(message),
         ApplicationError::Refused(Refusal::Failed(failure)) => {
             action_failure_response(failure.line())

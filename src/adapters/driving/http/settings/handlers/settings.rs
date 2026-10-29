@@ -226,6 +226,7 @@ pub async fn edit_connection_handler(
         Ok(connection) => connection,
         Err(message) => return action_invalid_response(message),
     };
+    let name = item_named(&replacement.name);
     let outcome = app_state
         .settings_service
         .update_connection(&id, move |connection| {
@@ -238,14 +239,7 @@ pub async fn edit_connection_handler(
 
     match outcome {
         Ok(_) => ok(""),
-        Err(e) => {
-            let name = app_state.settings().ok().and_then(|settings| {
-                settings
-                    .find_connection(&id)
-                    .and_then(|c| item_named(&c.name))
-            });
-            naming_item(answer_for_error(e, AnswerPolicy::EngineText), name)
-        }
+        Err(e) => naming_item(answer_for_error(e, AnswerPolicy::EngineText), name),
     }
 }
 

@@ -210,7 +210,7 @@ And it preserves the stored allowed modes (the form omitted them)
 Given a fresh app state
 When the client POST /prompt-presets/does-not-exist with name="Updated" and instructions="Updated." and preset_type="system"
 Then the response is a 400
-And the response body is `<div class="error-message">Preset not found</div>`
+And the response body is `<div class="error-message">The preset "Updated" was not saved: Preset not found.</div>`, with the name typed in the form
 ```
 
 #### Scenario 21.16: Update ignores the form's preset_type and keeps the stored type
@@ -228,7 +228,7 @@ And the stored preset still has preset_type "system" and name "Updated"
 Given a fresh app state with a seeded default system preset
 When the client POST /prompt-presets/{default_id} with name="Changed" and instructions="Changed." and preset_type="system"
 Then the response is a 400
-And the response body is `<div class="error-message">Cannot edit default presets</div>`
+And the response body is `<div class="error-message">The preset "Changed" was not saved: Cannot edit default presets.</div>`, with the name typed in the form
 ```
 
 #### Scenario 21.39: A failed preset edit answers non-2xx and carries the failure
@@ -239,6 +239,8 @@ And a seeded non-default system preset named "Original"
 When the client POST /prompt-presets/{id} with name="Changed"
 Then the response is a 500
 And the body carries the update failure text
+And the first line of the body is `The preset "Changed" was not saved`, with the name typed in the form
+And the body does not name "Original"
 And a following GET /fragment/prompt-presets still renders the preset named "Original"
 ```
 

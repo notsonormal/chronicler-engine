@@ -491,3 +491,12 @@ And every error slot is a direct child of such a form, or the report container o
 And every `.edit-actions` group of a story-log entry holds one error slot as a direct child, also while an entry is in edit
 And no other element holds an error slot
 ```
+
+#### Scenario 44.46: Each control that opens the dialog renders a unique id
+
+```gherkin
+Given the stub renders each tab
+When the client loads each tab that holds a control that opens the edit dialog
+Then each such control has an id
+And no two of them share an id
+```

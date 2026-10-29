@@ -56,15 +56,15 @@ pub struct RoleRowView {
                 {% if conn.id == quantifier_connection_id %}<span class="badge quantifier">Quantifier</span>{% endif %}
             </div>
             <div class="connection-actions">
-                <button type="button" hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">Edit</button>
-                <button type="button" hx-post="/connections/{{ conn.id }}/test" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">Test</button>
+                <button type="button" id="connection-edit-open-{{ conn.id }}" hx-get="/fragment/connections/{{ conn.id }}/edit" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">Edit</button>
+                <button type="button" id="connection-test-open-{{ conn.id }}" hx-post="/connections/{{ conn.id }}/test" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-cyan">Test</button>
                 <button type="button" hx-post="/connections/{{ conn.id }}/delete" hx-confirm="Delete this connection?" hx-swap="none" class="btn-danger">Delete</button>
             </div>
         </div>
         {% endfor %}
     </div>
     <div class="connection-add">
-        <button type="button" hx-get="/fragment/connections/new" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-primary">Add Connection</button>
+        <button type="button" id="connection-add-open" hx-get="/fragment/connections/new" hx-target="#edit-dialog-body" hx-swap="innerHTML" class="btn-primary">Add Connection</button>
     </div>
 </div>
 <div class="settings-subtab-panel" id="settings-text-check" role="tabpanel" aria-labelledby="subtab-text-check" hidden data-keep="hidden">

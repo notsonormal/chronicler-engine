@@ -19,7 +19,9 @@ use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::support::app_wiring::app_with_model;
-use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_settled};
+use crate::support::http_requests::{
+    fetch_body, post_action, post_empty, wait_settled, post_on_last_message,
+};
 use crate::TEST_PERSONA;
 
 fn one_turn_app() -> (axum::Router, AppState) {
@@ -277,12 +279,7 @@ async fn test_delete_history_handler_success() {
             .contains("You look around.")
     );
 
-    let req = Request::builder()
-        .uri("/history/delete")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.clone().oneshot(req).await.unwrap();
+    let response = post_on_last_message(&app, "/history/delete").await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -298,12 +295,7 @@ async fn test_delete_history_handler_empty() {
     // A Game holds its opening Narration, and the delete keeps the last Message.
     let app = TestAppBuilder::default_app();
 
-    let req = Request::builder()
-        .uri("/history/delete")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = post_on_last_message(&app, "/history/delete").await;
 
     assert_eq!(
         response.status(),
@@ -617,7 +609,12 @@ async fn test_switch_swipe_handler_success() {
         wait_settled(&state, 1000).await,
         "the Action should complete"
     );
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(
         wait_settled(&state, 1000).await,
         "the Retry should complete"

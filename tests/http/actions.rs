@@ -25,7 +25,7 @@ use crate::support::http_fixtures::{
 };
 use crate::support::http_requests::{
     fetch_status_label, assert_answers_nothing, fetch_body, fetch_busy_status, post_action,
-    post_action_check, post_empty, post_form, response_body, wait_settled,
+    post_action_check, post_form, response_body, wait_settled, post_on_last_message,
 };
 
 // [docs/specs/actions.md] SCENARIO: 1.1
@@ -651,7 +651,7 @@ async fn test_sequential_execute_retry_execute_http() {
     let _ = post_action(&app, "examine room").await;
     assert!(wait_settled(&state, 2000).await, "action A should complete");
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry A should complete");
 
@@ -692,7 +692,7 @@ async fn test_async_action_sequence_then_retry_http() {
     let _ = post_action(&app, "examine room").await;
     assert!(wait_settled(&state, 2000).await);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 

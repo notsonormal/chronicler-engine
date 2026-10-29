@@ -1,6 +1,6 @@
 # Feature Spec: Retry (POST /swipe/new)
 
-Endpoint: `POST /swipe/new`
+Endpoint: `POST /swipe/new`, with the form field `message`: the id of the Message that the page rendered the control on
 
 ## Scenarios
 
@@ -276,6 +276,17 @@ And the player is in "room2" (the state that the retry's analysis saved)
 Given a Game whose Job is running
 When the client sends POST /swipe/new
 Then the response is 409 with the "Still thinking..." line
+And no Swipe is added
+```
+
+#### Scenario 12.2: A Retry that names a Message that is not the last one is refused
+
+```gherkin
+Given a Game whose story holds an Input and the Narration that answers it
+When the client sends POST /swipe/new with the field message set to the id of the Input
+Then the response is 409
+And the first line of the body is "The last Message changed, so the Retry was not started."
+And the second line of the body is "The page showed a Message that is no longer the last one."
 And no Swipe is added
 ```
 

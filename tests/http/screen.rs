@@ -220,7 +220,11 @@ async fn test_every_action_route_answers_with_the_revision_stamp() {
             "/prompt-presets/no-such/activate".into(),
             String::new(),
         ),
-        ("/history/delete", "/history/delete".into(), String::new()),
+        (
+            "/history/delete",
+            "/history/delete".into(),
+            format!("message={message}"),
+        ),
         (
             "/games/:id/switch",
             format!("/games/{second}/switch"),
@@ -257,12 +261,16 @@ async fn test_every_action_route_answers_with_the_revision_stamp() {
     );
     revision_header_of(&started, "POST /action that starts a Job");
     assert!(hold.wait_started(1000), "the Job reaches its narrator call");
+    let busy_named = format!(
+        "message={}",
+        story_of(&busy_state).last().expect("a story").id
+    );
     for (route, uri, body) in [
         ("/action", "/action", "command=listen"),
         ("/action/confirm", "/action/confirm", "command=listen"),
         ("/autoplay", "/autoplay", "cycles=1"),
-        ("/swipe/new", "/swipe/new", ""),
-        ("/retrigger", "/retrigger", ""),
+        ("/swipe/new", "/swipe/new", busy_named.as_str()),
+        ("/retrigger", "/retrigger", busy_named.as_str()),
     ] {
         let response = post_form(&busy_app, uri, body).await;
         assert_eq!(
@@ -364,27 +372,30 @@ async fn test_a_busy_refusal_answers_409_with_the_wait_line_and_writes_nothing()
 }
 
 /// The Game-bound routes: every `POST` route whose handler acts on the active Game.
-fn game_bound_rows(message: u64) -> Vec<(&'static str, String, &'static str)> {
+fn game_bound_rows(message: u64) -> Vec<(&'static str, String, String)> {
+    let named = format!("message={message}");
+    let row =
+        |route: &'static str, uri: &str, body: &str| (route, uri.to_string(), body.to_string());
     vec![
-        ("/action", "/action".to_string(), "command=look"),
-        ("/action/check", "/action/check".to_string(), "command=look"),
-        (
-            "/action/confirm",
-            "/action/confirm".to_string(),
-            "command=look",
-        ),
-        ("/autoplay", "/autoplay".to_string(), "cycles=1"),
-        ("/swipe/new", "/swipe/new".to_string(), ""),
-        ("/retrigger", "/retrigger".to_string(), ""),
-        ("/reset", "/reset".to_string(), ""),
-        (
+        row("/action", "/action", "command=look"),
+        row("/action/check", "/action/check", "command=look"),
+        row("/action/confirm", "/action/confirm", "command=look"),
+        row("/autoplay", "/autoplay", "cycles=1"),
+        row("/swipe/new", "/swipe/new", &named),
+        row("/retrigger", "/retrigger", &named),
+        row("/reset", "/reset", ""),
+        row(
             "/message/:id/swipe/:index",
-            format!("/message/{message}/swipe/0"),
+            &format!("/message/{message}/swipe/0"),
             "",
         ),
-        ("/history/:id", format!("/history/{message}"), "text=Edited"),
-        ("/history/delete", "/history/delete".to_string(), ""),
-        ("/status/reset-busy", "/status/reset-busy".to_string(), ""),
+        row(
+            "/history/:id",
+            &format!("/history/{message}"),
+            "text=Edited",
+        ),
+        row("/history/delete", "/history/delete", &named),
+        row("/status/reset-busy", "/status/reset-busy", ""),
     ]
 }
 
@@ -415,7 +426,7 @@ async fn test_a_stale_game_header_is_refused_on_each_game_bound_route() {
     );
     for (route, uri, body) in rows {
         let response =
-            post_form_with_headers(&app, &uri, body, &[(GAME_HEADER, stale.as_str())]).await;
+            post_form_with_headers(&app, &uri, &body, &[(GAME_HEADER, stale.as_str())]).await;
         assert_eq!(
             response.status(),
             StatusCode::CONFLICT,
@@ -677,7 +688,7 @@ async fn test_a_refusal_names_what_was_not_done() {
     let stale = second.to_string();
     for (route, uri, body) in game_bound_rows(message) {
         let response =
-            post_form_with_headers(&app, &uri, body, &[(GAME_HEADER, stale.as_str())]).await;
+            post_form_with_headers(&app, &uri, &body, &[(GAME_HEADER, stale.as_str())]).await;
         assert_eq!(response.status(), StatusCode::CONFLICT, "stale {route}");
         assert_eq!(
             error_lines_of(route, &response_body(response).await),
@@ -695,6 +706,7 @@ async fn test_a_refusal_names_what_was_not_done() {
     assert!(post_action(&busy_app, "look").await.status().is_success());
     assert!(hold.wait_started(1000), "the Job reaches its narrator call");
     let busy_message = story_of(&busy_state).last().expect("a story").id;
+    let busy_named = format!("message={busy_message}");
     let busy_rows = [
         ("/action", "/action".to_string(), "command=listen"),
         (
@@ -708,14 +720,18 @@ async fn test_a_refusal_names_what_was_not_done() {
             "command=listen",
         ),
         ("/autoplay", "/autoplay".to_string(), "cycles=1"),
-        ("/swipe/new", "/swipe/new".to_string(), ""),
-        ("/retrigger", "/retrigger".to_string(), ""),
+        ("/swipe/new", "/swipe/new".to_string(), busy_named.as_str()),
+        ("/retrigger", "/retrigger".to_string(), busy_named.as_str()),
         (
             "/history/:id",
             format!("/history/{busy_message}"),
             "text=Edited",
         ),
-        ("/history/delete", "/history/delete".to_string(), ""),
+        (
+            "/history/delete",
+            "/history/delete".to_string(),
+            busy_named.as_str(),
+        ),
         (
             "/message/:id/swipe/:index",
             format!("/message/{busy_message}/swipe/0"),
@@ -891,4 +907,35 @@ async fn test_the_first_line_of_a_failed_answer_says_what_was_not_done() {
         lines[1].contains("abc"),
         "the text of the rejection is the second line: {lines:?}"
     );
+}
+
+// [docs/specs/screen.md] SCENARIO: 45.20
+#[tokio::test]
+async fn test_a_request_that_names_no_last_message_is_invalid_on_each_route_that_needs_one() {
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let (app, state) = app_with_model(Arc::clone(&model));
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job settles");
+    let before = story_of(&state).len();
+
+    for (uri, sentence) in [
+        (
+            "/history/delete",
+            "The Message was not deleted: The request names no Message.",
+        ),
+        (
+            "/swipe/new",
+            "The Retry was not started: The request names no Message.",
+        ),
+        (
+            "/retrigger",
+            "The retrigger was not started: The request names no Message.",
+        ),
+    ] {
+        let response = post_form(&app, uri, "").await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "POST {uri}");
+        let body = response_body(response).await;
+        assert_eq!(error_lines_of(uri, &body), [sentence], "POST {uri}");
+    }
+    assert_eq!(story_of(&state).len(), before, "the refusals wrote nothing");
 }

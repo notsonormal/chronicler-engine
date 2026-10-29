@@ -277,3 +277,14 @@ And the entry carries data-editing, and #story-log carries data-editing-entry
 When the client clicks the Cancel of the entry in edit
 Then the slot of the entry holds no report
 ```
+
+#### Scenario 30.26: A delete of a Message that is no longer the last one reports in the notice
+
+```gherkin
+Given a story log with more than one .log-entry rendered
+And a Narration was added after that render
+When the client deletes the last entry of the render and the engine refuses the delete as stale
+Then #screen-error shows "The last Message changed, so the Message was not deleted."
+And its Details disclosure holds the engine's line
+And the next load shows the added Narration and every entry of before
+```

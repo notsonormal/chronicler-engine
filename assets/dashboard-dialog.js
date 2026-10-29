@@ -24,38 +24,14 @@ function focusInto(root) {
   return focusFirstIn(root, FOCUSABLE_FIELD) || focusFirstIn(root, FOCUSABLE);
 }
 
-// The control that opened the dialog, the request it sends and the part that
-// holds it. A load morphs a part in place, so after a load the node that opened
-// the dialog can be a different control: the request, not the node, names the
-// opener.
-let dialogOpener = null;
-let dialogOpenerRequest = null;
-let dialogOpenerPart = null;
-
-const OPENER_REQUEST_ATTRIBUTES = ["hx-get", "hx-post"];
-
-function requestOf(element) {
-  for (const name of OPENER_REQUEST_ATTRIBUTES) {
-    const value = element.getAttribute(name);
-    if (value !== null) return { name, value };
-  }
-  return null;
-}
-
-function hasRequest(element, request) {
-  return element.getAttribute(request.name) === request.value;
-}
-
-function partHolding(element) {
-  return element.closest("[data-part]");
-}
+// The id of the control that opened the dialog. A load can replace that node, but
+// the server renders the same id on the control that replaces it.
+let dialogOpenerId = "";
 
 document.body.addEventListener("htmx:afterSwap", function (evt) {
   if (!evt.detail || evt.detail.target !== editDialogBody) return;
   const request = evt.detail.requestConfig;
-  dialogOpener = request ? request.elt : null;
-  dialogOpenerRequest = dialogOpener ? requestOf(dialogOpener) : null;
-  dialogOpenerPart = dialogOpener ? partHolding(dialogOpener) : null;
+  dialogOpenerId = request && request.elt ? request.elt.id : "";
   if (!editDialog.open) editDialog.showModal();
   renderDialogStatus();
   focusInto(editDialogBody);
@@ -71,41 +47,12 @@ document.body.addEventListener("htmx:beforeSwap", function (evt) {
   evt.detail.shouldSwap = false;
 });
 
-// The control that opened the dialog now: the opener itself while it still sends
-// its request, else the control of its part that sends that request, else the
-// part.
-function openerNow(opener, request, part) {
-  if (opener && opener.isConnected && (!request || hasRequest(opener, request))) {
-    return opener;
-  }
-  if (part && part.isConnected && request) {
-    for (const candidate of part.querySelectorAll(`[${request.name}]`)) {
-      if (hasRequest(candidate, request)) return candidate;
-    }
-  }
-  return part && part.isConnected ? part : null;
-}
-
-// `showModal()` returns focus to the node that had it when the dialog opened. A
-// load can have replaced that node or rewritten it into another control, so focus
-// goes to the control that sends the opener's request.
+// `showModal()` returns focus to the node that had it when the dialog opened, and a
+// load can have replaced that node. The id names the control that is there now.
 function returnFocusAfterClose() {
-  const focused = document.activeElement;
-  const opener = dialogOpener;
-  const request = dialogOpenerRequest;
-  const part = dialogOpenerPart;
-  dialogOpener = null;
-  dialogOpenerRequest = null;
-  dialogOpenerPart = null;
-  const focusIsFree =
-    !focused || focused === document.body || editDialog.contains(focused) || focused === opener;
-  if (!focusIsFree) return;
-  const target = openerNow(opener, request, part);
-  if (!target) return;
-  if (target === part && !part.hasAttribute("tabindex")) {
-    part.setAttribute("tabindex", "-1");
-  }
-  target.focus();
+  const opener = document.getElementById(dialogOpenerId);
+  dialogOpenerId = "";
+  if (opener) opener.focus();
 }
 
 // Each open of the dialog is one session. A save that waits for the screen closes
