@@ -64,7 +64,7 @@ And the marker is empty
 Given an active Game whose visual sidebar cannot render
 When the client GET /screen?parts=visual-sidebar
 Then the response is non-2xx
-And the response asks the client to swap nothing
+And the response does not ask the client to swap nothing
 ```
 
 #### Scenario 38.18: A panel load that cannot read its data answers non-2xx with an error fragment

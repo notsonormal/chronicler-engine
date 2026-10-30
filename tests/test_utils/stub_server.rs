@@ -1461,13 +1461,7 @@ async fn screen_part_html(state: &Arc<StubState>, name: &str, games_page: u64) -
         "options-dock" => options_dock_fragment(state()).await.0,
         "send-control" => send_control_answer(stub_busy(&state().0).as_ref()),
         "autoplay-controls" => autoplay_controls_answer(stub_busy(&state().0).as_ref()),
-        "status-display" => {
-            let answer = status_busy(state()).await;
-            let bytes = axum::body::to_bytes(answer.into_body(), usize::MAX)
-                .await
-                .expect("read the stub status answer");
-            String::from_utf8_lossy(&bytes).to_string()
-        }
+        "status-display" => status_display_html(&state().0),
         "settings" => settings_fragment(state()).await.0,
         "prompt-presets" => presets_fragment(state()).await.0,
         "worlds" => worlds_fragment(state()).await.0,
@@ -1596,13 +1590,13 @@ fn stub_busy(state: &StubState) -> Option<Busy> {
     busy_of(&state.status.lock().expect("stub status lock poisoned"))
 }
 
-async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
+fn status_display_html(state: &StubState) -> String {
     let status = state
         .status
         .lock()
         .expect("stub status lock poisoned")
         .clone();
-    let body = match (busy_of(&status), status) {
+    match (busy_of(&status), status) {
         (Some(busy), _) => busy_answer(&busy),
         (None, StubStatus::Error(kind, raw)) => failure_answer(&GenerationFailure {
             kind,
@@ -1610,13 +1604,7 @@ async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
             raw,
         }),
         (None, _) => idle_answer(),
-    };
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        body,
-    )
-        .into_response()
+    }
 }
 
 /// The send of a command from the two buttons of the text-check preview (the

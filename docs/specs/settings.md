@@ -89,7 +89,7 @@ Then that role row reports Healthy and the degraded marker is gone
 ```gherkin
 Given a fresh app state whose settings cannot be read
 When the client GET /screen?parts=settings
-Then the response is non-2xx and asks the client to swap nothing
+Then the response is non-2xx and does not ask the client to swap nothing
 And the body carries the read failure text
 And the body carries no Settings panel
 ```
