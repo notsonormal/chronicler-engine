@@ -5,10 +5,8 @@
 let checkInFlight = false;
 
 // The action area's own state between an accepted request and the screen that
-// shows its effect. The status display is a part of the screen: the action area
-// reads it and never writes it. This state shows in #action-status. Each request
-// that begins it ends it with its own answer: when the screen shows the revision
-// of the answer, or at once when the engine did not take the request.
+// shows its effect: the status display is a part, which the action area reads and
+// never writes.
 let sendPending = false;
 
 function renderActionStatus() {
@@ -34,8 +32,6 @@ function endPendingWhenScreenShows(stamp) {
   afterScreenShows(stamp).then(endPending);
 }
 
-// A request that the engine took begins the state, and the screen that shows the
-// revision of its answer ends it.
 function beginPendingUntilScreenShows(stamp) {
   beginPending();
   endPendingWhenScreenShows(stamp);
@@ -73,10 +69,8 @@ function deriveActionState() {
   return "idle";
 }
 
-// `data-state` on the action area is the browser's view state: a pending send, a
-// check in flight and an open preview are known to the page only. The server
-// renders the disabled state of every control, and a request disables only the
-// shell field of its form through `hx-disabled-elt`, so no script writes `disabled`.
+// The server renders the disabled state of every control, so no script writes
+// `disabled`.
 function applyActionState(state) {
   const area = document.getElementById("action-area");
   if (area) area.dataset.state = state;
@@ -216,9 +210,8 @@ function onCommandBeforeRequest() {
   syncActionState();
 }
 
-// The input clears once the screen shows the command that it sent, and only if it
-// still holds the text that was sent: the player can type the next action before
-// the screen shows the last one.
+// The input clears only if it still holds the text that was sent: the player can
+// type the next action before the screen shows the last one.
 function clearCommandInputAfterScreenShows(stamp, sentText) {
   afterScreenShows(stamp).then(() => {
     const input = commandInput();
@@ -229,7 +222,43 @@ function clearCommandInputAfterScreenShows(stamp, sentText) {
 function clearCommandInput() {
   const form = document.getElementById("command-form");
   if (form) form.reset();
+  syncCommandDraft();
 }
+
+// The draft pins the Game that the screen showed when it began, so a send names
+// that Game even after a load shows another one.
+function syncCommandDraft() {
+  const form = document.getElementById("command-form");
+  const input = commandInput();
+  if (!form || !input) return;
+  if (input.value === "") form.removeAttribute("data-draft-game");
+  else if (!form.hasAttribute("data-draft-game")) {
+    form.setAttribute("data-draft-game", screenRoot.dataset.game || "");
+  }
+}
+
+// An Option comes from the screen of the current Game, so it starts a new draft.
+function startNewCommandDraft() {
+  const form = document.getElementById("command-form");
+  if (form) form.removeAttribute("data-draft-game");
+  syncCommandDraft();
+}
+
+// A `409` of a request of the Action input is a busy Game or a Game that is no
+// longer active. The draft then takes the Game that the screen shows once it
+// shows the answer.
+function retakeDraftGameWhenScreenShows(stamp) {
+  afterScreenShows(stamp).then(() => {
+    const form = document.getElementById("command-form");
+    if (form && form.hasAttribute("data-draft-game")) {
+      form.setAttribute("data-draft-game", screenRoot.dataset.game || "");
+    }
+  });
+}
+
+document.addEventListener("input", function (event) {
+  if (event.target === commandInput()) syncCommandDraft();
+});
 
 // A swap that throws skips the after-request event of the form, so the check is
 // over here: the area must not stay in the state "checking".
@@ -241,6 +270,7 @@ function onCommandLoadError() {
 function onCommandAfterRequest(event) {
   checkInFlight = false;
   const answer = requestAnswer(event);
+  if (answer.outcome === "refused") retakeDraftGameWhenScreenShows(answer.stamp);
   if (answer.outcome === "done" && !previewIsOpen()) {
     clearCommandInputAfterScreenShows(answer.stamp, event.detail.requestConfig.parameters.command);
     beginPendingUntilScreenShows(answer.stamp);
@@ -248,8 +278,8 @@ function onCommandAfterRequest(event) {
   syncActionState();
 }
 
-// The text that a preview send consumes is the text that the input held when the
-// request began: the player can type on while the request is in flight.
+// The player can type on while a preview send is in flight, so the send consumes
+// the text that the input held when the request began.
 let previewSentText = "";
 
 function onPreviewBeforeRequest() {
@@ -259,6 +289,7 @@ function onPreviewBeforeRequest() {
 
 function onPreviewSendAfterRequest(event) {
   const answer = requestAnswer(event);
+  if (answer.outcome === "refused") retakeDraftGameWhenScreenShows(answer.stamp);
   if (answer.outcome !== "done") return;
   clearCommandInputAfterScreenShows(answer.stamp, previewSentText);
   beginPendingUntilScreenShows(answer.stamp);
@@ -286,17 +317,17 @@ function closeActionPreview() {
 
 function useOption(btn) {
   const input = commandInput();
-  // The input is disabled only while a check request runs, so a generation in
-  // flight needs the explicit actionIsGenerating() guard.
-  if (!input || input.disabled || actionIsGenerating()) return;
+  if (!input || checkInFlight || actionIsGenerating()) return;
   input.value = btn.textContent;
+  startNewCommandDraft();
   document.getElementById("command-form").requestSubmit();
 }
 
 function editOption(btn) {
   const input = commandInput();
-  if (!input || input.disabled) return;
+  if (!input || checkInFlight) return;
   const optionBtn = btn.closest(".option-item").querySelector(".option-btn");
   input.value = optionBtn.textContent;
+  startNewCommandDraft();
   input.focus();
 }

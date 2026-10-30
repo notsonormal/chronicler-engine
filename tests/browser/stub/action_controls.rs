@@ -5,9 +5,9 @@ use std::time::Duration;
 use chronicler_engine::domain::model::state::generation_status::Step;
 
 use super::support::{
-    NOTICE, eval_string, hold_requests_ending_with, hold_screen_loads, read_command_input,
-    release_held_requests_and_wait_for_answers, release_screen_loads, wait_for_held_screen_load,
-    StubRunner,
+    NOTICE, active_element_is, eval_string, hold_requests_ending_with, hold_screen_loads,
+    read_command_input, release_held_requests_and_wait_for_answers, release_screen_loads,
+    wait_for_held_screen_load, StubRunner,
 };
 use super::*;
 
@@ -62,7 +62,7 @@ async fn press_send(page: &playwright_rs::Page, command: &str) {
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.62
-async fn check_a_check_request_disables_the_input_and_shows_send_as_busy_until_it_ends(
+async fn check_a_check_request_shows_send_as_busy_and_leaves_the_input_enabled_until_it_ends(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -71,16 +71,18 @@ async fn check_a_check_request_disables_the_input_and_shows_send_as_busy_until_i
 
     press_send(&page, "look around").await;
 
-    wait_for_controls(
-        &page,
-        "the request disables the Action input and the area is checking",
-        |(_, input, _, state)| *input && state == "checking",
-    )
+    wait_for_controls(&page, "the area is checking", |(.., state)| {
+        state == "checking"
+    })
     .await;
-    let (send_disabled, ..) = read_controls(&page).await;
+    let (send_disabled, input_disabled, ..) = read_controls(&page).await;
     assert!(
         !send_disabled,
         "no script and no request disables Send, the server renders it enabled"
+    );
+    assert!(
+        !input_disabled,
+        "no request disables the Action input, so it keeps its focus"
     );
     assert!(
         !send_takes_clicks(&page).await,
@@ -90,7 +92,7 @@ async fn check_a_check_request_disables_the_input_and_shows_send_as_busy_until_i
     release_held_requests_and_wait_for_answers(&page).await;
     wait_for_controls(
         &page,
-        "the end of the request enables the Action input",
+        "the end of the request leaves the area not checking",
         |(send, input, _, state)| !send && !input && state != "checking",
     )
     .await;
@@ -109,6 +111,46 @@ async fn held_requests_seen(page: &playwright_rs::Page) -> f64 {
     page.evaluate::<(), f64>("() => window.heldRequestsSeen", None)
         .await
         .unwrap()
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.84
+async fn check_the_action_input_keeps_focus_through_a_send(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    wait_for_screen_current(&page).await;
+    hold_requests_ending_with(&page, "/action/check").await;
+    page.locator("#command-input")
+        .await
+        .fill("look around", None)
+        .await
+        .unwrap();
+    page.locator("#command-input")
+        .await
+        .press("Enter", None)
+        .await
+        .unwrap();
+    let held = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(10),
+        || async { held_requests_seen(&page).await >= 1.0 },
+    )
+    .await;
+    assert!(held, "the send leaves the page and is held");
+    // A disabled input loses focus within 50 ms of the send, and no event marks the
+    // absence of that loss, so the check gives it time to show.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        active_element_is(&page, "#command-input").await,
+        "focus stays in the Action input while the request runs"
+    );
+
+    release_held_requests_and_wait_for_answers(&page).await;
+    wait_for_screen_current(&page).await;
+    assert!(
+        active_element_is(&page, "#command-input").await,
+        "focus stays in the Action input after the request ends"
+    );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.63
@@ -172,11 +214,9 @@ async fn check_a_load_during_a_check_request_renders_send_as_the_server_does(
     wait_for_screen_current(&page).await;
     hold_requests_ending_with(&page, "/action/check").await;
     press_send(&page, "look around").await;
-    wait_for_controls(
-        &page,
-        "the request disables the Action input",
-        |(_, input, ..)| *input,
-    )
+    wait_for_controls(&page, "the area is checking", |(.., state)| {
+        state == "checking"
+    })
     .await;
 
     stub.status_handle().set(StubStatus::Step(Step::Narrating));
@@ -279,7 +319,6 @@ async fn check_the_action_area_is_in_the_preview_state_while_the_preview_is_open
     .await;
 }
 
-/// The ids of the controls that Tab reaches from the Action input, one press each.
 async fn tab_order_from_the_action_input(
     page: &playwright_rs::Page,
     presses: usize,
@@ -399,8 +438,8 @@ async fn check_a_swap_that_throws_leaves_the_command_form_dead_and_the_screen_lo
     wait_for_screen_current(&page).await;
     wait_for_controls(
         &page,
-        "a load after the failed swap renders Send enabled, the area is not checking, and the Action input stays disabled",
-        |(send, input, label, state)| !send && *input && label == "Send" && state != "checking",
+        "a load after the failed swap renders Send enabled, the area is not checking, and the Action input stays enabled",
+        |(send, input, label, state)| !send && !input && label == "Send" && state != "checking",
     )
     .await;
     assert!(
@@ -643,7 +682,13 @@ async fn run_action_controls_checks() {
     runner
         .run(
             StubActionOutcome::Refused,
-            check_a_check_request_disables_the_input_and_shows_send_as_busy_until_it_ends,
+            check_a_check_request_shows_send_as_busy_and_leaves_the_input_enabled_until_it_ends,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_the_action_input_keeps_focus_through_a_send,
         )
         .await;
     runner

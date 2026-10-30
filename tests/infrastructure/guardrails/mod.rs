@@ -191,8 +191,8 @@ fn dead_scope_violation(rule_name: &str, scope: &str) -> Violation {
     )
 }
 
-/// Runs a path-limited guardrail over `src/`, and fails it when its scope matches no
-/// file.
+/// Fails when its scope matches no file, so a stale scope cannot pass by checking
+/// nothing.
 fn check_src_files_in_scope(
     rule_name: &str,
     scope: &str,
@@ -501,8 +501,6 @@ fn guardrails_stub_answers_the_parts_of_the_server() {
     );
 }
 
-/// The scripts of `assets/` whose file name `wanted` accepts, with their text,
-/// sorted by path.
 fn scripts_of_assets(wanted: impl Fn(&str) -> bool) -> Vec<(String, String)> {
     let mut scripts: Vec<(String, String)> = std::fs::read_dir("assets")
         .unwrap()
@@ -756,6 +754,16 @@ fn guardrails_post_routes_have_words() {
     let source = std::fs::read_to_string(path).unwrap();
     let errors = check_post_routes_have_words(path, &source, &routes_with_words());
     assert_violations(&errors, "every post route has a row in the words table");
+}
+
+#[test]
+fn guardrails_post_handlers_can_answer_an_error() {
+    let path = "src/adapters/driving/http/builders/router.rs";
+    let source = std::fs::read_to_string(path).unwrap();
+    let http_sources = template_sources();
+    let errors =
+        check_post_handlers_can_answer_an_error(path, &source, &http_sources, HTML_ANSWER_ALLOWED);
+    assert_violations(&errors, "no post handler returns a plain Html<String>");
 }
 
 #[test]

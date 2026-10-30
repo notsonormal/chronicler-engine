@@ -1,6 +1,8 @@
 // The screen: the ask loop, the screen load of the visible tab, the keep rules of a load, the stamp that says what the page shows, and the Game header of a request.
 
 const DEFAULT_POLL_MS = 1000;
+const DEFAULT_ASK_TIMEOUT_MS = 10000;
+const GAMES_PAGE_KEY = "chronicle.gamesPage";
 const GAME_HEADER = "X-Chronicler-Game";
 const screenRoot = document.documentElement;
 
@@ -8,6 +10,35 @@ function pollIntervalMs() {
   const value = Number(screenRoot.dataset.pollMs);
   return value > 0 ? value : DEFAULT_POLL_MS;
 }
+
+// Without a limit, one ask that never ends keeps the next ask from starting: a
+// request that gets no answer within this time is "No answer", the Unreachable
+// banner.
+function askTimeoutSignal() {
+  const value = Number(screenRoot.dataset.askTimeoutMs);
+  return AbortSignal.timeout(value > 0 ? value : DEFAULT_ASK_TIMEOUT_MS);
+}
+
+// The page of the saved Games is view state that survives a tab change and a
+// reload, as the active tab and the Settings sub-tab do.
+function rememberGamesPage(page) {
+  try {
+    sessionStorage.setItem(GAMES_PAGE_KEY, page);
+  } catch (e) {
+    // Without storage the page lasts until the page reloads.
+  }
+}
+
+function restoreGamesPage() {
+  try {
+    const saved = sessionStorage.getItem(GAMES_PAGE_KEY);
+    if (saved) screenRoot.dataset.gamesPage = saved;
+  } catch (e) {
+    // Without storage the Games tab opens on page 1.
+  }
+}
+
+restoreGamesPage();
 
 function fireScreenEvent(name, detail) {
   document.dispatchEvent(new CustomEvent(name, { detail: detail }));
@@ -17,8 +48,6 @@ function visibleSection() {
   return document.querySelector(".tab-content.active");
 }
 
-// The header and the failure banner are outside every section, so they always
-// load. The other parts load while their section is the visible one.
 function visibleParts() {
   const section = visibleSection();
   return Array.from(document.querySelectorAll("[data-part]")).filter((part) => {
@@ -27,10 +56,8 @@ function visibleParts() {
   });
 }
 
-// A part is not written while its element holds a state that the server does not
-// know: a request in flight or a story-log entry in edit. View state lives in
-// attributes that the server never changes; an element lists them in
-// `data-keep`, and a load keeps their values on the element it morphs.
+// View state lives in attributes that the server never renders, so an element
+// lists them in `data-keep` and a morph keeps their values.
 Idiomorph.defaults.callbacks.beforeAttributeUpdated = function (
   attributeName,
   node,
@@ -39,11 +66,9 @@ Idiomorph.defaults.callbacks.beforeAttributeUpdated = function (
   if (keep && keep.split(/\s+/).includes(attributeName)) return false;
 };
 
-// A control whose request is in flight holds a value that the engine has not
-// seen, so a load must not overwrite it. The page counts the requests itself: the
-// htmx class `htmx-request` is not enough, because the settle of a swap that lands
-// during a request writes the old `class` back onto the element after the request
-// ended.
+// The htmx class `htmx-request` is not enough, because the settle of a swap that
+// lands during a request writes the old `class` back onto the element after the
+// request ended: the page counts the requests itself.
 const requestsInFlight = new Map();
 
 function holdInFlight(node) {
@@ -64,8 +89,7 @@ document.body.addEventListener("htmx:beforeRequest", function (evt) {
 // The end of a request leaves the screen stale in a way that the revision may not
 // show: a load that skipped the control of the request recorded the stamp, and a
 // request that wrote nothing moves no revision. So the end of every request that is
-// not a read forgets the stamp, and the page asks at once. A swap that throws
-// skips `htmx:afterRequest`, so `htmx:onLoadError` is the end of that request.
+// not a read forgets the stamp.
 function endRequest(evt) {
   const element = evt.detail && evt.detail.elt;
   if (element && requestsInFlight.has(element)) releaseInFlight(element);
@@ -81,9 +105,8 @@ function requestIsInFlight(node) {
   return !!node && node.nodeType === 1 && requestsInFlight.has(node);
 }
 
-// A story-log entry in edit holds the text that the player is typing. A load skips
-// it, and the skip counts as current: the engine's render of the entry is not
-// wanted until the edit ends, and the end of the edit forgets the stamp.
+// A load skips the entry in edit, and the skip counts as current: the engine's
+// render of the entry is not wanted until the edit ends.
 function isBeingEdited(node) {
   return !!node && node.nodeType === 1 && node.hasAttribute("data-editing");
 }
@@ -130,9 +153,6 @@ function focusFirstControlIn(row) {
   return false;
 }
 
-// A load that removes the focused node moves focus to its own row when the row
-// survives, else to the nearest row that does, the one after it first, or else to
-// the part.
 function applyFocusPlan(part, plan) {
   if (!plan || plan.focused.isConnected) return;
   for (let distance = 0; distance < plan.rows.length; distance += 1) {
@@ -147,8 +167,6 @@ function applyFocusPlan(part, plan) {
   part.focus();
 }
 
-// The stamp `<server>:<revision>` of the page is `<html data-revision>`. A page
-// that shows nothing yet, or whose last load must be repeated, has none.
 function forgetScreenStamp() {
   delete screenRoot.dataset.revision;
 }
@@ -166,12 +184,9 @@ function screenShows(stamp) {
   return have.server === want.server && have.revision >= want.revision;
 }
 
-// An answer that carries the revision after its write is shown when the screen
-// holds that revision. The server id differs after a restart, and the revision of
-// the old server means nothing to the new one, so such a stamp is shown by the
-// first good load that started after the wait began: a load that started earlier
-// may still carry the old server. Each load takes the next number when it starts,
-// and each wait records the number of the last load that had started.
+// The server id differs after a restart, and the revision of the old server means
+// nothing to the new one, so such a stamp is shown only by a load that started
+// after the wait began: an earlier load may still carry the old server.
 let loadsStarted = 0;
 const screenWaiters = [];
 
@@ -200,9 +215,16 @@ function reportScreenError(summary, detail) {
   showNotice(summary, detail, "screen");
 }
 
-// The engine answered, so it is reachable.
+// The engine answered with a failure status. A body that never arrives is
+// "No answer", as in the load.
 async function showScreenFailure(request, response) {
-  const body = await response.text();
+  let body;
+  try {
+    body = await response.text();
+  } catch (error) {
+    markUnreachable();
+    return;
+  }
   reportScreenError(
     request + " answered " + response.status + ". The screen was not updated.",
     plainResponseText(body),
@@ -222,9 +244,8 @@ function clearScreenError() {
   if (place && place.dataset.source === "screen") clearNotice();
 }
 
-// A load is for the tab that was visible and the page of the saved Games that was
-// asked for when it started. An answer that arrives after a tab change or a click
-// on Previous or Next is dropped, and that change has already asked again.
+// An answer that arrives after a tab change or a click on Previous or Next is
+// dropped, and that change has already asked again.
 async function loadScreen() {
   const section = visibleSection();
   const gamesPage = screenRoot.dataset.gamesPage;
@@ -236,7 +257,10 @@ async function loadScreen() {
   try {
     const query =
       "parts=" + names.join(",") + (gamesPage ? "&games_page=" + gamesPage : "");
-    response = await fetch("/screen?" + query, { cache: "no-store" });
+    response = await fetch("/screen?" + query, {
+      cache: "no-store",
+      signal: askTimeoutSignal(),
+    });
     clearUnreachable();
     if (!response.ok) {
       await showScreenFailure("GET /screen", response);
@@ -285,7 +309,10 @@ function morphParts(parts, body, response, loadNumber) {
 async function runAsk() {
   let response;
   try {
-    response = await fetch("/changes", { cache: "no-store" });
+    response = await fetch("/changes", {
+      cache: "no-store",
+      signal: askTimeoutSignal(),
+    });
   } catch (error) {
     markUnreachable();
     return;
@@ -299,7 +326,8 @@ async function runAsk() {
   try {
     answer = await response.json();
   } catch (error) {
-    showScreenException("GET /changes", "could not be read", error);
+    if (error.name === "TimeoutError") markUnreachable();
+    else showScreenException("GET /changes", "could not be read", error);
     return;
   }
   if (answer.server + ":" + answer.revision === screenRoot.dataset.revision) {
@@ -309,9 +337,8 @@ async function runAsk() {
   await loadScreen();
 }
 
-// One ask at a time: an ask waits for the one before it. An ask that has not
-// started yet serves every caller that comes before it starts, because it starts
-// after each of their requests has ended.
+// An ask that has not started yet serves every caller that comes before it starts,
+// because it starts after each of their requests has ended.
 let askChain = Promise.resolve();
 let asksPending = 0;
 let queuedAsk = null;
@@ -359,23 +386,19 @@ document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible") askNow();
 });
 
-// The page of the saved Games is view state of the Games tab: a Previous or Next
-// control carries the page that it goes to, and the loads ask for it until the
-// player leaves the tab. A control that cannot move is `aria-disabled`, not
-// `disabled`: it keeps keyboard focus through the morph.
+// A control that cannot move is `aria-disabled`, not `disabled`: it keeps keyboard
+// focus through the morph.
 document.addEventListener("click", function (event) {
   const control = event.target.closest('[data-part="games"] [data-page]');
   if (!control || control.getAttribute("aria-disabled") === "true") return;
   screenRoot.dataset.gamesPage = control.dataset.page;
+  rememberGamesPage(control.dataset.page);
   forgetScreenStamp();
   askNow();
 });
 
-// A tab change empties each part of the tab that closes, and the tab that opens
-// loads at once.
 function leaveSection(section) {
   if (!section) return;
-  delete screenRoot.dataset.gamesPage;
   const cleared = [];
   section.querySelectorAll("[data-part]").forEach((part) => {
     part.replaceChildren();
@@ -385,10 +408,21 @@ function leaveSection(section) {
   fireScreenEvent("screen:cleared", { parts: cleared });
 }
 
-// The Game of the screen goes with every request that is not a read, so the engine
-// can refuse a request from a page that shows a Game that is no longer active. A
-// page that shows no Game names none, and its request acts on the active Game.
+// The engine refuses a request from a page that shows a Game that is no longer
+// active, so every request that is not a read names its Game, and a draft names the
+// Game of the screen when the draft began.
+// The preview forms sit outside #command-form, but they send the same draft.
+function draftOfRequest(element) {
+  if (element.closest("#action-preview")) return document.getElementById("command-form");
+  return element.closest("[data-draft-game]");
+}
+
 document.body.addEventListener("htmx:configRequest", function (evt) {
-  const game = screenRoot.dataset.game;
-  if (game && evt.detail.verb !== "get") evt.detail.headers[GAME_HEADER] = game;
+  if (evt.detail.verb === "get") return;
+  const draft = draftOfRequest(evt.detail.elt);
+  const game =
+    draft && draft.hasAttribute("data-draft-game")
+      ? draft.dataset.draftGame
+      : screenRoot.dataset.game;
+  if (game) evt.detail.headers[GAME_HEADER] = game;
 });

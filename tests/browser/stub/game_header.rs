@@ -324,6 +324,231 @@ async fn check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_notice
     );
 }
 
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.81
+async fn check_a_command_typed_for_a_game_names_that_game_after_a_switch(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    page.locator("#command-input")
+        .await
+        .fill("look around", None)
+        .await
+        .unwrap();
+    stub.changes_handle().set_game(Some(2));
+    wait_until_page_shows_game(&page, "2").await;
+
+    page.locator("#command-input")
+        .await
+        .press("Enter", None)
+        .await
+        .unwrap();
+
+    wait_for_error_disclosure(&page, NOTICE, "the refused send reports in the notice").await;
+    let (_, line, _) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        line, "The active Game changed, so the Action was not sent.",
+        "the line says what was refused and why"
+    );
+    assert_eq!(
+        stub.changes_handle().game_headers("/action/check"),
+        vec![Some("1".to_string())],
+        "the send names the Game that the text was typed for"
+    );
+    assert_eq!(
+        stub.action_handle().count(),
+        0,
+        "the engine took nothing for the other Game"
+    );
+    assert_eq!(
+        read_command_input(&page).await,
+        "look around",
+        "a refused send keeps the text the player typed"
+    );
+
+    wait_for_screen_current(&page).await;
+    page.locator("#command-input")
+        .await
+        .press("Enter", None)
+        .await
+        .unwrap();
+    let sent = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { stub.changes_handle().game_headers("/action/check").len() == 2 },
+    )
+    .await;
+    assert!(sent, "the second send reaches the stub");
+    assert_eq!(
+        stub.changes_handle().game_headers("/action/check")[1],
+        Some("2".to_string()),
+        "after the refusal, the draft takes the Game that the screen shows, so a second Enter names it"
+    );
+    assert_eq!(
+        stub.action_handle().count(),
+        1,
+        "the engine took the second send for the new Game"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.85
+async fn check_an_option_click_after_a_game_change_names_the_new_game(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    wait_for_element_children(&page, "#options-dock .option-item", 3).await;
+    page.locator("#command-input")
+        .await
+        .fill("typed for the first Game", None)
+        .await
+        .unwrap();
+    stub.changes_handle().set_game(Some(2));
+    wait_until_page_shows_game(&page, "2").await;
+    wait_for_screen_current(&page).await;
+
+    page.evaluate::<(), ()>(
+        "() => document.querySelector('#options-dock .option-btn').click()",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let sent = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            !stub
+                .changes_handle()
+                .game_headers("/action/check")
+                .is_empty()
+        },
+    )
+    .await;
+    assert!(sent, "the Option reaches the stub");
+    assert_eq!(
+        stub.changes_handle().game_headers("/action/check"),
+        vec![Some("2".to_string())],
+        "an Option comes from the screen of the current Game, so it starts a new draft"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.86
+async fn check_an_option_edited_after_a_game_change_names_the_new_game(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    wait_for_element_children(&page, "#options-dock .option-item", 3).await;
+    page.locator("#command-input")
+        .await
+        .fill("typed for the first Game", None)
+        .await
+        .unwrap();
+    stub.changes_handle().set_game(Some(2));
+    wait_until_page_shows_game(&page, "2").await;
+    wait_for_screen_current(&page).await;
+
+    page.evaluate::<(), ()>(
+        "() => document.querySelector('#options-dock .option-item [aria-label=\"Edit before send\"]').click()",
+        None,
+    )
+    .await
+    .unwrap();
+    page.locator("#command-input")
+        .await
+        .press("Enter", None)
+        .await
+        .unwrap();
+
+    let sent = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            !stub
+                .changes_handle()
+                .game_headers("/action/check")
+                .is_empty()
+        },
+    )
+    .await;
+    assert!(sent, "the edited Option reaches the stub");
+    assert_eq!(
+        stub.changes_handle().game_headers("/action/check"),
+        vec![Some("2".to_string())],
+        "an edited Option comes from the screen of the current Game, so it starts a new draft"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.82
+async fn check_an_edit_opened_for_a_game_saves_to_that_game_after_a_switch(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    wait_until_page_shows_game(&page, "1").await;
+    page.locator(".log-entry.narration .edit-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
+    page.locator("#edit-textarea")
+        .await
+        .fill("Text typed before the switch", None)
+        .await
+        .unwrap();
+    stub.changes_handle().set_game(Some(2));
+    wait_until_page_shows_game(&page, "2").await;
+
+    page.locator("[data-editing] .save-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    wait_for_error_disclosure(&page, NOTICE, "the refused save reports in the notice").await;
+    let (_, line, _) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        line, "The active Game changed, so the edit was not saved.",
+        "the line says what was refused and why"
+    );
+    assert!(
+        stub.save_handle().saved_texts().is_empty(),
+        "the engine saved nothing for the other Game"
+    );
+    assert_eq!(
+        page.locator("#edit-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "Text typed before the switch",
+        "the editor keeps the player's text"
+    );
+
+    page.locator("[data-editing] .cancel-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    let draft_game: Option<String> = page
+        .evaluate::<(), Option<String>>(
+            "() => document.querySelector('#story-log [data-draft-game]')?.getAttribute('data-draft-game') ?? null",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(draft_game, None, "Cancel ends the draft");
+    let entries_in_edit: u32 = page
+        .evaluate::<(), u32>(
+            "() => document.querySelectorAll('#story-log [data-editing]').length",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(entries_in_edit, 0, "after Cancel no entry is in edit");
+}
+
 #[tokio::test]
 async fn run_game_header_checks() {
     let mut runner = StubRunner::launch().await;
@@ -373,6 +598,30 @@ async fn run_game_header_checks() {
         .run(
             StubActionOutcome::Pending,
             check_a_reset_for_a_game_that_is_no_longer_active_reports_in_the_notice,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_command_typed_for_a_game_names_that_game_after_a_switch,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_an_edit_opened_for_a_game_saves_to_that_game_after_a_switch,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_an_option_click_after_a_game_change_names_the_new_game,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_an_option_edited_after_a_game_change_names_the_new_game,
         )
         .await;
     runner.finish().await;

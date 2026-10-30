@@ -149,7 +149,6 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
 // [docs/specs/dashboard.md] SCENARIO: 39.3
 #[tokio::test]
 async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
-    // A held Job is the busy state: the Game holds a Job entry.
     let model = Arc::new(ScriptedModel::new().turn("You look around."));
     let hold = model.hold(Role::Narrator);
     let (app, state) = TestAppBuilder::default_test()
@@ -289,9 +288,14 @@ async fn stop_dock_read_fails() {
     failures.clear_all();
 
     assert_eq!(
-        response_body(stop).await,
-        "failed",
-        "a stop that cannot read the dock answers failed"
+        stop.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "a stop that cannot read the dock answers 500"
+    );
+    let stop_body = response_body(stop).await;
+    assert!(
+        stop_body.contains("The Autoplay run was not stopped."),
+        "the first line of the answer is the sentence of the stop, got: {stop_body}"
     );
     assert_eq!(
         fetch_status_label(&app).await,
@@ -344,10 +348,17 @@ async fn stop_with_no_active_game() {
         .skip_seeding(true)
         .build();
 
+    let stop = post_empty(&app, "/status/reset-busy").await;
+
     assert_eq!(
-        response_body(post_empty(&app, "/status/reset-busy").await).await,
-        "failed",
-        "a stop with no active Game answers failed"
+        stop.status(),
+        StatusCode::BAD_REQUEST,
+        "a stop with no active Game answers 400, as every Game-bound route does"
+    );
+    let body = response_body(stop).await;
+    assert!(
+        body.contains("No active game"),
+        "the refusal names the missing Game, got: {body}"
     );
 }
 

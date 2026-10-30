@@ -1,8 +1,8 @@
 //! Detection tests for the answer-words guardrails.
 
 use crate::answer_words::{
-    check_request_paths_have_words, check_post_routes_have_words,
-    check_words_rows_are_router_routes,
+    check_post_handlers_can_answer_an_error, check_post_routes_have_words,
+    check_request_paths_have_words, check_words_rows_are_router_routes,
 };
 
 const ROWS: [&str; 4] = [
@@ -117,4 +117,72 @@ fn test_check_post_routes_have_words_finds_a_post_handler_in_a_chain() {
     assert_eq!(violations.len(), 1, "{violations:?}");
     assert!(violations[0].message.contains("/games"));
     assert_eq!(violations[0].line, 2);
+}
+
+const STOP_ROUTER: &str = r#"
+    .route(
+        "/status/reset-busy",
+        post(layout::handlers::reset_busy_handler),
+    )
+    .route("/status/busy", get(layout::handlers::busy_status_handler))
+"#;
+
+fn handler_file(source: &str) -> Vec<(String, String)> {
+    vec![("endpoints.rs".to_string(), source.to_string())]
+}
+
+#[test]
+fn test_check_post_handlers_can_answer_an_error_rejects_a_plain_html_handler() {
+    let handlers = handler_file(
+        r#"
+pub async fn reset_busy_handler(
+    State(state): State<AppState>,
+    current: Option<CurrentGame>,
+) -> Html<String> {
+    Html("failed".to_string())
+}
+"#,
+    );
+    let violations =
+        check_post_handlers_can_answer_an_error("router.rs", STOP_ROUTER, &handlers, &[]);
+    assert_eq!(violations.len(), 1, "{violations:?}");
+    assert!(violations[0].message.contains("reset_busy_handler"));
+    assert_eq!(
+        violations[0].line, 2,
+        "the violation names the line of the route"
+    );
+}
+
+#[test]
+fn test_check_post_handlers_can_answer_an_error_accepts_a_response_and_ignores_a_get_route() {
+    let handlers = handler_file(
+        r#"
+pub async fn reset_busy_handler(State(state): State<AppState>) -> Response<Body> {
+    ok("reset")
+}
+pub async fn busy_status_handler() -> Html<String> {
+    Html(String::new())
+}
+"#,
+    );
+    let violations =
+        check_post_handlers_can_answer_an_error("router.rs", STOP_ROUTER, &handlers, &[]);
+    assert!(violations.is_empty(), "{violations:?}");
+}
+
+#[test]
+fn test_check_post_handlers_can_answer_an_error_accepts_a_listed_handler() {
+    let handlers =
+        handler_file("pub async fn reset_busy_handler() -> Html<String> { Html(String::new()) }");
+    let allowed = [("reset_busy_handler", "a reason")];
+    let violations =
+        check_post_handlers_can_answer_an_error("router.rs", STOP_ROUTER, &handlers, &allowed);
+    assert!(violations.is_empty(), "{violations:?}");
+}
+
+#[test]
+fn test_check_post_handlers_can_answer_an_error_rejects_a_handler_with_no_definition() {
+    let violations = check_post_handlers_can_answer_an_error("router.rs", STOP_ROUTER, &[], &[]);
+    assert_eq!(violations.len(), 1, "{violations:?}");
+    assert!(violations[0].message.contains("no definition"));
 }

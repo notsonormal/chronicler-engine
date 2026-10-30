@@ -24,12 +24,9 @@ function autoResizeTextarea(textarea) {
   textarea.style.height = textarea.scrollHeight + border + "px";
 }
 
-// While an entry is in edit, the root of the story log carries
-// `data-editing-entry`. CSS shows the Edit buttons and the swipe controls as
-// disabled, and the click guard below stops a keyboard activation. A load morphs
-// only the children of the root, so the lock survives every load. It ends after
-// the load that follows a saved edit, so the saved entry's controls stay locked
-// until the entry shows the saved text.
+// The root carries `data-editing-entry` for the whole edit, so the lock survives
+// every load, which morphs only its children, and ends once the entry shows the
+// saved text.
 function storyLogRoot() {
   return document.getElementById("story-log");
 }
@@ -95,6 +92,7 @@ function showEditForm(id) {
 
     // A load skips the entry in edit, so new narration shows around the draft.
     entry.setAttribute("data-editing", "");
+    entry.setAttribute("data-draft-game", screenRoot.dataset.game || "");
     lockEditing();
     textarea.focus();
   }
@@ -103,7 +101,10 @@ function showEditForm(id) {
 function clearEditState() {
   document
     .querySelectorAll("#story-log [data-editing]")
-    .forEach((entry) => entry.removeAttribute("data-editing"));
+    .forEach((entry) => {
+      entry.removeAttribute("data-editing");
+      entry.removeAttribute("data-draft-game");
+    });
   editState = null;
   forgetScreenStamp();
   askNow();
@@ -160,9 +161,8 @@ function onSwipeSwitched(event) {
   if (answer.outcome === "done") afterScreenShows(answer.stamp).then(announceSwipeRestore);
 }
 
-// The Delete control lives on the last entry, so the swap replaces the node that
-// had focus. The entry that becomes the last one carries the equivalent
-// controls, and the command input is the landing spot for a log left empty.
+// The Delete control lives on the last entry, so the swap replaces the node that had
+// focus. The entry that becomes the last one carries the equivalent controls.
 function focusAfterLogDelete() {
   const entries = document.querySelectorAll("#story-log .log-entry");
   const lastEntry = entries.length ? entries[entries.length - 1] : null;
@@ -177,10 +177,9 @@ function onMessageDeleted(event) {
   if (answer.outcome === "done") afterScreenShows(answer.stamp).then(focusAfterLogDelete);
 }
 
-// A load morphs the log in place, so its scroll position survives the swap and
-// a new entry would land below the fold. A swap that adds an entry scrolls the
-// log back to its bottom, but only when the log was already there: a player
-// reading further up keeps their place.
+// A load morphs the log in place, so a new entry would land below the fold. The
+// follow then scrolls back to the bottom, but only when the log was already there:
+// a player reading further up keeps their place.
 const STORY_LOG_BOTTOM_SLACK_PX = 8;
 let storyLogSwapStart = null;
 
@@ -199,12 +198,10 @@ function storyLogCanScroll(log) {
   return log.scrollHeight > log.clientHeight;
 }
 
-// The log's height is what the flex column has left over, so its box settles
-// only once the parts beside it have loaded (the options dock alone takes
-// ~150px of it). An assignment made in the swap, or in the next frame, can
-// therefore still measure a log that does not overflow yet and clamp to the
-// top. While the log cannot scroll there is no position of the player's to
-// respect, so the follow retries each frame until the box can hold the bottom.
+// The log's box settles only once the parts beside it have loaded (the options dock
+// alone takes ~150px of it), so a scroll assignment made in the swap or in the next
+// frame can measure a log that does not overflow yet and clamp to the top. The
+// follow retries each frame until the box can hold the bottom.
 const STORY_LOG_FOLLOW_TIMEOUT_MS = 1000;
 
 function followStoryLogBottom(log) {
@@ -237,15 +234,12 @@ document.addEventListener("screen:loaded", function (evt) {
   storyLogSwapStart = null;
   const log = storyLogRoot();
   if (!start || !log || !evt.detail.parts.includes("story-log")) return;
-  // An open edit owns the log's position.
   if (editState !== null) return;
   if (!start.atBottom) return;
   if (storyLogEntryCount(log) <= start.entries) return;
   followStoryLogBottom(log);
 });
 
-// A tab change empties the story log, so an edit that was open is discarded and
-// the lock of the Edit buttons goes with it.
 document.addEventListener("screen:cleared", function () {
   editState = null;
   unlockEditing();

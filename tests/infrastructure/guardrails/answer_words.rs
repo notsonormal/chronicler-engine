@@ -1,4 +1,4 @@
-//! Answer-words guardrails: every `post` route of the router has a row in the words table, and every request path that a template or the shell names matches a row.
+//! Answer-words guardrails: every `post` route of the router has a row in the words table, every request path that a template or the shell names matches a row, and no `post` handler returns a plain `Html<String>`.
 
 use regex::Regex;
 
@@ -106,4 +106,81 @@ pub fn check_request_paths_have_words(path: &str, content: &str, rows: &[&str]) 
             })
         })
         .collect()
+}
+
+/// The `post` handlers whose result is content and not a request outcome, each with its
+/// reason.
+pub const HTML_ANSWER_ALLOWED: &[(&str, &str)] = &[
+    (
+        "test_saved_connection_handler",
+        "its result is content that is not stored: a failed Test is a result, not a failed request",
+    ),
+    (
+        "test_form_connection_handler",
+        "its result is content that is not stored: a failed Test is a result, not a failed request",
+    ),
+];
+
+/// A handler that returns `Html<String>` cannot answer an error status, so the answer
+/// reader of the page cannot see its failure.
+///
+/// Not covered: a handler whose parameter list holds a `{` (a destructured
+/// `Path(P { id })`), because the signature is cut at the first `{` and the return
+/// type is then unread; a return type written with a path, such as
+/// `axum::response::Html<String>`, because the type is compared as the exact text
+/// `Html<String>`; and a handler that the router names through a closure.
+pub fn check_post_handlers_can_answer_an_error(
+    router_path: &str,
+    router_source: &str,
+    handler_files: &[(String, String)],
+    allowed: &[(&str, &str)],
+) -> Vec<Violation> {
+    let post_handler = Regex::new(r"\bpost\(\s*(?:\w+::)*(\w+)\s*\)").expect("post handler");
+    let mut offset = 0;
+    let mut violations = Vec::new();
+    for (index, chunk) in router_source.split(".route(").enumerate() {
+        let start = offset;
+        offset += chunk.len() + ".route(".len();
+        if index == 0 {
+            continue;
+        }
+        let Some(found) = post_handler.captures(chunk) else {
+            continue;
+        };
+        let handler = &found[1];
+        if allowed.iter().any(|(name, _)| name == &handler) {
+            continue;
+        }
+        let line = line_of(router_source, start);
+        let definition =
+            Regex::new(&format!(r"\bfn\s+{handler}\s*\(")).expect("handler definition");
+        let signature = handler_files.iter().find_map(|(_, content)| {
+            definition.find(content).map(|at| {
+                let rest = &content[at.start()..];
+                rest[..rest.find('{').unwrap_or(rest.len())].to_string()
+            })
+        });
+        let Some(signature) = signature else {
+            violations.push(Violation::error(
+                router_path,
+                line,
+                format!("the `post` handler `{handler}` has no definition under the HTTP adapter, so its return type is unread."),
+            ));
+            continue;
+        };
+        let returned = signature
+            .rsplit_once("->")
+            .map(|(_, returned)| returned.split_whitespace().collect::<String>())
+            .unwrap_or_default();
+        if returned == "Html<String>" {
+            violations.push(Violation::error(
+                router_path,
+                line,
+                format!(
+                    "the `post` handler `{handler}` returns `Html<String>`, which cannot answer an error status, so the page cannot see its failure. Return a `Response` that carries the status, or list the handler in `HTML_ANSWER_ALLOWED` with its reason."
+                ),
+            ));
+        }
+    }
+    violations
 }

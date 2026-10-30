@@ -51,7 +51,6 @@ impl NotAccepted {
     }
 }
 
-/// Why a step or a transaction of a Job did not finish.
 #[derive(Debug)]
 pub enum JobFailure {
     /// The Game's Job entry no longer holds this Job's id: a stop or a reset
@@ -101,7 +100,7 @@ impl SavedText {
     }
 }
 
-/// The record of a Job that runs: the Job's own methods are its only writers.
+/// The record of a Job that runs.
 struct JobEntry {
     /// The Job that owns the entry; a transaction whose id differs is refused.
     id: u64,
@@ -187,9 +186,7 @@ impl BusyRegistry {
     /// A writer's check and its transactions happen in one critical section, and the lock
     /// order stays the guard, then the backend mutex, then the connection mutex.
     ///
-    /// The busy state is memory only, so this is the one place that sees it change. The
-    /// `Busy` of each Game before and after `f` decide the raise, and a step that keeps
-    /// its value raises nothing.
+    /// The busy state is memory only, so this is the one place that sees it change.
     fn hold<T>(&self, storage: &Arc<Storage>, f: impl FnOnce(&mut Holders, &TxOpener) -> T) -> T {
         let opener = TxOpener {
             storage: Arc::clone(storage),
@@ -213,8 +210,7 @@ impl BusyRegistry {
             .collect()
     }
 
-    /// The busy state of each Game whose `Busy` changed, and the Games list when the set
-    /// of Games that a run holds changed: the list marks those Games.
+    /// The Games list marks the Games that a run holds, so a change to that set raises it.
     fn raise_busy_changes(
         storage: &Storage,
         before: &HashMap<GameId, Busy>,
@@ -352,8 +348,7 @@ impl GameWriter {
         )
     }
 
-    /// The busy rule: a Game with a holder answers "Still thinking..." before any
-    /// other check.
+    /// The busy rule: the busy refusal comes before any other check of the request.
     fn require_idle(holders: &Holders, game: GameId) -> Result<(), NotAccepted> {
         if holders.contains_key(&game) {
             return Err(NotAccepted::StillThinking);
@@ -436,9 +431,8 @@ impl GameWriter {
         AutoplayAccept::Accepted(self.accepted(game, job_id, plan), progress)
     }
 
-    /// The plan of the request, and the transactions that make it a started Job. The transaction
-    /// lands before the caller makes the entry: a refused accept makes no entry, so
-    /// a Game is never busy for a Job that never started.
+    /// The transaction lands before the caller makes the entry: a refused accept makes
+    /// no entry, so a Game is never busy for a Job that never started.
     fn plan_and_start(
         &self,
         opener: &TxOpener,
@@ -489,7 +483,6 @@ impl GameWriter {
         })
     }
 
-    /// A holder of another run, or none, stays as it is.
     pub fn end_autoplay(&self, game: GameId, run: AutoplayRunId) {
         self.hold(|holders, _opener| {
             if holders
@@ -503,7 +496,7 @@ impl GameWriter {
 
     /// The write of the config columns `change` names, refused while an Autoplay run
     /// holds the Game. The check and the transaction run in one registry hold, so a run
-    /// cannot start between them. The caller read and validated `change` before.
+    /// cannot start between them.
     pub fn save_config(&self, game: GameId, change: &ConfigChange) -> Result<(), ApplicationError> {
         self.hold(|holders, opener| {
             if matches!(holders.get(&game), Some(Holder::Autoplay { .. })) {
@@ -543,9 +536,7 @@ impl GameWriter {
             let last =
                 tail.ok_or_else(|| NotAccepted::BadRequest("No message to switch".to_string()))?;
             if last.last.id != message {
-                return Err(NotAccepted::BadRequest(
-                    "Only the last message can be swiped".to_string(),
-                ));
+                return Err(NotAccepted::LastMessageChanged);
             }
             if index >= last.last.swipes.len() {
                 return Err(NotAccepted::BadRequest(
@@ -667,14 +658,11 @@ impl GameWriter {
             .map_err(|error| self.unreadable(game, Record::Story, &error, opener))
     }
 
-    /// A record the request needs that the engine has no row for: the failure line
-    /// names it.
     fn missing(&self, game: GameId, record: Record, opener: &TxOpener) -> NotAccepted {
         self.not_accepted_with_failure(game, GenerationFailure::missing(record), opener)
     }
 
-    /// A record the request needs that the engine cannot read: the line names it,
-    /// and the disclosure holds the error behind it.
+    /// The disclosure holds the read error behind the line that names the record.
     fn unreadable(
         &self,
         game: GameId,
@@ -685,8 +673,7 @@ impl GameWriter {
         self.not_accepted_with_failure(game, GenerationFailure::unreadable(record, error), opener)
     }
 
-    /// The write the request asked for failed: the line is the design's save line,
-    /// and the disclosure holds the error behind it.
+    /// The disclosure holds the save error behind the design's save line.
     fn save_failed(&self, game: GameId, error: &EngineError, opener: &TxOpener) -> NotAccepted {
         self.not_accepted_with_failure(game, GenerationFailure::save_failed(error), opener)
     }
@@ -705,8 +692,7 @@ impl GameWriter {
         NotAccepted::Failed(failure)
     }
 
-    /// The Game row, the Persona and the start state that the plan names: the
-    /// records a Job reads, checked before the Game turns busy.
+    /// The records a Job reads, checked before the Game turns busy.
     fn require_records(
         &self,
         game: GameId,
@@ -742,8 +728,6 @@ impl GameWriter {
         Ok(StoryEnd { tail, has_text })
     }
 
-    /// The end of a request that changes the story under a Game with no running
-    /// Job: the failure line goes, and the dock holds `record`.
     fn clear_failure_and_put_dock(tx: &mut Tx<'_>, record: &DockRecord) -> Result<(), EngineError> {
         tx.set_game_failure(None)?;
         tx.put_dock(record)
@@ -807,8 +791,8 @@ impl JobWriter {
         self.id
     }
 
-    /// One hold for this Job: the Job entry of the Game's holder must still hold
-    /// this Job's id, and the transactions of `f` open under the same lock.
+    /// One hold for this Job: the id check and the transactions of `f` run under the same
+    /// lock.
     fn hold<T>(
         &self,
         f: impl FnOnce(&mut JobEntry, &TxOpener) -> Result<T, JobFailure>,

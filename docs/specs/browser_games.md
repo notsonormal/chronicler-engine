@@ -101,14 +101,16 @@ When the client presses Previous
 Then the Saved Games list shows 50 Games and the pager shows "Page 1 of 2"
 ```
 
-#### Scenario 27.9: The page of saved Games resets when the client leaves the Games tab
+#### Scenario 27.9: The page of saved Games survives a tab change and a reload
 
 ```gherkin
 Given the engine holds 51 saved Games
 And the client opened the Games tab and pressed Next, so the pager shows "Page 2 of 2"
 When the client opens the Worlds tab
 And the client opens the Games tab again
-Then the Saved Games list shows 50 Games and the pager shows "Page 1 of 2"
+Then the Saved Games list shows 1 Game and the pager shows "Page 2 of 2"
+When the client reloads the page
+Then the Saved Games list shows 1 Game and the pager shows "Page 2 of 2"
 ```
 
 #### Scenario 27.10: A click on Next during a load drops the old answer

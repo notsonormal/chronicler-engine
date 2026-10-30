@@ -126,7 +126,8 @@ Then the response status is "500 Internal Server Error"
 Given a Game whose Job is held at its narrator call
 And a storage that rejects the read of the dock record
 When the client POST /status/reset-busy
-Then the stop answers "failed"
+Then the response status is "500 Internal Server Error"
+And the first line of the body is "The Autoplay run was not stopped."
 And the status display still answers with the step of the Job
 When the Job's model answer arrives
 Then the Job saves its Narration and the Game is idle
@@ -142,12 +143,13 @@ Then the response body carries the line "The data for this request is missing: t
 And the response body is not a status element with data-status "idle"
 ```
 
-#### Scenario 39.10: With no active Game, the stop answers "failed"
+#### Scenario 39.10: With no active Game, the stop answers 400
 
 ```gherkin
 Given no active Game
 When the client POST /status/reset-busy
-Then the stop answers "failed"
+Then the response status is "400 Bad Request"
+And the response body mentions "No active game"
 ```
 
 #### Scenario 39.11: With no active Game, the status display answers Ready

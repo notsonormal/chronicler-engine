@@ -552,6 +552,8 @@ struct StubState {
     deleted: std::sync::atomic::AtomicBool,
     header_degraded: std::sync::atomic::AtomicBool,
     asks_and_loads_failing: std::sync::atomic::AtomicBool,
+    asks_held: std::sync::atomic::AtomicBool,
+    screen_loads_held: std::sync::atomic::AtomicBool,
     row_deletes_succeed: std::sync::atomic::AtomicBool,
     world_delete_refused: std::sync::atomic::AtomicBool,
     preset_card_refused: std::sync::atomic::AtomicBool,
@@ -720,6 +722,8 @@ impl StubServer {
             deleted: std::sync::atomic::AtomicBool::new(false),
             header_degraded: std::sync::atomic::AtomicBool::new(false),
             asks_and_loads_failing: std::sync::atomic::AtomicBool::new(false),
+            asks_held: std::sync::atomic::AtomicBool::new(false),
+            screen_loads_held: std::sync::atomic::AtomicBool::new(false),
             row_deletes_succeed: std::sync::atomic::AtomicBool::new(false),
             world_delete_refused: std::sync::atomic::AtomicBool::new(false),
             preset_card_refused: std::sync::atomic::AtomicBool::new(false),
@@ -1267,6 +1271,11 @@ async fn count_and_fail_reads_middleware(
                 .any(|part| names_part(part)));
     if is_panel_load && state.panel_loads_failing.load(SeqCst) {
         return failed_answer("panel load failed");
+    }
+    let held = (path == "/changes" && state.asks_held.load(SeqCst))
+        || (path == "/screen" && state.screen_loads_held.load(SeqCst));
+    if held {
+        std::future::pending::<()>().await;
     }
     let is_read = is_load || path == "/changes";
     let failing =
@@ -1820,7 +1829,6 @@ async fn duplicate_preset(
     (StatusCode::OK, "").into_response()
 }
 
-/// The Add control of a preset type.
 async fn preset_add_form_fragment(
     axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
 ) -> Response<Body> {

@@ -98,8 +98,8 @@ async fn test_reset_busy_ok() {
 
     let result = reset_busy_handler(
         axum::extract::State(state.clone()),
-        Some(CurrentGame(active_game_of(&state))),
+        CurrentGame(active_game_of(&state)),
     )
     .await;
-    assert!(result.0.contains("reset") || !result.0.is_empty());
+    assert_eq!(result.status(), axum::http::StatusCode::OK);
 }

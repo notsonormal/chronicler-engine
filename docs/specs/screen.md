@@ -61,7 +61,7 @@ Given an active Game and a second saved Game
 When the client sends each Game-bound POST route with the header X-Chronicler-Game set to the id of the second Game
 Then each response status is 409
 And the first line of each response body begins "The active Game changed, so "
-And the second line of each response body is "The page showed a Game that is no longer active."
+And the second line of each response body is "The request named a Game that is no longer active."
 And each answer carries X-Revision
 And the `server:revision` of GET /changes is the same before and after each request
 And the story log holds the Messages it held before
@@ -199,7 +199,7 @@ Drift indicates a regression even if all scenarios pass.
 These properties hold across every Game-bound route (the endpoints above) and are observable through HTTP.
 
 - **I.3** A request without the `X-Chronicler-Game` header acts on the active Game.
-- **I.4** A request whose `X-Chronicler-Game` header does not name the active Game is refused with `409`. The first line of the body is "The active Game changed, so <the words of the route>." and the second line is "The page showed a Game that is no longer active.". The refusal writes nothing, and it comes before the handler runs.
+- **I.4** A request whose `X-Chronicler-Game` header does not name the active Game is refused with `409`. The first line of the body is "The active Game changed, so <the words of the route>." and the second line is "The request named a Game that is no longer active.". The refusal writes nothing, and it comes before the handler runs.
 - **I.5** A `GET` route does not read the `X-Chronicler-Game` header.
 
 #### Scenario 45.15: A games_page that is not a whole number of at least 1 answers 400 and renders nothing
@@ -256,7 +256,7 @@ Given an engine with an active Game and a second saved Game
 When the client sends each Game-bound POST route with the header X-Chronicler-Game set to the id of the second Game
 Then each response status is 409
 And the first line of each body is "The active Game changed, so <the words of the route>."
-And the second line of each body is "The page showed a Game that is no longer active."
+And the second line of each body is "The request named a Game that is no longer active."
 
 Given a Job holds the Game, inside its narrator call
 When the client POST /action, /action/confirm, /autoplay, /swipe/new, /retrigger, /history/:id, /history/delete and /message/:id/swipe/:index

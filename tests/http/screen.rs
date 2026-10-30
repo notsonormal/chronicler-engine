@@ -22,7 +22,7 @@ use crate::support::http_requests::{
 
 pub(crate) const GAME_HEADER: &str = "x-chronicler-game";
 const REVISION_HEADER: &str = "x-revision";
-pub(crate) const STALE_GAME_LINE: &str = "The page showed a Game that is no longer active.";
+pub(crate) const STALE_GAME_LINE: &str = "The request named a Game that is no longer active.";
 
 async fn stamp_of_changes(app: &axum::Router) -> String {
     let request = Request::builder()
@@ -82,7 +82,6 @@ fn post_routes_of_router() -> BTreeSet<String> {
         .collect()
 }
 
-/// The paths of the `game_bound_routes` function of the router source.
 fn game_bound_routes_of_router() -> BTreeSet<&'static str> {
     let source = include_str!("../../src/adapters/driving/http/builders/router.rs");
     let start = source

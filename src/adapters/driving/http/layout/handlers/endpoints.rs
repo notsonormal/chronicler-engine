@@ -10,10 +10,11 @@ use axum::{
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driving::http::utils::error::{
-    failed_answer, not_found_answer, error_disclosure, raw_error_detail,
+    AnswerPolicy, answer_for_error, failed_answer, not_found_answer, error_disclosure,
+    raw_error_detail,
 };
 use crate::adapters::driving::http::utils::fragment::render_fragment;
-use crate::adapters::driving::http::utils::response::html_escape;
+use crate::adapters::driving::http::utils::response::{html_escape, ok};
 use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
 use crate::application::generation::gate::Busy;
@@ -118,8 +119,8 @@ pub async fn busy_status_handler(
     ))
 }
 
-/// The status display for the given Game; with no Game it is idle. A Game whose
-/// status cannot be read shows its failure line in the display, not an error answer.
+/// A Game whose status cannot be read shows its failure line in the display, not an
+/// error answer.
 pub fn render_status_display(state: &AppState, game: Option<GameId>) -> String {
     let Some(game_id) = game else {
         return idle_answer();
@@ -139,8 +140,7 @@ pub fn idle_answer() -> String {
     status_element("idle", "ready", "Ready")
 }
 
-/// The status display's answer: one element. `data-status` holds the machine
-/// state that the action area reads, and the label is the text the display shows.
+/// `data-status` holds the machine state that the action area reads.
 fn status_element(state: &str, class: &str, label: &str) -> String {
     format!(
         "<span class=\"status {class}\" data-status=\"{state}\">{}</span>",
@@ -182,16 +182,10 @@ pub fn failure_answer(failure: &GenerationFailure) -> String {
 
 pub async fn reset_busy_handler(
     State(state): State<AppState>,
-    current: Option<CurrentGame>,
-) -> Html<String> {
-    let Some(CurrentGame(game_id)) = current else {
-        return Html("failed".to_string());
-    };
+    CurrentGame(game_id): CurrentGame,
+) -> Response<Body> {
     match state.game_writer.stop(game_id) {
-        Ok(()) => Html("reset".to_string()),
-        Err(e) => {
-            tracing::error!("reset_busy_handler: {e}");
-            Html("failed".to_string())
-        }
+        Ok(()) => ok("reset"),
+        Err(e) => answer_for_error(e.into(), None, AnswerPolicy::EngineText),
     }
 }

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
 };
@@ -210,4 +211,48 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
         "the second Swipe's state comes back"
     );
     assert_eq!(room_header_of(&state, message_id), None);
+}
+
+// [docs/specs/swipe_switch.md] SCENARIO: 36.6
+#[tokio::test]
+async fn test_switch_swipe_on_a_message_that_is_not_the_last_is_refused_http() {
+    let (app, state, _storage) = app_with_script(ScriptedModel::new().turn("You look around."));
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job settles");
+    let story = || {
+        story_of(&state)
+            .iter()
+            .map(|message| {
+                (
+                    message.id,
+                    message.swipe_count(),
+                    message.active_swipe_index,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let before = story();
+    let input = story_of(&state)
+        .iter()
+        .find(|message| message.message_type == MessageType::Input)
+        .expect("the story holds the Input")
+        .id;
+
+    let resp = post_empty(&app, &format!("/message/{input}/swipe/0")).await;
+
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The last Message changed, so the Swipe was not switched."),
+        "the refusal names the changed last Message: {body}"
+    );
+    assert!(
+        body.contains("The page showed a Message that is no longer the last one."),
+        "the second line is the engine's line: {body}"
+    );
+    assert_eq!(
+        story(),
+        before,
+        "the refused switch changes no story record"
+    );
 }

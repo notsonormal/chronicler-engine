@@ -143,7 +143,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
 - **infrastructure/**
     - `architecture.rs` — Architecture guardrail tests using arch-lint — fail the build on any violation defined in `arch-lint.toml`; run with `cargo nextest run --test architecture`.
     - **guardrails/**
-      - `answer_words.rs` — Answer-words guardrails: every `post` route of the router has a row in the words table, and every request path that a template or the shell names matches a row.
+      - `answer_words.rs` — Answer-words guardrails: every `post` route of the router has a row in the words table, every request path that a template or the shell names matches a row, and no `post` handler returns a plain `Html<String>`.
       - `answer_words_tests.rs` — Detection tests for the answer-words guardrails.
       - `enums.rs` — Enum variant doc guardrail: every enum variant must carry `///` doc, OR the enum must be marked `/// [TRIVIAL_ENUM]` with all variants bare.
       - `free_fn.rs` — Free fn location guardrail: top-level free fns must live in a folder named `mappers`, `utils`, `builders`, `test_support`, `bootstrap`, or `handlers`.

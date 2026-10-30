@@ -100,7 +100,6 @@ pub fn check_parts_in_shell(path: &str, content: &str) -> Vec<Violation> {
     violations
 }
 
-/// One part element of the shell: an element with `data-part`.
 pub struct ShellPart {
     /// The value of `data-part`.
     pub name: String,
@@ -230,7 +229,6 @@ pub fn check_stub_answers_the_parts_of_the_server(
     violations
 }
 
-/// One row of a table that lists the parts of the shell by hand.
 pub struct ListedPart {
     pub selector: String,
     pub name: String,
@@ -337,17 +335,9 @@ fn line_of(content: &str, offset: usize) -> usize {
 }
 
 /// Checks one `assets/dashboard-*.js` script other than `dashboard-screen.js`, the
-/// one script that writes a part (the morph, and the clear on leave). A script must
-/// not write the content of a part element: a part shows what the screen load
-/// renders, and the only change a script makes to it is to ask for that load. The
-/// check finds:
-/// - `X.innerHTML = …`, `X.outerHTML = …`, `X.textContent = …`, `X.innerText = …`,
-///   and the calls `X.insertAdjacentHTML(…)`, `X.replaceChildren(…)`,
-///   `X.appendChild(…)`, `X.append(…)`, `X.prepend(…)`, `X.insertBefore(…)`,
-///   `X.replaceWith(…)`, where `X` is a chain that names a part, or an identifier
-///   that the same file declares from an expression that does (a selector chain, a
-///   `[data-part]` selector, a constant that lists one);
-/// - `htmx.ajax(…)` whose call names a part, which swaps into it.
+/// one script that writes a part (the morph, and the clear on leave): a part shows
+/// what the screen load renders, so the only change a script makes to it is to ask
+/// for that load.
 ///
 /// An element that reaches a helper as a parameter is not resolved, so a helper
 /// that writes takes the element from a caller that does not name a part.
@@ -480,11 +470,8 @@ pub fn check_handler_headers(path: &str, source: &str, parts: &[String]) -> Vec<
 }
 
 /// Checks one template source: a file of the HTTP adapter that renders markup, or
-/// the shell. A request changes only the element it acts on, so:
-/// - no `hx-target` names a part element (`#story-log`, `.games-panel`, …);
-/// - no `outerHTML` swap replaces a part element: an element that swaps
-///   `outerHTML` and names a part as its target, or has no target and is itself a
-///   part.
+/// the shell. A request changes only the element it acts on, so no `hx-target` names
+/// a part element and no `outerHTML` swap replaces one.
 ///
 /// The check reads each start tag, including the ones in a Rust string with escaped
 /// quotes.
@@ -768,19 +755,14 @@ pub fn check_scripts_listen_no_part_swaps(
 }
 
 /// Checks one first-party script of `assets/`. The server renders every control
-/// state, so no script writes `disabled`. These are findings, read over the whole
-/// text so that a call split over lines is found, at the line where it starts:
-/// - a property write (`control.disabled = …`, also `||=`, `&&=`, `??=`);
-/// - a bracket write (`control["disabled"] = …`, in any quote style);
-/// - a call of `setAttribute`, `removeAttribute` or `toggleAttribute` that names
-///   `disabled`;
-/// - the same call or bracket write with a constant that a `const`, `let` or `var`
-///   in the script binds to `"disabled"`.
+/// state, so no script writes `disabled`, through a property, a bracket, or
+/// `setAttribute`, `removeAttribute` or `toggleAttribute`, including a name that a
+/// `const`, `let` or `var` binds to `"disabled"`.
 ///
 /// A read (`if (input.disabled)`) is not a finding, and a comment is not read. Not
 /// covered: `Object.assign(control, { disabled: true })`, `setAttributeNS`, a name
 /// built at run time, markup strings that carry `disabled`, and inline handlers in
-/// the shell. A request disables a field of the shell through `hx-disabled-elt`.
+/// the shell.
 pub fn check_scripts_write_no_disabled(path: &str, script: &str) -> Vec<Violation> {
     const QUOTED: &str = r#"["'`]disabled["'`]"#;
     const WRITE_OPERATOR: &str = r"\s*(?:\|\||&&|\?\?)?=(?:[^=]|$)";
@@ -819,7 +801,7 @@ pub fn check_scripts_write_no_disabled(path: &str, script: &str) -> Vec<Violatio
             Violation::error(
                 path,
                 line,
-                "a script writes `disabled`. The server renders every control state, and a request disables a field of the shell with `hx-disabled-elt`.",
+                "a script writes `disabled`. The server renders every control state.",
             )
         })
         .collect()

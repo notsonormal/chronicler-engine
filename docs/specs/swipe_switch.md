@@ -57,3 +57,14 @@ Then the response is 400 Bad Request carrying "Swipe index out of bounds"
 And the last Message keeps the active Swipe it had
 And the last Message keeps its two Swipes
 ```
+
+#### Scenario 36.6: A swipe switch on a Message that is no longer the last is refused
+
+```gherkin
+Given a Game whose story holds an Input followed by a Narration
+When the client POST /message/:id/swipe/0 with the id of the Input
+Then the response is 409 Conflict
+And the first line of the body is "The last Message changed, so the Swipe was not switched."
+And the second line of the body is "The page showed a Message that is no longer the last one."
+And no Message of the story changes
+```

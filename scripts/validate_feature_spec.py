@@ -79,10 +79,9 @@ TAG_EXEMPT_FILES = {
     ),
 }
 
-# Pins the requires_migration quarantine: the count may only go down.
-# Migration cleanups lower it deliberately; a new test in the folder fails
-# the gate.
-REQUIRES_MIGRATION_TEST_COUNT = 71
+# Pins the requires_migration quarantine: the count may only go down, and a
+# migration cleanup lowers it deliberately.
+REQUIRES_MIGRATION_TEST_COUNT = 70
 
 
 def parse_spec_scenarios(spec_path: Path) -> set[str]:
@@ -175,9 +174,6 @@ def is_tag_exempt(rel: Path) -> bool:
 def find_untagged_tests(
     scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str]]:
-    """In the stub tier a `check_*` function is the tag target (the module's
-    `run_*` runner test is exempt: it drives the checks and observes no
-    scenario of its own)."""
     violations: list[tuple[Path, int, str]] = []
     for path, rel, scan in scans:
         if is_tag_exempt(rel):
@@ -201,9 +197,7 @@ def find_untagged_tests(
 def find_unwired_checks(
     scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str]]:
-    """Return (path, line, fn name) for every stub-tier `check_*` that no
-    runner in its file calls: its SCENARIO tag would otherwise count as
-    coverage for a check that never runs."""
+    """A `check_*` that no runner calls would still count as covering its scenario."""
     violations: list[tuple[Path, int, str]] = []
     for path, rel, scan in scans:
         if not rel.is_relative_to(STUB_DIR):
@@ -217,9 +211,8 @@ def find_unwired_checks(
 def find_surface_violations(
     scans: list[tuple[Path, Path, TestFileScan]],
 ) -> list[tuple[Path, int, str, str]]:
-    """Return (path, line, spec_path, reason) for every SCENARIO tag whose
-    observation surface does not match its test directory (contract:
-    tests/STRATEGY.md "SCENARIO tags", per-surface rule)."""
+    """The tag of a test whose observation surface does not match its directory
+    (contract: tests/STRATEGY.md "SCENARIO tags", per-surface rule)."""
     violations: list[tuple[Path, int, str, str]] = []
     browser_dir = Path("tests/browser")
     for path, rel, scan in scans:

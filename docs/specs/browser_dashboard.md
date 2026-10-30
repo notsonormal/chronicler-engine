@@ -7,7 +7,7 @@ The action controls are two parts of the screen. `#send-control` holds Send, and
 The disabled state follows the busy state of the Game and the request in flight, not the view states of the action area. Two differences from the script that wrote `disabled` before stage 7 are kept:
 
 - Autoplay takes clicks while the state of the action area is Checking or Preview, because the Game is idle then. A run can start while the preview stays open.
-- The cycles field is enabled while a Job runs, because only a request of its own form disables it. Enter in the field does not submit the form during a Job, because its default button, Autoplay, is disabled.
+- The cycles field is enabled while a Job runs, and a request of its own form leaves it enabled. Enter in the field does not submit the form during a Job, because its default button, Autoplay, is disabled.
 
 ## Scenarios
 
@@ -389,7 +389,7 @@ Given the dashboard is loaded
 And a generation is already in flight
 When the client submits a command the engine refuses
 Then #notice says "The Game is busy, so the Action was not sent."
-And its Details disclosure holds both lines of the answer
+And its Details disclosure holds only the second line of the answer
 And the status display keeps the state it had
 And the command input still holds the typed command
 And no preview is open
@@ -604,16 +604,16 @@ And the engine takes the command and the screen shows the send
 Then the Action input keeps the typed text
 ```
 
-#### Scenario 16.62: A check request disables the Action input and shows Send as busy until it ends
+#### Scenario 16.62: A check request shows Send as busy and leaves the Action input enabled until it ends
 
 ```gherkin
 Given the dashboard is loaded and idle, and the engine holds the request that checks a command
 When the client submits a command
-Then the Action input is disabled
+Then the Action input is not disabled
 And #submit-btn is not disabled, and it takes no click
 And #action-area carries the state "checking"
 When the engine answers the request
-Then the Action input is enabled and #submit-btn takes clicks
+Then the Action input is not disabled and #submit-btn takes clicks
 And #action-area no longer carries the state "checking"
 ```
 
@@ -677,7 +677,7 @@ When the client submits a command
 Then htmx reports the load error
 And the screen loads again, though no change moved the revision
 And #submit-btn is enabled as the server renders it, and #action-area does not carry the state "checking"
-But the Action input stays disabled, #submit-btn still takes no click, and the command form sends nothing when it is submitted again
+But #submit-btn still takes no click, and the command form sends nothing when it is submitted again
 ```
 
 #### Scenario 16.69: A pending state ends when the screen shows the answer of its request
@@ -720,14 +720,14 @@ Then #notice is hidden and its report is empty
 And focus is on #main-content
 ```
 
-Where each kind of control reports a refusal or a failure is pinned by the scenarios of that control: 16.19 (the Action input), 16.25 and 44.18 (a control that saves on change), 16.29 (an invalid dialog form), 16.32 and 16.34 (row buttons), 16.40 (a preview confirm), 16.58 and 16.59 (a Game that is no longer active), 44.17 (a dialog form that fails), and 16.42 and 42.6 (the busy refusal, with both lines in Details). A failure with no lead and a refusal with both lines are pinned there too.
+Where each kind of control reports a refusal or a failure is pinned by the scenarios of that control: 16.19 (the Action input), 16.25 and 44.18 (a control that saves on change), 16.29 (an invalid dialog form), 16.32 and 16.34 (row buttons), 16.40 (a preview confirm), 16.58 and 16.59 (a Game that is no longer active), 44.17 (a dialog form that fails), and 16.42 and 42.6 (the busy refusal, with only the second line in Details). A failure with no lead and a refusal with both lines are pinned there too.
 
 #### Scenario 16.73: A refused dialog form reports in the notice, and an invalid answer of a form with typed input reports in that form
 
 ```gherkin
 Given the Rename dialog of a Game is open with a typed name
 When the client saves the form and the engine refuses it with 409
-Then #notice shows "The Game is busy, so the Game was not renamed." with both lines in Details
+Then #notice shows "The Game is busy, so the Game was not renamed." with only the second line in Details
 And that is the only report on the page, and the banner is not raised
 And the dialog stays open with its draft, and its status line repeats the sentence
 
@@ -818,4 +818,75 @@ And a report whose sentence is the whole text and is longer than its place is wi
 When the report shows in the slot of the form and in the notice, at 1280 and at 1024 pixels
 Then each place draws the whole sentence on more than one line
 And no place cuts the sentence or ends it with an ellipsis
+```
+
+#### Scenario 16.81: A command names the Game that it was typed for
+
+```gherkin
+Given the dashboard shows Game 1
+And the client typed a command in the Action input
+When the engine switches the active Game to Game 2 and the page shows Game 2
+And the client presses Enter in the Action input
+Then the request carries the header X-Chronicler-Game with the id of Game 1
+And the engine refuses it with 409 and "The active Game changed, so the Action was not sent."
+And #notice shows that line
+And the engine took no Action
+And the Action input still holds the typed command
+When the screen shows the answer and the client presses Enter again
+Then the request carries the header X-Chronicler-Game with the id of Game 2
+And the engine takes the Action
+```
+
+#### Scenario 16.82: A Message edit names the Game that it was opened for
+
+```gherkin
+Given the dashboard shows Game 1 and an entry of the story log is in edit with typed text
+When the engine switches the active Game to Game 2 and the page shows Game 2
+And the client presses Save
+Then the engine refuses the save with 409 and "The active Game changed, so the edit was not saved."
+And #notice shows that line
+And the engine saved no text
+And the editor is still open and holds the typed text
+When the client activates Cancel
+Then the entry is no longer in edit
+```
+
+#### Scenario 16.83: A two-line answer shows its sentence once, and Details hold only the second line
+
+```gherkin
+Given the dashboard is loaded
+When the engine answers the Action input with 500, and the body has two lines
+Then #notice shows the first line as the sentence of the report
+And the Details of #notice hold only the second line
+And the first line shows once in #notice, Details included
+```
+
+#### Scenario 16.84: The Action input keeps focus through a send
+
+```gherkin
+Given the dashboard is loaded and idle, and the engine holds the request that checks a command
+When the client types a command and presses Enter in the Action input
+Then focus is on the Action input while the request runs
+When the engine answers the request and the screen shows the send
+Then focus is on the Action input
+```
+
+#### Scenario 16.85: An Option clicked after a Game change names the new Game
+
+```gherkin
+Given the dashboard shows Game 1 with Options in the dock
+And the client typed a command in the Action input
+When the engine switches the active Game to Game 2 and the page shows Game 2
+And the client clicks an Option
+Then the request carries the header X-Chronicler-Game with the id of Game 2
+```
+
+#### Scenario 16.86: An Option edited after a Game change names the new Game
+
+```gherkin
+Given the dashboard shows Game 1 with Options in the dock
+And the client typed a command in the Action input
+When the engine switches the active Game to Game 2 and the page shows Game 2
+And the client activates "Edit before send" of an Option and presses Enter
+Then the request carries the header X-Chronicler-Game with the id of Game 2
 ```

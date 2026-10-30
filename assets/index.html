@@ -120,7 +120,6 @@
           hx-target="#action-preview"
           hx-swap="innerHTML"
           hx-sync="this:drop"
-          hx-disabled-elt="#command-input"
           hx-on::before-request="onCommandBeforeRequest()"
           hx-on::after-request="onCommandAfterRequest(event)"
           hx-on::on-load-error="onCommandLoadError()"
@@ -139,14 +138,12 @@
           />
           <div class="inline-error-slot" data-error-slot="action" hidden></div>
         </form>
-        <!-- Send: the server renders its disabled state. Send submits the command form through its form attribute. -->
         <div id="send-control" data-part="send-control"></div>
         <form
           id="autoplay-form"
           hx-post="/autoplay"
           hx-swap="none"
           hx-sync="this:drop"
-          hx-disabled-elt="#autoplay-cycles"
           hx-on::after-request="onAutoplayAfterRequest(event)"
         >
           <label class="visually-hidden" for="autoplay-cycles">Autoplay cycles</label>
@@ -162,7 +159,6 @@
           />
           <div class="inline-error-slot" data-error-slot="autoplay" hidden></div>
         </form>
-        <!-- Autoplay and Stop: the server renders their disabled state. Autoplay submits the Autoplay form through its form attribute. -->
         <div id="autoplay-controls" data-part="autoplay-controls"></div>
         <!-- The action area's own state, next to the live status display that it never writes. -->
         <div class="status thinking" id="action-status"></div>
@@ -225,11 +221,11 @@
     </dialog>
 
 
-    <script src="/assets/dashboard-errors.js?v=16"></script>
-    <script src="/assets/dashboard-screen.js?v=10"></script>
+    <script src="/assets/dashboard-errors.js?v=17"></script>
+    <script src="/assets/dashboard-screen.js?v=12"></script>
     <script src="/assets/dashboard-saves.js?v=5"></script>
-    <script src="/assets/dashboard-action-area.js?v=17"></script>
-    <script src="/assets/dashboard-story-log.js?v=14"></script>
+    <script src="/assets/dashboard-action-area.js?v=18"></script>
+    <script src="/assets/dashboard-story-log.js?v=15"></script>
     <script src="/assets/dashboard-slash-menu.js?v=1"></script>
     <script src="/assets/dashboard-panels.js?v=9"></script>
     <script src="/assets/dashboard-dialog.js?v=12"></script>

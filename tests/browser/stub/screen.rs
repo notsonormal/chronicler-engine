@@ -324,6 +324,71 @@ async fn check_a_failed_ask_shows_in_the_screen_error_and_a_good_ask_clears_it(
     );
 }
 
+const SHORTEN_ASK_TIMEOUT: &str =
+    "() => { document.documentElement.dataset.askTimeoutMs = '300'; }";
+
+async fn wait_for_unreachable_banner(page: &playwright_rs::Page, why: &str) {
+    let shown = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { read_banner(page).await.0 },
+    )
+    .await;
+    assert!(shown, "{why}");
+}
+
+// [docs/specs/browser_screen.md] SCENARIO: 44.47
+async fn check_an_ask_that_gets_no_answer_shows_unreachable_and_the_next_answer_clears_it(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let failure = stub.failure_handle();
+    start_current(&page).await;
+    page.evaluate::<(), ()>(SHORTEN_ASK_TIMEOUT, None)
+        .await
+        .unwrap();
+
+    failure.set_asks_held(true);
+    ask_once_without_waiting(&page).await;
+    wait_for_unreachable_banner(&page, "an ask with no answer must raise the banner").await;
+    let (_, role, text) = read_banner(&page).await;
+    assert_eq!(role, "alert");
+    assert!(
+        text.contains("The engine is unreachable"),
+        "the banner must say that the engine is unreachable, got {text:?}"
+    );
+
+    failure.set_asks_held(false);
+    ask_once(&page).await;
+    let (visible, _, text) = read_banner(&page).await;
+    assert!(!visible, "an answer must clear the banner, got {text:?}");
+}
+
+// [docs/specs/browser_screen.md] SCENARIO: 44.48
+async fn check_a_load_that_gets_no_answer_shows_unreachable_and_the_next_answer_loads_the_screen(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let failure = stub.failure_handle();
+    start_current(&page).await;
+    page.evaluate::<(), ()>(SHORTEN_ASK_TIMEOUT, None)
+        .await
+        .unwrap();
+
+    failure.set_screen_loads_held(true);
+    page.evaluate::<(), ()>("() => fetch('/stub/touch').then(() => {})", None)
+        .await
+        .unwrap();
+    ask_once_without_waiting(&page).await;
+    wait_for_unreachable_banner(&page, "a load with no answer must raise the banner").await;
+
+    failure.set_screen_loads_held(false);
+    ask_once(&page).await;
+    let (visible, _, text) = read_banner(&page).await;
+    assert!(!visible, "an answer must clear the banner, got {text:?}");
+    wait_for_screen_current(&page).await;
+}
+
 const HIDE_PAGE: &str = r#"() => {
     Object.defineProperty(document, 'visibilityState', {
         configurable: true,
@@ -906,6 +971,18 @@ async fn run_screen_checks() {
         .run(
             outcome,
             check_a_failed_ask_shows_in_the_screen_error_and_a_good_ask_clears_it,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_an_ask_that_gets_no_answer_shows_unreachable_and_the_next_answer_clears_it,
+        )
+        .await;
+    runner
+        .run(
+            outcome,
+            check_a_load_that_gets_no_answer_shows_unreachable_and_the_next_answer_loads_the_screen,
         )
         .await;
     runner.run(outcome, check_a_hidden_page_does_not_ask).await;

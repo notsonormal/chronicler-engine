@@ -14,7 +14,6 @@ use chronicler_engine::test_support::{
 };
 use chronicler_engine::TestAppBuilder;
 
-use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::AppState;
 
@@ -594,7 +593,6 @@ async fn test_create_game_with_invalid_world_key() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler_success() {
-    // An Action and a Retry give the last Narration two Swipes to switch between.
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::new(
             ScriptedModel::new()
@@ -668,45 +666,6 @@ async fn test_reset_handler_success() {
     assert!(
         response.headers().get("HX-Refresh").is_none(),
         "a reset must not reload the page"
-    );
-}
-
-#[tokio::test]
-async fn test_switch_swipe_handler_not_last() {
-    // The Action's own Narration is the last Message, and its Input is not.
-    let (app, state) = TestAppBuilder::default_test()
-        .model(Arc::new(ScriptedModel::new().turn("You look around.")))
-        .build_with_state();
-    assert!(post_action(&app, "look").await.status().is_success());
-    assert!(
-        wait_settled(&state, 1000).await,
-        "the Action should complete"
-    );
-
-    let game = active_game_of(&state);
-    let entries: Vec<_> = state
-        .game_view_query
-        .story_window(game)
-        .expect("the story reads back")
-        .entries
-        .into_iter()
-        .map(|entry| entry.row)
-        .collect();
-    let input = entries
-        .iter()
-        .rev()
-        .find(|entry| entry.message_type == MessageType::Input)
-        .expect("the Action saved its Input");
-    assert!(
-        entries.last().is_some_and(|last| last.id != input.id),
-        "the Input is not the last Message"
-    );
-
-    let response = post_empty(&app, &format!("/message/{}/swipe/0", input.id)).await;
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "Switching swipe on non-last message should fail"
     );
 }
 

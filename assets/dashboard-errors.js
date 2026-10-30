@@ -11,10 +11,8 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => entities[ch]);
 }
 
-// Mirrors the server's disclosure shape: the short line carries its own text
-// element, which the status column's line clamp is applied to. A report with no
-// text beyond its short line has no Details, and its sentence wraps instead of
-// ending in an ellipsis, because nothing else holds the end of it.
+// The markup mirrors the server's disclosure shape, which the status column's line
+// clamp and the Details popover both key off.
 function errorDisclosureHtml(popoverId, message, rawText) {
   const details = rawText
     ? '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
@@ -160,8 +158,9 @@ function reportAnswer(event) {
   clearUnreachable();
   if (answer.outcome === "done") return;
   const text = plainResponseText(event.detail.xhr.responseText);
-  const summary = text.split("\n")[0].trim() || "The server answered " + answer.status + ".";
-  const detail = text === summary ? "" : text;
+  const [sentence, ...engineLines] = text.split("\n");
+  const summary = sentence.trim() || "The server answered " + answer.status + ".";
+  const detail = engineLines.join("\n").trim();
   const slot = answer.outcome === "invalid" ? formSlotOf(event.detail.elt) : null;
   if (slot) renderInlineError(slot, summary, detail);
   else showNotice(summary, detail, "request");
@@ -184,9 +183,8 @@ document.addEventListener("click", function (evt) {
 
 document.addEventListener("screen:loaded", refreshFailureBanner);
 
-// The open state lives in `hidden` and the position `style` of the popover, and
-// in `aria-expanded` of the toggle. Each lists its attributes in `data-keep`, so a
-// load of the part keeps them.
+// A load of the part keeps the open state and the position of a popover: each
+// lives in an attribute that `data-keep` lists.
 function closeErrorPopover(popover) {
   if (!popover) return;
   popover.hidden = true;
@@ -236,8 +234,8 @@ document.addEventListener("click", function (evt) {
   if (!target.closest(".error-detail-popover")) closeAllErrorPopovers();
 });
 
-// Escape closes an open error detail first. It must not also reach the modal
-// dialog, which would close and discard the draft that the error is about.
+// Escape must not also reach the modal dialog, which would close and discard the
+// draft that the error is about.
 document.addEventListener("keydown", function (evt) {
   if (evt.key !== "Escape") return;
   const anyOpen = document.querySelector(".error-detail-popover:not([hidden])");

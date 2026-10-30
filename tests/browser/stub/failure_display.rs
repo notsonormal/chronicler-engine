@@ -11,8 +11,8 @@ use playwright_rs::Viewport;
 
 use super::*;
 use super::support::{
-    StubRunner, active_element_is, ask_once_without_waiting, read_banner, read_command_input,
-    start_current,
+    StubRunner, active_element_is, ask_once_without_waiting, eval_string, read_banner,
+    read_command_input, start_current,
 };
 
 /// A failed request swaps nothing on its 500, and the form is submitted directly so the
@@ -198,6 +198,31 @@ async fn check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_scree
     assert!(
         !read_error_disclosure(&page, "#notice").await.0,
         "a later successful load should clear the screen error"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.83
+async fn check_a_two_line_answer_shows_its_sentence_once_and_details_hold_only_line_two(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    submit_command(&page, "Internal server error").await;
+
+    wait_for_error_disclosure(&page, "#notice", "a failed Action shows in the notice").await;
+    let (_, message, raw) = read_error_disclosure(&page, "#notice").await;
+    assert_eq!(message, "The Action was not sent.");
+    assert_eq!(
+        raw, "Failed to process action: Internal server error",
+        "Details hold only the line after the sentence"
+    );
+    let sentence_count: String = eval_string(
+        &page,
+        "() => String(document.getElementById('notice').textContent.split('The Action was not sent.').length - 1)",
+    )
+    .await;
+    assert_eq!(
+        sentence_count, "1",
+        "the sentence shows once in the report, Details included"
     );
 }
 
@@ -839,7 +864,6 @@ async fn check_generation_error_is_drawn_in_the_error_colour_and_reads_without_d
     );
 }
 
-/// `needed_height` is the height the sentence needs once the clamp is lifted off it.
 #[derive(serde::Deserialize)]
 struct ClampedLine {
     text: String,
@@ -1214,6 +1238,12 @@ async fn run_failure_display_slot_checks() {
         .run(
             StubActionOutcome::Error,
             check_failed_action_renders_in_the_notice,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Error,
+            check_a_two_line_answer_shows_its_sentence_once_and_details_hold_only_line_two,
         )
         .await;
     runner

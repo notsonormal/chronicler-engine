@@ -159,7 +159,7 @@ async fn check_next_and_previous_move_between_the_pages_of_saved_games(
 }
 
 // [docs/specs/browser_games.md] SCENARIO: 27.9
-async fn check_the_page_of_saved_games_resets_when_the_client_leaves_the_games_tab(
+async fn check_the_page_of_saved_games_survives_a_tab_change_and_a_reload(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -177,8 +177,21 @@ async fn check_the_page_of_saved_games_resets_when_the_client_leaves_the_games_t
     open_worlds_tab(&page).await;
     open_games_tab(&page).await;
 
-    wait_for_saved_game_rows(&page, PAGE_SIZE).await;
-    assert_eq!(pager_position(&page).await, "Page 1 of 2");
+    wait_for_saved_game_rows(&page, 1).await;
+    assert_eq!(
+        pager_position(&page).await,
+        "Page 2 of 2",
+        "the tab change keeps the page"
+    );
+
+    page.reload(None).await.unwrap();
+    wait_for_screen_current(&page).await;
+    wait_for_saved_game_rows(&page, 1).await;
+    assert_eq!(
+        pager_position(&page).await,
+        "Page 2 of 2",
+        "the reload keeps the page, as it keeps the Settings sub-tab"
+    );
 }
 
 // [docs/specs/browser_games.md] SCENARIO: 27.10
@@ -267,7 +280,7 @@ async fn run_games_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_the_page_of_saved_games_resets_when_the_client_leaves_the_games_tab,
+            check_the_page_of_saved_games_survives_a_tab_change_and_a_reload,
         )
         .await;
     runner

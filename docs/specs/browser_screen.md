@@ -16,9 +16,9 @@ The dashboard shows one **screen**: the header, the failure banner and the visib
 
 The page asks `GET /changes` (`docs/specs/changes.md`) while it is visible. The answer holds the `server` and the `revision` of the engine. The page shows the **stamp** `<server>:<revision>` of its last good load in `<html data-revision>`, and the id of the Game that the load showed in `<html data-game>`. When the stamp of the answer differs from the stamp of the page, one `GET /screen?parts=<names>` (`docs/specs/screen.md`) loads the header, the failure banner and the parts of the visible tab, and a direct morph writes each part. The interval of the ask is `<html data-poll-ms>`. While an ask or a load is in flight, `<html>` has the attribute `data-screen-busy`.
 
-A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes and loads the tab that opens. No part holds a draft: a form that waits for a Save is in the edit dialog, outside every part. A load keeps what it does not change, and it skips the two kinds of element that hold unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight. A load carries the tab that was visible and the page of the saved Games that was asked for (`<html data-games-page>`, `docs/specs/browser_games.md`) when it started; an answer for another tab or page is dropped. A load always records the stamp of what it rendered. The end of every request that is not a read forgets the stamp, so the next ask loads the screen once.
+A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes and loads the tab that opens. No part holds a dialog form: a form that waits for a Save is in the edit dialog, outside every part, and the story-log entry in edit is the one draft inside a part. A load keeps what it does not change, and it skips the two kinds of element that hold unsaved input: the story-log entry in edit (`data-editing`), and a control whose request is in flight. A load carries the tab that was visible and the page of the saved Games that was asked for (`<html data-games-page>`, `docs/specs/browser_games.md`) when it started; an answer for another tab or page is dropped. A load always records the stamp of what it rendered. The end of every request that is not a read forgets the stamp, so the next ask loads the screen once.
 
-A non-2xx answer of `GET /changes` or `GET /screen` shows in `#notice`, and every part keeps its content. Only a network error shows the Unreachable banner.
+A non-2xx answer of `GET /changes` or `GET /screen` shows in `#notice`, and every part keeps its content. Only a network error, or no answer within the time limit (`<html data-ask-timeout-ms>`, 10 s), shows the Unreachable banner.
 
 The scenarios start on the Game tab, with the page quiet: the stamp of the page equals the stamp of the engine and no ask or load is in flight.
 
@@ -499,4 +499,27 @@ Given the stub renders each tab
 When the client loads each tab that holds a control that opens the edit dialog
 Then each such control has an id
 And no two of them share an id
+```
+
+#### Scenario 44.47: An ask that gets no answer shows the Unreachable banner, and the next answer clears it
+
+```gherkin
+Given the dashboard is loaded and the page is quiet
+And the time limit of the ask is shortened with `<html data-ask-timeout-ms>`
+When GET /changes gets no answer and the page asks
+Then #failure-banner shows, with the role alert, once the time limit has passed
+When GET /changes answers again and the page asks
+Then #failure-banner is hidden
+```
+
+#### Scenario 44.48: A load that gets no answer shows the Unreachable banner, and the next answer loads the screen
+
+```gherkin
+Given the dashboard is loaded and the page is quiet
+And the time limit of the load is shortened with `<html data-ask-timeout-ms>`
+When the revision moves and GET /screen gets no answer
+Then #failure-banner shows once the time limit has passed
+When GET /screen answers again and the page asks
+Then #failure-banner is hidden
+And the page shows the stamp of the engine
 ```

@@ -16,9 +16,9 @@ const UNBUILT_TEXT_LIMIT_BYTES: usize = 64 * 1024;
 pub enum RefusalKind {
     /// A Job or an Autoplay run holds the Game.
     Busy,
-    /// The page named a Game that is no longer active.
+    /// The request named a Game that is no longer active.
     GameChanged,
-    /// The page named a Message that is no longer the last one.
+    /// The request named a Message that is no longer the last one.
     LastMessageChanged,
 }
 
@@ -35,7 +35,7 @@ impl RefusalKind {
     fn engine_line(self) -> String {
         match self {
             Self::Busy => NotAccepted::StillThinking.line(),
-            Self::GameChanged => "The page showed a Game that is no longer active.".to_string(),
+            Self::GameChanged => "The request named a Game that is no longer active.".to_string(),
             Self::LastMessageChanged => NotAccepted::LastMessageChanged.line(),
         }
     }

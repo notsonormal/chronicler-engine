@@ -674,7 +674,9 @@ fn test_scripts_write_no_disabled_rejects_a_property_write() {
         let violations = check_scripts_write_no_disabled("assets/dashboard-x.js", &script);
         assert_eq!(violations.len(), 1, "{statement}: {violations:?}");
         assert!(
-            violations[0].message.contains("hx-disabled-elt"),
+            violations[0]
+                .message
+                .contains("The server renders every control state"),
             "{}",
             violations[0].message
         );

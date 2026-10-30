@@ -41,7 +41,6 @@ pub struct StubChangesHandle {
 }
 
 impl StubChangesHandle {
-    /// Moves the number of one kind.
     pub fn bump(&self, kind: ChangeKind) {
         self.state.bump(&[kind]);
     }
@@ -367,6 +366,20 @@ impl StubFailureHandle {
         self.state
             .asks_and_loads_failing
             .store(failing, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// While armed, `GET /changes` gets no answer at all.
+    pub fn set_asks_held(&self, held: bool) {
+        self.state
+            .asks_held
+            .store(held, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// While armed, `GET /screen` gets no answer at all.
+    pub fn set_screen_loads_held(&self, held: bool) {
+        self.state
+            .screen_loads_held
+            .store(held, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Every panel loads once per page load, or when its section opens, so arming

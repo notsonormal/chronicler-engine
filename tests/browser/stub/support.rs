@@ -126,15 +126,12 @@ fn print_summary(reports: &[CheckReport]) {
     eprintln!("  {total:>7.3}s  total (shared browser)");
 }
 
-/// Evaluates a script that answers a string, and fails with the script when it throws.
 pub(super) async fn eval_string(page: &playwright_rs::Page, script: &str) -> String {
     page.evaluate::<(), String>(script, None)
         .await
         .unwrap_or_else(|e| panic!("evaluate failed: {e}\n{script}"))
 }
 
-/// Opens a dashboard section the way the player does, and waits until the page
-/// shows the screen of the section.
 pub(super) async fn open_section(page: &playwright_rs::Page, tab: &str, part: &str) {
     page.locator(&format!(r#"[data-tab="{tab}"]"#))
         .await
@@ -145,7 +142,6 @@ pub(super) async fn open_section(page: &playwright_rs::Page, tab: &str, part: &s
     await_panel_ready(page, part).await.expect_settled(tab);
 }
 
-/// Opens the Settings tab and waits until its Connections sub-tab shows.
 pub(super) async fn open_settings(page: &playwright_rs::Page) {
     page.locator(r#"[data-tab="settings"]"#)
         .await
@@ -185,7 +181,6 @@ pub(super) async fn wait_until_dialog_closed(page: &playwright_rs::Page, why: &s
     assert!(closed, "{why}");
 }
 
-/// Makes the page ask as it does when the tab becomes visible, and returns at once.
 pub(super) async fn ask_once_without_waiting(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         "() => { document.dispatchEvent(new Event('visibilitychange')); }",
@@ -308,7 +303,6 @@ pub(super) async fn hold_requests_ending_with(page: &playwright_rs::Page, suffix
     .unwrap();
 }
 
-/// Sends the held requests and waits until each answer came back.
 pub(super) async fn release_held_requests_and_wait_for_answers(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         "() => { window.expectedHeldAnswers = window.heldRequestsAnswered + 1; window.releaseHeldRequests(); }",
@@ -444,7 +438,6 @@ pub(super) async fn story_load_count(page: &playwright_rs::Page) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Counts the screen loads that write the story log.
 pub(super) async fn install_story_load_counter(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
@@ -477,9 +470,8 @@ pub(super) async fn assert_busy_refusal(page: &playwright_rs::Page, slot: &str, 
     );
     if slot == NOTICE {
         assert_eq!(
-            detail,
-            format!("{line}\nStill thinking..."),
-            "the notice holds both lines of the answer"
+            detail, "Still thinking...",
+            "the notice's Details hold only the line after the sentence"
         );
     }
 }

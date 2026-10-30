@@ -64,8 +64,8 @@ async fn assert_reported_in_the_notice(
         "{what}: the short line is the first line of the body"
     );
     assert!(
-        raw.starts_with(summary) && raw.contains(raw_contains),
-        "{what}: Details holds the whole text, got {raw:?}"
+        raw.contains(raw_contains) && !raw.contains(summary),
+        "{what}: Details holds the lines after the sentence, got {raw:?}"
     );
     assert_eq!(
         reports_on_the_page(page).await,
