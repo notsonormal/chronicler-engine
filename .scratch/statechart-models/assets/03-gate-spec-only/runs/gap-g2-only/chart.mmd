@@ -1,0 +1,32 @@
+---
+title: "The gate of one Game, written from the docs only"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Idle
+    lg1: Autoplay
+    lg2: Breaks R04_AnEndedRunStartsNoJob or R05_TheGameStaysIdleAfterAStop
+    lg3: Path to the R04_AnEndedRunStartsNoJob or R05_TheGameStaysIdleAfterAStop bug
+  }
+  class lg0 teal
+  class lg1 purple
+  class lg2 breaks
+  class lg3 bugPath
+  s0: Idle
+  s1: A run holds the Game between Jobs
+  s2: Idle#59; a stopped run's loop still runs
+  s3: A run holds the Game, its Job starts#59; a stopped run's loop still runs
+  [*] --> s0
+  s0 --> s1: you start Autoplay
+  s1 --> s2: you press Stop
+  s2 --> s3: the run starts its next Job
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s0 teal
+  class s0 bugPath
+  class s1 purple
+  class s1 bugPath
+  class s2 teal
+  class s2 bugPath
+  class s3 purple
+  class s3 breaks
+  class s3 bugPath

@@ -1,0 +1,47 @@
+---
+title: "The gate of one Game, written from the docs only"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Idle
+    lg1: Busy
+    lg2: Autoplay
+    lg3: Breaks R02_ARunningJobKeepsItsEntry
+    lg4: Breaks R03_ARunHoldsTheGameUntilItEnds in some cases
+    lg5: Path to the R02_ARunningJobKeepsItsEntry or R03_ARunHoldsTheGameUntilItEnds bug
+  }
+  class lg0 teal
+  class lg1 blue
+  class lg2 purple
+  class lg3 breaks
+  class lg4 mayBreak
+  class lg5 bugPath
+  s0: Idle
+  s1: A run holds the Game between Jobs
+  s2: Idle#59; a stopped run's loop still runs
+  s3: A run holds the Game between Jobs#59; a stopped run's loop still runs
+  s4: A Job holds the Game#59; a stopped run's loop still runs
+  s5: Idle#59; a Job runs with no entry
+  [*] --> s0
+  s0 --> s1: you start Autoplay
+  s1 --> s2: you press Stop
+  s2 --> s3: you start Autoplay
+  s2 --> s4: you send an Action
+  s3 --> s0: the run finds another holder and ends
+  s4 --> s5: the run finds another holder and ends
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  classDef mayBreak fill:#fff3e6,stroke:#e8730c,stroke-width:2.5px,color:#b85a06
+  class s0 teal
+  class s0 mayBreak
+  class s0 bugPath
+  class s1 purple
+  class s1 bugPath
+  class s2 teal
+  class s2 bugPath
+  class s3 purple
+  class s3 bugPath
+  class s4 blue
+  class s4 bugPath
+  class s5 teal
+  class s5 breaks
+  class s5 bugPath

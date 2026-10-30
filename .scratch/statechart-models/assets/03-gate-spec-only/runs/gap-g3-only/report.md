@@ -1,0 +1,19 @@
+# GateSpecOnly
+
+TLC reached more states than the chart budget of 500, so the chart draws only the bug paths: 5 states and 7 arrows.
+
+## R10_ARunEndsOnAFailureOfItsOwnJobOnly breaks
+The shortest path has 8 steps:
+0. Idle
+1. you send an Action: A Job holds the Game
+2. the Job saves its Input: A Job holds the Game
+3. the Job starts its next step: A Job holds the Game, narrating
+4. the narrator call of the Job fails: A Job holds the Game, narrating
+5. the Job saves a failure line: A Job holds the Game, narrating
+6. the engine restarts: Idle with a failure line
+7. you start Autoplay: A run holds the Game between Jobs
+8. the run ends: Idle with a failure line
+
+## Rules not checked
+R01_ALateSaveLandsNowhere, R02_ARunningJobKeepsItsEntry, R03_ARunHoldsTheGameUntilItEnds, R04_AnEndedRunStartsNoJob, R05_TheGameStaysIdleAfterAStop, R06_ACutSwipeKeepsItsPreAnalysisState, R07_TheDockHoldsNoOptionsFailureAfterAStop, R08_TheFailureLineIsOfTheLastJob, R09_TheEntryShowsTheStepOfItsOwnJob, R11_TheCycleInProgressIsInTheBudget, R12_NoStoryWriteWhileBusy, R13_NoConfigWriteUnderARun, R14_ASwipeStateIsWrittenAtMostTwice, R15_EveryGameIsIdleAfterAStart, NoDeadlock
+After the first break, each TLC run stops at 100,000 distinct states. A run reached that bound before it checked these rules in every state.

@@ -17,7 +17,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **Evidence is re-checked, not trusted.** A finding is a hypothesis, and the tree moves. Re-check the cited `file:line` before deciding.
 - **Concurrency.** Other efforts edit this checkout at the same time. The user decides the scope of each commit.
 - **Skills.** `/grilling` and `/domain-modeling` for every ticket. `/writing-for-agents` for any skill or `AGENTS.md` edit. `/code-review` for an implementation ticket.
-- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 86.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
+- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 90.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
 - **Audit.** [`audit.md`](./audit.md) (2026-10-25) sorts the open tickets by whether the fix changes what the next agent does.
 
 ## Decisions so far
@@ -127,3 +127,8 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 
 - [23 — Make the mutation check unconditional for state-repair tests and fixtures](./issues/23-unconditional-mutation-check.md)
 - [35 — Lint a spec scenario's shape and vocabulary](./issues/35-lint-spec-scenario-shape.md)
+- [86 — Per-stage implement, review and fix loops move the code away from the approved plan](./issues/86-staged-fixes-drift-from-the-plan.md)
+- [87 — Repeat one test until it fails, without a hand-written loop](./issues/87-repeat-a-test-until-it-fails.md)
+- [88 — Grilling questions use review IDs and rest on facts nobody checked](./issues/88-grilling-questions-unreadable-and-unchecked.md)
+- [89 — The full gate fails on a stale generated doc that it could regenerate](./issues/89-full-gate-fails-on-a-stale-generated-doc.md)
+- [90 — `pkill -f` kills the shell that runs it](./issues/90-pkill-f-kills-its-own-shell.md)

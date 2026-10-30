@@ -1,0 +1,48 @@
+---
+title: "The gate of one Game, written from the docs only"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Idle
+    lg1: Busy
+    lg2: Breaks R05_TheGameStaysIdleAfterAStop
+    lg3: Breaks R01_ALateSaveLandsNowhere or R06_ACutSwipeKeepsItsPreAnalysisState or R07_TheDockHoldsNoOptionsFailureAfterAStop or R08_TheFailureLineIsOfTheLastJob or R09_TheEntryShowsTheStepOfItsOwnJob in some cases
+    lg4: Path to the R01_ALateSaveLandsNowhere or R05_TheGameStaysIdleAfterAStop or R06_ACutSwipeKeepsItsPreAnalysisState or R07_TheDockHoldsNoOptionsFailureAfterAStop or R08_TheFailureLineIsOfTheLastJob or R09_TheEntryShowsTheStepOfItsOwnJob bug
+  }
+  class lg0 teal
+  class lg1 blue
+  class lg2 breaks
+  class lg3 mayBreak
+  class lg4 bugPath
+  s0: Idle
+  s1: A Job holds the Game
+  s2: Idle#59; a stopped Job still runs
+  s3: A Job holds the Game#59; a stopped Job still runs
+  s4: A Job holds the Game, narrating#59; a stopped Job still runs
+  s5: Idle with a failure line#59; a stopped Job still runs
+  [*] --> s0
+  s0 --> s1: you send an Action
+  s1 --> s2: you press Stop
+  s2 --> s2: the stopped Job saves its Input or the stopped Job starts its next step or the narrator call of the stopped Job fails or the narrator answers the stopped Job or the stopped Job saves its text or the analysis answers the stopped Job or the stopped Job saves the new state or the Options call of the stopped Job fails or the stopped Job saves an Options failure
+  s2 --> s3: you send an Action
+  s3 --> s3: the stopped Job saves its Input
+  s3 --> s4: the stopped Job starts its next step
+  s2 --> s5: the stopped Job saves a failure line
+  s4 --> s4: the narrator call of the stopped Job fails or the stopped Job saves a failure line
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  classDef mayBreak fill:#fff3e6,stroke:#e8730c,stroke-width:2.5px,color:#b85a06
+  class s0 teal
+  class s0 bugPath
+  class s1 blue
+  class s1 bugPath
+  class s2 teal
+  class s2 mayBreak
+  class s2 bugPath
+  class s3 blue
+  class s3 bugPath
+  class s4 blue
+  class s4 mayBreak
+  class s4 bugPath
+  class s5 teal
+  class s5 breaks
+  class s5 bugPath
