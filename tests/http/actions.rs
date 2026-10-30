@@ -1066,12 +1066,15 @@ async fn test_a_move_between_two_map_rooms_with_the_same_name_shows_no_room_http
 
 // [docs/specs/actions.md] SCENARIO: 1.13
 #[tokio::test]
-async fn test_confirm_dispatches_and_answers_nothing() {
+async fn test_a_preview_send_dispatches_and_answers_nothing() {
     let (app, state) = app_with_model(Arc::new(ScriptedModel::new().turn("You look around.")));
 
-    let resp = post_form(&app, "/action/confirm", "command=look").await;
+    let resp = post_form(&app, "/action", "command=look").await;
     assert_answers_nothing(resp).await;
-    assert!(wait_settled(&state, 2000).await, "confirm should complete");
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the preview send should complete"
+    );
 }
 
 // [docs/specs/actions.md] SCENARIO: 2.6

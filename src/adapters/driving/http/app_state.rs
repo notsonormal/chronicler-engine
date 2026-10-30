@@ -7,8 +7,8 @@ use askama::Template;
 
 use crate::adapters::driving::http::builders::headers::{failure_banner_html, header_fragment_html};
 use crate::adapters::driving::http::templates::{
-    CharacterHeadshotsTemplate, LlmMessageRecordTemplate, LlmMessagesTemplate,
-    NarrationLogTemplate, OptionsDockTemplate, VisualSidebarTemplate,
+    LlmMessageRecordTemplate, LlmMessagesTemplate, NarrationLogTemplate, OptionsDockTemplate,
+    VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
     CharacterPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
@@ -121,7 +121,7 @@ impl AppState {
 
         let character_data = self
             .game_view_query
-            .get_character_headshots(game_id, true)
+            .get_character_headshots(game_id)
             .map_err(ApplicationError::into_engine_error)?;
 
         let character_portraits: Vec<CharacterPortraitView> = character_data
@@ -149,23 +149,6 @@ impl AppState {
         template
             .render()
             .map_err(|e| EngineError::Template(Self::template_failure_context("options dock", e)))
-    }
-
-    pub fn render_character_headshots(&self, game_id: GameId) -> Result<String> {
-        let character_data = self
-            .game_view_query
-            .get_character_headshots(game_id, false)
-            .map_err(ApplicationError::into_engine_error)?;
-
-        let character_portraits: Vec<CharacterPortraitView> = character_data
-            .into_iter()
-            .map(|(image_path, name)| CharacterPortraitView { image_path, name })
-            .collect();
-
-        let template = CharacterHeadshotsTemplate::new(character_portraits);
-        template.render().map_err(|e| {
-            EngineError::Template(Self::template_failure_context("character headshots", e))
-        })
     }
 
     pub fn render_llm_messages(&self) -> Result<String> {

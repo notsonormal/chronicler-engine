@@ -2,7 +2,7 @@
 
 Endpoints:
 - `POST /action`
-- `GET /fragment/options-dock`
+- `GET /screen?parts=options-dock`
 - `POST /games/{game_id}/mode`
 
 ## Scenarios

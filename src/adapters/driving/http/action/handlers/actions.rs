@@ -47,15 +47,6 @@ pub async fn action_handler(
     dispatch_action(&state, game_id, command)
 }
 
-pub async fn action_confirm_handler(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-    Form(form): Form<ActionForm>,
-) -> Response<Body> {
-    let command = form.command.trim().to_string();
-    dispatch_action(&state, game_id, command)
-}
-
 pub async fn action_check_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,

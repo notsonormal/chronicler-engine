@@ -153,7 +153,6 @@ impl RouteWords {
 pub const ANSWER_WORDS: &[RouteWords] = &[
     RouteWords::new("/action", "Action", "was not sent"),
     RouteWords::new("/action/check", "Action", "was not sent"),
-    RouteWords::new("/action/confirm", "Action", "was not sent"),
     RouteWords::new("/autoplay", "Autoplay run", "did not start"),
     RouteWords::new("/swipe/new", "Retry", "was not started"),
     RouteWords::new("/retrigger", "retrigger", "was not started"),

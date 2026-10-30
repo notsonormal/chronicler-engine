@@ -1,6 +1,6 @@
 # Feature Spec: Visual Sidebar
 
-Endpoint: `GET /fragment/visual-sidebar`
+Endpoint: `GET /screen?parts=visual-sidebar`
 
 ## Scenarios
 

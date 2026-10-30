@@ -3,7 +3,7 @@
 Endpoints:
 - `POST /autoplay` (the start; form field `cycles`)
 - `POST /status/reset-busy` (the stop)
-- `GET /status/busy` (the status display)
+- `GET /screen?parts=status-display` (the status display)
 
 An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one after the other: an `/impersonate` Job, then a Continue Job that answers the Input the first one wrote. The run holds its Game from its start to its end, also between two Jobs. A **cycle** ends when a Job of the run ends without a failure line and leaves the story on a Narration. So an Input is answered by a Continue Job, or by the event Narration of a Trigger that fires in the Job that wrote the Input. The **budget** is the number of cycles: it counts the answered Inputs of the run.
 

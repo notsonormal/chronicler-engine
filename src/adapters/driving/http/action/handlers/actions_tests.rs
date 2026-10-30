@@ -6,9 +6,7 @@ use axum::{Form, http::StatusCode};
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driven::storage::Storage;
 use crate::domain::model::settings::TextCheckMode;
-use crate::adapters::driving::http::action::handlers::actions::{
-    action_check_handler, action_confirm_handler, action_handler,
-};
+use crate::adapters::driving::http::action::handlers::actions::{action_check_handler, action_handler};
 use crate::adapters::driving::http::action::handlers::ActionForm;
 use crate::test_support::{active_game_of, TestAppBuilder, TestWorld, TestMap, TestPersona};
 
@@ -192,42 +190,6 @@ async fn test_action_handler_impersonate_command_dispatches() {
         body_str.is_empty(),
         "impersonate command should dispatch to the continue seam (a dispatched command answers nothing): {body_str}"
     );
-}
-
-#[tokio::test]
-async fn test_action_confirm_handler_empty_command() {
-    let state = TestAppBuilder::default_test().build_service();
-    let form = ActionForm {
-        command: String::new(),
-    };
-
-    let response = action_confirm_handler(
-        axum::extract::State(state.clone()),
-        CurrentGame(active_game_of(&state)),
-        Form(form),
-    )
-    .await;
-    assert_eq!(
-        response.status(),
-        StatusCode::OK,
-        "Empty command should trigger continuation"
-    );
-}
-
-#[tokio::test]
-async fn test_action_confirm_handler_started() {
-    let state = TestAppBuilder::default_test().build_service();
-    let form = ActionForm {
-        command: "look".to_string(),
-    };
-
-    let response = action_confirm_handler(
-        axum::extract::State(state.clone()),
-        CurrentGame(active_game_of(&state)),
-        Form(form),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]

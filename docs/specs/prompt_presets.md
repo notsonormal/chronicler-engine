@@ -1,7 +1,7 @@
 # Feature Spec: Prompt Presets
 
 Endpoints:
-- `GET /fragment/prompt-presets`
+- `GET /screen?parts=prompt-presets`
 - `GET /fragment/prompt-presets/new?type={type}`
 - `GET /fragment/prompt-presets/{id}/edit`
 - `GET /fragment/prompt-presets/{id}/view`

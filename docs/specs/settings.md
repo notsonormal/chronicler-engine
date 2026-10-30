@@ -1,7 +1,7 @@
 # Feature Spec: Settings
 
 Endpoints: 
- - `GET /fragment/settings`
+ - `GET /screen?parts=settings`
  - `GET /fragment/connections/new`
  - `GET /fragment/connections/{id}/edit`
  - `POST /settings/text-check`

@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! Fragment endpoints
+//! The status display, the changes answer, the LLM record dialog and the busy reset.
 
 use axum::body::Body;
 use axum::{
@@ -13,7 +13,6 @@ use crate::adapters::driving::http::utils::error::{
     AnswerPolicy, answer_for_error, failed_answer, not_found_answer, error_disclosure,
     raw_error_detail,
 };
-use crate::adapters::driving::http::utils::fragment::render_fragment;
 use crate::adapters::driving::http::utils::response::{html_escape, ok};
 use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
@@ -21,69 +20,6 @@ use crate::application::generation::gate::Busy;
 use crate::domain::model::change::ChangeVersions;
 use crate::domain::model::game::GameId;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
-
-pub async fn header_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(&state, |s| s.render_header(game_id), "header_fragment")
-}
-
-pub async fn failure_banner_fragment(State(state): State<AppState>) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_failure_banner(),
-        "failure_banner_fragment",
-    )
-}
-
-pub async fn story_log_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_story_log(game_id),
-        "story_log_fragment",
-    )
-}
-
-pub async fn visual_sidebar_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_visual_sidebar(game_id),
-        "visual_sidebar_fragment",
-    )
-}
-
-pub async fn options_dock_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_options_dock(game_id),
-        "options_dock_fragment",
-    )
-}
-
-pub async fn character_headshots_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_character_headshots(game_id),
-        "character_headshots_fragment",
-    )
-}
-
-pub async fn llm_messages_fragment(State(state): State<AppState>) -> Response<Body> {
-    render_fragment(&state, |s| s.render_llm_messages(), "llm_messages_fragment")
-}
 
 /// The dialog opens only on a 2xx answer: a missing record answers a 404 and a failed
 /// read a 500, and the notice reports either.
@@ -109,16 +45,6 @@ pub async fn changes_handler(
     )
 }
 
-pub async fn busy_status_handler(
-    State(state): State<AppState>,
-    current: Option<CurrentGame>,
-) -> Html<String> {
-    Html(render_status_display(
-        &state,
-        current.map(|CurrentGame(game_id)| game_id),
-    ))
-}
-
 /// A Game whose status cannot be read shows its failure line in the display, not an
 /// error answer.
 pub fn render_status_display(state: &AppState, game: Option<GameId>) -> String {
@@ -130,7 +56,7 @@ pub fn render_status_display(state: &AppState, game: Option<GameId>) -> String {
         Ok(Status::Failed(failure)) => failure_answer(&failure),
         Ok(Status::Idle) => idle_answer(),
         Err(e) => {
-            tracing::error!("busy_status_handler: {e}");
+            tracing::error!("render_status_display: {e}");
             failure_answer(&GenerationFailure::unreadable(Record::Game, &e))
         }
     }

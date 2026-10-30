@@ -89,26 +89,19 @@ impl GameViewQuery {
     pub fn get_character_headshots(
         &self,
         game_id: GameId,
-        scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
         let storage = &self.storage;
         let game = storage.require_game(game_id.0)?;
         let world_with_map = storage.require_world(&game.world_key)?;
         let characters_list = storage.list_characters(world_with_map.world_id)?;
 
-        let character_ids: Vec<String> = if scene_only {
-            self.current_state(game_id)?
-                .scene
-                .characters_present
-                .iter()
-                .map(|character| character.id.clone())
-                .collect()
-        } else {
-            characters_list
-                .iter()
-                .map(|character| character.id.clone())
-                .collect()
-        };
+        let character_ids: Vec<String> = self
+            .current_state(game_id)?
+            .scene
+            .characters_present
+            .iter()
+            .map(|character| character.id.clone())
+            .collect();
 
         let character_data: Vec<(String, String)> = character_ids
             .iter()

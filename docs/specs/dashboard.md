@@ -1,10 +1,10 @@
 # Feature Spec: Dashboard
 
 Endpoints:
-- `GET /status/busy` (the status display)
+- `GET /screen?parts=status-display` (the status display)
 - `GET /screen?parts=send-control` (the Send control) and `GET /screen?parts=autoplay-controls` (the Autoplay and Stop controls)
 - `POST /status/reset-busy` (the stop)
-- `GET /fragment/options-dock`
+- `GET /screen?parts=options-dock`
 - `GET /debug/is_busy`
 - `GET /debug/state`
 - `GET /` (the shell that defines the icons)

@@ -1,7 +1,7 @@
 # Feature Spec: Worlds
 
 Endpoints:
-- `GET /fragment/worlds`
+- `GET /screen?parts=worlds`
 - `GET /fragment/worlds/new`
 - `GET /worlds/:key/edit`
 - `POST /worlds`

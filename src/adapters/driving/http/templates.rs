@@ -7,8 +7,8 @@ use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::story_window::StoryWindowEntry;
 use crate::application::ports::text_checker::CheckResult;
 use crate::adapters::driving::http::view_models::{
-    LlmMessageRecordView, LlmMessageRowView, StoryRowView, CharacterPortraitView,
-    OptionsDockViewModel, PreviewIssueView, VisualSidebarViewModel,
+    LlmMessageRecordView, LlmMessageRowView, OptionsDockViewModel, PreviewIssueView, StoryRowView,
+    VisualSidebarViewModel,
 };
 
 #[derive(Template)]
@@ -58,23 +58,6 @@ impl VisualSidebarTemplate {
     }
 }
 
-#[derive(Template)]
-#[template(
-    source = r##"{% for character in characters %}<div class="headshot" onclick="toggleVisualSidebar()"><img src="{{ character.image_path }}" alt="{{ character.name }}" /><div class="name">{{ character.name }}</div></div>{% endfor %}"##,
-    ext = "html"
-)]
-pub struct CharacterHeadshotsTemplate {
-    pub characters: Vec<CharacterPortraitView>,
-}
-
-impl CharacterHeadshotsTemplate {
-    pub fn new(character_data: Vec<CharacterPortraitView>) -> Self {
-        Self {
-            characters: character_data,
-        }
-    }
-}
-
 /// An empty set of Options and no failure render an empty body.
 #[derive(Template)]
 #[template(
@@ -112,11 +95,11 @@ impl OptionsDockTemplate {
     </div>
     {# The corrections are suggestions the player opts into, so Send Original keeps the primary style. #}
     <div class="form-actions">
-        <form method="post" hx-post="/action/confirm" hx-swap="none" hx-on::before-request="onPreviewBeforeRequest()" hx-on::after-request="onPreviewSendAfterRequest(event)">
+        <form method="post" hx-post="/action" hx-swap="none" hx-on::before-request="onPreviewBeforeRequest()" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <input type="hidden" name="command" value="{{ original }}" />
             <button type="submit" class="btn-primary btn-original">Send Original</button>
         </form>
-        <form method="post" hx-post="/action/confirm" hx-swap="none" hx-include="#corrected-textarea" hx-on::before-request="onPreviewBeforeRequest()" hx-on::after-request="onPreviewSendAfterRequest(event)">
+        <form method="post" hx-post="/action" hx-swap="none" hx-include="#corrected-textarea" hx-on::before-request="onPreviewBeforeRequest()" hx-on::after-request="onPreviewSendAfterRequest(event)">
             <button type="submit" class="btn-cyan">Send with edits</button>
         </form>
         <button type="button" class="btn-cyan preview-cancel" onclick="closeActionPreview()">Cancel</button>

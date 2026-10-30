@@ -10,7 +10,7 @@ use crate::domain::model::settings::{AppSettings, LlmConnection, TextCheckMode};
 use crate::adapters::driving::http::settings::handlers::{
     add_connection_handler, delete_connection_handler, edit_connection_form,
     edit_connection_handler, new_connection_form, save_text_check_handler, set_narrator_handler,
-    set_quantifier_handler, settings_panel, ConnectionForm, RoleForm, TextCheckForm,
+    render_settings_panel, set_quantifier_handler, ConnectionForm, RoleForm, TextCheckForm,
 };
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driven::storage::Storage;
@@ -40,12 +40,10 @@ fn mock_connection(id: &str, name: &str) -> LlmConnection {
     }
 }
 
-#[tokio::test]
-async fn test_settings_panel_returns_html() {
+#[test]
+fn test_settings_panel_returns_html() {
     let app_state = make_test_app_state();
-    let response = settings_panel(axum::extract::State(app_state)).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let html = body_text(response).await;
+    let html = render_settings_panel(&app_state).expect("the settings part renders");
 
     assert!(
         !html.contains("settings-panel"),

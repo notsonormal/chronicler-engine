@@ -2,7 +2,7 @@
 
 Endpoints:
 - `POST /action`
-- `GET /fragment/llm-messages` (the LLM call records)
+- `GET /screen?parts=llm-messages` (the LLM call records)
 
 ## Scenarios
 
@@ -379,7 +379,7 @@ text and is checked like ordinary player input.
 ```gherkin
 Given a game state with a command held in the text-check preview
 And a narrator backend that returns a non-empty narration for any prompt
-When the client POST /action/confirm with that command
+When the client POST /action with that command
 Then the response is 200 with an empty body
 And the response carries no HX-Retarget, HX-Reswap or HX-Refresh header
 And the Game is no longer busy

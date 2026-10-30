@@ -3,7 +3,7 @@
 Endpoints:
 - `POST /history/delete`, with the form field `message`: the id of the Message that the page rendered the control on
 - `POST /history/:id`
-- `GET /fragment/story-log`
+- `GET /screen?parts=story-log`
 
 ## Scenarios
 

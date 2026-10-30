@@ -11,10 +11,9 @@ use chronicler_engine::adapters::driving::http::utils::response::refused;
 
 /// The routes of the engine whose handler acts on the active Game, as the router
 /// writes them. A test compares this list with `game_bound_routes` in `router.rs`.
-pub const GAME_BOUND_ROUTES: [&str; 11] = [
+pub const GAME_BOUND_ROUTES: [&str; 10] = [
     "/action",
     "/action/check",
-    "/action/confirm",
     "/autoplay",
     "/swipe/new",
     "/retrigger",

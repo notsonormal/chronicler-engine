@@ -123,7 +123,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
           - `mod.rs` — Layout module (route handlers).
           - **handlers/**
             - `action_controls.rs` — The action control parts: Send, and Autoplay with Stop, each rendered from the busy state of the Game
-            - `endpoints.rs` — Fragment endpoints
+            - `endpoints.rs` — The status display, the changes answer, the LLM record dialog and the busy reset.
             - `mod.rs` — Layout route handlers (partials + status endpoints).
         - **prompt_presets/**
           - `mod.rs` — Prompt presets module.
@@ -151,7 +151,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
           - `answer_words.rs` — The words of a failed answer: one table of routes, and the layer that writes the first line of every failed answer.
           - `current_game.rs` — `CurrentGame` — the request's Game, read once per request.
           - `error.rs` — Error rendering helpers for HTTP fragments.
-          - `fragment.rs` — Fragment-rendering glue: the try-render wrapper for AppState renderers and the template render helpers.
+          - `fragment.rs` — Fragment-rendering glue: the template render helpers.
           - `handler_helpers.rs` — Handler-level utilities: option string and storage-id helpers, and the form of a control that names the last Message.
           - `mod.rs` — HTTP utility modules.
           - `request_layers.rs` — The two route layers of the request answers: the revision stamp, and the Game header check.

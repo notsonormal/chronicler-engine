@@ -17,7 +17,7 @@ use crate::adapters::driving::http::utils::error::{
     raw_error_detail,
 };
 use crate::adapters::driving::http::utils::response::ok;
-use crate::adapters::driving::http::utils::fragment::{render_fragment, render_or_error_fragment};
+use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, opt_string};
 use crate::application::connection_test_service::ConnectionTestResult;
 use crate::application::errors::ApplicationError;
@@ -25,10 +25,6 @@ use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort, TextCheckMode};
 use crate::error::EngineError;
-
-pub async fn settings_panel(State(app_state): State<AppState>) -> Response<Body> {
-    render_fragment(&app_state, render_settings_panel, "settings_panel")
-}
 
 pub fn render_settings_panel(app_state: &AppState) -> Result<String, EngineError> {
     let settings = app_state.settings()?;

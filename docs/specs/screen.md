@@ -4,7 +4,7 @@ Endpoints:
 - `GET /screen?parts=<names>` and `GET /screen?parts=<names>&games_page=<n>`
 - every `POST` route
 - the `GET` routes that open a dialog, for a record that is gone: `GET /fragment/games/:id/rename`, `GET /fragment/prompt-presets/:id/edit`, `GET /fragment/prompt-presets/:id/view`
-- the Game-bound `POST` routes: `POST /action`, `POST /action/check`, `POST /action/confirm`, `POST /autoplay`, `POST /swipe/new`, `POST /retrigger`, `POST /reset`, `POST /message/:id/swipe/:index`, `POST /history/:id`, `POST /history/delete` and `POST /status/reset-busy`
+- the Game-bound `POST` routes: `POST /action`, `POST /action/check`, `POST /autoplay`, `POST /swipe/new`, `POST /retrigger`, `POST /reset`, `POST /message/:id/swipe/:index`, `POST /history/:id`, `POST /history/delete` and `POST /status/reset-busy`
 
 The screen is the header, the failure banner and the parts of the visible tab. `GET /screen` renders the parts that the page names, in one answer. The part names are `header`, `failure-banner`, `story-log`, `visual-sidebar`, `options-dock`, `send-control`, `autoplay-controls`, `status-display`, `settings`, `prompt-presets`, `worlds`, `games` and `llm-messages`.
 
@@ -117,14 +117,6 @@ And the header X-Revision has the form `<server>:<revision>`
 And the header X-Game is the id of the active Game
 ```
 
-#### Scenario 45.9: A part of the screen equals the answer of its own part route
-
-```gherkin
-Given an engine with an active Game
-When the client GET /screen?parts=<name> for each part name
-Then the content of the template of each part equals the body of its own route: GET /fragment/header, /fragment/failure-banner, /fragment/story-log, /fragment/visual-sidebar, /fragment/options-dock, /status/busy, /fragment/settings, /fragment/prompt-presets, /fragment/worlds, /fragment/games and /fragment/llm-messages
-```
-
 #### Scenario 45.10: A missing, unknown or repeated part name answers 400 and renders nothing
 
 ```gherkin
@@ -188,7 +180,7 @@ And the body holds no template
 
 ## Properties
 
-- **S.1** `GET /screen` answers each part with the renderer of its own part route, so the screen and the part routes never differ. The two action control parts have no route of their own. The screen reads the revision before it renders, so it holds at least that revision.
+- **S.1** The screen reads the revision before it renders, so it holds at least that revision.
 
 These properties hold across every `POST` route and are observable through HTTP.
 Drift indicates a regression even if all scenarios pass.
@@ -259,7 +251,7 @@ And the first line of each body is "The active Game changed, so <the words of th
 And the second line of each body is "The request named a Game that is no longer active."
 
 Given a Job holds the Game, inside its narrator call
-When the client POST /action, /action/confirm, /autoplay, /swipe/new, /retrigger, /history/:id, /history/delete and /message/:id/swipe/:index
+When the client POST /action, /action/check, /autoplay, /swipe/new, /retrigger, /history/:id, /history/delete and /message/:id/swipe/:index
 Then each response status is 409
 And the first line of each body is "The Game is busy, so <the words of the route>."
 And the second line of each body is "Still thinking..."

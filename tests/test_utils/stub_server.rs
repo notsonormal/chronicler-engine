@@ -906,7 +906,7 @@ fn stub_router(state: Arc<StubState>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/action/check", post(action_check))
-        .route("/action/confirm", post(action_confirm))
+        .route("/action", post(action_send))
         .route("/connections/add", post(save_connection))
         .route("/connections/:id/edit", post(save_connection))
         .route("/connections/set-quantifier", post(set_quantifier))
@@ -1619,9 +1619,10 @@ async fn status_busy(State(state): State<Arc<StubState>>) -> Response<Body> {
         .into_response()
 }
 
-/// An error outcome answers the 500 a failing engine action produces, so a test
-/// can drive a refused confirm. A refused outcome answers the busy refusal.
-async fn action_confirm(
+/// The send of a command from the two buttons of the text-check preview (the
+/// command form posts `/action/check`). An error outcome answers the 500 a failing engine action
+/// produces. A refused outcome answers the busy refusal.
+async fn action_send(
     State(state): State<Arc<StubState>>,
     Form(form): Form<HashMap<String, String>>,
 ) -> Response<Body> {

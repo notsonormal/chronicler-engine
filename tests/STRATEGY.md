@@ -188,7 +188,7 @@ It puts its markup in place with client-side JS, not through a real failure.
 
 | Question asked | Answer | Tier | Example |
 |---|---|---|---|
-| Is the outcome a domain outcome? | yes | 1 | A GET of `/fragment/games` asserts that the stored posture renders selected and that the auto-save routes are present (games.md 20.8). |
+| Is the outcome a domain outcome? | yes | 1 | A GET of `/screen?parts=games` asserts that the stored posture renders selected and that the auto-save routes are present (games.md 20.8). |
 | Would faking the server change it? | no | 2 | The palette is a document-level `input` listener on the shipped shell. This test needs only the shell, `assets/index.html` (browser_slash_menu.md 31.1). |
 | Would faking the server change it? | no | 2 | `showEditForm` and `cancelEdit` are client JS acting on the canned entry's structural elements (browser_story_log.md 30.2). |
 | Would faking the server change it? | yes | 3 | The select's `change` must reach the server, and a reload must show the persisted tense (browser_worlds.md 29.2). |

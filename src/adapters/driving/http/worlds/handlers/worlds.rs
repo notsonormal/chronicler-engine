@@ -18,7 +18,7 @@ use crate::adapters::driving::http::utils::answer_words::item_named;
 use crate::adapters::driving::http::utils::error::{
     AnswerPolicy, not_found_answer, invalid_answer, answer_for_error,
 };
-use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
+use crate::adapters::driving::http::utils::fragment::render_response;
 use crate::application::errors::ApplicationError;
 use crate::error::EngineError;
 use crate::adapters::driving::http::utils::response::ok;
@@ -98,10 +98,6 @@ impl WorldForm {
 
         Ok((world_card, map))
     }
-}
-
-pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    render_fragment(&state, render_worlds_panel, "list_worlds_fragment")
 }
 
 pub fn render_worlds_panel(state: &AppState) -> Result<String, EngineError> {

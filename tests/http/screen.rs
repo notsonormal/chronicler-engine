@@ -265,7 +265,6 @@ async fn test_every_post_route_answers_with_the_revision_stamp() {
     );
     for (route, uri, body) in [
         ("/action", "/action", "command=listen"),
-        ("/action/confirm", "/action/confirm", "command=listen"),
         ("/autoplay", "/autoplay", "cycles=1"),
         ("/swipe/new", "/swipe/new", busy_named.as_str()),
         ("/retrigger", "/retrigger", busy_named.as_str()),
@@ -377,7 +376,6 @@ pub(crate) fn game_bound_rows(message: u64) -> Vec<(&'static str, String, String
     vec![
         row("/action", "/action", "command=look"),
         row("/action/check", "/action/check", "command=look"),
-        row("/action/confirm", "/action/confirm", "command=look"),
         row("/autoplay", "/autoplay", "cycles=1"),
         row("/swipe/new", "/swipe/new", &named),
         row("/retrigger", "/retrigger", &named),
@@ -407,7 +405,7 @@ async fn test_a_stale_game_header_is_refused_on_each_game_bound_route() {
     let stale = second.to_string();
 
     let rows = game_bound_rows(message);
-    assert_eq!(rows.len(), 11, "the router has 11 Game-bound routes");
+    assert_eq!(rows.len(), 10, "the router has 10 Game-bound routes");
     assert_eq!(
         rows.iter()
             .map(|(route, _, _)| *route)

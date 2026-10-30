@@ -7,29 +7,11 @@ use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
-use chronicler_engine::adapters::driving::http::screen::handlers::screen_part_names;
 use chronicler_engine::test_support::{active_game_of, empty_sqlite_storage, TestAppBuilder};
 
 use crate::support::app_wiring::two_game_app;
 use crate::support::http_requests::{post_form, response_body, templates_of};
 use crate::SettingsTestGuard;
-
-/// The parts that have a route of their own. The two action control parts have none.
-const PART_ROUTES: [(&str, &str); 11] = [
-    ("header", "/fragment/header"),
-    ("failure-banner", "/fragment/failure-banner"),
-    ("story-log", "/fragment/story-log"),
-    ("visual-sidebar", "/fragment/visual-sidebar"),
-    ("options-dock", "/fragment/options-dock"),
-    ("status-display", "/status/busy"),
-    ("settings", "/fragment/settings"),
-    ("prompt-presets", "/fragment/prompt-presets"),
-    ("worlds", "/fragment/worlds"),
-    ("games", "/fragment/games"),
-    ("llm-messages", "/fragment/llm-messages"),
-];
-
-const ACTION_CONTROL_PARTS: [&str; 2] = ["send-control", "autoplay-controls"];
 
 async fn get(app: &axum::Router, uri: &str) -> axum::response::Response<Body> {
     let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
@@ -85,31 +67,6 @@ async fn test_a_screen_load_answers_one_template_for_each_named_part_in_the_orde
         .map(|(name, _)| name)
         .collect();
     assert_eq!(names, ["status-display", "header", "story-log"]);
-}
-
-// [docs/specs/screen.md] SCENARIO: 45.9
-#[tokio::test]
-async fn test_a_part_of_the_screen_equals_the_answer_of_its_own_part_route() {
-    let (app, _state, _storage, _second) = two_game_app();
-    let named: Vec<&str> = screen_part_names()
-        .filter(|name| !ACTION_CONTROL_PARTS.contains(name))
-        .collect();
-    assert_eq!(
-        named,
-        PART_ROUTES.map(|(name, _)| name),
-        "the table of this test names every part that has a route, in the order of SCREEN_PARTS"
-    );
-
-    for (name, route) in PART_ROUTES {
-        let screen = response_body(get(&app, &format!("/screen?parts={name}")).await).await;
-        let template = templates_of(&screen);
-        assert_eq!(template.len(), 1, "{name}: one template");
-        let own = response_body(get(&app, route).await).await;
-        assert_eq!(
-            template[0].1, own,
-            "{name}: the screen part is the body of {route}"
-        );
-    }
 }
 
 // [docs/specs/screen.md] SCENARIO: 45.10

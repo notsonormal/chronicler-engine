@@ -256,7 +256,7 @@ async fn check_a_preview_send_clears_the_input_only_if_it_still_holds_the_text_t
 ) {
     stop_page_timer(&page).await;
     submit_intercepted_command(&page).await;
-    hold_requests_ending_with(&page, "/action/confirm").await;
+    hold_requests_ending_with(&page, "/action").await;
     page.locator(".text-check-preview .btn-original")
         .await
         .click(None)

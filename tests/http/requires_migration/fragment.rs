@@ -19,8 +19,7 @@ use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::support::app_wiring::app_with_model;
 use crate::support::http_requests::{
-    fetch_answer, fetch_body, fetch_part, post_action, post_empty, wait_settled,
-    post_on_last_message,
+    fetch_answer, fetch_part, post_action, post_empty, post_on_last_message, wait_settled,
 };
 use crate::TEST_PERSONA;
 
@@ -181,20 +180,6 @@ async fn test_action_handler_empty_command() {
 }
 
 #[tokio::test]
-async fn test_character_headshots_fragment() {
-    let body = fetch_body(
-        &TestAppBuilder::default_app(),
-        "/fragment/character-headshots",
-    )
-    .await;
-
-    assert!(
-        body.contains("headshot"),
-        "Expected headshot in fragment: {body}"
-    );
-}
-
-#[tokio::test]
 async fn test_reset_busy_handler() {
     let app = TestAppBuilder::default_app();
 
@@ -301,30 +286,6 @@ async fn test_delete_history_handler_empty() {
         response.status(),
         StatusCode::BAD_REQUEST,
         "a story that holds only its opening Narration refuses the delete"
-    );
-}
-
-#[tokio::test]
-async fn test_action_confirm_empty_command() {
-    let (app, state) = TestAppBuilder::default_test()
-        .model(Arc::new(ScriptedModel::new().turn("The scene continues.")))
-        .build_with_state();
-
-    let req = Request::builder()
-        .uri("/action/confirm")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command="))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert!(
-        wait_settled(&state, 1000).await,
-        "the continuation Job should settle"
     );
 }
 

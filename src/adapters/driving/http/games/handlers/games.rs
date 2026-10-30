@@ -20,23 +20,10 @@ use crate::adapters::driving::http::games::templates::games::{
     GamePostureTemplate, GameRenameFormTemplate, GamesPagerView, GamesPanelTemplate,
     NewGameFormTemplate, PersonaRowView,
 };
-use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
+use crate::adapters::driving::http::utils::fragment::render_response;
 use crate::adapters::driving::http::utils::error::{AnswerPolicy, not_found_answer, answer_for_error};
 use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
-
-pub async fn list_games_fragment(
-    State(state): State<AppState>,
-    current: Option<CurrentGame>,
-) -> Response<axum::body::Body> {
-    let active_id = current.map(|CurrentGame(game_id)| game_id);
-    render_fragment(
-        &state,
-        |state| render_games_panel(state, active_id, 1),
-        "list_games_fragment",
-    )
-}
 
 pub fn render_games_panel(
     state: &AppState,

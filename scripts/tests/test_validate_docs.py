@@ -581,7 +581,7 @@ class TestRouteCheck(unittest.TestCase):
     def test_live_table_lists_a_param_route_and_rejects_a_removed_one(self) -> None:
         routes = vd.load_route_table(REPO_ROOT)
         self.assertTrue(vd.route_is_listed("/message/3/swipe/1", routes))
-        self.assertTrue(vd.route_is_listed("/status/busy", routes))
+        self.assertTrue(vd.route_is_listed("/screen", routes))
         self.assertFalse(vd.route_is_listed("/status/generating", routes))
 
 

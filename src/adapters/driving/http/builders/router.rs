@@ -40,10 +40,6 @@ fn game_bound_routes(app_state: AppState) -> Router<AppState> {
             post(action::handlers::action_check_handler),
         )
         .route(
-            "/action/confirm",
-            post(action::handlers::action_confirm_handler),
-        )
-        .route(
             "/autoplay",
             post(autoplay::handlers::start_autoplay_handler),
         )
@@ -75,34 +71,8 @@ pub fn build_router(app_state: AppState) -> Router {
             "/debug/backend",
             get(debug::handlers::debug_backend_handler),
         )
-        .route("/fragment/header", get(layout::handlers::header_fragment))
-        .route(
-            "/fragment/failure-banner",
-            get(layout::handlers::failure_banner_fragment),
-        )
-        .route(
-            "/fragment/story-log",
-            get(layout::handlers::story_log_fragment),
-        )
-        .route(
-            "/fragment/visual-sidebar",
-            get(layout::handlers::visual_sidebar_fragment),
-        )
-        .route(
-            "/fragment/options-dock",
-            get(layout::handlers::options_dock_fragment),
-        )
-        .route(
-            "/fragment/character-headshots",
-            get(layout::handlers::character_headshots_fragment),
-        )
         .route("/changes", get(layout::handlers::changes_handler))
         .route("/screen", get(screen::handlers::screen_handler))
-        .route("/status/busy", get(layout::handlers::busy_status_handler))
-        .route(
-            "/fragment/llm-messages",
-            get(layout::handlers::llm_messages_fragment),
-        )
         .route(
             "/fragment/llm-messages/:id",
             get(layout::handlers::llm_message_record_fragment),
@@ -132,7 +102,6 @@ pub fn build_router(app_state: AppState) -> Router {
             "/games/:id/presets",
             post(games::handlers::update_game_presets_handler),
         )
-        .route("/fragment/games", get(games::handlers::list_games_fragment))
         .route(
             "/fragment/games/new",
             get(games::handlers::new_game_form_handler),
@@ -140,10 +109,6 @@ pub fn build_router(app_state: AppState) -> Router {
         .route(
             "/fragment/games/:id/rename",
             get(games::handlers::rename_game_form_handler),
-        )
-        .route(
-            "/fragment/worlds",
-            get(worlds::handlers::list_worlds_fragment),
         )
         .route("/worlds", post(worlds::handlers::create_world_handler))
         .route("/worlds/:key", post(worlds::handlers::update_world_handler))
@@ -162,10 +127,6 @@ pub fn build_router(app_state: AppState) -> Router {
         .route(
             "/worlds/:key/delete",
             post(worlds::handlers::delete_world_handler),
-        )
-        .route(
-            "/fragment/settings",
-            get(settings::handlers::settings_panel),
         )
         .route(
             "/connections/add",
@@ -206,10 +167,6 @@ pub fn build_router(app_state: AppState) -> Router {
         .route(
             "/settings/text-check",
             post(settings::handlers::save_text_check_handler),
-        )
-        .route(
-            "/fragment/prompt-presets",
-            get(prompt_presets::handlers::panel_handler),
         )
         .route(
             "/prompt-presets",

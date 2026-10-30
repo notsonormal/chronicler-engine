@@ -184,11 +184,6 @@ async fn test_a_busy_refusal_names_what_was_not_done_on_each_route_that_a_job_re
             "/action/check".to_string(),
             "command=/options",
         ),
-        (
-            "/action/confirm",
-            "/action/confirm".to_string(),
-            "command=listen",
-        ),
         ("/autoplay", "/autoplay".to_string(), "cycles=1"),
         ("/swipe/new", "/swipe/new".to_string(), busy_named.as_str()),
         ("/retrigger", "/retrigger".to_string(), busy_named.as_str()),
@@ -420,11 +415,6 @@ async fn test_a_request_that_names_no_last_message_is_invalid_on_each_route_that
 const PINNED_WORDS: &[(&str, &str, &str)] = &[
     ("/action", "/action", "The Action was not sent."),
     ("/action/check", "/action/check", "The Action was not sent."),
-    (
-        "/action/confirm",
-        "/action/confirm",
-        "The Action was not sent.",
-    ),
     ("/autoplay", "/autoplay", "The Autoplay run did not start."),
     ("/swipe/new", "/swipe/new", "The Retry was not started."),
     ("/retrigger", "/retrigger", "The retrigger was not started."),

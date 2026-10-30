@@ -2,11 +2,11 @@
 
 Endpoints:
 - `POST /action`
-- `GET /fragment/header`
-- `GET /fragment/failure-banner`
-- `GET /fragment/settings`
-- `GET /fragment/visual-sidebar`
-- `GET /status/busy`
+- `GET /screen?parts=header`
+- `GET /screen?parts=failure-banner`
+- `GET /screen?parts=settings`
+- `GET /screen?parts=visual-sidebar`
+- `GET /screen?parts=status-display`
 
 ## Scenarios
 

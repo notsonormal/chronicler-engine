@@ -2,10 +2,10 @@
 
 Endpoints:
 - `POST /action`
-- `GET /fragment/llm-messages`
+- `GET /screen?parts=llm-messages`
 - `GET /fragment/llm-messages/:id`
 
-`GET /fragment/llm-messages` answers a header for each of the 50 newest attempts:
+`GET /screen?parts=llm-messages` answers a header for each of the 50 newest attempts:
 the Agent, the backend and model, the time, and for a failed attempt the error mark
 with a short line of its failure text. A header holds no prompt, no response and no
 Raw JSON. The Open control of a header loads the record of the attempt into the edit

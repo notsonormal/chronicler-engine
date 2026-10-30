@@ -17,7 +17,7 @@ use crate::application::errors::ApplicationError;
 use crate::adapters::driving::http::utils::error::{
     AnswerPolicy, failed_answer, not_found_answer, invalid_answer, answer_for_error,
 };
-use crate::adapters::driving::http::utils::fragment::{render_fragment, render_response};
+use crate::adapters::driving::http::utils::fragment::render_response;
 use crate::adapters::driving::http::utils::handler_helpers::generate_storage_id;
 use crate::adapters::driving::http::utils::response::ok;
 
@@ -96,14 +96,6 @@ pub async fn new_preset_form_handler(
         Ok(preset_type) => render_response(&PresetAddFormTemplate::for_type(preset_type)),
         Err(_) => invalid_answer("Invalid preset type"),
     }
-}
-
-pub async fn panel_handler(State(app_state): State<AppState>) -> Response<Body> {
-    render_fragment(
-        &app_state,
-        render_prompt_presets_panel,
-        "prompt_presets_panel",
-    )
 }
 
 pub fn render_prompt_presets_panel(app_state: &AppState) -> Result<String, EngineError> {

@@ -26,7 +26,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 |--------|------|---------|
 | POST | `/action` | `action_handler` |
 | POST | `/action/check` | `action_check_handler` |
-| POST | `/action/confirm` | `action_confirm_handler` |
 
 ## Autoplay
 
@@ -46,15 +45,7 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | Method | Path | Handler |
 |--------|------|---------|
 | POST | `/status/reset-busy` | `reset_busy_handler` |
-| GET | `/fragment/header` | `header_fragment` |
-| GET | `/fragment/failure-banner` | `failure_banner_fragment` |
-| GET | `/fragment/story-log` | `story_log_fragment` |
-| GET | `/fragment/visual-sidebar` | `visual_sidebar_fragment` |
-| GET | `/fragment/options-dock` | `options_dock_fragment` |
-| GET | `/fragment/character-headshots` | `character_headshots_fragment` |
 | GET | `/changes` | `changes_handler` |
-| GET | `/status/busy` | `busy_status_handler` |
-| GET | `/fragment/llm-messages` | `llm_messages_fragment` |
 | GET | `/fragment/llm-messages/:id` | `llm_message_record_fragment` |
 
 ## Games
@@ -68,7 +59,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/games/:id/mode` | `switch_game_mode_handler` |
 | POST | `/games/:id/posture` | `update_game_posture_handler` |
 | POST | `/games/:id/presets` | `update_game_presets_handler` |
-| GET | `/fragment/games` | `list_games_fragment` |
 | GET | `/fragment/games/new` | `new_game_form_handler` |
 | GET | `/fragment/games/:id/rename` | `rename_game_form_handler` |
 
@@ -76,7 +66,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/worlds` | `list_worlds_fragment` |
 | POST | `/worlds` | `create_world_handler` |
 | POST | `/worlds/:key` | `update_world_handler` |
 | POST | `/worlds/:key/posture` | `update_world_posture_handler` |
@@ -88,7 +77,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/settings` | `settings_panel` |
 | POST | `/connections/add` | `add_connection_handler` |
 | POST | `/connections/test` | `test_form_connection_handler` |
 | POST | `/connections/:id/test` | `test_saved_connection_handler` |
@@ -104,7 +92,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/prompt-presets` | `panel_handler` |
 | POST | `/prompt-presets` | `save_preset_handler` |
 | GET | `/fragment/prompt-presets/new` | `new_preset_form_handler` |
 | GET | `/fragment/prompt-presets/:id/edit` | `edit_preset_form_handler` |
