@@ -1,0 +1,40 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+────────────
+ Nextest run ID 1b2cb3b5-06d0-479d-a655-638c4cef99c9 with nextest profile: default
+    Starting 5 tests across 2 binaries (1 test skipped)
+        FAIL [   0.007s] (3/5) probe t::fails
+  stdout ───
+
+    running 1 test
+    test t::fails ... FAILED
+
+    failures:
+
+    failures:
+        t::fails
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+  stderr ───
+    some noise on stderr
+
+    thread 't::fails' panicked at src/lib.rs:11:9:
+    assertion `left == right` failed: the real message
+      left: 2
+     right: 3
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        LEAK [   0.208s] (4/5) probe::leak leaks_a_child
+ TERMINATING [>  1.000s] (───) probe t::times_out
+     TIMEOUT [   1.002s] (5/5) probe t::times_out
+  stdout ───
+
+    running 1 test
+
+    (test timed out)
+
+────────────
+     Summary [   1.009s] 5 tests run: 3 passed (1 leaky), 1 failed, 1 timed out, 1 skipped
+        FAIL [   0.007s] (3/5) probe t::fails
+     TIMEOUT [   1.002s] (5/5) probe t::times_out
+error: test run failed

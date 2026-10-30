@@ -28,6 +28,17 @@ slow-timeout = { period = "180s", terminate-after = 1, on-timeout = "fail" }
 filter = 'binary(browser)'
 threads-required = 1
 
+# build.py reads the failing tests and, for --test-timings, every test's duration and its
+# stub-check lines from this report. nextest 0.9.146 writes it to
+# <workspace root>/target/nextest/<profile>/junit.xml whatever CARGO_TARGET_DIR or
+# --target-dir says, so the target dirs of one checkout share one report per profile. The
+# build slot runs one nextest step at a time, and build.py deletes the file before each run.
+# store-success-output keeps the output of passing tests: the stub runners print their
+# per-check timings there.
+[profile.default.junit]
+path = "junit.xml"
+store-success-output = true
+
 [profile.llm]
 inherits = "default"
 slow-timeout = { period = "300s", terminate-after = 1, on-timeout = "fail" }

@@ -1,4 +1,7 @@
-"""Unit tests for build.py's nextest summary, epilogue and log stamps.
+"""Unit tests for how build.py reads a finished step, and for its epilogue and log stamp.
+
+The step tests run ``_run_step`` against a fake ``subprocess.run`` that answers with output
+recorded from cargo and nextest (``fixtures/build_output/``).
 
 Run via ``python -m unittest discover scripts/tests`` or via ``build.py``.
 """
@@ -10,7 +13,6 @@ import os
 import sys
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -18,566 +20,419 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build  # noqa: E402
-from build_cli_support import _MemLog, reset_epilogue_state  # noqa: E402
+from build_cli_support import (  # noqa: E402
+    fake_subprocess,
+    fixture,
+    junit_path,
+    make_ctx,
+    run_main,
+)
+
 
 class SessionStampTests(unittest.TestCase):
     """Build logs carry the originating pi session id when known."""
 
-    def setUp(self):
-        self.buffer = io.StringIO()
-        build._set_log_fh(self.buffer)
-
-    def tearDown(self):
-        build._set_log_fh(None)
-
     def test_stamp_written_when_session_id_present(self):
-        with mock.patch.dict(
-            os.environ, {"PI_SESSION_ID": "0123abcd-0000-1111-2222-333344445555"}
-        ):
+        buffer = io.StringIO()
+        build._set_log_fh(buffer)
+        self.addCleanup(build._set_log_fh, None)
+        with mock.patch.dict(os.environ, {"PI_SESSION_ID": "0123abcd-0000-1111-2222-333344445555"}):
             build._stamp_session_id()
-        self.assertIn(
-            "Session-Id: 0123abcd-0000-1111-2222-333344445555",
-            self.buffer.getvalue(),
-        )
+        self.assertEqual(buffer.getvalue(), "Session-Id: 0123abcd-0000-1111-2222-333344445555\n")
 
     def test_no_stamp_without_session_id(self):
+        buffer = io.StringIO()
+        build._set_log_fh(buffer)
+        self.addCleanup(build._set_log_fh, None)
         env = {key: value for key, value in os.environ.items() if key != "PI_SESSION_ID"}
         with mock.patch.dict(os.environ, env, clear=True):
             build._stamp_session_id()
-        self.assertEqual(self.buffer.getvalue(), "")
+        self.assertEqual(buffer.getvalue(), "")
+
+    def test_stamp_is_first_log_line_in_main(self):
+        with mock.patch.dict(os.environ, {"PI_SESSION_ID": "0123abcd-0000-1111-2222-333344445555"}):
+            _, log, code, _ = run_main()
+        self.assertEqual(code, 0)
+        self.assertEqual(log.splitlines()[0], "Session-Id: 0123abcd-0000-1111-2222-333344445555")
 
 
-class NextestSummaryLineTests(unittest.TestCase):
-    """_nextest_summary_line renders nextest's Summary as a compact one-liner."""
+class JsonOutputTests(unittest.TestCase):
+    """cargo compile and test commands run with JSON messages; the rest run unchanged."""
 
-    def test_single_test_pass_summary(self):
-        output = "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped\n"
-        self.assertEqual(
-            build._nextest_summary_line(output), "nextest: 1 passed, 0 failed"
-        )
+    def test_the_flag_goes_right_after_the_subcommand(self):
+        cases = {
+            "cargo clippy --all-targets -- -D warnings": (
+                "cargo clippy --message-format json --all-targets -- -D warnings"
+            ),
+            "cargo check --all-targets": "cargo check --message-format json --all-targets",
+            "cargo build --bin chronicler_engine": (
+                "cargo build --message-format json --bin chronicler_engine"
+            ),
+            "cargo nextest run -E 'x' --fail-fast": (
+                "cargo nextest run --cargo-message-format json -E 'x' --fail-fast"
+            ),
+            "cargo llvm-cov nextest --no-report": (
+                "cargo llvm-cov nextest --cargo-message-format json --no-report"
+            ),
+        }
+        for cmd, expected in cases.items():
+            with self.subTest(cmd=cmd):
+                self.assertEqual(build._with_json_output(cmd), expected)
 
-    def test_fail_summary_omits_zero_skipped(self):
-        output = (
-            "     Summary [   1.497s] 119 tests run: 118 passed, 1 failed, 0 skipped\n"
-        )
-        self.assertEqual(
-            build._nextest_summary_line(output), "nextest: 118 passed, 1 failed"
-        )
-
-    def test_nonzero_skipped_is_kept(self):
-        output = "     Summary [   2.000s] 26 tests run: 21 passed, 0 failed, 5 skipped\n"
-        self.assertEqual(
-            build._nextest_summary_line(output),
-            "nextest: 21 passed, 0 failed, 5 skipped",
-        )
-
-    def test_failed_segment_absent_means_zero_failed(self):
-        # Real nextest output omits the "failed" segment on clean runs.
-        output = "     Summary [   0.174s] 21 tests run: 21 passed, 1462 skipped\n"
-        self.assertEqual(
-            build._nextest_summary_line(output),
-            "nextest: 21 passed, 0 failed, 1462 skipped",
-        )
-
-    def test_leaky_count_is_kept(self):
-        # Recorded from logs/build_20261003_021636.log:309 (the browser tier).
-        output = (
-            "     Summary [  60.628s] 30 tests run: 30 passed (1 leaky), 0 skipped\n"
-        )
-        self.assertEqual(
-            build._nextest_summary_line(output),
-            "nextest: 30 passed, 0 failed, 1 leaky",
-        )
-
-    def test_leaky_count_survives_a_skipped_segment(self):
-        output = "     Summary [  10.000s] 12 tests run: 9 passed (2 leaky), 1 failed, 3 skipped\n"
-        self.assertEqual(
-            build._nextest_summary_line(output),
-            "nextest: 9 passed, 1 failed, 3 skipped, 2 leaky",
-        )
-
-    def test_flaky_count_is_kept(self):
-        output = (
-            "     Summary [  60.628s] 30 tests run: 28 passed, 1 flaky, 1 failed, 0 skipped\n"
-        )
-        self.assertEqual(
-            build._nextest_summary_line(output),
-            "nextest: 28 passed, 1 failed, 1 flaky",
-        )
-
-    def test_last_summary_line_wins(self):
-        output = (
-            "     Summary [   1.000s] 2 tests run: 1 passed, 1 failed\n"
-            "     Summary [   3.000s] 4 tests run: 4 passed, 0 failed\n"
-        )
-        self.assertEqual(
-            build._nextest_summary_line(output), "nextest: 4 passed, 0 failed"
-        )
-
-    def test_cancelled_run_names_the_tests_it_never_reached(self):
-        # Recorded from cargo-nextest 0.9.146. A --fail-fast run stops after the
-        # first failure, so the summary counts the tests it never started.
-        output = (
-            "     Summary [   0.308s] 3/6 tests run: 2 passed, 1 failed, 0 skipped\n"
-        )
-        self.assertEqual(
-            build._nextest_summary_line(output),
-            "nextest: 2 passed, 1 failed, 3 not run",
-        )
-
-    def test_cancelled_run_keeps_the_skipped_count(self):
-        output = (
-            "     Summary [   0.400s] 3/5 tests run: 2 passed, 1 failed, 1 skipped\n"
-        )
-        self.assertEqual(
-            build._nextest_summary_line(output),
-            "nextest: 2 passed, 1 failed, 1 skipped, 2 not run",
-        )
-
-    def test_no_summary_returns_none(self):
-        self.assertIsNone(build._nextest_summary_line("error: could not compile\n"))
-
-    def test_compilation_output_without_summary_returns_none(self):
-        output = "   Compiling chronicler-engine v0.1.0\n     Running unittests\n"
-        self.assertIsNone(build._nextest_summary_line(output))
+    def test_other_commands_are_left_alone(self):
+        for cmd in (
+            "cargo fmt --check -- -l",
+            "cargo llvm-cov report --json",
+            "python scripts/validate_docs.py",
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(build._with_json_output(cmd))
 
 
-class NextestResultLineTests(unittest.TestCase):
-    """_NEXTEST_RESULT_RE drives the per-test timing report."""
-
-    def test_leak_line_is_parsed_with_its_duration_and_name(self):
-        line = "        LEAK [   0.229s] ( 2/2) leakprobe::leak leaks_a_child"
-        match = build._NEXTEST_RESULT_RE.match(line)
-        self.assertIsNotNone(match)
-        self.assertEqual(build._nextest_duration_to_secs(match.group(1)), 0.229)
-        self.assertEqual(match.group(2).strip(), "leakprobe::leak leaks_a_child")
-
-    def test_pass_line_still_parses_after_adding_leak(self):
-        line = "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x"
-        match = build._NEXTEST_RESULT_RE.match(line)
-        self.assertIsNotNone(match)
-        self.assertEqual(match.group(2).strip(), "chronicler_engine::browser behaviour::test_x")
-
-
-class NextestStashTests(unittest.TestCase):
-    """run() stashes the summary even when a checked failure sys.exits."""
+class RunStepReadsOutputTests(unittest.TestCase):
+    """What _run_step keeps from the output of the command it ran."""
 
     def setUp(self):
-        reset_epilogue_state()
+        self.ctx = make_ctx(self)
+        patcher = mock.patch.object(build, "both_print")
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-    def tearDown(self):
-        reset_epilogue_state()
+    def nextest_step(self, cmd="cargo nextest run --no-fail-fast", profile="default"):
+        return build.Step("Running tests...", cmd, profile=profile, check=False)
 
-    @staticmethod
-    def _fake_process(out, returncode):
-        fake = mock.Mock()
-        fake.communicate.return_value = (out, None)
-        fake.returncode = returncode
-        return fake
-
-    def _run_silenced(self, out, returncode, check=True):
-        fake = self._fake_process(out, returncode)
-        with mock.patch.object(
-            build.subprocess, "Popen", return_value=fake
-        ), mock.patch("builtins.print"):
-            return build.run("cargo nextest run", check=check)
-
-    def test_run_stashes_summary_on_success(self):
-        rc = self._run_silenced(
-            "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped\n", 0
-        )
-        self.assertEqual(rc, 0)
+    def test_a_red_nextest_run_names_its_tests_counts_and_leaks(self):
+        with fake_subprocess(
+            stderr=fixture("nextest_failed.stderr"),
+            rc=100,
+            junit="junit_failed.xml",
+            junit_path=junit_path(),
+        ):
+            result = build._run_step(self.nextest_step(), self.ctx)
+        self.assertEqual(result.rc, 100)
         self.assertEqual(
-            build._NextestSummary.lines, [("", "nextest: 1 passed, 0 failed")]
+            result.counts.line, "nextest: 3 passed, 1 failed, 1 skipped, 1 leaky, 1 timed out"
         )
-
-    def test_run_stashes_summary_on_checked_failure(self):
-        with self.assertRaises(SystemExit):
-            self._run_silenced(
-                "     Summary [   1.497s] 3 tests run: 2 passed, 1 failed\n", 1
-            )
+        self.assertEqual(result.leaks, [("LEAK", "probe::leak leaks_a_child")])
         self.assertEqual(
-            build._NextestSummary.lines, [("", "nextest: 2 passed, 1 failed")]
-        )
-
-    def test_run_without_summary_leaves_stash_unset(self):
-        with self.assertRaises(SystemExit):
-            self._run_silenced("error: could not compile\n", 101)
-        self.assertEqual(build._NextestSummary.lines, [])
-
-    def test_run_names_a_leaky_test(self):
-        build._NextestSummary.label = "Running browser tests..."
-        self._run_silenced(
-            "        LEAK [   1.229s] ( 2/63) chronicler_engine::browser behaviour::test_x\n"
-            "     Summary [ 130.000s] 63 tests run: 63 passed (1 leaky), 0 skipped\n",
-            0,
-        )
-        self.assertEqual(
-            build._NextestLeaks.lines,
+            result.failures,
             [
-                (
-                    "Running browser tests...",
-                    "LEAK",
-                    "chronicler_engine::browser behaviour::test_x",
-                )
+                ("probe t::fails", "assertion `left == right` failed: the real message"),
+                ("probe t::times_out", "test timeout"),
+            ],
+        )
+        self.assertEqual(result.tail, [])  # nextest names its own cause
+
+    def test_a_report_left_by_an_earlier_run_is_not_read(self):
+        stale = junit_path()
+        stale.parent.mkdir(parents=True)
+        stale.write_text(fixture("junit_failed.xml"))
+        with fake_subprocess(stderr=fixture("nextest_failed.stderr"), rc=100):
+            result = build._run_step(self.nextest_step(), self.ctx)
+        self.assertEqual(result.failures, [])
+        self.assertFalse(stale.exists())
+
+    def test_target_dir_does_not_move_the_report(self):
+        """nextest ignores --target-dir for the report, so build.py reads the same file."""
+        ctx = make_ctx(self, target_dir="/elsewhere/target/agent2")
+        with fake_subprocess(
+            stderr=fixture("nextest_failed.stderr"),
+            rc=100,
+            junit="junit_failed.xml",
+            junit_path=junit_path(),
+        ):
+            result = build._run_step(self.nextest_step(), ctx)
+        self.assertEqual(len(result.failures), 2)
+        self.assertEqual(build._junit_path("default"), build._NEXTEST_DIR / "default" / "junit.xml")
+        self.assertNotIn("elsewhere", str(build._junit_path("default")))
+
+    def test_the_llm_profile_reads_its_own_report(self):
+        cmd = "cargo nextest run --profile llm --run-ignored all --no-fail-fast --test llm"
+        with fake_subprocess(
+            stderr=fixture("nextest_failed.stderr"),
+            rc=100,
+            junit="junit_failed.xml",
+            junit_path=junit_path("llm"),
+        ):
+            result = build._run_step(self.nextest_step(cmd, "llm"), self.ctx)
+        self.assertEqual(len(result.failures), 2)
+
+    def test_a_green_run_keeps_counts_without_reading_the_report(self):
+        with fake_subprocess(
+            stderr="     Summary [ 1.0s] 4 tests run: 4 passed, 1 skipped\n",
+            junit="junit_failed.xml",
+            junit_path=junit_path(),
+        ):
+            result = build._run_step(self.nextest_step(), self.ctx)
+        self.assertEqual(result.counts.line, "nextest: 4 passed, 0 failed, 1 skipped")
+        self.assertEqual(result.failures, [])
+
+    def test_a_compile_error_gives_each_error_once_and_the_rendered_text_to_the_log(self):
+        log = []
+        step = build.Step("Checking compilation...", "cargo check --all-targets")
+        with fake_subprocess(
+            stdout=fixture("cargo_check_errors.json"),
+            stderr=fixture("cargo_check_errors.stderr"),
+            rc=101,
+        ), mock.patch.object(build, "log_status", side_effect=log.append):
+            result = build._run_step(step, self.ctx)
+        self.assertEqual(result.compile_errors, ["error[E0308]: mismatched types  (src/lib.rs:6:5)"])
+        self.assertTrue(result.fatal)
+        self.assertEqual(result.tail, [])
+        logged = "\n".join(log)
+        self.assertIn("error[E0308]: mismatched types", logged)
+        self.assertIn("error: could not compile `probe` (lib)", logged)
+        self.assertNotIn('"reason"', logged)
+        self.assertNotIn("Checking probe", logged)  # cargo progress stays out of the log
+
+    def test_the_echo_names_the_command_that_runs(self):
+        printed = []
+        with fake_subprocess(), mock.patch.object(
+            build, "both_print", side_effect=lambda msg="": printed.append(msg)
+        ):
+            build._run_command("cargo nextest run -E 'x'", {})
+            build._run_command("cargo fmt", {})
+        self.assertEqual(
+            printed,
+            [
+                "$ cargo nextest run --cargo-message-format json -E 'x'",
+                "$ cargo fmt",
             ],
         )
 
-    def test_leak_printed_live_and_in_final_list_is_named_once(self):
-        leak = "        LEAK [   1.229s] ( 2/63) chronicler_engine::browser behaviour::test_x\n"
-        self._run_silenced(
-            leak
-            + "     Summary [ 130.000s] 63 tests run: 63 passed (1 leaky), 0 skipped\n"
-            + leak,
-            0,
-        )
-        self.assertEqual(len(build._NextestLeaks.lines), 1)
-
-    def test_timing_report_counts_a_repeated_test_once(self):
-        line = "        LEAK [   1.229s] ( 2/63) chronicler_engine::browser behaviour::test_x\n"
-        result = mock.Mock(returncode=0, stdout="", stderr=line + line)
-        printed = []
+    def test_cargo_runs_with_split_streams_and_other_commands_with_merged_ones(self):
+        calls = []
         with mock.patch.object(
-            build.subprocess, "run", return_value=result
-        ), mock.patch("builtins.print", side_effect=lambda msg="": printed.append(msg)):
-            build.run_with_test_timings("cargo nextest run")
-        self.assertIn("  Slowest tests (of 1 measured, top 30):", printed)
-
-    def test_tier_command_records_its_test_set_size(self):
-        build._NextestSummary.label = "Running integration tests..."
-        fake = self._fake_process(
-            "     Summary [  20.500s] 1570 tests run: 1570 passed, 2 skipped\n", 0
-        )
-        with mock.patch.object(build.subprocess, "Popen", return_value=fake), mock.patch(
-            "builtins.print"
+            build.subprocess,
+            "run",
+            side_effect=lambda cmd, **kw: calls.append((cmd, kw["stderr"])) or mock.Mock(
+                returncode=0, stdout="", stderr=""
+            ),
         ):
-            build.run(build.get_integration_test_cmd())
-        self.assertEqual(
-            build._NextestSummary.sizes,
-            {"Running integration tests...": build._TierSize("integration", 1572)},
+            build._run_command("cargo check", {})
+            build._run_command("python x.py", {})
+        self.assertEqual(calls[0], ("cargo check --message-format json", build.subprocess.PIPE))
+        self.assertEqual(calls[1], ("python x.py", build.subprocess.STDOUT))
+
+    def test_a_failed_plain_step_keeps_its_last_three_lines(self):
+        step = build.Step("Checking guardrails.md freshness...", "python scripts/x.py")
+        with fake_subprocess(stdout="one\n\ntwo\nthree\nfour\nfix: python scripts/x.py\n\n", rc=1):
+            result = build._run_step(step, self.ctx)
+        self.assertEqual(result.tail, ["three", "four", "fix: python scripts/x.py"])
+
+    def test_unformatted_files_are_named_with_the_fix(self):
+        step = build.Step(
+            build._FORMAT_CHECK_LABEL, build._FORMAT_CHECK_CMD, output=build.OUTPUT_RUSTFMT_CHECK
         )
-        # A NamedTuple equals a plain tuple, so check the type as well.
-        self.assertIsInstance(
-            build._NextestSummary.sizes["Running integration tests..."], build._TierSize
+        with fake_subprocess(stdout=fixture("fmt_list.txt"), rc=1), mock.patch.object(
+            build.build_report.os.path, "relpath", side_effect=lambda p: p[len("/work/") :]
+        ):
+            result = build._run_step(step, self.ctx)
+        self.assertEqual(result.tail, ["unformatted: probe/src/lib.rs", "fix: python build.py fmt"])
+
+    def test_a_rustfmt_syntax_error_joins_the_compile_errors_with_its_location(self):
+        for output, step_cmd in (
+            (build.OUTPUT_RUSTFMT_CHECK, build._FORMAT_CHECK_CMD),
+            (build.OUTPUT_RUSTFMT, "cargo fmt"),
+        ):
+            with self.subTest(output=output):
+                step = build.Step("Formatting...", step_cmd, output=output)
+                with fake_subprocess(stdout=fixture("fmt_syntax_error.txt"), rc=1), mock.patch.object(
+                    build.build_report.os.path, "relpath", side_effect=lambda p: p[len("/work/") :]
+                ):
+                    result = build._run_step(step, self.ctx)
+                self.assertEqual(
+                    result.compile_errors,
+                    ["error: this file contains an unclosed delimiter  (probe/src/lib.rs:5:3)"],
+                )
+                self.assertEqual(result.tail, [])
+
+    def test_a_plain_step_is_not_scanned_for_error_lines(self):
+        step = build.Step("Validating...", "python v.py")
+        with fake_subprocess(stdout="error: bad data\n", rc=1):
+            result = build._run_step(step, self.ctx)
+        self.assertEqual((result.compile_errors, result.tail), ([], ["error: bad data"]))
+
+    def test_more_than_ten_unformatted_files_are_counted(self):
+        text = "".join(f"/work/probe/src/f{n}.rs\n" for n in range(12))
+        with mock.patch.object(build.build_report.os.path, "relpath", side_effect=lambda p: p):
+            detail = build._unformatted_detail(text)
+        self.assertEqual(len(detail), 12)
+        self.assertEqual(detail[10:], ["... 2 more files", "fix: python build.py fmt"])
+
+    def test_a_passing_step_leaves_no_failure_facts(self):
+        with fake_subprocess(stdout="all good\n"):
+            result = build._run_step(build.Step("Validating...", "python v.py"), self.ctx)
+        self.assertEqual((result.rc, result.tail, result.failures, result.counts), (0, [], [], None))
+
+
+class TestTimingReportTests(unittest.TestCase):
+    """--test-timings prints the durations and the stub checks from the JUnit report."""
+
+    def test_the_report_lists_the_slowest_tests_binaries_and_stub_checks(self):
+        ctx = make_ctx(self)
+        printed = []
+        step = build.Step(
+            "Running tests...", "cargo nextest run", profile="default", check=False, timings=True
         )
-        # The epilogue lines keep their (label, text) shape.
-        self.assertEqual(
-            build._NextestSummary.lines,
-            [("Running integration tests...", "nextest: 1570 passed, 0 failed, 2 skipped")],
-        )
+        with fake_subprocess(
+            stderr=fixture("nextest_failed.stderr"),
+            rc=100,
+            junit="junit_failed.xml",
+            junit_path=junit_path(),
+        ), mock.patch.object(build, "both_print", side_effect=lambda msg="": printed.append(msg)):
+            build._run_step(step, ctx)
+        self.assertIn("$ cargo nextest run --cargo-message-format json  (with --test-timings)", printed)
+        self.assertIn("  Slowest tests (of 5 measured, top 30):", printed)
+        slowest = printed[printed.index("  Slowest tests (of 5 measured, top 30):") + 1]
+        self.assertTrue(slowest.endswith("s  probe t::times_out"), slowest)
+        self.assertTrue(any(line.endswith("s  probe::leak") for line in printed))
+        self.assertIn("  Slowest stub checks (of 1, top 30):", printed)
+        self.assertIn("       0.902s  [OK]  check_x  (run_checks)", printed)
 
-    def test_other_command_records_no_size(self):
-        self._run_silenced("     Summary [  1.0s] 1 test run: 1 passed, 0 skipped\n", 0)
-        self.assertEqual(build._NextestSummary.sizes, {})
-        self.assertEqual(len(build._NextestSummary.lines), 1)
-
-    def test_run_ignores_pass_lines(self):
-        self._run_silenced(
-            "        PASS [  18.645s] ( 4/26) chronicler_engine::browser behaviour::test_x\n"
-            "     Summary [  21.153s] 1 test run: 1 passed, 0 skipped\n",
-            0,
-        )
-        self.assertEqual(build._NextestLeaks.lines, [])
+    def test_a_missing_report_says_so(self):
+        printed = []
+        with mock.patch.object(build, "both_print", side_effect=lambda msg="": printed.append(msg)):
+            build._print_timing_report(None)
+        self.assertIn("  No per-test durations in the nextest JUnit report.", printed)
 
 
-class NextestFailureTests(unittest.TestCase):
-    """A red run keeps each FAIL line and the cause of a failed non-nextest step."""
-
-    PANIC_OUTPUT = (
-        "        FAIL [   0.120s] ( 3/9) chronicler_engine::guardrails guardrails_long_comment_runs\n"
-        "  stdout ───\n\n"
-        "--- STDERR:              chronicler_engine::guardrails guardrails_long_comment_runs ---\n"
-        "\n"
-        "thread 'guardrails_long_comment_runs' panicked at tests/guardrails/gate.rs:338:9:\n"
-        "gate.rs:338 [WARN] Long comment run\n"
-        "note: run with `RUST_BACKTRACE=1`\n"
-        "        FAIL [   0.120s] ( 3/9) chronicler_engine::guardrails guardrails_long_comment_runs\n"
-        "     Summary [   1.000s] 9 tests run: 8 passed, 1 failed, 0 skipped\n"
+def failed_tests_result(label="Running guardrail tests...", **kwargs):
+    return build.StepResult(
+        label,
+        rc=100,
+        failures=[("chronicler_engine::guardrails long_comment_runs", "gate.rs:338 [WARN] Long comment run")],
+        **kwargs,
     )
 
-    def setUp(self):
-        reset_epilogue_state()
 
-    def tearDown(self):
-        reset_epilogue_state()
+class EpilogueTests(unittest.TestCase):
+    """main() prints the verdict lines in order, right before the closing banner."""
 
-    def _stash(self, output, label="Running guardrail tests..."):
-        build._NextestSummary.label = label
-        build._stash_nextest_summary(output)
+    def epilogue(self, results, baselines=None, **overrides):
+        def gate(_args, out):
+            out.extend(results)
 
-    def test_fail_line_is_kept_once_with_its_panic_message(self):
-        self._stash(self.PANIC_OUTPUT)
-        self.assertEqual(
-            build._TestFailures.lines,
-            [
-                (
-                    "Running guardrail tests...",
-                    "chronicler_engine::guardrails guardrails_long_comment_runs",
-                    "gate.rs:338 [WARN] Long comment run",
-                )
-            ],
+        return run_main(gate, baselines=baselines, **overrides)
+
+    def test_counts_print_between_the_step_table_and_the_banner(self):
+        counts = build.build_report.parse_summary(fixture("nextest_cancelled.stderr"))
+        result = build.StepResult("Running integration tests...", counts=counts, tier="integration")
+        printed, _, code, _ = self.epilogue([result])
+        self.assertEqual(code, 0)
+        idx = printed.index(
+            "nextest: 1 passed, 1 failed, 1 skipped, 3 not run  (Running integration tests...)"
+            "  tests: 6 (no earlier record)"
         )
+        self.assertEqual(printed[idx + 1 : idx + 3], ["=" * 60, "=== Build Complete ==="])
 
-    def test_fail_line_without_stderr_keeps_an_empty_message(self):
-        self._stash("        FAIL [   0.1s] ( 1/1) bin::t\n")
-        self.assertEqual(
-            build._TestFailures.lines, [("Running guardrail tests...", "bin::t", "")]
+    def test_a_run_that_is_not_a_whole_tier_has_no_count_change(self):
+        counts = build.build_report.parse_summary(fixture("nextest_cancelled.stderr"))
+        printed, *_ = self.epilogue([build.StepResult("Running tests...", counts=counts)])
+        self.assertIn("nextest: 1 passed, 1 failed, 1 skipped, 3 not run  (Running tests...)", printed)
+
+    def test_the_count_change_compares_with_the_newest_record(self):
+        counts = build.build_report.parse_summary(
+            "     Summary [ 1s] 1563 tests run: 1563 passed, 2 skipped\n"
         )
-
-    def test_pass_line_is_not_a_failure(self):
-        self._stash("        PASS [   0.1s] ( 1/1) bin::t\n")
-        self.assertEqual(build._TestFailures.lines, [])
-
-    def test_failed_non_nextest_step_keeps_its_last_lines(self):
-        build._NextestSummary.label = "Checking guardrails.md freshness..."
-        build._stash_failure("one\n\ntwo\nthree\nfour\nfix: python scripts/generate_guardrails_doc.py\n\n")
-        self.assertEqual(
-            build._StepFailures.lines,
-            [
-                (
-                    "Checking guardrails.md freshness...",
-                    ["three", "four", "fix: python scripts/generate_guardrails_doc.py"],
-                )
-            ],
-        )
-
-    def test_failed_nextest_or_compile_step_keeps_no_tail(self):
-        build._stash_failure(self.PANIC_OUTPUT)
-        build._stash_failure("error[E0599]: no method\n --> src/a.rs:1:1\n")
-        self.assertEqual(build._StepFailures.lines, [])
-
-    def test_cancelled_nextest_summary_keeps_no_tail(self):
-        # A --fail-fast run stops early. Its summary must still match, or the
-        # tail reads as an unexplained step failure.
-        build._stash_failure(
-            "     Summary [   0.308s] 3/6 tests run: 2 passed, 1 failed\n"
-        )
-        self.assertEqual(build._StepFailures.lines, [])
-
-    @staticmethod
-    def _run_main(printed, failed_step, setup):
-        memlog = _MemLog()
-        gate_args = SimpleNamespace(
-            command=None, cleanup=False, llm_only=False, no_browser=False
-        )
-
-        def fake_gate(_args, record):
-            setup()
-            record.failures.append(failed_step)
-
-        with mock.patch.object(
-            build, "parse_args", return_value=gate_args
-        ), mock.patch.object(build, "run_gate", side_effect=fake_gate), mock.patch.object(
-            build, "clean_old_logs"
-        ), mock.patch.object(
-            build, "_tree_identity", return_value="abc"
-        ), mock.patch.object(
-            build, "_append_history"
-        ), mock.patch.object(
-            build, "_last_tier_sizes", return_value={}
-        ), mock.patch(
-            "builtins.print", side_effect=lambda msg="": printed.append(msg)
-        ), mock.patch(
-            "builtins.open", return_value=memlog
-        ):
-            return build.main()
-
-    def test_epilogue_prints_the_failures_block(self):
-        printed = []
-        label = "Running guardrail tests..."
-        exit_code = self._run_main(
-            printed, label, lambda: self._stash(self.PANIC_OUTPUT, label)
-        )
-        self.assertEqual(exit_code, 1)
-        idx = printed.index("--- Failures ---")
-        self.assertEqual(printed[idx + 1], f"  {label}")
-        self.assertEqual(
-            printed[idx + 2],
-            "    FAIL chronicler_engine::guardrails guardrails_long_comment_runs",
-        )
-        self.assertEqual(printed[idx + 3], "      gate.rs:338 [WARN] Long comment run")
-
-    def test_epilogue_prints_the_cause_of_a_failed_non_nextest_step(self):
-        printed = []
-        label = "Checking guardrails.md freshness..."
-
-        def setup():
-            build._NextestSummary.label = label
-            build._stash_failure("stale\nrun: python scripts/generate_guardrails_doc.py\n")
-
-        self._run_main(printed, label, setup)
-        idx = printed.index("--- Failures ---")
-        self.assertEqual(printed[idx + 1], f"  {label}")
-        self.assertEqual(printed[idx + 2], "    stale")
-        self.assertEqual(
-            printed[idx + 3], "    run: python scripts/generate_guardrails_doc.py"
-        )
-
-    def test_epilogue_bounds_the_test_list(self):
-        printed = []
-        label = "Running integration tests..."
-        output = "".join(
-            f"        FAIL [   0.1s] ( {i}/30) bin::t{i}\n" for i in range(25)
-        )
-        self._run_main(printed, label, lambda: self._stash(output, label))
-        self.assertEqual(sum(1 for msg in printed if msg.startswith("    FAIL ")), 20)
-        self.assertIn("  ... 5 more, see the log", printed)
-
-    def test_green_run_prints_no_failures_block(self):
-        printed = []
-        build._TestFailures.lines = [("Some step", "bin::t", "")]
-        gate_args = SimpleNamespace(
-            command=None, cleanup=False, llm_only=False, no_browser=False
-        )
-        with mock.patch.object(
-            build, "parse_args", return_value=gate_args
-        ), mock.patch.object(build, "run_gate"), mock.patch.object(
-            build, "clean_old_logs"
-        ), mock.patch.object(
-            build, "_tree_identity", return_value="abc"
-        ), mock.patch.object(
-            build, "_append_history"
-        ), mock.patch(
-            "builtins.print", side_effect=lambda msg="": printed.append(msg)
-        ), mock.patch(
-            "builtins.open", return_value=_MemLog()
-        ):
-            build.main()
-        self.assertNotIn("--- Failures ---", printed)
-
-
-class NextestEpilogueTests(unittest.TestCase):
-    """The epilogue prints the one-liner directly before the build banner."""
-
-    def setUp(self):
-        reset_epilogue_state()
-
-    def tearDown(self):
-        reset_epilogue_state()
-
-    @staticmethod
-    def _run_main(printed, no_browser=False):
-        memlog = _MemLog()
-        gate_args = SimpleNamespace(
-            command=None,
-            cleanup=False,
-            llm_only=False,
-            no_browser=no_browser,
-        )
-        with mock.patch.object(
-            build, "parse_args", return_value=gate_args
-        ), mock.patch.object(build, "run_gate"), mock.patch.object(
-            build, "clean_old_logs"
-        ), mock.patch.object(
-            build, "_tree_identity", return_value="abc"
-        ), mock.patch.object(
-            build, "_append_history"
-        ), mock.patch.object(
-            build, "_last_tier_sizes", return_value={}
-        ), mock.patch(
-            "builtins.print", side_effect=lambda msg="": printed.append(msg)
-        ), mock.patch(
-            "builtins.open", return_value=memlog
-        ):
-            return build.main()
-
-    def test_summary_printed_between_step_summary_and_banner(self):
-        printed = []
-        build._NextestSummary.lines = [
-            ("Running integration tests...", "nextest: 21 passed, 0 failed")
-        ]
-        self.assertEqual(self._run_main(printed), 0)
-        idx = printed.index("nextest: 21 passed, 0 failed  (Running integration tests...)")
-        self.assertEqual(printed[idx + 1], "=" * 60)
-        self.assertEqual(printed[idx + 2], "=== Build Complete ===")
-
-    def test_two_tiers_print_one_line_each_before_banner(self):
-        """The gate runs integration and browser separately; both report."""
-        printed = []
-        build._NextestSummary.lines = [
-            ("Running integration tests...", "nextest: 1587 passed, 0 failed"),
-            ("Running browser tests...", "nextest: 27 passed, 0 failed"),
-        ]
-        self.assertEqual(self._run_main(printed), 0)
-        block = (
-            "nextest: 1587 passed, 0 failed  (Running integration tests...)\n"
-            "nextest: 27 passed, 0 failed  (Running browser tests...)"
-        )
-        idx = printed.index(block)
-        self.assertEqual(printed[idx + 1], "=" * 60)
-        self.assertEqual(printed[idx + 2], "=== Build Complete ===")
-
-    def test_no_summary_prints_no_extra_line(self):
-        printed = []
-        self.assertEqual(self._run_main(printed), 0)
-        self.assertFalse(any(msg.startswith("nextest:") for msg in printed))
-        self.assertFalse(any(msg.startswith("skipped:") for msg in printed))
-
-    def test_tier_line_carries_the_count_change(self):
-        printed = []
-        build._NextestSummary.lines = [
-            ("Running integration tests...", "nextest: 1563 passed, 0 failed, 2 skipped")
-        ]
-        build._NextestSummary.sizes = {
-            "Running integration tests...": build._TierSize("integration", 1565)
-        }
-        self.assertEqual(self._run_main(printed), 0)
+        baseline = build.build_history.TierRecord("2026-10-08T19:46:00", "a1b2c3d4e5", 1572)
+        result = build.StepResult("Running integration tests...", counts=counts, tier="integration")
+        printed, *_ = self.epilogue([result], baselines={"integration": baseline})
         self.assertIn(
             "nextest: 1563 passed, 0 failed, 2 skipped  (Running integration tests...)"
-            "  tests: 1565 (no earlier record)",
+            "  tests: 1565 (-7 vs 2026-10-08T19:46:00, tree a1b2c3d4e5)",
             printed,
         )
 
+    def test_a_leaking_test_is_named(self):
+        result = build.StepResult("Running browser tests...", leaks=[("LEAK", "probe::leak leaks_a_child")])
+        printed, *_ = self.epilogue([result])
+        self.assertIn("leak test: probe::leak leaks_a_child  (Running browser tests...)", printed)
+
+    def test_the_failures_block_names_each_test_with_its_message(self):
+        result = failed_tests_result()
+        printed, _, code, _ = self.epilogue([result])
+        self.assertEqual(code, 1)
+        idx = printed.index("--- Failures ---")
+        self.assertEqual(
+            printed[idx + 1 : idx + 4],
+            [
+                "  Running guardrail tests...",
+                "    FAIL chronicler_engine::guardrails long_comment_runs",
+                "      gate.rs:338 [WARN] Long comment run",
+            ],
+        )
+
+    def test_the_failures_block_gives_the_cause_of_a_failed_plain_step(self):
+        result = build.StepResult("Checking guardrails.md freshness...", rc=1, tail=["stale", "run: x"])
+        printed, *_ = self.epilogue([result])
+        idx = printed.index("--- Failures ---")
+        self.assertEqual(
+            printed[idx + 1 : idx + 4],
+            ["  Checking guardrails.md freshness...", "    stale", "    run: x"],
+        )
+
+    def test_the_failures_block_is_bounded(self):
+        result = build.StepResult(
+            "Running integration tests...", rc=100, failures=[(f"bin::t{n}", "") for n in range(25)]
+        )
+        printed, *_ = self.epilogue([result])
+        self.assertEqual(sum(1 for msg in printed if msg.startswith("    FAIL ")), 20)
+        self.assertIn("  ... 5 more, see the log", printed)
+
+    def test_a_green_run_and_a_report_only_warning_print_no_failures_block(self):
+        warned = build.StepResult("Checking for duplicate code...", rc=1, report_only=True, tail=["x"])
+        printed, _, code, _ = self.epilogue([warned, build.StepResult("Formatting...")])
+        self.assertEqual(code, 0)
+        self.assertNotIn("--- Failures ---", printed)
+        self.assertIn("    0.00s  [WARN]  Checking for duplicate code...  (report-only)", printed)
+
+    def test_compile_errors_print_before_the_banner_without_repeats_and_bounded(self):
+        results = [
+            build.StepResult("Checking compilation...", rc=101, compile_errors=[f"error: e{n}" for n in range(7)]),
+            build.StepResult("Running clippy...", rc=101, compile_errors=["error: e0"]),
+        ]
+        printed, *_ = self.epilogue(results)
+        idx = printed.index("compile errors (first 5 of 7):")
+        self.assertEqual(printed[idx + 5], "  error: e4")
+        self.assertEqual(printed[idx + 6], "=" * 60)
+
     def test_no_browser_gate_names_the_skipped_tier(self):
-        printed = []
-        self.assertEqual(self._run_main(printed, no_browser=True), 0)
+        printed, *_ = self.epilogue([], no_browser=True)
         idx = printed.index('skipped: browser tier (run "python build.py browser")')
         self.assertEqual(printed[idx + 1], "=" * 60)
 
-    def test_leaky_test_name_is_printed_before_the_banner(self):
-        printed = []
-        build._NextestLeaks.lines = [
-            (
-                "Running browser tests...",
-                "LEAK",
-                "chronicler_engine::browser behaviour::test_x",
-            )
+    def test_a_clean_empty_run_prints_no_verdict_lines(self):
+        printed, *_ = self.epilogue([])
+        self.assertFalse(any(msg.startswith(("nextest:", "skipped:", "compile errors")) for msg in printed))
+
+    def test_step_table_marks_ok_failed_and_the_total(self):
+        results = [
+            build.StepResult("Formatting...", elapsed=1.5),
+            failed_tests_result(elapsed=2.0),
         ]
-        self.assertEqual(self._run_main(printed), 0)
-        idx = printed.index(
-            "leak test: chronicler_engine::browser behaviour::test_x  (Running browser tests...)"
-        )
-        self.assertEqual(printed[idx + 1], "=" * 60)
-        self.assertEqual(printed[idx + 2], "=== Build Complete ===")
+        printed, *_ = self.epilogue(results)
+        self.assertIn("    1.50s  [OK]  Formatting...", printed)
+        self.assertIn("    2.00s  [FAILED]  Running guardrail tests...", printed)
+        self.assertIn("           Total: 3.50s", printed)
+        self.assertIn("\n  Failed steps: Running guardrail tests...", printed)
 
 
-class MainStampTests(unittest.TestCase):
-    """The session stamp is the first line written to every build log."""
+class ExitCodeTests(unittest.TestCase):
+    def test_a_fatal_failure_exits_with_its_own_code(self):
+        results = [build.StepResult("a", rc=100), build.StepResult("b", rc=101, fatal=True)]
+        self.assertEqual(build._exit_code(results), 101)
 
-    def test_stamp_is_first_log_line_in_main(self):
-        memlog = _MemLog()
-        gate_args = SimpleNamespace(
-            command=None,
-            cleanup=False,
-            llm_only=False,
-            no_browser=False,
-        )
-        with mock.patch.dict(
-            os.environ, {"PI_SESSION_ID": "0123abcd-0000-1111-2222-333344445555"}
-        ), mock.patch.object(build, "parse_args", return_value=gate_args), mock.patch.object(
-            build, "run_gate"
-        ), mock.patch.object(
-            build, "_tree_identity", return_value="abc"
-        ), mock.patch.object(
-            build, "_append_history"
-        ), mock.patch.object(
-            build, "clean_old_logs"
-        ), mock.patch(
-            "builtins.print"
-        ), mock.patch(
-            "builtins.open", return_value=memlog
-        ):
-            rc = build.main()
-        self.assertEqual(rc, 0)
-        first_line = memlog.getvalue().splitlines()[0]
-        self.assertEqual(first_line, "Session-Id: 0123abcd-0000-1111-2222-333344445555")
+    def test_a_recorded_test_failure_exits_one(self):
+        self.assertEqual(build._exit_code([build.StepResult("a", rc=100)]), 1)
+
+    def test_a_report_only_failure_exits_zero(self):
+        self.assertEqual(build._exit_code([build.StepResult("a", rc=1, report_only=True)]), 0)
+
+    def test_tier_sizes_cover_only_the_whole_tiers(self):
+        counts = build.build_report.parse_summary("     Summary [ 1s] 1570 tests run: 1570 passed, 2 skipped\n")
+        results = [
+            build.StepResult("integration", counts=counts, tier="integration"),
+            build.StepResult("pattern", counts=counts),
+        ]
+        self.assertEqual(build._tier_sizes(results), {"integration": 1572})

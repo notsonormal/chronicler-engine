@@ -1,0 +1,9 @@
+error: this file contains an unclosed delimiter
+ --> /work/probe/src/lib.rs:5:3
+  |
+3 | pub fn broken( -> i32 {
+  |              - unclosed delimiter
+4 |     2
+5 | }
+  |  ^
+

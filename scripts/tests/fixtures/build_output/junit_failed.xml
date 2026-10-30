@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="nextest-run" tests="5" skipped="0" failures="2" errors="0" uuid="1b2cb3b5-06d0-479d-a655-638c4cef99c9" timestamp="2026-10-30T22:55:20.635+00:00" time="1.009">
+    <testsuite name="probe" tests="4" skipped="0" errors="0" failures="2">
+        <testcase name="t::passes" classname="probe" timestamp="2026-10-30T22:55:20.635+00:00" time="0.007">
+            <system-out>
+running 1 test
+test t::passes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+</system-out>
+            <system-err></system-err>
+        </testcase>
+        <testcase name="stubs::run_checks" classname="probe" timestamp="2026-10-30T22:55:20.635+00:00" time="0.007">
+            <system-out>
+running 1 test
+test stubs::run_checks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+</system-out>
+            <system-err>--- Stub checks (1) ---
+    0.902s  [OK]  check_x
+</system-err>
+        </testcase>
+        <testcase name="t::fails" classname="probe" timestamp="2026-10-30T22:55:20.635+00:00" time="0.007">
+            <failure message="thread &apos;t::fails&apos; panicked at src/lib.rs:11:9" type="test failure with exit code 101">thread &apos;t::fails&apos; panicked at src/lib.rs:11:9:
+assertion `left == right` failed: the real message
+  left: 2
+ right: 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</failure>
+            <system-out>
+running 1 test
+test t::fails ... FAILED
+
+failures:
+
+failures:
+    t::fails
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+</system-out>
+            <system-err>some noise on stderr
+
+thread &apos;t::fails&apos; panicked at src/lib.rs:11:9:
+assertion `left == right` failed: the real message
+  left: 2
+ right: 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+</system-err>
+        </testcase>
+        <testcase name="t::times_out" classname="probe" timestamp="2026-10-30T22:55:20.642+00:00" time="1.002">
+            <failure type="test timeout"/>
+            <system-out>
+running 1 test
+</system-out>
+            <system-err></system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="probe::leak" tests="1" skipped="0" errors="0" failures="0">
+        <testcase name="leaks_a_child" classname="probe::leak" timestamp="2026-10-30T22:55:20.643+00:00" time="0.208">
+            <system-out>
+running 1 test
+test leaks_a_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+</system-out>
+            <system-err></system-err>
+        </testcase>
+    </testsuite>
+</testsuites>

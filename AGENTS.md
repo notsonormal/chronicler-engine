@@ -300,6 +300,8 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
     - `cli.rs` — Command-line interface definitions
 - `build.py` — Full build, validate, and test for Chronicler Engine.
 - **scripts/**
+  - `build_history.py` — The build-history journal of ``build.py``: one record per run, and the tree each run covered.
+  - `build_report.py` — Readers for the structured output of cargo, nextest and rustfmt, used by ``build.py``.
   - `build_slot.py` — Machine-wide build slot: one cargo compile or test step at a time across all checkouts.
   - `check_python_docstrings.py` — Scan Python files in scripts/ and scripts/issue_tracker/ for missing module docstrings.
   - `check_test_structure.py` — Enforce unit-test structure rules: no inline test modules, every *_tests.rs registered.

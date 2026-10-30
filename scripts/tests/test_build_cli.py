@@ -5,7 +5,6 @@ Run via ``python -m unittest discover scripts/tests`` or via ``build.py``.
 
 from __future__ import annotations
 
-import contextlib
 import io
 import os
 import socket
@@ -26,7 +25,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build  # noqa: E402
-from build_cli_support import _MemLog, reset_epilogue_state  # noqa: E402
+from build_cli_support import gate_args, run_main  # noqa: E402
 
 
 class RegistryTests(unittest.TestCase):
@@ -64,13 +63,12 @@ class RegistryTests(unittest.TestCase):
             self.assertTrue(spec.label, spec.name)
             self.assertTrue(spec.cmd, spec.name)
 
-    def test_gate_order_is_stable(self):
-        gate_names = [name for name in build.GATE_ORDER if name in build.REGISTRY]
-        self.assertEqual(gate_names[0], "fmt")
-        self.assertIn("guardrails", gate_names)
+    def test_gate_plan_order_is_stable(self):
+        labels = [step.label for step in build._plan_gate_steps(gate_args())]
+        self.assertEqual(labels[2], build.REGISTRY["fmt"].label)
         self.assertLess(
-            gate_names.index("validate-docs"),
-            gate_names.index("guardrails"),
+            labels.index(build.REGISTRY["validate-docs"].label),
+            labels.index(build.REGISTRY["guardrails"].label),
             "registry guardrail steps must run after the doc steps",
         )
 
@@ -80,8 +78,8 @@ class RegistryTests(unittest.TestCase):
 
     def test_run_is_not_a_gate_step(self):
         """`run` has its own dispatcher and must not join the full gate."""
-        self.assertIn("run", build.REGISTRY)
-        self.assertNotIn("run", build.GATE_ORDER)
+        labels = [step.label for step in build._plan_gate_steps(gate_args())]
+        self.assertNotIn(build.REGISTRY["run"].label, labels)
 
 
 class ParseArgsTests(unittest.TestCase):
@@ -296,7 +294,7 @@ class PortProbeTests(unittest.TestCase):
 
 
 class RunServerTests(unittest.TestCase):
-    """run_server builds under the slot and returns the argv; it never execs."""
+    """run_server builds through the plan and returns the argv; it never execs."""
 
     def setUp(self):
         patcher = mock.patch.dict(
@@ -311,128 +309,81 @@ class RunServerTests(unittest.TestCase):
             command="run", server_flags=flags, target_dir=target_dir, release=False
         )
 
+    def _serve(self, args, port_check=None):
+        """Run run_server with the toolchain, the port check and the plan run stubbed."""
+        with mock.patch.object(build, "_prelude"), mock.patch.object(
+            build, "_require_free_port", side_effect=port_check
+        ), mock.patch.object(build, "_run_plan") as plan:
+            argv = build.run_server(args, [])
+        return argv, plan
+
     def test_returns_binary_and_stripped_flags(self):
-        args = self._args(["--", "--world", "x", "--port", "3099"])
-        with mock.patch.object(build, "check_rust_version"), mock.patch.object(
-            build, "_require_free_port"
-        ), mock.patch.object(build, "_warn_if_target_locked"), mock.patch.object(
-            build, "_timed_run"
-        ) as timed:
-            argv = build.run_server(args, build.StepRecord())
+        argv, plan = self._serve(self._args(["--", "--world", "x", "--port", "3099"]))
         self.assertEqual(
-            argv,
-            ["target/debug/chronicler_engine", "--world", "x", "--port", "3099"],
+            argv, ["target/debug/chronicler_engine", "--world", "x", "--port", "3099"]
         )
-        self.assertEqual(timed.call_args.args[3], "cargo build --bin chronicler_engine")
+        self.assertEqual(plan.call_args.args[0][0].cmd, "cargo build --bin chronicler_engine")
 
     def test_target_dir_after_run_points_at_that_binary(self):
-        args = self._args(["--port", "3099"], target_dir="target/agent2")
-        with mock.patch.object(build, "check_rust_version"), mock.patch.object(
-            build, "_require_free_port"
-        ), mock.patch.object(build, "_warn_if_target_locked"), mock.patch.object(
-            build, "_timed_run"
-        ):
-            argv = build.run_server(args, build.StepRecord())
+        argv, _ = self._serve(self._args(["--port", "3099"], target_dir="target/agent2"))
         self.assertEqual(argv[0], "target/agent2/debug/chronicler_engine")
 
     def test_busy_port_fails_before_building(self):
-        args = self._args(["--", "--port", "3099"])
-        with mock.patch.object(build, "check_rust_version"), mock.patch.object(
+        with mock.patch.object(build, "_prelude"), mock.patch.object(
             build, "_require_free_port", side_effect=SystemExit(1)
-        ), mock.patch.object(build, "_timed_run") as timed:
+        ), mock.patch.object(build, "_run_plan") as plan:
             with self.assertRaises(SystemExit):
-                build.run_server(args, build.StepRecord())
-        timed.assert_not_called()
+                build.run_server(self._args(["--", "--port", "3099"]), [])
+        plan.assert_not_called()
 
 
 class ExecPendingTests(unittest.TestCase):
     """The __main__ exec replaces the process only after a clean build."""
 
-    def tearDown(self):
-        build._pending_exec = None
+    ARGV = ["/bin/echo", "--port", "3099"]
 
-    def test_execs_when_pending_and_clean(self):
-        build._pending_exec = ["/bin/echo", "--port", "3099"]
+    def test_execs_when_clean(self):
         with mock.patch.object(build, "_require_free_port"), mock.patch.object(
             build, "os"
         ) as os_mod:
-            build._exec_pending(0)
-        os_mod.execv.assert_called_once_with(
-            "/bin/echo", ["/bin/echo", "--port", "3099"]
-        )
+            build._exec_pending(0, self.ARGV)
+        os_mod.execv.assert_called_once_with("/bin/echo", self.ARGV)
 
     def test_rechecks_the_port_before_the_exec(self):
-        build._pending_exec = ["/bin/echo", "--port", "3099"]
         with mock.patch.object(
             build, "_require_free_port", side_effect=SystemExit(1)
         ), mock.patch.object(build, "os") as os_mod:
             with self.assertRaises(SystemExit):
-                build._exec_pending(0)
+                build._exec_pending(0, self.ARGV)
         os_mod.execv.assert_not_called()
 
-    def test_does_not_exec_on_failure(self):
-        build._pending_exec = ["/bin/echo"]
+    def test_does_not_exec_on_failure_or_without_argv(self):
         with mock.patch.object(build, "os") as os_mod:
-            build._exec_pending(1)
+            build._exec_pending(1, self.ARGV)
+            build._exec_pending(0, None)
         os_mod.execv.assert_not_called()
-
-    def test_does_not_exec_when_nothing_pending(self):
-        build._pending_exec = None
-        with mock.patch.object(build, "os") as os_mod:
-            build._exec_pending(0)
-        os_mod.execv.assert_not_called()
-
-    def test_clears_pending_after_one_call(self):
-        build._pending_exec = ["/bin/echo"]
-        with mock.patch.object(build, "_require_free_port"), mock.patch.object(build, "os"):
-            build._exec_pending(0)
-        self.assertIsNone(build._pending_exec)
 
 
 class MainRunTests(unittest.TestCase):
-    """main() routes `run` to run_server and stores the exec argv for __main__."""
-
-    def tearDown(self):
-        build._pending_exec = None
-
-    @staticmethod
-    def _run_args():
-        return SimpleNamespace(
-            command="run", cleanup=False, llm_only=False, no_browser=False
-        )
+    """main() routes `run` to run_server and hands the exec argv back to __main__."""
 
     def _run_main(self, run_server):
-        memlog = _MemLog()
-        with (
-            mock.patch.object(build, "parse_args", return_value=self._run_args()),
-            mock.patch.object(build, "run_server", side_effect=run_server) as server,
-            mock.patch.object(build, "run_step") as step,
-            mock.patch.object(build, "_append_history"),
-            mock.patch.object(build, "_tree_identity", return_value="abc"),
-            mock.patch.object(build, "clean_old_logs"),
-            mock.patch("builtins.print"),
-            mock.patch("builtins.open", return_value=memlog),
-        ):
-            rc = build.main()
-        return rc, server, step
+        with mock.patch.object(build, "run_server", side_effect=run_server):
+            return run_main(command="run")
 
-    def test_stores_argv_and_never_calls_run_step(self):
-        rc, server, step = self._run_main(
-            lambda args, record: ["/bin/echo", "--port", "9"]
-        )
-        self.assertEqual(rc, 0)
-        server.assert_called_once()
-        step.assert_not_called()
-        self.assertEqual(build._pending_exec, ["/bin/echo", "--port", "9"])
+    def test_returns_the_argv_to_exec(self):
+        _, _, code, exec_argv = self._run_main(lambda args, results: ["/bin/echo", "--port", "9"])
+        self.assertEqual(code, 0)
+        self.assertEqual(exec_argv, ["/bin/echo", "--port", "9"])
 
-    def test_failed_build_leaves_nothing_pending(self):
-        def boom(args, record):
-            raise SystemExit(101)
+    def test_a_failed_build_returns_no_argv(self):
+        def failed_build(args, results):
+            results.append(build.StepResult("Building dev server...", rc=101, fatal=True))
+            return ["/bin/echo"]
 
-        with self.assertRaises(SystemExit) as ctx:
-            self._run_main(boom)
-        self.assertEqual(ctx.exception.code, 101)
-        self.assertIsNone(build._pending_exec)
+        _, _, code, exec_argv = self._run_main(failed_build)
+        self.assertEqual(code, 101)
+        self.assertIsNone(exec_argv)
 
 
 class StepCommandTests(unittest.TestCase):
@@ -495,88 +446,43 @@ class StepCommandTests(unittest.TestCase):
 class FailModeTests(unittest.TestCase):
     """A step run stops at the first failing test. The gate reports every failure."""
 
-    def step_command(self, argv):
-        """The command a step run executes, with cargo and the prelude stubbed."""
-        args = build.parse_args(argv)
-        captured = {}
-        with (
-            mock.patch.object(build, "check_rust_version"),
-            mock.patch.object(build, "require_nextest"),
-            mock.patch.object(build, "_cargo_env_for", return_value={}),
-            mock.patch.object(build, "_warn_if_target_locked"),
-            mock.patch.object(
-                build,
-                "_timed_run",
-                side_effect=lambda *a, **k: captured.update(cmd=a[3]),
-            ),
-        ):
-            build.run_step(args, build.StepRecord())
-        return captured["cmd"]
+    @staticmethod
+    def step_plan(argv):
+        """The steps a step run plans."""
+        return build._step_plan(build.parse_args(argv))
 
     def test_step_run_stops_at_the_first_failure(self):
-        self.assertEqual(
-            self.step_command(["test-pattern", "x", "--test-target", "browser"]),
-            "cargo nextest run --test browser x --fail-fast",
-        )
+        (step,) = self.step_plan(["test-pattern", "x", "--test-target", "browser"])
+        self.assertEqual(step.cmd, "cargo nextest run --test browser x --fail-fast")
 
     def test_browser_step_stops_at_the_first_failure(self):
-        self.assertEqual(
-            self.step_command(["browser"]),
-            "cargo nextest run -E 'binary(browser)' --fail-fast",
-        )
+        (step,) = self.step_plan(["browser"])
+        self.assertEqual(step.cmd, "cargo nextest run -E 'binary(browser)' --fail-fast")
 
     def test_explicit_no_fail_fast_wins_in_a_step(self):
-        self.assertEqual(
-            self.step_command(["browser", "--no-fail-fast"]),
-            "cargo nextest run -E 'binary(browser)' --no-fail-fast",
-        )
-
-    def gate_args(self, **overrides):
-        defaults = dict(
-            command=None,
-            no_fmt=False,
-            no_browser=False,
-            coverage=False,
-            include_llm=False,
-            test_timings=False,
-            release=False,
-            target_dir=None,
-            fail_fast=None,
-        )
-        defaults.update(overrides)
-        return SimpleNamespace(**defaults)
-
-    @staticmethod
-    def plan_cmd(plan, label_prefix):
-        """The command of the one gate step whose label starts with the prefix."""
-        steps = [step for step in plan if step.label.startswith(label_prefix)]
-        assert len(steps) == 1, [step.label for step in plan]
-        return steps[0].cmd
+        (step,) = self.step_plan(["browser", "--no-fail-fast"])
+        self.assertEqual(step.cmd, "cargo nextest run -E 'binary(browser)' --no-fail-fast")
 
     def test_gate_reports_every_failure(self):
-        plan = build._plan_gate_steps(self.gate_args())
-        for prefix in (
-            "Running browser tests",
-            "Running integration tests",
-            "Running guardrail tests",
+        by_label = {step.label: step for step in build._plan_gate_steps(gate_args())}
+        for label in (
+            "Running browser tests...",
+            "Running integration tests...",
+            "Running guardrail tests...",
         ):
-            with self.subTest(prefix=prefix):
-                self.assertTrue(
-                    self.plan_cmd(plan, prefix).endswith("--no-fail-fast"), prefix
-                )
+            with self.subTest(label=label):
+                self.assertTrue(by_label[label].cmd.endswith("--no-fail-fast"), label)
 
     def test_explicit_fail_fast_wins_in_the_gate(self):
-        plan = build._plan_gate_steps(self.gate_args(fail_fast=True))
-        self.assertTrue(
-            self.plan_cmd(plan, "Running browser tests").endswith("--fail-fast")
-        )
+        by_label = {
+            step.label: step for step in build._plan_gate_steps(gate_args(fail_fast=True))
+        }
+        self.assertTrue(by_label["Running browser tests..."].cmd.endswith("--fail-fast"))
 
     def test_flag_is_accepted_before_and_after_a_step(self):
         self.assertIs(build.parse_args(["--fail-fast", "browser"]).fail_fast, True)
         self.assertIs(build.parse_args(["browser", "--fail-fast"]).fail_fast, True)
-        self.assertIs(
-            build.parse_args(["browser", "--no-fail-fast"]).fail_fast, False
-        )
+        self.assertIs(build.parse_args(["browser", "--no-fail-fast"]).fail_fast, False)
 
     def test_last_flag_wins(self):
         args = build.parse_args(["browser", "--fail-fast", "--no-fail-fast"])
@@ -599,14 +505,6 @@ class FailModeTests(unittest.TestCase):
             "python scripts/validate_docs.py",
         )
 
-    def test_tier_is_recognized_with_the_fail_flag(self):
-        for flag in ("--fail-fast", "--no-fail-fast"):
-            with self.subTest(flag=flag):
-                self.assertEqual(
-                    build._tier_for_cmd(f"{build.get_browser_test_cmd()} {flag}"),
-                    "browser",
-                )
-
     def test_coverage_refuses_fail_fast(self):
         """The coverage report needs every test, so `--coverage` refuses the flag."""
         with self.assertRaises(SystemExit) as ctx:
@@ -618,117 +516,37 @@ class FailModeTests(unittest.TestCase):
     def test_llm_only_keeps_the_gate_fail_mode(self):
         """`--llm-only` is a gate mode, so its nextest command reports every failure."""
         args = build.parse_args(["--llm-only"])
-        with (
-            mock.patch.object(build, "check_rust_version"),
-            mock.patch.object(build, "require_nextest"),
-            mock.patch.object(build, "_gate_prelude", return_value={}),
-            mock.patch.object(build, "_set_target_args"),
-            mock.patch.object(
-                build, "_cargo_slot", new=mock.MagicMock(return_value=contextlib.nullcontext())
-            ),
-            mock.patch.object(build, "run") as runner,
-            mock.patch.object(build, "both_print"),
-        ):
-            build.run_llm_only(args, build.StepRecord())
-        llm_cmd = runner.call_args_list[-1].args[0]
-        self.assertIn("--test llm", llm_cmd)
-        self.assertTrue(llm_cmd.endswith("--test llm"))
-        self.assertIn("--no-fail-fast", llm_cmd)
+        with mock.patch.object(build, "_prelude"), mock.patch.object(
+            build, "_run_plan"
+        ) as plan:
+            build.run_llm_only(args, [])
+        building, llm, done = plan.call_args.args[0]
+        self.assertEqual(building.cmd, "cargo build")
+        self.assertEqual(
+            llm.cmd,
+            "cargo nextest run --profile llm --run-ignored all --no-fail-fast --test llm",
+        )
+        self.assertEqual(done.cmd, "")
 
 
 class ClippyFormatCheckTests(unittest.TestCase):
-    """The narrow `clippy` step runs `cargo fmt --check` first and fails fast."""
+    """The narrow `clippy` step runs `cargo fmt --check` first. The full gate runs `fmt` instead."""
 
-    def setUp(self):
-        reset_epilogue_state()
-
-    def tearDown(self):
-        reset_epilogue_state()
-
-    @staticmethod
-    def _run_step(command, fmt_result):
-        events = []
-        record = build.StepRecord()
-        args = SimpleNamespace(command=command, target_dir=None, release=False)
-
-        def fake_fmt(cmd, **_kwargs):
-            events.append(("fmt", cmd))
-            return fmt_result
-
-        def fake_timed(_counter, _record, label, cmd, **_kwargs):
-            events.append(("step", cmd))
-
-        with mock.patch.object(build, "check_rust_version"), mock.patch.object(
-            build, "_cargo_env_for", return_value={}
-        ), mock.patch.object(build, "_warn_if_target_locked"), mock.patch.object(
-            build.subprocess, "run", side_effect=fake_fmt
-        ), mock.patch.object(
-            build, "_timed_run", side_effect=fake_timed
-        ), mock.patch.object(build, "both_print"):
-            try:
-                build.run_step(args, record)
-                exited = None
-            except SystemExit as err:
-                exited = err.code
-        return events, record, exited
-
-    def test_clean_formatting_runs_the_fmt_check_before_clippy(self):
-        fmt = SimpleNamespace(returncode=0, stdout="", stderr="")
-        events, record, exited = self._run_step("clippy", fmt)
-        self.assertIsNone(exited)
+    def test_clippy_runs_the_fmt_check_first(self):
+        cmds = [step.cmd for step in build._step_plan(build.parse_args(["clippy"]))]
         self.assertEqual(
-            events,
+            cmds,
             [
-                ("fmt", "cargo fmt --check"),
-                ("step", "cargo clippy --all-targets --all-features -- -D warnings"),
-            ],
-        )
-        self.assertEqual(record.failures, [])
-
-    def test_unformatted_files_fail_fast_and_are_named(self):
-        fmt = SimpleNamespace(
-            returncode=1,
-            stdout="Diff in /x/tests/http/settings.rs:568:\n-  a \n+  a\nDiff in /x/src/a.rs:1:\n",
-            stderr="",
-        )
-        with mock.patch.object(build.os.path, "relpath", side_effect=lambda p: p[3:]):
-            events, record, exited = self._run_step("clippy", fmt)
-        self.assertEqual(exited, 1)
-        self.assertEqual(events, [("fmt", "cargo fmt --check")])
-        self.assertEqual(record.failures, ["Checking formatting..."])
-        self.assertEqual(
-            build._StepFailures.lines,
-            [
-                (
-                    "Checking formatting...",
-                    [
-                        "unformatted: tests/http/settings.rs",
-                        "unformatted: src/a.rs",
-                        "fix: python build.py fmt",
-                    ],
-                )
+                "cargo fmt --check -- -l",
+                "cargo clippy --all-targets --all-features -- -D warnings",
             ],
         )
 
     def test_other_steps_do_not_run_the_fmt_check(self):
-        fmt = SimpleNamespace(returncode=1, stdout="", stderr="")
-        events, _record, exited = self._run_step("check", fmt)
-        self.assertIsNone(exited)
-        self.assertEqual([kind for kind, _ in events], ["step"])
+        self.assertEqual(len(build._step_plan(build.parse_args(["check"]))), 1)
 
-    def test_full_gate_plan_is_unchanged(self):
-        labels = [
-            step.label
-            for step in build._plan_gate_steps(
-                SimpleNamespace(
-                    no_fmt=False,
-                    no_browser=False,
-                    coverage=False,
-                    include_llm=False,
-                    test_timings=False,
-                )
-            )
-        ]
+    def test_the_full_gate_has_no_fmt_check(self):
+        labels = [step.label for step in build._plan_gate_steps(gate_args())]
         self.assertNotIn("Checking formatting...", labels)
         self.assertIn("Formatting...", labels)
 
@@ -749,103 +567,6 @@ class CargoEnvTests(unittest.TestCase):
         # `leak` names a passing-but-leaking test without the PASS flood.
         self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "leak")
 
-    def test_test_timings_keeps_leak_level(self):
-        # --final-status-level pass supplies the PASS lines; a live pass level
-        # would print each test twice and double the timing report.
-        env = build._cargo_env_for(SimpleNamespace(target_dir=None, test_timings=True))
-        self.assertEqual(env["NEXTEST_STATUS_LEVEL"], "leak")
-
-
-class StubCheckTimingTests(unittest.TestCase):
-    """A stub runner's per-check summary is parsed out of its success output."""
-
-    OUTPUT = """\
-        PASS [   1.834s] (1/2) chronicler_engine::browser stub::games::run_games_checks
-  stderr ───
-    --- Stub checks (2) ---
-        0.902s  [OK]  check_deleting_a_saved_game_keeps_keyboard_focus_in_the_panel
-        3.250s  [FAIL]  check_switch_lands_on_the_game
-        4.152s  total (shared browser)
-
-        PASS [   0.012s] (2/2) chronicler_engine::http story_log::test_delete
-"""
-
-    def test_check_lines_are_attributed_to_their_runner(self):
-        self.assertEqual(
-            build._parse_stub_check_timings(self.OUTPUT.splitlines()),
-            [
-                (
-                    0.902,
-                    "chronicler_engine::browser stub::games::run_games_checks",
-                    "check_deleting_a_saved_game_keeps_keyboard_focus_in_the_panel",
-                    "OK",
-                ),
-                (
-                    3.25,
-                    "chronicler_engine::browser stub::games::run_games_checks",
-                    "check_switch_lands_on_the_game",
-                    "FAIL",
-                ),
-            ],
-        )
-
-    # Trimmed from a `--test-timings` browser log: nextest's final status list
-    # prints each runner's result line, then its stdout and stderr blocks.
-    REAL_OUTPUT = """\
-     Summary [  95.410s] 27 tests run: 27 passed, 0 skipped
-        PASS [   3.441s] (10/27) chronicler_engine::browser stub::announcements::run_announcements_checks
-  stdout \u2500\u2500\u2500
-
-    running 1 test
-    test stub::announcements::run_announcements_checks ... ok
-
-    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 3.43s
-
-  stderr \u2500\u2500\u2500
-    --- Stub checks (2) ---
-        0.949s  [OK]  check_status_changes_are_announced_once
-        1.337s  [OK]  check_new_narration_and_options_are_announced_once
-        2.286s  total (shared browser)
-
-        PASS [   8.614s] (11/27) chronicler_engine::browser stub::dashboard::run_dashboard_chrome_checks
-  stdout \u2500\u2500\u2500
-
-    running 1 test
-    test stub::dashboard::run_dashboard_chrome_checks ... ok
-
-  stderr \u2500\u2500\u2500
-    --- Stub checks (1) ---
-        1.897s  [OK]  check_tab_bar_exposes_a_tablist_and_panels
-        1.897s  total (shared browser)
-"""
-
-    def test_real_final_status_list_attributes_each_check(self):
-        announcements = "chronicler_engine::browser stub::announcements::run_announcements_checks"
-        dashboard = "chronicler_engine::browser stub::dashboard::run_dashboard_chrome_checks"
-        self.assertEqual(
-            build._parse_stub_check_timings(self.REAL_OUTPUT.splitlines()),
-            [
-                (0.949, announcements, "check_status_changes_are_announced_once", "OK"),
-                (1.337, announcements, "check_new_narration_and_options_are_announced_once", "OK"),
-                (1.897, dashboard, "check_tab_bar_exposes_a_tablist_and_panels", "OK"),
-            ],
-        )
-
-    def test_only_the_browser_tier_shows_success_output(self):
-        self.assertIn(
-            "--success-output final", build._timed_test_cmd(build.get_browser_test_cmd())
-        )
-        integration = build._timed_test_cmd(build.get_integration_test_cmd())
-        self.assertNotIn("--success-output", integration)
-        self.assertIn("--final-status-level pass", integration)
-        # Coverage also selects the browser binary, but it is not the browser tier.
-        coverage = build._timed_test_cmd(build.get_coverage_cmd(browser_only=True))
-        self.assertNotIn("--success-output", coverage)
-
-    def test_output_without_runners_has_no_checks(self):
-        self.assertEqual(
-            build._parse_stub_check_timings(["        PASS [   0.012s] (1/1) x y"]), []
-        )
 
 
 class LldLinkerEnvTests(unittest.TestCase):

@@ -1,0 +1,32 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+────────────
+ Nextest run ID 2f4fb03c-4284-4c0f-95e4-4783ed200007 with nextest profile: default
+    Starting 5 tests across 2 binaries (1 test skipped)
+        FAIL [   0.006s] (2/5) probe t::fails
+  stdout ───
+
+    running 1 test
+    test t::fails ... FAILED
+
+    failures:
+
+    failures:
+        t::fails
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+  stderr ───
+    some noise on stderr
+
+    thread 't::fails' panicked at src/lib.rs:11:9:
+    assertion `left == right` failed: the real message
+      left: 2
+     right: 3
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   0.014s] 2/5 tests run: 1 passed, 1 failed, 1 skipped
+        FAIL [   0.006s] (2/5) probe t::fails
+warning: 3/5 tests were not run due to test failure (run with --no-fail-fast to run all tests, or run with --max-fail)
+error: test run failed
