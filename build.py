@@ -10,9 +10,17 @@ Two invocation modes:
   gate minus the browser (Playwright) tier.
 - Step mode: ``python build.py <step>`` runs one registry step (e.g.
   ``clippy``, ``fmt``, ``test-pattern <pattern>``) with a minimal prelude — no
-  asset copy, no SQLite cleanup. ``--target-dir`` is
+  asset copy, no SQLite cleanup. ``--target-dir`` and ``--fail-fast`` are
   accepted on either side of the step; all other top-level flags are gate-only
   and rejected next to a step.
+
+Test failure mode:
+
+- A step run stops at the first failing test.
+- The full gate runs every test, so one red gate names every failure.
+- ``--fail-fast`` and ``--no-fail-fast`` override either default, before or
+  after the step name. The last one on the command line wins. ``--coverage``
+  refuses ``--fail-fast``, because the coverage report needs every test.
 
 ``python build.py run [-- <server flags>]`` builds the binary and then replaces
 this process with it, so the dev server links in the ``build.py`` environment
@@ -331,7 +339,22 @@ _NEXTEST_RESULT_RE = re.compile(
 #   "     Summary [   1.497s] 119 tests run: 118 passed, 1 failed, 0 skipped"
 # Counts are matched independently of segment order so a nextest format
 # change cannot silently break the epilogue one-liner.
-_NEXTEST_SUMMARY_RE = re.compile(r"^\s*Summary \[[^\]]*\]\s+\d+ tests? run:")
+_NEXTEST_SUMMARY_RE = re.compile(
+    r"^\s*Summary \[[^\]]*\]\s+(?:\d+/\d+|\d+) tests? run:"
+)
+# The run's counts: "119" when every selected test ran, "3/6" when the run
+# stopped early (--fail-fast). In "3/6", 6 is the tier's size, and nextest
+# prints no FAIL line for the 3 tests it never reached.
+_RUN_COUNT_RE = re.compile(r"(\d+)(?:/(\d+))? tests? run:")
+
+
+def _run_counts(line: str) -> tuple[int, int] | None:
+    """The (reached, selected) test counts of nextest's Summary line."""
+    m = _RUN_COUNT_RE.search(line)
+    if not m:
+        return None
+    reached = int(m.group(1))
+    return reached, int(m.group(2)) if m.group(2) else reached
 
 
 def _summary_count(line: str, label: str) -> str | None:
@@ -347,7 +370,8 @@ def _nextest_summary_line(output: str) -> str | None:
     nextest omits the "failed" segment when nothing failed, but the epilogue
     line always shows it (0 when absent) so a clean run still reads as clean.
     A zero "skipped" or "leaky" segment is omitted; a nonzero one is kept so a
-    passing-but-leaking run cannot read as fully clean.
+    passing-but-leaking run cannot read as fully clean. A run that stopped
+    early also shows how many tests it never reached.
     """
     rendered = None
     for line in output.splitlines():
@@ -358,6 +382,7 @@ def _nextest_summary_line(output: str) -> str | None:
         skipped = _summary_count(line, "skipped")
         leaky = _summary_count(line, "leaky")
         flaky = _summary_count(line, "flaky")
+        reached, selected = _run_counts(line) or (0, 0)
         rendered = f"nextest: {passed} passed, {failed} failed"
         if skipped and skipped != "0":
             rendered += f", {skipped} skipped"
@@ -365,6 +390,8 @@ def _nextest_summary_line(output: str) -> str | None:
             rendered += f", {leaky} leaky"
         if flaky and flaky != "0":
             rendered += f", {flaky} flaky"
+        if selected > reached:
+            rendered += f", {selected - reached} not run"
     return rendered
 
 
@@ -382,19 +409,19 @@ def _tier_for_cmd(cmd: str | None) -> str | None:
         get_integration_test_cmd(): "integration",
         get_browser_test_cmd(): "browser",
     }
-    return commands.get(cmd)
+    return commands.get(_base_cmd(cmd))
 
 
 def _summary_size(output: str) -> int | None:
-    """The test-set size is tests run plus skipped, from nextest's Summary."""
+    """The test-set size is the selected tests plus the ones nextest skipped."""
     size = None
     for line in output.splitlines():
         if not _NEXTEST_SUMMARY_RE.match(line):
             continue
-        run_count = _summary_count(line, "tests? run")
+        counts = _run_counts(line)
         skipped = _summary_count(line, "skipped") or "0"
-        if run_count is not None:
-            size = int(run_count) + int(skipped)
+        if counts is not None:
+            size = counts[1] + int(skipped)
     return size
 
 
@@ -695,7 +722,40 @@ class StepSpec(NamedTuple):
 LIB_TEST_TARGET = "lib"
 
 
-_NEXTEST_RUN = "cargo nextest run --no-fail-fast"
+# The nextest command line without a fail mode. `_fail_flag` adds the mode where
+# a run knows it, so the gate and a step share one registry string.
+_NEXTEST_RUN = "cargo nextest run"
+_FAIL_FAST = "--fail-fast"
+_NO_FAIL_FAST = "--no-fail-fast"
+_FAIL_FLAG_RE = re.compile(rf" (?:{_NO_FAIL_FAST}|{_FAIL_FAST})\b")
+
+
+def _fail_flag(args) -> str:
+    """The fail mode of this run: an explicit flag wins, else the mode default.
+
+    A step run answers whether the code is still red, and the rest of the tier
+    cannot change a failure it already found. The gate runs every test, so one
+    cycle names every failure.
+    """
+    explicit = getattr(args, "fail_fast", None)
+    if explicit is not None:
+        return _FAIL_FAST if explicit else _NO_FAIL_FAST
+    return _FAIL_FAST if getattr(args, "command", None) else _NO_FAIL_FAST
+
+
+def _with_fail_flag(cmd: str, args) -> str:
+    """Append this run's fail mode to a nextest command. Others pass through."""
+    if not cmd.startswith(_NEXTEST_RUN):
+        return cmd
+    return f"{cmd} {_fail_flag(args)}"
+
+
+def _base_cmd(cmd: str | None) -> str | None:
+    """The command with the fail mode removed, so `_tier_for_cmd` finds its tier."""
+    if not cmd:
+        return cmd
+    return _FAIL_FLAG_RE.sub("", cmd)
+
 
 REGISTRY: dict[str, StepSpec] = {
     spec.name: spec
@@ -895,6 +955,38 @@ _GATE_ONLY_FLAGS = (
 )
 
 
+def _add_fail_mode_flags(parser, default=None):
+    """Add the two fail-mode flags, accepted before or after a step name.
+
+    Both flags write one dest, so the last one on the command line wins.
+    ``default=None`` keeps "not given" distinct from either value. A step
+    subparser passes ``SUPPRESS``, so it does not overwrite a flag typed before
+    the step name.
+    """
+    parser.add_argument(
+        "--fail-fast",
+        dest="fail_fast",
+        action="store_const",
+        const=True,
+        default=default,
+        help=(
+            "Stop the test tier at the first failing test (a step run does this"
+            " by default; the full gate reports every failure)"
+        ),
+    )
+    parser.add_argument(
+        "--no-fail-fast",
+        dest="fail_fast",
+        action="store_const",
+        const=False,
+        default=default,
+        help=(
+            "Run every test and report every failure (the full gate does this"
+            " by default; a step run stops at the first failure)"
+        ),
+    )
+
+
 def parse_args(argv=None):
     """Parse CLI arguments into a namespace. Pure: no filesystem or subprocess
     side effects.
@@ -965,10 +1057,12 @@ def parse_args(argv=None):
             " Surfaces nextest's per-test durations without a separate command."
         ),
     )
+    _add_fail_mode_flags(parser)
 
     sub = parser.add_subparsers(dest="command", metavar="<step>")
     for spec in REGISTRY.values():
         step_parser = sub.add_parser(spec.name, help=spec.help)
+        _add_fail_mode_flags(step_parser, default=argparse.SUPPRESS)
         step_parser.add_argument(
             "--target-dir",
             dest="target_dir",
@@ -1017,6 +1111,11 @@ def parse_args(argv=None):
     if args.coverage and args.no_browser:
         parser.error(
             "--no-browser cannot be combined with --coverage: coverage needs the browser tier"
+        )
+    if args.coverage and getattr(args, "fail_fast", None):
+        parser.error(
+            "--fail-fast cannot be combined with --coverage: the coverage report"
+            " needs the result of every test"
         )
     return args
 
@@ -1522,6 +1621,8 @@ def _plan_gate_steps(args) -> list[GateStep]:
                 int_cmd = get_integration_test_cmd(include_llm=args.include_llm)
                 browser_cmd = get_browser_test_cmd()
                 suffix = ""
+            int_cmd = _with_fail_flag(int_cmd, args)
+            browser_cmd = _with_fail_flag(browser_cmd, args)
             tail = " and timings..." if args.test_timings else "..."
             plan.append(
                 GateStep(
@@ -1557,7 +1658,7 @@ def _plan_gate_steps(args) -> list[GateStep]:
         spec = REGISTRY[name]
         if name == "fmt" and args.no_fmt:
             continue
-        plan.append(GateStep("cmd", spec.label, spec.cmd))
+        plan.append(GateStep("cmd", spec.label, _with_fail_flag(spec.cmd, args)))
     return plan
 
 
@@ -1826,11 +1927,14 @@ def run_step(args, record):
         counter,
         record,
         spec.label,
-        _step_command(
-            spec,
-            getattr(args, "pattern", None),
-            _step_extra_args(spec, args),
-            getattr(args, "test_target", None),
+        _with_fail_flag(
+            _step_command(
+                spec,
+                getattr(args, "pattern", None),
+                _step_extra_args(spec, args),
+                getattr(args, "test_target", None),
+            ),
+            args,
         ),
         check=True,
         env=cargo_env,
@@ -2018,7 +2122,7 @@ def run_llm_only(args, record):
     both_print("=" * 60)
     # get_test_cmd always returns nextest; the --test llm filter selects the
     # LLM binary inside the llm profile run.
-    llm_cmd = get_test_cmd(include_llm=True) + " --test llm"
+    llm_cmd = _with_fail_flag(get_test_cmd(include_llm=True), args) + " --test llm"
     with _cargo_slot(llm_cmd, "Running LLM tests only..."):
         run(llm_cmd, check=True, env=cargo_env)
 

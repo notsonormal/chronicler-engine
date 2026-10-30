@@ -114,6 +114,26 @@ class NextestSummaryLineTests(unittest.TestCase):
             build._nextest_summary_line(output), "nextest: 4 passed, 0 failed"
         )
 
+    def test_cancelled_run_names_the_tests_it_never_reached(self):
+        # Recorded from cargo-nextest 0.9.146. A --fail-fast run stops after the
+        # first failure, so the summary counts the tests it never started.
+        output = (
+            "     Summary [   0.308s] 3/6 tests run: 2 passed, 1 failed, 0 skipped\n"
+        )
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 2 passed, 1 failed, 3 not run",
+        )
+
+    def test_cancelled_run_keeps_the_skipped_count(self):
+        output = (
+            "     Summary [   0.400s] 3/5 tests run: 2 passed, 1 failed, 1 skipped\n"
+        )
+        self.assertEqual(
+            build._nextest_summary_line(output),
+            "nextest: 2 passed, 1 failed, 1 skipped, 2 not run",
+        )
+
     def test_no_summary_returns_none(self):
         self.assertIsNone(build._nextest_summary_line("error: could not compile\n"))
 
@@ -324,6 +344,14 @@ class NextestFailureTests(unittest.TestCase):
     def test_failed_nextest_or_compile_step_keeps_no_tail(self):
         build._stash_failure(self.PANIC_OUTPUT)
         build._stash_failure("error[E0599]: no method\n --> src/a.rs:1:1\n")
+        self.assertEqual(build._StepFailures.lines, [])
+
+    def test_cancelled_nextest_summary_keeps_no_tail(self):
+        # A --fail-fast run stops early. Its summary must still match, or the
+        # tail reads as an unexplained step failure.
+        build._stash_failure(
+            "     Summary [   0.308s] 3/6 tests run: 2 passed, 1 failed\n"
+        )
         self.assertEqual(build._StepFailures.lines, [])
 
     @staticmethod

@@ -249,6 +249,24 @@ class TierForCmdTests(unittest.TestCase):
         )
         self.assertIsNone(build._summary_size("error: could not compile\n"))
 
+    def test_summary_size_of_a_cancelled_run_is_the_whole_tier(self):
+        # A --fail-fast run reports "3/6". The 6 names the tier's size, so the
+        # journal can still compare it with the previous run's count.
+        self.assertEqual(
+            build._summary_size(
+                "     Summary [   0.308s] 3/6 tests run: 2 passed, 1 failed, 0 skipped\n"
+            ),
+            6,
+        )
+
+    def test_summary_size_of_a_cancelled_run_adds_skipped(self):
+        self.assertEqual(
+            build._summary_size(
+                "     Summary [   0.400s] 3/5 tests run: 2 passed, 1 failed, 1 skipped\n"
+            ),
+            6,
+        )
+
 
 class JournalTests(unittest.TestCase):
     """The journal records the tree and per-tier test counts of each run."""

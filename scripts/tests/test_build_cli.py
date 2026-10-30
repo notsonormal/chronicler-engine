@@ -5,6 +5,7 @@ Run via ``python -m unittest discover scripts/tests`` or via ``build.py``.
 
 from __future__ import annotations
 
+import contextlib
 import io
 import os
 import socket
@@ -453,10 +454,10 @@ class StepCommandTests(unittest.TestCase):
         "http-routes-check": "python scripts/extract_http_routes.py --check",
         "guardrails-doc-check": "python scripts/generate_guardrails_doc.py --check",
         "validate-docs": "python scripts/validate_docs.py",
-        "guardrails": "cargo nextest run --no-fail-fast --test architecture --test guardrails",
-        "integration": "cargo nextest run --no-fail-fast -E 'not binary(browser) and not binary(architecture) and not binary(guardrails)'",
-        "browser": "cargo nextest run --no-fail-fast -E 'binary(browser)'",
-        "test-pattern": "cargo nextest run --no-fail-fast",
+        "guardrails": "cargo nextest run --test architecture --test guardrails",
+        "integration": "cargo nextest run -E 'not binary(browser) and not binary(architecture) and not binary(guardrails)'",
+        "browser": "cargo nextest run -E 'binary(browser)'",
+        "test-pattern": "cargo nextest run",
         "run": "cargo build --bin chronicler_engine",
     }
 
@@ -472,25 +473,167 @@ class StepCommandTests(unittest.TestCase):
 
     def test_pattern_is_shell_quoted(self):
         cmd = build._step_command(build.REGISTRY["test-pattern"], "my test")
-        self.assertEqual(cmd, "cargo nextest run --no-fail-fast 'my test'")
+        self.assertEqual(cmd, "cargo nextest run 'my test'")
 
     def test_test_target_selects_one_binary(self):
         cmd = build._step_command(build.REGISTRY["test-pattern"], "x", None, "http")
-        self.assertEqual(
-            cmd, "cargo nextest run --no-fail-fast --test http x"
-        )
+        self.assertEqual(cmd, "cargo nextest run --test http x")
 
     def test_test_target_lib_selects_the_lib_unit_binary(self):
         cmd = build._step_command(build.REGISTRY["test-pattern"], "", None, "lib")
-        self.assertEqual(cmd, "cargo nextest run --no-fail-fast --lib ''")
+        self.assertEqual(cmd, "cargo nextest run --lib ''")
 
     def test_no_test_target_keeps_every_binary(self):
         cmd = build._step_command(build.REGISTRY["test-pattern"], "", None, None)
-        self.assertEqual(cmd, "cargo nextest run --no-fail-fast ''")
+        self.assertEqual(cmd, "cargo nextest run ''")
 
     def test_test_target_is_ignored_by_a_non_test_step(self):
         command = build._step_command(build.REGISTRY["clippy"], None, None, "http")
         self.assertEqual(command, build.REGISTRY["clippy"].cmd)
+
+
+class FailModeTests(unittest.TestCase):
+    """A step run stops at the first failing test. The gate reports every failure."""
+
+    def step_command(self, argv):
+        """The command a step run executes, with cargo and the prelude stubbed."""
+        args = build.parse_args(argv)
+        captured = {}
+        with (
+            mock.patch.object(build, "check_rust_version"),
+            mock.patch.object(build, "require_nextest"),
+            mock.patch.object(build, "_cargo_env_for", return_value={}),
+            mock.patch.object(build, "_warn_if_target_locked"),
+            mock.patch.object(
+                build,
+                "_timed_run",
+                side_effect=lambda *a, **k: captured.update(cmd=a[3]),
+            ),
+        ):
+            build.run_step(args, build.StepRecord())
+        return captured["cmd"]
+
+    def test_step_run_stops_at_the_first_failure(self):
+        self.assertEqual(
+            self.step_command(["test-pattern", "x", "--test-target", "browser"]),
+            "cargo nextest run --test browser x --fail-fast",
+        )
+
+    def test_browser_step_stops_at_the_first_failure(self):
+        self.assertEqual(
+            self.step_command(["browser"]),
+            "cargo nextest run -E 'binary(browser)' --fail-fast",
+        )
+
+    def test_explicit_no_fail_fast_wins_in_a_step(self):
+        self.assertEqual(
+            self.step_command(["browser", "--no-fail-fast"]),
+            "cargo nextest run -E 'binary(browser)' --no-fail-fast",
+        )
+
+    def gate_args(self, **overrides):
+        defaults = dict(
+            command=None,
+            no_fmt=False,
+            no_browser=False,
+            coverage=False,
+            include_llm=False,
+            test_timings=False,
+            release=False,
+            target_dir=None,
+            fail_fast=None,
+        )
+        defaults.update(overrides)
+        return SimpleNamespace(**defaults)
+
+    @staticmethod
+    def plan_cmd(plan, label_prefix):
+        """The command of the one gate step whose label starts with the prefix."""
+        steps = [step for step in plan if step.label.startswith(label_prefix)]
+        assert len(steps) == 1, [step.label for step in plan]
+        return steps[0].cmd
+
+    def test_gate_reports_every_failure(self):
+        plan = build._plan_gate_steps(self.gate_args())
+        for prefix in (
+            "Running browser tests",
+            "Running integration tests",
+            "Running guardrail tests",
+        ):
+            with self.subTest(prefix=prefix):
+                self.assertTrue(
+                    self.plan_cmd(plan, prefix).endswith("--no-fail-fast"), prefix
+                )
+
+    def test_explicit_fail_fast_wins_in_the_gate(self):
+        plan = build._plan_gate_steps(self.gate_args(fail_fast=True))
+        self.assertTrue(
+            self.plan_cmd(plan, "Running browser tests").endswith("--fail-fast")
+        )
+
+    def test_flag_is_accepted_before_and_after_a_step(self):
+        self.assertIs(build.parse_args(["--fail-fast", "browser"]).fail_fast, True)
+        self.assertIs(build.parse_args(["browser", "--fail-fast"]).fail_fast, True)
+        self.assertIs(
+            build.parse_args(["browser", "--no-fail-fast"]).fail_fast, False
+        )
+
+    def test_last_flag_wins(self):
+        args = build.parse_args(["browser", "--fail-fast", "--no-fail-fast"])
+        self.assertIs(args.fail_fast, False)
+
+    def test_no_flag_leaves_the_mode_default(self):
+        self.assertIsNone(build.parse_args([]).fail_fast)
+        self.assertIsNone(build.parse_args(["browser"]).fail_fast)
+
+    def test_fail_fast_is_not_gate_only(self):
+        """The flag is not gate-only: `_reject_gate_flags_with_step` must pass it."""
+        args = build.parse_args(["clippy", "--fail-fast"])
+        self.assertEqual(args.command, "clippy")
+        self.assertIs(args.fail_fast, True)
+
+    def test_a_non_nextest_command_keeps_its_text(self):
+        args = build.parse_args(["validate-docs"])
+        self.assertEqual(
+            build._with_fail_flag("python scripts/validate_docs.py", args),
+            "python scripts/validate_docs.py",
+        )
+
+    def test_tier_is_recognized_with_the_fail_flag(self):
+        for flag in ("--fail-fast", "--no-fail-fast"):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    build._tier_for_cmd(f"{build.get_browser_test_cmd()} {flag}"),
+                    "browser",
+                )
+
+    def test_coverage_refuses_fail_fast(self):
+        """The coverage report needs every test, so `--coverage` refuses the flag."""
+        with self.assertRaises(SystemExit) as ctx:
+            with mock.patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                build.parse_args(["--coverage", "--fail-fast"])
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("--coverage", stderr.getvalue())
+
+    def test_llm_only_keeps_the_gate_fail_mode(self):
+        """`--llm-only` is a gate mode, so its nextest command reports every failure."""
+        args = build.parse_args(["--llm-only"])
+        with (
+            mock.patch.object(build, "check_rust_version"),
+            mock.patch.object(build, "require_nextest"),
+            mock.patch.object(build, "_gate_prelude", return_value={}),
+            mock.patch.object(build, "_set_target_args"),
+            mock.patch.object(
+                build, "_cargo_slot", new=mock.MagicMock(return_value=contextlib.nullcontext())
+            ),
+            mock.patch.object(build, "run") as runner,
+            mock.patch.object(build, "both_print"),
+        ):
+            build.run_llm_only(args, build.StepRecord())
+        llm_cmd = runner.call_args_list[-1].args[0]
+        self.assertIn("--test llm", llm_cmd)
+        self.assertTrue(llm_cmd.endswith("--test llm"))
+        self.assertIn("--no-fail-fast", llm_cmd)
 
 
 class ClippyFormatCheckTests(unittest.TestCase):
