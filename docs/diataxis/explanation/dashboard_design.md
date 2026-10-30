@@ -5,110 +5,90 @@ title: Dashboard Design
 
 ## The SillyTavern lineage
 
-The Chronicler Engine's dashboard inherits its interaction model from SillyTavern, the chat front end for LLM roleplay that set the conventions for this kind of interface. The borrowed pieces:
+The dashboard takes its interaction model from SillyTavern, a chat front end for LLM roleplay. A player who knows SillyTavern finds the chat layout, the Swipes of the last Message and the inline edit of a Message where they expect them.
 
-- **Story log, visual sidebar and action area.** The Game tab mirrors SillyTavern's chat layout: a centre column for the chat history, a side column for character portraits and scene imagery, and a bottom strip for input. The Chronicler Engine pins the action area to the bottom of the page rather than letting it float.
-- **A/B swipes on the last message.** SillyTavern's swipe model, with several alternative generations on the last message and arrow buttons to move between them, maps directly to the `Swipe` aggregate.
-- **Inline edit on any message.** The player opens an entry's edit control, changes the text, and saves. The Chronicler Engine applies the pattern to player inputs (re-edit what you said) and to AI responses (replace the LLM's generation with a hand edit).
-- **Continue on an empty input.** SillyTavern's Continue extends the last narration from a separate button next to Send. The Chronicler Engine puts Continue on the Send button: the player sends an empty input.
-- **Confirmation before destructive requests.** Deleting a message, resetting the game and deleting a game each ask the player to confirm first.
+## How the dashboard keeps the screen current
 
-## How the dashboard shows server data
+The browser keeps no copy of engine data. The server renders all of it, and the page shows what the server rendered. Each section states one rule of this model, its reason and its cost. The Dashboard reference states the mechanism.
 
-The server renders every part of the screen, so domain content has one source. The htmx runtime ships with the app's static assets, so a dashboard load reaches only the engine's own server.
+### One revision, one screen load
 
-The design came from one rule: a draft, a focus or a scroll position must survive every load, and no part may stay old while another part shows new data. An earlier design gave each region its own poll, its own number and its own protection from loads. Most of its bugs were a swap that destroyed client state, or a region that was out of step with another region. Each fix was local to one region, so the fixes added mechanisms and faults of their own.
+The engine has one revision. The page asks `GET /changes`, and when the revision moves, one `GET /screen` load writes the parts of the visible tab. The page needs no table from a kind of data to the parts that show it, so a new part needs only a renderer and a place in the shell. The page converges after any change, because the load does not depend on what changed. The page polls and holds no stream, so a lost answer costs one ask.
 
-Two designs of the interface were then written from the requirements alone, by two models that had no access to the code. Both models belong to one family, so their agreement is weaker evidence than two families would give. Both kept the server half: the server renders, a request answers no screen content, and a change marks the screen old before the screen fetches and morphs. Both rejected a browser table that maps each kind of data to its regions. The design below follows what both required, and takes the one point that they left free, the dialog, because it removes a dirty check.
+The costs:
 
-### One screen, loaded in one request
+- A move of the revision loads the whole visible tab, also when no visible part shows the change. The morph keeps each unchanged node, so the player sees nothing.
+- The server reads the parts one after the other. A load shows at least the revision that it names, and one Game. A story log from before a Narration can show beside a status display from after it, until the next ask. "No part lags" holds for each load as a lower bound, not as a snapshot.
 
-The screen is the header, the failure banner and the parts of the visible tab. Any change moves one engine-wide revision, and the page loads the whole visible screen in one request. All parts of one load come from one revision, so no part can lag behind another. The browser has no table of kinds and regions, so a new part needs no mapping and cannot be forgotten in one.
+### A request answers only its outcome
 
-The cost is that a change in data that no visible part shows still loads the screen. The morph keeps every node that did not change, so the player sees nothing. A local server makes the extra load cheap.
+A request answers a status and the revision after its commit. Only a screen load writes a part, so each part has one writer and one shape. The page shows "Saved", closes a dialog or clears the Action input only when the screen shows the revision of the answer. The confirmation and the screen then agree. The cost is the ask and the load after each request.
 
-The browser names the parts that it wants, and the server holds one renderer for each part name. The shell is then the one source of the layout, and the server knows renderers, not tabs. A part that has no renderer fails at once, in every state.
+Three `POST` routes answer content: `/action/check` (the preview), `/connections/:id/test` and `/connections/test` (the Test result). The engine stores no result of these requests, so no load can show it. Each answers into a place outside every part.
 
-### One ask on a revision
+### Five outcomes
 
-The page asks one small endpoint, `GET /changes`, once a second while the page is visible. The answer holds only numbers, so it is cheap. Polling is simpler and more stable than the htmx WebSocket extension, which was unreliable in production. A push transport can carry the same revision later.
+Every request ends in Done, Refused, Invalid, Failed or No answer. Each outcome asks the player for a different next step:
 
-The server still keeps one number for each kind of data. The numbers record which kind each write raises, and the browser compares only the revision. A number rises after its data is committed, and every save path raises its kinds through the storage layer. A save path that names no kinds does not compile, so the dashboard needs no safety refresh for a forgotten path. The numbers are counters, not dates, so they do not depend on the system clock.
+- **Done.** The player goes on.
+- **Refused.** A `409` only: a busy Game, a Game that is no longer active, or a Message that is no longer the last one. The player waits, or looks at what changed.
+- **Invalid.** The player fixes the input, or reads why.
+- **Failed.** A fault in the engine stopped the request. The player tries again later, or reads the engine lines.
+- **No answer.** The player waits for the engine.
 
-### A request answers one of five outcomes
+A request with no answer within its time limit is No answer, so one hung ask cannot stop the screen. The limit covers the ask and the load. A request that a control sends has no limit, and its control stays busy while it waits.
 
-A `POST` saves data and answers a status code and the revision after its commit. An opener `GET` saves nothing and gets no revision. The data reaches the screen only through a screen load, so two answers cannot write the same part in different shapes.
+The server writes the sentence of every failed answer, because only the engine knows what it did not do and which item it read. The sentence names the item, so it reads correctly away from its control. Details hold only the engine lines after the sentence. The Unreachable text, the summary of a failed screen load and the line for an answer with no body stay in the page, because the engine cannot write them.
 
-Every answer is one of five outcomes, and each outcome asks the player for a different next step:
+### A request names what its control showed
 
-- **Done**: a `2xx` with the revision. The player goes on.
-- **Refused**: a `409`. The Game is busy, another Game is active now, or the last Message is no longer the one that the page showed. The player waits, or looks at what changed.
-- **Invalid**: a `400`, or a `404` for a dialog that opens a record that is gone. The input is bad, or the data does not allow the change. The player fixes the input, or reads why.
-- **Failed**: a `500`. A fault in the engine stopped the request.
-- **No answer**: the engine is unreachable. The player waits for it.
+A control that acts on the last Message names that Message. A request that acts on a Game names a Game, and a draft names the Game that it was written for. The reason is one rule: a stale page must not act on something that the player does not see. The engine refuses such a request, and the typed text stays. After a refused send, the Action input takes the Game that the screen shows, because the player sees that Game now.
 
-The status chooses the outcome, and the text tells the player what happened. The server writes the sentence of every request answer. A sentence says what was not done, and it names the item where one exists, so it reads correctly away from its control. When the answer has more than its sentence, the engine's text is behind Details. The engine knows what it refused and which item it read, so the words have one source, and a new request brings its sentence with it. Three sentences stay in the page, because the engine cannot write them: the Unreachable text, the summary of a failed screen load, and the line for an answer with no body.
-
-The page shows "Saved", closes the dialog and clears the Action input only when the screen shows the revision of the answer. The confirmation and the screen then agree. The cost is one extra round trip after each request: the ask that follows it.
-
-Each request that acts on the Game carries the Game of the screen. The engine refuses it from a page whose Game is no longer active, so a tab cannot send to a Game that another tab switched to a moment before. The refused text stays in the input.
-
-Delete, Retry and Retrigger act on the last Message, so each request also names the Message that the page showed with the control. The engine refuses the request when that Message is no longer the last one. An entry stops being last when, for example, another browser tab added or deleted a Message, an Autoplay run added one, or the page was last loaded before a Job ended.
+The cost is a refusal that the player did not cause. Another browser tab, an Autoplay run or a finished Job can change the last Message or the active Game after the page rendered its controls.
 
 ### A report shows where the player can act on it
 
-An invalid answer to a form with typed input shows inside that form, and the typed text stays. The forms with typed input are the dialog forms, the Action input, the Autoplay cycles and the message edit. The fix is in that text, so the report is next to it.
+An invalid answer to a form with typed input shows in that form, because the fix is in that text. Every other report shows in the one notice place under the header, because its cause is the state of the engine. An open dialog repeats the summary, because the modal hides the page. The latest report wins, and a one-line report wraps.
 
-Every other report shows in the notice place of the shell, under the header. The cause of a refusal, a failure or a failed screen load is the state of the engine, so one fixed place on every tab holds all of them, and the player finds each report in the same place. An open dialog repeats the summary in its status line, because the modal hides the page. A refused or failed dialog stays open, so the player keeps the draft.
+The costs: a refusal shows away from the control that the player pressed, so its sentence names what was not done. A failing screen load repeats each second and replaces the notice of a request, so the player can lose a refusal report after about one second.
 
-The tradeoff is distance: a refusal shows away from the control that the player pressed. The sentence names what was not done, so the report still makes sense there. A refusal is rare, because the server renders Send and Autoplay disabled while the Game is busy, and the `409` catches two requests that race.
+### One reader reports every answer
 
-The notice place is in the shell, so a tab change keeps the report.
+One piece of browser code reads every request answer and shows every report. A new request needs no reader of its own, and its words and its place follow from its outcome.
 
-### One reader for every answer
+The server renders every control that sends a request and every place for a report, except in the shell. The shell holds `#notice`, the command form and the Autoplay form, because they must survive a load and a tab change. The shell is a second source of markup, so a sweep test checks the report places of both sources.
 
-One piece of browser code reads every request answer and shows every report. A control adds only its own work after a done answer: it closes the dialog, clears the input or moves focus. A control that saves on change also returns to its rendered value when its save does not go through. An earlier design read the answer at each control, and each control chose its own words and its own place, so a new request had to know which reader applied to it.
+### Cannot act has more than one source
 
-The server renders every control that sends a request and every place that holds a report. The server is then the one source of the markup, so one check covers every control.
+The server renders `disabled` for what the engine knows: a busy Game, a view-only Game. The Games pager uses `aria-disabled`, so it keeps focus through a load. CSS shows a request in flight as busy. The story-log edit lock, with its click guard, stops Edit and the swipe controls, because only the browser knows the edit. No script writes `disabled`, so each load corrects every control and no failure leaves one disabled. The Action input and the cycle budget stay enabled during their request, so focus stays in the input.
 
-### A tab exists while it is open
+The cost is that the busy state of a request is CSS only. Assistive technology gets no signal. The page drops a second submit of the same form, and the engine refuses a second send.
 
-A tab's parts hold content only while the tab is open. Leaving a tab empties its parts, and opening a tab loads them. A closed tab cannot be stale, and no rule must decide when a hidden part loads. View state of the open tab, such as the page of the saved Games, ends with the tab.
+### A draft lives outside the screen
 
-The cost is that leaving the Game tab loses the scroll position of the story and an open message edit. The Action input keeps its text, because it is in the shell.
+A form that waits for a Save opens in one modal dialog outside the screen, so no load meets a draft and the page needs no check of what counts as a draft. The Action input and the Autoplay form live in the shell for the same reason. The cost is that the dialog takes the player out of the list, and it shows the data as it was when it opened. The last save wins.
 
-### View state survives a load, and a draft stays out of the screen
+The inline Message edit is the one draft inside a part. The edit stays in the story, next to the text that it changes. Its cost is a list of rules that no other draft needs:
 
-A change can arrive while the player works. A load must neither destroy what the player does nor wait for it.
+- A load skips the entry in edit.
+- The edit lock and its click guard stop the controls that would change the story under the draft.
+- Its report slot is in `.edit-actions`, the one slot that is not in a form.
+- The Save hint reads the status display of another part.
 
-- A load morphs each part, so a node that the new render keeps stays the same node, with its focus, selection and scroll position.
-- View state, such as an open Details disclosure or the active Settings sub-tab, lives in attributes that the server never sets, and the load keeps them.
-- A form that waits for a Save opens in one modal dialog outside the screen, so no load meets a draft. A load never writes into a draft: both designs required it. The single dialog was free, and it was chosen because it needs no check of what counts as a draft. Closing the dialog discards the form, and focus returns to the control that opened it. The server renders an id on each opener, and the dialog finds it by that id, so focus returns also when the opener had no focus at the click.
-- Two elements still hold unsaved input inside a part: a story-log entry in edit, and a control whose request is in flight. A load skips each one and shows the rest of the part. The player can edit a message while a Job runs, and the new narration arrives around the draft.
+### View state and tabs
 
-The tradeoff is the dialog. It takes the player out of the list for the time of the edit, and it shows the data as it was when the form opened. The last save wins.
+The player owns view state, such as an open Details, so a load keeps it. The active tab, the Settings sub-tab and the Games page also survive a tab change and a reload, in `sessionStorage`. The cost is that each browser tab holds its own view state.
 
-### The server renders every control state
-
-Whether a control is disabled is data, so the server renders it from the busy state of the Game. No script writes `disabled`, and each load corrects every control. A control that a script had disabled and no script re-enabled could stay disabled after a failure. The guardrails ban such a write.
-
-The cost is that a request shows its own busy state through CSS only. Assistive technology gets no signal in that time. A second submit of the form is dropped, and the engine refuses a second send with `409`.
+A tab's parts hold content only while the tab is open. A closed tab cannot be stale, and no rule decides when a hidden part loads. The cost is that leaving the Game tab loses the scroll position of the story and an open Message edit.
 
 ### A list sends short rows
 
-A list sends the header of each row. The full item loads when the player opens it, in the dialog. The LLM Messages record is the case: a record never changes, and the full texts of 50 records were the largest part of each load.
+A list sends the header of each row, and the full item opens in the dialog. The full texts of the LLM messages are the largest data of the dashboard, and they never change after the engine records them. The cost is one more request when the player opens an item.
 
-A list with no natural limit has pages. The saved Games show 50 for each page. The page number is view state of the browser, not of the server, so two tabs can show different pages, and a tab change resets it.
+### The convergence check
 
-### The check that the screen converges
-
-Every browser check ends with a comparison of each visible part with a fresh render of the same part. A part that stayed old fails the check, so a stale part is found by one test and not fixed one part at a time.
-
-## Palette
-
-The dashboard's palette is built for long prose. Quoted dialogue differs from narration by hue, and both stay at body weight.
+Every browser check ends with a comparison of each visible part with a fresh render of the same part. One shared check finds a stale part in any part, so no part needs a protection of its own. `tests/STRATEGY.md` states the mechanism.
 
 ## Document References
 
 - [`../reference/frontend/dashboard.md`](../reference/frontend/dashboard.md) — the dashboard's parts and what owns what.
-- [`../reference/storage.md`](../reference/storage.md) — the revision and the change counters.

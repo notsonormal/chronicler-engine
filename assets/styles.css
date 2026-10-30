@@ -344,6 +344,7 @@ body {
 }
 
 .log-entry .text q {
+    /* Long prose: quoted dialogue differs from narration by hue and slant, and both stay at body weight. */
     color: var(--color-accent-orange);
     font-style: italic;
 }

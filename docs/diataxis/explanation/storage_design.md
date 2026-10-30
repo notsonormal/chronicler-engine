@@ -11,7 +11,7 @@ A `Storage` holds no Game, so each caller names the Game it reads or writes. A J
 
 ## Change counters in the storage layer
 
-Every save of data passes the one wrapper that dispatches a `Storage` method, or the commit of a transaction. The change counters rise at those two points, so rename, the LLM message recorder, Settings, prompt presets and Worlds raise their numbers with no code of their own. Two exhaustive maps name the kinds of each call and each write, so a new save path that forgets its kinds fails the build instead of leaving a dashboard region stale. The application layer holds no counter port, because the storage adapter may not depend on the application layer.
+Every save of data passes the one wrapper that dispatches a `Storage` method, or the commit of a transaction. The change counters rise at those two points, so rename, the LLM message recorder, Settings, prompt presets and Worlds raise their numbers with no code of their own. Two exhaustive maps name the kinds of each call and each write, so a new save path that forgets its kinds fails the build instead of leaving a part of the screen stale. The numbers are counters, not dates, so they do not depend on the system clock. The application layer holds no counter port, because the storage adapter may not depend on the application layer.
 
 ## The database as the sole source of truth at runtime
 
