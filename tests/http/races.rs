@@ -21,8 +21,8 @@ use crate::support::http_fixtures::{
     create_game_from, room_header_of, story_of, story_of_game, OFFERED_SET,
 };
 use crate::support::http_requests::{
-    fetch_body, fetch_status_label, post_action, post_empty, post_form, response_body,
-    wait_for_jobs, wait_idle, wait_settled, post_on_last_message,
+    fetch_status_label, post_action, post_empty, post_form, response_body, wait_for_jobs,
+    wait_idle, wait_settled, post_on_last_message, fetch_part,
 };
 
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
@@ -177,7 +177,7 @@ async fn test_options_while_job_runs_is_refused_http() {
         0,
         "the refused /options must generate nothing"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "the refused /options must leave the dock empty: {dock}"
@@ -1072,7 +1072,7 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                 Some(expected.as_str()),
                 "{label}: the state update landed, so the Narration shows the room it arrived in"
             );
-            let dock = fetch_body(&start.app, "/fragment/options-dock").await;
+            let dock = fetch_part(&start.app, "options-dock").await;
             assert!(
                 !dock.contains("options-strip"),
                 "{label}: the text save emptied the offered set, and the refused Options run leaves it empty, got: {dock}"

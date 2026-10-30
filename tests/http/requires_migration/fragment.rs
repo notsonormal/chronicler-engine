@@ -19,7 +19,8 @@ use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::support::app_wiring::app_with_model;
 use crate::support::http_requests::{
-    fetch_body, post_action, post_empty, wait_settled, post_on_last_message,
+    fetch_answer, fetch_body, fetch_part, post_action, post_empty, wait_settled,
+    post_on_last_message,
 };
 use crate::TEST_PERSONA;
 
@@ -35,22 +36,22 @@ async fn test_basic_fragments_return_html() {
     // a seeded entry.
     let app = TestAppBuilder::default_test().build();
     let fragments = [
-        ("/fragment/header", "class=\"game-title\""),
-        ("/fragment/story-log", "class=\"log-entry"),
-        ("/fragment/visual-sidebar", "id=\"visual-sidebar\""),
+        ("header", "class=\"game-title\""),
+        ("story-log", "class=\"log-entry"),
+        ("visual-sidebar", "id=\"visual-sidebar\""),
     ];
-    for (uri, expected) in fragments {
-        let body = fetch_body(&app, uri).await;
+    for (part, expected) in fragments {
+        let body = fetch_part(&app, part).await;
         assert!(
             body.contains(expected),
-            "Fragment {uri} should contain '{expected}'"
+            "Fragment {part} should contain '{expected}'"
         );
     }
 }
 
 #[tokio::test]
 async fn test_visual_sidebar_renders_room_image() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/visual-sidebar").await;
+    let body = fetch_part(&TestAppBuilder::default_app(), "visual-sidebar").await;
     assert!(
         body.contains("data/images/test_room.png"),
         "Expected room image in sidebar: {body}"
@@ -86,7 +87,7 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
         "second action should complete"
     );
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
     assert!(
         body.contains("edit-btn"),
         "story-log should render edit button: {body}"
@@ -108,7 +109,7 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
 
 #[tokio::test]
 async fn test_header_fragment_displays_game_title() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/header").await;
+    let body = fetch_part(&TestAppBuilder::default_app(), "header").await;
     assert!(
         body.contains("game-title"),
         "header should have .game-title element: {body}"
@@ -273,7 +274,7 @@ async fn test_delete_history_handler_success() {
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 1000).await, "the turn should settle");
     assert!(
-        fetch_body(&app, "/fragment/story-log")
+        fetch_part(&app, "story-log")
             .await
             .contains("You look around.")
     );
@@ -282,7 +283,7 @@ async fn test_delete_history_handler_success() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
     assert!(
         !body.contains("You look around."),
         "Log entry should be deleted from rendered story log"
@@ -378,17 +379,7 @@ async fn test_list_games_fragment_populated() {
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
+    let html = fetch_part(&app, "games").await;
     assert!(
         html.contains("game-item"),
         "Should render game item: {html}"
@@ -416,16 +407,7 @@ async fn test_list_games_fragment_escapes_html() {
         .storage(Arc::clone(&storage))
         .build();
 
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
+    let html = fetch_part(&app, "games").await;
     assert!(
         !html.contains("<script>"),
         "Should escape HTML in game name: {html}"
@@ -446,13 +428,8 @@ async fn test_list_games_fragment_storage_error() {
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let (status, _body) = fetch_answer(&app, "/screen?parts=games").await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]
@@ -496,17 +473,7 @@ async fn test_list_games_fragment_shows_world_badge() {
         .storage(Arc::clone(&storage))
         .build();
 
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
+    let html = fetch_part(&app, "games").await;
     assert!(
         html.contains("world-badge"),
         "Should render world-badge class: {html}"
@@ -714,7 +681,7 @@ async fn test_switch_swipe_handler_concurrent() {
 
 #[tokio::test]
 async fn test_header_fragment_has_no_hardcoded_connection_status() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/header").await;
+    let body = fetch_part(&TestAppBuilder::default_app(), "header").await;
     assert!(
         !body.contains("id=\"connection-status\""),
         "the header no longer claims a live connection: {body}"

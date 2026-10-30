@@ -11,7 +11,7 @@ use chronicler_engine::domain::model::llm_message::LlmMessage;
 use chronicler_engine::test_support::{analysis_report, ScriptedModel};
 
 use crate::support::app_wiring::app_with_script;
-use crate::support::http_requests::{fetch_body, post_action, response_body, wait_settled};
+use crate::support::http_requests::{fetch_body, post_action, response_body, wait_settled, fetch_part};
 
 // [docs/specs/llm_messages.md] SCENARIO: 33.1
 #[tokio::test]
@@ -52,7 +52,7 @@ async fn test_failed_narration_attempt_records_and_renders_failure_http() {
     assert!(failure.raw_response_json.is_empty());
     assert!(failure.parsed_response.is_empty());
 
-    let panel = fetch_body(&app, "/fragment/llm-messages").await;
+    let panel = fetch_part(&app, "llm-messages").await;
     assert!(
         panel.contains("narrator"),
         "the Agent must be named: {panel}"
@@ -126,7 +126,7 @@ async fn test_failed_attempt_survives_a_later_success_http() {
         "the second attempt is a success row"
     );
 
-    let panel = fetch_body(&app, "/fragment/llm-messages").await;
+    let panel = fetch_part(&app, "llm-messages").await;
     assert!(
         panel.contains("configured_failure"),
         "the failure text must stay visible: {panel}"
@@ -210,7 +210,7 @@ async fn test_llm_messages_list_sends_a_header_for_each_attempt_http() {
     let ids = recorded_ids(&state);
     assert_eq!(ids.len(), 2);
 
-    let panel = fetch_body(&app, "/fragment/llm-messages").await;
+    let panel = fetch_part(&app, "llm-messages").await;
 
     assert!(
         !panel.contains("llm-messages-panel"),

@@ -118,12 +118,12 @@ Given three created games, one of them active, and two saved games "id2" and "id
 When the client POST /games/{id2}/delete
 Then the response status is "200 OK"
 And the response body is empty
-And a GET /fragment/games lists "id3" and shows no empty state
+And a GET /screen?parts=games lists "id3" and shows no empty state
 
 When the client POST /games/{id3}/delete
 Then the response status is "200 OK"
 And the response body is empty
-And a GET /fragment/games renders the Saved Games empty state
+And a GET /screen?parts=games renders the Saved Games empty state
 ```
 
 ### Rename
@@ -138,8 +138,8 @@ And the response body is empty
 And the response has no "HX-Refresh" header
 And the active game's display name is "The Long Road"
 And the active game's stable name is unchanged
-And a GET /fragment/header renders "The Long Road" as the game name
-And a GET /fragment/games renders "The Long Road" as the active game name
+And a GET /screen?parts=header renders "The Long Road" as the game name
+And a GET /screen?parts=games renders "The Long Road" as the active game name
 ```
 
 #### Scenario 17.5: Renaming a game to a blank display name is rejected
@@ -191,7 +191,7 @@ When the client POST /games/{game_id}/posture with narrative_perspective="third"
 Then the response status is "200 OK"
 And the response body is empty
 And game_catalogue.current_game() reports tense "present" and perspective "third"
-And a GET /fragment/games renders the narrative_tense select with "present" selected
+And a GET /screen?parts=games renders the narrative_tense select with "present" selected
 And it renders the narrative_perspective select with "third" selected
 ```
 
@@ -199,7 +199,7 @@ And it renders the narrative_perspective select with "third" selected
 
 ```gherkin
 Given a seeded world with key "test" and an active game in Novel mode (Third person, Past)
-When the client GET /fragment/games
+When the client GET /screen?parts=games
 Then the response status is "200 OK"
 And the body contains id="game-posture-controls"
 And the narrator_mode select renders "novel" selected
@@ -217,14 +217,14 @@ When the client POST /games/{game_id}/presets with options_preset_id set to a di
 Then the response status is "200 OK"
 And the response body is empty
 And the active game's Options preset is the chosen one
-And a GET /fragment/games renders the Options select with that Options preset selected
+And a GET /screen?parts=games renders the Options select with that Options preset selected
 ```
 
 #### Scenario 20.9: The games fragment lists only the games other than the active one
 
 ```gherkin
 Given a seeded world with key "test" and an active game in Novel mode
-When the client GET /fragment/games
+When the client GET /screen?parts=games
 Then the response status is "200 OK"
 And the Saved Games section says there are no other saved games (the active game is the only game)
 And the active game card carries no status badge repeating the section heading
@@ -234,7 +234,7 @@ And the active game card carries no status badge repeating the section heading
 
 ```gherkin
 Given a seeded world with key "test", an active game, and a second saved game
-When the client GET /fragment/games
+When the client GET /screen?parts=games
 Then the response status is "200 OK"
 And the Saved Games section lists the second game
 And the Saved Games section does not list the active game
@@ -254,7 +254,7 @@ And the active game's Narrator Mode is unchanged
 
 ```gherkin
 Given a seeded world with key "test", an active game, and a second saved game
-When the client GET /fragment/games
+When the client GET /screen?parts=games
 Then the response status is "200 OK"
 And the body does not hold an element with the class "games-panel"
 And the active game row and the row of the second game each carry the id "game-row-{game_id}"

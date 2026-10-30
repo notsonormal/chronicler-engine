@@ -7,19 +7,11 @@ use chronicler_engine::test_support::assert_answers_nothing;
 use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
+use crate::support::http_requests::fetch_part;
 
 /// A saved change answers nothing, so a test reads the result from the panel.
 async fn settings_panel(app: &axum::Router) -> String {
-    let req = Request::builder()
-        .uri("/fragment/settings")
-        .body(Body::empty())
-        .unwrap();
-    let response = app.clone().oneshot(req).await.unwrap();
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 65536)
-        .await
-        .unwrap();
-    String::from_utf8_lossy(&body).into_owned()
+    fetch_part(app, "settings").await
 }
 
 #[tokio::test]

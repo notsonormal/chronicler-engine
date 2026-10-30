@@ -22,8 +22,8 @@ use crate::support::http_assertions::{
 };
 use crate::support::http_fixtures::{story_of, OFFERED_SET};
 use crate::support::http_requests::{
-    fetch_status_label, assert_answers_nothing, fetch_body, fetch_busy_status, post_action,
-    wait_settled, post_on_last_message,
+    fetch_status_label, assert_answers_nothing, fetch_busy_status, post_action, wait_settled,
+    post_on_last_message, fetch_part,
 };
 
 fn story_log_holds_event_narration(state: &AppState) -> bool {
@@ -300,7 +300,7 @@ async fn test_retrigger_last_message_is_a_typed_input_returns_400_http() {
             .is_some(),
         "the typed Input's state holds the event record"
     );
-    let story_log = fetch_body(&app, "/fragment/story-log").await;
+    let story_log = fetch_part(&app, "story-log").await;
     assert!(
         !story_log.contains("retrigger-btn"),
         "a typed Input offers no Retrigger: {story_log}"
@@ -353,7 +353,7 @@ async fn test_retrigger_last_message_is_event_continuation_returns_400_http() {
         StatusCode::BAD_REQUEST,
         "Retrigger when last message is event continuation should return bad request"
     );
-    let story_log = fetch_body(&app, "/fragment/story-log").await;
+    let story_log = fetch_part(&app, "story-log").await;
     assert!(
         !story_log.contains("retrigger-btn"),
         "an event Narration offers no Retrigger: {story_log}"
@@ -422,7 +422,7 @@ async fn test_retrigger_trigger_narration_failure_sets_failed_http() {
         "the main narration must stay the last entry: {messages_after:?}"
     );
 
-    let story_log = fetch_body(&app, "/fragment/story-log").await;
+    let story_log = fetch_part(&app, "story-log").await;
     assert!(
         story_log.contains("retrigger-btn"),
         "the failed trigger must leave Retrigger available: {story_log}"

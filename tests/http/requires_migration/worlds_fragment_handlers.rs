@@ -12,7 +12,7 @@ use chronicler_engine::TestDataBuilder;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::world::WorldCard;
 
-use crate::support::http_requests::fetch_body;
+use crate::support::http_requests::fetch_part;
 
 fn make_world_form_data(key: &str, name: &str, map_json: &str, scenarios_json: &str) -> String {
     format!(
@@ -27,16 +27,7 @@ fn make_world_form_data(key: &str, name: &str, map_json: &str, scenarios_json: &
 #[tokio::test]
 async fn test_list_worlds_fragment_returns_html() {
     let app = TestAppBuilder::default_app();
-    let req = Request::builder()
-        .uri("/fragment/worlds")
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert!(response.status().is_success());
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let body_str = String::from_utf8_lossy(&body);
+    let body_str = fetch_part(&app, "worlds").await;
     assert!(
         body_str.contains(r##"hx-target="#edit-dialog-body""##),
         "Expected the controls that open the dialog in response: {body_str}"
@@ -50,7 +41,7 @@ async fn test_list_worlds_fragment_returns_html() {
 #[tokio::test]
 async fn test_list_worlds_fragment_shows_world_count() {
     let app = TestAppBuilder::default_app();
-    let body_str = fetch_body(&app, "/fragment/worlds").await;
+    let body_str = fetch_part(&app, "worlds").await;
 
     assert!(
         body_str.contains("Test World"),
@@ -146,7 +137,7 @@ async fn test_create_world_handler_valid_data() {
         .await
         .unwrap();
     assert!(body.is_empty(), "a saved World answers nothing: {body:?}");
-    let panel = fetch_body(&app, "/fragment/worlds").await;
+    let panel = fetch_part(&app, "worlds").await;
     assert!(
         panel.contains("New World"),
         "Expected the saved World in the list: {panel}"
@@ -327,7 +318,7 @@ async fn test_update_world_handler_valid_data() {
         .await
         .unwrap();
     assert!(body.is_empty(), "a saved World answers nothing: {body:?}");
-    let panel = fetch_body(&app, "/fragment/worlds").await;
+    let panel = fetch_part(&app, "worlds").await;
     assert!(
         panel.contains("Updated Test World"),
         "Expected the saved World in the list: {panel}"

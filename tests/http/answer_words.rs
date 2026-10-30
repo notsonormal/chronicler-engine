@@ -21,7 +21,8 @@ use crate::screen::{game_bound_rows, GAME_HEADER, STALE_GAME_LINE};
 use crate::support::app_wiring::{app_with_model, two_game_app};
 use crate::support::http_fixtures::{story_of, world_form_body};
 use crate::support::http_requests::{
-    post_action, post_form, post_form_with_headers, response_body, wait_for_jobs, wait_settled,
+    fetch_answer, post_action, post_form, post_form_with_headers, response_body, wait_for_jobs,
+    wait_settled,
 };
 
 async fn send(
@@ -52,13 +53,6 @@ fn error_text_of(label: &str, body: &str) -> String {
     text.to_string()
 }
 
-async fn get_status_and_body(app: &axum::Router, uri: &str) -> (StatusCode, String) {
-    let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
-    let response = app.clone().oneshot(request).await.unwrap();
-    let status = response.status();
-    (status, response_body(response).await)
-}
-
 // [docs/specs/screen.md] SCENARIO: 45.18
 #[tokio::test]
 async fn test_each_kind_of_failed_request_answers_its_status_and_one_body() {
@@ -87,7 +81,7 @@ async fn test_each_kind_of_failed_request_answers_its_status_and_one_body() {
         "/fragment/prompt-presets/no-such-preset/edit",
         "/fragment/prompt-presets/no-such-preset/view",
     ] {
-        let (status, body) = get_status_and_body(&app, uri).await;
+        let (status, body) = fetch_answer(&app, uri).await;
         assert_eq!(
             status,
             StatusCode::NOT_FOUND,
@@ -343,7 +337,7 @@ async fn test_the_first_line_of_a_failed_answer_says_what_was_not_done() {
         "a Message request names no item"
     );
 
-    let (status, body) = get_status_and_body(&app, "/fragment/games/999999/rename").await;
+    let (status, body) = fetch_answer(&app, "/fragment/games/999999/rename").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(
         error_lines_of("an opener", &body),

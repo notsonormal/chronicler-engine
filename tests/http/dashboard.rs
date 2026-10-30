@@ -134,13 +134,13 @@ async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
         );
     }
 
-    for uri in ["/fragment/story-log", "/fragment/games"] {
-        let icons = referenced_icons(&fetch_body(&app, uri).await);
-        assert!(!icons.is_empty(), "{uri} should show at least one icon");
+    for part in ["story-log", "games"] {
+        let icons = referenced_icons(&fetch_part(&app, part).await);
+        assert!(!icons.is_empty(), "{part} should show at least one icon");
         for icon in icons {
             assert!(
                 defined.contains(&icon),
-                "{uri} references icon {icon}, which the shell does not define"
+                "{part} references icon {icon}, which the shell does not define"
             );
         }
     }
@@ -166,7 +166,7 @@ async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
         "true",
         "a Game with a Job reports true"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("disabled"),
         "a Game with a Job disables the dock controls: {dock}"
@@ -186,7 +186,7 @@ async fn test_the_dock_and_the_debug_endpoint_answer_from_the_live_registry() {
         "false",
         "a Game with no Job reports false"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("disabled"),
         "a Game with no Job leaves the dock controls enabled: {dock}"

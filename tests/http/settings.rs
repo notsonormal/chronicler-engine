@@ -20,7 +20,7 @@ use chronicler_engine::test_support::empty_sqlite_storage;
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::app_with_production_graph;
 use crate::support::http_fixtures::mock_connection;
-use crate::support::http_requests::post_form;
+use crate::support::http_requests::{fetch_part, post_form};
 use crate::test_utils::card_html_slice;
 
 async fn get_body(app: &axum::Router, uri: &str) -> String {
@@ -56,7 +56,7 @@ fn connection_row<'a>(panel: &'a str, id: &str) -> &'a str {
 async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
     let app = TestAppBuilder::default_app();
 
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
 
     assert!(
         !body.contains("settings-panel"),
@@ -119,7 +119,7 @@ async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
 async fn test_role_rows_connection_rows_and_the_text_check_card_hold_no_error_slot() {
     let app = TestAppBuilder::default_app();
 
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
 
     assert!(
         body.contains("connection-openrouter-gpt-4o-mini") && body.contains("role-select-narrator"),
@@ -136,7 +136,7 @@ async fn test_role_rows_connection_rows_and_the_text_check_card_hold_no_error_sl
 async fn test_panel_controls_swap_nothing_into_the_panel() {
     let app = TestAppBuilder::default_app();
 
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
 
     assert!(
         body.contains(r#"hx-trigger="change" hx-swap="none""#),
@@ -222,7 +222,7 @@ async fn test_text_check_autosave_stores_mode_and_check_before_sending() {
 
     assert_answers_nothing(response).await;
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"<option value="spell" selected>"#),
         "the stored mode must render selected: {panel}"
@@ -247,7 +247,7 @@ async fn test_text_check_disabled_clears_check_before_sending() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"<option value="disabled" selected>"#),
         "the stored mode must render Disabled selected: {panel}"
@@ -315,7 +315,7 @@ async fn test_failed_settings_panel_load_reports_inside_the_panel() {
     );
 
     let request = Request::builder()
-        .uri("/fragment/settings")
+        .uri("/screen?parts=settings")
         .body(Body::empty())
         .unwrap();
     let response = app.clone().oneshot(request).await.unwrap();
@@ -389,7 +389,7 @@ async fn test_narrator_role_select_applies_at_once() {
 
     let response = post_form(&app, "/connections/set-narrator", "connection_id=mock-b").await;
     assert_answers_nothing(response).await;
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     let narrator_row = panel
         .split(r#"id="role-row-quantifier""#)
         .next()
@@ -424,7 +424,7 @@ async fn test_quantifier_role_select_applies_at_once() {
 
     let response = post_form(&app, "/connections/set-quantifier", "connection_id=mock-b").await;
     assert_answers_nothing(response).await;
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     let quantifier_row = panel
         .split(r#"id="role-row-quantifier""#)
         .nth(1)
@@ -469,7 +469,7 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
         body.contains("role above"),
         "the refusal must point at the role rows: {body}"
     );
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"hx-get="/fragment/connections/mock-a/edit"#),
         "the refused connection must stay in the list: {panel}"
@@ -485,7 +485,7 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
 
     let response = post_form(&app, "/connections/mock-c/delete", "").await;
     assert_answers_nothing(response).await;
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         !panel.contains(r#"hx-get="/fragment/connections/mock-c/edit"#),
         "an unused connection must still be deletable: {panel}"
@@ -498,7 +498,7 @@ async fn test_role_rows_show_each_roles_health() {
     let (state, storage) = TestAppBuilder::default_test().build_service_with_storage();
     let app = build_router(state);
 
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
     assert_eq!(
         body.matches("No calls yet").count(),
         2,
@@ -514,7 +514,7 @@ async fn test_role_rows_show_each_roles_health() {
             -10,
         ))
         .unwrap();
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
     assert!(
         body.contains("Degraded"),
         "the failed role must degrade: {body}"
@@ -539,7 +539,7 @@ async fn test_role_rows_show_each_roles_health() {
     storage
         .save_llm_message(&llm_message("narrator", "mock", None, 0))
         .unwrap();
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
     assert!(
         body.contains("Healthy"),
         "a later success must report Healthy: {body}"
@@ -576,7 +576,7 @@ async fn test_connection_add_duplicate_name_is_refused() {
     assert!(body.contains("Duplicate Probe"), "body: {body}");
     assert!(body.contains("already exists"), "body: {body}");
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert_eq!(
         panel
             .matches(r#"<span class="connection-name">Duplicate Probe</span>"#)
@@ -628,7 +628,7 @@ async fn test_connection_edit_keeps_its_own_name() {
     )
     .await;
     assert_eq!(added.status(), StatusCode::OK);
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     let id = added_connection_id(&panel);
 
     let response = post_form(
@@ -638,7 +638,7 @@ async fn test_connection_edit_keeps_its_own_name() {
     )
     .await;
     assert_answers_nothing(response).await;
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     let row = connection_row(&panel, &id);
     assert!(
         row.contains(r#"<span class="connection-name">Alpha</span>"#),
@@ -673,7 +673,7 @@ async fn test_connection_add_unknown_provider_answers_non_2xx() {
         "the failure must name the rejected provider: {body}"
     );
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"<span class="connection-name">"#),
         "the connection rows must survive the refused add: {panel}"
@@ -693,7 +693,7 @@ async fn test_connection_edit_unknown_provider_answers_non_2xx() {
     )
     .await;
     assert_eq!(added.status(), StatusCode::OK);
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     let id = added_connection_id(&panel);
 
     let response = post_form(
@@ -710,7 +710,7 @@ async fn test_connection_edit_unknown_provider_answers_non_2xx() {
     let body = body_text(response).await;
     assert!(body.contains("bogus_provider"), "body: {body}");
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"<span class="connection-name">Alpha</span>"#),
         "the connection must survive the refused edit: {panel}"
@@ -730,7 +730,7 @@ async fn test_connection_edit_failure_names_the_typed_name() {
     )
     .await;
     assert_eq!(added.status(), StatusCode::OK);
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     let alpha = added_connection_id(&panel);
 
     let added = post_form(
@@ -740,7 +740,7 @@ async fn test_connection_edit_failure_names_the_typed_name() {
     )
     .await;
     assert_eq!(added.status(), StatusCode::OK);
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     let beta = panel
         .match_indices("hx-get=\"/fragment/connections/conn-")
         .map(|(at, _)| added_connection_id(&panel[at..]))

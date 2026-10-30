@@ -22,7 +22,7 @@ read-only. Its root (`data-dialog-form`) carries the title of the dialog.
 Given an active Game whose narrator backend fails every narration request
 When the client POST /action with command="look"
 And the Game is no longer busy
-Then GET /fragment/llm-messages shows one entry for the narrator that names the backend/model the attempt was made against
+Then GET /screen?parts=llm-messages shows one entry for the narrator that names the backend/model the attempt was made against
 And that entry carries the backend's failure text
 And the record of that entry carries the failure text and no Raw JSON section
 ```
@@ -35,7 +35,7 @@ When the client POST /action with command="look"
 And the Game is no longer busy
 And the client POST /action with command="listen"
 And the Game is no longer busy
-Then GET /fragment/llm-messages shows two entries for the narrator
+Then GET /screen?parts=llm-messages shows two entries for the narrator
 And the first entry carries the backend's failure text
 And the record of the second entry carries the second narration
 ```
@@ -45,7 +45,7 @@ And the record of the second entry carries the second narration
 ```gherkin
 Given an active Game with a recorded LLM attempt that holds every field
 And a recorded LLM attempt that failed
-When the client GET /fragment/llm-messages
+When the client GET /screen?parts=llm-messages
 Then the response status is "200 OK"
 And the body does not hold an element with the class "llm-messages-panel"
 And each attempt's card has the id "llm-msg-{id}"

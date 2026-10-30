@@ -58,17 +58,17 @@ Given a Game whose story log holds only its opening Narration
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action with command="examine room"
 And the Game is no longer busy
-And the client GET /fragment/story-log (at least 2 .log-entry rendered)
+And the client GET /screen?parts=story-log (at least 2 .log-entry rendered)
 And the client POST /history/delete
 Then the response is 200 with an empty body
-And the client GET /fragment/story-log renders exactly one fewer .log-entry
+And the client GET /screen?parts=story-log renders exactly one fewer .log-entry
 ```
 
 #### Scenario 8.5: Story-log fragment declares no log container
 
 ```gherkin
 Given a game state with at least one message entry
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then the response body contains .log-entry markup
 And the response body contains no id="story-log" declaration
 And the response body contains no class="story-log" declaration
@@ -79,7 +79,7 @@ And the response body contains no class="story-log" declaration
 ```gherkin
 Given a game with at least 2 Messages and a stored trigger
 And the last Message is a Narration with one Swipe
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then the response shows the Edit, Delete, Retrigger and Swipe controls
 And every button that shows no text has an accessible name
 And a button that has a tooltip is named by the same words
@@ -101,9 +101,9 @@ And the story log still holds every Message of the Job
 
 ```gherkin
 Given a Game whose Job is held at the analysis call of a Narration
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then the rendered log holds the Narration's text
-And the client GET /status/busy answers the status "thinking" with the label "Quantifying..."
+And the client GET /screen?parts=status-display answers the status "thinking" with the label "Quantifying..."
 ```
 
 #### Scenario 8.9: An edit of a Message that does not exist answers 400
@@ -128,7 +128,7 @@ And the story log still holds the opening Narration
 
 ```gherkin
 Given a Game whose story holds 53 Messages
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then the response renders exactly 50 .log-entry
 And the last .log-entry is the last stored Message
 And the first .log-entry is the fourth stored Message
@@ -139,10 +139,10 @@ And the Delete and Retry controls sit on the last .log-entry
 
 ```gherkin
 Given a Game whose story holds 53 Messages
-And the client GET /fragment/story-log
+And the client GET /screen?parts=story-log
 When the client POST /history/delete
 Then the response status is "200 OK"
-And the client GET /fragment/story-log renders exactly 50 .log-entry
+And the client GET /screen?parts=story-log renders exactly 50 .log-entry
 And the last .log-entry is the stored Message before the deleted one
 And no .log-entry holds the deleted Message
 And the first .log-entry is the third stored Message
@@ -153,7 +153,7 @@ And the first .log-entry is the third stored Message
 ```gherkin
 Given a Game whose story holds 53 Messages
 And every Message holds the state of the same room "Test Room"
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then the response renders exactly 50 .log-entry
 And the first .log-entry shows the room "Test Room"
 And no other .log-entry shows a room
@@ -164,7 +164,7 @@ And no other .log-entry shows a room
 ```gherkin
 Given a Game whose last Message is an Impersonate Input
 And the state of that Input's Swipe holds an event record
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then the last .log-entry carries the `.retrigger-btn` control
 And no other .log-entry carries it
 ```
@@ -175,14 +175,14 @@ And no other .log-entry carries it
 Given a Game whose last Message is a Narration
 When the client POST /history/:id with the id of that Message and a new text
 Then the response is 200 with an empty body
-And the client GET /fragment/story-log shows the new text on that Message
+And the client GET /screen?parts=story-log shows the new text on that Message
 ```
 
 #### Scenario 8.16: The story log sends its requests through htmx and renders the controls of an edit
 
 ```gherkin
 Given a Game whose story ends on an Impersonate Input that offers Retrigger
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then each .log-entry renders .edit-actions with a .save-btn, a .cancel-btn and one error slot
 And each .save-btn sends the edit of its Message with the text of #edit-textarea
 And the last .log-entry renders .delete-btn, .retrigger-btn and the Retry control as htmx requests

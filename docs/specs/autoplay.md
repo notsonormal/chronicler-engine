@@ -193,7 +193,7 @@ When the Impersonate Job of the second cycle is at its narrator call
 Then the status display answers the status "autoplay" with the label "Autoplay: cycle 2/2 Generating narration..."
 
 Given a run between its first Job and its second Job
-When the client requests GET /status/busy, GET /debug/is_busy and GET /debug/state
+When the client requests GET /screen?parts=status-display, GET /debug/is_busy and GET /debug/state
 Then the status display answers the status "autoplay" with the label "Autoplay: cycle 1/2"
 And the debug response body is "true"
 And the debug state reports the status "Busy", with no step
@@ -255,18 +255,18 @@ While a plain Job runs, the story log and the config controls render enabled (th
 ```gherkin
 Given a Game whose last Message is a Narration with two Swipes, the second one active
 And an offered set of options in the dock
-When the client GET /fragment/story-log and GET /fragment/options-dock
+When the client GET /screen?parts=story-log and GET /screen?parts=options-dock
 Then no Edit, Delete, Previous swipe or Retry control carries the `disabled` attribute
 And no option button carries the `disabled` attribute
 
 Given a run that holds the Game before its first Job
-When the client GET /fragment/story-log and GET /fragment/options-dock
+When the client GET /screen?parts=story-log and GET /screen?parts=options-dock
 Then every Edit, Delete, Previous swipe and Retry control carries the `disabled` attribute
 And every option button carries the `disabled` attribute
 And the entries and their text are as before
 
 When the client POST /status/reset-busy
-And the client GET /fragment/story-log and GET /fragment/options-dock
+And the client GET /screen?parts=story-log and GET /screen?parts=options-dock
 Then none of those controls carries the `disabled` attribute
 ```
 
@@ -275,12 +275,12 @@ Then none of those controls carries the `disabled` attribute
 ```gherkin
 Given two Games, with the second one active
 And a run that holds the Game before its first Job on the first Game
-When the client GET /fragment/games
+When the client GET /screen?parts=games
 Then the item of the first Game carries a `.run-badge`
 And the item of the active Game carries no `.run-badge`
 
 Given a run that holds the Game before its first Job on the active Game
-When the client GET /fragment/games
+When the client GET /screen?parts=games
 Then the item of the active Game carries a `.run-badge`
 ```
 
@@ -288,11 +288,11 @@ Then the item of the active Game carries a `.run-badge`
 
 ```gherkin
 Given a run that holds the Game before its first Job on the active Game
-When the client GET /fragment/games
+When the client GET /screen?parts=games
 Then the Narrator Mode, Perspective, Tense and four preset selects of the active Game carry the `disabled` attribute
 
 When the client POST /status/reset-busy
-And the client GET /fragment/games
+And the client GET /screen?parts=games
 Then none of those selects carries the `disabled` attribute
 ```
 
@@ -313,20 +313,20 @@ And the Game is idle
 ```gherkin
 Given a Game whose last Message is an Impersonate Input whose event Narration failed
 And a run that holds the Game before its first Job
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then the Retrigger control carries the `disabled` attribute
 
 When the client POST /status/reset-busy
-And the client GET /fragment/story-log
+And the client GET /screen?parts=story-log
 Then the Retrigger control does not carry the `disabled` attribute
 
 Given a Game whose last Message is a Narration with two Swipes, the first one active
 And a run that holds the Game before its first Job
-When the client GET /fragment/story-log
+When the client GET /screen?parts=story-log
 Then the Next swipe control carries the `disabled` attribute
 
 When the client POST /status/reset-busy
-And the client GET /fragment/story-log
+And the client GET /screen?parts=story-log
 Then the Next swipe control does not carry the `disabled` attribute
 ```
 

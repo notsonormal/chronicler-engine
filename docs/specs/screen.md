@@ -98,7 +98,7 @@ When the client POST /history/:id with the header X-Chronicler-Game set to "not-
 Then the response status is 409
 And the `server:revision` of GET /changes did not move
 
-When the client GET /fragment/story-log with the header X-Chronicler-Game set to an id that is no Game
+When the client GET /screen?parts=story-log with the header X-Chronicler-Game set to an id that is no Game
 Then the response status is 200
 
 Given no active Game

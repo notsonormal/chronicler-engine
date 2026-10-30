@@ -8,7 +8,7 @@ Endpoint: `GET /fragment/visual-sidebar`
 
 ```gherkin
 Given a Game whose current Room contains a Character with a name
-When the client GET /fragment/visual-sidebar
+When the client GET /screen?parts=visual-sidebar
 Then the response body contains one portrait per Character in the Room
 And each portrait renders that Character's name as visible label text
 ```
@@ -17,7 +17,7 @@ And each portrait renders that Character's name as visible label text
 
 ```gherkin
 Given a Game whose current Room contains a Character named "Ben & Jerry <Script>"
-When the client GET /fragment/visual-sidebar
+When the client GET /screen?parts=visual-sidebar
 Then the response body renders the name as escaped text, not markup
 And the response body contains no raw "<Script>" tag
 ```

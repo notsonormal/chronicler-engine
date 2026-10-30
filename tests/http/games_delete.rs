@@ -10,7 +10,7 @@ use chronicler_engine::TestAppBuilder;
 
 use crate::support::app_wiring::two_game_app;
 use crate::support::http_fixtures::seeded_storage_with_initial_game;
-use crate::support::http_requests::{assert_answers_nothing, fetch_body};
+use crate::support::http_requests::{assert_answers_nothing, fetch_part};
 
 // [docs/specs/games.md] SCENARIO: 19.1
 #[tokio::test]
@@ -23,7 +23,7 @@ async fn test_delete_game_handler_success() {
         .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let panel = fetch_body(&app, "/fragment/games").await;
+    let panel = fetch_part(&app, "games").await;
     assert!(
         !panel.contains(&format!("data-id=\"{other_id}\"")),
         "the deleted game {other_id} must not render in the games panel"
@@ -113,7 +113,7 @@ async fn test_delete_game_answers_nothing_and_the_panel_shows_the_empty_state_af
     );
 
     delete_game_answering_nothing(&app, saved_ids[0]).await;
-    let panel = fetch_body(&app, "/fragment/games").await;
+    let panel = fetch_part(&app, "games").await;
     assert!(
         panel.contains(&format!("data-id=\"{}\"", saved_ids[1])),
         "the panel must still list the saved game that was not deleted: {panel}"
@@ -124,7 +124,7 @@ async fn test_delete_game_answers_nothing_and_the_panel_shows_the_empty_state_af
     );
 
     delete_game_answering_nothing(&app, saved_ids[1]).await;
-    let panel = fetch_body(&app, "/fragment/games").await;
+    let panel = fetch_part(&app, "games").await;
     assert!(
         panel.contains("No other saved games."),
         "the panel must show the empty state once the last saved game is gone: {panel}"

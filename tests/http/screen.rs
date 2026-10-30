@@ -526,7 +526,7 @@ async fn test_a_header_that_names_no_game_is_refused_and_a_read_ignores_the_head
     assert_eq!(stamp_of_changes(&app).await, stamp_before);
 
     let request = Request::builder()
-        .uri("/fragment/story-log")
+        .uri("/screen?parts=story-log")
         .header(GAME_HEADER, "999999")
         .body(Body::empty())
         .unwrap();

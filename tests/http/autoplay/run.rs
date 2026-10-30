@@ -30,7 +30,7 @@ use crate::support::http_fixtures::{create_game_from, story_of_game};
 use crate::support::http_requests::{
     assert_answers_nothing, fetch_body, fetch_busy_status, post_action, post_empty, post_form,
     response_body, wait_for_jobs, wait_for_jobs_running_at_most, wait_settled,
-    post_on_last_message,
+    post_on_last_message, fetch_part,
 };
 
 // [docs/specs/autoplay.md] SCENARIO: 41.1
@@ -284,7 +284,7 @@ async fn test_a_failed_options_run_writes_its_options_failure_and_the_run_goes_o
         vec![FIRST_INPUT, FIRST_NARRATION, SECOND_INPUT, SECOND_NARRATION],
         "a failed Options run does not stop the run: both cycles are in the story"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("options-notice-line") && dock.contains("Options generation failed"),
         "the dock shows the Options failure of the failed Options run, got: {dock}"

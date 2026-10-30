@@ -19,8 +19,8 @@ use crate::support::http_assertions::{
 };
 use crate::support::http_fixtures::{append_narrations, story_of};
 use crate::support::http_requests::{
-    fetch_status_label, assert_answers_nothing, fetch_body, post_action, post_empty, post_form,
-    response_body, wait_settled, post_on_last_message,
+    fetch_status_label, assert_answers_nothing, post_action, post_empty, post_form, response_body,
+    wait_settled, post_on_last_message, fetch_part,
 };
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
@@ -210,7 +210,7 @@ async fn test_delete_removes_entry_from_fragment_http() {
     let _ = post_action(&app, "examine room").await;
     assert!(wait_settled(&state, 1000).await, "narration should persist");
 
-    let before = fetch_body(&app, "/fragment/story-log").await;
+    let before = fetch_part(&app, "story-log").await;
     let before_count = before.matches("class=\"log-entry").count();
     assert!(
         before_count >= 2,
@@ -220,7 +220,7 @@ async fn test_delete_removes_entry_from_fragment_http() {
     let resp = post_on_last_message(&app, "/history/delete").await;
     assert_answers_nothing(resp).await;
 
-    let after = fetch_body(&app, "/fragment/story-log").await;
+    let after = fetch_part(&app, "story-log").await;
     let after_count = after.matches("class=\"log-entry").count();
     assert_eq!(
         after_count,
@@ -276,7 +276,7 @@ async fn test_the_story_log_of_a_long_story_ends_at_the_last_message() {
     let (app, state) = long_story_app();
     let story = story_of(&state);
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     let entries = log_entries(&body);
     assert_eq!(entries.len(), 50, "the window holds 50 entries: {body}");
@@ -310,13 +310,13 @@ async fn test_the_story_log_of_a_long_story_ends_at_the_last_message() {
 async fn test_delete_last_in_a_long_story_removes_the_entry_the_player_sees() {
     let (app, state) = long_story_app();
     let story = story_of(&state);
-    let before = fetch_body(&app, "/fragment/story-log").await;
+    let before = fetch_part(&app, "story-log").await;
     assert_eq!(log_entries(&before).len(), 50);
 
     let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let after = fetch_body(&app, "/fragment/story-log").await;
+    let after = fetch_part(&app, "story-log").await;
     let entries = log_entries(&after);
     assert_eq!(entries.len(), 50, "the window stays full: {after}");
     let deleted = story[52].id;
@@ -344,7 +344,7 @@ async fn test_story_log_fragment_declares_no_log_container() {
     // The seeded Game's opening Narration is the entry the fragment renders.
     let app = TestAppBuilder::default_app();
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     assert!(
         body.contains(r#"class="log-entry"#),
@@ -388,7 +388,7 @@ async fn test_story_log_icon_buttons_have_accessible_names() {
         "the Action should settle after its failed continuation"
     );
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     for control in ["edit-btn", "delete-btn", "retrigger-btn", "swipe-btn"] {
         assert!(
@@ -434,7 +434,7 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
         "Quantifying...",
         "the status names the step the held call runs in"
     );
-    let log = fetch_body(&app, "/fragment/story-log").await;
+    let log = fetch_part(&app, "story-log").await;
     assert!(
         log.contains("The room waits."),
         "the story log shows the text from the save on: {log}"
@@ -452,7 +452,7 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
 async fn test_in_a_long_story_the_oldest_entry_shows_its_room() {
     let (app, _state) = long_story_app();
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     let entries = log_entries(&body);
     assert_eq!(entries.len(), 50, "the window holds 50 entries: {body}");
@@ -479,7 +479,7 @@ async fn test_the_story_log_offers_retrigger_on_an_impersonate_input() {
         "the story ends on the Impersonate Input"
     );
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     let entries = log_entries(&body);
     let (_, markup) = entries.last().expect("the last .log-entry");
@@ -518,7 +518,7 @@ async fn test_edit_answers_nothing_and_the_log_shows_the_new_text_http() {
     .await;
     assert_answers_nothing(resp).await;
 
-    let log = fetch_body(&app, "/fragment/story-log").await;
+    let log = fetch_part(&app, "story-log").await;
     assert!(
         log.contains("The room is silent."),
         "the story log shows the edited text: {log}"
@@ -539,7 +539,7 @@ fn tag_holding<'a>(markup: &'a str, marker: &str) -> &'a str {
 async fn test_the_story_log_sends_its_requests_through_htmx_and_renders_the_edit_controls() {
     let (app, _state) = app_after_an_impersonate_with_a_failed_event().await;
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     let entries = log_entries(&body);
     assert!(
@@ -637,7 +637,7 @@ async fn test_the_swipe_controls_of_the_story_log_send_through_htmx() {
     assert!(wait_settled(&state, 1000).await);
     let message_id = story_of(&state).last().expect("the story is not empty").id;
 
-    let second_swipe = fetch_body(&app, "/fragment/story-log").await;
+    let second_swipe = fetch_part(&app, "story-log").await;
     assert!(
         second_swipe.contains(&format!(r#"hx-post="/message/{message_id}/swipe/0""#)),
         "the Previous swipe control posts the switch: {second_swipe}"
@@ -650,7 +650,7 @@ async fn test_the_swipe_controls_of_the_story_log_send_through_htmx() {
             .status()
             .is_success()
     );
-    let first_swipe = fetch_body(&app, "/fragment/story-log").await;
+    let first_swipe = fetch_part(&app, "story-log").await;
     assert!(
         first_swipe.contains(&format!(r#"hx-post="/message/{message_id}/swipe/1""#)),
         "the Next swipe control posts the switch: {first_swipe}"

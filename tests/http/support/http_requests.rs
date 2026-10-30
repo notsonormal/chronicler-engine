@@ -3,7 +3,7 @@
 use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::test_support::STRAY_CALL_MARKER;
 use axum::body::Body;
-use axum::http::{self, Method, Request};
+use axum::http::{self, Method, Request, StatusCode};
 use regex::Regex;
 use tower::util::ServiceExt;
 
@@ -57,13 +57,25 @@ pub async fn fetch_part(app: &axum::Router, name: &str) -> String {
     templates.remove(0).1
 }
 
-/// The status endpoint answers `idle`, a step endpoint string, or the failure
-/// disclosure.
-pub async fn fetch_busy_status(app: &axum::Router) -> String {
-    fetch_body(app, "/status/busy").await
+/// The status and the raw body of one read. A failed screen read carries no
+/// template, so the body is the failure answer. A page of 50 saved Games is
+/// larger than the cap of `response_body`, so this reads up to 4 MB.
+pub async fn fetch_answer(app: &axum::Router, uri: &str) -> (StatusCode, String) {
+    let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .expect("read the response body");
+    (status, String::from_utf8_lossy(&bytes).to_string())
 }
 
-/// The label the status display shows: the text of the `/status/busy` answer.
+/// The status display answers `idle`, a step label, or the failure disclosure.
+pub async fn fetch_busy_status(app: &axum::Router) -> String {
+    fetch_part(app, "status-display").await
+}
+
+/// The label the status display shows: the text of the status-display part.
 pub async fn fetch_status_label(app: &axum::Router) -> String {
     let body = fetch_busy_status(app).await;
     let mut label = String::new();

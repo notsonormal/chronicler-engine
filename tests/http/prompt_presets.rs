@@ -18,7 +18,7 @@ use crate::test_utils::preset_card_html_slice;
 use crate::test_utils::panel_section_html_slice;
 
 use crate::support::app_wiring::two_game_app;
-use crate::support::http_requests::{fetch_body, post_form};
+use crate::support::http_requests::{fetch_body, fetch_part, post_form};
 use crate::SettingsTestGuard;
 
 fn assert_one_error_message_holding(body: &str, failure_text: &str) {
@@ -73,12 +73,12 @@ fn preset_id_by_name(presets: &PromptPresetService, name: &str) -> String {
 /// empty 200 and reads the panel that the next load renders.
 async fn panel_after(app: &axum::Router, response: axum::response::Response) -> String {
     assert_answers_nothing(response).await;
-    fetch_body(app, "/fragment/prompt-presets").await
+    fetch_part(app, "prompt-presets").await
 }
 
 /// One preset's card as the panel renders it.
 async fn card_in_panel(app: &axum::Router, preset_id: &str) -> String {
-    let panel = fetch_body(app, "/fragment/prompt-presets").await;
+    let panel = fetch_part(app, "prompt-presets").await;
     preset_card_slice(&panel, preset_id).to_string()
 }
 
@@ -111,12 +111,7 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = fetch_part(&app, "prompt-presets").await;
 
     assert!(
         !body.contains("prompt-presets-panel"),
@@ -148,7 +143,7 @@ async fn test_prompt_presets_add_controls_open_the_dialog() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let body = fetch_body(&app, "/fragment/prompt-presets").await;
+    let body = fetch_part(&app, "prompt-presets").await;
 
     for preset_type in ["system", "quantifier", "impersonate", "options"] {
         assert!(
@@ -587,7 +582,7 @@ async fn test_delete_non_default_preset_returns_empty_body() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(body.is_empty());
-    let listed = fetch_body(&app, "/fragment/prompt-presets").await;
+    let listed = fetch_part(&app, "prompt-presets").await;
     assert!(
         !listed.contains(&format!(r#"id="preset-card-{preset_id}""#)),
         "the panel no longer lists the deleted preset: {listed}"
@@ -751,12 +746,7 @@ async fn test_delete_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
 
     failures.clear(StorageCall::DeletePreset);
 
-    let panel = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(panel.status(), StatusCode::OK);
-    let panel_body = body_text(panel).await;
+    let panel_body = fetch_part(&app, "prompt-presets").await;
     assert!(
         panel_body.contains("Doomed"),
         "the preset must stay stored: {panel_body}"
@@ -1052,12 +1042,7 @@ async fn test_panel_gates_activation_buttons_by_allowed_modes() {
         .storage(Arc::clone(&storage))
         .build();
 
-    let response = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = fetch_part(&app, "prompt-presets").await;
     assert!(
         body.contains(r#"hx-post="/prompt-presets/if-only/activate?mode=interactive_fiction""#),
         "IF-only preset must render an IF activation button"
@@ -1271,7 +1256,7 @@ async fn test_update_preset_keeps_its_own_name() {
     )
     .await;
     assert_answers_nothing(response).await;
-    let body = fetch_body(&app, "/fragment/prompt-presets").await;
+    let body = fetch_part(&app, "prompt-presets").await;
     let card = preset_card_html_slice(&body, "Alpha").expect("the updated card must render");
     assert!(
         card.contains("<span class=\"card-title\">Alpha</span>"),
@@ -1393,12 +1378,7 @@ async fn test_prompt_presets_panel_renders_options_section() {
         .storage(Arc::clone(&storage))
         .build();
 
-    let response = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = fetch_part(&app, "prompt-presets").await;
 
     assert!(body.contains("<h2>Options Prompts</h2>"));
     assert!(body.contains("Add Options Prompt Preset"));
@@ -1502,12 +1482,7 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
 
     failures.clear(StorageCall::SavePreset);
 
-    let panel = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(panel.status(), StatusCode::OK);
-    let panel_body = body_text(panel).await;
+    let panel_body = fetch_part(&app, "prompt-presets").await;
     assert!(
         panel_body.contains("Original"),
         "the stored preset must keep its original name: {panel_body}"

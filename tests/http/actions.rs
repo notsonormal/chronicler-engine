@@ -24,8 +24,8 @@ use crate::support::http_fixtures::{
     break_start_room, corrupt_start_state, room_header_of, story_of, OFFERED_SET,
 };
 use crate::support::http_requests::{
-    fetch_status_label, assert_answers_nothing, fetch_body, fetch_busy_status, post_action,
-    post_action_check, post_form, response_body, wait_settled, post_on_last_message,
+    fetch_status_label, assert_answers_nothing, fetch_busy_status, post_action, post_action_check,
+    post_form, response_body, wait_settled, post_on_last_message, fetch_part,
 };
 
 // [docs/specs/actions.md] SCENARIO: 1.1
@@ -484,7 +484,7 @@ async fn test_trigger_narration_failure_preserves_main_sets_failed_http() {
         "the main narration must stay the last entry: {messages:?}"
     );
 
-    let story_log = fetch_body(&app, "/fragment/story-log").await;
+    let story_log = fetch_part(&app, "story-log").await;
     assert!(
         story_log.contains("retrigger-btn"),
         "the failed trigger must leave Retrigger available: {story_log}"

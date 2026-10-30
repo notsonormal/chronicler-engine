@@ -26,7 +26,9 @@ use crate::SettingsTestGuard;
 use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
 use crate::support::http_assertions::status_error_message;
 use crate::support::http_fixtures::{break_start_room, corrupt_start_state, story_of};
-use crate::support::http_requests::{fetch_body, post_action, post_form, wait_for_jobs, wait_settled};
+use crate::support::http_requests::{
+    post_action, post_form, wait_for_jobs, wait_settled, fetch_part, fetch_busy_status,
+};
 // [docs/specs/failure_display.md] SCENARIO: 38.1
 #[tokio::test]
 async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
@@ -45,7 +47,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         .save_llm_message(&llm_message("narrator", "mock", None, -20))
         .unwrap();
 
-    let body = fetch_body(&app, "/fragment/failure-banner").await;
+    let body = fetch_part(&app, "failure-banner").await;
     assert!(
         body.contains("failure-banner"),
         "a degraded Quantifier must raise the banner: {body}"
@@ -88,7 +90,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
     storage
         .save_llm_message(&llm_message("quantifier", "mock", None, 0))
         .unwrap();
-    let body = fetch_body(&app, "/fragment/failure-banner").await;
+    let body = fetch_part(&app, "failure-banner").await;
     assert!(
         !body.contains("error-disclosure"),
         "a later success must clear the banner: {body}"
@@ -110,7 +112,7 @@ async fn test_degraded_trigger_role_raises_the_banner() {
         ))
         .unwrap();
 
-    let body = fetch_body(&app, "/fragment/failure-banner").await;
+    let body = fetch_part(&app, "failure-banner").await;
     assert!(
         body.contains("failure-banner"),
         "a degraded Trigger must raise the banner: {body}"
@@ -127,7 +129,7 @@ async fn test_degraded_trigger_role_raises_the_banner() {
         body.contains(r#"<pre class="error-detail-raw">trigger call timed out</pre>"#),
         "the raw failure text must be reachable inside the disclosure: {body}"
     );
-    let settings = fetch_body(&app, "/fragment/settings").await;
+    let settings = fetch_part(&app, "settings").await;
     assert!(
         settings
             .contains(r#"<span class="subtab-marker-slot" id="subtab-connections-marker"></span>"#),
@@ -153,7 +155,7 @@ async fn test_header_carries_the_game_name_only_and_settings_renders_its_own_rol
         .save_llm_message(&llm_message("narrator", "mock", None, -20))
         .unwrap();
 
-    let header = fetch_body(&app, "/fragment/header").await;
+    let header = fetch_part(&app, "header").await;
     assert!(
         header.contains("game-title"),
         "the header carries the game name: {header}"
@@ -170,7 +172,7 @@ async fn test_header_carries_the_game_name_only_and_settings_renders_its_own_rol
         );
     }
 
-    let settings = fetch_body(&app, "/fragment/settings").await;
+    let settings = fetch_part(&app, "settings").await;
     assert!(
         !settings.contains("hx-swap-oob"),
         "the panel's own cells are not out-of-band swaps: {settings}"
@@ -197,7 +199,7 @@ async fn test_header_carries_the_game_name_only_and_settings_renders_its_own_rol
     storage
         .save_llm_message(&llm_message("quantifier", "mock", None, 0))
         .unwrap();
-    let settings = fetch_body(&app, "/fragment/settings").await;
+    let settings = fetch_part(&app, "settings").await;
     assert!(
         settings.contains(r#"<span class="role-health-slot" id="role-health-quantifier"><span class="role-health healthy">Healthy</span>"#),
         "a later success must read Healthy: {settings}"
@@ -220,7 +222,7 @@ async fn test_failed_load_answers_non_2xx_and_reswap_none() {
     let app = build_router(state);
 
     let request = Request::builder()
-        .uri("/fragment/visual-sidebar")
+        .uri("/screen?parts=visual-sidebar")
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
@@ -231,18 +233,18 @@ async fn test_failed_load_answers_non_2xx_and_reswap_none() {
     );
     assert!(
         response.headers().get("HX-Reswap").is_none(),
-        "a part route is no htmx target, so it steers no swap"
+        "the screen load steers no swap"
     );
 }
 
 // [docs/specs/failure_display.md] SCENARIO: 38.18
 #[tokio::test]
 async fn test_failed_panel_loads_answer_non_2xx_with_an_error_fragment() {
-    for (path, call) in [
-        ("/fragment/settings", StorageCall::GetSettings),
-        ("/fragment/prompt-presets", StorageCall::GetSettings),
-        ("/fragment/worlds", StorageCall::ListWorlds),
-        ("/fragment/games", StorageCall::ListSavedGames),
+    for (part, call) in [
+        ("settings", StorageCall::GetSettings),
+        ("prompt-presets", StorageCall::GetSettings),
+        ("worlds", StorageCall::ListWorlds),
+        ("games", StorageCall::ListSavedGames),
     ] {
         let (storage, failures) = empty_sqlite_storage().with_test_failures();
         let (app, _state) = TestAppBuilder::default_test()
@@ -250,21 +252,22 @@ async fn test_failed_panel_loads_answer_non_2xx_with_an_error_fragment() {
             .build_with_state();
         failures.set(call, TestOverride::internal("the data is unreadable"));
 
-        let request = Request::builder().uri(path).body(Body::empty()).unwrap();
+        let uri = format!("/screen?parts={part}");
+        let request = Request::builder().uri(&uri).body(Body::empty()).unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(
             response.status(),
             StatusCode::INTERNAL_SERVER_ERROR,
-            "{path}: a failed load must answer non-2xx, not 200 with an error body"
+            "{part}: a failed load must answer non-2xx, not 200 with an error body"
         );
         assert!(
             response.headers().get("HX-Reswap").is_none(),
-            "{path}: a part route is no htmx target, so it steers no swap"
+            "{part}: the screen load steers no swap"
         );
         let body = crate::support::http_requests::response_body(response).await;
         assert!(
             body.contains(r#"class="error-message""#) && body.contains("the data is unreadable"),
-            "{path}: the body is an error fragment that names the failure: {body}"
+            "{part}: the body is an error fragment that names the failure: {body}"
         );
     }
 }
@@ -280,7 +283,7 @@ async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The language model could not be reached."),
         "the clamped line carries a short user-facing message: {body}"
@@ -306,7 +309,7 @@ async fn test_missing_preset_failure_clamps_with_the_missing_data_line() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The data for this request is missing: the preset."),
         "a missing preset keeps its own line, not the general one: {body}"
@@ -335,7 +338,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("Reasoning used the budget. Lower the reasoning effort."),
         "a spent token budget must keep its own line: {body}"
@@ -417,7 +420,7 @@ async fn test_empty_answer_keeps_its_own_line_clamps() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The language model gave an empty answer."),
         "an empty answer keeps its own line: {body}"
@@ -467,7 +470,7 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The text was saved, but the game state could not be updated."),
         "a contradiction keeps its own line: {body}"
@@ -533,7 +536,7 @@ async fn test_save_failure_clamps_with_the_save_line_and_saves_no_narration() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The new text could not be saved."),
         "a refused save keeps the save-failed line: {body}"
@@ -600,7 +603,7 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The story was too long for the language model."),
         "a prompt that cannot fit keeps the prompt-too-long line: {body}"
@@ -661,7 +664,7 @@ async fn preset_game_read_fails() {
 
     // The status reads the Game row, so the read works again before it asks.
     failures.clear(StorageCall::GetGame);
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The data for this request is missing: the game."),
         "an unreadable Game row is a failure line that names the Game, not a registry preset: {body}"
@@ -721,7 +724,7 @@ async fn status_after_a_read_fails_behind_a_call(call: StorageCall, held: Role) 
 
     // The status reads the Game row, so every read works again before it asks.
     failures.clear_all();
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     let narrations = story_of(&state)
         .iter()
         .filter(|message| message.message_type == MessageType::Narration)
@@ -794,7 +797,7 @@ async fn job_read_names_record_world() {
     );
 
     failures.clear_all();
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The data for this request is missing: the world."),
         "the line names the World: {body}"
@@ -846,7 +849,7 @@ async fn job_read_names_record_accept_start_state() {
     );
 
     failures.clear_all();
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains(line),
         "the status carries the line of the answer: {body}"
@@ -910,7 +913,7 @@ async fn job_read_names_record_preset() {
             "the Job should end before the status reads"
         );
 
-        let body = fetch_body(&app, "/status/busy").await;
+        let body = fetch_busy_status(&app).await;
         assert!(
             body.contains("The data for this request is missing: the preset."),
             "{preset_type:?}: the line names the preset: {body}"
@@ -960,7 +963,7 @@ async fn state_update_refused() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The text was saved, but the game state could not be updated."),
         "a refused state update shows the contradiction line: {body}"

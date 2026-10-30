@@ -14,7 +14,7 @@ use chronicler_engine::TestAppBuilder;
 async fn story_log_contains(app: &axum::Router, needle: &str) -> bool {
     for _ in 0..100 {
         let req = Request::builder()
-            .uri("/fragment/story-log")
+            .uri("/screen?parts=story-log")
             .method(http::Method::GET)
             .body(Body::empty())
             .unwrap();

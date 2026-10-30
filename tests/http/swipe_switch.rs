@@ -13,8 +13,8 @@ use chronicler_engine::test_support::{
 use crate::support::app_wiring::app_with_script;
 use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
 use crate::support::http_requests::{
-    assert_answers_nothing, fetch_body, fetch_status_label, post_action, post_empty, response_body,
-    wait_settled, post_on_last_message,
+    assert_answers_nothing, fetch_status_label, post_action, post_empty, response_body,
+    wait_settled, post_on_last_message, fetch_part,
 };
 
 fn first_switch_target(log_fragment: &str) -> (u64, usize) {
@@ -51,7 +51,7 @@ async fn last_message_with_two_swipes(app: &axum::Router, state: &AppState) -> (
     );
     assert!(wait_settled(state, 1000).await, "the retry should complete");
 
-    let log = fetch_body(app, "/fragment/story-log").await;
+    let log = fetch_part(app, "story-log").await;
     first_switch_target(&log)
 }
 
@@ -99,7 +99,7 @@ async fn test_switch_swipe_drops_the_offered_option_set_http() {
 
     assert!(post_action(&app, "/options").await.status().is_success());
     assert!(wait_settled(&state, 1000).await);
-    let before = fetch_body(&app, "/fragment/options-dock").await;
+    let before = fetch_part(&app, "options-dock").await;
     assert!(
         before.contains("options-strip"),
         "the dock must show a set before the switch: {before}"
@@ -108,7 +108,7 @@ async fn test_switch_swipe_drops_the_offered_option_set_http() {
     let resp = post_empty(&app, &format!("/message/{message_id}/swipe/{target}")).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "the restored swipe carries no option set, so the dock must not: {dock}"

@@ -1,13 +1,11 @@
 //! HTTP E2E tests for the pages of the saved Games on `GET /screen?parts=games`: the page size, the order, the clamp and the pager. Tagged against `docs/specs/games.md` and `docs/specs/screen.md`.
 
-use axum::body::Body;
-use axum::http::{Request, StatusCode};
-use tower::util::ServiceExt;
+use axum::http::StatusCode;
 
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::test_support::{seed_game_row, test_new_game, TestAppBuilder};
 
-use crate::support::http_requests::post_form;
+use crate::support::http_requests::{fetch_answer, post_form};
 use crate::test_utils::panel_section_html_slice;
 
 const PAGE_SIZE: usize = 50;
@@ -37,17 +35,6 @@ fn app_with_saved_games(saved: usize) -> (axum::Router, Vec<u64>) {
         })
         .collect();
     (build_router(state), ids)
-}
-
-/// A page of 50 Games is larger than the body limit of `response_body`.
-async fn get(app: &axum::Router, uri: &str) -> (StatusCode, String) {
-    let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
-    let response = app.clone().oneshot(request).await.unwrap();
-    let status = response.status();
-    let bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
-        .await
-        .expect("read the response body");
-    (status, String::from_utf8_lossy(&bytes).to_string())
 }
 
 fn games_part(screen: &str) -> &str {
@@ -93,7 +80,7 @@ fn pager_position(part: &str) -> String {
 }
 
 async fn games_page(app: &axum::Router, query: &str) -> String {
-    let (status, screen) = get(app, &format!("/screen?parts=games{query}")).await;
+    let (status, screen) = fetch_answer(app, &format!("/screen?parts=games{query}")).await;
     assert_eq!(status, StatusCode::OK, "{screen}");
     games_part(&screen).to_string()
 }
@@ -221,7 +208,8 @@ async fn test_a_games_page_that_is_not_a_page_number_answers_400_and_renders_not
     let (app, _ids) = app_with_saved_games(1);
 
     for value in ["0", "-1", "two", ""] {
-        let (status, body) = get(&app, &format!("/screen?parts=games&games_page={value}")).await;
+        let (status, body) =
+            fetch_answer(&app, &format!("/screen?parts=games&games_page={value}")).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "games_page={value:?}");
         assert!(
             body.contains("games_page"),

@@ -216,7 +216,7 @@ When the client POST /action with command="look"
 Then the response is 500 Internal Server Error
 And the response carries the line "The data for this request is missing: the persona."
 And the story log gains no Message
-When the client GET /status/busy
+When the client GET /screen?parts=status-display
 Then the status response carries the same line
 And the raw error text is reachable only inside that response's disclosure
 ```

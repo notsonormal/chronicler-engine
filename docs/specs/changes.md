@@ -72,9 +72,9 @@ Then the two `server` values differ
 ```gherkin
 Given an active Game with a story, a World, a prompt preset and an LLM message
 When the client reads, one after the other:
-  GET /changes, GET /fragment/header, GET /fragment/failure-banner, GET /fragment/story-log, GET /fragment/visual-sidebar,
-  GET /fragment/options-dock, GET /fragment/games, GET /fragment/worlds, GET /fragment/settings,
-  GET /fragment/prompt-presets, GET /fragment/llm-messages, GET /status/busy and GET /debug/state
+  GET /changes, GET /screen?parts=header, GET /screen?parts=failure-banner, GET /screen?parts=story-log, GET /screen?parts=visual-sidebar,
+  GET /screen?parts=options-dock, GET /screen?parts=games, GET /screen?parts=worlds, GET /screen?parts=settings,
+  GET /screen?parts=prompt-presets, GET /screen?parts=llm-messages, GET /screen?parts=status-display and GET /debug/state
 Then each response status is 200
 And no number of GET /changes moved after any of them
 ```

@@ -10,7 +10,9 @@ use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{TestAppBuilder, TestMap, empty_sqlite_storage};
 
 use crate::support::http_fixtures::world_form_body;
-use crate::support::http_requests::{fetch_body, post_form, post_form_with_hx, response_body};
+use crate::support::http_requests::{
+    fetch_body, post_form, post_form_with_hx, response_body, fetch_part,
+};
 use crate::support::http_assertions::assert_option_selected;
 
 fn posture_world() -> WorldCard {
@@ -331,7 +333,7 @@ async fn test_worlds_fragment_pluralises_game_count_http() {
     // `default_test` seeds one World with exactly one game in it.
     let (app, state) = TestAppBuilder::default_test().build_with_state();
 
-    let html = fetch_body(&app, "/fragment/worlds").await;
+    let html = fetch_part(&app, "worlds").await;
 
     assert!(
         html.contains(r#"<li class="world-item" id="world-test">"#),
@@ -364,7 +366,7 @@ async fn test_worlds_fragment_pluralises_game_count_http() {
         .create_game("test", "test_player")
         .expect("create a second game");
 
-    let html = fetch_body(&app, "/fragment/worlds").await;
+    let html = fetch_part(&app, "worlds").await;
     assert!(
         html.contains("(2 games)"),
         "a World with two games must use the plural count: {html}"
@@ -518,7 +520,7 @@ async fn test_world_delete_removes_a_world_with_no_games_http() {
             .is_none(),
         "the deleted World is no longer stored"
     );
-    let list = fetch_body(&app, "/fragment/worlds").await;
+    let list = fetch_part(&app, "worlds").await;
     assert!(
         !list.contains(r#"id="world-posture_world""#),
         "a following list does not hold the deleted World: {list}"
@@ -767,7 +769,7 @@ async fn test_world_row_shows_a_shortened_description_http() {
         .seed_world(&storage_world, &TestMap::single_room("start"))
         .expect("seed the long World");
 
-    let html = fetch_body(&app, "/fragment/worlds").await;
+    let html = fetch_part(&app, "worlds").await;
 
     assert!(
         html.contains("Opening lantern") && html.contains('…'),

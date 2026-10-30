@@ -197,14 +197,14 @@ And the body carries the error fragment naming the storage failure
 
 ```gherkin
 Given a seeded World with exactly one game
-When the client GET /fragment/worlds
+When the client GET /screen?parts=worlds
 Then the response status is "200 OK"
 And the body holds no editor slot and no root element of its own
 And the Create World control and each World's Edit control target `#edit-dialog-body`
 And the World's row carries a stable id
 And the World's card shows "1 game" and not "1 games"
 When a second game is created in that World
-And the client GET /fragment/worlds
+And the client GET /screen?parts=worlds
 Then the World's card shows "2 games"
 ```
 
@@ -212,7 +212,7 @@ Then the World's card shows "2 games"
 
 ```gherkin
 Given a seeded World whose description is longer than a row shows
-When the client GET /fragment/worlds
+When the client GET /screen?parts=worlds
 Then the World's row shows the start of the description, cut at a word, with a cut mark
 And the row does not show the end of the description
 ```
@@ -239,7 +239,7 @@ Given a seeded World "posture_world" with no games
 When the client POST /worlds/posture_world/delete
 Then the response is a 200 with an empty body
 And the World is no longer stored
-And a following GET /fragment/worlds does not list it
+And a following GET /screen?parts=worlds does not list it
 When the client POST /worlds/nonexistent/delete
 Then the response is a 200 with an empty body
 ```

@@ -36,7 +36,7 @@ screen when the panel loads.
 
 ```gherkin
 Given a fresh app state with the default connections
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then the response is 200
 And the body holds a Connections sub-tab and a Text Check sub-tab, and no root element of its own
 And the body holds no editor slot and no slot for the result of a connection Test
@@ -54,7 +54,7 @@ And the body contains no always-open Add Connection form
 
 ```gherkin
 Given a fresh app state with the default connections
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then the Narrator and Quantifier role rows and each connection row hold no error slot
 And the text-check card holds no error slot
 ```
@@ -63,7 +63,7 @@ And the text-check card holds no error slot
 
 ```gherkin
 Given a fresh app state with the default connections
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then each role select saves on change and swaps nothing
 And the Add Connection, Edit and Test controls target the edit dialog
 And no control targets the panel
@@ -73,14 +73,14 @@ And no control targets the panel
 
 ```gherkin
 Given a fresh app state with no recorded LLM calls
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then each role row reports "No calls yet"
 When a role's newest recorded call failed
-And the client GET /fragment/settings
+And the client GET /screen?parts=settings
 Then that role row reports it as Degraded with a Details disclosure carrying the raw failure text
 And the Connections sub-tab shows a degraded marker whose tooltip names the engine-wide scope
 When a later call for that role succeeds
-And the client GET /fragment/settings
+And the client GET /screen?parts=settings
 Then that role row reports Healthy and the degraded marker is gone
 ```
 
@@ -88,7 +88,7 @@ Then that role row reports Healthy and the degraded marker is gone
 
 ```gherkin
 Given a fresh app state whose settings cannot be read
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then the response is non-2xx and asks the client to swap nothing
 And the body carries the read failure text
 And the body carries no Settings panel
@@ -106,7 +106,7 @@ so the two controls cannot contradict each other.
 Given a fresh app state
 When the client POST /settings/text-check with check_mode="spell" and the check-before-sending box checked
 Then the response is a 200 with an empty body
-And a following GET /fragment/settings renders "spell" selected and the check box checked
+And a following GET /screen?parts=settings renders "spell" selected and the check box checked
 ```
 
 #### Scenario 20.13: Disabling the text-check mode clears and disables the check-before-sending box
@@ -116,7 +116,7 @@ Given a fresh app state with text check mode "spell" and check-before-sending en
 When the client POST /settings/text-check with check_mode="disabled" and the check-before-sending box checked
 Then the response is a 200
 And the stored check-before-sending is disabled
-And a following GET /fragment/settings renders "disabled" selected and the check box cleared and disabled
+And a following GET /screen?parts=settings renders "disabled" selected and the check box cleared and disabled
 ```
 
 #### Scenario 20.22: A failed text-check save keeps the card
@@ -138,7 +138,7 @@ Given an app state whose Narrator role uses the mock connection with model mock-
 And a second mock connection with model mock-model-b
 When the client sets the Narrator role to the second connection
 Then the response is a 200 with an empty body
-And a following GET /fragment/settings renders the second connection selected in the Narrator role row
+And a following GET /screen?parts=settings renders the second connection selected in the Narrator role row
 And a following GET /debug/backend reports mock-model-b (settings resolve per request, so the switch needs no restart)
 ```
 
@@ -149,7 +149,7 @@ Given an app state whose Quantifier role uses the mock connection with model moc
 And a second mock connection with model mock-model-b
 When the client sets the Quantifier role to the second connection
 Then the response is a 200 with an empty body
-And a following GET /fragment/settings renders the second connection selected in the Quantifier role row
+And a following GET /screen?parts=settings renders the second connection selected in the Quantifier role row
 And the Quantifier role now uses the second connection
 ```
 
@@ -199,7 +199,7 @@ Given a fresh app state with the default connections
 When the client POST /connections/add with conn_provider="bogus_provider", a name and a model
 Then the response is a 400
 And the body carries the unknown-backend failure text naming "bogus_provider"
-And a following GET /fragment/settings still lists the connection rows
+And a following GET /screen?parts=settings still lists the connection rows
 ```
 
 ### GET /fragment/connections/new and GET /fragment/connections/{id}/edit — the connection forms
@@ -239,7 +239,7 @@ And the body carries no connection form
 Given a fresh app state with a Connection named "Alpha"
 When the client edits that Connection with the same name "Alpha" and a changed model
 Then the response is a 200 with an empty body
-And a following GET /fragment/settings contains a Connection row named "Alpha" and the changed model
+And a following GET /screen?parts=settings contains a Connection row named "Alpha" and the changed model
 ```
 
 #### Scenario 20.18: A failed connection edit answers non-2xx and carries the failure
@@ -249,7 +249,7 @@ Given a fresh app state with a Connection named "Alpha"
 When the client edits that Connection with conn_provider="bogus_provider"
 Then the response is a 400
 And the body carries the unknown-backend failure text
-And a following GET /fragment/settings still renders the Connection named "Alpha"
+And a following GET /screen?parts=settings still renders the Connection named "Alpha"
 ```
 
 #### Scenario 20.46: A failed connection edit names the name typed in the form
@@ -341,7 +341,7 @@ When the client edits that Connection with a context window of text, of zero or 
 Then the response is 400
 And the body says the context window must be a positive whole number, or empty for the provider default
 And the stored Connection still holds no explicit context window
-And a following GET /fragment/settings still renders the Connection named "Alpha"
+And a following GET /screen?parts=settings still renders the Connection named "Alpha"
 When the client adds a Connection with a context window of text
 Then the response is 400
 And the connection list still holds the connections it held before

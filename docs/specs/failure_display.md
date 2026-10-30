@@ -16,14 +16,14 @@ Endpoints:
 
 ```gherkin
 Given an active Game whose newest Quantifier attempt carries an error message
-When the client GET /fragment/failure-banner
+When the client GET /screen?parts=failure-banner
 Then the response carries a failure banner naming the Quantifier and its failure effect
 And the banner states that role health covers every game
 And the banner's Details disclosure lists each role with the backend and model of its newest attempt
 And a role whose newest attempt succeeded reads as a success
 And a role with no recorded attempt reads as having no calls
 And the raw failure text is reachable only inside that disclosure
-When a later Quantifier attempt succeeds and the client GET /fragment/failure-banner again
+When a later Quantifier attempt succeeds and the client GET /screen?parts=failure-banner again
 Then the response carries no failure banner
 ```
 
@@ -31,10 +31,10 @@ Then the response carries no failure banner
 
 ```gherkin
 Given an active Game whose newest Trigger attempt carries an error message
-When the client GET /fragment/failure-banner
+When the client GET /screen?parts=failure-banner
 Then the response carries a failure banner naming the Trigger and its failure effect
 And its Details disclosure lists the Trigger role with that raw failure text
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then the Connections sub-tab's warning marker stays empty
 ```
 
@@ -42,16 +42,16 @@ Then the Connections sub-tab's warning marker stays empty
 
 ```gherkin
 Given a client showing the dashboard, with a role whose newest attempt failed
-When the client GET /fragment/header
+When the client GET /screen?parts=header
 Then the response carries the game name
 And the response carries no failure banner and no health cell
 And the response carries no out-of-band swap
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then the response carries a health cell for each role row, with no out-of-band swap
 And the failed role's cell reports it as Degraded
 And the response carries the Connections sub-tab's warning marker, which is present
 When a later attempt for that role succeeds
-And the client GET /fragment/settings again
+And the client GET /screen?parts=settings again
 Then the cell reports the role as Healthy
 And the marker is empty
 ```
@@ -62,7 +62,7 @@ And the marker is empty
 
 ```gherkin
 Given an active Game whose visual sidebar cannot render
-When the client GET /fragment/visual-sidebar
+When the client GET /screen?parts=visual-sidebar
 Then the response is non-2xx
 And the response asks the client to swap nothing
 ```
@@ -71,7 +71,7 @@ And the response asks the client to swap nothing
 
 ```gherkin
 Given the settings, the Games or the Worlds cannot be read from storage
-When the client GETs /fragment/settings, /fragment/prompt-presets, /fragment/worlds or /fragment/games
+When the client GETs /screen?parts=settings, /screen?parts=prompt-presets, /screen?parts=worlds or /screen?parts=games
 Then each response is non-2xx
 And the body of each response is an error fragment
 And no response carries HX-Reswap
@@ -95,7 +95,7 @@ And the response does not ask the client to swap nothing
 
 ```gherkin
 Given a Game whose last generation failed with a raw transport message
-When the client GET /status/busy
+When the client GET /screen?parts=status-display
 Then the response carries data-status "failed" and one short user-facing line
 And the raw transport message is reachable only inside the response's disclosure
 ```
@@ -104,7 +104,7 @@ And the raw transport message is reachable only inside the response's disclosure
 
 ```gherkin
 Given a Game whose last generation failed because its active prompt preset is missing
-When the client GET /status/busy
+When the client GET /screen?parts=status-display
 Then the response carries the missing-data line that names the preset, not the line for an unnamed failure
 And the raw text naming the missing preset is reachable only inside the response's disclosure
 ```
@@ -113,7 +113,7 @@ And the raw text naming the missing preset is reachable only inside the response
 
 ```gherkin
 Given a Game whose last generation failed because the model spent its whole token budget before writing an answer
-When the client GET /status/busy
+When the client GET /screen?parts=status-display
 Then the response carries the spent-token-budget line, not the unreadable-answer line or the line for an unnamed failure
 And that line names the model's reasoning and only a remedy the dashboard offers
 And the raw text naming the completion and reasoning token counts is reachable only inside the response's disclosure
@@ -125,7 +125,7 @@ And the raw text naming the completion and reasoning token counts is reachable o
 Given a Game whose narrator call answers with empty text
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/busy
+And the client GET /screen?parts=status-display
 Then the status response carries the empty-answer line, not the unreadable-answer line
 And the story log holds no Narration of that Action
 ```
@@ -137,7 +137,7 @@ Given a Game whose current state names a Character that the World does not hold
 And a narrator backend that answers the narration prompt
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/busy
+And the client GET /screen?parts=status-display
 Then the status response carries the contradiction line
 And the story log holds that Action's Narration text
 And the raw internal message appears once, inside that response's disclosure
@@ -149,7 +149,7 @@ And the raw internal message appears once, inside that response's disclosure
 Given a running Job whose Narration call is held
 And the storage fails the write of a Narration's text while the call is held
 When the call is released and the Job ends
-And the client GET /status/busy
+And the client GET /screen?parts=status-display
 Then the status response carries the save-failed line, not the line for an unnamed failure
 And the raw storage error is reachable only inside the response's disclosure
 And the story log holds that Action's Input
@@ -162,7 +162,7 @@ And the story log holds no Narration of that Action
 Given a Game whose narration connection holds a context window too small for the system prompt and the fixed input budget
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/busy
+And the client GET /screen?parts=status-display
 Then the status response carries the prompt-too-long line, not the line for an unnamed failure
 And the raw context-overflow message is reachable only inside the response's disclosure
 And the story log holds no Narration of that Action
@@ -174,7 +174,7 @@ And the story log holds no Narration of that Action
 Given a running Job whose Narration call is held
 And the Game's record becomes unreadable while the call is held
 When the call is released and the Job ends
-And the client GET /status/busy
+And the client GET /screen?parts=status-display
 Then the status response carries the missing-data line that names the Game
 And the raw storage message is in the response's disclosure
 And the Quantifier is not asked
@@ -188,7 +188,7 @@ Given a Game whose Job reads the record of one row of the Examples table below
 And the read fails
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/busy
+And the client GET /screen?parts=status-display
 Then the status response carries the missing-data line that names the record of that row
 And the status response does not carry the save-failed line
 And the raw storage error is reachable only inside the response's disclosure
@@ -210,7 +210,7 @@ When the client POST /action with command="look"
 Then the response is 500
 And the response carries the missing-data line that names the start state
 And the response does not carry the raw storage error
-When the client GET /status/busy
+When the client GET /screen?parts=status-display
 Then the status response carries the same line
 And the raw storage error is reachable only inside the response's disclosure
 And the story log is unchanged
@@ -222,7 +222,7 @@ And the story log is unchanged
 Given a Game whose preset for the kind of one row of the Examples table below is not in the library
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/busy
+And the client GET /screen?parts=status-display
 Then the status response carries the missing-data line that names the preset
 And the raw text naming the missing preset is reachable only inside the response's disclosure
 And the story log holds the Narrations of that row
@@ -241,7 +241,7 @@ Given a Game whose storage fails the write of a state update
 And a narrator backend that answers the narration prompt
 When the client POST /action with command="look"
 And the Job ends
-And the client GET /status/busy
+And the client GET /screen?parts=status-display
 Then the status response carries the contradiction line, not the save-failed line
 And the raw storage error is reachable only inside the response's disclosure
 And the story log holds that Action's Narration text

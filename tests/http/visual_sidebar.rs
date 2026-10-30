@@ -1,8 +1,8 @@
-//! HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.
+//! HTTP E2E tests for the visual sidebar part of the screen — the portrait labels.
 
 use chronicler_engine::test_support::{TestAppBuilder, TestDataBuilder, TestCharacter};
 
-use crate::support::http_requests::fetch_body;
+use crate::support::http_requests::fetch_part;
 
 // [docs/specs/visual_sidebar.md] SCENARIO: 32.1
 #[tokio::test]
@@ -15,7 +15,7 @@ async fn test_visual_sidebar_shows_character_name_label_http() {
         .build();
     let app = TestAppBuilder::default_test().data(data).build();
 
-    let body = fetch_body(&app, "/fragment/visual-sidebar").await;
+    let body = fetch_part(&app, "visual-sidebar").await;
 
     assert_eq!(
         body.matches(r#"class="image-container character-portrait"#)
@@ -44,7 +44,7 @@ async fn test_visual_sidebar_escapes_character_name_label_http() {
         .build();
     let app = TestAppBuilder::default_test().data(data).build();
 
-    let body = fetch_body(&app, "/fragment/visual-sidebar").await;
+    let body = fetch_part(&app, "visual-sidebar").await;
 
     assert!(
         !body.contains("<Script>"),

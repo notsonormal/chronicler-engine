@@ -10,7 +10,7 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::http_assertions::assert_option_selected;
-use crate::support::http_requests::{assert_answers_nothing, fetch_body, post_form, response_body};
+use crate::support::http_requests::{assert_answers_nothing, post_form, response_body, fetch_part};
 
 fn failing_storage() -> Arc<Storage> {
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
@@ -118,7 +118,7 @@ async fn test_posture_autosave_answers_nothing_and_the_fragment_renders_the_new_
     assert_eq!(game.narrative_tense.as_str(), "present");
     assert_eq!(game.narrative_perspective.as_str(), "third");
 
-    let html = fetch_body(&app, "/fragment/games").await;
+    let html = fetch_part(&app, "games").await;
     assert_option_selected(
         &html,
         "present",
@@ -167,7 +167,7 @@ async fn test_options_preset_selection_persists_http() {
         .expect("the active game must still exist");
     assert_eq!(game.active_options_prompt_preset_id, "options_custom");
 
-    let html = fetch_body(&app, "/fragment/games").await;
+    let html = fetch_part(&app, "games").await;
     assert_option_selected(
         &html,
         "options_custom",

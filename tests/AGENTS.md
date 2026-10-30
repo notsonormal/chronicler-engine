@@ -98,7 +98,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
     - `games_create.rs` — HTTP E2E tests for game creation (POST /games).
     - `games_delete.rs` — HTTP E2E tests for game deletion (POST /games/:id/delete).
-    - `games_fragment.rs` — HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.
+    - `games_fragment.rs` — HTTP E2E tests for the games part of the screen — the posture controls' rendered selects and preset pickers.
     - `games_pages.rs` — HTTP E2E tests for the pages of the saved Games on `GET /screen?parts=games`: the page size, the order, the clamp and the pager. Tagged against `docs/specs/games.md` and `docs/specs/screen.md`.
     - `games_rename.rs` — HTTP E2E tests for game rename (POST /games/:id/rename).
     - `games_switch.rs` — HTTP E2E tests for game switching (POST /games/:id/switch).
@@ -117,7 +117,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `story_log.rs` — HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
-    - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar fragment (`GET /fragment/visual-sidebar`) — the portrait labels.
+    - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar part of the screen — the portrait labels.
     - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure, and the Edit form of an unknown World.
     - **autoplay/**
       - `fragments.rs` — HTTP E2E tests for the view-only Game of Autoplay (autoplay.md 41.18-41.20, 41.22): the controls the story log, the dock and the Games panel render while a run holds the Game.
@@ -128,7 +128,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `core.rs` — HTTP integration test for reset-handler error handling.
       - `debug.rs` — HTTP integration tests for the debug endpoints: `/debug/state` returns the expected JSON shape and `/debug/is_busy` reflects the actual busy state.
       - `fragment.rs` — HTTP integration tests for fragment rendering.
-      - `games_fragment_handlers.rs` — HTTP E2E tests for the games list fragment (GET /fragment/games).
+      - `games_fragment_handlers.rs` — HTTP E2E tests for the games list part of the screen.
       - `index_handler.rs` — HTTP integration test for the dashboard index handler.
       - `mod.rs` — Quarantined HTTP tests pending specs.
       - `server_impl_wiring.rs` — HTTP wiring tests for `server_impl.rs` (real request routing lives in the `http` test binary).

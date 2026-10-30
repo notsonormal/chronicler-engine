@@ -21,7 +21,7 @@ use crate::support::http_assertions::{defined_icons, referenced_icons, status_er
 use crate::support::http_fixtures::{if_world, seed_offered_set, story_of};
 use crate::support::http_requests::{
     fetch_body, fetch_busy_status, post_action, post_action_check, post_empty, post_form,
-    wait_for_jobs, wait_settled,
+    wait_for_jobs, wait_settled, fetch_part,
 };
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -67,7 +67,7 @@ fn message_count(state: &AppState) -> usize {
 
 /// The dock's Options failure line, or `None` when the dock renders the offered set.
 async fn dock_options_failure(app: &axum::Router) -> Option<String> {
-    let dock = fetch_body(app, "/fragment/options-dock").await;
+    let dock = fetch_part(app, "options-dock").await;
     dock.split("options-notice-line").nth(1).map(|rest| {
         let line = rest.split_once('>').map(|(_, after)| after).unwrap_or("");
         line.split('<').next().unwrap_or("").to_string()
@@ -91,7 +91,7 @@ async fn test_on_demand_options_render_in_dock_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await, "/options should complete");
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("options-strip"),
         "the dock must render: {dock}"
@@ -126,7 +126,7 @@ async fn test_options_without_scene_history_errors_http() {
     );
     assert!(wait_settled(&state, 1000).await);
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "a rejected /options must render no options strip: {dock}"
@@ -157,14 +157,14 @@ async fn test_new_options_replace_set_without_history_http() {
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await);
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(dock.contains("Search the desk"), "set A first: {dock}");
 
     let resp = post_action(&app, "/options").await;
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await);
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(dock.contains("Open the gate"), "set B second: {dock}");
     assert!(
         !dock.contains("Search the desk"),
@@ -209,7 +209,7 @@ async fn test_failed_options_run_keeps_prior_set_http() {
     );
     assert!(options.contains(&"Search the desk".to_string()));
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "the Options failure takes the strip's place: {dock}"
@@ -222,7 +222,7 @@ async fn test_failed_options_run_keeps_prior_set_http() {
 
     let resp = post_empty(&app, "/status/reset-busy").await;
     assert_eq!(resp.status(), axum::http::StatusCode::OK);
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("Search the desk"),
         "the stop must give the prior set back: {dock}"
@@ -260,7 +260,7 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
         vec!["Inspect the ledger".to_string()],
         "an unavailable options agent must keep the prior set"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "the Options failure takes the strip's place: {dock}"
@@ -273,7 +273,7 @@ async fn test_on_demand_options_without_an_agent_reports_unavailable_http() {
 
     let resp = post_empty(&app, "/status/reset-busy").await;
     assert_eq!(resp.status(), axum::http::StatusCode::OK);
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("Inspect the ledger"),
         "the stop must give the prior set back: {dock}"
@@ -305,7 +305,7 @@ async fn test_always_on_generates_after_narration_turn_http() {
         "the always-on toggle must generate options at turn end"
     );
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("options-strip"),
         "the dock must render: {dock}"
@@ -356,7 +356,7 @@ async fn test_impersonate_keeps_offered_set_http() {
         set_a_options(),
         "an impersonate message must leave the offered set alone"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("Search the desk"),
         "the dock must still render set A: {dock}"
@@ -401,7 +401,7 @@ async fn test_narration_turn_clears_offered_set_http() {
         current_options(&state).is_empty(),
         "the turn end must clear the offered set when the toggle is off"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "a cleared set must leave the dock empty: {dock}"
@@ -446,7 +446,7 @@ async fn test_failed_always_on_options_run_clears_set_and_reports_http() {
         current_options(&state).is_empty(),
         "a failed Options run must leave the offered set empty"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "a failed Options run must render no options strip: {dock}"
@@ -483,7 +483,7 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
         current_options(&state).is_empty(),
         "the turn end must clear the offered set even when no agent can make new Options"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "with no agent the dock must render no options strip: {dock}"
@@ -557,7 +557,7 @@ async fn test_options_run_follows_a_failed_event_narration_http() {
         set_a_options(),
         "the Options run must follow the Narration the failed event step kept"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("options-strip"),
         "the dock must render the fresh set: {dock}"
@@ -616,7 +616,7 @@ async fn options_after_state_save_failed() {
         set_a_options(),
         "the Options run must follow the Narration the failed state update kept"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert_eq!(
         dock_options_failure(&app).await,
         None,
@@ -678,7 +678,7 @@ async fn options_after_event_text_save_failed() {
         set_a_options(),
         "the Options run must follow the Narration that the failed event text save left"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert_eq!(
         dock_options_failure(&app).await,
         None,
@@ -712,7 +712,7 @@ async fn test_numbered_list_response_parses_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await);
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(dock.contains("Search the desk"), "{dock}");
     assert!(dock.contains("Question the guard"), "{dock}");
     assert!(
@@ -739,7 +739,7 @@ async fn test_options_work_in_if_mode_http() {
     assert!(resp.status().is_success());
     assert!(wait_settled(&state, 1000).await);
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("options-strip"),
         "the dock must render: {dock}"
@@ -809,7 +809,7 @@ async fn test_mode_switch_keeps_offered_set_http() {
         set_a_options(),
         "a narrator-mode switch must leave the offered set alone"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("Search the desk"),
         "the dock must still render set A: {dock}"
@@ -901,7 +901,7 @@ async fn test_options_dock_icons_are_defined_by_the_shell() {
     assert!(wait_settled(&state, 1000).await, "/options should complete");
 
     let defined = defined_icons(&fetch_body(&app, "/").await);
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     let icons = referenced_icons(&dock);
     assert!(
         !icons.is_empty(),

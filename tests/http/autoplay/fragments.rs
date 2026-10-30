@@ -12,7 +12,7 @@ use crate::support::http_assertions::{assert_action_controls, ActionControls};
 use crate::support::app_wiring::{app_after_an_impersonate_with_a_failed_event, app_with_script};
 use crate::support::http_fixtures::{create_game_from, seed_offered_set, story_of_game};
 use crate::support::http_requests::{
-    fetch_body, fetch_part, post_action, post_empty, wait_settled, post_on_last_message,
+    fetch_part, post_action, post_empty, wait_settled, post_on_last_message,
 };
 
 fn button_tags_with_class(html: &str, class: &str) -> Vec<String> {
@@ -96,23 +96,19 @@ async fn test_while_a_run_holds_the_game_the_story_log_renders_its_controls_disa
     assert!(wait_settled(&state, 2000).await, "the Retry settles");
     seed_offered_set(&state, &["Ask the bartender"]);
 
-    let before = fetch_body(&app, "/fragment/story-log").await;
+    let before = fetch_part(&app, "story-log").await;
     assert_controls(&story_changing_controls(&before), false, "no run");
-    assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
-        false,
-        "no run",
-    );
+    assert_dock_controls(&fetch_part(&app, "options-dock").await, false, "no run");
 
     let pause = pause_before_first_job(&app, &state, game).await;
-    let during = fetch_body(&app, "/fragment/story-log").await;
+    let during = fetch_part(&app, "story-log").await;
     assert_controls(
         &story_changing_controls(&during),
         true,
         "a run holds the Game",
     );
     assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
+        &fetch_part(&app, "options-dock").await,
         true,
         "a run holds the Game",
     );
@@ -122,10 +118,10 @@ async fn test_while_a_run_holds_the_game_the_story_log_renders_its_controls_disa
     );
 
     end_paused_run(&app, &state, game, &pause).await;
-    let after = fetch_body(&app, "/fragment/story-log").await;
+    let after = fetch_part(&app, "story-log").await;
     assert_controls(&story_changing_controls(&after), false, "after the stop");
     assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
+        &fetch_part(&app, "options-dock").await,
         false,
         "after the stop",
     );
@@ -154,23 +150,19 @@ async fn test_between_two_jobs_of_a_run_the_story_log_and_the_dock_render_disabl
     assert!(wait_settled(&state, 2000).await, "the Retry settles");
     seed_offered_set(&state, &["Ask the bartender"]);
 
-    let before = fetch_body(&app, "/fragment/story-log").await;
+    let before = fetch_part(&app, "story-log").await;
     assert_controls(&story_changing_controls(&before), false, "no run");
-    assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
-        false,
-        "no run",
-    );
+    assert_dock_controls(&fetch_part(&app, "options-dock").await, false, "no run");
 
     let pause = pause_between_two_jobs(&app, &state, game).await;
-    let during = fetch_body(&app, "/fragment/story-log").await;
+    let during = fetch_part(&app, "story-log").await;
     assert_controls(
         &between_jobs_controls(&during),
         true,
         "a run holds the Game",
     );
     assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
+        &fetch_part(&app, "options-dock").await,
         true,
         "a run holds the Game",
     );
@@ -180,10 +172,10 @@ async fn test_between_two_jobs_of_a_run_the_story_log_and_the_dock_render_disabl
     );
 
     end_paused_run(&app, &state, game, &pause).await;
-    let after = fetch_body(&app, "/fragment/story-log").await;
+    let after = fetch_part(&app, "story-log").await;
     assert_controls(&between_jobs_controls(&after), false, "after the stop");
     assert_dock_controls(
-        &fetch_body(&app, "/fragment/options-dock").await,
+        &fetch_part(&app, "options-dock").await,
         false,
         "after the stop",
     );
@@ -203,10 +195,7 @@ async fn test_while_a_run_holds_the_game_retrigger_renders_disabled() {
     let game = active_game_of(&state);
     let pause = pause_before_first_job(&app, &state, game).await;
 
-    let during = button_tags_with_class(
-        &fetch_body(&app, "/fragment/story-log").await,
-        "retrigger-btn",
-    );
+    let during = button_tags_with_class(&fetch_part(&app, "story-log").await, "retrigger-btn");
     assert_eq!(
         during.len(),
         1,
@@ -215,10 +204,7 @@ async fn test_while_a_run_holds_the_game_retrigger_renders_disabled() {
     assert!(during[0].contains(" disabled"), "Retrigger: {}", during[0]);
 
     end_paused_run(&app, &state, game, &pause).await;
-    let after = button_tags_with_class(
-        &fetch_body(&app, "/fragment/story-log").await,
-        "retrigger-btn",
-    );
+    let after = button_tags_with_class(&fetch_part(&app, "story-log").await, "retrigger-btn");
     assert_eq!(after.len(), 1, "the story log offers Retrigger: {after:?}");
     assert!(
         !after[0].contains(" disabled"),
@@ -258,14 +244,14 @@ async fn test_while_a_run_holds_the_game_next_swipe_renders_disabled() {
     );
 
     let pause = pause_before_first_job(&app, &state, game).await;
-    let during = swipe_button(&fetch_body(&app, "/fragment/story-log").await, "Next swipe");
+    let during = swipe_button(&fetch_part(&app, "story-log").await, "Next swipe");
     assert!(
         during.contains(" disabled"),
         "a run holds the Game: {during}"
     );
 
     end_paused_run(&app, &state, game, &pause).await;
-    let after = swipe_button(&fetch_body(&app, "/fragment/story-log").await, "Next swipe");
+    let after = swipe_button(&fetch_part(&app, "story-log").await, "Next swipe");
     assert!(!after.contains(" disabled"), "after the stop: {after}");
 }
 
@@ -299,7 +285,7 @@ async fn test_the_games_fragment_marks_a_game_that_a_run_holds() {
         .expect("Game B reads back");
     assert_ne!(name_a, name_b, "the two Games have distinct names");
 
-    let panel = fetch_body(&app, "/fragment/games").await;
+    let panel = fetch_part(&app, "games").await;
     assert!(
         item_of_game(&panel, &name_a).contains("run-badge"),
         "the saved Game that a run holds carries the badge"
@@ -310,7 +296,7 @@ async fn test_the_games_fragment_marks_a_game_that_a_run_holds() {
     );
 
     let pause_b = pause_before_first_job(&app, &state, game_b).await;
-    let panel = fetch_body(&app, "/fragment/games").await;
+    let panel = fetch_part(&app, "games").await;
     assert!(
         item_of_game(&panel, &name_b).contains("run-badge"),
         "the active Game that a run holds carries the badge"
@@ -351,11 +337,11 @@ async fn test_while_a_run_holds_the_game_its_config_controls_render_disabled() {
     let game = active_game_of(&state);
 
     let pause = pause_between_two_jobs(&app, &state, game).await;
-    let during = fetch_body(&app, "/fragment/games").await;
+    let during = fetch_part(&app, "games").await;
     assert_config_selects(&during, true, "a run holds the Game");
 
     end_paused_run(&app, &state, game, &pause).await;
-    let after = fetch_body(&app, "/fragment/games").await;
+    let after = fetch_part(&app, "games").await;
     assert_config_selects(&after, false, "after the stop");
 }
 

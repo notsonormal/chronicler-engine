@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the games panel fragment (`GET /fragment/games`) — the posture fragment's rendered selects and preset pickers.
+//! HTTP E2E tests for the games part of the screen — the posture controls' rendered selects and preset pickers.
 
 use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
@@ -8,7 +8,7 @@ use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::test_support::TestAppBuilder;
 
 use crate::support::http_assertions::assert_option_selected;
-use crate::support::http_requests::{fetch_body, response_body};
+use crate::support::http_requests::{fetch_body, response_body, fetch_part};
 use crate::test_utils::panel_section_html_slice;
 
 // The fragment is a plain server render, so a GET observes the rendered
@@ -19,7 +19,7 @@ async fn test_games_fragment_renders_posture_controls_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
     let game_id = active_game_of(&state);
 
-    let html = fetch_body(&app, "/fragment/games").await;
+    let html = fetch_part(&app, "games").await;
 
     assert!(
         html.contains(r#"id="game-posture-controls""#),
@@ -86,7 +86,7 @@ async fn test_games_fragment_lists_only_other_saved_games_http() {
         .expect("the fixture seeds an active game")
         .name;
 
-    let html = fetch_body(&app, "/fragment/games").await;
+    let html = fetch_part(&app, "games").await;
 
     assert!(
         html.contains("No other saved games."),
@@ -127,7 +127,7 @@ async fn test_games_fragment_lists_other_saved_games_http() {
     );
 
     let app = build_router(state);
-    let html = fetch_body(&app, "/fragment/games").await;
+    let html = fetch_part(&app, "games").await;
 
     let saved_section = panel_section_html_slice(&html, "Saved Games")
         .expect("the fragment must render the Saved Games section");
@@ -166,7 +166,7 @@ async fn test_games_fragment_is_the_panel_content_with_stable_row_ids_http() {
     .0;
 
     let app = build_router(state);
-    let html = fetch_body(&app, "/fragment/games").await;
+    let html = fetch_part(&app, "games").await;
 
     assert!(
         !html.contains("games-panel"),

@@ -17,27 +17,27 @@ The answer is one element. Its `data-status` attribute holds the machine state: 
 
 ```gherkin
 Given a Game whose Job is at the narrator call of a Narration
-When the client requests GET /status/busy
-Then the response body is a status element with data-status "thinking" and the label "Generating narration..."
+When the client requests GET /screen?parts=status-display
+Then the template of status-display is a status element with data-status "thinking" and the label "Generating narration..."
 
 Given a Game whose Job is at its analysis
-When the client requests GET /status/busy
-Then the response body is a status element with data-status "thinking" and the label "Quantifying..."
+When the client requests GET /screen?parts=status-display
+Then the template of status-display is a status element with data-status "thinking" and the label "Quantifying..."
 
 Given a Game with no Job and a failure line
-When the client requests GET /status/busy
+When the client requests GET /screen?parts=status-display
 Then the response body carries data-status "failed"
 And the response body carries that failure line
 
 Given a Game with no Job and no failure line
-When the client requests GET /status/busy
-Then the response body is a status element with data-status "idle" and the label "Ready"
+When the client requests GET /screen?parts=status-display
+Then the template of status-display is a status element with data-status "idle" and the label "Ready"
 ```
 
 #### Scenario 39.2: The shell defines each referenced icon exactly once
 ```gherkin
 Given a game with at least 2 Messages and a stored trigger
-When the client requests GET / and GET /fragment/story-log and /fragment/games
+When the client requests GET / and GET /screen?parts=story-log and /screen?parts=games
 Then the shell defines each icon exactly once
 And every icon the shell or a fragment named above references is one the shell defines
 And each fragment named above shows at least one icon
@@ -47,12 +47,12 @@ And each fragment named above shows at least one icon
 
 ```gherkin
 Given a Game with an offered set and a Job
-When the client requests GET /fragment/options-dock and GET /debug/is_busy
+When the client requests GET /screen?parts=options-dock and GET /debug/is_busy
 Then the dock's controls are disabled
 And the debug response body is "true"
 
 Given a Game with an offered set and no Job
-When the client requests GET /fragment/options-dock and GET /debug/is_busy
+When the client requests GET /screen?parts=options-dock and GET /debug/is_busy
 Then the dock's controls are enabled
 And the debug response body is "false"
 ```
@@ -138,9 +138,9 @@ Then the Job saves its Narration and the Game is idle
 ```gherkin
 Given a Game with no Job
 And a storage that rejects the read of the Game
-When the client requests GET /status/busy
+When the client requests GET /screen?parts=status-display
 Then the response body carries the line "The data for this request is missing: the game."
-And the response body is not a status element with data-status "idle"
+And the template of status-display is not a status element with data-status "idle"
 ```
 
 #### Scenario 39.10: With no active Game, the stop answers 400
@@ -156,8 +156,8 @@ And the response body mentions "No active game"
 
 ```gherkin
 Given no active Game
-When the client requests GET /status/busy
-Then the response body is a status element with data-status "idle" and the label "Ready"
+When the client requests GET /screen?parts=status-display
+Then the template of status-display is a status element with data-status "idle" and the label "Ready"
 ```
 
 #### Scenario 39.12: The action controls render Send and Autoplay enabled while the Game is idle

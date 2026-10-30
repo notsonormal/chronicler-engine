@@ -15,7 +15,7 @@ Endpoints:
 Given a game with scene history and an options agent
 When the client POST /action with command="/options"
 And the Game is no longer busy
-Then GET /fragment/options-dock renders the options strip with one button per generated option
+Then GET /screen?parts=options-dock renders the options strip with one button per generated option
 ```
 
 #### Scenario 24.2: /options on a Game with no story text answers 400
@@ -25,7 +25,7 @@ Given a Game whose story holds no text (its opening Narration has none)
 When the client POST /action with command="/options"
 Then the response is 400 Bad Request
 And the response body names the missing scene ("No scene to generate options for yet")
-And GET /fragment/options-dock renders no options strip and no Options failure
+And GET /screen?parts=options-dock renders no options strip and no Options failure
 ```
 
 #### Scenario 24.18: /options with no options agent reports the agent is unavailable and keeps the set
@@ -218,7 +218,7 @@ Given a Game with scene history whose Job is running, held inside its narrator c
 When a client POST /action with command="/options"
 Then the response is 409 carrying the "Still thinking..." line
 And the offered set is unchanged
-And GET /fragment/options-dock renders no options strip
+And GET /screen?parts=options-dock renders no options strip
 ```
 
 ### Dock controls
@@ -229,6 +229,6 @@ And GET /fragment/options-dock renders no options strip
 Given a game with scene history and an options agent
 When the client POST /action with command="/options"
 And the Game is no longer busy
-Then GET /fragment/options-dock shows at least one icon
+Then GET /screen?parts=options-dock shows at least one icon
 And every icon it references is one GET / defines
 ```
