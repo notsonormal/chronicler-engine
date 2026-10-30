@@ -77,6 +77,7 @@ The `guardrails` column is the architecture and guardrails binaries together. Th
 | `Target seeding: no warm sibling ...` | This dir builds from scratch. The line names up to three rejected warm dirs and why each was rejected. |
 | `oom_kill` rising | Builds exceeded the memory limit. |
 | `some avg300` rising in `/sys/fs/cgroup/cpu.pressure` | The host is squeezing the container. |
+| `sccache --show-stats` reports `command not found` | A rebuilt home dropped the binary, so every compile is uncached. The header comment of `scripts/sccache-wrapper.sh` has the reinstall step. |
 
 ## What forces a rebuild
 
