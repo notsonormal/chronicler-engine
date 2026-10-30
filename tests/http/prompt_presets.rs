@@ -9,7 +9,7 @@ use tower::util::ServiceExt;
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::prompt_preset_service::PromptPresetService;
-use chronicler_engine::test_support::body_text;
+use chronicler_engine::test_support::{assert_answers_nothing, body_text};
 use chronicler_engine::test_support::TestPromptPreset;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::empty_sqlite_storage;
@@ -18,8 +18,21 @@ use crate::test_utils::preset_card_html_slice;
 use crate::test_utils::panel_section_html_slice;
 
 use crate::support::app_wiring::two_game_app;
-use crate::support::http_requests::post_form;
+use crate::support::http_requests::{fetch_body, fetch_part, post_form};
 use crate::SettingsTestGuard;
+
+fn assert_one_error_message_holding(body: &str, failure_text: &str) {
+    assert!(
+        body.starts_with(r#"<div class="error-message">"#)
+            && body.ends_with("</div>")
+            && body.matches("<div").count() == 1,
+        "the body is one error-message element: {body}"
+    );
+    assert!(
+        body.contains(failure_text),
+        "the body holds the text of the failure: {body}"
+    );
+}
 
 fn get_request(uri: &str) -> Request<Body> {
     Request::builder()
@@ -56,6 +69,19 @@ fn preset_id_by_name(presets: &PromptPresetService, name: &str) -> String {
     panic!("no preset named {name:?} in the preset library");
 }
 
+/// A saved change answers nothing, and the panel shows it: this asserts the
+/// empty 200 and reads the panel that the next load renders.
+async fn panel_after(app: &axum::Router, response: axum::response::Response) -> String {
+    assert_answers_nothing(response).await;
+    fetch_part(app, "prompt-presets").await
+}
+
+/// One preset's card as the panel renders it.
+async fn card_in_panel(app: &axum::Router, preset_id: &str) -> String {
+    let panel = fetch_part(app, "prompt-presets").await;
+    preset_card_slice(&panel, preset_id).to_string()
+}
+
 fn extract_first_preset_id(body: &str) -> String {
     let delete_marker = "/delete\"";
     let delete_pos = body
@@ -85,75 +111,51 @@ async fn test_prompt_presets_panel_renders_full_surface() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = fetch_part(&app, "prompt-presets").await;
 
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    assert!(
+        !body.contains("prompt-presets-panel"),
+        "the shell's .prompt-presets-panel is the part: the fragment repeats no root: {body}"
+    );
     assert!(body.contains("<h2>System Prompts</h2>"));
     assert!(body.contains("<h2>Quantifier Prompts</h2>"));
-    assert!(body.contains("preset-add-toggle"));
     assert!(body.contains("Add System Prompt Preset"));
     assert!(body.contains("Add Quantifier Prompt Preset"));
     // Default test fixture seeds one default system preset; the spec assumes a
     // default quantifier preset is also present, but the fixture does not seed one.
     assert!(body.contains("preset-card"));
+    assert!(
+        body.contains(r#"id="preset-card-system_default""#),
+        "a card carries a stable id, so a load keeps it: {body}"
+    );
     assert!(body.contains("Default"));
-    assert!(body.contains(r#"<input type="hidden" name="preset_type" value="system" />"#));
-    assert!(body.contains(r#"<input type="hidden" name="preset_type" value="quantifier" />"#));
     assert!(body.contains("<h2>Impersonate Prompts</h2>"));
     assert!(body.contains("Add Impersonate Prompt Preset"));
-    let impersonate_marker = r#"<input type="hidden" name="preset_type" value="impersonate" />"#;
-    let impersonate_start = body
-        .find(impersonate_marker)
-        .expect("impersonate add-form must render");
-    let impersonate_form = &body[impersonate_start..];
-    let impersonate_form = &impersonate_form[..impersonate_form
-        .find("</form>")
-        .expect("impersonate add-form must close")];
-    for field in [
-        "name",
-        "role",
-        "instructions",
-        "writing_style",
-        "output_format",
-    ] {
-        assert!(
-            impersonate_form.contains(&format!(r#"name="{field}""#)),
-            "impersonate add-form must contain input `{field}`: {impersonate_form}"
-        );
-    }
     assert!(
-        body.contains(r#"data-error-slot="preset-add-system""#)
-            && body.contains(r#"data-error-slot="preset-add-options""#),
-        "each Add form must carry the inline error slot the client renders into"
+        !body.contains("<form") && !body.contains("<textarea"),
+        "the panel holds no form that waits for a Save: {body}"
     );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.28
 #[tokio::test]
-async fn test_prompt_presets_add_forms_collapsed_by_default() {
+async fn test_prompt_presets_add_controls_open_the_dialog() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let response = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = fetch_part(&app, "prompt-presets").await;
 
-    assert_eq!(
-        body.matches(r#"<details class="preset-add">"#).count(),
-        4,
-        "each category's add form must be a closed disclosure"
-    );
+    for preset_type in ["system", "quantifier", "impersonate", "options"] {
+        assert!(
+            body.contains(&format!(
+                r##"hx-get="/fragment/prompt-presets/new?type={preset_type}" hx-target="#edit-dialog-body""##
+            )),
+            "the {preset_type} section must have an Add control that opens the dialog: {body}"
+        );
+    }
     assert!(
-        !body.contains(r#"<details class="preset-add" open>"#),
-        "the add forms must be closed by default"
+        !body.contains("<details"),
+        "the panel holds no disclosure: {body}"
     );
     assert!(body.contains("Add System Prompt Preset"));
     assert!(body.contains("Add Quantifier Prompt Preset"));
@@ -161,51 +163,75 @@ async fn test_prompt_presets_add_forms_collapsed_by_default() {
     assert!(body.contains("Add Options Prompt Preset"));
 }
 
-// [docs/specs/prompt_presets.md] SCENARIO: 21.2
+// [docs/specs/prompt_presets.md] SCENARIO: 21.42
 #[tokio::test]
-async fn test_prompt_preset_single_card_renders() {
+async fn test_prompt_preset_add_form_is_a_dialog_fragment_for_its_type() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let create_response = post_form(
-        &app,
-        "/prompt-presets",
-        "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
-    )
-    .await;
-    assert_eq!(create_response.status(), StatusCode::OK);
-    let panel = body_text(create_response).await;
-    let preset_id = extract_first_preset_id(&panel);
-
-    let response = app
-        .oneshot(get_request(&format!(
-            "/fragment/prompt-presets/{preset_id}"
-        )))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="preset-card""#));
-    assert!(body.contains("My System Prompt"));
-    assert!(body.contains("Set Active"));
-    assert!(body.contains("Edit"));
-    assert!(body.contains("Delete"));
-    assert!(body.contains("Duplicate"));
+    for (preset_type, has_writing_style) in [
+        ("system", true),
+        ("quantifier", false),
+        ("impersonate", true),
+        ("options", true),
+    ] {
+        let body = fetch_body(
+            &app,
+            &format!("/fragment/prompt-presets/new?type={preset_type}"),
+        )
+        .await;
+        assert!(
+            body.contains("data-dialog-form") && body.contains(r#"id="edit-dialog-title""#),
+            "the {preset_type} form is a dialog form with the title that names the dialog: {body}"
+        );
+        assert!(
+            body.contains(r#"hx-post="/prompt-presets""#),
+            "the {preset_type} form posts to the create route: {body}"
+        );
+        assert!(
+            body.contains(&format!(
+                r#"<input type="hidden" name="preset_type" value="{preset_type}" />"#
+            )),
+            "the {preset_type} form carries its type: {body}"
+        );
+        for field in ["name", "role", "instructions", "output_format"] {
+            assert!(
+                body.contains(&format!(r#"name="{field}""#)),
+                "the {preset_type} form must contain `{field}`: {body}"
+            );
+        }
+        assert_eq!(
+            body.contains(r#"name="writing_style""#),
+            has_writing_style,
+            "only the Quantifier form has no Writing Style: {body}"
+        );
+        assert!(
+            body.contains(&format!(r#"data-error-slot="preset-add-{preset_type}""#)),
+            "the {preset_type} form carries the inline error slot: {body}"
+        );
+        assert!(
+            body.contains("data-close-dialog"),
+            "the {preset_type} form has a Cancel control that closes the dialog: {body}"
+        );
+    }
 }
 
-// [docs/specs/prompt_presets.md] SCENARIO: 21.3
+// [docs/specs/prompt_presets.md] SCENARIO: 21.43
 #[tokio::test]
-async fn test_prompt_preset_single_card_missing_returns_error() {
+async fn test_prompt_preset_add_form_of_an_unknown_type_is_refused() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
     let response = app
-        .oneshot(get_request("/fragment/prompt-presets/does-not-exist"))
+        .oneshot(get_request("/fragment/prompt-presets/new?type=bogus"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The form was not opened: Invalid preset type.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.4
@@ -220,7 +246,7 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
         "name=Editable&instructions=Edit+me.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
@@ -231,7 +257,11 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="preset-card edit-form">"#));
+    assert!(
+        body.contains(r#"<div class="preset-form edit-form" data-dialog-form>"#)
+            && body.contains(r#"<h2 id="edit-dialog-title">Edit Editable</h2>"#),
+        "the editor is a dialog form with the title that names the dialog: {body}"
+    );
     assert!(body.contains(&format!(r#"hx-post="/prompt-presets/{preset_id}""#)));
     assert!(body.contains(r#"<input type="hidden" name="preset_type" value="system" />"#));
     assert!(body.contains(r#"value="Editable""#));
@@ -240,7 +270,10 @@ async fn test_prompt_preset_edit_form_renders_for_non_default() {
     assert!(body.contains(r#"name="writing_style""#));
     assert!(body.contains(r#"name="output_format""#));
     assert!(body.contains("Save"));
-    assert!(body.contains("Cancel"));
+    assert!(
+        body.contains("Cancel") && body.contains("data-close-dialog"),
+        "Cancel closes the dialog: {body}"
+    );
     assert!(
         body.contains(&format!(r#"data-error-slot="preset-edit-{preset_id}""#)),
         "the edit form must carry the inline error slot the client renders into"
@@ -257,9 +290,12 @@ async fn test_prompt_preset_edit_form_missing_returns_error() {
         .oneshot(get_request("/fragment/prompt-presets/does-not-exist/edit"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The form was not opened: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.6
@@ -272,11 +308,11 @@ async fn test_prompt_preset_edit_form_default_returns_error() {
         .oneshot(get_request("/fragment/prompt-presets/system_default/edit"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Cannot edit default presets</div>"
+        "<div class=\"error-message\">The form was not opened: Cannot edit default presets.</div>"
     );
 }
 
@@ -292,13 +328,20 @@ async fn test_prompt_preset_view_form_renders_for_default() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="preset-card view-form">"#));
+    assert!(
+        body.contains(r#"<div class="preset-form view-form" data-dialog-form>"#)
+            && body.contains(r#"<h2 id="edit-dialog-title">View Default Test System</h2>"#),
+        "the view is a dialog form with the title that names the dialog: {body}"
+    );
     assert!(body.contains("Default Test System"));
     assert!(body.contains("Role"));
     assert!(body.contains("Instructions"));
     assert!(body.contains("Writing Style"));
     assert!(body.contains("Output Format"));
-    assert!(body.contains("Close"));
+    assert!(
+        body.contains("Close") && body.contains("data-close-dialog"),
+        "Close closes the dialog: {body}"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.8
@@ -311,9 +354,12 @@ async fn test_prompt_preset_view_form_missing_returns_error() {
         .oneshot(get_request("/fragment/prompt-presets/does-not-exist/view"))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The form was not opened: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.9
@@ -328,9 +374,7 @@ async fn test_create_system_preset_renders_panel() {
         "name=My+System+Prompt&instructions=You+are+a+test+narrator.&preset_type=system",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    let body = panel_after(&app, response).await;
     assert!(body.contains("My System Prompt"));
     assert!(body.contains("You are a test narrator."));
     assert!(body.contains("Set Active"));
@@ -349,9 +393,7 @@ async fn test_create_quantifier_preset_renders_panel() {
         "name=My+Quantifier+Prompt&instructions=Quantify+this+scene.&preset_type=quantifier",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    let body = panel_after(&app, response).await;
     assert!(body.contains("My Quantifier Prompt"));
     assert!(body.contains("Quantify this scene."));
 }
@@ -372,7 +414,7 @@ async fn test_create_preset_invalid_type_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Invalid preset type</div>"
+        "<div class=\"error-message\">The preset was not saved: Invalid preset type.</div>"
     );
 }
 
@@ -411,7 +453,7 @@ async fn test_create_preset_reports_save_failure() {
     .await;
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="error-message">Save failed:"#));
+    assert_one_error_message_holding(&body, "preset save failure");
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.14
@@ -426,7 +468,7 @@ async fn test_update_preset_renders_card_with_new_name() {
         "name=Before&instructions=Original.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = post_form(
@@ -435,8 +477,8 @@ async fn test_update_preset_renders_card_with_new_name() {
         "name=After&instructions=Updated.&preset_type=system",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    assert_answers_nothing(response).await;
+    let body = card_in_panel(&app, &preset_id).await;
     assert!(body.contains(r#"<div class="preset-card""#));
     assert!(body.contains("After"));
     assert!(!body.contains("Before"));
@@ -456,7 +498,10 @@ async fn test_update_missing_preset_returns_error() {
     .await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The preset &quot;Updated&quot; was not saved: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.16
@@ -472,7 +517,7 @@ async fn test_update_preset_ignores_form_preset_type() {
         "name=Update+Type&instructions=Test.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = post_form(
@@ -481,13 +526,7 @@ async fn test_update_preset_ignores_form_preset_type() {
         "name=Updated&instructions=Updated.&preset_type=quantifier",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(
-        !body.contains("error-message"),
-        "update must succeed: {body}"
-    );
-    assert!(body.contains("preset-card"));
+    assert_answers_nothing(response).await;
 
     let stored = app_state
         .prompt_preset_service
@@ -514,7 +553,7 @@ async fn test_update_default_preset_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Cannot edit default presets</div>"
+        "<div class=\"error-message\">The preset &quot;Changed&quot; was not saved: Cannot edit default presets.</div>"
     );
 }
 
@@ -530,10 +569,11 @@ async fn test_delete_non_default_preset_returns_empty_body() {
         "name=Delete+Me&instructions=Delete.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
+        .clone()
         .oneshot(empty_post_request(&format!(
             "/prompt-presets/{preset_id}/delete"
         )))
@@ -542,6 +582,11 @@ async fn test_delete_non_default_preset_returns_empty_body() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_text(response).await;
     assert!(body.is_empty());
+    let listed = fetch_part(&app, "prompt-presets").await;
+    assert!(
+        !listed.contains(&format!(r#"id="preset-card-{preset_id}""#)),
+        "the panel no longer lists the deleted preset: {listed}"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.19
@@ -556,7 +601,10 @@ async fn test_delete_missing_preset_returns_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The preset was not deleted: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.20
@@ -573,7 +621,7 @@ async fn test_delete_default_preset_returns_error() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Cannot delete default presets</div>"
+        "<div class=\"error-message\">The preset &quot;Default Test System&quot; was not deleted: Cannot delete default presets.</div>"
     );
 }
 
@@ -694,19 +742,11 @@ async fn test_delete_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
         .unwrap();
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_text(response).await;
-    assert!(
-        body.contains(r#"<div class="error-message">Delete failed:"#),
-        "the failure must reach the client for its inline slot: {body}"
-    );
+    assert_one_error_message_holding(&body, "preset delete failure");
 
     failures.clear(StorageCall::DeletePreset);
 
-    let panel = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(panel.status(), StatusCode::OK);
-    let panel_body = body_text(panel).await;
+    let panel_body = fetch_part(&app, "prompt-presets").await;
     assert!(
         panel_body.contains("Doomed"),
         "the preset must stay stored: {panel_body}"
@@ -750,7 +790,7 @@ async fn test_delete_refuses_a_preset_that_a_game_uses_and_names_the_count() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         body_text(response).await,
-        "<div class=\"error-message\">Cannot delete preset used by 1 game</div>"
+        "<div class=\"error-message\">The preset &quot;Game Ref&quot; was not deleted: Cannot delete preset used by 1 game.</div>"
     );
 
     let active = games.iter().find(|game| game.id != other_id).unwrap();
@@ -763,7 +803,7 @@ async fn test_delete_refuses_a_preset_that_a_game_uses_and_names_the_count() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         body_text(response).await,
-        "<div class=\"error-message\">Cannot delete preset used by 2 games</div>"
+        "<div class=\"error-message\">The preset &quot;Game Ref&quot; was not deleted: Cannot delete preset used by 2 games.</div>"
     );
     assert!(
         state
@@ -787,18 +827,17 @@ async fn test_duplicate_preset_renders_panel_with_copy() {
         "name=Original&instructions=Original.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
+        .clone()
         .oneshot(empty_post_request(&format!(
             "/prompt-presets/{preset_id}/duplicate"
         )))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    let body = panel_after(&app, response).await;
     assert!(body.contains("Original (Copy)"));
 }
 
@@ -816,7 +855,10 @@ async fn test_duplicate_missing_preset_returns_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The preset was not duplicated: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.23
@@ -831,18 +873,17 @@ async fn test_activate_system_preset_renders_active_badge() {
         "name=Activate+Me&instructions=Activate.&preset_type=system",
     )
     .await;
-    let panel = body_text(create_response).await;
+    let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = app
+        .clone()
         .oneshot(empty_post_request(&format!(
             "/prompt-presets/{preset_id}/activate"
         )))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(body.contains(r#"<div class="prompt-presets-panel">"#));
+    let body = panel_after(&app, response).await;
     // Scope both assertions to the activated preset's card: the panel holds
     // several presets, and a panel-wide check can pass or fail on an
     // unrelated preset's badge or buttons.
@@ -871,7 +912,10 @@ async fn test_activate_missing_preset_returns_error() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
-    assert_eq!(body, "<div class=\"error-message\">Preset not found</div>");
+    assert_eq!(
+        body,
+        "<div class=\"error-message\">The preset was not activated: Preset not found.</div>"
+    );
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.26
@@ -906,7 +950,7 @@ async fn test_activate_refuses_preset_not_allowed_for_mode() {
     let body = body_text(response).await;
     assert_eq!(
         body,
-        "<div class=\"error-message\">Preset not allowed for novel mode</div>"
+        "<div class=\"error-message\">The preset &quot;IF Only&quot; was not activated: Preset not allowed for novel mode.</div>"
     );
 }
 
@@ -952,8 +996,7 @@ async fn test_activate_if_only_preset_via_if_mode_populates_if_bundle() {
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = panel_after(&app, response).await;
     assert!(
         body.contains("Active · Interactive Fiction"),
         "IF activation must badge the preset Active · Interactive Fiction"
@@ -999,12 +1042,7 @@ async fn test_panel_gates_activation_buttons_by_allowed_modes() {
         .storage(Arc::clone(&storage))
         .build();
 
-    let response = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = fetch_part(&app, "prompt-presets").await;
     assert!(
         body.contains(r#"hx-post="/prompt-presets/if-only/activate?mode=interactive_fiction""#),
         "IF-only preset must render an IF activation button"
@@ -1063,7 +1101,7 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
     assert_eq!(edit_form.status(), StatusCode::OK);
     let form = body_text(edit_form).await;
     assert!(
-        form.contains(r#"class="preset-card edit-form""#),
+        form.contains(r#"class="preset-form edit-form""#),
         "the edit form must render for the copy: {form}"
     );
     assert!(
@@ -1082,8 +1120,8 @@ async fn test_allowed_modes_duplicate_edit_save_chain_http() {
              &allowed_mode_novel=true&allowed_mode_if=true",
     )
     .await;
-    assert_eq!(saved.status(), StatusCode::OK);
-    let card = body_text(saved).await;
+    assert_answers_nothing(saved).await;
+    let card = card_in_panel(&app, &copy_id).await;
     assert!(
         card.contains("Set Active (Interactive Fiction)"),
         "the saved card must offer Set Active (Interactive Fiction): {card}"
@@ -1187,8 +1225,7 @@ async fn test_create_preset_same_name_in_another_category_is_allowed() {
         "name=Alpha&instructions=Second.&preset_type=quantifier",
     )
     .await;
-    assert_eq!(second.status(), StatusCode::OK);
-    let body = body_text(second).await;
+    let body = panel_after(&app, second).await;
     let quantifier_section = panel_section_html_slice(&body, "Quantifier Prompts")
         .expect("the panel must render a Quantifier section");
     assert!(
@@ -1209,7 +1246,7 @@ async fn test_update_preset_keeps_its_own_name() {
         "name=Alpha&instructions=First.&preset_type=system",
     )
     .await;
-    let panel = body_text(created).await;
+    let panel = panel_after(&app, created).await;
     let preset_id = extract_first_preset_id(&panel);
 
     let response = post_form(
@@ -1218,8 +1255,8 @@ async fn test_update_preset_keeps_its_own_name() {
         "name=Alpha&instructions=Changed.&preset_type=system",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    assert_answers_nothing(response).await;
+    let body = fetch_part(&app, "prompt-presets").await;
     let card = preset_card_html_slice(&body, "Alpha").expect("the updated card must render");
     assert!(
         card.contains("<span class=\"card-title\">Alpha</span>"),
@@ -1247,7 +1284,7 @@ async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
         "name=Original&instructions=Original.&preset_type=system",
     )
     .await;
-    let panel = body_text(created).await;
+    let panel = panel_after(&app, created).await;
     let source_id = extract_first_preset_id(&panel);
 
     let first = app
@@ -1257,21 +1294,20 @@ async fn test_duplicate_same_preset_twice_yields_distinct_copies() {
         )))
         .await
         .unwrap();
-    assert_eq!(first.status(), StatusCode::OK);
-    let first_panel = body_text(first).await;
+    let first_panel = panel_after(&app, first).await;
     assert!(
         first_panel.contains("Original (Copy)"),
         "first copy: {first_panel}"
     );
 
     let second = app
+        .clone()
         .oneshot(empty_post_request(&format!(
             "/prompt-presets/{source_id}/duplicate"
         )))
         .await
         .unwrap();
-    assert_eq!(second.status(), StatusCode::OK);
-    let second_panel = body_text(second).await;
+    let second_panel = panel_after(&app, second).await;
     assert!(
         second_panel.contains("Original (Copy 2)"),
         "second copy must get the next free number: {second_panel}"
@@ -1342,16 +1378,11 @@ async fn test_prompt_presets_panel_renders_options_section() {
         .storage(Arc::clone(&storage))
         .build();
 
-    let response = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = fetch_part(&app, "prompt-presets").await;
 
     assert!(body.contains("<h2>Options Prompts</h2>"));
     assert!(body.contains("Add Options Prompt Preset"));
-    assert!(body.contains(r#"name="preset_type" value="options""#));
+    assert!(body.contains(r##"hx-get="/fragment/prompt-presets/new?type=options""##));
     assert!(body.contains("Custom Options"));
 
     let card = preset_card_slice(&body, "options_custom");
@@ -1382,13 +1413,13 @@ async fn test_activate_options_preset_sets_the_settings_default() {
     let app = build_router(app_state.clone());
 
     let response = app
+        .clone()
         .oneshot(empty_post_request(
             "/prompt-presets/options_custom/activate",
         ))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    let body = panel_after(&app, response).await;
 
     let card = preset_card_slice(&body, "options_custom");
     assert!(
@@ -1435,9 +1466,14 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
         "a failed update must answer non-2xx, not a 200 card replacement"
     );
     let body = body_text(response).await;
+    assert_one_error_message_holding(&body, "preset save failure");
     assert!(
-        body.contains(r#"<div class="error-message">Update failed:"#),
-        "the failure must reach the client for its inline slot: {body}"
+        body.contains("The preset &quot;Changed&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+    assert!(
+        !body.contains("Original"),
+        "the sentence does not name the stored name: {body}"
     );
     assert!(
         !body.contains("preset-card"),
@@ -1446,12 +1482,7 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
 
     failures.clear(StorageCall::SavePreset);
 
-    let panel = app
-        .oneshot(get_request("/fragment/prompt-presets"))
-        .await
-        .unwrap();
-    assert_eq!(panel.status(), StatusCode::OK);
-    let panel_body = body_text(panel).await;
+    let panel_body = fetch_part(&app, "prompt-presets").await;
     assert!(
         panel_body.contains("Original"),
         "the stored preset must keep its original name: {panel_body}"

@@ -1,41 +1,40 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Settings handlers
 
+use askama::Template;
 use axum::body::Body;
 use axum::{Form, extract::State, response::Html, response::IntoResponse, response::Response};
 
 use crate::adapters::driving::http::AppState;
 use crate::adapters::driving::http::builders::headers::role_label;
 use crate::adapters::driving::http::settings::templates::settings::{
-    ConnectionFormTemplate, ConnectionTestResultTemplate, SettingsTemplate, TextCheckCardTemplate,
+    ConnectionFormTemplate, ConnectionTestDialogTemplate, ConnectionTestResultTemplate,
+    SettingsTemplate,
 };
+use crate::adapters::driving::http::utils::answer_words::item_named;
 use crate::adapters::driving::http::utils::error::{
-    action_error_response, action_failure_response, action_refusal_response, error_disclosure,
-    raw_error_detail, render_error,
+    AnswerPolicy, failed_answer, not_found_answer, answer_for_error, error_disclosure,
+    raw_error_detail,
 };
+use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, opt_string};
 use crate::application::connection_test_service::ConnectionTestResult;
+use crate::application::errors::ApplicationError;
 use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort, TextCheckMode};
 use crate::error::EngineError;
 
-pub async fn settings_panel(State(app_state): State<AppState>) -> Html<String> {
-    render_settings_panel(&app_state, None)
-}
-
-/// A refusal keeps the Connections sub-tab in place, so its message rides inside the panel rather than replacing it.
-fn render_settings_panel(app_state: &AppState, error: Option<&EngineError>) -> Html<String> {
-    match app_state.settings() {
-        Ok(settings) => match app_state.game_view_query.role_health() {
-            Ok(roles) => Html(render_or_error_fragment(&SettingsTemplate::from_settings(
-                &settings, &roles, error,
-            ))),
-            Err(e) => Html(render_error(&e.to_string())),
-        },
-        Err(e) => Html(render_error(&e.to_string())),
-    }
+pub fn render_settings_panel(app_state: &AppState) -> Result<String, EngineError> {
+    let settings = app_state.settings()?;
+    let roles = app_state
+        .game_view_query
+        .role_health()
+        .map_err(ApplicationError::into_engine_error)?;
+    SettingsTemplate::from_settings(&settings, &roles)
+        .render()
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 fn roles_using(settings: &AppSettings, connection_id: &str) -> Vec<&'static str> {
@@ -78,7 +77,7 @@ pub struct ConnectionForm {
 
 impl ConnectionForm {
     /// A blank field follows the provider default: `resolve_max_context_tokens`
-    /// decides it. Anything but a positive whole number is refused.
+    /// decides it. Anything but a positive whole number is invalid.
     fn resolved_max_context_tokens(&self) -> Result<Option<u32>, String> {
         let typed = self.conn_max_context_tokens.trim();
         if typed.is_empty() {
@@ -95,7 +94,7 @@ impl ConnectionForm {
     }
 
     /// A blank field sends no reasoning field, so the model default applies.
-    /// Anything but a listed effort is refused.
+    /// Anything but a listed effort is invalid.
     fn resolved_reasoning_effort(&self) -> Result<Option<ReasoningEffort>, String> {
         let typed = self.conn_reasoning_effort.trim();
         if typed.is_empty() {
@@ -168,11 +167,8 @@ pub async fn save_text_check_handler(
     });
 
     match outcome {
-        Ok(updated) => Html(render_or_error_fragment(
-            &TextCheckCardTemplate::from_settings(&updated, "Saved"),
-        ))
-        .into_response(),
-        Err(e) => action_failure_response(format!("Save failed: {e}")),
+        Ok(_) => ok(""),
+        Err(e) => answer_for_error(e.into(), None, AnswerPolicy::EngineText),
     }
 }
 
@@ -180,20 +176,23 @@ pub async fn new_connection_form(State(_app_state): State<AppState>) -> Html<Str
     Html(render_or_error_fragment(&ConnectionFormTemplate::new(None)))
 }
 
+/// A non-2xx opens no dialog: the connection list stays on screen, and the
+/// notice reports the failure.
 pub async fn edit_connection_form(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let settings = match app_state.settings() {
         Ok(s) => s,
-        Err(e) => return Html(render_error(&e.to_string())),
+        Err(e) => return failed_answer(e.to_string()),
     };
 
     match settings.find_connection(&id) {
         Some(conn) => Html(render_or_error_fragment(&ConnectionFormTemplate::new(
             Some(conn),
-        ))),
-        None => Html(render_error("Connection not found")),
+        )))
+        .into_response(),
+        None => not_found_answer("Connection not found"),
     }
 }
 
@@ -201,14 +200,21 @@ pub async fn add_connection_handler(
     State(app_state): State<AppState>,
     Form(form): Form<ConnectionForm>,
 ) -> Response<Body> {
+    let name = item_named(&form.conn_name);
     let connection = match form.into_config(generate_storage_id("conn")) {
         Ok(connection) => connection,
-        Err(message) => return action_refusal_response(message),
+        Err(message) => {
+            return answer_for_error(
+                ApplicationError::validation(message),
+                name,
+                AnswerPolicy::EngineText,
+            );
+        }
     };
 
     match app_state.settings_service.add_connection(connection) {
-        Ok(_) => render_settings_panel(&app_state, None).into_response(),
-        Err(e) => action_error_response(e, "Error"),
+        Ok(_) => ok(""),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -217,9 +223,16 @@ pub async fn edit_connection_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
     Form(form): Form<ConnectionForm>,
 ) -> Response<Body> {
+    let name = item_named(&form.conn_name);
     let replacement = match form.into_config(id.clone()) {
         Ok(connection) => connection,
-        Err(message) => return action_refusal_response(message),
+        Err(message) => {
+            return answer_for_error(
+                ApplicationError::validation(message),
+                name,
+                AnswerPolicy::EngineText,
+            );
+        }
     };
     let outcome = app_state
         .settings_service
@@ -232,8 +245,8 @@ pub async fn edit_connection_handler(
         });
 
     match outcome {
-        Ok(_) => render_settings_panel(&app_state, None).into_response(),
-        Err(e) => action_error_response(e, "Error"),
+        Ok(_) => ok(""),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -254,13 +267,19 @@ impl ConnectionTestSurface<'_> {
     }
 }
 
-/// A 200 keeps htmx's swap inside the result slot, so the connection row or form is never replaced.
+/// A failed test answers 200, so htmx swaps the disclosure into its target: the result slot of the form for the form Test, and the dialog body for a saved connection, where the caller wraps it.
 fn connection_test_error(message: &str, surface: ConnectionTestSurface<'_>) -> Html<String> {
-    Html(error_disclosure(
-        &surface.popover_id(),
+    Html(connection_test_failure_html(&surface.popover_id(), message))
+}
+
+/// The disclosure of a failed connection test: the sentence, and the engine's text
+/// behind Details.
+pub fn connection_test_failure_html(popover_id: &str, message: &str) -> String {
+    error_disclosure(
+        popover_id,
         "The connection test failed.",
         &raw_error_detail(message),
-    ))
+    )
 }
 
 fn connection_test_success(result: &ConnectionTestResult) -> Html<String> {
@@ -293,10 +312,22 @@ pub async fn test_saved_connection_handler(
     let service = app_state.connection_test_service.clone();
     let surface_id = id.clone();
     let surface = ConnectionTestSurface::SavedConnection(&surface_id);
-    match run_connection_test(move || service.test_saved_connection(&id)).await {
+    let connection_name = app_state
+        .settings()
+        .ok()
+        .and_then(|settings| {
+            settings
+                .find_connection(&id)
+                .map(|found| found.name.clone())
+        })
+        .unwrap_or_else(|| id.clone());
+    let result = match run_connection_test(move || service.test_saved_connection(&id)).await {
         Ok(result) => connection_test_success(&result),
         Err(message) => connection_test_error(&message, surface),
-    }
+    };
+    Html(render_or_error_fragment(
+        &ConnectionTestDialogTemplate::new(connection_name, result.0),
+    ))
 }
 
 pub async fn test_form_connection_handler(
@@ -318,14 +349,14 @@ pub async fn test_form_connection_handler(
 pub async fn delete_connection_handler(
     State(app_state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
-) -> Html<String> {
+) -> Response<Body> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         let Some(idx) = settings.connections.iter().position(|c| c.id == id) else {
-            return Err(EngineError::Config("Connection not found".to_string()));
+            return Err(EngineError::Validation("Connection not found".to_string()));
         };
 
         if settings.connections.len() <= 1 {
-            return Err(EngineError::Config(
+            return Err(EngineError::Validation(
                 "Cannot delete the last connection".to_string(),
             ));
         }
@@ -340,8 +371,15 @@ pub async fn delete_connection_handler(
     });
 
     match outcome {
-        Ok(()) => render_settings_panel(&app_state, None),
-        Err(e) => render_settings_panel(&app_state, Some(&e)),
+        Ok(()) => ok(""),
+        Err(e) => {
+            let name = app_state.settings().ok().and_then(|settings| {
+                settings
+                    .find_connection(&id)
+                    .and_then(|c| item_named(&c.name))
+            });
+            answer_for_error(e.into(), name, AnswerPolicy::SettingsSave)
+        }
     }
 }
 
@@ -349,25 +387,25 @@ async fn set_role(
     app_state: &AppState,
     connection_id: &str,
     assign: impl FnOnce(&mut AppSettings, &str),
-) -> Html<String> {
+) -> Response<Body> {
     let outcome = app_state.settings_service.update_settings(|settings| {
         if settings.find_connection(connection_id).is_none() {
-            return Err(EngineError::Config("Connection not found".to_string()));
+            return Err(EngineError::Validation("Connection not found".to_string()));
         }
         assign(settings, connection_id);
         Ok(())
     });
 
     match outcome {
-        Ok(()) => render_settings_panel(app_state, None),
-        Err(e) => render_settings_panel(app_state, Some(&e)),
+        Ok(()) => ok(""),
+        Err(e) => answer_for_error(e.into(), None, AnswerPolicy::SettingsSave),
     }
 }
 
 pub async fn set_narrator_handler(
     State(app_state): State<AppState>,
     Form(form): Form<RoleForm>,
-) -> Html<String> {
+) -> Response<Body> {
     set_role(&app_state, &form.connection_id, |settings, id| {
         settings.narration_connection_id = id.to_string();
     })
@@ -377,7 +415,7 @@ pub async fn set_narrator_handler(
 pub async fn set_quantifier_handler(
     State(app_state): State<AppState>,
     Form(form): Form<RoleForm>,
-) -> Html<String> {
+) -> Response<Body> {
     set_role(&app_state, &form.connection_id, |settings, id| {
         settings.quantifier_connection_id = id.to_string();
     })

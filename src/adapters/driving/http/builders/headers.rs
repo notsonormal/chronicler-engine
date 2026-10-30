@@ -1,9 +1,7 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! Header fragment, Settings role-health cell and status-swap header builders.
+//! Header and failure-banner fragment builders, and the Settings role-health cell builders.
 
 use askama::Template;
-
-use axum::{body::Body, http::HeaderValue, response::Response};
 
 use crate::adapters::driving::http::templates::HeaderTemplate;
 use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
@@ -149,54 +147,20 @@ pub fn connections_degraded_marker(degraded: bool) -> String {
         .to_string()
 }
 
-fn settings_swap(element_id: &str, class: &str, inner_html: impl std::fmt::Display) -> String {
-    format!("<span class=\"{class}\" id=\"{element_id}\" hx-swap-oob=\"true\">{inner_html}</span>")
-}
-
-fn settings_health_swaps(roles: &[RoleHealth]) -> String {
-    let cells = SETTINGS_ROLE_ROWS.iter().map(|role| {
-        let health = roles.iter().find(|health| health.role == *role);
-        settings_swap(
-            &role_health_cell_id(*role),
-            "role-health-slot",
-            role_health_cell(*role, health),
-        )
-    });
-    let marker = settings_swap(
-        "subtab-connections-marker",
-        "subtab-marker-slot",
-        connections_degraded_marker(connections_degraded(roles)),
-    );
-    cells.chain(std::iter::once(marker)).collect()
-}
-
-/// The out-of-band swaps also refresh the Settings health cells, which the engine-wide
-/// banner can contradict.
-pub fn header_fragment_html(game_name: String, roles: &[RoleHealth]) -> Result<String> {
-    let template = HeaderTemplate { game_name };
-    let header = template
+/// The header part holds the game name only. The engine-wide failure banner and
+/// the Settings role-health cells are parts of their own.
+pub fn header_fragment_html(game_name: String) -> Result<String> {
+    HeaderTemplate { game_name }
         .render()
-        .map_err(|e| EngineError::Template(e.to_string()))?;
-
-    let degraded: Vec<&RoleHealth> = roles.iter().filter(|r| r.last_error.is_some()).collect();
-    let banner = if degraded.is_empty() {
-        String::new()
-    } else {
-        let summary = format!("{} (engine-wide role health)", banner_message(&degraded));
-        error_disclosure("failure-banner-popover", &summary, &banner_detail(roles))
-    };
-
-    Ok(format!(
-        "{header}<div id=\"failure-banner-degraded\" hx-swap-oob=\"true\">{banner}</div>{}",
-        settings_health_swaps(roles)
-    ))
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-pub fn add_status_swap_headers(response: &mut Response<Body>) {
-    response
-        .headers_mut()
-        .insert("HX-Retarget", HeaderValue::from_static("#status-display"));
-    response
-        .headers_mut()
-        .insert("HX-Reswap", HeaderValue::from_static("innerHTML"));
+/// The engine-wide failure banner: empty while every role is healthy.
+pub fn failure_banner_html(roles: &[RoleHealth]) -> String {
+    let degraded: Vec<&RoleHealth> = roles.iter().filter(|r| r.last_error.is_some()).collect();
+    if degraded.is_empty() {
+        return String::new();
+    }
+    let summary = format!("{} (engine-wide role health)", banner_message(&degraded));
+    error_disclosure("failure-banner-popover", &summary, &banner_detail(roles))
 }

@@ -1,21 +1,23 @@
-//! Stub-browser tests for the story log's edit flow: edit mode, the entry locks and the failure slots. Tagged against `docs/specs/browser_story_log.md`.
+//! Stub-browser tests for the story log's edit flow: edit mode, the entry locks and where a failed request shows. Tagged against `docs/specs/browser_story_log.md`.
 
 // The stub serves a canned entry in the real template's shape, so the edit
 // behaviour does not depend on the entry's text.
 
 use std::time::Duration;
 
-use super::*;
-use super::support::{StubRunner, install_story_poll_counter, poll_now, story_poll_count};
+use chronicler_engine::domain::model::change::ChangeKind;
 
-/// `pausePolling` writes "none"; `resumePolling` restores the shell's original
-/// trigger.
-async fn story_log_trigger(page: &playwright_rs::Page) -> String {
-    page.evaluate::<(), String>(
-        r#"(() => {
-            const el = document.getElementById('story-log');
-            return el ? (el.getAttribute('hx-trigger') || '') : '';
-        })()"#,
+use super::*;
+use super::support::{
+    NOTICE, StubRunner, hold_screen_loads, install_story_load_counter, release_screen_loads,
+    start_current, story_load_count,
+};
+
+/// An open editor marks its entry `data-editing` and the root of the story log
+/// `data-editing-entry`.
+async fn story_log_marks_an_edit(page: &playwright_rs::Page) -> (bool, bool) {
+    page.evaluate::<(), (bool, bool)>(
+        "(() => [!!document.querySelector('#story-log .log-entry[data-editing]'), document.getElementById('story-log').hasAttribute('data-editing-entry')])()",
         None,
     )
     .await
@@ -81,7 +83,11 @@ async fn check_edit_cancel_restores_original(page: playwright_rs::Page, _stub: S
         .await
         .unwrap();
 
-    page.locator(".cancel-btn").await.click(None).await.unwrap();
+    page.locator("[data-editing] .cancel-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
     wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
     let restored = page
@@ -97,34 +103,63 @@ async fn check_edit_cancel_restores_original(page: playwright_rs::Page, _stub: S
     );
 }
 
-// The stub's 2s poll would replace `#story-log`'s innerHTML and destroy the
-// textarea, so only a working pause lets the textarea persist.
+// A moved story number makes the log load on every ask. The load skips the entry
+// in edit and shows the rest of the log, so new narration arrives around the draft.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.3
-async fn check_polling_pauses_during_edit(page: playwright_rs::Page, _stub: StubServer) {
-    page.evaluate::<(), bool>(
-        r#"(() => {
-                const btn = document.querySelector('.edit-btn');
-                if (btn) { btn.click(); return true; }
-                return false;
-            })()"#,
-        None,
+async fn check_an_entry_in_edit_survives_loads_of_the_story_log(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    enter_narration_edit(&page).await;
+    page.locator("#edit-textarea")
+        .await
+        .fill("A draft that a load must not erase", None)
+        .await
+        .unwrap();
+
+    let changes = stub.changes_handle();
+    let loads = changes.loads("story-log");
+    stub.story_log_handle()
+        .append_narration("Narration that arrived during the edit.");
+    changes.bump(ChangeKind::STORY);
+    let loaded = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            changes.loads("story-log") > loads
+                && page
+                    .evaluate::<(), bool>(
+                        "(() => document.getElementById('story-log').innerText.includes('Narration that arrived during the edit.'))()",
+                        None,
+                    )
+                    .await
+                    .unwrap_or(false)
+        },
     )
-    .await
-    .unwrap();
-
-    wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
-
-    let persisted = wait_for_element_persist(&page, "#edit-textarea", Duration::from_secs(3)).await;
+    .await;
     assert!(
-        persisted,
-        "Edit textarea should persist during polling pause"
+        loaded,
+        "the story log loads while an entry is in edit, and the new narration shows"
     );
+
+    let textarea = page
+        .evaluate::<(), String>(
+            "(() => { const t = document.getElementById('edit-textarea'); return t ? t.value : 'the textarea is gone'; })()",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        textarea, "A draft that a load must not erase",
+        "the entry in edit keeps its draft through the load"
+    );
+    assert_eq!(story_log_marks_an_edit(&page).await, (true, true));
 }
 
 // The stub answers the save with a 500, so the shipped save click exercises the
 // recovery path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.4
-async fn check_failed_save_restores_entry_and_resumes_polling(
+async fn check_failed_save_restores_entry_and_releases_the_edit_marks(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -139,9 +174,9 @@ async fn check_failed_save_restores_entry_and_resumes_polling(
     wait_until_visible(&page, "#edit-textarea", Duration::from_millis(500)).await;
 
     assert_eq!(
-        story_log_trigger(&page).await,
-        "none",
-        "edit mode should pause story-log polling"
+        story_log_marks_an_edit(&page).await,
+        (true, true),
+        "edit mode should mark the entry and the story log"
     );
 
     page.locator("#edit-textarea")
@@ -149,25 +184,17 @@ async fn check_failed_save_restores_entry_and_resumes_polling(
         .fill("Modified text that fails to save", None)
         .await
         .unwrap();
-    page.locator(".log-entry.narration .save-btn")
+    page.locator("[data-editing] .save-btn")
         .await
         .click(None)
         .await
         .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
-        )
-        .await,
-        "a failed save should report in the story log's error slot"
-    );
-    let (_, save_message, save_raw) = read_error_disclosure(&page, "#story-log-error").await;
-    assert!(
-        !save_message.is_empty(),
-        "the failed save should show a short failure message"
+    wait_for_error_disclosure(&page, NOTICE, "a failed save should report in the notice").await;
+    let (_, save_message, save_raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        save_message, "The edit was not saved.",
+        "the failed save shows the first line of the server's answer"
     );
     assert!(
         save_raw.contains("Stub save failure"),
@@ -192,7 +219,8 @@ async fn check_failed_save_restores_entry_and_resumes_polling(
             r#"(() => {
                     const entry = document.querySelector('.log-entry.narration');
                     if (!entry) return false;
-                    return !!entry.querySelector('.edit-btn') &&
+                    const edit = entry.querySelector('.edit-btn');
+                    return !!edit && getComputedStyle(edit).display !== 'none' &&
                         !!entry.querySelector('.swipe-controls .swipe-btn:not([disabled])');
                 })()"#,
             None,
@@ -204,21 +232,17 @@ async fn check_failed_save_restores_entry_and_resumes_polling(
         "the entry's pre-edit action controls, including an enabled Retry, should be available again after a failed save"
     );
 
-    let trigger = story_log_trigger(&page).await;
-    assert_ne!(
-        trigger, "none",
-        "story-log polling should resume after a failed save"
-    );
-    assert!(
-        trigger.contains("every 2s"),
-        "resumed poll trigger should be the shell's original, got {trigger:?}"
+    assert_eq!(
+        story_log_marks_an_edit(&page).await,
+        (false, false),
+        "no entry should be marked as in edit after a failed save"
     );
 }
 
 // The stub answers the retry route with a 500, so the shipped retry click
 // exercises the recovery path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.5
-async fn check_failed_retry_clears_pending_status_and_re_enables_send(
+async fn check_failed_retry_reports_in_the_notice_and_re_enables_send(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -230,26 +254,18 @@ async fn check_failed_retry_clears_pending_status_and_re_enables_send(
 
     // Reading the disclosure first also guarantees the synchronous recovery
     // ran before the Send/status assertion below.
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#status-display").await.0 },
-        )
-        .await,
-        "a failed retry should report in the status display"
-    );
-    let (_, message, raw) = read_error_disclosure(&page, "#status-display").await;
-    assert!(
-        message.contains("Failed to generate a new swipe"),
-        "the status display should name the failed action, got {message:?}"
+    wait_for_error_disclosure(&page, NOTICE, "a failed retry should report in the notice").await;
+    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The Retry was not started.",
+        "the notice names the failed request"
     );
     assert!(
         raw.contains("Stub retry failure"),
         "the server's own text belongs in the disclosure, got {raw:?}"
     );
     assert!(
-        !error_details_open(&page, "#status-display").await,
+        !error_details_open(&page, NOTICE).await,
         "the raw error text must not be on screen until the client opens Details"
     );
 
@@ -334,8 +350,8 @@ async fn check_edit_textarea_fits_content_and_takes_focus(
 }
 
 // [docs/specs/browser_story_log.md] SCENARIO: 30.7
-async fn check_escape_cancels_edit(page: playwright_rs::Page, _stub: StubServer) {
-    install_story_poll_counter(&page).await;
+async fn check_escape_cancels_edit(page: playwright_rs::Page, stub: StubServer) {
+    install_story_load_counter(&page).await;
     let original_text = narration_text(&page).await;
     assert!(!original_text.is_empty(), "Should have original text");
 
@@ -345,6 +361,8 @@ async fn check_escape_cancels_edit(page: playwright_rs::Page, _stub: StubServer)
         .fill("Modified text that Escape abandons", None)
         .await
         .unwrap();
+    // A number moved during the edit is what the log loads once the edit ends.
+    stub.changes_handle().bump(ChangeKind::STORY);
     textarea.press("Escape", None).await.unwrap();
 
     wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
@@ -380,13 +398,13 @@ async fn check_escape_cancels_edit(page: playwright_rs::Page, _stub: StubServer)
         "Escape must put focus on the entry's edit button"
     );
 
-    let polled = wait_for_condition_async(
+    let loaded = wait_for_condition_async(
         Duration::from_millis(4000),
         Duration::from_millis(20),
-        || async { story_poll_count(&page).await >= 1.0 },
+        || async { story_load_count(&page).await >= 1.0 },
     )
     .await;
-    assert!(polled, "the resumed poll never ran after Escape");
+    assert!(loaded, "the held load never ran after Escape");
     assert!(
         wait_for_condition_async(
             Duration::from_millis(1000),
@@ -404,23 +422,22 @@ async fn check_escape_cancels_edit(page: playwright_rs::Page, _stub: StubServer)
             },
         )
         .await,
-        "the resumed poll must keep focus on the entry's edit button"
+        "the load after the edit must keep focus on the entry's edit button"
     );
 }
 
-// The stub answers the save with a 500, so a recorded request proves the
-// shortcut reached the shipped `submitEdit`; the failure recovery is covered by
-// 30.4.
+// The stub answers the first two saves with a 500, so a recorded request proves the
+// shortcut clicked the Save of the entry and sent the typed text; the failure recovery
+// is covered by 30.4. The third save succeeds with its screen load held: the old
+// textarea is still in the page, and a shortcut there sends nothing.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.8
-async fn check_keyboard_save_shortcuts_submit_edit(page: playwright_rs::Page, _stub: StubServer) {
+async fn check_keyboard_save_shortcuts_submit_edit(page: playwright_rs::Page, stub: StubServer) {
     page.evaluate::<(), ()>(
         r#"(() => {
                 window.__saveRequests = [];
-                const original = window.fetch;
-                window.fetch = function (input, init) {
-                    window.__saveRequests.push(String(input));
-                    return original.call(this, input, init);
-                };
+                document.body.addEventListener('htmx:beforeRequest', (evt) => {
+                    window.__saveRequests.push(evt.detail.requestConfig.path);
+                });
             })()"#,
         None,
     )
@@ -438,21 +455,71 @@ async fn check_keyboard_save_shortcuts_submit_edit(page: playwright_rs::Page, _s
 
         wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
     }
+    assert_eq!(
+        stub.save_handle().saved_texts(),
+        ["Ctrl+Enter text", "Cmd+Enter text"],
+        "each save posts the text of the textarea"
+    );
+
+    stub.save_handle().set_save_succeeds(true);
+    wait_for_screen_current(&page).await;
+    hold_screen_loads(&page).await;
+    enter_narration_edit(&page).await;
+    let textarea = page.locator("#edit-textarea").await;
+    textarea.fill("Saved text", None).await.unwrap();
+    textarea.press("Control+Enter", None).await.unwrap();
+    let ended = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { !story_log_marks_an_edit(&page).await.0 },
+    )
+    .await;
+    assert!(
+        ended,
+        "a done save ends the edit state while the screen load is held"
+    );
+    textarea.press("Control+Enter", None).await.unwrap();
+    release_screen_loads(&page).await;
+    wait_until_hidden(&page, "#edit-textarea", Duration::from_secs(5)).await;
 
     let requests: Vec<String> = page
-        .evaluate::<(), Vec<String>>("(() => window.__saveRequests)()", None)
+        .evaluate::<(), Vec<String>>(
+            "(() => window.__saveRequests.filter((url) => url.startsWith('/history/')))()",
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(
         requests.len(),
-        2,
-        "Ctrl+Enter and Cmd+Enter should each send one save request, got {requests:?}"
+        3,
+        "each saving shortcut sends one save request, and a shortcut after a done save sends none, got {requests:?}"
     );
     assert!(
         requests.iter().all(|url| url.ends_with("/history/1")),
         "save requests should target the edited entry, got {requests:?}"
     );
 }
+
+const SWIPE_CONTROLS_ARE_LOCKED: &str = r#"(() => {
+    const entry = document.querySelector('.log-entry.narration');
+    const buttons = entry.querySelectorAll('.swipe-controls .action-btn');
+    return entry.hasAttribute('data-editing') && buttons.length > 0
+        && Array.from(buttons).every((b) => getComputedStyle(b).pointerEvents === 'none');
+})()"#;
+
+/// The click guard of the story log stops a click on a locked control before htmx sees it.
+const CLICK_RETRY_AND_COUNT: &str = r#"(() => {
+    if (window.__retries === undefined) {
+        window.__retries = 0;
+        document.body.addEventListener('htmx:beforeRequest', (evt) => {
+            if (evt.detail.requestConfig.path === '/swipe/new') window.__retries += 1;
+        });
+    }
+    const before = window.__retries;
+    const retry = document.querySelector('.log-entry.narration .swipe-controls .swipe-btn:last-child');
+    retry.click();
+    return window.__retries - before;
+})()"#;
 
 // [docs/specs/browser_story_log.md] SCENARIO: 30.9
 async fn check_edit_locks_entry_controls_and_cancel_restores_them(
@@ -461,39 +528,41 @@ async fn check_edit_locks_entry_controls_and_cancel_restores_them(
 ) {
     enter_narration_edit(&page).await;
 
-    let (swipe_disabled, edit_replaced): (bool, bool) = page
-        .evaluate::<(), (bool, bool)>(
-            r#"(() => {
-                    const entry = document.querySelector('.log-entry.narration');
-                    const buttons = entry.querySelectorAll('.swipe-controls .action-btn');
-                    return [
-                        buttons.length > 0 && Array.from(buttons).every((b) => b.disabled),
-                        !entry.querySelector('.edit-btn'),
-                    ];
-                })()"#,
+    assert!(
+        page.evaluate::<(), bool>(SWIPE_CONTROLS_ARE_LOCKED, None)
+            .await
+            .unwrap(),
+        "the entry's swipe controls should show as locked while editing"
+    );
+    let clicked = page
+        .evaluate::<(), u32>(CLICK_RETRY_AND_COUNT, None)
+        .await
+        .unwrap();
+    assert_eq!(clicked, 0, "a click on a locked swipe control does nothing");
+    let edit_hidden = page
+        .evaluate::<(), bool>(
+            "(() => getComputedStyle(document.querySelector('.log-entry.narration .edit-btn')).display === 'none')()",
             None,
         )
         .await
         .unwrap();
     assert!(
-        swipe_disabled,
-        "the entry's swipe controls should be disabled while editing"
-    );
-    assert!(
-        edit_replaced,
-        "the edit control should be replaced while editing"
+        edit_hidden,
+        "the edit control should be hidden while editing"
     );
 
-    // Read in the same tick: the resumed poll is async, so this observes
+    // Read in the same tick: the load that follows is async, so this observes
     // `revertEdit`'s synchronous restoration.
-    let (edit_back, retry_enabled): (bool, bool) = page
-        .evaluate::<(), (bool, bool)>(
-            r#"(() => {
-                    document.querySelector('.log-entry.narration .cancel-btn').click();
+    let (edit_back, retry_clicks): (bool, u32) = page
+        .evaluate::<(), (bool, u32)>(
+            &format!(
+                r#"(() => {{
+                    document.querySelector('[data-editing] .cancel-btn').click();
                     const entry = document.querySelector('.log-entry.narration');
-                    const retry = entry.querySelector('.swipe-controls .swipe-btn:not([disabled])');
-                    return [!!entry.querySelector('.edit-btn'), !!retry];
-                })()"#,
+                    const edit = entry.querySelector('.edit-btn');
+                    return [getComputedStyle(edit).display !== 'none', {CLICK_RETRY_AND_COUNT}];
+                }})()"#
+            ),
             None,
         )
         .await
@@ -502,16 +571,128 @@ async fn check_edit_locks_entry_controls_and_cancel_restores_them(
         edit_back,
         "cancel should restore the entry's edit control immediately"
     );
-    assert!(
-        retry_enabled,
-        "cancel should re-enable the entry's Retry swipe control"
+    assert_eq!(
+        retry_clicks, 1,
+        "cancel should unlock the entry's Retry swipe control"
     );
 
     wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
 }
 
+/// The Save control as the player sees it: whether it looks disabled, and the
+/// text its hover shows.
+async fn save_control_look(page: &playwright_rs::Page) -> (bool, String) {
+    page.locator("[data-editing] .save-btn")
+        .await
+        .hover(None)
+        .await
+        .unwrap();
+    page.evaluate::<(), (bool, String)>(
+        r#"(() => {
+            const save = document.querySelector('[data-editing] .save-btn');
+            const style = getComputedStyle(save);
+            const hover = getComputedStyle(save, '::after').content;
+            return [
+                Number(style.opacity) < 1 && style.cursor === 'not-allowed',
+                hover === 'none' || hover === 'normal' ? '' : hover.replace(/^"|"$/g, ''),
+            ];
+        })()"#,
+        None,
+    )
+    .await
+    .unwrap()
+}
+
+// [docs/specs/browser_story_log.md] SCENARIO: 30.24
+async fn check_the_save_of_an_edit_looks_disabled_while_the_game_is_busy(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    use chronicler_engine::domain::model::state::generation_status::Step;
+
+    enter_narration_edit(&page).await;
+    let status = stub.status_handle();
+
+    for busy in [
+        StubStatus::Step(Step::Narrating),
+        StubStatus::Autoplay {
+            done: 1,
+            budget: 3,
+            step: None,
+        },
+    ] {
+        status.set(busy);
+        let marked = wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+            || async {
+                page.evaluate::<(), bool>(
+                    "(() => !!document.querySelector('#status-display [data-status=\"thinking\"], #status-display [data-status=\"autoplay\"]'))()",
+                    None,
+                )
+                .await
+                .unwrap_or(false)
+            },
+        )
+        .await;
+        assert!(marked, "the status display shows the busy Game");
+        let (disabled, hover) = save_control_look(&page).await;
+        assert!(
+            disabled,
+            "the Save control looks disabled while the Game is busy"
+        );
+        assert_eq!(hover, "Wait for the narration to finish");
+        status.set(StubStatus::Idle);
+        let ready = wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+            || async {
+                page.evaluate::<(), bool>(
+                    "(() => !!document.querySelector('#status-display [data-status=\"idle\"]'))()",
+                    None,
+                )
+                .await
+                .unwrap_or(false)
+            },
+        )
+        .await;
+        assert!(ready, "the status display shows Ready again");
+        let (disabled, hover) = save_control_look(&page).await;
+        assert!(
+            !disabled,
+            "the Save control looks enabled while the Game is idle"
+        );
+        assert_eq!(hover, "", "an enabled Save has no waiting text");
+    }
+
+    status.set(StubStatus::Error(
+        chronicler_engine::domain::model::state::generation_status::GenerationFailureKind::Other,
+        "narration failed".to_string(),
+    ));
+    let failed = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            page.evaluate::<(), bool>(
+                "(() => !!document.querySelector('#status-display [data-status=\"failed\"]'))()",
+                None,
+            )
+            .await
+            .unwrap_or(false)
+        },
+    )
+    .await;
+    assert!(failed, "the status display shows the failure");
+    let (disabled, hover) = save_control_look(&page).await;
+    assert!(
+        !disabled,
+        "the Save control does not look disabled when the status display shows a failure"
+    );
+    assert_eq!(hover, "", "an enabled Save has no waiting text");
+}
+
 // The stub answers `/retrigger` with a 500, so the click runs the shipped
-// `submitRetrigger` against the real route shape.
+// retrigger control against the real route shape.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.10
 async fn check_failed_retrigger_posts_to_retrigger_and_recovers(
     page: playwright_rs::Page,
@@ -529,26 +710,23 @@ async fn check_failed_retrigger_posts_to_retrigger_and_recovers(
 
     // Reading the disclosure first also guarantees the recovery ran before
     // the assertions below.
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#status-display").await.0 },
-        )
-        .await,
-        "a failed retrigger should report in the status display"
-    );
-    let (_, message, raw) = read_error_disclosure(&page, "#status-display").await;
-    assert!(
-        message.contains("Failed to retrigger the event"),
-        "the status display should name the failed action, got {message:?}"
+    wait_for_error_disclosure(
+        &page,
+        NOTICE,
+        "a failed retrigger should report in the notice",
+    )
+    .await;
+    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The retrigger was not started.",
+        "the notice names the failed request"
     );
     assert!(
         raw.contains("Stub retrigger failure"),
         "the server's own text belongs in the disclosure, got {raw:?}"
     );
     assert!(
-        !error_details_open(&page, "#status-display").await,
+        !error_details_open(&page, NOTICE).await,
         "the raw error text must not be on screen until the client opens Details"
     );
 
@@ -586,17 +764,9 @@ async fn arm_save_completion(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
         r#"(() => {
             window.__saveDone = false;
-            const original = window.fetch;
-            window.fetch = function (input, init) {
-                const request = original.call(this, input, init);
-                if (String(input).includes('/history/')) {
-                    return request.then((response) => {
-                        window.__saveDone = true;
-                        return response;
-                    });
-                }
-                return request;
-            };
+            document.body.addEventListener('htmx:afterRequest', (evt) => {
+                if (evt.detail.requestConfig.path.startsWith('/history/')) window.__saveDone = true;
+            });
         })()"#,
         None,
     )
@@ -619,7 +789,27 @@ async fn wait_for_save_completion(page: &playwright_rs::Page) -> bool {
 
 const OTHER_EDIT_LOCKED: &str = r#"(() => {
     const other = document.querySelector('.log-entry.input .edit-btn');
-    return !!other && other.disabled;
+    if (!other) return false;
+    const style = getComputedStyle(other);
+    return document.getElementById('story-log').hasAttribute('data-editing-entry')
+        && style.pointerEvents === 'none'
+        && Number(style.opacity) < 1;
+})()"#;
+
+const OTHER_EDIT_UNLOCKED: &str = r#"(() => {
+    const other = document.querySelector('.log-entry.input .edit-btn');
+    if (!other) return false;
+    return !document.getElementById('story-log').hasAttribute('data-editing-entry')
+        && getComputedStyle(other).pointerEvents !== 'none';
+})()"#;
+
+/// A click on the other entry's Edit control, counted instead of run: the click
+/// guard stops a click on a locked control before its own handler runs.
+const CLICK_OTHER_EDIT_AND_COUNT: &str = r#"(() => {
+    window.__editOpens = 0;
+    window.showEditForm = () => { window.__editOpens += 1; };
+    document.querySelector('.log-entry.input .edit-btn').click();
+    return window.__editOpens;
 })()"#;
 
 // [docs/specs/browser_story_log.md] SCENARIO: 30.15
@@ -629,30 +819,31 @@ async fn check_edit_locks_the_other_entries_edit_controls(
 ) {
     enter_narration_edit(&page).await;
 
-    let locked = page
-        .evaluate::<(), bool>(OTHER_EDIT_LOCKED, None)
-        .await
-        .unwrap();
     assert!(
-        locked,
-        "the other entries' Edit controls must be disabled during an edit"
+        page.evaluate::<(), bool>(OTHER_EDIT_LOCKED, None)
+            .await
+            .unwrap(),
+        "the other entries' Edit controls must show as locked during an edit"
+    );
+    assert_eq!(
+        page.evaluate::<(), u32>(CLICK_OTHER_EDIT_AND_COUNT, None)
+            .await
+            .unwrap(),
+        0,
+        "a click on a locked Edit control must not open a second editor"
     );
 
-    // Read in the same tick: the resumed poll is async.
+    // Read in the same tick: the load that follows is async.
+    let cancel_then_read = format!(
+        "(() => {{ document.querySelector('[data-editing] .cancel-btn').click(); return {OTHER_EDIT_UNLOCKED}; }})()"
+    );
     let unlocked = page
-        .evaluate::<(), bool>(
-            r#"(() => {
-                    document.querySelector('.log-entry.narration .cancel-btn').click();
-                    const other = document.querySelector('.log-entry.input .edit-btn');
-                    return !!other && !other.disabled;
-                })()"#,
-            None,
-        )
+        .evaluate::<(), bool>(&cancel_then_read, None)
         .await
         .unwrap();
     assert!(
         unlocked,
-        "cancel must re-enable the other entries' Edit controls immediately"
+        "cancel must unlock the other entries' Edit controls immediately"
     );
 
     wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
@@ -666,10 +857,10 @@ async fn check_failed_save_releases_the_edit_lock(page: playwright_rs::Page, _st
         page.evaluate::<(), bool>(OTHER_EDIT_LOCKED, None)
             .await
             .unwrap(),
-        "the other entries' Edit controls must be disabled during an edit"
+        "the other entries' Edit controls must show as locked during an edit"
     );
 
-    page.locator(".log-entry.narration .save-btn")
+    page.locator("[data-editing] .save-btn")
         .await
         .click(None)
         .await
@@ -680,25 +871,19 @@ async fn check_failed_save_releases_the_edit_lock(page: playwright_rs::Page, _st
     );
 
     let unlocked = page
-        .evaluate::<(), bool>(
-            r#"(() => {
-                    const other = document.querySelector('.log-entry.input .edit-btn');
-                    return !!other && !other.disabled;
-                })()"#,
-            None,
-        )
+        .evaluate::<(), bool>(OTHER_EDIT_UNLOCKED, None)
         .await
         .unwrap();
     assert!(
         unlocked,
-        "a failed save must re-enable the other entries' Edit controls"
+        "a failed save must unlock the other entries' Edit controls"
     );
 }
 
 // The lock must outlive a successful save: releasing it early would let a
 // second editor open on the stale textarea.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.17
-async fn check_successful_save_holds_the_edit_lock_until_the_poll(
+async fn check_successful_save_holds_the_edit_lock_until_the_load(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -708,17 +893,18 @@ async fn check_successful_save_holds_the_edit_lock_until_the_poll(
     page.evaluate::<(), ()>(
         r#"(() => {
                     window.__earlyUnlock = false;
+                    const log = document.getElementById('story-log');
                     const observer = new MutationObserver(() => {
-                        const other = document.querySelector('.log-entry.input .edit-btn');
+                        if (!document.querySelector('#edit-textarea')) return;
+                        const swipe = document.querySelector('.swipe-controls .action-btn');
                         if (
-                            document.querySelector('#edit-textarea')
-                            && other
-                            && !other.disabled
+                            !log.hasAttribute('data-editing-entry')
+                            || (swipe && getComputedStyle(swipe).pointerEvents !== 'none')
                         ) {
                             window.__earlyUnlock = true;
                         }
                     });
-                    observer.observe(document.getElementById('story-log'), {
+                    observer.observe(log, {
                         subtree: true,
                         childList: true,
                         attributes: true,
@@ -734,10 +920,10 @@ async fn check_successful_save_holds_the_edit_lock_until_the_poll(
         page.evaluate::<(), bool>(OTHER_EDIT_LOCKED, None)
             .await
             .unwrap(),
-        "the other entries' Edit controls must be disabled during an edit"
+        "the other entries' Edit controls must show as locked during an edit"
     );
 
-    page.locator(".log-entry.narration .save-btn")
+    page.locator("[data-editing] .save-btn")
         .await
         .click(None)
         .await
@@ -756,7 +942,8 @@ async fn check_successful_save_holds_the_edit_lock_until_the_poll(
                             const other = document.querySelector('.log-entry.input .edit-btn');
                             return !document.querySelector('#edit-textarea')
                                 && !!other
-                                && !other.disabled;
+                                && getComputedStyle(other).pointerEvents !== 'none'
+                                && !document.getElementById('story-log').hasAttribute('data-editing-entry');
                         })()"#,
                 None,
             )
@@ -767,7 +954,7 @@ async fn check_successful_save_holds_the_edit_lock_until_the_poll(
     .await;
     assert!(
         rerendered,
-        "the resumed poll must re-render the log and re-enable the Edit controls"
+        "the load after the save must re-render the log and unlock the Edit controls"
     );
 
     let early_unlock = page
@@ -776,17 +963,14 @@ async fn check_successful_save_holds_the_edit_lock_until_the_poll(
         .unwrap();
     assert!(
         !early_unlock,
-        "a successful save must hold the edit lock until the poll re-renders the log"
+        "a successful save must hold the edit lock until the load re-renders the log"
     );
 }
 
 // The stub answers POST /history/delete with a 500, so the shipped delete click
 // exercises the failure path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.18
-async fn check_failed_delete_reports_in_the_story_log_slot(
-    page: playwright_rs::Page,
-    _stub: StubServer,
-) {
+async fn check_failed_delete_reports_in_the_notice(page: playwright_rs::Page, _stub: StubServer) {
     page.on_dialog(|dialog| async move { dialog.accept(None).await })
         .await
         .unwrap();
@@ -803,19 +987,11 @@ async fn check_failed_delete_reports_in_the_story_log_slot(
         .await
         .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
-        )
-        .await,
-        "a failed delete should report in the story log's error slot"
-    );
-    let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
-    assert!(
-        message.contains("Failed to delete the message"),
-        "the slot should name the failed action, got {message:?}"
+    wait_for_error_disclosure(&page, NOTICE, "a failed delete should report in the notice").await;
+    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The Message was not deleted.",
+        "the notice names the failed request"
     );
     assert!(
         raw.contains("Stub delete failure"),
@@ -828,17 +1004,63 @@ async fn check_failed_delete_reports_in_the_story_log_slot(
     );
 }
 
+// The page keeps the Delete of the entry it rendered until the next load. The stub
+// adds a Narration after that render, so the Delete names a Message that is no longer last.
+// [docs/specs/browser_story_log.md] SCENARIO: 30.26
+async fn check_a_delete_of_a_message_that_is_no_longer_last_reports_in_the_notice(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    page.on_dialog(|dialog| async move { dialog.accept(None).await })
+        .await
+        .unwrap();
+    start_current(&page).await;
+    let entries_before = count_log_entries(&page).await;
+    assert!(
+        entries_before > 1,
+        "the fixture must show an entry that carries a delete control"
+    );
+    // A load after the append would show the new Narration and its Delete, which names
+    // the true last Message.
+    stop_page_timer(&page).await;
+    stub.story_log_handle()
+        .append_narration("A Narration that another tab added.");
+
+    page.locator("#story-log .log-entry:last-child .delete-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    wait_for_error_disclosure(&page, NOTICE, "a stale delete should report in the notice").await;
+    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The last Message changed, so the Message was not deleted.",
+        "the notice names the changed Message"
+    );
+    assert!(
+        raw.contains("The page showed a Message that is no longer the last one."),
+        "the engine's line belongs in the disclosure, got {raw:?}"
+    );
+    load_screen_now(&page).await;
+    assert_eq!(
+        count_log_entries(&page).await,
+        entries_before + 1,
+        "the refused delete removed nothing, and the load shows the added Narration"
+    );
+}
+
 // The stub answers a swipe switch with a 500 once the test asks for the failure
 // path, so the shipped previous-swipe click runs the real client path.
 // [docs/specs/browser_story_log.md] SCENARIO: 30.19
-async fn check_failed_swipe_switch_reports_in_the_story_log_slot(
+async fn check_failed_swipe_switch_reports_in_the_notice(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let swipe = stub.swipe_handle();
     swipe.set_two_swipes();
     swipe.set_switch_failing();
-    poll_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
 
     assert!(
                 wait_for_condition_async(
@@ -869,19 +1091,16 @@ async fn check_failed_swipe_switch_reports_in_the_story_log_slot(
     .await
     .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async { read_error_disclosure(&page, "#story-log-error").await.0 },
-        )
-        .await,
-        "a failed swipe switch should report in the story log's error slot"
-    );
-    let (_, message, raw) = read_error_disclosure(&page, "#story-log-error").await;
-    assert!(
-        message.contains("Failed to switch the swipe"),
-        "the slot should name the failed action, got {message:?}"
+    wait_for_error_disclosure(
+        &page,
+        NOTICE,
+        "a failed swipe switch should report in the notice",
+    )
+    .await;
+    let (_, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The Swipe was not switched.",
+        "the notice names the failed request"
     );
     assert!(
         raw.contains("Stub swipe switch failure"),
@@ -942,6 +1161,72 @@ async fn check_successful_delete_keeps_focus_in_the_story_log(
     );
 }
 
+const EDIT_SLOT: &str = "[data-editing] .edit-actions > [data-error-slot]";
+
+// [docs/specs/browser_story_log.md] SCENARIO: 30.25
+async fn check_an_invalid_save_reports_in_the_edit_slot_and_keeps_the_draft(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    stub.save_handle().set_save_invalid(true);
+    enter_narration_edit(&page).await;
+    page.locator("#edit-textarea")
+        .await
+        .fill("A draft that the engine does not accept", None)
+        .await
+        .unwrap();
+    page.locator("[data-editing] .save-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    wait_for_error_disclosure(
+        &page,
+        EDIT_SLOT,
+        "an invalid save reports in the slot of the entry",
+    )
+    .await;
+    let (_, line, _) = read_error_disclosure(&page, EDIT_SLOT).await;
+    assert_eq!(line, "The edit was not saved: The value is not allowed.");
+    assert!(
+        !read_error_disclosure(&page, NOTICE).await.0,
+        "an invalid save of a message edit shows in its slot, not in the notice"
+    );
+    assert_eq!(
+        page.locator("#edit-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "A draft that the engine does not accept",
+        "the draft stays"
+    );
+    assert_eq!(
+        story_log_marks_an_edit(&page).await,
+        (true, true),
+        "the entry stays in edit and the lock stays"
+    );
+
+    page.locator("[data-editing] .cancel-btn")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_hidden(&page, "#edit-textarea", Duration::from_millis(500)).await;
+    let slot = ".log-entry.narration .edit-actions > [data-error-slot]";
+    let cleared = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { !read_error_disclosure(&page, slot).await.0 },
+    )
+    .await;
+    assert!(
+        cleared,
+        "Cancel clears the slot: the load that follows renders it empty"
+    );
+}
+
 #[tokio::test]
 async fn run_story_log_edit_mode_checks() {
     let mut runner = StubRunner::launch().await;
@@ -958,7 +1243,10 @@ async fn run_story_log_edit_mode_checks() {
         )
         .await;
     runner
-        .run(StubActionOutcome::Pending, check_polling_pauses_during_edit)
+        .run(
+            StubActionOutcome::Pending,
+            check_an_entry_in_edit_survives_loads_of_the_story_log,
+        )
         .await;
     runner
         .run(
@@ -987,6 +1275,12 @@ async fn run_story_log_edit_mode_checks() {
             check_edit_locks_the_other_entries_edit_controls,
         )
         .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_the_save_of_an_edit_looks_disabled_while_the_game_is_busy,
+        )
+        .await;
     runner.finish().await;
 }
 
@@ -996,13 +1290,20 @@ async fn run_story_log_edit_failure_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_save_restores_entry_and_resumes_polling,
+            check_failed_save_restores_entry_and_releases_the_edit_marks,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_retry_clears_pending_status_and_re_enables_send,
+            check_an_invalid_save_reports_in_the_edit_slot_and_keeps_the_draft,
+        )
+        .await;
+
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_failed_retry_reports_in_the_notice_and_re_enables_send,
         )
         .await;
     runner
@@ -1020,19 +1321,25 @@ async fn run_story_log_edit_failure_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_successful_save_holds_the_edit_lock_until_the_poll,
+            check_successful_save_holds_the_edit_lock_until_the_load,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_delete_reports_in_the_story_log_slot,
+            check_failed_delete_reports_in_the_notice,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_swipe_switch_reports_in_the_story_log_slot,
+            check_a_delete_of_a_message_that_is_no_longer_last_reports_in_the_notice,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_failed_swipe_switch_reports_in_the_notice,
         )
         .await;
     runner

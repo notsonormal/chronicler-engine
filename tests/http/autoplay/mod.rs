@@ -12,7 +12,7 @@ use chronicler_engine::test_support::ScriptedModel;
 
 use crate::support::http_fixtures::story_of_game;
 use crate::support::http_requests::{
-    assert_no_unscripted_model_call, fetch_busy_status, post_empty, post_form, response_body,
+    fetch_status_label, assert_no_unscripted_model_call, post_empty, post_form, response_body,
     wait_for_jobs,
 };
 
@@ -84,7 +84,7 @@ async fn end_paused_run(app: &axum::Router, state: &AppState, game: GameId, paus
 }
 
 async fn assert_status(app: &axum::Router, expected: &str, label: &str) {
-    assert_eq!(fetch_busy_status(app).await.trim(), expected, "{label}");
+    assert_eq!(fetch_status_label(app).await, expected, "{label}");
 }
 
 async fn stop(app: &axum::Router) {

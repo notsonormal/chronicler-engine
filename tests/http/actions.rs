@@ -24,8 +24,8 @@ use crate::support::http_fixtures::{
     break_start_room, corrupt_start_state, room_header_of, story_of, OFFERED_SET,
 };
 use crate::support::http_requests::{
-    fetch_body, fetch_busy_status, post_action, post_action_check, post_empty, post_form,
-    response_body, wait_settled,
+    fetch_status_label, assert_answers_nothing, fetch_busy_status, post_action, post_action_check,
+    post_form, response_body, wait_settled, post_on_last_message, fetch_part,
 };
 
 // [docs/specs/actions.md] SCENARIO: 1.1
@@ -36,7 +36,7 @@ async fn test_action_succeeds_one_narration_idle_http() {
     ));
 
     let resp = post_action(&app, "look").await;
-    assert!(resp.status().is_success());
+    assert_answers_nothing(resp).await;
     assert!(wait_settled(&state, 2000).await, "action should complete");
 
     let messages = story_of(&state);
@@ -60,8 +60,8 @@ async fn test_action_succeeds_one_narration_idle_http() {
         Some("You see a small wooden room.")
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "action should finish in the Idle state"
     );
 }
@@ -93,8 +93,8 @@ async fn test_input_persisted_before_narration_http() {
     assert_eq!(messages[input_idx].text(), "examine the room");
     assert_eq!(messages[narration_idx].text(), "It is a small wooden room.");
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "input persistence should finish in the Idle state"
     );
 }
@@ -159,8 +159,8 @@ async fn test_quantifier_character_fires_trigger_http() {
         "main + trigger continuation narrations, got {narration_count}"
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "trigger action should finish in the Idle state"
     );
 }
@@ -202,8 +202,8 @@ async fn test_no_trigger_character_produces_narration_no_event_http() {
         );
     }
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "no-trigger action should finish in the Idle state"
     );
 }
@@ -262,8 +262,8 @@ async fn test_trigger_does_not_refire_on_second_encounter_http() {
         "one-shot trigger should fire at most once, got {trigger_narrations} trigger narrations"
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "second encounter should finish in the Idle state"
     );
 }
@@ -297,8 +297,8 @@ async fn test_empty_command_continuation_no_input_http() {
         Some("The scene continues.")
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "continuation should finish in the Idle state"
     );
 }
@@ -484,7 +484,7 @@ async fn test_trigger_narration_failure_preserves_main_sets_failed_http() {
         "the main narration must stay the last entry: {messages:?}"
     );
 
-    let story_log = fetch_body(&app, "/fragment/story-log").await;
+    let story_log = fetch_part(&app, "story-log").await;
     assert!(
         story_log.contains("retrigger-btn"),
         "the failed trigger must leave Retrigger available: {story_log}"
@@ -546,8 +546,8 @@ async fn assert_quantifier_failure_keeps_characters(model: Arc<ScriptedModel>) {
     );
 
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "the action must finish in the Idle state"
     );
     let characters_after = state
@@ -588,8 +588,8 @@ async fn test_delayed_llm_completes_without_deadlock_http() {
         "a held LLM call should complete once released"
     );
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "idle",
+        fetch_status_label(&app).await,
+        "Ready",
         "status should not be Busy"
     );
 }
@@ -651,7 +651,7 @@ async fn test_sequential_execute_retry_execute_http() {
     let _ = post_action(&app, "examine room").await;
     assert!(wait_settled(&state, 2000).await, "action A should complete");
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry A should complete");
 
@@ -692,7 +692,7 @@ async fn test_async_action_sequence_then_retry_http() {
     let _ = post_action(&app, "examine room").await;
     assert!(wait_settled(&state, 2000).await);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(wait_settled(&state, 2000).await, "retry should complete");
 
@@ -778,7 +778,7 @@ async fn test_bare_slash_impersonate_produces_input_http() {
         None,
         "a bare /impersonate stores no direction"
     );
-    assert_eq!(fetch_busy_status(&app).await, "idle");
+    assert_eq!(fetch_status_label(&app).await, "Ready");
 }
 
 // [docs/specs/actions.md] SCENARIO: 1.10
@@ -845,17 +845,7 @@ async fn test_slash_command_bypasses_text_check_http() {
     );
 
     let resp = post_action_check(&app, "/guide look at the casle").await;
-    assert!(resp.status().is_success());
-    assert!(
-        resp.headers().get("HX-Retarget").is_some(),
-        "steering command should dispatch directly (HX-Retarget set)"
-    );
-    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        !body_str.contains("text-check-preview"),
-        "steering command must bypass the text check: {body_str}"
-    );
+    assert_answers_nothing(resp).await;
     assert!(
         wait_settled(&state, 2000).await,
         "guide action should complete"
@@ -864,17 +854,7 @@ async fn test_slash_command_bypasses_text_check_http() {
     // The /guide leg above already wrote story text, so this /options dispatch
     // passes the check that needs a story with text to work from.
     let resp = post_action_check(&app, "/options").await;
-    assert!(resp.status().is_success());
-    assert!(
-        resp.headers().get("HX-Retarget").is_some(),
-        "/options is an engine command and should dispatch directly (HX-Retarget set)"
-    );
-    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
-    let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        !body_str.contains("text-check-preview"),
-        "/options must bypass the text check: {body_str}"
-    );
+    assert_answers_nothing(resp).await;
     assert!(
         wait_settled(&state, 2000).await,
         "/options action should complete"
@@ -882,10 +862,6 @@ async fn test_slash_command_bypasses_text_check_http() {
 
     let resp = post_action_check(&app, "look at the casle").await;
     assert!(resp.status().is_success());
-    assert!(
-        resp.headers().get("HX-Retarget").is_none(),
-        "plain input should show a preview, not dispatch (no HX-Retarget)"
-    );
     let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
@@ -1090,26 +1066,15 @@ async fn test_a_move_between_two_map_rooms_with_the_same_name_shows_no_room_http
 
 // [docs/specs/actions.md] SCENARIO: 1.13
 #[tokio::test]
-async fn test_confirm_retargets_status_display() {
+async fn test_a_preview_send_dispatches_and_answers_nothing() {
     let (app, state) = app_with_model(Arc::new(ScriptedModel::new().turn("You look around.")));
 
-    let resp = post_form(&app, "/action/confirm", "command=look").await;
-    assert!(resp.status().is_success());
-    assert_eq!(
-        resp.headers().get("HX-Retarget"),
-        Some(&axum::http::HeaderValue::from_static("#status-display")),
-        "confirm must retarget the status display"
-    );
-    let body = response_body(resp).await;
+    let resp = post_form(&app, "/action", "command=look").await;
+    assert_answers_nothing(resp).await;
     assert!(
-        body.starts_with("<span class=\"status"),
-        "confirm must return a bare status span: {body}"
+        wait_settled(&state, 2000).await,
+        "the preview send should complete"
     );
-    assert!(
-        !body.contains("id=\"action-area\"") && !body.contains("command-form"),
-        "confirm must not replace the action area or the command form: {body}"
-    );
-    assert!(wait_settled(&state, 2000).await, "confirm should complete");
 }
 
 // [docs/specs/actions.md] SCENARIO: 2.6

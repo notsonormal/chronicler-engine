@@ -101,8 +101,8 @@ fn test_prompt_presets_template_has_add_forms() {
     let html = template.render().unwrap();
     assert!(html.contains("Add System Prompt Preset"));
     assert!(html.contains("Add Quantifier Prompt Preset"));
-    assert!(html.contains(r#"name="preset_type" value="system""#));
-    assert!(html.contains(r#"name="preset_type" value="quantifier""#));
+    assert!(html.contains(r##"hx-get="/fragment/prompt-presets/new?type=system""##));
+    assert!(html.contains(r##"hx-get="/fragment/prompt-presets/new?type=quantifier""##));
 }
 
 #[test]

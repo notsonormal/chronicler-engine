@@ -21,8 +21,8 @@ use crate::support::http_fixtures::{
     create_game_from, room_header_of, story_of, story_of_game, OFFERED_SET,
 };
 use crate::support::http_requests::{
-    fetch_body, post_action, post_empty, post_form, response_body, wait_for_jobs, wait_idle,
-    wait_settled,
+    fetch_status_label, post_action, post_empty, post_form, response_body, wait_for_jobs,
+    wait_idle, wait_settled, post_on_last_message, fetch_part,
 };
 
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
@@ -48,7 +48,7 @@ async fn test_action_while_job_runs_is_refused_http() {
     );
 
     let refused = post_action(&app, "listen").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     let body = response_body(refused).await;
     assert_still_thinking(&body);
     assert_eq!(
@@ -90,11 +90,8 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
     let click = |app: axum::Router, barrier: Arc<Barrier>| async move {
         barrier.wait().await;
         let resp = post_action(&app, "look").await;
-        assert!(
-            resp.status().is_success(),
-            "an accepted Action and a refused one both answer 200"
-        );
-        response_body(resp).await
+        let status = resp.status();
+        (status, response_body(resp).await)
     };
     let first = tokio::spawn(click(app.clone(), Arc::clone(&barrier)));
     let second = tokio::spawn(click(app.clone(), Arc::clone(&barrier)));
@@ -105,9 +102,20 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
 
     let refused = bodies
         .iter()
-        .filter(|body| body.contains(STILL_THINKING))
+        .filter(|(_, body)| body.contains(STILL_THINKING))
         .count();
     assert_eq!(refused, 1, "exactly one click is refused: {bodies:?}");
+    for (status, body) in &bodies {
+        let expected = if body.contains(STILL_THINKING) {
+            StatusCode::CONFLICT
+        } else {
+            StatusCode::OK
+        };
+        assert_eq!(
+            *status, expected,
+            "the refused click answers 409 and the accepted one 2xx: {bodies:?}"
+        );
+    }
     assert!(
         hold.wait_started(1000),
         "the accepted click's narration call should reach the model"
@@ -155,7 +163,7 @@ async fn test_options_while_job_runs_is_refused_http() {
     );
 
     let refused = post_action(&app, "/options").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     let body = response_body(refused).await;
     assert_still_thinking(&body);
 
@@ -169,7 +177,7 @@ async fn test_options_while_job_runs_is_refused_http() {
         0,
         "the refused /options must generate nothing"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "the refused /options must leave the dock empty: {dock}"
@@ -298,11 +306,10 @@ async fn test_reset_while_job_runs_keeps_only_the_new_game_opening() {
             .any(|text| text == "The stopped narration."),
         "the late answer of the Job the reset ended must not join the new Game"
     );
-    let status = fetch_body(&app, "/status/busy").await;
     assert_eq!(
-        status.trim(),
-        "idle",
-        "the new Game answers idle, with no failure line"
+        fetch_status_label(&app).await,
+        "Ready",
+        "the new Game answers Ready, with no failure line"
     );
 }
 
@@ -322,12 +329,12 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
     let target = before.last().expect("the Job saved its Input").id;
 
     let edit = post_form(&app, &format!("/history/{target}"), "text=An+edited+text").await;
-    assert_eq!(edit.status(), StatusCode::OK);
+    assert_eq!(edit.status(), StatusCode::CONFLICT);
     let edit_body = response_body(edit).await;
     assert_still_thinking(&edit_body);
 
-    let delete = post_empty(&app, "/history/delete").await;
-    assert_eq!(delete.status(), StatusCode::OK);
+    let delete = post_on_last_message(&app, "/history/delete").await;
+    assert_eq!(delete.status(), StatusCode::CONFLICT);
     let delete_body = response_body(delete).await;
     assert_still_thinking(&delete_body);
 
@@ -364,7 +371,12 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 1000).await, "the first Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(&state, 1000).await, "the retry settles");
 
     let narration = story_of_game(&state, game)
@@ -390,7 +402,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
     );
 
     let resp = post_empty(&app, &format!("/message/{}/swipe/{target}", narration.id)).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
     let body = response_body(resp).await;
     assert_still_thinking(&body);
 
@@ -671,7 +683,7 @@ enum StoryLogAfterStop {
 struct StopRow {
     kind: JobKind,
     held: Role,
-    /// The step the status poll answers while the call is held, where the
+    /// The step the status display load answers while the call is held, where the
     /// design names the step.
     status: Option<&'static str>,
     after_stop: StoryLogAfterStop,
@@ -686,7 +698,7 @@ static STOP_ROWS: &[StopRow] = &[
             fires_trigger: false,
         },
         held: Role::Narrator,
-        status: Some("narrating"),
+        status: Some("Generating narration..."),
         after_stop: StoryLogAfterStop::PlanInput,
     },
     StopRow {
@@ -694,7 +706,7 @@ static STOP_ROWS: &[StopRow] = &[
             fires_trigger: true,
         },
         held: Role::Quantifier,
-        status: Some("quantifying"),
+        status: Some("Quantifying..."),
         after_stop: StoryLogAfterStop::InputAndNarration,
     },
     StopRow {
@@ -702,37 +714,37 @@ static STOP_ROWS: &[StopRow] = &[
             fires_trigger: false,
         },
         held: Role::Options,
-        status: Some("options"),
+        status: Some("Generating options..."),
         after_stop: StoryLogAfterStop::InRoom { room: MOVED_ROOM },
     },
     StopRow {
         kind: JobKind::Impersonate,
         held: Role::Narrator,
-        status: Some("narrating"),
+        status: Some("Generating narration..."),
         after_stop: StoryLogAfterStop::NoMessage,
     },
     StopRow {
         kind: JobKind::Impersonate,
         held: Role::Quantifier,
-        status: Some("quantifying"),
+        status: Some("Quantifying..."),
         after_stop: StoryLogAfterStop::ImpersonateInput,
     },
     StopRow {
         kind: JobKind::InputRetry,
         held: Role::Narrator,
-        status: Some("narrating"),
+        status: Some("Generating narration..."),
         after_stop: StoryLogAfterStop::NoMessage,
     },
     StopRow {
         kind: JobKind::EventNarration,
         held: Role::Trigger,
-        status: Some("generating-event"),
+        status: Some("Generating event..."),
         after_stop: StoryLogAfterStop::MainNarrationOnly,
     },
     StopRow {
         kind: JobKind::EventNarrationAnalysis,
         held: Role::Quantifier,
-        status: Some("quantifying"),
+        status: Some("Quantifying..."),
         after_stop: StoryLogAfterStop::EventNarrationWithFiredTrigger,
     },
 ];
@@ -822,14 +834,19 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             assert!(post_action(&app, ACTION_INPUT).await.status().is_success());
             assert!(wait_settled(&state, 2000).await, "the first Job settles");
             assert!(
-                post_empty(&app, "/history/delete")
+                post_on_last_message(&app, "/history/delete")
                     .await
                     .status()
                     .is_success()
             );
             let story_before = story_of_game(&state, game);
             let hold = model.hold(row.held);
-            assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+            assert!(
+                post_on_last_message(&app, "/swipe/new")
+                    .await
+                    .status()
+                    .is_success()
+            );
             StopJob {
                 app,
                 state,
@@ -938,11 +955,10 @@ async fn run_stop_row(row: &'static StopRow) {
     );
 
     if let Some(status) = row.status {
-        let answered = fetch_body(&start.app, "/status/busy").await;
         assert_eq!(
-            answered.trim(),
+            fetch_status_label(&start.app).await,
             status,
-            "{label}: the status poll names the step the call runs in"
+            "{label}: the status display names the step the call runs in"
         );
     }
 
@@ -956,10 +972,9 @@ async fn run_stop_row(row: &'static StopRow) {
         wait_idle(&start.state, 2000).await,
         "{label}: the Game should end idle at once"
     );
-    let status = fetch_body(&start.app, "/status/busy").await;
     assert_eq!(
-        status.trim(),
-        "idle",
+        fetch_status_label(&start.app).await,
+        "Ready",
         "{label}: a stopped Game is idle, with no failure line"
     );
 
@@ -1057,7 +1072,7 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                 Some(expected.as_str()),
                 "{label}: the state update landed, so the Narration shows the room it arrived in"
             );
-            let dock = fetch_body(&start.app, "/fragment/options-dock").await;
+            let dock = fetch_part(&start.app, "options-dock").await;
             assert!(
                 !dock.contains("options-strip"),
                 "{label}: the text save emptied the offered set, and the refused Options run leaves it empty, got: {dock}"

@@ -153,10 +153,12 @@ pub enum JobRequest {
     Impersonate(Option<String>),
     /// `/options`: the Options run alone.
     Options,
-    /// A Retry of the last Message, of the kind the last Message holds.
-    Retry,
-    /// A Retrigger of the Trigger the last Message holds.
-    Retrigger,
+    /// A Retry of the last Message, of the kind the last Message holds. The id is the
+    /// Message that the player's page showed as the last one.
+    Retry(u64),
+    /// A Retrigger of the Trigger the last Message holds. The id is the Message that
+    /// the player's page showed as the last one.
+    Retrigger(u64),
 }
 
 impl JobRequest {
@@ -219,18 +221,20 @@ impl StoryEnd {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PlanRefusal {
+pub enum PlanError {
     /// The request is wrong; the line says why.
     BadRequest(String),
     /// A record the request needs is missing; the failure line names it.
     Missing(Record),
+    /// The Message that the request names is no longer the last one.
+    LastMessageChanged,
 }
 
 impl JobPlan {
-    pub fn for_request(request: &JobRequest, story: StoryEnd) -> Result<Self, PlanRefusal> {
+    pub fn for_request(request: &JobRequest, story: StoryEnd) -> Result<Self, PlanError> {
         let StoryEnd { tail, has_text } = story;
         match request {
-            JobRequest::Options if !has_text => Err(PlanRefusal::BadRequest(
+            JobRequest::Options if !has_text => Err(PlanError::BadRequest(
                 "No scene to generate options for yet".to_string(),
             )),
             JobRequest::Options => Ok(Self {
@@ -238,15 +242,17 @@ impl JobPlan {
                 first: None,
                 options: OptionsRun::OnDemand,
             }),
-            JobRequest::Retry => {
+            JobRequest::Retry(named) => {
                 let tail =
-                    tail.ok_or_else(|| PlanRefusal::BadRequest("No input to retry".to_string()))?;
+                    tail.ok_or_else(|| PlanError::BadRequest("No input to retry".to_string()))?;
+                Self::require_last(&tail, *named)?;
                 Ok(Self::of_one(Self::redo(&tail), None))
             }
-            JobRequest::Retrigger => {
-                let refused = || PlanRefusal::BadRequest("No event record available".to_string());
-                let tail = tail.ok_or_else(refused)?;
-                let record = tail.retrigger_record().ok_or_else(refused)?.clone();
+            JobRequest::Retrigger(named) => {
+                let bad_request = || PlanError::BadRequest("No event record available".to_string());
+                let tail = tail.ok_or_else(bad_request)?;
+                Self::require_last(&tail, *named)?;
+                let record = tail.retrigger_record().ok_or_else(bad_request)?.clone();
                 Ok(Self::of_one(
                     GenerationOrder::event_after(tail.current_at(), record),
                     None,
@@ -273,6 +279,14 @@ impl JobPlan {
         }
     }
 
+    fn require_last(tail: &Tail, named: u64) -> Result<(), PlanError> {
+        if tail.last.id == named {
+            Ok(())
+        } else {
+            Err(PlanError::LastMessageChanged)
+        }
+    }
+
     /// The step the status shows from the accept, until the Job names its own: a
     /// Retry of an event Narration starts in the event step.
     pub fn first_step(&self) -> Step {
@@ -294,10 +308,10 @@ impl JobPlan {
         tail: Option<&Tail>,
         generation: Generation,
         input: Option<String>,
-    ) -> Result<Self, PlanRefusal> {
+    ) -> Result<Self, PlanError> {
         let start = tail
             .map(Tail::current_at)
-            .ok_or(PlanRefusal::Missing(Record::Story))?;
+            .ok_or(PlanError::Missing(Record::Story))?;
         Ok(Self::of_one(
             GenerationOrder {
                 generation,

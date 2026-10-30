@@ -1,6 +1,6 @@
 # Feature Spec: Retry (POST /swipe/new)
 
-Endpoint: `POST /swipe/new`
+Endpoint: `POST /swipe/new`, with the form field `message`: the id of the Message that the page rendered the control on
 
 ## Scenarios
 
@@ -14,8 +14,9 @@ And a narrator backend that returns "First." then "Second." for successive narra
 When the client sends POST /action with command="look"
 And the Game is no longer busy
 And the client sends POST /swipe/new
+Then the response is 200 with an empty body
 And the Game is no longer busy
-Then the story log holds 2 Narration entries (its opening Narration and the Action's)
+And the story log holds 2 Narration entries (its opening Narration and the Action's)
 And the Action's Narration entry keeps its message ID and has 2 swipes (one appended by the retry)
 And the active swipe's text is "Second."
 And the generation status is Idle
@@ -72,7 +73,7 @@ Then the story log contains at least one Narration entry that carries an event h
 
 ```gherkin
 Given a fresh game state
-And a quantifier backend that returns no movement for both the action and the retry prompt
+And a quantifier backend that returns no movement for both the Action and the retry prompt
 When the client sends POST /action with command="walk around"
 And the Game is no longer busy
 And the client sends POST /swipe/new
@@ -269,12 +270,23 @@ And the player is in "room2" (the state that the retry's analysis saved)
 
 ### Concurrency
 
-#### Scenario 12.1: Retry while a generation is already in flight returns "Still thinking..."
+#### Scenario 12.1: Retry while a generation is already in flight answers 409 "Still thinking..."
 
 ```gherkin
 Given a Game whose Job is running
 When the client sends POST /swipe/new
-Then the response is 200 with a "Still thinking..." status string
+Then the response is 409 with the "Still thinking..." line
+And no Swipe is added
+```
+
+#### Scenario 12.2: A Retry that names a Message that is not the last one is refused
+
+```gherkin
+Given a Game whose story holds an Input and the Narration that answers it
+When the client sends POST /swipe/new with the field message set to the id of the Input
+Then the response is 409
+And the first line of the body is "The last Message changed, so the Retry was not started."
+And the second line of the body is "The page showed a Message that is no longer the last one."
 And no Swipe is added
 ```
 
@@ -390,7 +402,7 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   violation: 500 and the failure line "The data for this request is
   missing: …", not a user error (400).
 - **I.8** Retry rejects concurrent generation the same way `POST /action`
-  does: 200 with a `"Still thinking..."` status, no generation started.
+  does: 409 with the `"Still thinking..."` line, no generation started.
 - **I.9** A failed retry that appended no Swipe leaves the room, the
   encounters and the fired triggers as the click found them. A failed retry
   that appended a Swipe keeps the state that its analysis saved.

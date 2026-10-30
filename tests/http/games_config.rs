@@ -10,7 +10,7 @@ use chronicler_engine::test_support::{
 };
 
 use crate::support::http_assertions::assert_option_selected;
-use crate::support::http_requests::post_form;
+use crate::support::http_requests::{assert_answers_nothing, post_form, response_body, fetch_part};
 
 fn failing_storage() -> Arc<Storage> {
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
@@ -93,13 +93,12 @@ async fn test_mode_switch_failure_surfaces_500_error_span_http() {
     );
 }
 
-// The select's `hx-post="/games/{id}/posture"` with
-// `hx-include="closest .posture-row"` sends exactly this form body, and the
-// handler returns the fragment's outerHTML — so the re-render is asserted from
-// the response body rather than the live DOM.
+// The select's `hx-post="/games/{id}/posture"` with `hx-include="closest .posture-row"`
+// sends exactly this form body. The save answers nothing, so the new value is read
+// back from the game and from the Games fragment, which the panel loads.
 // [docs/specs/games.md] SCENARIO: 20.7
 #[tokio::test]
-async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
+async fn test_posture_autosave_answers_nothing_and_the_fragment_renders_the_new_tense_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
     let id = active_game_of(&state);
 
@@ -109,26 +108,7 @@ async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
         "narrative_perspective=third&narrative_tense=present",
     )
     .await;
-    assert!(
-        resp.status().is_success(),
-        "the posture auto-save should succeed"
-    );
-    let body = axum::body::to_bytes(resp.into_body(), 16384).await.unwrap();
-    let html = String::from_utf8_lossy(&body);
-    assert!(
-        html.contains(r#"id="game-posture-controls""#),
-        "the response must be the re-rendered posture fragment: {html}"
-    );
-    assert_option_selected(
-        &html,
-        "present",
-        "the re-rendered tense select must show 'present' selected",
-    );
-    assert_option_selected(
-        &html,
-        "third",
-        "the re-rendered perspective select must keep 'third' selected",
-    );
+    assert_answers_nothing(resp).await;
 
     let game = state
         .game_catalogue
@@ -137,6 +117,18 @@ async fn test_posture_autosave_rerenders_fragment_with_new_tense_http() {
         .expect("the active game must still exist");
     assert_eq!(game.narrative_tense.as_str(), "present");
     assert_eq!(game.narrative_perspective.as_str(), "third");
+
+    let html = fetch_part(&app, "games").await;
+    assert_option_selected(
+        &html,
+        "present",
+        "the fragment's tense select must show 'present' selected",
+    );
+    assert_option_selected(
+        &html,
+        "third",
+        "the fragment's perspective select must keep 'third' selected",
+    );
 }
 
 // [docs/specs/games.md] SCENARIO: 20.11
@@ -166,21 +158,7 @@ async fn test_options_preset_selection_persists_http() {
     );
 
     let resp = post_form(&app, &format!("/games/{id}/presets"), &body).await;
-    assert!(
-        resp.status().is_success(),
-        "the options selection should persist"
-    );
-    let body = axum::body::to_bytes(resp.into_body(), 16384).await.unwrap();
-    let html = String::from_utf8_lossy(&body);
-    assert!(
-        html.contains(r#"id="game-posture-controls"#),
-        "the response must be the re-rendered posture fragment: {html}"
-    );
-    assert_option_selected(
-        &html,
-        "options_custom",
-        "the re-rendered Options select must select the chosen preset",
-    );
+    assert_answers_nothing(resp).await;
 
     let game = state
         .game_catalogue
@@ -188,4 +166,45 @@ async fn test_options_preset_selection_persists_http() {
         .expect("active_game should succeed")
         .expect("the active game must still exist");
     assert_eq!(game.active_options_prompt_preset_id, "options_custom");
+
+    let html = fetch_part(&app, "games").await;
+    assert_option_selected(
+        &html,
+        "options_custom",
+        "the fragment's Options select must select the chosen preset",
+    );
+}
+
+// [docs/specs/games.md] SCENARIO: 20.12
+#[tokio::test]
+async fn test_a_config_save_with_a_rejected_value_answers_400_http() {
+    let (app, state) = TestAppBuilder::default_test().build_with_state();
+    let id = active_game_of(&state);
+    let before = state
+        .game_catalogue
+        .active_game()
+        .expect("active_game should succeed")
+        .expect("the active game must exist")
+        .narrator_mode;
+
+    let resp = post_form(
+        &app,
+        &format!("/games/{id}/mode"),
+        "narrator_mode=no_such_mode",
+    )
+    .await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("no_such_mode"),
+        "the error fragment must name the rejected value: {body}"
+    );
+
+    let after = state
+        .game_catalogue
+        .active_game()
+        .expect("active_game should succeed")
+        .expect("the active game must still exist")
+        .narrator_mode;
+    assert_eq!(after, before, "a rejected value must not change the mode");
 }

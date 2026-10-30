@@ -3,6 +3,8 @@
 
 use std::str::FromStr;
 
+use askama::Template;
+
 use axum::{extract::Path, extract::State, response::Response, Form};
 use serde::Deserialize;
 
@@ -12,9 +14,14 @@ use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, Narra
 use crate::domain::model::world::WorldCard;
 use crate::adapters::driving::http::AppState;
 
-use crate::adapters::driving::http::utils::error::{action_error_response, render_error};
+use crate::adapters::driving::http::utils::answer_words::item_named;
+use crate::adapters::driving::http::utils::error::{
+    AnswerPolicy, not_found_answer, invalid_answer, answer_for_error,
+};
 use crate::adapters::driving::http::utils::fragment::render_response;
-use crate::adapters::driving::http::utils::response::{bad_request, internal_error, ok};
+use crate::application::errors::ApplicationError;
+use crate::error::EngineError;
+use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::games_per_world;
 use crate::adapters::driving::http::worlds::templates::worlds::{
     WorldFormTemplate, WorldsPanelTemplate,
@@ -93,38 +100,42 @@ impl WorldForm {
     }
 }
 
-pub async fn list_worlds_fragment(State(state): State<AppState>) -> Response<axum::body::Body> {
-    let worlds = match state.world_catalogue.list_worlds() {
-        Ok(w) => w,
-        Err(e) => return internal_error(format!("Failed to load worlds: {e}")),
-    };
+pub fn render_worlds_panel(state: &AppState) -> Result<String, EngineError> {
+    let worlds = state
+        .world_catalogue
+        .list_worlds()
+        .map_err(ApplicationError::into_engine_error)?;
 
-    let games = state.game_catalogue.list_games().unwrap_or_default();
+    let games = state
+        .game_catalogue
+        .list_games()
+        .map_err(ApplicationError::into_engine_error)?;
     let games_per_world = games_per_world(&games);
 
-    render_response(&WorldsPanelTemplate::from_worlds(&worlds, &games_per_world))
+    WorldsPanelTemplate::from_worlds(&worlds, &games_per_world)
+        .render()
+        .map_err(|e| EngineError::Template(e.to_string()))
 }
 
 pub async fn create_world_handler(
     State(state): State<AppState>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
+    let name = item_named(&form.name);
     let (world_card, map) = match form.into_world_card() {
         Ok(w) => w,
-        Err(e) => return bad_request(e),
+        Err(message) => {
+            return answer_for_error(
+                ApplicationError::validation(message),
+                name,
+                AnswerPolicy::EngineText,
+            );
+        }
     };
 
     match state.world_catalogue.create_world(world_card, map) {
-        Ok(_) => {
-            let worlds = state.world_catalogue.list_worlds();
-            let games = state.game_catalogue.list_games().unwrap_or_default();
-            let games_per_world = games_per_world(&games);
-            render_response(&WorldsPanelTemplate::from_worlds(
-                &worlds.unwrap_or_default(),
-                &games_per_world,
-            ))
-        }
-        Err(e) => action_error_response(e, "Failed to create world"),
+        Ok(_) => ok(""),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -138,8 +149,8 @@ pub async fn edit_world_form_handler(
 ) -> Response<axum::body::Body> {
     let (_, world_card, map) = match state.world_catalogue.get_world(&key) {
         Ok(Some(w)) => w,
-        Ok(None) => return bad_request(format!("World '{key}' not found")),
-        Err(e) => return internal_error(format!("Failed to load world: {e}")),
+        Ok(None) => return not_found_answer(format!("World '{key}' not found")),
+        Err(e) => return answer_for_error(e, None, AnswerPolicy::EngineText),
     };
 
     render_response(&WorldFormTemplate::from_world_data(
@@ -154,19 +165,27 @@ pub async fn update_world_handler(
     Path(key): Path<String>,
     Form(form): Form<WorldForm>,
 ) -> Response<axum::body::Body> {
+    let name = item_named(&form.name);
+    let invalid = |message: String| {
+        answer_for_error(
+            ApplicationError::validation(message),
+            name.clone(),
+            AnswerPolicy::EngineText,
+        )
+    };
     let (world_id, mut world_card, _) = match state.world_catalogue.get_world(&key) {
         Ok(Some(w)) => w,
-        Ok(None) => return bad_request(format!("World '{key}' not found")),
-        Err(e) => return internal_error(format!("Failed to load world: {e}")),
+        Ok(None) => return invalid(format!("World '{key}' not found")),
+        Err(e) => return answer_for_error(e, name, AnswerPolicy::EngineText),
     };
 
     let map = match form.parse_map() {
         Ok(m) => m,
-        Err(e) => return bad_request(e),
+        Err(e) => return invalid(e),
     };
     let scenarios = match form.parse_scenarios() {
         Ok(s) => s,
-        Err(e) => return bad_request(e),
+        Err(e) => return invalid(e),
     };
 
     world_card.default_scenario_id = world_card
@@ -193,16 +212,8 @@ pub async fn update_world_handler(
         .world_catalogue
         .update_world(world_id, world_card, map)
     {
-        Ok(()) => {
-            let worlds = state.world_catalogue.list_worlds();
-            let games = state.game_catalogue.list_games().unwrap_or_default();
-            let games_per_world = games_per_world(&games);
-            render_response(&WorldsPanelTemplate::from_worlds(
-                &worlds.unwrap_or_default(),
-                &games_per_world,
-            ))
-        }
-        Err(e) => internal_error(format!("Failed to update world: {e}")),
+        Ok(()) => ok(""),
+        Err(e) => answer_for_error(e, name, AnswerPolicy::EngineText),
     }
 }
 
@@ -212,11 +223,15 @@ pub async fn delete_world_handler(
 ) -> Response<axum::body::Body> {
     match state.world_catalogue.delete_world(&key) {
         Ok(()) => ok(""),
-        Err(e) if e.is_user_displayable() => {
-            let error_html = render_error(&e.to_string());
-            ok(format!(r#"<li class="world-item">{error_html}</li>"#))
+        Err(e) => {
+            let name = state
+                .world_catalogue
+                .get_world(&key)
+                .ok()
+                .flatten()
+                .and_then(|(_, card, _)| item_named(&card.name));
+            answer_for_error(e, name, AnswerPolicy::EngineText)
         }
-        Err(e) => internal_error(render_error(&e.to_string())),
     }
 }
 
@@ -228,8 +243,8 @@ pub struct WorldPostureForm {
 }
 
 /// Auto-save the world's narrative posture. Patches only the posture
-/// fields; invalid values render an error fragment into `#world-posture-status`
-/// and mutate nothing.
+/// fields; a saved change answers nothing, and an invalid value answers a 400
+/// error fragment and mutates nothing.
 pub async fn update_world_posture_handler(
     State(state): State<AppState>,
     Path(key): Path<String>,
@@ -252,14 +267,14 @@ pub async fn update_world_posture_handler(
     let (mode, perspective, tense) = match parsed {
         (Ok(mode), Ok(perspective), Ok(tense)) => (mode, perspective, tense),
         (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
-            return ok(render_error(&e));
+            return invalid_answer(e);
         }
     };
 
     let (world_id, mut world_card, map) = match state.world_catalogue.get_world(&key) {
         Ok(Some(w)) => w,
-        Ok(None) => return bad_request(format!("World '{key}' not found")),
-        Err(e) => return internal_error(format!("Failed to load world: {e}")),
+        Ok(None) => return invalid_answer(format!("World '{key}' not found")),
+        Err(e) => return answer_for_error(e, None, AnswerPolicy::EngineText),
     };
 
     if let Some(mode) = mode {
@@ -276,7 +291,7 @@ pub async fn update_world_posture_handler(
         .world_catalogue
         .update_world(world_id, world_card, map)
     {
-        Ok(()) => ok(r#"<span class="posture-status">Saved</span>"#),
-        Err(e) => internal_error(format!("Failed to update world posture: {e}")),
+        Ok(()) => ok(""),
+        Err(e) => answer_for_error(e, None, AnswerPolicy::EngineText),
     }
 }

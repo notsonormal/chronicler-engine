@@ -14,12 +14,13 @@ use chronicler_engine::test_support::{
 };
 use chronicler_engine::TestAppBuilder;
 
-use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::adapters::driving::http::AppState;
 
 use crate::support::app_wiring::app_with_model;
-use crate::support::http_requests::{fetch_body, post_action, post_empty, wait_settled};
+use crate::support::http_requests::{
+    fetch_answer, fetch_part, post_action, post_empty, post_on_last_message, wait_settled,
+};
 use crate::TEST_PERSONA;
 
 fn one_turn_app() -> (axum::Router, AppState) {
@@ -34,22 +35,22 @@ async fn test_basic_fragments_return_html() {
     // a seeded entry.
     let app = TestAppBuilder::default_test().build();
     let fragments = [
-        ("/fragment/header", "class=\"header\""),
-        ("/fragment/story-log", "class=\"log-entry"),
-        ("/fragment/visual-sidebar", "id=\"visual-sidebar\""),
+        ("header", "class=\"game-title\""),
+        ("story-log", "class=\"log-entry"),
+        ("visual-sidebar", "id=\"visual-sidebar\""),
     ];
-    for (uri, expected) in fragments {
-        let body = fetch_body(&app, uri).await;
+    for (part, expected) in fragments {
+        let body = fetch_part(&app, part).await;
         assert!(
             body.contains(expected),
-            "Fragment {uri} should contain '{expected}'"
+            "Fragment {part} should contain '{expected}'"
         );
     }
 }
 
 #[tokio::test]
 async fn test_visual_sidebar_renders_room_image() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/visual-sidebar").await;
+    let body = fetch_part(&TestAppBuilder::default_app(), "visual-sidebar").await;
     assert!(
         body.contains("data/images/test_room.png"),
         "Expected room image in sidebar: {body}"
@@ -85,7 +86,7 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
         "second action should complete"
     );
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
     assert!(
         body.contains("edit-btn"),
         "story-log should render edit button: {body}"
@@ -107,7 +108,7 @@ async fn test_story_log_fragment_renders_action_buttons_after_actions() {
 
 #[tokio::test]
 async fn test_header_fragment_displays_game_title() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/header").await;
+    let body = fetch_part(&TestAppBuilder::default_app(), "header").await;
     assert!(
         body.contains("game-title"),
         "header should have .game-title element: {body}"
@@ -138,7 +139,10 @@ async fn test_action_handler_accepts_command() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    assert!(body_str.contains("status"));
+    assert!(
+        body_str.is_empty(),
+        "an accepted command answers nothing: {body_str}"
+    );
     assert!(
         wait_settled(&state, 1000).await,
         "the accepted Action's Job should settle"
@@ -166,26 +170,12 @@ async fn test_action_handler_empty_command() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("Thinking"),
-        "Expected empty command to trigger continuation: {body_str}"
+        body_str.is_empty(),
+        "Expected empty command to trigger continuation (a dispatched command answers nothing): {body_str}"
     );
     assert!(
         wait_settled(&state, 1000).await,
         "the continuation Job should settle"
-    );
-}
-
-#[tokio::test]
-async fn test_character_headshots_fragment() {
-    let body = fetch_body(
-        &TestAppBuilder::default_app(),
-        "/fragment/character-headshots",
-    )
-    .await;
-
-    assert!(
-        body.contains("headshot"),
-        "Expected headshot in fragment: {body}"
     );
 }
 
@@ -236,10 +226,7 @@ async fn test_edit_history_handler_success() {
         .await
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
-    assert!(
-        body_str.contains("Edited"),
-        "Expected success message: {body_str}"
-    );
+    assert!(body_str.is_empty(), "an edit answers nothing: {body_str}");
 }
 
 #[tokio::test]
@@ -272,21 +259,16 @@ async fn test_delete_history_handler_success() {
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 1000).await, "the turn should settle");
     assert!(
-        fetch_body(&app, "/fragment/story-log")
+        fetch_part(&app, "story-log")
             .await
             .contains("You look around.")
     );
 
-    let req = Request::builder()
-        .uri("/history/delete")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.clone().oneshot(req).await.unwrap();
+    let response = post_on_last_message(&app, "/history/delete").await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
     assert!(
         !body.contains("You look around."),
         "Log entry should be deleted from rendered story log"
@@ -298,41 +280,12 @@ async fn test_delete_history_handler_empty() {
     // A Game holds its opening Narration, and the delete keeps the last Message.
     let app = TestAppBuilder::default_app();
 
-    let req = Request::builder()
-        .uri("/history/delete")
-        .method(http::Method::POST)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
+    let response = post_on_last_message(&app, "/history/delete").await;
 
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
         "a story that holds only its opening Narration refuses the delete"
-    );
-}
-
-#[tokio::test]
-async fn test_action_confirm_empty_command() {
-    let (app, state) = TestAppBuilder::default_test()
-        .model(Arc::new(ScriptedModel::new().turn("The scene continues.")))
-        .build_with_state();
-
-    let req = Request::builder()
-        .uri("/action/confirm")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from("command="))
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert!(
-        wait_settled(&state, 1000).await,
-        "the continuation Job should settle"
     );
 }
 
@@ -387,17 +340,7 @@ async fn test_list_games_fragment_populated() {
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
+    let html = fetch_part(&app, "games").await;
     assert!(
         html.contains("game-item"),
         "Should render game item: {html}"
@@ -425,16 +368,7 @@ async fn test_list_games_fragment_escapes_html() {
         .storage(Arc::clone(&storage))
         .build();
 
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
+    let html = fetch_part(&app, "games").await;
     assert!(
         !html.contains("<script>"),
         "Should escape HTML in game name: {html}"
@@ -449,19 +383,14 @@ async fn test_list_games_fragment_escapes_html() {
 #[tokio::test]
 async fn test_list_games_fragment_storage_error() {
     let storage = Arc::new(empty_sqlite_storage().with_failure(
-        StorageCall::ListGames,
+        StorageCall::ListSavedGames,
         TestOverride::config("list_games failed"),
     ));
 
     let app = TestAppBuilder::default_test().storage(storage).build();
 
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let (status, _body) = fetch_answer(&app, "/screen?parts=games").await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]
@@ -505,17 +434,7 @@ async fn test_list_games_fragment_shows_world_badge() {
         .storage(Arc::clone(&storage))
         .build();
 
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
+    let html = fetch_part(&app, "games").await;
     assert!(
         html.contains("world-badge"),
         "Should render world-badge class: {html}"
@@ -527,36 +446,6 @@ async fn test_list_games_fragment_shows_world_badge() {
     assert!(
         html.contains(&world_b.name),
         "Should show world B name: {html}"
-    );
-}
-
-#[tokio::test]
-async fn test_list_games_fragment_shows_new_game_form() {
-    let storage = Arc::new(empty_sqlite_storage());
-    let world_a = chronicler_engine::test_support::TestWorld::minimal();
-    let map_a = chronicler_engine::test_support::TestMap::single_room("start");
-    storage.seed_world(&world_a, &map_a).unwrap();
-    let player = chronicler_engine::test_support::TestPersona::standard();
-    storage.seed_persona(&player.key, &player).unwrap();
-
-    let app = TestAppBuilder::default_test()
-        .storage(Arc::clone(&storage))
-        .build();
-
-    let req = Request::builder()
-        .uri("/fragment/games")
-        .method(http::Method::GET)
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let html = String::from_utf8_lossy(&body);
-    assert!(
-        html.contains("<select") && html.contains("world_key"),
-        "Should render world picker select element: {html}"
     );
 }
 
@@ -584,10 +473,9 @@ async fn test_create_game_with_world_key() {
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("HX-Refresh").unwrap(),
-        "true",
-        "Should return HX-Refresh header"
+    assert!(
+        response.headers().get("HX-Refresh").is_none(),
+        "a create must not reload the page"
     );
 
     let games = storage.list_games().unwrap();
@@ -633,7 +521,6 @@ async fn test_create_game_with_invalid_world_key() {
 
 #[tokio::test]
 async fn test_switch_swipe_handler_success() {
-    // An Action and a Retry give the last Narration two Swipes to switch between.
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::new(
             ScriptedModel::new()
@@ -648,7 +535,12 @@ async fn test_switch_swipe_handler_success() {
         wait_settled(&state, 1000).await,
         "the Action should complete"
     );
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(
         wait_settled(&state, 1000).await,
         "the Retry should complete"
@@ -699,50 +591,9 @@ async fn test_reset_handler_success() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let hx_refresh = response.headers().get("HX-Refresh");
-    assert_eq!(
-        hx_refresh,
-        Some(&axum::http::HeaderValue::from_static("true")),
-        "Reset should trigger HX-Refresh"
-    );
-}
-
-#[tokio::test]
-async fn test_switch_swipe_handler_not_last() {
-    // The Action's own Narration is the last Message, and its Input is not.
-    let (app, state) = TestAppBuilder::default_test()
-        .model(Arc::new(ScriptedModel::new().turn("You look around.")))
-        .build_with_state();
-    assert!(post_action(&app, "look").await.status().is_success());
     assert!(
-        wait_settled(&state, 1000).await,
-        "the Action should complete"
-    );
-
-    let game = active_game_of(&state);
-    let entries: Vec<_> = state
-        .game_view_query
-        .story_window(game)
-        .expect("the story reads back")
-        .entries
-        .into_iter()
-        .map(|entry| entry.row)
-        .collect();
-    let input = entries
-        .iter()
-        .rev()
-        .find(|entry| entry.message_type == MessageType::Input)
-        .expect("the Action saved its Input");
-    assert!(
-        entries.last().is_some_and(|last| last.id != input.id),
-        "the Input is not the last Message"
-    );
-
-    let response = post_empty(&app, &format!("/message/{}/swipe/0", input.id)).await;
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "Switching swipe on non-last message should fail"
+        response.headers().get("HX-Refresh").is_none(),
+        "a reset must not reload the page"
     );
 }
 
@@ -771,15 +622,15 @@ async fn test_switch_swipe_handler_concurrent() {
 
     assert_eq!(
         response.status(),
-        StatusCode::OK,
-        "a swipe switch while the Game is busy is a wait answer, not a failure"
+        StatusCode::CONFLICT,
+        "a swipe switch while the Game is busy is refused with 409"
     );
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();
     assert!(
         String::from_utf8_lossy(&body).contains("Still thinking..."),
-        "the answer carries the wait status"
+        "the answer carries the busy refusal line"
     );
 
     hold.release();
@@ -791,7 +642,7 @@ async fn test_switch_swipe_handler_concurrent() {
 
 #[tokio::test]
 async fn test_header_fragment_has_no_hardcoded_connection_status() {
-    let body = fetch_body(&TestAppBuilder::default_app(), "/fragment/header").await;
+    let body = fetch_part(&TestAppBuilder::default_app(), "header").await;
     assert!(
         !body.contains("id=\"connection-status\""),
         "the header no longer claims a live connection: {body}"

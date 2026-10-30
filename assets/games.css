@@ -224,32 +224,36 @@
     color: var(--color-accent-ok);
 }
 
-/* The disclosure opens beside its summary, so opening it neither grows the row nor
-   drops the summary above the badges' line. */
-.game-rename {
+.game-rename-form form {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: var(--spacing-sm);
 }
 
-.game-rename summary {
-    cursor: pointer;
-    font-size: var(--font-size-small, 0.85em);
-    color: var(--color-text-muted);
-}
-
-.game-rename form {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-}
-
-.game-rename input {
-    width: 240px;
+.game-rename-form input {
+    width: 100%;
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);
     border-radius: 4px;
     padding: 4px 6px;
     font-family: inherit;
+}
+
+.games-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+}
+
+.games-page-position {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.games-pager button[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
 }

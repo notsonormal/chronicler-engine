@@ -17,14 +17,14 @@ checks outside the tier model.
 | `tests/http/requires_migration/` | tier 1, quarantine | as `tests/http/` | as `tests/http/` | legacy tests that wait for a spec; untagged, size pinned |
 | `tests/http/support/` | support for tier 1 | — | — | request builders, seeding fixtures, HTML assertions, app wiring |
 | `tests/browser/stub/` | **Stub browser (tier 2)** | the whole engine | stub server (real shell, real or canned fragments) + browser, a fresh page per test | client-side behaviour of the shipped JS |
-| `tests/browser/` | **Full-stack browser (tier 3)** | LLM | browser + engine server | the full-stack hop: a client action whose effect is server state |
+| `tests/browser/` | **Full-stack browser (tier 3)** | LLM | browser + engine server | the full-stack hop: a client request whose effect is server state |
 | `tests/storage/` | **Driven-adapter** | nothing | SQLite | the storage seam: CRUD, errors, referential integrity, queries |
 | `tests/bootstrap/` | bootstrap smoke | nothing | `bootstrap::run()` | startup branches |
 | `tests/llm/` | real provider | nothing | an LLM provider | provider flows; `#[ignore]`d, run with `--llm-only` |
 | `tests/infrastructure/` | architecture | — | source tree | `arch-lint.toml` layer rules |
 | `tests/infrastructure/guardrails/` | guardrails | — | source tree | source and test structure rules |
 | `tests/helpers/` | support for driven-adapter | — | — | storage fixtures shared by the `storage` binary |
-| `tests/test_utils/` | support for the `http`, `browser`, `storage`, `bootstrap` and `llm` binaries | — | — | server, browser, htmx-settle and wait helpers; the stub server |
+| `tests/test_utils/` | support for the `http`, `browser`, `storage`, `bootstrap` and `llm` binaries | — | — | server, browser, htmx-settle, convergence and wait helpers; the stub server |
 | `tests/test_utils/stub_fixtures/` | support for tier 2 | — | — | canned fragments the stub server serves |
 
 A `#[tokio::test]` with fakes is a unit test.
@@ -188,7 +188,7 @@ It puts its markup in place with client-side JS, not through a real failure.
 
 | Question asked | Answer | Tier | Example |
 |---|---|---|---|
-| Is the outcome a domain outcome? | yes | 1 | A GET of `/fragment/games` asserts that the stored posture renders selected and that the auto-save routes are present (games.md 20.8). |
+| Is the outcome a domain outcome? | yes | 1 | A GET of `/screen?parts=games` asserts that the stored posture renders selected and that the auto-save routes are present (games.md 20.8). |
 | Would faking the server change it? | no | 2 | The palette is a document-level `input` listener on the shipped shell. This test needs only the shell, `assets/index.html` (browser_slash_menu.md 31.1). |
 | Would faking the server change it? | no | 2 | `showEditForm` and `cancelEdit` are client JS acting on the canned entry's structural elements (browser_story_log.md 30.2). |
 | Would faking the server change it? | yes | 3 | The select's `change` must reach the server, and a reload must show the persisted tense (browser_worlds.md 29.2). |
@@ -216,8 +216,27 @@ a `tests/browser/` file outside `stub/`; a line that ends in
 `// settle-guard-exempt: <why>` is exempt).
 
 Wait on an htmx-settle helper or a DOM condition. `networkidle` never
-settles: the dashboard pollers keep the network busy, so it is banned at
+settles: the page asks `GET /changes` every 1 s, so it is banned at
 every tier. **Check:** review-only.
+
+### Convergence check
+
+Every stub check and every tier-3 check ends with the convergence check
+(`assert_screen_converged`, `tests/test_utils/convergence.rs`).
+`StubRunner::run` and `with_test_page` run it after the check, before the page
+closes. The check waits until the page is quiet. Then it compares each visible
+part with a fresh `GET /screen?parts=<name>`, and it fails with the part, the route
+and a short diff. It also checks that each part of a closed tab is empty, and that
+each part element has the attributes of the shell, apart from the focus fallback and
+the lock of the entry in edit.
+
+The comparison drops what a load keeps or skips by design: the attributes that
+`data-keep` names, the htmx classes, and the story-log
+entry in edit (`data-editing`). It has no allow list.
+
+A check that leaves the page unable to match a fresh render on purpose, for
+example with a stopped server, uses `StubRunner::run_without_convergence` and
+gives the reason. Use it for no other case. **Check:** review-only.
 
 ## SCENARIO tags
 
@@ -247,3 +266,8 @@ panel owns live in `docs/specs/browser_dashboard.md`.
 
 The validator scans `tests/http/` and `tests/browser/` only, so a tag belongs
 in one of those two folders.
+
+Two kinds of stub-tier file carry no tag: layout and computed-style checks
+(`layout.rs`), which have no HTTP surface, and probes of the vendored htmx
+event contract (`htmx_events.rs`), which pin the library the page relies on
+and not a scenario. The exemptions are in `TAG_EXEMPT_FILES`.

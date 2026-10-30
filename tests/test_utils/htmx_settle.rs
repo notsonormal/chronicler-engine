@@ -1,11 +1,11 @@
-//! htmx settle harness primitive: an `htmx:afterSettle` counter installed at page load, and a target-scoped wait for an interaction's own swap.
+//! htmx settle harness primitive: a counter of `htmx:afterSettle` and `screen:loaded` installed at page load, and a target-scoped wait for an interaction's own swap or the screen load that shows it.
 
 // htmx attaches an element's `hx-trigger` listeners at the end of the settle
 // task for the swap that registered it. A test that interacts as soon as the
 // element is *visible* can dispatch `change` before the listener exists, and
 // the interaction is silently lost: zero POSTs, no error. Waiting for the
 // registering swap to settle closes that race; scoping the wait to the
-// interaction's own target stops the dashboard's self-polling regions from
+// interaction's own target stops a load of another part from
 // satisfying it early.
 //
 // playwright-rs 0.9.0 has no `wait_for_function`, so readiness is polled over
@@ -34,6 +34,20 @@ pub const HTMX_SETTLE_INIT_SCRIPT: &str = r#"(() => {
       cls: typeof elt.className === 'string' ? elt.className : '',
     } : { id: '', tag: '', cls: '' });
     if (gate.targets.length > 64) gate.targets.shift();
+  });
+  // A screen load morphs its parts directly, so it fires no htmx swap: each part
+  // that it wrote counts as a settled target.
+  document.addEventListener('screen:loaded', (evt) => {
+    for (const name of evt.detail.parts) {
+      const elt = document.querySelector('[data-part="' + name + '"]');
+      gate.count += 1;
+      gate.targets.push(elt ? {
+        id: elt.id || '',
+        tag: elt.tagName || '',
+        cls: typeof elt.className === 'string' ? elt.className : '',
+      } : { id: '', tag: '', cls: '' });
+      if (gate.targets.length > 64) gate.targets.shift();
+    }
   });
 })();"#;
 
@@ -243,8 +257,8 @@ impl SettleOutcome {
 /// document, or only those past a baseline read.
 enum SettleScope {
     /// Every settle target recorded in the current document. A baseline-relative
-    /// wait cannot see an `hx-trigger="load"` swap: panels load at page load,
-    /// before any test arms a baseline. A `WholeDocument` wait runs at the
+    /// wait cannot see the first screen load: it ends before any test arms a
+    /// baseline. A `WholeDocument` wait runs at the
     /// start of a test; the recorded list is capped at 64 entries, so it is not
     /// a general search back through an arbitrary past.
     WholeDocument,
@@ -276,7 +290,7 @@ pub async fn click_and_settle(page: &Page, selector: &str, swap_target: &str) ->
 /// `swap_target` to settle.
 ///
 /// Waiting for the interaction's *own* target proves the round-trip completed;
-/// waiting for any settle would be satisfied by a poller.
+/// waiting for any settle would be satisfied by a load of another part.
 pub async fn select_option_and_settle(
     page: &Page,
     selector: &str,

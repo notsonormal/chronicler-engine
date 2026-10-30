@@ -3,6 +3,7 @@
 
 pub mod action;
 pub mod agent;
+pub mod change;
 pub mod character;
 pub mod dock;
 pub mod game;
@@ -13,6 +14,7 @@ pub mod map;
 pub mod message;
 pub mod prompt_preset;
 pub mod quantifier;
+pub mod saved_games_page;
 pub mod scenario;
 pub mod settings;
 pub mod state;
@@ -43,6 +45,8 @@ mod message_tests;
 mod prompt_preset_tests;
 #[cfg(test)]
 mod quantifier_tests;
+#[cfg(test)]
+mod saved_games_page_tests;
 #[cfg(test)]
 mod scenario_tests;
 #[cfg(test)]

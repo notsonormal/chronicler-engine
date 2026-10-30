@@ -1,7 +1,7 @@
 # Feature Spec: Settings
 
 Endpoints: 
- - `GET /fragment/settings`
+ - `GET /screen?parts=settings`
  - `GET /fragment/connections/new`
  - `GET /fragment/connections/{id}/edit`
  - `POST /settings/text-check`
@@ -19,17 +19,29 @@ Endpoints:
 ### Settings panel
 
 The panel splits into two client-side sub-tabs: **Connections** (default) and
-**Text Check**. The panel loads once, so the selected sub-tab stays until a
-page reload.
+**Text Check**. The selected sub-tab is view state: it lives in `aria-selected`
+on the sub-tab buttons and in `hidden` on the sub-tab panels, and each lists
+its attribute in `data-keep`, so a load of the panel keeps the selected
+sub-tab. The panel is a part of the screen (`settings`): its
+fragment carries no root element of its own. The connection forms and the
+result of a connection Test open in the edit dialog, outside the panel, so a
+load of the panel never meets them.
+
+A save answers nothing on success: an empty 200. An invalid value answers a 400 error
+fragment, and a failure a 500 error fragment. The page shows the report of a save in
+the notice place, or in the form that holds the typed input. The change reaches the
+screen when the panel loads.
 
 #### Scenario 20.1: Settings panel renders the Connections and Text Check sub-tabs
 
 ```gherkin
 Given a fresh app state with the default connections
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then the response is 200
-And the body contains a settings panel with a Connections sub-tab and a Text Check sub-tab
-And the Connections sub-tab is the selected one
+And the body holds a Connections sub-tab and a Text Check sub-tab, and no root element of its own
+And the body holds no editor slot and no slot for the result of a connection Test
+And the Connections sub-tab is the selected one, and the sub-tab attributes are listed in data-keep
+And the connection rows and the role rows carry stable ids
 And the Connections panel holds a role row for Narrator and a role row for Quantifier, each with a connection select
 And the Connections panel holds one connection row per connection with its name, provider and model, role tags, Edit, Test and Delete
 And the Connections panel offers an Add Connection control
@@ -38,27 +50,47 @@ And the body contains no "Set as Narrator" or "Set as Quantifier" control
 And the body contains no always-open Add Connection form
 ```
 
+#### Scenario 20.34: A role row, a connection row and the text-check card hold no error slot
+
+```gherkin
+Given a fresh app state with the default connections
+When the client GET /screen?parts=settings
+Then the Narrator and Quantifier role rows and each connection row hold no error slot
+And the text-check card holds no error slot
+```
+
+#### Scenario 20.35: The controls of the panel swap nothing into the panel
+
+```gherkin
+Given a fresh app state with the default connections
+When the client GET /screen?parts=settings
+Then each role select saves on change and swaps nothing
+And the Add Connection, Edit and Test controls target the edit dialog
+And no control targets the panel
+```
+
 #### Scenario 20.16: The role rows report each role's health
 
 ```gherkin
 Given a fresh app state with no recorded LLM calls
-When the client GET /fragment/settings
+When the client GET /screen?parts=settings
 Then each role row reports "No calls yet"
 When a role's newest recorded call failed
-And the client GET /fragment/settings
+And the client GET /screen?parts=settings
 Then that role row reports it as Degraded with a Details disclosure carrying the raw failure text
 And the Connections sub-tab shows a degraded marker whose tooltip names the engine-wide scope
 When a later call for that role succeeds
-And the client GET /fragment/settings
+And the client GET /screen?parts=settings
 Then that role row reports Healthy and the degraded marker is gone
 ```
 
-#### Scenario 20.23: A failed Settings panel load reports the failure inside the panel
+#### Scenario 20.23: A failed Settings panel load answers non-2xx and carries the failure
 
 ```gherkin
 Given a fresh app state whose settings cannot be read
-When the client GET /fragment/settings
-Then the body carries the read failure text
+When the client GET /screen?parts=settings
+Then the response is non-2xx and does not ask the client to swap nothing
+And the body carries the read failure text
 And the body carries no Settings panel
 ```
 
@@ -73,8 +105,8 @@ so the two controls cannot contradict each other.
 ```gherkin
 Given a fresh app state
 When the client POST /settings/text-check with check_mode="spell" and the check-before-sending box checked
-Then the response is a 200 carrying the re-rendered Text Check card with its own save feedback
-And a following GET /fragment/settings renders "spell" selected and the check box checked
+Then the response is a 200 with an empty body
+And a following GET /screen?parts=settings renders "spell" selected and the check box checked
 ```
 
 #### Scenario 20.13: Disabling the text-check mode clears and disables the check-before-sending box
@@ -84,7 +116,7 @@ Given a fresh app state with text check mode "spell" and check-before-sending en
 When the client POST /settings/text-check with check_mode="disabled" and the check-before-sending box checked
 Then the response is a 200
 And the stored check-before-sending is disabled
-And a following GET /fragment/settings renders "disabled" selected and the check box cleared and disabled
+And a following GET /screen?parts=settings renders "disabled" selected and the check box cleared and disabled
 ```
 
 #### Scenario 20.22: A failed text-check save keeps the card
@@ -105,7 +137,8 @@ And the body carries no Text Check card
 Given an app state whose Narrator role uses the mock connection with model mock-model-a
 And a second mock connection with model mock-model-b
 When the client sets the Narrator role to the second connection
-Then the response is 200 and its Narrator role row renders the second connection selected
+Then the response is a 200 with an empty body
+And a following GET /screen?parts=settings renders the second connection selected in the Narrator role row
 And a following GET /debug/backend reports mock-model-b (settings resolve per request, so the switch needs no restart)
 ```
 
@@ -115,30 +148,32 @@ And a following GET /debug/backend reports mock-model-b (settings resolve per re
 Given an app state whose Quantifier role uses the mock connection with model mock-model-a
 And a second mock connection with model mock-model-b
 When the client sets the Quantifier role to the second connection
-Then the response is 200 and its Quantifier role row renders the second connection selected
+Then the response is a 200 with an empty body
+And a following GET /screen?parts=settings renders the second connection selected in the Quantifier role row
 And the Quantifier role now uses the second connection
 ```
 
 ### POST /connections/{id}/delete — delete
 
-#### Scenario 20.15: Deleting a connection a role uses is refused
+#### Scenario 20.15: Deleting a connection a role uses answers 400
 
 ```gherkin
 Given an app state whose Narrator role uses a connection and whose Quantifier role uses another
 And a third connection that no role uses
 When the client deletes the Narrator's connection
-Then the response is 200
+Then the response is a 400
 And the body names Narrator and points at the role rows above
 And the connection list still holds the Narrator's connection
 When the client deletes the Quantifier's connection
-Then the body names Quantifier
+Then the response is a 400 and the body names Quantifier
 When the client deletes the connection no role uses
-Then the connection list no longer holds it
+Then the response is a 200 with an empty body
+And the connection list no longer holds it
 ```
 
 ### POST /connections/add — create
 
-#### Scenario 20.9: Adding a Connection whose name already exists is refused
+#### Scenario 20.9: Adding a Connection whose name already exists answers 400
 
 ```gherkin
 Given a fresh app state with a Connection named "Duplicate Probe"
@@ -148,7 +183,7 @@ And the body names "Duplicate Probe" and says a connection with that name alread
 And the Connection list still holds exactly one Connection named "Duplicate Probe"
 ```
 
-#### Scenario 20.10: Adding a Connection differing only in case and surrounding space is refused
+#### Scenario 20.10: Adding a Connection differing only in case and surrounding space answers 400
 
 ```gherkin
 Given a fresh app state with a Connection named "Alpha"
@@ -164,17 +199,34 @@ Given a fresh app state with the default connections
 When the client POST /connections/add with conn_provider="bogus_provider", a name and a model
 Then the response is a 400
 And the body carries the unknown-backend failure text naming "bogus_provider"
-And a following GET /fragment/settings still lists the Connections panel and its connection rows
+And a following GET /screen?parts=settings still lists the connection rows
 ```
 
-### GET /fragment/connections/{id}/edit — edit form
+### GET /fragment/connections/new and GET /fragment/connections/{id}/edit — the connection forms
 
-#### Scenario 20.24: The connection Edit form reports an unknown connection inside the panel
+A connection form is a dialog fragment: its root carries `data-dialog-form`, and
+its heading has the id `edit-dialog-title`. The client puts it in the edit
+dialog. Cancel closes the dialog in the browser and sends no request.
+
+#### Scenario 20.36: The connection forms answer dialog fragments
+
+```gherkin
+Given a fresh app state with the default connections
+When the client GET /fragment/connections/new
+Then the response is 200
+And the body is a dialog fragment titled "Add Connection", with a form that posts to /connections/add
+When the client GET /fragment/connections/{id}/edit for a saved connection
+Then the response is 200
+And the body is a dialog fragment titled with the connection's name, with a form that posts to /connections/{id}/edit
+And each form has a Cancel control, a Test control for the typed values, and its own error slot
+```
+
+#### Scenario 20.24: The connection Edit form answers 404 for an unknown connection and opens no dialog
 
 ```gherkin
 Given a fresh app state
 When the client GET /fragment/connections/does-not-exist/edit
-Then the response is a 200
+Then the response is a 404
 And the body says the connection was not found
 And the body carries no connection form
 ```
@@ -186,8 +238,8 @@ And the body carries no connection form
 ```gherkin
 Given a fresh app state with a Connection named "Alpha"
 When the client edits that Connection with the same name "Alpha" and a changed model
-Then the response is 200
-And the body contains a Connection row named "Alpha" and the changed model
+Then the response is a 200 with an empty body
+And a following GET /screen?parts=settings contains a Connection row named "Alpha" and the changed model
 ```
 
 #### Scenario 20.18: A failed connection edit answers non-2xx and carries the failure
@@ -197,7 +249,58 @@ Given a fresh app state with a Connection named "Alpha"
 When the client edits that Connection with conn_provider="bogus_provider"
 Then the response is a 400
 And the body carries the unknown-backend failure text
-And a following GET /fragment/settings still renders the Connection named "Alpha"
+And a following GET /screen?parts=settings still renders the Connection named "Alpha"
+```
+
+#### Scenario 20.46: A failed connection edit names the name typed in the form
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha" and a Connection named "Beta"
+When the client edits "Beta" with the name "Alpha", which another Connection holds
+Then the response is a 400
+And the first line of the body is `The Connection "Alpha" was not saved`, with the name typed in the form
+And the body does not name "Beta"
+```
+
+#### Scenario 20.47: A Connection that is gone is invalid, and a setup fault of the engine is a failure
+
+```gherkin
+Given a fresh app state with the default connections
+When the client edits a Connection that does not exist
+Then the response is a 400
+And the body says that the Connection was not found
+
+When the client POST /connections/{id}/delete for a Connection that does not exist
+Then the response is a 400
+And the body says that the Connection was not found
+
+Given an app state with one Connection
+When the client POST /connections/{id}/delete for that Connection
+Then the response is a 400
+And the body says that the last Connection cannot be deleted
+
+Given a storage whose settings write fails with a configuration fault
+When the client POST /connections/{id}/delete for a Connection
+Then the response is a 500
+And the body holds the text of the fault
+```
+
+#### Scenario 20.48: A Connection edit with an invalid form names the typed name
+
+```gherkin
+Given a fresh app state
+When the client edits a Connection with the name "Typed" and a provider that does not exist
+Then the response is a 400
+And the first line of the body starts with `The Connection "Typed" was not saved`, with the name typed in the form
+```
+
+#### Scenario 20.49: A Connection add with an invalid form names the typed name
+
+```gherkin
+Given a fresh app state
+When the client adds a Connection with the name "Typed" and a provider that does not exist
+Then the response is a 400
+And the first line of the body starts with `The Connection "Typed" was not saved`, with the name typed in the form
 ```
 
 #### Scenario 20.25: The context window field sets the window the next narration uses
@@ -230,7 +333,7 @@ And the stored Connection still holds the explicit value
 And a following GET /fragment/connections/{id}/edit renders the explicit value in the context window field
 ```
 
-#### Scenario 20.28: A context window that is not a positive whole number is refused
+#### Scenario 20.28: A context window that is not a positive whole number answers 400
 
 ```gherkin
 Given a fresh app state with a Connection named "Alpha"
@@ -238,7 +341,7 @@ When the client edits that Connection with a context window of text, of zero or 
 Then the response is 400
 And the body says the context window must be a positive whole number, or empty for the provider default
 And the stored Connection still holds no explicit context window
-And a following GET /fragment/settings still renders the Connection named "Alpha"
+And a following GET /screen?parts=settings still renders the Connection named "Alpha"
 When the client adds a Connection with a context window of text
 Then the response is 400
 And the connection list still holds the connections it held before
@@ -264,7 +367,7 @@ And the stored Connection holds no reasoning effort
 And a following GET /fragment/connections/{id}/edit renders "Provider default" as the selected reasoning effort option
 ```
 
-#### Scenario 20.31: An unknown reasoning effort is refused
+#### Scenario 20.31: An unknown reasoning effort answers 400
 
 ```gherkin
 Given a fresh app state with a Connection whose reasoning effort is "high"
@@ -299,7 +402,7 @@ moves role health or the failure banner.
 Given a saved mock connection
 When the client tests that connection
 Then the response is 200
-And the body reports a successful reply naming the connection's model and the reply time
+And the body is a dialog fragment that reports a successful reply naming the connection's model and the reply time
 And the LLM Messages list is still empty
 And no role's health has a backend or a failure
 ```
@@ -310,7 +413,7 @@ And no role's health has a backend or a failure
 Given a saved connection whose provider fails the test call
 When the client tests that connection
 Then the response is 200
-And the body carries a short failure message with a Details disclosure holding the raw failure text
+And the body is a dialog fragment with a short failure message and a Details disclosure holding the raw failure text
 And the LLM Messages list is still empty
 ```
 

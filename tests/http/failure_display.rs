@@ -26,7 +26,9 @@ use crate::SettingsTestGuard;
 use crate::support::app_wiring::{app_with_model, app_with_model_and_storage};
 use crate::support::http_assertions::status_error_message;
 use crate::support::http_fixtures::{break_start_room, corrupt_start_state, story_of};
-use crate::support::http_requests::{fetch_body, post_action, post_form, wait_for_jobs, wait_settled};
+use crate::support::http_requests::{
+    post_action, post_form, wait_for_jobs, wait_settled, fetch_part, fetch_busy_status,
+};
 // [docs/specs/failure_display.md] SCENARIO: 38.1
 #[tokio::test]
 async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
@@ -45,7 +47,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         .save_llm_message(&llm_message("narrator", "mock", None, -20))
         .unwrap();
 
-    let body = fetch_body(&app, "/fragment/header").await;
+    let body = fetch_part(&app, "failure-banner").await;
     assert!(
         body.contains("failure-banner"),
         "a degraded Quantifier must raise the banner: {body}"
@@ -88,7 +90,7 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
     storage
         .save_llm_message(&llm_message("quantifier", "mock", None, 0))
         .unwrap();
-    let body = fetch_body(&app, "/fragment/header").await;
+    let body = fetch_part(&app, "failure-banner").await;
     assert!(
         !body.contains("error-disclosure"),
         "a later success must clear the banner: {body}"
@@ -110,7 +112,7 @@ async fn test_degraded_trigger_role_raises_the_banner() {
         ))
         .unwrap();
 
-    let body = fetch_body(&app, "/fragment/header").await;
+    let body = fetch_part(&app, "failure-banner").await;
     assert!(
         body.contains("failure-banner"),
         "a degraded Trigger must raise the banner: {body}"
@@ -127,43 +129,19 @@ async fn test_degraded_trigger_role_raises_the_banner() {
         body.contains(r#"<pre class="error-detail-raw">trigger call timed out</pre>"#),
         "the raw failure text must be reachable inside the disclosure: {body}"
     );
+    let settings = fetch_part(&app, "settings").await;
     assert!(
-        body.contains(
-            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"></span>"#
-        ),
-        "a Trigger failure has no Settings row to mark: {body}"
+        settings
+            .contains(r#"<span class="subtab-marker-slot" id="subtab-connections-marker"></span>"#),
+        "a Trigger failure has no Settings row to mark: {settings}"
     );
 }
 
 // [docs/specs/failure_display.md] SCENARIO: 38.6
 #[tokio::test]
-async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
+async fn test_header_carries_the_game_name_only_and_settings_renders_its_own_role_health() {
     let (state, storage) = TestAppBuilder::default_test().build_service_with_storage();
     let app = build_router(state);
-
-    let settings = fetch_body(&app, "/fragment/settings").await;
-    for cell_id in [
-        "role-health-narrator",
-        "role-health-quantifier",
-        "subtab-connections-marker",
-    ] {
-        assert!(
-            settings.contains(&format!(r#"id="{cell_id}""#)),
-            "the Settings panel must render the cell '{cell_id}' the header poll refreshes: {settings}"
-        );
-    }
-    assert!(
-        !settings.contains("hx-swap-oob"),
-        "the panel's own cells are not out-of-band swaps: {settings}"
-    );
-
-    let header = fetch_body(&app, "/fragment/header").await;
-    assert!(
-        header.contains(
-            r#"<span class="role-health-slot" id="role-health-narrator" hx-swap-oob="true"><span class="role-health unknown">No calls yet</span>"#
-        ),
-        "a role with no recorded attempt must swap in as no calls: {header}"
-    );
 
     storage
         .save_llm_message(&llm_message(
@@ -177,47 +155,65 @@ async fn test_header_poll_keeps_the_settings_role_health_cells_current() {
         .save_llm_message(&llm_message("narrator", "mock", None, -20))
         .unwrap();
 
-    let header = fetch_body(&app, "/fragment/header").await;
+    let header = fetch_part(&app, "header").await;
     assert!(
-        header.contains(
-            r#"<span class="role-health-slot" id="role-health-quantifier" hx-swap-oob="true"><span class="role-health degraded">Degraded</span>"#
-        ),
-        "the degraded role's cell must swap in as Degraded: {header}"
+        header.contains("game-title"),
+        "the header carries the game name: {header}"
+    );
+    for forbidden in [
+        "failure-banner",
+        "role-health",
+        "subtab-connections-marker",
+        "hx-swap-oob",
+    ] {
+        assert!(
+            !header.contains(forbidden),
+            "the header carries no '{forbidden}': {header}"
+        );
+    }
+
+    let settings = fetch_part(&app, "settings").await;
+    assert!(
+        !settings.contains("hx-swap-oob"),
+        "the panel's own cells are not out-of-band swaps: {settings}"
+    );
+    for cell_id in ["role-health-narrator", "role-health-quantifier"] {
+        assert!(
+            settings.contains(&format!(r#"id="{cell_id}""#)),
+            "the Settings panel must render the cell '{cell_id}': {settings}"
+        );
+    }
+    assert!(
+        settings.contains(r#"<span class="role-health-slot" id="role-health-quantifier"><span class="role-health degraded">Degraded</span>"#),
+        "the degraded role's cell must read Degraded: {settings}"
     );
     assert!(
-        header.contains(
-            r#"<span class="role-health-slot" id="role-health-narrator" hx-swap-oob="true"><span class="role-health healthy">Healthy</span>"#
-        ),
-        "a role whose newest attempt succeeded must swap in as Healthy: {header}"
+        settings.contains(r#"<span class="role-health-slot" id="role-health-narrator"><span class="role-health healthy">Healthy</span>"#),
+        "a role whose newest attempt succeeded must read Healthy: {settings}"
     );
     assert!(
-        header.contains(
-            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"><span class="subtab-degraded-marker""#
-        ),
-        "the Connections sub-tab's warning marker must ride along: {header}"
+        settings.contains(r#"<span class="subtab-marker-slot" id="subtab-connections-marker"><span class="subtab-degraded-marker""#),
+        "the Connections sub-tab's warning marker must be present: {settings}"
     );
 
     storage
         .save_llm_message(&llm_message("quantifier", "mock", None, 0))
         .unwrap();
-    let header = fetch_body(&app, "/fragment/header").await;
+    let settings = fetch_part(&app, "settings").await;
     assert!(
-        header.contains(
-            r#"<span class="role-health-slot" id="role-health-quantifier" hx-swap-oob="true"><span class="role-health healthy">Healthy</span>"#
-        ),
-        "a later success must swap the cell back to Healthy: {header}"
+        settings.contains(r#"<span class="role-health-slot" id="role-health-quantifier"><span class="role-health healthy">Healthy</span>"#),
+        "a later success must read Healthy: {settings}"
     );
     assert!(
-        header.contains(
-            r#"<span class="subtab-marker-slot" id="subtab-connections-marker" hx-swap-oob="true"></span>"#
-        ),
-        "a recovered role must clear the marker: {header}"
+        settings
+            .contains(r#"<span class="subtab-marker-slot" id="subtab-connections-marker"></span>"#),
+        "a recovered role must clear the marker: {settings}"
     );
 }
 
 // [docs/specs/failure_display.md] SCENARIO: 38.2
 #[tokio::test]
-async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
+async fn test_failed_load_answers_non_2xx_and_reswap_none() {
     let storage = Arc::new(empty_sqlite_storage());
     let state = TestAppBuilder::default_test()
         .storage(Arc::clone(&storage))
@@ -226,23 +222,54 @@ async fn test_failed_poll_answers_non_2xx_and_reswap_none() {
     let app = build_router(state);
 
     let request = Request::builder()
-        .uri("/fragment/visual-sidebar")
+        .uri("/screen?parts=visual-sidebar")
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(
         response.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
-        "a failed poll must answer non-2xx, not 200 with an error body"
+        "a failed load must answer non-2xx, not 200 with an error body"
     );
-    assert_eq!(
-        response
-            .headers()
-            .get("HX-Reswap")
-            .and_then(|value| value.to_str().ok()),
-        Some("none"),
-        "a failed poll must ask the client to swap nothing"
+    assert!(
+        response.headers().get("HX-Reswap").is_none(),
+        "the screen load steers no swap"
     );
+}
+
+// [docs/specs/failure_display.md] SCENARIO: 38.18
+#[tokio::test]
+async fn test_failed_panel_loads_answer_non_2xx_with_an_error_fragment() {
+    for (part, call) in [
+        ("settings", StorageCall::GetSettings),
+        ("prompt-presets", StorageCall::GetSettings),
+        ("worlds", StorageCall::ListWorlds),
+        ("games", StorageCall::ListSavedGames),
+    ] {
+        let (storage, failures) = empty_sqlite_storage().with_test_failures();
+        let (app, _state) = TestAppBuilder::default_test()
+            .storage(Arc::new(storage))
+            .build_with_state();
+        failures.set(call, TestOverride::internal("the data is unreadable"));
+
+        let uri = format!("/screen?parts={part}");
+        let request = Request::builder().uri(&uri).body(Body::empty()).unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "{part}: a failed load must answer non-2xx, not 200 with an error body"
+        );
+        assert!(
+            response.headers().get("HX-Reswap").is_none(),
+            "{part}: the screen load steers no swap"
+        );
+        let body = crate::support::http_requests::response_body(response).await;
+        assert!(
+            body.contains(r#"class="error-message""#) && body.contains("the data is unreadable"),
+            "{part}: the body is an error fragment that names the failure: {body}"
+        );
+    }
 }
 
 // [docs/specs/failure_display.md] SCENARIO: 38.3
@@ -256,7 +283,7 @@ async fn test_generation_error_clamps_with_raw_text_in_disclosure() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The language model could not be reached."),
         "the clamped line carries a short user-facing message: {body}"
@@ -282,7 +309,7 @@ async fn test_missing_preset_failure_clamps_with_the_missing_data_line() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The data for this request is missing: the preset."),
         "a missing preset keeps its own line, not the general one: {body}"
@@ -311,14 +338,14 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
         .build_service();
     let app = build_router(state);
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("Reasoning used the budget. Lower the reasoning effort."),
         "a spent token budget must keep its own line: {body}"
     );
     assert!(
         !body.contains("Max Tokens"),
-        "the line must name only an action the dashboard offers: {body}"
+        "the line must name only a remedy the dashboard offers: {body}"
     );
     assert!(
         !body.contains("The engine failed with an internal error."),
@@ -341,7 +368,7 @@ async fn test_spent_token_budget_clamps_with_its_own_line() {
 
 // [docs/specs/failure_display.md] SCENARIO: 38.4
 #[tokio::test]
-async fn test_failed_user_action_is_not_a_failed_poll() {
+async fn test_a_failed_request_is_not_a_failed_load() {
     let (storage, failures) = empty_sqlite_storage().with_test_failures();
     failures.set_write(
         TxWrite::SetGameConfig,
@@ -362,11 +389,11 @@ async fn test_failed_user_action_is_not_a_failed_poll() {
     assert_eq!(
         response.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
-        "a failed user action answers non-2xx"
+        "a failed request answers non-2xx"
     );
     assert!(
         response.headers().get("HX-Reswap").is_none(),
-        "a failed user action must not ask the client to swap nothing"
+        "a failed request must not ask the client to swap nothing"
     );
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
@@ -393,7 +420,7 @@ async fn test_empty_answer_keeps_its_own_line_clamps() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The language model gave an empty answer."),
         "an empty answer keeps its own line: {body}"
@@ -443,7 +470,7 @@ async fn test_contradiction_clamps_with_its_own_line_and_keeps_the_text() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The text was saved, but the game state could not be updated."),
         "a contradiction keeps its own line: {body}"
@@ -509,7 +536,7 @@ async fn test_save_failure_clamps_with_the_save_line_and_saves_no_narration() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The new text could not be saved."),
         "a refused save keeps the save-failed line: {body}"
@@ -576,7 +603,7 @@ async fn test_context_overflow_clamps_with_the_prompt_too_long_line() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The story was too long for the language model."),
         "a prompt that cannot fit keeps the prompt-too-long line: {body}"
@@ -637,7 +664,7 @@ async fn preset_game_read_fails() {
 
     // The status reads the Game row, so the read works again before it asks.
     failures.clear(StorageCall::GetGame);
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The data for this request is missing: the game."),
         "an unreadable Game row is a failure line that names the Game, not a registry preset: {body}"
@@ -697,7 +724,7 @@ async fn status_after_a_read_fails_behind_a_call(call: StorageCall, held: Role) 
 
     // The status reads the Game row, so every read works again before it asks.
     failures.clear_all();
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     let narrations = story_of(&state)
         .iter()
         .filter(|message| message.message_type == MessageType::Narration)
@@ -770,7 +797,7 @@ async fn job_read_names_record_world() {
     );
 
     failures.clear_all();
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The data for this request is missing: the world."),
         "the line names the World: {body}"
@@ -822,7 +849,7 @@ async fn job_read_names_record_accept_start_state() {
     );
 
     failures.clear_all();
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains(line),
         "the status carries the line of the answer: {body}"
@@ -886,7 +913,7 @@ async fn job_read_names_record_preset() {
             "the Job should end before the status reads"
         );
 
-        let body = fetch_body(&app, "/status/busy").await;
+        let body = fetch_busy_status(&app).await;
         assert!(
             body.contains("The data for this request is missing: the preset."),
             "{preset_type:?}: the line names the preset: {body}"
@@ -936,7 +963,7 @@ async fn state_update_refused() {
         "the Job should end before the status reads"
     );
 
-    let body = fetch_body(&app, "/status/busy").await;
+    let body = fetch_busy_status(&app).await;
     assert!(
         body.contains("The text was saved, but the game state could not be updated."),
         "a refused state update shows the contradiction line: {body}"

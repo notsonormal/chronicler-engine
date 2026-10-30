@@ -2,7 +2,10 @@
 
 use std::time::Duration;
 
-use super::support::{StubRunner, accept_delete_confirmation, wait_for_count, wait_until_focused};
+use super::support::{
+    NOTICE, StubRunner, accept_delete_confirmation, active_element_is, wait_for_count,
+    wait_until_focus_within, wait_until_focused,
+};
 use super::*;
 
 // [docs/specs/browser_worlds.md] SCENARIO: 29.4
@@ -48,91 +51,117 @@ async fn check_deleting_a_world_keeps_keyboard_focus_in_the_panel(
     page.locator(last_delete).await.click(None).await.unwrap();
 
     // The clicked control sits inside the panel, so a focus wait is satisfied
-    // before the swap lands. Wait for the removal itself first.
+    // before the load lands. Wait for the removal itself first.
     assert!(
         wait_for_count(&page, rows, 0).await,
         "the last delete must remove the final world"
     );
     assert!(
-        wait_until_focused(&page, ".worlds-panel :focus", Duration::from_secs(5)).await,
+        wait_until_focus_within(&page, ".worlds-panel", Duration::from_secs(5)).await,
         "deleting the last world must leave focus inside the Worlds panel"
     );
 }
 
-/// The refused delete waits out `swap:0.3s`, so a poll can settle in that gap:
-/// htmx fires the poll's own `beforeSwap` and `afterSettle`, and this dispatches
-/// both as the row swap lands, before the row's own settle. The delete's landing
-/// spot has to survive them.
-async fn settle_a_poll_during_the_refused_delete(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>(
-        r#"() => {
-            const once = (evt) => {
-                const target = evt.detail && evt.detail.target;
-                if (!target || !target.classList || !target.classList.contains('world-item')) {
-                    return;
-                }
-                document.body.removeEventListener('htmx:afterSwap', once);
-                const display = document.getElementById('status-display');
-                const detail = { elt: display, target: display };
-                display.dispatchEvent(new CustomEvent('htmx:beforeSwap', {
-                    bubbles: true,
-                    detail: Object.assign({}, detail, {
-                        shouldSwap: true,
-                        serverResponse: 'idle',
-                    }),
-                }));
-                display.dispatchEvent(new CustomEvent('htmx:afterSettle', {
-                    bubbles: true,
-                    detail,
-                }));
-            };
-            document.body.addEventListener('htmx:afterSwap', once);
-        }"#,
-        None,
-    )
-    .await
-    .unwrap();
-}
-
-// A refused delete (the world still has games) answers a 200 whose body stands
-// in for the row, so the refusal's own message is where focus belongs.
+// The world still has games, so the delete is refused.
 // [docs/specs/browser_worlds.md] SCENARIO: 29.5
-async fn check_a_refused_world_delete_lands_focus_on_its_message(
+async fn check_an_invalid_world_delete_reports_in_the_notice_and_keeps_focus(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     stub.row_delete_handle().set_world_delete_refused(true);
     accept_delete_confirmation(&page).await;
     open_worlds_tab(&page).await;
-    settle_a_poll_during_the_refused_delete(&page).await;
 
     let rows = ".worlds-list .world-item";
-    let refusal = ".worlds-list .world-item:first-child .error-message";
-    let first_delete = ".worlds-list .world-item:first-child .btn-danger";
+    let first_delete = "#world-redmist_estate .btn-danger";
+    let row_before = page
+        .evaluate::<(), bool>(
+            "() => { window.__worldRow = document.getElementById('world-redmist_estate'); return !!window.__worldRow; }",
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(row_before, "the first world's row must carry its stable id");
     page.locator(first_delete).await.focus().await.unwrap();
     page.locator(first_delete).await.click(None).await.unwrap();
 
-    wait_until_visible(&page, refusal, Duration::from_secs(5)).await;
+    wait_for_error_disclosure(&page, NOTICE, "the refusal shows in the notice").await;
+    let (_, message, _) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The World \"Redmist Estate\" was not deleted: World still has games.",
+        "the notice must carry the refusal"
+    );
     assert_eq!(
         page.query_selector_all(rows)
             .await
             .unwrap_or_default()
             .len(),
         2,
-        "the refusal must replace the world's row rather than remove it"
-    );
-    assert_eq!(
-        page.query_selector_all(".worlds-list .world-item .btn-cyan")
-            .await
-            .unwrap_or_default()
-            .len(),
-        1,
-        "only the refused row takes the message: the surviving world keeps its controls"
+        "the refusal must leave both rows in place"
     );
     assert!(
-        wait_until_focused(&page, refusal, Duration::from_secs(5)).await,
-        "a refused delete must land focus on the refusal message, not on the neighbouring row"
+        page.evaluate::<(), bool>(
+            "() => document.getElementById('world-redmist_estate') === window.__worldRow",
+            None,
+        )
+        .await
+        .unwrap(),
+        "the refused row must be the same element"
     );
+    assert!(
+        active_element_is(&page, first_delete).await,
+        "a refused delete must leave focus on its Delete control"
+    );
+}
+
+// [docs/specs/browser_worlds.md] SCENARIO: 29.6
+async fn check_a_world_posture_save_leaves_the_dialog_open_with_the_draft(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_worlds_tab(&page).await;
+    let edit = r#"#world-test button[hx-get$="/edit"]"#;
+    click_and_settle(&page, edit, "#edit-dialog-body").await;
+
+    let drafted: bool = page
+        .evaluate::<(), bool>(
+            r#"() => {
+                const input = document.querySelector('#edit-dialog input[name="name"]');
+                if (!input) return false;
+                input.value = 'A typed world name';
+                window.__worldForm = document.getElementById('world-form-container');
+                window.__worldInput = input;
+                return true;
+            }"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(drafted, "the World form opens in the dialog");
+
+    let saved: String = page
+        .evaluate::<(), String>(
+            r#"async () => {
+                const select = document.querySelector('#edit-dialog select[name="narrative_tense"]');
+                const ended = new Promise((resolve) =>
+                    select.addEventListener('htmx:afterRequest', resolve, { once: true }));
+                select.value = 'present';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                await ended;
+                await window.__waitForScreen();
+                const dialog = document.getElementById('edit-dialog');
+                const input = document.querySelector('#edit-dialog input[name="name"]');
+                if (!dialog.open) return 'the posture save closed the dialog';
+                if (document.getElementById('world-form-container') !== window.__worldForm) return 'the form is a new element';
+                if (input !== window.__worldInput || input.value !== 'A typed world name') return 'the typed name did not survive';
+                return document.getElementById('world-posture-status').hasAttribute('data-saved')
+                    ? '' : 'the Saved flag does not show';
+            }"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(saved, "");
 }
 
 #[tokio::test]
@@ -147,7 +176,13 @@ async fn run_world_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_a_refused_world_delete_lands_focus_on_its_message,
+            check_an_invalid_world_delete_reports_in_the_notice_and_keeps_focus,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_world_posture_save_leaves_the_dialog_open_with_the_draft,
         )
         .await;
     runner.finish().await;

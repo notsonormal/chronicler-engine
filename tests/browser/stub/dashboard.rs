@@ -4,8 +4,13 @@ use std::time::Duration;
 
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 
+use chronicler_engine::domain::model::state::generation_status::Step;
+
 use super::*;
-use super::support::{StubRunner, active_element_is, poll_now, read_banner, read_command_input};
+use super::support::{
+    NOTICE, StubRunner, active_element_is, assert_busy_refusal, read_banner, read_command_input,
+    submit_intercepted_command,
+};
 
 async fn stash_action_area_nodes(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
@@ -34,21 +39,6 @@ async fn action_area_nodes_unchanged(page: &playwright_rs::Page) -> (bool, bool)
     )
     .await
     .unwrap()
-}
-
-async fn submit_intercepted_command(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>(
-        r#"(() => {
-            const input = document.querySelector('#command-form input[name="command"]');
-            input.value = 'look at the casle';
-            document.querySelector('#command-form button[type="submit"]').click();
-        })()"#,
-        None,
-    )
-    .await
-    .unwrap();
-
-    wait_until_visible(page, ".text-check-preview", Duration::from_secs(5)).await;
 }
 
 /// The player can still submit the form while the primary button is disabled mid-generation.
@@ -97,8 +87,11 @@ async fn check_primary_button_locks_and_unlocks_after_confirm(
     stub: StubServer,
 ) {
     let status = stub.status_handle();
-    // Keep the stub generating so no poll unlocks the button before the assertion reads it.
-    status.set(StubStatus::Step("narrating".to_string()));
+    // The page timer would load the generating status into the button between the
+    // `set` and the click, and a click on a disabled button sends nothing. The
+    // action itself still makes the page ask.
+    stop_page_timer(&page).await;
+    status.set(StubStatus::Step(Step::Narrating));
     stash_action_area_nodes(&page).await;
 
     submit_intercepted_command(&page).await;
@@ -126,7 +119,7 @@ async fn check_primary_button_locks_and_unlocks_after_confirm(
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     wait_for_status_ready(&page).await;
     let (disabled, label) = read_submit_button(&page).await;
     assert!(
@@ -152,7 +145,7 @@ async fn check_status_error_shows_in_the_status_display_after_confirm(
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -191,7 +184,7 @@ async fn check_status_error_shows_in_the_status_display_after_confirm(
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     wait_for_status_ready(&page).await;
     assert!(
         wait_for_condition_async(
@@ -207,8 +200,8 @@ async fn check_status_error_shows_in_the_status_display_after_confirm(
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.13
 async fn check_preview_opens_beside_status_display(page: playwright_rs::Page, stub: StubServer) {
     let status = stub.status_handle();
-    status.set(StubStatus::Step("narrating".to_string()));
-    poll_now(&page, "#status-display").await;
+    status.set(StubStatus::Step(Step::Narrating));
+    load_screen_now(&page).await;
     wait_for_status_busy(&page).await;
 
     submit_intercepted_command_direct(&page).await;
@@ -414,14 +407,14 @@ async fn check_dashboard_exposes_landmarks_and_a_labelled_command_input(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.28
-async fn check_status_poll_leaves_generating_and_enter_submits(
+async fn check_status_load_leaves_generating_and_enter_submits(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let status = stub.status_handle();
     let action = stub.action_handle();
-    status.set(StubStatus::Step("narrating".to_string()));
-    poll_now(&page, "#status-display").await;
+    status.set(StubStatus::Step(Step::Narrating));
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -429,7 +422,7 @@ async fn check_status_poll_leaves_generating_and_enter_submits(
             || async { read_submit_button(&page).await.0 },
         )
         .await,
-        "the poll's phase should lock Send"
+        "the status load's phase should lock Send"
     );
     let status_text = page
         .locator("#status-display")
@@ -443,10 +436,13 @@ async fn check_status_poll_leaves_generating_and_enter_submits(
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     wait_for_status_ready(&page).await;
     let (disabled, _) = read_submit_button(&page).await;
-    assert!(!disabled, "Send should unlock once the poll reports idle");
+    assert!(
+        !disabled,
+        "Send should unlock once the status load reports idle"
+    );
 
     // Only a real Enter runs the browser's disabled-default-button check;
     // `requestSubmit()` bypasses it.
@@ -484,10 +480,14 @@ async fn check_confirmed_preview_consumes_the_command_text(
         .await
         .unwrap();
     wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
-    assert_eq!(
-        read_command_input(&page).await,
-        "",
-        "Send with edits must consume the command text"
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+            || async { read_command_input(&page).await.is_empty() }
+        )
+        .await,
+        "Send with edits must consume the command text, once the screen shows the send"
     );
 
     submit_intercepted_command_direct(&page).await;
@@ -497,10 +497,14 @@ async fn check_confirmed_preview_consumes_the_command_text(
         .await
         .unwrap();
     wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
-    assert_eq!(
-        read_command_input(&page).await,
-        "",
-        "Send Original must consume the command text"
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+            || async { read_command_input(&page).await.is_empty() }
+        )
+        .await,
+        "Send Original must consume the command text, once the screen shows the send"
     );
 
     submit_intercepted_command_direct(&page).await;
@@ -517,61 +521,13 @@ async fn check_confirmed_preview_consumes_the_command_text(
     );
 }
 
-/// The five-second status poll replaces the wait state, so it must be captured
-/// as the swap lands rather than read afterwards.
-async fn record_wait_state(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>(
-        r#"(() => {
-            window.__waitSnapshot = null;
-            const record = () => {
-                if (window.__waitSnapshot) return;
-                const display = document.getElementById('status-display');
-                if (!display || !display.classList.contains('wait')) return;
-                const label = display.querySelector('.status.wait') || display;
-                window.__waitSnapshot = [display.className, getComputedStyle(label).color];
-            };
-            new MutationObserver(record).observe(document.body, {
-                childList: true,
-                subtree: true,
-                attributeFilter: ['class'],
-            });
-            record();
-        })()"#,
-        None,
-    )
-    .await
-    .unwrap();
-}
-
-async fn read_wait_snapshot(page: &playwright_rs::Page) -> Option<(String, String)> {
-    page.evaluate::<(), Option<(String, String)>>("(() => window.__waitSnapshot)()", None)
-        .await
-        .unwrap_or(None)
-}
-
-async fn resolve_palette_colour(page: &playwright_rs::Page, token: &str) -> String {
-    page.evaluate::<String, String>(
-        r#"(token) => {
-            const probe = document.createElement('span');
-            probe.style.color = `var(${token})`;
-            document.body.appendChild(probe);
-            const colour = getComputedStyle(probe).color;
-            probe.remove();
-            return colour;
-        }"#,
-        Some(&token.to_string()),
-    )
-    .await
-    .unwrap()
-}
-
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.42
-async fn check_refused_concurrent_send_keeps_the_command_and_shows_the_wait_state(
+async fn check_refused_concurrent_send_keeps_the_command_and_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
-    record_wait_state(&page).await;
-
+    wait_for_status_ready(&page).await;
+    let status_before = status_display_text(&page).await;
     fill_command_input(&page, "look around").await;
     page.evaluate::<(), ()>(
         r#"() => document.getElementById('command-form').requestSubmit()"#,
@@ -580,33 +536,134 @@ async fn check_refused_concurrent_send_keeps_the_command_and_shows_the_wait_stat
     .await
     .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(10),
-            Duration::from_millis(50),
-            || async { read_wait_snapshot(&page).await.is_some() },
-        )
-        .await,
-        "a refused concurrent send must put the status display into its wait state"
-    );
-
-    let (wait_class, wait_colour) = read_wait_snapshot(&page)
-        .await
-        .expect("the wait state must have been recorded");
-    let classes: Vec<&str> = wait_class.split_whitespace().collect();
-    assert!(
-        classes.contains(&"wait") && !classes.contains(&"ready"),
-        "the container must carry the wait state instead of the ready one, got {wait_class:?}"
-    );
-    assert_eq!(
-        wait_colour,
-        resolve_palette_colour(&page, "--color-text-primary").await,
-        "the wait label must be drawn in the palette's body text colour"
-    );
+    assert_busy_refusal(
+        &page,
+        NOTICE,
+        "a refused concurrent send must report in the notice",
+    )
+    .await;
     assert_eq!(
         read_command_input(&page).await,
         "look around",
         "a command the engine refused must keep the text the player typed"
+    );
+    assert_eq!(
+        status_display_text(&page).await,
+        status_before,
+        "a refusal leaves the status display as it was"
+    );
+    let preview_children: f64 = page
+        .evaluate::<(), f64>(
+            "(() => document.getElementById('action-preview').children.length)()",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview_children, 0.0, "a refusal opens no preview");
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.44
+async fn check_confirm_refused_for_a_busy_game_reports_in_the_notice_and_keeps_the_preview(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    submit_intercepted_command(&page).await;
+    page.locator(".text-check-preview .btn-original")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    assert_busy_refusal(&page, NOTICE, "a refused confirm must report in the notice").await;
+    wait_until_visible(&page, ".text-check-preview", Duration::from_secs(5)).await;
+    assert_eq!(
+        page.locator("#corrected-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "look at the castle",
+        "the preview stays open with the corrected text"
+    );
+    assert_eq!(
+        read_command_input(&page).await,
+        "look at the casle",
+        "a command the engine refused must keep the text the player typed"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.45
+async fn check_the_action_area_shows_its_own_state_until_the_status_display_shows_the_send(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    changes.set_loads_failing(true);
+    fill_command_input(&page, "look around").await;
+    page.evaluate::<(), ()>(
+        r#"() => document.getElementById('command-form').requestSubmit()"#,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let own_text = || async {
+        page.evaluate::<(), String>(
+            "(() => document.getElementById('action-status').textContent.trim())()",
+            None,
+        )
+        .await
+        .unwrap()
+    };
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+            || async { own_text().await == "Thinking..." },
+        )
+        .await,
+        "an accepted send shows Thinking... in the action area's own element"
+    );
+    let (state, send_takes_clicks) = page
+        .evaluate::<(), (String, bool)>(
+            r#"(() => {
+                const area = document.getElementById('action-area');
+                const send = document.getElementById('submit-btn');
+                return [
+                    area.dataset.state,
+                    getComputedStyle(send).pointerEvents !== 'none',
+                ];
+            })()"#,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        state, "generating",
+        "the area's view state says that a send is pending"
+    );
+    assert!(
+        !send_takes_clicks,
+        "Send takes no click while the send is pending: the part still renders it as idle"
+    );
+
+    changes.set_loads_failing(false);
+    ask_once(&page).await;
+    assert_eq!(
+        own_text().await,
+        "",
+        "the status display shows the send, so the own state ends"
+    );
+    assert_eq!(
+        status_display_text(&page).await,
+        "Generating narration...",
+        "the status display shows the label of the Job's step"
+    );
+    let (disabled, label) = read_submit_button(&page).await;
+    assert!(disabled, "Send stays locked while the Job runs");
+    assert!(
+        label.contains("Generating"),
+        "the server renders the locked button as a generating indicator, got {label:?}"
     );
 }
 
@@ -640,7 +697,7 @@ async fn run_dashboard_action_area_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_status_poll_leaves_generating_and_enter_submits,
+            check_status_load_leaves_generating_and_enter_submits,
         )
         .await;
     runner
@@ -651,8 +708,20 @@ async fn run_dashboard_action_area_checks() {
         .await;
     runner
         .run(
+            StubActionOutcome::Pending,
+            check_the_action_area_shows_its_own_state_until_the_status_display_shows_the_send,
+        )
+        .await;
+    runner
+        .run(
             StubActionOutcome::Refused,
-            check_refused_concurrent_send_keeps_the_command_and_shows_the_wait_state,
+            check_confirm_refused_for_a_busy_game_reports_in_the_notice_and_keeps_the_preview,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Refused,
+            check_refused_concurrent_send_keeps_the_command_and_reports_in_the_notice,
         )
         .await;
     runner.finish().await;

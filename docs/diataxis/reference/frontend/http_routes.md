@@ -11,11 +11,11 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/` | `index_handler` |
 | POST | `/swipe/new` | `retry_handler` |
 | POST | `/message/:id/swipe/:index` | `switch_swipe_handler` |
 | POST | `/retrigger` | `retrigger_handler` |
 | POST | `/reset` | `reset_handler` |
+| GET | `/` | `index_handler` |
 | GET | `/debug/state` | `debug_state_handler` |
 | GET | `/debug/is_busy` | `debug_is_busy_handler` |
 | GET | `/debug/backend` | `debug_backend_handler` |
@@ -26,7 +26,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 |--------|------|---------|
 | POST | `/action` | `action_handler` |
 | POST | `/action/check` | `action_check_handler` |
-| POST | `/action/confirm` | `action_confirm_handler` |
 
 ## Autoplay
 
@@ -45,14 +44,9 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/header` | `header_fragment` |
-| GET | `/fragment/story-log` | `story_log_fragment` |
-| GET | `/fragment/visual-sidebar` | `visual_sidebar_fragment` |
-| GET | `/fragment/options-dock` | `options_dock_fragment` |
-| GET | `/fragment/character-headshots` | `character_headshots_fragment` |
-| GET | `/status/busy` | `busy_status_handler` |
 | POST | `/status/reset-busy` | `reset_busy_handler` |
-| GET | `/fragment/llm-messages` | `llm_messages_fragment` |
+| GET | `/changes` | `changes_handler` |
+| GET | `/fragment/llm-messages/:id` | `llm_message_record_fragment` |
 
 ## Games
 
@@ -65,13 +59,13 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/games/:id/mode` | `switch_game_mode_handler` |
 | POST | `/games/:id/posture` | `update_game_posture_handler` |
 | POST | `/games/:id/presets` | `update_game_presets_handler` |
-| GET | `/fragment/games` | `list_games_fragment` |
+| GET | `/fragment/games/new` | `new_game_form_handler` |
+| GET | `/fragment/games/:id/rename` | `rename_game_form_handler` |
 
 ## Worlds
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/worlds` | `list_worlds_fragment` |
 | POST | `/worlds` | `create_world_handler` |
 | POST | `/worlds/:key` | `update_world_handler` |
 | POST | `/worlds/:key/posture` | `update_world_posture_handler` |
@@ -83,7 +77,6 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/settings` | `settings_panel` |
 | POST | `/connections/add` | `add_connection_handler` |
 | POST | `/connections/test` | `test_form_connection_handler` |
 | POST | `/connections/:id/test` | `test_saved_connection_handler` |
@@ -99,12 +92,19 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `/fragment/prompt-presets` | `panel_handler` |
 | POST | `/prompt-presets` | `save_preset_handler` |
-| GET | `/fragment/prompt-presets/:id` | `preset_card_handler` |
+| GET | `/fragment/prompt-presets/new` | `new_preset_form_handler` |
 | GET | `/fragment/prompt-presets/:id/edit` | `edit_preset_form_handler` |
 | GET | `/fragment/prompt-presets/:id/view` | `view_preset_form_handler` |
 | POST | `/prompt-presets/:id` | `update_preset_handler` |
 | POST | `/prompt-presets/:id/delete` | `delete_preset_handler` |
 | POST | `/prompt-presets/:id/duplicate` | `duplicate_preset_handler` |
 | POST | `/prompt-presets/:id/activate` | `activate_preset_handler` |
+
+## Unknown areas
+
+The following routes have handler-module prefixes not listed in the script's `AREA_GROUPS`. Add a new area (or fold them into an existing one) in `scripts/extract_http_routes.py`:
+
+| Method | Path | Handler |
+|--------|------|---------|
+| GET | `/screen` | `screen_handler` |

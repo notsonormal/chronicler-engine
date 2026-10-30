@@ -1,137 +1,14 @@
-// Panel chrome: the tab bar, the Settings sub-tabs, the LLM Messages expansion state, the swap focus restore and the world posture status clear.
+// Panel chrome: the tab bar, and the Settings sub-tabs.
 
-// htmx restores focus only to an id that survives the swap, so a control
-// replaced by a different one (Edit to form, Cancel to list) needs this
-// fallback. Every panel swapped as a whole is listed, so a panel rewrite cannot
-// silently drop out of the restore.
-const FOCUS_SWAP_TARGETS =
-  ".worlds-panel, .prompt-presets-panel, .preset-card, .settings-panel, .games-panel";
-const FOCUSABLE = "input:not([type=hidden]), select, textarea, button, a[href]";
-// A form field is the better landing spot: an Edit that opens a form should put
-// the caret in its first field, not on the back link above it.
-const FOCUSABLE_FIELD = "input:not([type=hidden]), select, textarea";
-// A Delete removes the row its control sits in; the story log plans its own
-// landing spot in dashboard-story-log.js.
-const FOCUS_ROW = ".game-item, .preset-card, .world-item";
-const FOCUS_ROW_PANEL = ".games-panel, .prompt-presets-panel, .worlds-panel";
-// A refused action can answer 200 with an error fragment standing in for the row,
-// card or panel it replaced: that message is the landing spot, not a neighbour.
-const FOCUS_ERROR = ".error-message";
-// The element a swap took focus from, with the swap target whose settle may claim
-// focus for it: htmx reports both events for one request, and `detail.target` is
-// the resolved swap target in `htmx:beforeSwap` and stays that element in
-// `htmx:afterSettle` (whose `detail.elt` is the swapped-in replacement).
-let focusBeforeSwap = null;
-
-// `focus()` is a no-op on a hidden or detached control (inside a closed
-// disclosure, in a removed row), so a candidate counts only once it holds focus.
-function focusFirstIn(root, selector) {
-  if (!root || !root.querySelectorAll) return false;
-  for (const next of root.querySelectorAll(selector)) {
-    if (next.disabled) continue;
-    next.focus();
-    if (document.activeElement === next) return true;
-  }
-  return false;
-}
-
-function focusInto(root) {
-  return focusFirstIn(root, FOCUSABLE_FIELD) || focusFirstIn(root, FOCUSABLE);
-}
-
-// A server error fragment carries no focus of its own (it is the same markup
-// every failure surface uses), so it becomes focusable here, where it is the
-// landing spot. `tabindex="-1"` takes no stop in the tab order.
-function focusErrorFragment(target) {
-  const error = target.matches(FOCUS_ERROR)
-    ? target
-    : target.querySelector(FOCUS_ERROR);
-  if (!error) return false;
-  if (!error.hasAttribute("tabindex")) error.setAttribute("tabindex", "-1");
-  error.focus();
-  return document.activeElement === error;
-}
-
-// A preset section's add form sits between its cards, so the landing spot is the
-// next card in the container.
-function focusAfterRemovedRow(row) {
-  const cards = Array.from(row.parentElement.children).filter((child) =>
-    child.matches(FOCUS_ROW),
-  );
-  const position = cards.indexOf(row);
-  return (
-    focusInto(cards[position + 1]) ||
-    focusInto(cards[position - 1]) ||
-    focusInto(row.closest(FOCUS_ROW_PANEL))
-  );
-}
-
-// A swap that inserts a panel, a card, or the error fragment that stands in for
-// one takes focus from `htmx:afterSettle`, so a row with no such replacement is
-// the one whose landing spot has to be claimed while the row is still there.
-function insertsFocusTarget(response) {
-  const fragment = document.createElement("template");
-  fragment.innerHTML = response || "";
-  return !!fragment.content.querySelector(`${FOCUS_SWAP_TARGETS}, ${FOCUS_ERROR}`);
-}
-
-// A swap whose target is the row itself takes the row out; a rename or a reset
-// form inside a row leaves it in place. That removal needs focus to move before
-// the swap: a `swap:0.3s` delete removes the row after htmx:afterRequest has
-// already been handled, and a swap that inserts nothing fires no afterSettle.
-//
-// Only a swap that can take the focused control's row or panel away records a
-// landing spot: a poll's swap target is neither, so its 2–5 s cycle cannot
-// overwrite the element a delete saved while the delete's settle delay runs.
-document.body.addEventListener("htmx:beforeSwap", function (evt) {
-  const target = evt.detail.elt;
-  if (!target || !target.matches || !evt.detail.shouldSwap) return;
-  if (!target.matches(FOCUS_SWAP_TARGETS) && !target.closest(FOCUS_ROW)) return;
-  const element = document.activeElement;
-  focusBeforeSwap = { element, target };
-  const row = element && element.closest && element.closest(FOCUS_ROW);
-  if (!row || target !== row) return;
-  if (insertsFocusTarget(evt.detail.serverResponse)) return;
-  focusAfterRemovedRow(row);
-});
-
-document.body.addEventListener("htmx:afterSettle", function (evt) {
-  const saved = focusBeforeSwap;
-  // A poll can settle inside a `swap:0.3s` delete's delay, and that settle
-  // carries its own target: only the swap that saved the element may claim or
-  // clear it, or the delete's landing spot is lost and focus falls to `body`.
-  // Scenario 29.5 dispatches that poll settle on purpose.
-  if (!saved || !evt.detail || evt.detail.target !== saved.target) return;
-  focusBeforeSwap = null;
-  const element = saved.element;
-  if (!element || element === document.body || document.contains(element)) return;
-  if (document.activeElement && document.activeElement !== document.body) return;
-  const target = evt.detail.elt;
-  if (!target || !target.matches) return;
-  if (target.matches(FOCUS_SWAP_TARGETS)) {
-    focusInto(target);
-    return;
-  }
-  // The row the control sat in came back as an error fragment: focus the message
-  // there, so the refusal is read where the control was, not on a neighbour. Only
-  // a row or an error fragment may take focus this way, so an unrelated poll's
-  // fragment cannot.
-  if (target.matches(FOCUS_ROW) || target.matches(FOCUS_ERROR)) {
-    focusErrorFragment(target);
-  }
-});
-
-// A failed Update World must not sit under green feedback from an earlier auto-save.
-function clearPostureStatus() {
-  const status = document.getElementById("world-posture-status");
-  if (status) status.innerHTML = "";
-}
-
-// Tab state is client-only, and several actions reload the page (a rename, a
-// game switch, a new game), so the active tab is remembered for the reload.
+// Tab state is client-only, so the active tab and the Settings sub-tab are
+// remembered for a reload of the page. The Settings sub-tab is also what a load of
+// the Settings part restores: the part is empty while the tab is closed.
 const ACTIVE_TAB_KEY = "chronicle.activeTab";
+const SETTINGS_SUBTAB_KEY = "chronicle.settingsSubtab";
 
 function activateTab(btn) {
+  const leaving = document.querySelector(".tab-content.active");
+  const panel = document.getElementById(btn.dataset.tab + "-tab");
   document.querySelectorAll(".tab").forEach((b) => {
     b.classList.remove("active");
     b.setAttribute("aria-selected", b === btn ? "true" : "false");
@@ -140,9 +17,50 @@ function activateTab(btn) {
     .querySelectorAll(".tab-content")
     .forEach((c) => c.classList.remove("active"));
   btn.classList.add("active");
-  const panel = document.getElementById(btn.dataset.tab + "-tab");
-  if (panel) panel.classList.add("active");
+  if (!panel) return;
+  panel.classList.add("active");
+  // The tab that closes holds no content, and the tab that opens loads.
+  if (leaving && leaving !== panel) leaveSection(leaving);
+  askNow();
 }
+
+function rememberSettingsSubtab(subtab) {
+  try {
+    sessionStorage.setItem(SETTINGS_SUBTAB_KEY, subtab.getAttribute("aria-controls"));
+  } catch (e) {
+    // Without storage the sub-tab lasts until the Settings tab closes.
+  }
+}
+
+function selectSettingsSubtab(panel, subtab) {
+  panel.querySelectorAll(".settings-subtab").forEach((b) => {
+    b.setAttribute("aria-selected", b === subtab ? "true" : "false");
+  });
+  const target = subtab.getAttribute("aria-controls");
+  panel.querySelectorAll(".settings-subtab-panel").forEach((p) => {
+    p.hidden = p.id !== target;
+  });
+}
+
+// A fresh render of the Settings part shows the first sub-tab. The sub-tab the
+// player chose comes back in the same task as the morph, so it never shows.
+document.addEventListener("screen:loaded", function (evt) {
+  if (!evt.detail.parts.includes("settings")) return;
+  let saved = null;
+  try {
+    saved = sessionStorage.getItem(SETTINGS_SUBTAB_KEY);
+  } catch (e) {
+    return;
+  }
+  const panel = document.querySelector('[data-part="settings"]');
+  if (!saved || !panel) return;
+  const subtab = Array.from(panel.querySelectorAll(".settings-subtab")).find(
+    (b) => b.getAttribute("aria-controls") === saved,
+  );
+  if (subtab && subtab.getAttribute("aria-selected") !== "true") {
+    selectSettingsSubtab(panel, subtab);
+  }
+});
 
 function rememberActiveTab(tab) {
   try {
@@ -175,80 +93,14 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // The Settings panel is swapped as a whole, so the sub-tab buttons cannot be bound per button.
+  // The selected sub-tab is view state in `aria-selected` (buttons) and `hidden`
+  // (panels). Both are in `data-keep`, so a load of the Settings panel keeps them.
   document.addEventListener("click", (event) => {
     const subtab = event.target.closest(".settings-subtab");
     if (!subtab) return;
     const panel = subtab.closest(".settings-panel");
     if (!panel) return;
-    panel.querySelectorAll(".settings-subtab").forEach((b) => {
-      const selected = b === subtab;
-      b.classList.toggle("active", selected);
-      b.setAttribute("aria-selected", selected ? "true" : "false");
-    });
-    panel
-      .querySelectorAll(".settings-subtab-panel")
-      .forEach((p) => p.classList.remove("active"));
-    const target = panel.querySelector(
-      "#" + subtab.getAttribute("aria-controls"),
-    );
-    if (target) target.classList.add("active");
+    selectSettingsSubtab(panel, subtab);
+    rememberSettingsSubtab(subtab);
   });
-
-  // htmx polls re-render the panel, so expansion state lives in JS.
-  const expandedLlmMessages = new Set();
-  let llmOriginalTrigger = null;
-
-  function pauseLlmPolling() {
-    const panel = document.querySelector(".llm-messages-panel");
-    if (panel) {
-      llmOriginalTrigger = panel.getAttribute("hx-trigger");
-      panel.setAttribute("hx-trigger", "none");
-      htmx.process(panel);
-    }
-  }
-
-  function resumeLlmPolling() {
-    const panel = document.querySelector(".llm-messages-panel");
-    if (panel && llmOriginalTrigger) {
-      panel.setAttribute("hx-trigger", llmOriginalTrigger);
-      htmx.process(panel);
-      llmOriginalTrigger = null;
-    }
-  }
-
-  window.toggleLlmMessage = function (header) {
-    const card = header.closest(".llm-message-card");
-    if (card) {
-      const expanded = card.classList.toggle("expanded");
-      header.setAttribute("aria-expanded", String(expanded));
-      const msgId = card.id;
-      if (msgId) {
-        if (expanded) {
-          expandedLlmMessages.add(msgId);
-          pauseLlmPolling();
-        } else {
-          expandedLlmMessages.delete(msgId);
-          if (expandedLlmMessages.size === 0) {
-            resumeLlmPolling();
-          }
-        }
-      }
-    }
-  };
-
-  window.restoreLlmExpandedState = function () {
-    expandedLlmMessages.forEach(function (msgId) {
-      const card = document.getElementById(msgId);
-      if (card) {
-        card.classList.add("expanded");
-        const header = card.querySelector(".llm-message-header");
-        if (header) header.setAttribute("aria-expanded", "true");
-      } else {
-        expandedLlmMessages.delete(msgId);
-      }
-    });
-  };
-
-
 });

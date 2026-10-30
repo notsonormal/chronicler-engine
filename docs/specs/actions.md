@@ -2,7 +2,7 @@
 
 Endpoints:
 - `POST /action`
-- `GET /fragment/llm-messages` (the LLM call records)
+- `GET /screen?parts=llm-messages` (the LLM call records)
 
 ## Scenarios
 
@@ -14,8 +14,9 @@ Endpoints:
 Given a Game whose story log holds only its opening Narration
 And an LLM backend that returns "You see a small wooden room." for any narration prompt
 When the client POST /action with command="look"
+Then the response is 200 with an empty body
 And the Game is no longer busy (status not generating)
-Then the story log gained exactly 2 messages:
+And the story log gained exactly 2 messages:
   - one player-input message whose text is "look"
   - one Narration message whose text is "You see a small wooden room."
 And the generation status is Idle
@@ -215,7 +216,7 @@ When the client POST /action with command="look"
 Then the response is 500 Internal Server Error
 And the response carries the line "The data for this request is missing: the persona."
 And the story log gains no Message
-When the client GET /status/busy
+When the client GET /screen?parts=status-display
 Then the status response carries the same line
 And the raw error text is reachable only inside that response's disclosure
 ```
@@ -237,7 +238,7 @@ And within 2 s, the generation status is no longer Generating
 ```gherkin
 Given a Game whose Job is running, held inside its narrator call
 When a client POST /action with command="listen"
-Then the response is 200 carrying the "Still thinking..." status
+Then the response is 409 carrying the "Still thinking..." line
 And the story log gained no player-input message for "listen"
 And the story log gained no Narration message for "listen"
 ```
@@ -247,7 +248,7 @@ And the story log gained no Narration message for "listen"
 ```gherkin
 Given a Game that is idle
 When two clients POST /action with command="look" at the same moment
-Then one Action is accepted and the other is refused with the "Still thinking..." status
+Then one Action is accepted and the other is refused with 409 and the "Still thinking..." line
 And the story log holds exactly one player-input message for "look"
 And the story log holds the opening Narration and exactly one Narration of that Action
 ```
@@ -355,12 +356,12 @@ Given a Game whose story log holds only its opening Narration
 And text check mode is Spell with auto-check enabled
 And a narrator backend that returns a non-empty narration for any prompt
 When the client POST /action/check with command="/guide look at the casle" (a deliberate misspelling the spell check would flag)
-Then the response contains no text-check preview
+Then the response is 200 with an empty body, and it contains no text-check preview
 And the guide action is dispatched directly
 And the Game is no longer busy
 And a narration message has created scene history
 When the client POST /action/check with command="/options" (an engine command the dispatch layer handles)
-Then the response contains no text-check preview
+Then the response is 200 with an empty body, and it contains no text-check preview
 And the options action is dispatched directly
 And the Game is no longer busy
 When the client POST /action/check with command="look at the casle" (same words, plain input)
@@ -373,20 +374,21 @@ text and is checked like ordinary player input.
 
 ### Confirm
 
-#### Scenario 1.13: Confirming a preview retargets the status display
+#### Scenario 1.13: Confirming a preview dispatches the command and answers nothing
 
 ```gherkin
 Given a game state with a command held in the text-check preview
 And a narrator backend that returns a non-empty narration for any prompt
-When the client POST /action/confirm with that command
-Then the response is the status fragment alone, not the action area or the command form
-And the response retargets #status-display
+When the client POST /action with that command
+Then the response is 200 with an empty body
+And the response carries no HX-Retarget, HX-Reswap or HX-Refresh header
 And the Game is no longer busy
 ```
 
-The confirm path is the preview's send: it dispatches the checked command
-without swapping a fresh action area back in, so the status display alone
-reflects the running generation.
+The confirm path is the preview's send: it dispatches the checked command.
+The running generation shows in the status display, which loads when the
+busy state changes. A confirm that the engine refuses answers the refusal
+and writes no part of the screen.
 
 ## Properties
 

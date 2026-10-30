@@ -1,6 +1,6 @@
 # Chronicler Engine
 
-An interactive fiction / text-adventure engine in Rust. An LLM-driven narrative pipeline resolves player actions, persists game state across sessions, and serves an HTMX dashboard over HTTP/WebSocket.
+An interactive fiction / text-adventure engine in Rust. An LLM-driven narrative pipeline resolves player actions, persists game state across sessions, and serves an HTMX dashboard over HTTP.
 
 ## Prerequisites
 

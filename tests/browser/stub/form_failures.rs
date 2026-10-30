@@ -1,23 +1,14 @@
-//! Stub-browser tests for refused form actions: the form keeps its place and reports the failure inline. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for failed form requests: the form keeps its place, and an invalid answer shows in its slot while a refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 
 use super::*;
-use super::support::StubRunner;
-
-async fn open_settings_panel(page: &playwright_rs::Page) {
-    page.locator(r#"[data-tab="settings"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
-    wait_until_visible(page, "#subtab-connections", Duration::from_secs(5)).await;
-}
+use super::support::{eval_string, open_settings, StubRunner, NOTICE};
 
 async fn connection_form_node_is_still_present(page: &playwright_rs::Page) -> bool {
     page.evaluate::<(), bool>(
         r#"() => {
-            const now = document.querySelector('.connection-form-page');
+            const now = document.querySelector('#edit-dialog .connection-form');
             return !!now && now === window.__connectionFormBefore;
         }"#,
         None,
@@ -29,7 +20,7 @@ async fn connection_form_node_is_still_present(page: &playwright_rs::Page) -> bo
 async fn stash_connection_form_node(page: &playwright_rs::Page) -> bool {
     page.evaluate::<(), bool>(
         r#"() => {
-            window.__connectionFormBefore = document.querySelector('.connection-form-page');
+            window.__connectionFormBefore = document.querySelector('#edit-dialog .connection-form');
             return !!window.__connectionFormBefore;
         }"#,
         None,
@@ -40,7 +31,7 @@ async fn stash_connection_form_node(page: &playwright_rs::Page) -> bool {
 
 async fn submit_connection_form(page: &playwright_rs::Page) {
     page.evaluate::<(), ()>(
-        r#"() => document.querySelector('.connection-form-page form').requestSubmit()"#,
+        r#"() => document.querySelector('#edit-dialog .connection-form form').requestSubmit()"#,
         None,
     )
     .await
@@ -61,39 +52,40 @@ async fn check_failed_connection_add_keeps_the_form_and_renders_inline(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
-    open_settings_panel(&page).await;
+    open_settings(&page).await;
 
-    click_and_settle(&page, ".connection-add button", ".settings-panel").await;
-    wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
+    click_and_settle(&page, ".connection-add button", "#edit-dialog-body").await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
     assert!(
         stash_connection_form_node(&page).await,
-        "the Add form page should be loaded"
+        "the Add form should be loaded"
     );
 
     submit_connection_form(&page).await;
 
-    let slot = r#".connection-form-page [data-error-slot="connection-form"]"#;
+    let slot = r#"#edit-dialog .connection-form [data-error-slot="connection-form"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
-        "a refused connection add should render into the form's inline slot"
+        "an invalid connection add should render into the form's inline slot"
     );
-    let (visible, message, raw) = read_error_disclosure(&page, slot).await;
+    let (visible, message, _) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
-    assert!(
-        message.contains("action failed"),
-        "the inline message should name the failed action, got {message:?}"
-    );
-    assert!(
-        message.contains("Unknown LLM backend"),
-        "the short line should quote the server's own refusal, got {message:?}"
-    );
-    assert!(
-        raw.contains("Unknown LLM backend"),
-        "the raw refusal belongs in the disclosure, got {raw:?}"
+    assert_eq!(
+        message, "The Connection was not saved: Unknown LLM backend 'bogus_provider'.",
+        "the short line is the sentence that the server wrote, with the engine's explanation"
     );
     assert!(
         connection_form_node_is_still_present(&page).await,
-        "a refused connection add must leave the form page in place"
+        "an invalid connection add must leave the form in place in the dialog"
+    );
+    assert!(
+        !read_error_disclosure(&page, NOTICE).await.0,
+        "an invalid answer shows in the slot of the form, and the notice stays empty"
     );
 }
 
@@ -102,71 +94,68 @@ async fn check_failed_connection_edit_keeps_the_form_and_renders_inline(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
-    open_settings_panel(&page).await;
+    open_settings(&page).await;
 
     click_and_settle(
         &page,
         ".connection-list .connection-row:first-child button:has-text('Edit')",
-        ".settings-panel",
+        "#edit-dialog-body",
     )
     .await;
-    wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
     assert!(
         stash_connection_form_node(&page).await,
-        "the Edit form page should be loaded"
+        "the Edit form should be loaded"
     );
 
     submit_connection_form(&page).await;
 
-    let slot = r#".connection-form-page [data-error-slot="connection-form"]"#;
+    let slot = r#"#edit-dialog .connection-form [data-error-slot="connection-form"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
-        "a refused connection edit should render into the form's inline slot"
+        "an invalid connection edit should render into the form's inline slot"
     );
-    let (visible, message, raw) = read_error_disclosure(&page, slot).await;
+    let (visible, message, _) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
-    assert!(
-        message.contains("action failed"),
-        "the inline message should name the failed action, got {message:?}"
-    );
-    assert!(
-        raw.contains("Unknown LLM backend"),
-        "the raw refusal belongs in the disclosure, got {raw:?}"
+    assert_eq!(
+        message, "The Connection was not saved: Unknown LLM backend 'bogus_provider'.",
+        "the short line is the sentence that the server wrote, with the engine's explanation"
     );
     assert!(
         connection_form_node_is_still_present(&page).await,
-        "a refused connection edit must leave the form page in place"
+        "an invalid connection edit must leave the form in place in the dialog"
     );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.30
-async fn check_failed_preset_add_keeps_the_panel_and_renders_inline(
+async fn check_failed_preset_add_keeps_the_dialog_and_renders_inline(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
     open_prompt_presets_tab(&page).await;
 
-    let opened = page
-        .evaluate::<(), bool>(
-            r#"() => {
-                    window.__presetPanelBefore = document.querySelector('.prompt-presets-panel');
-                    const details = document.querySelector('.preset-add');
-                    if (!details) return false;
-                    details.open = true;
-                    return true;
-                }"#,
-            None,
-        )
-        .await
-        .unwrap();
-    assert!(
-        opened,
-        "the Prompt Presets panel with an Add form should be loaded"
-    );
+    click_and_settle(
+        &page,
+        r#"button[hx-get="/fragment/prompt-presets/new?type=system"]"#,
+        "#edit-dialog-body",
+    )
+    .await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .preset-add-form",
+        Duration::from_secs(5),
+    )
+    .await;
 
     page.evaluate::<(), ()>(
         r#"() => {
-                const form = document.querySelector('.preset-add form');
+                window.__presetFormBefore = document.querySelector('#edit-dialog .preset-add-form form');
+                const form = window.__presetFormBefore;
                 form.querySelector('input[name="name"]').value = 'Bad Type';
                 form.requestSubmit();
             }"#,
@@ -175,25 +164,25 @@ async fn check_failed_preset_add_keeps_the_panel_and_renders_inline(
     .await
     .unwrap();
 
-    let slot = r#".preset-add form [data-error-slot="preset-add-system"]"#;
+    let slot = r#"#edit-dialog form [data-error-slot="preset-add-system"]"#;
     assert!(
         wait_for_inline_slot(&page, slot).await,
-        "a refused preset add should render into the form's inline slot"
+        "an invalid preset add should render into the form's inline slot"
     );
-    let (visible, _, raw) = read_error_disclosure(&page, slot).await;
+    let (visible, message, _) = read_error_disclosure(&page, slot).await;
     assert!(visible, "the inline slot should be shown");
     assert!(
-        raw.contains("Invalid preset type"),
-        "the raw refusal belongs in the disclosure, got {raw:?}"
+        message.contains("Invalid preset type"),
+        "the sentence carries the engine's explanation, got {message:?}"
     );
 
     let kept = page
         .evaluate::<(), bool>(
             r#"() => {
-                    const now = document.querySelector('.prompt-presets-panel');
-                    return !!now
-                        && now === window.__presetPanelBefore
-                        && !!now.querySelector('.preset-card');
+                    const now = document.querySelector('#edit-dialog .preset-add-form form');
+                    return document.getElementById('edit-dialog').open
+                        && now === window.__presetFormBefore
+                        && now.querySelector('input[name="name"]').value === 'Bad Type';
                 }"#,
             None,
         )
@@ -201,12 +190,12 @@ async fn check_failed_preset_add_keeps_the_panel_and_renders_inline(
         .unwrap();
     assert!(
         kept,
-        "a refused preset add must leave the panel and its cards in place"
+        "an invalid preset add must leave the dialog open with the same form and its typed text"
     );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.31
-async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
+async fn check_failed_preset_edit_keeps_the_dialog_and_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -214,14 +203,14 @@ async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
 
     let edit_selector =
         r#".preset-card:has(.card-title:text-is("My Custom Prompt")) button:has-text('Edit')"#;
-    click_and_settle(&page, edit_selector, ".preset-card").await;
-    wait_until_visible(&page, ".preset-card.edit-form", Duration::from_secs(5)).await;
+    click_and_settle(&page, edit_selector, "#edit-dialog-body").await;
+    wait_until_visible(&page, "#edit-dialog .edit-form", Duration::from_secs(5)).await;
 
     let stashed = page
         .evaluate::<(), bool>(
             r#"() => {
-                    window.__presetCardBefore = document.querySelector('.preset-card.edit-form');
-                    return !!window.__presetCardBefore;
+                    window.__presetFormBefore = document.querySelector('#edit-dialog .edit-form form');
+                    return !!window.__presetFormBefore;
                 }"#,
             None,
         )
@@ -230,29 +219,36 @@ async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
     assert!(stashed, "the preset edit form should be loaded");
 
     page.evaluate::<(), ()>(
-        r#"() => document.querySelector('.preset-card.edit-form form').requestSubmit()"#,
+        r#"() => document.querySelector('#edit-dialog .edit-form form').requestSubmit()"#,
         None,
     )
     .await
     .unwrap();
 
-    let slot = r#"[data-error-slot="preset-edit-custom_ref"]"#;
-    assert!(
-        wait_for_inline_slot(&page, slot).await,
-        "a failed preset edit should render into the card's inline slot"
-    );
-    let (visible, _, raw) = read_error_disclosure(&page, slot).await;
-    assert!(visible, "the inline slot should be shown");
+    wait_for_error_disclosure(&page, NOTICE, "a failed preset edit reports in the notice").await;
+    let (visible, message, raw) = read_error_disclosure(&page, NOTICE).await;
+    assert!(visible, "the notice should be shown");
+    assert_eq!(message, "The preset was not saved.");
     assert!(
         raw.contains("preset save failure"),
         "the raw failure belongs in the disclosure, got {raw:?}"
+    );
+    assert!(
+        !read_error_disclosure(
+            &page,
+            r#"#edit-dialog [data-error-slot="preset-edit-custom_ref"]"#
+        )
+        .await
+        .0,
+        "a failure shows in the notice, and the form's slot stays empty"
     );
 
     let kept = page
         .evaluate::<(), bool>(
             r#"() => {
-                    const now = document.querySelector('.preset-card.edit-form');
-                    return !!now && now === window.__presetCardBefore;
+                    const now = document.querySelector('#edit-dialog .edit-form form');
+                    return document.getElementById('edit-dialog').open
+                        && now === window.__presetFormBefore;
                 }"#,
             None,
         )
@@ -260,12 +256,12 @@ async fn check_failed_preset_edit_keeps_the_card_and_renders_inline(
         .unwrap();
     assert!(
         kept,
-        "a failed preset edit must leave the card and its edited values in place"
+        "a failed preset edit must leave the dialog open with the same form"
     );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.32
-async fn check_refused_preset_delete_keeps_the_card_and_renders_inline(
+async fn check_an_invalid_preset_delete_keeps_the_card_and_reports_in_the_notice(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -296,16 +292,17 @@ async fn check_refused_preset_delete_keeps_the_card_and_renders_inline(
     .await
     .unwrap();
 
-    let slot = r#"[data-error-slot="preset-custom_ref"]"#;
-    assert!(
-        wait_for_inline_slot(&page, slot).await,
-        "a refused preset delete should render into the card's inline slot"
-    );
-    let (visible, _, raw) = read_error_disclosure(&page, slot).await;
-    assert!(visible, "the inline slot should be shown");
-    assert!(
-        raw.contains("mode default"),
-        "the raw refusal belongs in the disclosure, got {raw:?}"
+    wait_for_error_disclosure(
+        &page,
+        NOTICE,
+        "an invalid preset delete reports in the notice",
+    )
+    .await;
+    let (visible, message, _) = read_error_disclosure(&page, NOTICE).await;
+    assert!(visible, "the notice should be shown");
+    assert_eq!(
+        message,
+        "The preset was not deleted: Preset is a mode default; change the default before deleting."
     );
 
     let kept = page
@@ -321,7 +318,89 @@ async fn check_refused_preset_delete_keeps_the_card_and_renders_inline(
             )
             .await
             .unwrap();
-    assert!(kept, "a refused preset delete must leave the card in place");
+    assert!(
+        kept,
+        "an invalid preset delete must leave the card in place"
+    );
+}
+
+// A one-line sentence is the whole report: it has no Details, so the sentence is the only
+// place that holds its end. It wraps onto more lines instead of being cut.
+const LONG_SENTENCE: &str = "The World \"Typed Name\" was not created: Invalid scenarios JSON: invalid type: map, expected a sequence at line 1 column 0, so the Scenarios field holds text that no World can read and the player must see all of this sentence to fix it.";
+
+/// Whether the sentence of the report in `place` is drawn whole: no cut at the right edge, no
+/// ellipsis, and more than one line, because the sentence is longer than the place is wide.
+async fn sentence_reads_in_full(page: &playwright_rs::Page, place: &str) -> String {
+    eval_string(
+        page,
+        &format!(
+            r#"() => {{
+                const message = document.querySelector('{place} .error-disclosure-message');
+                const text = document.querySelector('{place} .error-disclosure-text');
+                if (!message || !text) return 'no report in {place}';
+                const style = getComputedStyle(message);
+                const lineHeight = parseFloat(getComputedStyle(text).lineHeight) || 16;
+                const cut = message.scrollWidth > message.clientWidth
+                    || text.scrollWidth > text.clientWidth
+                    || message.scrollHeight > message.clientHeight + 1;
+                if (cut) return 'cut: scrollWidth ' + message.scrollWidth + ' clientWidth ' + message.clientWidth;
+                if (style.textOverflow === 'ellipsis') return 'ellipsis';
+                if (text.getBoundingClientRect().height < lineHeight * 1.5) return 'one line: ' + text.getBoundingClientRect().height;
+                return 'ok';
+            }}"#
+        ),
+    )
+    .await
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.80
+async fn check_a_long_sentence_without_details_reads_in_full(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_settings(&page).await;
+    click_and_settle(&page, ".connection-add button", "#edit-dialog-body").await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
+
+    eval_string(
+        &page,
+        &format!(
+            r#"() => {{
+                const slot = document.querySelector('#edit-dialog .connection-form [data-error-slot="connection-form"]');
+                renderInlineError(slot, {LONG_SENTENCE:?}, '');
+                showNotice({LONG_SENTENCE:?}, '', 'request');
+                return '';
+            }}"#
+        ),
+    )
+    .await;
+
+    for width in [1280, 1024] {
+        page.set_viewport_size(playwright_rs::Viewport { width, height: 800 })
+            .await
+            .unwrap();
+        for place in [
+            r#"#edit-dialog .connection-form [data-error-slot="connection-form"]"#,
+            NOTICE,
+        ] {
+            let outcome = wait_for_condition_async(
+                Duration::from_secs(2),
+                Duration::from_millis(50),
+                || async { sentence_reads_in_full(&page, place).await == "ok" },
+            )
+            .await;
+            assert!(
+                outcome,
+                "at {width} px the sentence in {place} reads in full, got {}",
+                sentence_reads_in_full(&page, place).await
+            );
+        }
+    }
 }
 
 #[tokio::test]
@@ -342,19 +421,25 @@ async fn run_form_failures_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_preset_add_keeps_the_panel_and_renders_inline,
+            check_failed_preset_add_keeps_the_dialog_and_renders_inline,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_preset_edit_keeps_the_card_and_renders_inline,
+            check_failed_preset_edit_keeps_the_dialog_and_reports_in_the_notice,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_refused_preset_delete_keeps_the_card_and_renders_inline,
+            check_an_invalid_preset_delete_keeps_the_card_and_reports_in_the_notice,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_long_sentence_without_details_reads_in_full,
         )
         .await;
     runner.finish().await;

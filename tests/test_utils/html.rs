@@ -1,4 +1,4 @@
-//! HTML slicing helpers for panel markup without element ids — locate a region by a stable anchor string.
+//! HTML slicing helpers for panel markup — locate a region by a stable anchor string.
 
 /// Slice one `<div class="{card_class}…">…</div>` region out of a rendered
 /// panel: find `anchor` (a string unique to the card — its duplicate URL or
@@ -6,9 +6,9 @@
 /// slice at the next card's opening tag (or EOF). `None` when `anchor` is
 /// absent.
 ///
-/// Cards deliberately carry no `data-id` (see STRATEGY.md "Stub tier's
-/// accepted tax"), so the anchor + sibling-bound algorithm is the shared
-/// shape; callers keep their own anchor logic and assertions.
+/// A card carries an `id` for the morph of a load, and a test anchors on a
+/// string the card renders anyway, so the anchor + sibling-bound algorithm is the
+/// shared shape; callers keep their own anchor logic and assertions.
 pub fn card_html_slice<'a>(body: &'a str, card_class: &str, anchor: &str) -> Option<&'a str> {
     let opening = format!("<div class=\"{card_class}");
     let anchor_pos = body.find(anchor)?;
@@ -35,4 +35,14 @@ pub fn panel_section_html_slice<'a>(body: &'a str, heading: &str) -> Option<&'a 
         .map(|offset| after_heading + offset)
         .unwrap_or(body.len());
     Some(&body[start..end])
+}
+
+/// The inner HTML of the `<template data-part="{name}">` of a `GET /screen`
+/// body: the part as the client gets it. `None` when the body has no such part,
+/// as with a failed read.
+pub fn part_of_screen<'a>(screen_body: &'a str, name: &str) -> Option<&'a str> {
+    let opening = format!("<template data-part=\"{name}\">");
+    let start = screen_body.find(&opening)? + opening.len();
+    let length = screen_body[start..].find("</template>")?;
+    Some(&screen_body[start..start + length])
 }

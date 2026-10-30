@@ -1,6 +1,6 @@
 # Feature Spec: Retrigger (POST /retrigger)
 
-Endpoint: `POST /retrigger`
+Endpoint: `POST /retrigger`, with the form field `message`: the id of the Message that the page rendered the control on
 
 ## Scenarios
 
@@ -14,8 +14,9 @@ And the last Message is a non-event Narration (the main narration)
 And the story log holds N Messages
 And a narrator backend that returns a non-empty continuation for the trigger prompt
 When the client sends POST /retrigger
+Then the response is 200 with an empty body
 And the Game is no longer busy
-Then the story log holds N+1 Messages (the original history is preserved; the new event narration is appended, not a replacement)
+And the story log holds N+1 Messages (the original history is preserved; the new event narration is appended, not a replacement)
 And the new Message is an event Narration (it carries an event header)
 And the generation status is Idle
 ```
@@ -110,12 +111,23 @@ Then the response is 400 Bad Request
 
 ### Concurrency
 
-#### Scenario 15.1: Retrigger while a generation is already in flight returns "Still thinking..."
+#### Scenario 15.1: Retrigger while a generation is already in flight answers 409 "Still thinking..."
 
 ```gherkin
 Given a Game whose Job is running
 When the client sends POST /retrigger
-Then the response is 200 with a "Still thinking..." status string
+Then the response is 409 with the "Still thinking..." line
+And no event Narration is added
+```
+
+#### Scenario 15.2: A Retrigger that names a Message that is not the last one is refused
+
+```gherkin
+Given a Game whose story holds an Input and the Narration that answers it
+When the client sends POST /retrigger with the field message set to the id of the Input
+Then the response is 409
+And the first line of the body is "The last Message changed, so the retrigger was not started."
+And the second line of the body is "The page showed a Message that is no longer the last one."
 And no event Narration is added
 ```
 
@@ -132,7 +144,7 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   violation: 500 and the failure line "The data for this request is
   missing: …", not a user error (400).
 - **I.8** Retrigger rejects concurrent generation the same way an Action
-  does: 200 with a `"Still thinking..."` status, no generation started.
+  does: 409 with the `"Still thinking..."` line, no generation started.
 - **I.9** A failed event Narration leaves the event record of the last
   Narration in place. Retrigger stays available as a recovery path after
   the failure, with no new Action.

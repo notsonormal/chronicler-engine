@@ -2,12 +2,10 @@
 //! Worlds templates
 
 use askama::Template;
-use crate::adapters::driving::http::utils::response::html_escape;
-use crate::adapters::driving::http::utils::template_helpers::select_options_html;
+use crate::adapters::driving::http::utils::template_helpers::{select_options_html, truncated_preview};
 use crate::adapters::driving::http::view_models::{SafeHtml, SelectOptionView};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::scenario::StartingScenario;
-use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::world::WorldCard;
 
 pub struct WorldRowView {
@@ -20,26 +18,24 @@ pub struct WorldRowView {
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="worlds-panel">
-    <button class="btn-primary btn-new-world" hx-get="/fragment/worlds/new" hx-target=".worlds-panel" hx-swap="outerHTML">Create New World</button>
+<button class="btn-primary btn-new-world" id="world-new-open" hx-get="/fragment/worlds/new" hx-target="#edit-dialog-body" hx-swap="innerHTML">Create New World</button>
 
     {% if worlds.is_empty() %}
     <p>No worlds defined. Create your first world to get started.</p>
     {% else %}
     <ul class="worlds-list">
         {% for world in worlds %}
-        <li class="world-item">
+        <li class="world-item" id="world-{{ world.key }}">
             <div class="world-item-head">
                 <strong>{{ world.name }}</strong> <em>({{ world.game_count }} {% if world.game_count == 1 %}game{% else %}games{% endif %})</em>
-                <button class="btn-cyan" hx-get="/worlds/{{ world.key }}/edit" hx-target=".worlds-panel" hx-swap="outerHTML">Edit</button>
-                <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-target="closest .world-item" hx-swap="outerHTML swap:0.3s" class="btn-danger">Delete</button>
+                <button class="btn-cyan" id="world-edit-open-{{ world.key }}" hx-get="/worlds/{{ world.key }}/edit" hx-target="#edit-dialog-body" hx-swap="innerHTML">Edit</button>
+                <button hx-post="/worlds/{{ world.key }}/delete" hx-confirm="Delete this world? This cannot be undone." hx-swap="none" class="btn-danger">Delete</button>
             </div>
             {{ world.description }}
         </li>
         {% endfor %}
     </ul>
     {% endif %}
-</div>
 "##,
     ext = "html"
 )]
@@ -59,7 +55,7 @@ impl WorldsPanelTemplate {
                 WorldRowView {
                     key: w.key.clone(),
                     name: w.name.clone(),
-                    description: w.description.clone(),
+                    description: truncated_preview(&w.description),
                     game_count,
                 }
             })
@@ -71,11 +67,25 @@ impl WorldsPanelTemplate {
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="worlds-panel">
-<div class="world-form-container">
-    <h2>{% if is_edit %}Edit World{% else %}Create New World{% endif %}</h2>
+{% macro posture_selects(narrator_options, perspective_options, tense_options, auto_save_key) %}<label>Narrator Mode:
+                <select name="narrator_mode"{% if let Some(key) = auto_save_key %} hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-swap="none" data-saved-flag="world-posture-status"{% endif %}>
+                    {{ narrator_options }}
+                </select>
+            </label>
+            <label>Perspective:
+                <select name="narrative_perspective"{% if let Some(key) = auto_save_key %} hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-swap="none" data-saved-flag="world-posture-status"{% endif %}>
+                    {{ perspective_options }}
+                </select>
+            </label>
+            <label>Tense:
+                <select name="narrative_tense"{% if let Some(key) = auto_save_key %} hx-post="/worlds/{{ key }}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-swap="none" data-saved-flag="world-posture-status"{% endif %}>
+                    {{ tense_options }}
+                </select>
+            </label>{% endmacro %}
+<div class="world-form-container" id="world-form-container" data-dialog-form>
+    <h2 id="edit-dialog-title">{% if is_edit %}Edit World{% else %}Create New World{% endif %}</h2>
 
-    <form hx-post="{{ form_action }}" hx-target=".worlds-panel" hx-swap="outerHTML" enctype="application/x-www-form-urlencoded"{% if is_edit %} hx-on::before-request="clearPostureStatus()"{% endif %}>
+    <form hx-post="{{ form_action }}" hx-swap="none" enctype="application/x-www-form-urlencoded"{% if is_edit %} hx-on::before-request="clearPostureStatus()"{% endif %}>
         <label>Key: <input type="text" name="key" value="{{ key }}" {% if is_readonly %}readonly{% endif %} required /></label>
 
         <label>Name: <input type="text" name="name" value="{{ name }}" required /></label>
@@ -89,7 +99,7 @@ impl WorldsPanelTemplate {
         {% if !is_edit %}
         <fieldset class="posture-group">
             <legend>Posture</legend>
-            {{ posture_selects }}
+            {{ posture_selects(narrator_options, perspective_options, tense_options, auto_save_key) }}
         </fieldset>
         {% endif %}
 
@@ -107,7 +117,7 @@ impl WorldsPanelTemplate {
 
         <div class="form-actions">
             <button type="submit" class="btn-primary">{{ submit_text }}</button>
-            <button type="button" class="btn-cyan" hx-get="/fragment/worlds" hx-target=".worlds-panel" hx-swap="outerHTML">Cancel</button>
+            <button type="button" class="btn-cyan" data-close-dialog>Cancel</button>
         </div>
         <div class="inline-error-slot" data-error-slot="world-form" hidden></div>
         {% if is_edit %}
@@ -118,11 +128,10 @@ impl WorldsPanelTemplate {
     {% if is_edit %}
     <fieldset class="posture-group" id="world-posture-group">
         <legend>Posture — saves automatically</legend>
-        {{ posture_selects }}
-        <span id="world-posture-status"></span>
+        {{ posture_selects(narrator_options, perspective_options, tense_options, auto_save_key) }}
+        <span id="world-posture-status" class="posture-status saved-flag"></span>
     </fieldset>
     {% endif %}
-</div>
 </div>
 "##,
     ext = "html"
@@ -136,7 +145,11 @@ pub struct WorldFormTemplate {
     pub default_room_image: String,
     pub map_json: String,
     pub scenarios_json: String,
-    pub posture_selects: SafeHtml,
+    pub narrator_options: SafeHtml,
+    pub perspective_options: SafeHtml,
+    pub tense_options: SafeHtml,
+    /// The key whose posture the selects save on change; `None` on the create form.
+    pub auto_save_key: Option<String>,
     pub options_always_on: bool,
     pub form_action: String,
     pub is_readonly: bool,
@@ -175,8 +188,6 @@ impl WorldFormTemplate {
             )
         };
 
-        let auto_save_key = if is_edit { Some(w.key.as_str()) } else { None };
-
         Self {
             is_edit,
             key: w.key.clone(),
@@ -186,12 +197,18 @@ impl WorldFormTemplate {
             default_room_image: w.default_room_image.clone().unwrap_or_default(),
             map_json: map_json_str,
             scenarios_json: scenarios_json_str,
-            posture_selects: Self::posture_selects_html(
+            narrator_options: select_options_html(SelectOptionView::narrator_modes(
                 w.narrator_mode,
+            )),
+            perspective_options: select_options_html(Self::option_set(
+                &[("second", "Second person"), ("third", "Third person")],
                 w.narrative_perspective.as_str(),
+            )),
+            tense_options: select_options_html(Self::option_set(
+                &[("past", "Past"), ("present", "Present")],
                 w.narrative_tense.as_str(),
-                auto_save_key,
-            ),
+            )),
+            auto_save_key: is_edit.then(|| w.key.clone()),
             options_always_on: w.options_always_on,
             form_action: if is_edit {
                 format!("/worlds/{}", w.key)
@@ -208,49 +225,6 @@ impl WorldFormTemplate {
             }
             .to_string(),
         }
-    }
-
-    fn posture_selects_html(
-        narrator_mode: NarratorMode,
-        perspective: &str,
-        tense: &str,
-        auto_save_key: Option<&str>,
-    ) -> SafeHtml {
-        let hx = auto_save_key
-            .map(|key| {
-                format!(
-                    r##" hx-post="/worlds/{}/posture" hx-trigger="change" hx-include="closest .posture-group" hx-target="#world-posture-status" hx-swap="innerHTML""##,
-                    html_escape(key)
-                )
-            })
-            .unwrap_or_default();
-        let narrator_options = select_options_html(SelectOptionView::narrator_modes(narrator_mode));
-        let perspective_options = select_options_html(Self::option_set(
-            &[("second", "Second person"), ("third", "Third person")],
-            perspective,
-        ));
-        let tense_options = select_options_html(Self::option_set(
-            &[("past", "Past"), ("present", "Present")],
-            tense,
-        ));
-
-        SafeHtml::new(format!(
-            r##"<label>Narrator Mode:
-                <select name="narrator_mode"{hx}>
-                    {narrator_options}
-                </select>
-            </label>
-            <label>Perspective:
-                <select name="narrative_perspective"{hx}>
-                    {perspective_options}
-                </select>
-            </label>
-            <label>Tense:
-                <select name="narrative_tense"{hx}>
-                    {tense_options}
-                </select>
-            </label>"##
-        ))
     }
 
     fn option_set(values: &[(&str, &str)], selected: &str) -> Vec<SelectOptionView> {

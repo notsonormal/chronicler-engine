@@ -1,7 +1,7 @@
 # Keep an open rename form through the Games-panel poll
 
 Type: task
-Status: needs-triage
+Status: closed
 Blocked by: —
 
 ## Question
@@ -17,4 +17,5 @@ While an Autoplay run holds a Game, the Games panel polls every 5 seconds and re
 
 ## Comments
 
-- 2026-10-25 — Plan written: [`docs/plans/change-driven-dashboard-refresh.md`](../../../docs/plans/change-driven-dashboard-refresh.md). The review of this ticket showed a design flaw in the dashboard refresh as a whole (19 related bugs, no shared rule). The plan replaces the per-panel fix: one change-driven version poll, and one rule that holds a region while the player works in it. This ticket closes at the end of its stage 3.
+- 2026-10-25 — Plan written: [`old-docs/archived-plans/change-driven-dashboard-refresh.md`](../../../old-docs/archived-plans/change-driven-dashboard-refresh.md). The review of this ticket showed a design flaw in the dashboard refresh as a whole (19 related bugs, no shared rule). The plan replaces the per-panel fix: one change-driven version poll, and one rule that holds a region while the player works in it. This ticket closes at the end of its stage 3.
+- 2026-10-25 — Closed by stage 3a of [`old-docs/archived-plans/change-driven-dashboard-refresh.md`](../../../old-docs/archived-plans/change-driven-dashboard-refresh.md) (commit `782ca8e5` on `wf/change-driven-dashboard-refresh`). The Games panel no longer polls: it loads when the games, worlds or presets number moves. An open rename form holds the panel while its field is edited, and `data-keep="open"` keeps the form open through a load. Covered by `docs/specs/browser_games.md` Scenarios 27.4 (form, typed name and focus kept), 27.5 (ending the edit loads the panel once) and 27.6 (the New Game selects keep their choice).

@@ -1,6 +1,7 @@
 //! Worlds HTTP handler tests.
 
 use axum::extract::Path;
+use axum::http::StatusCode;
 
 use crate::adapters::driving::http::worlds::handlers::{
     update_world_handler, update_world_posture_handler, WorldForm, WorldPostureForm,
@@ -23,14 +24,22 @@ fn seed_world(state: &AppState, key: &str) {
         .expect("world seed should succeed");
 }
 
-async fn post_posture(state: &AppState, key: &str, form: WorldPostureForm) -> String {
+async fn post_posture(state: &AppState, key: &str, form: WorldPostureForm) -> Posted {
     let response = update_world_posture_handler(
         axum::extract::State(state.clone()),
         Path(key.to_string()),
         axum::extract::Form(form),
     )
     .await;
-    body_text(response).await
+    Posted {
+        status: response.status(),
+        body: body_text(response).await,
+    }
+}
+
+struct Posted {
+    status: StatusCode,
+    body: String,
 }
 
 #[tokio::test]
@@ -49,12 +58,10 @@ async fn test_world_posture_invalid_value_renders_error_and_mutates_nothing() {
         },
     )
     .await;
-    assert!(
-        saved.contains(r#"posture-status">Saved</span>"#),
-        "valid save should report Saved: {saved}"
-    );
+    assert_eq!(saved.status, StatusCode::OK);
+    assert_eq!(saved.body, "", "a saved posture answers nothing");
 
-    let body = post_posture(
+    let Posted { status, body } = post_posture(
         &state,
         "posture_world",
         WorldPostureForm {
@@ -64,6 +71,7 @@ async fn test_world_posture_invalid_value_renders_error_and_mutates_nothing() {
         },
     )
     .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "a refusal is non-2xx");
     assert!(
         body.contains(r#"class="error-message""#),
         "invalid value should render the error fragment: {body}"
@@ -98,10 +106,8 @@ async fn test_world_posture_omitted_field_keeps_stored_value() {
         },
     )
     .await;
-    assert!(
-        saved.contains(r#"posture-status">Saved</span>"#),
-        "valid save should report Saved: {saved}"
-    );
+    assert_eq!(saved.status, StatusCode::OK);
+    assert_eq!(saved.body, "", "a saved posture answers nothing");
 
     // Only the tense is posted; mode and perspective must keep their
     // stored values (the posture endpoint patches per-field).
@@ -115,10 +121,8 @@ async fn test_world_posture_omitted_field_keeps_stored_value() {
         },
     )
     .await;
-    assert!(
-        saved.contains(r#"posture-status">Saved</span>"#),
-        "partial save should report Saved: {saved}"
-    );
+    assert_eq!(saved.status, StatusCode::OK);
+    assert_eq!(saved.body, "", "a saved posture answers nothing");
 
     let (_, world, _) = state
         .world_catalogue

@@ -1,9 +1,7 @@
 use axum::{http::StatusCode, Form};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::history::handlers::{
-    delete_history_handler, edit_history_handler, EditHistoryForm,
-};
+use crate::adapters::driving::http::history::handlers::{edit_history_handler, EditHistoryForm};
 use crate::test_support::active_game_of;
 use crate::test_support::TestAppBuilder;
 
@@ -53,23 +51,6 @@ async fn test_edit_history_handler_ok() {
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
-        "an edit of a Message the story does not hold is refused as a bad request"
-    );
-}
-
-#[tokio::test]
-async fn test_delete_history_handler_refuses_the_only_message() {
-    let state = TestAppBuilder::default_test().build_service();
-
-    let response = delete_history_handler(
-        axum::extract::State(state.clone()),
-        CurrentGame(active_game_of(&state)),
-    )
-    .await;
-
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "a Game holding only its opening Message refuses the delete"
+        "an edit of a Message the story does not hold answers 400 as a bad request"
     );
 }

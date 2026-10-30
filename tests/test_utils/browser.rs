@@ -5,17 +5,50 @@ use std::time::Duration;
 use playwright_rs::LaunchOptions;
 use playwright_rs::Playwright;
 
+use super::convergence::assert_screen_converged;
 use super::htmx_settle::{await_panel_ready, click_and_settle, install_htmx_settle};
-use super::html::preset_card_html_slice;
+use super::html::{part_of_screen, preset_card_html_slice};
 use super::server::{buffer_text, get_config_port, registered_server_logs, tail_lines, TestServer};
+use super::screen::{wait_for_screen_current, WAIT_FOR_SCREEN_INIT_SCRIPT};
 use super::stub_server::StubServer;
 #[allow(unused_imports)]
 pub use super::wait::wait_for_element_children;
-use super::wait::wait_until_visible;
+use super::wait::{wait_for_condition_async, wait_until_visible};
 #[allow(unused_imports)]
 pub use super::wait::wait_for_status_ready;
-use super::wait::wait_for_status_busy;
+use super::wait::wait_for_action_acknowledged;
 pub use super::wait::wait_for_story_log;
+
+/// Counts the requests that the page sends from now on, except the asks of
+/// `GET /changes`: both `XMLHttpRequest` (htmx) and `fetch` (the screen script).
+pub async fn start_counting_requests(page: &playwright_rs::Page) {
+    page.evaluate::<(), ()>(
+        r#"() => {
+            window.__requestsSent = 0;
+            const counts = (url) => !String(url).split('?')[0].endsWith('/changes');
+            const open = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+                if (counts(url)) window.__requestsSent += 1;
+                return open.call(this, method, url, ...rest);
+            };
+            const send = window.fetch;
+            window.fetch = function (input, ...rest) {
+                const url = typeof input === 'string' ? input : input.url;
+                if (counts(url)) window.__requestsSent += 1;
+                return send.call(this, input, ...rest);
+            };
+        }"#,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+pub async fn requests_counted(page: &playwright_rs::Page) -> u64 {
+    page.evaluate::<(), u64>("() => window.__requestsSent", None)
+        .await
+        .unwrap()
+}
 
 pub async fn goto_with_connection_check(
     page: &playwright_rs::Page,
@@ -75,6 +108,8 @@ async fn close_chrome(playwright: &playwright_rs::Playwright, browser: &playwrig
     let _ = playwright.shutdown().await;
 }
 
+/// After the test, the page must converge: each visible part equals a fresh
+/// `GET /screen` of that part.
 pub async fn with_test_page<F, Fut>(config_path: &str, world: &str, persona: &str, test_fn: F)
 where
     F: FnOnce(playwright_rs::Page, u16) -> Fut,
@@ -90,7 +125,8 @@ where
         .await
         .expect("Failed to connect to server");
 
-    test_fn(page, port).await;
+    test_fn(page.clone(), port).await;
+    assert_screen_converged(&page).await;
 
     close_chrome(&playwright, &browser).await;
 }
@@ -118,26 +154,30 @@ impl SharedBrowser {
         let page = self.browser.new_page().await.unwrap();
         let url = stub.url();
         install_htmx_settle(&page).await;
+        page.add_init_script(WAIT_FOR_SCREEN_INIT_SCRIPT)
+            .await
+            .expect("add_init_script for the screen waiter");
         page.goto(&url, None)
             .await
             .unwrap_or_else(|e| panic!("navigate to stub at {url}: {e}"));
         wait_for_story_log(&page).await;
+        wait_for_screen_current(&page).await;
         page
     }
 }
 
-/// A hidden panel's load swap lands before any test arms a baseline, so the wait
-/// goes through `await_panel_ready`, which searches the whole recorded target
-/// list.
+/// A tab loads its parts when it opens. The load is on the recorded target list
+/// by the time `await_panel_ready` reads it, because that wait searches the
+/// whole list, so the wait follows the click.
 async fn open_tab(page: &playwright_rs::Page, tab: &str, gate_target: &str) {
-    await_panel_ready(page, gate_target)
-        .await
-        .expect_settled(tab);
     page.locator(&format!(r#"[data-tab="{tab}"]"#))
         .await
         .click(None)
         .await
         .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
+    await_panel_ready(page, gate_target)
+        .await
+        .expect_settled(tab);
 }
 
 pub async fn open_worlds_tab(page: &playwright_rs::Page) {
@@ -158,18 +198,18 @@ pub async fn open_prompt_presets_tab(page: &playwright_rs::Page) {
 /// the engine seeds two worlds, so an unscoped Edit selector matches twice and
 /// strict mode rejects it, and name-scoping is order-independent.
 ///
-/// The Edit click's swap is awaited through the htmx settle counter: htmx
-/// attaches the new form's `hx-trigger` listeners at the end of that settle,
-/// so a `change` fired earlier is lost.
+/// The Edit click's swap into the dialog body is awaited through the htmx settle
+/// counter: htmx attaches the new form's `hx-trigger` listeners at the end of that
+/// settle, so a `change` fired earlier is lost.
 pub async fn open_world_edit(page: &playwright_rs::Page) {
     open_worlds_tab(page).await;
     let edit_selector = r#".world-item:has(strong:text-is("Test Realm")) button:has-text('Edit')"#;
-    click_and_settle(page, edit_selector, ".worlds-panel").await;
+    click_and_settle(page, edit_selector, "#edit-dialog-body").await;
     // Wait on the posture selects, not #world-posture-status: an empty
     // (zero-sized) span never becomes visible.
     wait_until_visible(
         page,
-        r#"#worlds-tab select[name="narrator_mode"]"#,
+        r#"#edit-dialog select[name="narrator_mode"]"#,
         Duration::from_millis(5000),
     )
     .await;
@@ -179,8 +219,63 @@ pub async fn open_world_edit(page: &playwright_rs::Page) {
 /// e.g. `.preset-card:has(.card-title:text-is("My Preset"))`.
 pub async fn open_preset_editor(page: &playwright_rs::Page, card_selector: &str) {
     let edit_selector = format!("{card_selector} button:has-text('Edit')");
-    click_and_settle(page, &edit_selector, ".preset-card").await;
-    wait_until_visible(page, ".preset-card.edit-form", Duration::from_millis(5000)).await;
+    click_and_settle(page, &edit_selector, "#edit-dialog-body").await;
+    wait_until_visible(page, "#edit-dialog .edit-form", Duration::from_millis(5000)).await;
+}
+
+/// Choose `value` in an auto-save select whose answer swaps nothing, and wait for
+/// the browser to show "Saved" on `#flag_id`: the line that the player reads,
+/// which the browser draws once the request ended well. An empty answer fires no
+/// htmx settle, so the visible line is the observable end of the save.
+pub async fn select_option_and_await_saved(
+    page: &playwright_rs::Page,
+    selector: &str,
+    value: &str,
+    flag_id: &str,
+) {
+    page.locator(selector)
+        .await
+        .select_option(value, None)
+        .await
+        .unwrap_or_else(|e| panic!("select_option('{selector}' -> '{value}') failed: {e}"));
+    let script = format!(
+        "() => {{ const flag = document.getElementById('{flag_id}'); return getComputedStyle(flag, '::before').content === '\"Saved\"'; }}"
+    );
+    let saved = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            page.evaluate::<(), bool>(&script, None)
+                .await
+                .unwrap_or(false)
+        },
+    )
+    .await;
+    assert!(
+        saved,
+        "select_option('{selector}' -> '{value}'): #{flag_id} never showed the text Saved"
+    );
+}
+
+/// Click a control that closes the edit dialog in the browser, and wait until the
+/// dialog is closed. Closing sends no request, so no htmx settle follows.
+pub async fn click_and_close_dialog(page: &playwright_rs::Page, selector: &str) {
+    page.locator(selector)
+        .await
+        .click(None)
+        .await
+        .unwrap_or_else(|e| panic!("click('{selector}') failed: {e}"));
+    let closed = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            page.evaluate::<(), bool>("() => !document.getElementById('edit-dialog').open", None)
+                .await
+                .unwrap_or(false)
+        },
+    )
+    .await;
+    assert!(closed, "click('{selector}') never closed the edit dialog");
 }
 
 pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
@@ -208,12 +303,28 @@ pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
         "seed_system_preset('{name}') returned {status}: {body}"
     );
     assert!(
-        preset_card_rendered(&body, name),
-        "seed_system_preset('{name}') found no card for the new preset in the panel: {body}"
+        body.is_empty(),
+        "seed_system_preset('{name}') must answer nothing: {body}"
+    );
+    let panel = client
+        .get(format!(
+            "http://127.0.0.1:{port}/screen?parts=prompt-presets"
+        ))
+        .send()
+        .await
+        .unwrap_or_else(|e| panic!("load the preset panel after seeding '{name}': {e}"))
+        .text()
+        .await
+        .unwrap_or_default();
+    let panel = part_of_screen(&panel, "prompt-presets").unwrap_or_else(|| {
+        panic!("load the preset panel after seeding '{name}' gave no part: {panel}")
+    });
+    assert!(
+        preset_card_rendered(panel, name),
+        "seed_system_preset('{name}') found no card for the new preset in the panel: {panel}"
     );
 }
 
-/// Cards carry no `data-id`, so the duplicate button is the stable anchor.
 fn preset_card_rendered(body: &str, name: &str) -> bool {
     let title_anchor = format!(r#"<span class="card-title">{name}</span>"#);
     preset_card_html_slice(body, &title_anchor).is_some_and(|card| {
@@ -242,13 +353,30 @@ pub async fn fill_command_input(page: &playwright_rs::Page, command: &str) {
         .await;
 }
 
+/// The action controls are a part of the screen, so the Send button exists once the
+/// first screen load has shown it.
+async fn wait_for_send_button(page: &playwright_rs::Page) {
+    let shown = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async {
+            page.evaluate::<(), bool>("() => !!document.getElementById('submit-btn')", None)
+                .await
+                .unwrap_or(false)
+        },
+    )
+    .await;
+    assert!(shown, "the screen load shows the Send button within 5s");
+}
+
 pub async fn send_action(page: &playwright_rs::Page, text: &str) {
+    wait_for_send_button(page).await;
     fill_command_input(page, text).await;
     let _: Result<(), _> = page
         .evaluate::<(), ()>(
             r#"
             () => {
-                const btn = document.querySelector('#command-form button[type="submit"]');
+                const btn = document.querySelector('#submit-btn');
                 if (btn) {
                     btn.click();
                 }
@@ -258,12 +386,11 @@ pub async fn send_action(page: &playwright_rs::Page, text: &str) {
         )
         .await;
 
-    // Confirm the action was acknowledged before returning: the
-    // `/action/check` response swaps "Thinking..." into #status-display. Without
-    // this wait, a subsequent `wait_for_status_ready` can return on the STALE
-    // pre-action "Ready" (before the swap arrives) and race the test — see
-    // `wait_for_status_busy`.
-    wait_for_status_busy(page).await;
+    // Confirm the action was acknowledged before returning: the action area
+    // consumes the input of a command the engine took. Without this wait, a
+    // subsequent `wait_for_status_ready` can return on the STALE pre-action
+    // "Ready" — see `wait_for_action_acknowledged`.
+    wait_for_action_acknowledged(page).await;
 
     dismiss_text_check_if_present(page).await;
 }
@@ -310,6 +437,20 @@ pub async fn read_error_disclosure(
     )
     .await
     .unwrap()
+}
+
+/// Waits until `selector` shows an error disclosure. `shows` is the failure
+/// message of the wait.
+pub async fn wait_for_error_disclosure(page: &playwright_rs::Page, selector: &str, shows: &str) {
+    assert!(
+        wait_for_condition_async(
+            Duration::from_secs(5),
+            Duration::from_millis(50),
+            || async { read_error_disclosure(page, selector).await.0 }
+        )
+        .await,
+        "{shows}"
+    );
 }
 
 pub async fn error_details_open(page: &playwright_rs::Page, selector: &str) -> bool {

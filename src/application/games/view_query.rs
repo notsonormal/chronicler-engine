@@ -9,6 +9,7 @@ use crate::application::debug::DebugStateView;
 use crate::application::errors::ApplicationError;
 use crate::application::generation::gate::{Busy, GameWriter};
 use crate::domain::model::agent::Role;
+use crate::domain::model::change::ChangeVersions;
 use crate::domain::model::dock::DockRecord;
 use crate::domain::model::game::GameId;
 use crate::domain::model::llm_message::LlmMessage;
@@ -88,26 +89,19 @@ impl GameViewQuery {
     pub fn get_character_headshots(
         &self,
         game_id: GameId,
-        scene_only: bool,
     ) -> Result<Vec<(String, String)>, ApplicationError> {
         let storage = &self.storage;
         let game = storage.require_game(game_id.0)?;
         let world_with_map = storage.require_world(&game.world_key)?;
         let characters_list = storage.list_characters(world_with_map.world_id)?;
 
-        let character_ids: Vec<String> = if scene_only {
-            self.current_state(game_id)?
-                .scene
-                .characters_present
-                .iter()
-                .map(|character| character.id.clone())
-                .collect()
-        } else {
-            characters_list
-                .iter()
-                .map(|character| character.id.clone())
-                .collect()
-        };
+        let character_ids: Vec<String> = self
+            .current_state(game_id)?
+            .scene
+            .characters_present
+            .iter()
+            .map(|character| character.id.clone())
+            .collect();
 
         let character_data: Vec<(String, String)> = character_ids
             .iter()
@@ -197,10 +191,6 @@ impl GameViewQuery {
         self.storage.stories().messages(game_id).map_err(Into::into)
     }
 
-    pub fn get_current_options(&self, game_id: GameId) -> Result<Vec<String>, ApplicationError> {
-        Ok(self.dock(game_id)?.offered)
-    }
-
     pub fn dock(&self, game_id: GameId) -> Result<DockRecord, ApplicationError> {
         Ok(self.storage.docks().get(game_id)?.unwrap_or_default())
     }
@@ -219,6 +209,11 @@ impl GameViewQuery {
                 None => Status::Idle,
             },
         )
+    }
+
+    /// Reads memory only.
+    pub fn change_versions(&self, game: Option<GameId>) -> ChangeVersions {
+        self.storage.changes().versions(game)
     }
 
     pub fn is_busy(&self, game_id: GameId) -> bool {
@@ -245,6 +240,10 @@ impl GameViewQuery {
         self.storage
             .list_latest_llm_messages(limit)
             .map_err(Into::into)
+    }
+
+    pub fn llm_message(&self, id: i64) -> Result<Option<LlmMessage>, ApplicationError> {
+        self.storage.get_llm_message(id).map_err(Into::into)
     }
 
     pub fn role_health(&self) -> Result<Vec<RoleHealth>, ApplicationError> {

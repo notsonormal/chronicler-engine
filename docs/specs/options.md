@@ -2,7 +2,7 @@
 
 Endpoints:
 - `POST /action`
-- `GET /fragment/options-dock`
+- `GET /screen?parts=options-dock`
 - `POST /games/{game_id}/mode`
 
 ## Scenarios
@@ -15,17 +15,17 @@ Endpoints:
 Given a game with scene history and an options agent
 When the client POST /action with command="/options"
 And the Game is no longer busy
-Then GET /fragment/options-dock renders the options strip with one button per generated option
+Then GET /screen?parts=options-dock renders the options strip with one button per generated option
 ```
 
-#### Scenario 24.2: /options on a Game with no story text is refused
+#### Scenario 24.2: /options on a Game with no story text answers 400
 
 ```gherkin
 Given a Game whose story holds no text (its opening Narration has none)
 When the client POST /action with command="/options"
 Then the response is 400 Bad Request
 And the response body names the missing scene ("No scene to generate options for yet")
-And GET /fragment/options-dock renders no options strip and no Options failure
+And GET /screen?parts=options-dock renders no options strip and no Options failure
 ```
 
 #### Scenario 24.18: /options with no options agent reports the agent is unavailable and keeps the set
@@ -154,7 +154,7 @@ And the status names the event narration failure
 
 ```gherkin
 Given a world with the always-on toggle on and an options agent
-And storage that refuses the write of a state update
+And storage that fails the write of a state update
 When the client POST /games creates a game from that world
 And the client POST /action with command="look"
 And the Game is no longer busy
@@ -168,7 +168,7 @@ And the status carries the contradiction line
 ```gherkin
 Given a world with the always-on toggle on and an options agent
 And a Character whose Trigger fires on the next Action
-And storage that refuses the write of a new Message once the Narration that fired the Trigger is saved
+And storage that fails the write of a new Message once the Narration that fired the Trigger is saved
 When the client POST /games creates a game from that world
 And the client POST /action with command="examine the character"
 And the Game is no longer busy
@@ -216,9 +216,9 @@ Then the offered set still holds set A
 ```gherkin
 Given a Game with scene history whose Job is running, held inside its narrator call
 When a client POST /action with command="/options"
-Then the response is 200 carrying the "Still thinking..." status
+Then the response is 409 carrying the "Still thinking..." line
 And the offered set is unchanged
-And GET /fragment/options-dock renders no options strip
+And GET /screen?parts=options-dock renders no options strip
 ```
 
 ### Dock controls
@@ -229,6 +229,6 @@ And GET /fragment/options-dock renders no options strip
 Given a game with scene history and an options agent
 When the client POST /action with command="/options"
 And the Game is no longer busy
-Then GET /fragment/options-dock shows at least one icon
+Then GET /screen?parts=options-dock shows at least one icon
 And every icon it references is one GET / defines
 ```

@@ -5,7 +5,6 @@ use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrit
 use chronicler_engine::domain::model::dock::{DockRecord, OptionsFailure};
 use chronicler_engine::domain::model::game::{GameId, NewGame};
 use chronicler_engine::domain::model::message::{Maker, Message, Swipe, SwipeAt};
-use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind,
 };
@@ -16,26 +15,18 @@ use chronicler_engine::domain::model::state::swipe_state::SwipeState;
 use chronicler_engine::domain::model::state::event_record::{EventRecord, TriggerRef};
 use chronicler_engine::domain::model::trigger::Encounters;
 use chronicler_engine::error::EngineError;
-use chronicler_engine::test_support::tx_token;
+use chronicler_engine::test_support::{test_new_game, tx_token};
 
 const WORLD_KEY: &str = "record_world";
 
 fn new_game(name: &str) -> NewGame {
-    NewGame {
-        world_name: "Record World".to_string(),
-        world_key: WORLD_KEY.to_string(),
-        persona_key: "record_persona".to_string(),
-        persona_name: "Record Persona".to_string(),
-        name: name.to_string(),
-        narrator_mode: NarratorMode::Novel,
-        narrative_perspective: NarrativePerspective::Third,
-        narrative_tense: NarrativeTense::Past,
-        system_prompt_preset_id: "system_default".to_string(),
-        quantifier_prompt_preset_id: "quantifier_default".to_string(),
-        impersonate_prompt_preset_id: "impersonate_default".to_string(),
-        options_prompt_preset_id: "options_default".to_string(),
-        options_always_on: false,
-    }
+    test_new_game(
+        "Record World",
+        WORLD_KEY,
+        "record_persona",
+        "Record Persona",
+        name,
+    )
 }
 
 fn state_in(room: &str) -> SwipeState {

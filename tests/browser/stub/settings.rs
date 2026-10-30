@@ -1,19 +1,14 @@
-//! Stub-browser tests for the Settings panel: the client-side sub-tabs and the shared connection form page. Tagged against `docs/specs/browser_settings.md`.
+//! Stub-browser tests for the Settings panel: the client-side sub-tabs and the connection form in the dialog. Tagged against `docs/specs/browser_settings.md`.
 
 use std::time::Duration;
 
-use super::support::wait_until_focused;
-use super::*;
-use super::support::StubRunner;
+use chronicler_engine::domain::model::change::ChangeKind;
 
-async fn open_settings(page: &playwright_rs::Page) {
-    page.locator(r#"[data-tab="settings"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
-    wait_until_visible(page, "#subtab-connections", Duration::from_secs(5)).await;
-}
+use super::support::{
+    dialog_is_open, open_settings, wait_for_count, wait_until_dialog_closed, wait_until_focused,
+    StubRunner,
+};
+use super::*;
 
 // [docs/specs/browser_settings.md] SCENARIO: 40.1
 async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
@@ -36,8 +31,8 @@ async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
                     const connectionsPanel = document.getElementById('settings-connections');
                     return [
                         tab.getAttribute('aria-selected'),
-                        textPanel.classList.contains('active'),
-                        connectionsPanel.classList.contains('active'),
+                        !textPanel.hidden,
+                        !connectionsPanel.hidden,
                     ];
                 })()"#,
             None,
@@ -59,24 +54,20 @@ async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
         .click(None)
         .await
         .unwrap();
-    page.locator(r#"[data-tab="settings"]"#)
-        .await
-        .click(None)
-        .await
-        .unwrap();
+    open_settings(&page).await;
 
     let kept: bool = page
-            .evaluate::<(), bool>(
-                r#"(() => {
+        .evaluate::<(), bool>(
+            r#"(() => {
                     const tab = document.getElementById('subtab-text-check');
                     return tab.getAttribute('aria-selected') === 'true'
-                        && document.getElementById('settings-text-check').classList.contains('active')
-                        && !document.getElementById('settings-connections').classList.contains('active');
+                        && !document.getElementById('settings-text-check').hidden
+                        && document.getElementById('settings-connections').hidden;
                 })()"#,
-                None,
-            )
-            .await
-            .unwrap();
+            None,
+        )
+        .await
+        .unwrap();
     assert!(
         kept,
         "the selected sub-tab must survive a top-level tab change"
@@ -84,43 +75,54 @@ async fn check_settings_sub_tabs_keep_their_place_across_a_top_level_tab_change(
 }
 
 // [docs/specs/browser_settings.md] SCENARIO: 40.2
-async fn check_add_and_edit_open_the_shared_connection_form_page(
+async fn check_add_and_edit_open_the_connection_form_in_the_dialog(
     page: playwright_rs::Page,
-    _stub: StubServer,
+    stub: StubServer,
 ) {
+    let stub = stub.changes_handle();
     open_settings(&page).await;
 
-    page.locator(".connection-add button")
-        .await
-        .click(None)
-        .await
-        .unwrap();
-    wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
-
-    let back_link = page
-        .locator(".connection-form-page .back-link")
+    click_and_settle(&page, ".connection-add button", "#edit-dialog-body").await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
+    let heading = page
+        .locator("#edit-dialog h2")
         .await
         .inner_text()
         .await
         .unwrap_or_default();
-    assert!(
-        back_link.contains("Connections"),
-        "the form page must offer a back link to Connections, got {back_link:?}"
-    );
+    assert_eq!(heading, "Add Connection");
 
-    page.locator(".connection-form-page .back-link")
+    page.locator("#edit-dialog [data-close-dialog]")
         .await
         .click(None)
         .await
         .unwrap();
-    wait_until_visible(&page, ".connection-list", Duration::from_secs(5)).await;
+    wait_until_hidden(&page, "#edit-dialog", Duration::from_secs(5)).await;
+    assert!(
+        wait_for_count(&page, "#edit-dialog-body > *", 0).await,
+        "closing the dialog empties its body"
+    );
+    assert_eq!(
+        stub.loads("/fragment/connections/new"),
+        1,
+        "Cancel sent no request: the only request was the one that opened the dialog"
+    );
 
     let edit_selector = r#".connection-row:has(.connection-name:text-is("openrouter-gpt-4o-mini")) button:has-text('Edit')"#;
-    page.locator(edit_selector).await.click(None).await.unwrap();
-    wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
-
+    click_and_settle(&page, edit_selector, "#edit-dialog-body").await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
     let heading = page
-        .locator(".connection-form-page h2")
+        .locator("#edit-dialog h2")
         .await
         .inner_text()
         .await
@@ -130,41 +132,47 @@ async fn check_add_and_edit_open_the_shared_connection_form_page(
         "the Edit form must name the connection, got {heading:?}"
     );
 
-    page.locator(".connection-form-page .back-link")
+    page.locator("#edit-dialog [data-close-dialog]")
         .await
         .click(None)
         .await
         .unwrap();
-    wait_until_visible(&page, ".connection-list", Duration::from_secs(5)).await;
+    wait_until_hidden(&page, "#edit-dialog", Duration::from_secs(5)).await;
 }
 
 // [docs/specs/browser_settings.md] SCENARIO: 40.3
-async fn check_settings_panel_swaps_keep_keyboard_focus_in_the_panel(
+async fn check_opening_and_closing_the_connection_dialog_keeps_keyboard_focus_where_the_player_works(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
     open_settings(&page).await;
 
-    let edit = r#".connection-row:has(.connection-name:text-is("openrouter-gpt-4o-mini")) button:has-text('Edit')"#;
+    let edit = r#"#connection-openrouter-gpt-4o-mini button[hx-get$="/edit"]"#;
     page.locator(edit).await.focus().await.unwrap();
-    page.locator(edit).await.click(None).await.unwrap();
-    wait_until_visible(&page, ".connection-form-page", Duration::from_secs(5)).await;
+    click_and_settle(&page, edit, "#edit-dialog-body").await;
+    wait_until_visible(
+        &page,
+        "#edit-dialog .connection-form",
+        Duration::from_secs(5),
+    )
+    .await;
     assert!(
         wait_until_focused(&page, "#conn_name", Duration::from_secs(2)).await,
         "opening the connection form must land focus in its first field"
     );
 
-    let back = ".connection-form-page .back-link";
-    page.locator(back).await.focus().await.unwrap();
-    page.locator(back).await.click(None).await.unwrap();
-    wait_until_visible(&page, ".connection-list", Duration::from_secs(5)).await;
+    page.locator("#edit-dialog [data-close-dialog]")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_hidden(&page, "#edit-dialog", Duration::from_secs(5)).await;
     assert!(
-        wait_until_focused(&page, "#role-select-narrator", Duration::from_secs(2)).await,
-        "the back link must land focus back in the Connections view, not on the page body"
+        wait_until_focused(&page, edit, Duration::from_secs(2)).await,
+        "Cancel must land focus on the control that opened the dialog, not on the page body"
     );
 
-    // The role-change swap re-renders the panel, but htmx restores focus to
-    // the select that came back with the same id.
+    // A role change swaps nothing, so the select keeps focus.
     page.locator("#role-select-quantifier")
         .await
         .focus()
@@ -181,6 +189,86 @@ async fn check_settings_panel_swaps_keep_keyboard_focus_in_the_panel(
     );
 }
 
+// [docs/specs/browser_settings.md] SCENARIO: 40.5
+async fn check_the_test_result_of_a_saved_connection_opens_in_the_dialog_and_survives_a_load(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    let changes = stub.changes_handle();
+    open_settings(&page).await;
+
+    let test_button = r#"#connection-openrouter-gpt-4o-mini button[hx-post$="/test"]"#;
+    page.locator(test_button).await.focus().await.unwrap();
+    click_and_settle(&page, test_button, "#edit-dialog-body").await;
+    assert!(dialog_is_open(&page).await, "the row Test opens the dialog");
+    let result = page
+        .locator("#edit-dialog .connection-test-result.success")
+        .await
+        .inner_text()
+        .await
+        .unwrap_or_default();
+    assert!(
+        result.contains("OK"),
+        "the dialog shows the result of the test, got {result:?}"
+    );
+
+    let loads_before = changes.loads("settings");
+    changes.bump(ChangeKind::SETTINGS);
+    let loaded = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(25),
+        || async { changes.loads("settings") > loads_before },
+    )
+    .await;
+    assert!(loaded, "the Settings panel loads after its number moved");
+    assert!(
+        dialog_is_open(&page).await
+            && page
+                .locator("#edit-dialog .connection-test-result.success")
+                .await
+                .count()
+                .await
+                .unwrap_or(0)
+                == 1,
+        "a Settings load must leave the result in the dialog"
+    );
+
+    page.keyboard().press("Escape", None).await.unwrap();
+    wait_until_dialog_closed(&page, "Escape closes the result").await;
+    assert!(
+        wait_until_focused(&page, test_button, Duration::from_secs(2)).await,
+        "closing the result returns focus to the Test control"
+    );
+}
+
+// [docs/specs/browser_settings.md] SCENARIO: 40.4
+async fn check_a_saved_text_check_change_shows_the_saved_line(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_settings(&page).await;
+    page.locator("#subtab-text-check")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+    wait_until_visible(&page, "#check_mode", Duration::from_secs(5)).await;
+
+    let shown_before: String = page
+        .evaluate::<(), String>(
+            "() => getComputedStyle(document.getElementById('text-check-status'), '::before').content",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        shown_before, "none",
+        "the status line must show no text before a save"
+    );
+
+    select_option_and_await_saved(&page, "#check_mode", "spell", "text-check-status").await;
+}
+
 #[tokio::test]
 async fn run_settings_checks() {
     let mut runner = StubRunner::launch().await;
@@ -193,13 +281,25 @@ async fn run_settings_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_add_and_edit_open_the_shared_connection_form_page,
+            check_add_and_edit_open_the_connection_form_in_the_dialog,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_settings_panel_swaps_keep_keyboard_focus_in_the_panel,
+            check_opening_and_closing_the_connection_dialog_keeps_keyboard_focus_where_the_player_works,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_saved_text_check_change_shows_the_saved_line,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_the_test_result_of_a_saved_connection_opens_in_the_dialog_and_survives_a_load,
         )
         .await;
     runner.finish().await;

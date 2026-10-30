@@ -18,7 +18,10 @@ fn test_header_template_renders_game_name() {
     };
     let rendered = template.render().unwrap();
     assert!(rendered.contains("Chronicler Engine"));
-    assert!(rendered.contains(r#"class="header""#));
+    assert!(
+        !rendered.contains(r#"class="header""#),
+        "the shell's #header is the part, so the fragment repeats no root"
+    );
     assert!(rendered.contains(r#"class="game-title""#));
     assert!(rendered.contains("Test Game"));
     assert!(
@@ -236,7 +239,7 @@ fn test_story_log_template_retrigger_button_shown_when_the_window_allows_it() {
     let template = NarrationLogTemplate::new(&window_entries(&entries), true, false);
     let rendered = template.render().unwrap();
     assert!(rendered.contains("retrigger-btn"));
-    assert!(rendered.contains("submitRetrigger"));
+    assert!(rendered.contains(r#"hx-post="/retrigger""#));
     assert!(rendered.contains(r#"aria-label="Retrigger Event""#));
 }
 
@@ -270,8 +273,8 @@ fn test_story_log_template_swipe_controls_on_last_narration_with_one_swipe() {
         "Swipe controls should appear on last narration"
     );
     assert!(
-        rendered.contains("submitNewSwipe()"),
-        "Right arrow should call submitNewSwipe on latest swipe"
+        rendered.contains(r#"hx-post="/swipe/new""#),
+        "Right arrow should post a new swipe on the latest swipe"
     );
     assert!(rendered.contains(r#"aria-label="Previous swipe""#));
     assert!(rendered.contains(r#"aria-label="Retry""#));
@@ -297,7 +300,7 @@ fn test_story_log_template_swipe_controls_on_last_input_with_one_swipe() {
         rendered.contains("swipe-controls"),
         "Swipe controls should appear on last input"
     );
-    assert!(rendered.contains("submitNewSwipe()"));
+    assert!(rendered.contains(r#"hx-post="/swipe/new""#));
 }
 
 #[test]
@@ -315,7 +318,7 @@ fn test_story_log_template_swipe_controls_on_last_input() {
         rendered.contains("swipe-controls"),
         "Swipe controls should appear on last input"
     );
-    assert!(rendered.contains("submitNewSwipe()"));
+    assert!(rendered.contains(r#"hx-post="/swipe/new""#));
 }
 
 #[test]
@@ -378,16 +381,16 @@ fn test_story_log_template_swipe_navigation_between_existing_swipes() {
     assert!(rendered.contains("swipe-controls"));
     assert!(rendered.contains("2 / 3"));
     assert!(
-        rendered.contains("switchSwipe(1, 0)"),
+        rendered.contains(r#"hx-post="/message/1/swipe/0""#),
         "Left arrow should navigate to previous swipe"
     );
     assert!(
-        rendered.contains("switchSwipe(1, 2)"),
+        rendered.contains(r#"hx-post="/message/1/swipe/2""#),
         "Right arrow should navigate to next swipe"
     );
     assert!(
-        !rendered.contains("submitNewSwipe()"),
-        "Right arrow should not call submitNewSwipe when next swipe exists"
+        !rendered.contains(r#"hx-post="/swipe/new""#),
+        "Right arrow should not post a new swipe when next swipe exists"
     );
     assert!(rendered.contains(r#"aria-label="Next swipe""#));
     assert!(

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard};
 use crate::domain::model::map::{Direction, MapDef, Overworld, Region, Room};
 use crate::domain::model::game::GameId;
+use crate::error::DatabaseContext;
 use crate::domain::model::message::{Maker, Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::llm_backend::LlmBackendType;
@@ -486,6 +487,25 @@ pub fn seed_game_row(storage: &Storage, request: &crate::domain::model::game::Ne
         })
         // arch-lint: allow(no-unwrap-expect) reason="test fixture panics when the seed write fails"
         .expect("test setup: the Game row must land")
+}
+
+/// Test setup only: a Game row with the `updated_at` that a test needs, so two Games
+/// can hold the same one. A running engine sets it to the time of the write.
+pub fn set_game_updated_at_row(storage: &Storage, game: GameId, updated_at: &str) {
+    storage
+        .with_backend_mut(StorageCall::SeedGameRow, |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                conn.execute(
+                    "UPDATE games SET updated_at = ?1 WHERE id = ?2",
+                    rusqlite::params![updated_at, game.0 as i64],
+                )
+                .db_context("Failed to set the Game updated_at")?;
+                Ok(())
+            }
+        })
+        // arch-lint: allow(no-unwrap-expect) reason="test fixture panics when the seed write fails"
+        .expect("test setup: the Game updated_at must land");
 }
 
 /// Test setup only: a running engine writes the config through `GameWriter::save_config`.

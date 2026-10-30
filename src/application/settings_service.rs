@@ -63,9 +63,9 @@ impl SettingsService {
                 let is_narrator = settings.narration_connection_id == id;
                 let is_quantifier = settings.quantifier_connection_id == id;
                 let (name, updated) = {
-                    let connection = settings
-                        .find_connection_mut(id)
-                        .ok_or_else(|| EngineError::Config("Connection not found".to_string()))?;
+                    let connection = settings.find_connection_mut(id).ok_or_else(|| {
+                        EngineError::Validation("Connection not found".to_string())
+                    })?;
                     edit(connection);
                     (connection.name.clone(), connection.clone())
                 };

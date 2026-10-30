@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test actions take.
+//! HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test requests take.
 
 use std::sync::{Arc, Mutex};
 
@@ -17,7 +17,7 @@ use chronicler_engine::TestAppBuilder;
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::long_story_app;
 use crate::support::http_fixtures::mock_connection;
-use crate::support::http_requests::{fetch_body, post_action, post_form, wait_settled};
+use crate::support::http_requests::{fetch_body, post_action, post_form, wait_settled, fetch_part};
 
 /// One Mock connection serving both roles, so the production graph can resolve
 /// its eager boot check.
@@ -217,7 +217,7 @@ async fn test_context_window_that_is_not_a_positive_whole_number_is_refused() {
         );
     }
 
-    let panel = fetch_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"<span class="connection-name">Alpha</span>"#),
         "the refused edit must leave the connection list intact: {panel}"

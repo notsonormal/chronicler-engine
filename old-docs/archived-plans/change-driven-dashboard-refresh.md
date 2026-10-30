@@ -1,7 +1,7 @@
 # Plan: Change-driven dashboard refresh
 
 **Date:** 2026-10-25
-**Status:** Draft. The design was decided with the owner, reviewed against the code, and the two decisions from the review are made (D1, D2). Not started.
+**Status:** Done (archived). All four stages are built on `wf/change-driven-dashboard-refresh`. The "Outcome" section at the end lists every difference from this plan.
 **Goal:** One architecture for how the dashboard shows server data. Data flows one way: an action saves data, and the regions that show the data load it. A region loads only when its data changed, keeps what the load does not change, and waits while the player edits in it. One table, one load path and one test cover every region. A missed load or a destroyed form fails a test. It does not depend on timing.
 
 This plan replaces `docs/plans/games-panel-rename-form-survives-the-poll.md`, which was never committed. It closes `.scratch/autoplay-follow-ups/issues/04-rename-form-survives-the-games-panel-poll.md` at the end of stage 3.
@@ -109,7 +109,7 @@ What the four statements cover:
 
 ### 1. Data kinds and the browser's table
 
-The browser's table is the `data-live` attribute on each region element in `assets/index.html`. It lists the kinds of data the region shows, so one look at a region tells which changes load it. A guardrail test parses `index.html` (§8).
+The browser's table is the `data-live` attribute on each region element in `assets/index.html`. It lists the kinds of data the region shows, so one look at a region tells which changes load it. Its tokens are the field names of the `/changes` answer: `story`, `options`, `busy`, `games`, `worlds`, `settings`, `presets`, `llm`. A guardrail test parses `index.html` (§8).
 
 | Region | `data-live` (kinds) | Renders |
 |---|---|---|
@@ -143,8 +143,8 @@ The banner and the Settings role-health cells load on the same raise of "LLM mes
 - `src/domain/model/change.rs` (new): `ChangeKind` (the eight kinds) and `ChangeVersions` (one snapshot of the numbers, `Serialize`). Plain data, so the server can use `ChangeVersions` without importing storage.
 - `src/adapters/driven/storage/changes.rs` (new): `ChangeCounters`. It holds:
   - a server id, a `uuid::Uuid::new_v4()` made at construction (the `uuid` crate is already a dependency);
-  - one `AtomicU64` for each engine-wide kind;
-  - a `Mutex<HashMap<GameId, …>>` with the three per-Game numbers. A deleted Game's entry is dropped.
+  - every number under one `Mutex`: the engine-wide numbers, and a `HashMap<GameId, …>` with the three per-Game numbers. The storage guardrail (`tests/infrastructure/guardrails/walker_rows.rs`) bans `Atomic*` types in the storage adapter, and one lock lets a snapshot read all numbers together. The counter lock is always the innermost lock: a raise takes no other lock.
+  - `GameWriter::delete` and `replace` drop a deleted Game's entry after their hold returns. A drop inside the transaction would not work, because the hold's own busy raise would make the entry again.
 
   It also holds the two exhaustive maps, `StorageCall → kinds` and `TxWrite → kinds`. Each map is one `match` with no `_` arm and `#[deny(clippy::wildcard_enum_match_arm)]`. So a new variant does not compile until it names its kinds (Q6).
 - `Storage` gets the field `changes: ChangeCounters`. `new_sqlite` builds it, and `with_overrides` carries it over. `Storage::changes()` gives read and raise access to the application.
@@ -168,7 +168,7 @@ There are three raise points:
      - `InsertSwipe`, `SetSwipeText`, `SetSwipeState` and `SetActiveSwipe` map to story;
      - `PutDock`, `PutOptionsFailure` and `ClearDock` map to Options;
      - `SetGameFailure` maps to busy state;
-     - `InsertGame`, `DeleteGame` and `SetGameConfig` map to games.
+     - `InsertGame`, `DeleteGame` and `SetGameConfig` map to games. The Game row of a create lands before the `Tx` exists, so `run_transaction` records `InsertGame` itself on the create path.
    - After `tx.commit()` returns `Ok`, the transaction raises the recorded kinds once, for its Game. A rolled-back transaction raises nothing.
 3. **The busy state: `BusyRegistry::hold`** (`src/application/generation/gate.rs`). This is the only code that takes the busy lock.
    - Before and after the closure, derive the `Busy` value of each held Game. `Busy` already derives `PartialEq`. For each Game whose value changed, raise busy state. This drops the repeated `step()` calls that keep the same value.
@@ -220,7 +220,7 @@ the page becomes visible      → ask at once
 
 - The per-region record handles held, stale and failed loads with one comparison. A load is never lost, because a region's record moves only when its load succeeds.
 - Each region shows its state in a `data-live-state` attribute (`current`, `loading`, `held`, `stale`, `due`). A developer sees in the DOM inspector why a region did not load, and tests can assert the state.
-- Every region element keeps its `hx-get` and has `hx-trigger="load, refresh"` and `hx-swap="morph:innerHTML"`. No region has an `every` trigger. `<body hx-ext="morph">` already enables morph.
+- Every region element keeps its `hx-get` and has `hx-trigger="refresh"` and `hx-swap="morph:innerHTML"`. No region has a `load` or an `every` trigger. The first ask after page start finds no record, so it loads every region. Only the loop starts a region load, so every load has a record (correction after stage 2a: a `load` trigger loaded each region a second time, because a load that no ask started has no numbers to record). `<body hx-ext="morph">` already enables morph.
 - `markUnreachable` and `clearUnreachable` (`dashboard-errors.js`) already exist. The loop calls them because its ask is a `fetch`, not an htmx request.
 - **The region element is never replaced.** A fragment's root does not repeat the region's own element or class. Today every panel fragment does repeat it (`<div class="games-panel">` inside `<div class="games-panel">`). `dashboard-ui-review` ticket 01 fixed the same fault, but for the story log only.
 - **Morph needs stable ids** on repeated items, so that it matches a row to the same row.
@@ -273,7 +273,8 @@ Today's actions that change, from `rg 'hx-target' src/adapters/driving/http asse
 | Autoplay start | Answers into `#status-display` | Nothing; the busy number loads the status display |
 | Swipe switch (`switchSwipe`) | `fetch`, then `#story-log.innerHTML = html` | `fetch`, then ask at once; the story number loads the log |
 | Story-log edit save, delete last, Retry, Retrigger | `fetch`; the log waits for its next poll | `fetch`, then ask at once |
-| Command send, preview confirm | Answer `#action-preview` | Unchanged: the preview is the action area's own element (statement 4) |
+| Command send (`POST /action/check`) | Answers `#action-preview` | Unchanged: the preview is the action area's own element (statement 4) |
+| Preview confirm (`POST /action/confirm`) | Its form targets `#action-preview`, but the answer carries `HX-Retarget: #status-display` (`add_status_swap_headers`), so it writes the status display | Nothing on success; the busy number loads the status display. A refusal goes to the action form's inline slot. `add_status_swap_headers` goes (found after stage 2a). |
 
 ### 6. The header and the failure banner
 
@@ -292,12 +293,12 @@ Today's actions that change, from `rg 'hx-target' src/adapters/driving/http asse
 The guardrails are one test file in the `guardrails` binary. They fail when:
 
 - an element in `assets/index.html` has an `every` trigger;
-- an element with `hx-get` in `index.html` has no `data-live`, or lacks `hx-trigger="load, refresh"`, or lacks `hx-swap="morph:innerHTML"`;
+- an element with `hx-get` in `index.html` has no `data-live`, or lacks `hx-trigger="refresh"`, or lacks `hx-swap="morph:innerHTML"`;
 - a `data-live` attribute lists an unknown kind;
 - a template in `src/adapters/driving/http/` or `index.html` has an `hx-target` that names a region element (a selector in the `data-live` set), or swaps a region element with `outerHTML`;
 - a template has `hx-swap-oob`;
 - a script in `assets/dashboard-*.js` writes `innerHTML` or `outerHTML` of a region element;
-- a handler answers `HX-Refresh`.
+- a handler answers `HX-Refresh`, or an `HX-Retarget` that names a region element.
 
 The two exhaustive maps in §2 are checked by the compiler, not by a guardrail.
 
@@ -418,7 +419,7 @@ Each stage ends with `python build.py` green. During a stage, use `python build.
    - `/changes` in what `set_polls_failing` fails.
 
    Add a test helper for one deterministic ask. The loop exposes one function for a single ask, which returns when every load that the ask started has settled.
-5. Add `assets/dashboard-live.js` (`?v=1`), the `data-keep` callback, the hold, the focus rule, and `data-live`, `hx-trigger="load, refresh"` and morph on the Game-tab regions and the header. In this stage, the header keeps its out-of-band swaps, so its `data-live` is "games, settings, LLM messages" until stage 3.
+5. Add `assets/dashboard-live.js` (`?v=1`), the `data-keep` callback, the hold, the focus rule, and `data-live`, `hx-trigger="refresh"` and morph on the Game-tab regions and the header. In this stage, the header keeps its out-of-band swaps, so its `data-live` is "games, settings, LLM messages" until stage 3.
 6. Remove from the Game tab and the header:
    - their timers;
    - the story-log poll pause (`pausePolling`, `resumePolling`);
@@ -503,3 +504,31 @@ Each stage ends with `python build.py` green. During a stage, use `python build.
 - A JS framework or a JS build step. The browser side stays htmx 1.9.10, idiomorph and plain scripts.
 - A visual redesign. The editors keep their look, and the panels keep their layout.
 - The dead `/fragment/character-headshots` route and its template (`inventory.md`). File a separate ticket.
+
+## Outcome (2026-10-25)
+
+Built in six commits on `wf/change-driven-dashboard-refresh`: stage 1 (`cc60662e`), 2a (`b1daa1ef`), 2b (`cfc92819`), 3a (`782ca8e5`), 3b (`38593c79`), 4 (`af91b6b8`). Ticket 04 closed in `4dbeed72`. Every item of "Done when" holds.
+
+Differences from the plan, each with its reason:
+
+| Area | Plan | Built | Reason |
+|---|---|---|---|
+| Counters | `AtomicU64` per kind | One `Mutex` over all numbers | A storage guardrail bans `Atomic*` in the storage adapter; one lock also gives a consistent snapshot. |
+| Triggers | `load, refresh` | `refresh` only; the first ask loads every region | A `load` that no ask started has no numbers to record, so each region loaded twice at page start. |
+| Preview confirm | Unchanged | Answers nothing; `add_status_swap_headers` removed | Its answer carried `HX-Retarget: #status-display`, a write into a region the plan had missed. |
+| Options regenerate form | Not listed | Swaps nothing; refusal in its own slot | It targeted `#status-display` with `innerHTML`. |
+| Busy refusal | Inline slot | Still a 200 with the `status wait` markup, which the client reads and reports in the action's slot; never shown | The specs pin that answer widely. |
+| Retry and Retrigger failure | Action area | `#story-log-error` | The failure belongs to the story log action. |
+| Action area state | Own element | `#action-status`, which shows only "Thinking..." until the first status load after a send | The other states already had their own place. |
+| Inline errors | Not in the plan | A load keeps an inline error slot that shows an error | Without it, any load would erase a D2 error within a second. |
+| End of an edit | One rule | `endEdit` and `settleSave`; only a form releases `data-work`; markers `data-close-on-save`, `data-reset-on-save`, `data-autosave`, `data-saved-flag`, `data-refusal-what`, `data-opens-editor`, `data-close-editor` | An auto-save control is not a form and must not close the editor around it. The markers make each behaviour explicit instead of guessed. |
+| Row ids | `data-id` is enough | `id` on every row (`game-row-{id}`, `preset-card-{id}`, ...) | Idiomorph matches nodes by `id` only. |
+| Hidden section | Loads its stale regions | Opening a section asks at once | One path: the ask decides which regions are due. |
+| Rejected values | 200 with an error fragment | 400 (config values, World posture, World delete refusal, unknown connection edit) | A 2xx answer would be taken as a save. |
+| Status labels | Not specified | Rendered by the server in `layout/handlers/endpoints.rs`; `Step::label` removed from the domain | Presentation does not belong in the domain model. |
+| LLM message cards | `data-keep` on the card | The `.expanded` class is gone; `aria-expanded` and `hidden` carry the state | A class that the server also sets cannot be kept. |
+| Kept focus code | Remove | `.preset-card` focus code in `dashboard-panels.js` stays | Preset Edit, View and Cancel still swap their own card, and htmx restores focus only by id. |
+| Fade | Delete fade | Gone | Accepted risk. |
+
+Measured: a morph of the LLM Messages panel with 50 messages takes 26–61 ms per load (UI pass, `tmp/ui-pass/`).
+

@@ -95,7 +95,7 @@ fn test_get_character_headshots_returns_typed_error_when_game_missing() {
     let app = minimal_app_no_game();
     let err = app
         .game_view_query
-        .get_character_headshots(active_game_of(&app), true)
+        .get_character_headshots(active_game_of(&app))
         .unwrap_err();
     assert!(
         matches!(
@@ -111,17 +111,7 @@ fn test_get_character_headshots_scene_only_empty() {
     let app = minimal_app();
     let headshots = app
         .game_view_query
-        .get_character_headshots(active_game_of(&app), true)
-        .unwrap();
-    assert!(headshots.is_empty());
-}
-
-#[test]
-fn test_get_character_headshots_all_empty() {
-    let app = minimal_app();
-    let headshots = app
-        .game_view_query
-        .get_character_headshots(active_game_of(&app), false)
+        .get_character_headshots(active_game_of(&app))
         .unwrap();
     assert!(headshots.is_empty());
 }

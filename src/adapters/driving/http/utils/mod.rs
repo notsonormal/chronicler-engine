@@ -1,10 +1,12 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! HTTP utility modules.
 
+pub mod answer_words;
 pub mod current_game;
 pub mod error;
 pub mod fragment;
 pub mod handler_helpers;
+pub mod request_layers;
 pub mod response;
 pub mod template_helpers;
 pub mod view_mappers;

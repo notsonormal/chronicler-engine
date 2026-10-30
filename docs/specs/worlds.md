@@ -1,10 +1,21 @@
 # Feature Spec: Worlds
 
 Endpoints:
+- `GET /screen?parts=worlds`
+- `GET /fragment/worlds/new`
+- `GET /worlds/:key/edit`
 - `POST /worlds`
 - `POST /worlds/:key`
 - `POST /worlds/:key/posture`
 - `POST /worlds/:key/delete`
+
+The Worlds panel is a part of the screen (`worlds`). Its fragment
+carries no root element of its own. A World row shows a shortened description. The World editor opens in the edit dialog
+(`#edit-dialog-body`): the Create and Edit controls load it, and its root
+(`data-dialog-form`) carries the title of the dialog. A World save answers nothing on success:
+an empty 200. An invalid value answers a 400 error fragment, and a failure a 500 error
+fragment. The page shows the report of a save in the notice place, or in the form that
+holds the typed input. The saved World reaches the screen when the panel loads.
 
 ## Scenarios
 
@@ -15,7 +26,7 @@ Endpoints:
 ```gherkin
 Given a seeded world in Interactive Fiction mode with perspective "second" and tense "past"
 When the client POST /worlds/{key} with the full form but no posture fields
-Then the response is a 200 and the panel re-renders
+Then the response is a 200 with an empty body
 And the stored world still carries mode "interactive_fiction", perspective "second", and tense "past"
 ```
 
@@ -53,17 +64,17 @@ Then the stored world's options_always_on is false
 
 ### World posture auto-save
 
-The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers with the `#world-posture-status` fragment. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment, so the contract is verified at request level and the browser keeps only a wiring check.
+The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers an empty 200 for a saved change. The browser shows "Saved" in `#world-posture-status`, and a refused or failed save puts the select back to its rendered value, and the notice reports the failure. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment, so the contract is verified at request level and the browser keeps only a wiring check.
 
 #### Scenario 25.5: The posture endpoint patches and reports per outcome
 
 ```gherkin
 Given a seeded world in Interactive Fiction mode with tense "past"
 When the client POST /worlds/{key}/posture with a valid tense patch
-Then the response is a 200 carrying the "Saved" status span
+Then the response is a 200 with an empty body
 And the stored world's tense is the patched value
 When the client POST /worlds/{key}/posture with an invalid narrator_mode
-Then the response is a 200 carrying an error fragment
+Then the response is a 400 carrying an error fragment
 And the stored world is mutated not at all
 When the client POST /worlds/{key}/posture for an unknown key
 Then the response is a 400
@@ -82,13 +93,84 @@ And the narrator_mode, narrative_perspective, and narrative_tense selects are re
 And the narrator_mode select renders "interactive_fiction" selected
 And the narrative_perspective select renders "second" selected
 And the narrative_tense select renders "past" selected
-And the body contains the #world-posture-status target
+And the editor root is a dialog form (`data-dialog-form`) with the title `edit-dialog-title`, and carries no hx-target
+And the body contains the #world-posture-status flag, and the posture group holds no error slot
 And the posture selects auto-save to /worlds/posture_world/posture
 ```
 
-### World creation refuses an existing identifier
+### World edit form
 
-#### Scenario 25.7: Creating a World whose identifier already exists is refused
+#### Scenario 25.14: The World Edit form answers 404 for an unknown World and opens no dialog
+
+```gherkin
+Given a fresh app state
+When the client GET /worlds/does-not-exist/edit
+Then the response is a 404
+And the body says the World was not found
+And the body carries no World form
+```
+
+### A failed World update
+
+#### Scenario 25.15: A storage failure during a World update names the typed name
+
+```gherkin
+Given a seeded World named "Posture World"
+And a storage that rejects the World update
+When the client POST /worlds/{key} with the full form and the name "Typed Name"
+Then the response status is "500 Internal Server Error"
+And the first line of the body is `The World "Typed Name" was not saved`, with the name typed in the form
+And the body does not name "Posture World"
+```
+
+#### Scenario 25.16: A World update for a World that is gone names the typed name
+
+```gherkin
+Given a fresh app state
+When the client POST /worlds/{key} for a key that no World holds, with the full form and the name "Typed Name"
+Then the response status is "400 Bad Request"
+And the first line of the body is `The World "Typed Name" was not saved`, with the name typed in the form
+```
+
+#### Scenario 25.17: A World update whose map is not JSON names the typed name
+
+```gherkin
+Given a seeded World
+When the client POST /worlds/{key} with the name "Typed Name" and a map field that is not JSON
+Then the response status is "400 Bad Request"
+And the first line of the body starts with `The World "Typed Name" was not saved: Invalid map JSON`
+```
+
+#### Scenario 25.18: A World update whose Scenarios are not JSON names the typed name
+
+```gherkin
+Given a seeded World
+When the client POST /worlds/{key} with the name "Typed Name" and a Scenarios field that is not JSON
+Then the response status is "400 Bad Request"
+And the first line of the body starts with `The World "Typed Name" was not saved: Invalid scenarios JSON`
+```
+
+#### Scenario 25.19: A World create whose map is not JSON names the typed name
+
+```gherkin
+Given an app with no World of the typed key
+When the client POST /worlds with the name "Typed Name" and a map field that is not JSON
+Then the response status is "400 Bad Request"
+And the first line of the body starts with `The World "Typed Name" was not created: Invalid map JSON`
+```
+
+#### Scenario 25.20: A World create whose Scenarios are not JSON names the typed name
+
+```gherkin
+Given an app with no World of the typed key
+When the client POST /worlds with the name "Typed Name" and a Scenarios field that is not JSON
+Then the response status is "400 Bad Request"
+And the first line of the body starts with `The World "Typed Name" was not created: Invalid scenarios JSON`
+```
+
+### World creation answers 400 for an existing identifier
+
+#### Scenario 25.7: Creating a World whose identifier already exists answers 400
 
 ```gherkin
 Given a seeded world with identifier "posture_world", a description and a room map
@@ -115,26 +197,38 @@ And the body carries the error fragment naming the storage failure
 
 ```gherkin
 Given a seeded World with exactly one game
-When the client GET /fragment/worlds
+When the client GET /screen?parts=worlds
 Then the response status is "200 OK"
+And the body holds no editor slot and no root element of its own
+And the Create World control and each World's Edit control target `#edit-dialog-body`
+And the World's row carries a stable id
 And the World's card shows "1 game" and not "1 games"
 When a second game is created in that World
-And the client GET /fragment/worlds
+And the client GET /screen?parts=worlds
 Then the World's card shows "2 games"
+```
+
+#### Scenario 25.13: A World row shows a shortened description
+
+```gherkin
+Given a seeded World whose description is longer than a row shows
+When the client GET /screen?parts=worlds
+Then the World's row shows the start of the description, cut at a word, with a cut mark
+And the row does not show the end of the description
 ```
 
 ### World delete
 
-#### Scenario 25.10: The refusal of a World delete pluralises the game count
+#### Scenario 25.10: The 400 of a World delete pluralises the game count
 
 ```gherkin
 Given a seeded World with exactly one game
 When the client POST /worlds/{key}/delete
-Then the response is a 200 that holds the refusal "Cannot delete world with 1 game"
-And the refusal does not read "1 games"
+Then the response is a 400 that holds the text "Cannot delete world with 1 game"
+And the text does not read "1 games"
 When a second game is created in that World
 And the client POST /worlds/{key}/delete
-Then the refusal reads "Cannot delete world with 2 games"
+Then the text reads "Cannot delete world with 2 games"
 And the World is still stored
 ```
 
@@ -145,6 +239,7 @@ Given a seeded World "posture_world" with no games
 When the client POST /worlds/posture_world/delete
 Then the response is a 200 with an empty body
 And the World is no longer stored
+And a following GET /screen?parts=worlds does not list it
 When the client POST /worlds/nonexistent/delete
 Then the response is a 200 with an empty body
 ```

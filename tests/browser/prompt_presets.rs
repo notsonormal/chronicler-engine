@@ -4,9 +4,9 @@ use std::time::Duration;
 
 use super::*;
 
-/// The browser-only question: do the Duplicate click's panel swap, the Edit
-/// button's in-place card swap, and the Save form posting the ticked mode flags
-/// to the card's own route all work through real clicks. The request chain is
+/// The browser-only question: do the Duplicate click's panel load, the Edit
+/// button's load of the form into the dialog, and the Save form posting the ticked
+/// mode flags to the card's own route all work through real clicks. The request chain is
 /// covered at HTTP (`tests/http/prompt_presets.rs` SCENARIO 21.27).
 ///
 /// Seeding goes through the engine's own HTTP API (`seed_system_preset`): the
@@ -23,16 +23,16 @@ async fn test_preset_duplicate_edit_save_click_chain() {
             let seed_name = "Wiring Guard Preset";
             seed_system_preset(port, seed_name, "Seed instructions for the preset guard.").await;
 
-            // Reload so the `load`-triggered panel re-renders including the new
-            // card; `open_prompt_presets_tab` awaits that reload's settle.
+            // Reload so the first load of the tab shows the new card;
+            // `open_prompt_presets_tab` awaits that load.
             page.reload(None).await.expect("reload after seeding a preset");
             open_prompt_presets_tab(&page).await;
 
             let seed_card = preset_card_selector(seed_name);
             wait_until_visible(&page, &seed_card, Duration::from_millis(5000)).await;
 
-            // The whole panel is replaced (hx-target `.prompt-presets-panel`,
-            // `outerHTML`).
+            // Duplicate answers nothing: the presets number moves, and the
+            // panel loads the copy.
             let duplicate_selector = format!("{seed_card} button:has-text('Duplicate')");
             click_and_settle(&page, &duplicate_selector, ".prompt-presets-panel").await;
 
@@ -57,14 +57,12 @@ async fn test_preset_duplicate_edit_save_click_chain() {
                 "the duplicated copy must start with only the Novel mode enabled, got: {copy_html_before}"
             );
 
-            // The replacement card is titled "Edit <name>", so `copy_card` no
-            // longer matches it — scope the form fields to
-            // `.preset-card.edit-form`, of which only one exists at a time.
+            // The form opens in the dialog, which holds one form at a time.
             open_preset_editor(&page, &copy_card).await;
 
             // Tick IF: the post-reload assertion proves the save *added* a mode
             // rather than re-rendering one the copy already carried.
-            let edit_form = ".preset-card.edit-form";
+            let edit_form = "#edit-dialog .edit-form";
             page.locator(&format!(r#"{edit_form} input[name="allowed_mode_if"]"#))
                 .await
                 .set_checked(true, None) // settle-guard-exempt: the mode checkboxes carry no hx attribute — the form posts only via the settle-gated Save click.
@@ -72,9 +70,8 @@ async fn test_preset_duplicate_edit_save_click_chain() {
                 .expect("tick the IF mode flag");
 
             let save_selector = format!("{edit_form} button:has-text('Save')");
-            // The Save swap replaces the card in place (`hx-target
-            // closest .preset-card`) — await the card, not the panel.
-            click_and_settle(&page, &save_selector, ".preset-card").await;
+            // Save answers nothing: the dialog closes, and the panel loads the card.
+            click_and_settle(&page, &save_selector, ".prompt-presets-panel").await;
 
             // Reload before asserting: a fragment edit that only re-rendered
             // client-side would pass an assertion made in the same document.

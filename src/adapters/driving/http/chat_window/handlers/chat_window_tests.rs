@@ -1,26 +1,9 @@
 //! Unit tests for the chat window HTTP handlers.
-use axum::http::StatusCode;
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::chat_window::handlers::{retrigger_handler, switch_swipe_handler};
+use crate::adapters::driving::http::chat_window::handlers::switch_swipe_handler;
 use crate::test_support::active_game_of;
 use crate::test_support::TestAppBuilder;
-
-#[tokio::test]
-async fn test_retrigger_handler_returns_400_when_no_event_record() {
-    let state = TestAppBuilder::default_test().build_service();
-
-    let response = retrigger_handler(
-        axum::extract::State(state.clone()),
-        CurrentGame(active_game_of(&state)),
-    )
-    .await;
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "a Retrigger with no event record is refused as a bad request"
-    );
-}
 
 #[tokio::test]
 async fn test_switch_swipe_handler() {

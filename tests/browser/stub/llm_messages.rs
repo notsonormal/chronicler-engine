@@ -1,21 +1,27 @@
-//! Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row. Tagged against `docs/specs/browser_llm_messages.md`.
+//! Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row, the record that opens in the dialog, and the load that leaves the open dialog alone. Tagged against `docs/specs/browser_llm_messages.md`.
 
-// Keyboard operation is the shipped shell's: Enter and Space on the native
-// button fire the same click handler a mouse uses. The stub server only serves
-// the canned card, so faking the engine changes nothing.
+// The Open control is a native button with an `hx-get` into the edit dialog, so
+// Enter and Space fire the same click a mouse uses. The stub server renders the
+// list and the record with the engine's own templates, so a row holds what the
+// real list holds.
 //
-// The panel's own 4s poll re-serves the fragment, so a swap can land between
-// any two reads. Every assertion polls the state it wants rather than sampling
-// once, and reads the live DOM rather than a Playwright element handle that a
-// swap has detached.
+// The panel loads when the revision moves. The page's timer stops in the
+// checks that move it, so each load is one the check asked for. Every assertion
+// polls the state it wants rather than sampling once, and reads the live DOM
+// rather than a Playwright element handle.
 
 use std::time::Duration;
 
-use super::*;
-use super::support::StubRunner;
+use chronicler_engine::domain::model::change::ChangeKind;
 
-/// Open the LLM Messages tab. The stub tier has no htmx swap lifecycle to race,
-/// so the tab click needs no settle gate.
+use super::support::{dialog_is_open, wait_until_dialog_closed, wait_until_focused, StubRunner, NOTICE};
+use super::*;
+
+const OPEN_CONTROL: &str = ".llm-message-open";
+const RECORD: &str = "#edit-dialog .llm-message-record";
+const WAIT: Duration = Duration::from_millis(2000);
+
+/// The section loads its part when it opens, so the wait is for the card the load renders.
 async fn open_llm_messages_tab(page: &playwright_rs::Page) {
     page.locator(r#"[data-tab="llm-messages"]"#)
         .await
@@ -25,211 +31,224 @@ async fn open_llm_messages_tab(page: &playwright_rs::Page) {
     wait_until_visible(page, ".llm-message-card", Duration::from_millis(2000)).await;
 }
 
-async fn llm_header_state(page: &playwright_rs::Page) -> (bool, String) {
-    page.evaluate::<(), (bool, String)>(
-        r#"(() => {
-            const card = document.querySelector('.llm-message-card');
-            const header = card ? card.querySelector('.llm-message-header') : null;
-            return [
-                !!(card && card.classList.contains('expanded')),
-                header ? (header.getAttribute('aria-expanded') || '') : '',
-            ];
-        })()"#,
-        None,
+async fn text_of(page: &playwright_rs::Page, selector: &str) -> String {
+    page.evaluate::<String, String>(
+        "(selector) => { const el = document.querySelector(selector); return el ? el.textContent : ''; }",
+        Some(&selector.to_string()),
     )
     .await
     .unwrap()
 }
 
-async fn wait_for_row_state(
-    page: &playwright_rs::Page,
-    want_expanded: bool,
-    want_aria: &str,
-) -> bool {
-    let want_aria = want_aria.to_string();
-    wait_for_condition_async(
-        Duration::from_millis(2000),
-        Duration::from_millis(20),
-        || {
-            let want_aria = want_aria.clone();
-            async move {
-                let (expanded, aria) = llm_header_state(page).await;
-                expanded == want_expanded && aria == want_aria
-            }
-        },
-    )
-    .await
+async fn card_count(page: &playwright_rs::Page) -> usize {
+    page.query_selector_all(".llm-message-card")
+        .await
+        .map(|cards| cards.len())
+        .unwrap_or(0)
 }
 
-async fn wait_for_body(page: &playwright_rs::Page, visible: bool) -> bool {
-    wait_for_condition_async(
-        Duration::from_millis(2000),
-        Duration::from_millis(20),
-        || async {
-            page.locator(".llm-message-body")
-                .await
-                .is_visible()
-                .await
-                .unwrap_or(false)
-                == visible
-        },
-    )
-    .await
-}
-
-async fn stash_header_node(page: &playwright_rs::Page) {
-    page.evaluate::<(), ()>(
-        r#"() => { window.__llmHeaderBefore = document.querySelector('.llm-message-header'); }"#,
-        None,
-    )
-    .await
-    .unwrap();
-}
-
-async fn wait_for_header_replacement(page: &playwright_rs::Page) {
-    let replaced = wait_for_condition_async(
-        Duration::from_millis(2000),
-        Duration::from_millis(20),
-        || async {
-            page.evaluate::<(), bool>(
-                r#"() => document.querySelector('.llm-message-header') !== window.__llmHeaderBefore"#,
-                None,
-            )
-            .await
-            .unwrap_or(false)
-        },
-    )
-    .await;
-    assert!(replaced, "the panel swap never replaced the row");
+async fn press_open_and_wait_for_the_record(page: &playwright_rs::Page) {
+    page.locator(OPEN_CONTROL)
+        .await
+        .press("Enter", None)
+        .await
+        .unwrap();
+    wait_until_visible(page, RECORD, Duration::from_secs(5)).await;
 }
 
 // [docs/specs/browser_llm_messages.md] SCENARIO: 35.1
-async fn check_llm_message_row_toggles_from_the_keyboard(
+async fn check_open_shows_the_record_in_the_dialog_from_the_keyboard(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
     open_llm_messages_tab(&page).await;
+    let row = text_of(&page, ".llm-messages-panel").await;
+    assert!(
+        !row.contains("the system prompt") && !row.contains("canned narration"),
+        "the row holds no record text: {row:?}"
+    );
 
-    // Tab from the LLM tab button: the first focusable in the panel is the
-    // row header, so this proves the header is keyboard-reachable, not just
-    // focusable.
+    // Tab from the LLM tab button: the first focusable in the panel is the Open
+    // control, so this proves it is keyboard-reachable, not just focusable.
     page.locator(r#"[data-tab="llm-messages"]"#)
         .await
         .press("Tab", None)
         .await
         .unwrap();
-    let header = page.locator(".llm-message-header").await;
     assert!(
-            wait_for_condition_async(
-                Duration::from_millis(500),
-                Duration::from_millis(20),
-                || async {
-                    page.evaluate::<(), bool>(
-                        r#"() => document.activeElement === document.querySelector('.llm-message-header')"#,
-                        None,
-                    )
-                    .await
-                    .unwrap_or(false)
-                },
-            )
-            .await,
-            "Tab must reach the row header"
+        wait_until_focused(&page, OPEN_CONTROL, Duration::from_millis(500)).await,
+        "Tab must reach the Open control"
+    );
+    press_open_and_wait_for_the_record(&page).await;
+
+    assert!(dialog_is_open(&page).await, "Open must open the dialog");
+    let record = text_of(&page, RECORD).await;
+    for text in ["the system prompt", "the user prompt", "canned narration"] {
+        assert!(
+            record.contains(text),
+            "the dialog must show the whole record ({text}): {record:?}"
         );
-    header.press("Enter", None).await.unwrap();
-
-    assert!(
-        wait_for_row_state(&page, true, "true").await,
-        "Enter must expand the row and expose the expanded state"
-    );
-    assert!(
-        wait_for_body(&page, true).await,
-        "the expanded row must show its body"
-    );
-
-    header.press(" ", None).await.unwrap();
-
-    assert!(
-        wait_for_row_state(&page, false, "false").await,
-        "Space must collapse the row and expose the collapsed state"
-    );
-    assert!(
-        wait_for_body(&page, false).await,
-        "the collapsed row must hide its body"
-    );
-}
-
-// [docs/specs/browser_llm_messages.md] SCENARIO: 35.2
-async fn check_expanded_llm_row_survives_panel_refresh(
-    page: playwright_rs::Page,
-    _stub: StubServer,
-) {
-    open_llm_messages_tab(&page).await;
-
-    let header = page.locator(".llm-message-header").await;
-    header.focus().await.unwrap();
-    header.press("Enter", None).await.unwrap();
-    assert!(
-        wait_for_row_state(&page, true, "true").await,
-        "Enter must expand the row before the refresh"
-    );
-
-    stash_header_node(&page).await;
-    // Expanding pauses the panel's 4s poll, so drive the same innerHTML
-    // swap the poll would make: the panel's own after-settle hook must
-    // restore the expanded state onto the fresh row.
-    page.evaluate::<(), ()>(
-            r#"() => { htmx.ajax("GET", "/fragment/llm-messages", { target: ".llm-messages-panel", swap: "innerHTML" }); }"#,
+    }
+    let titled = page
+        .evaluate::<(), bool>(
+            "() => document.getElementById('edit-dialog-title').closest('dialog') === document.getElementById('edit-dialog')",
             None,
         )
         .await
         .unwrap();
-    wait_for_header_replacement(&page).await;
+    assert!(titled, "the record carries the title that names the dialog");
+}
 
+// [docs/specs/browser_llm_messages.md] SCENARIO: 35.2
+async fn check_close_returns_focus_to_the_open_control(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    open_llm_messages_tab(&page).await;
+    page.locator(OPEN_CONTROL).await.focus().await.unwrap();
+    press_open_and_wait_for_the_record(&page).await;
+
+    page.locator("#edit-dialog [data-close-dialog]")
+        .await
+        .click(None)
+        .await
+        .unwrap();
+
+    wait_until_dialog_closed(&page, "Close must close the dialog and empty its body").await;
     assert!(
-        wait_for_row_state(&page, true, "true").await,
-        "the refreshed panel must restore the expanded row"
-    );
-    assert!(
-        wait_for_body(&page, true).await,
-        "the restored row must show its body"
+        wait_until_focused(&page, OPEN_CONTROL, WAIT).await,
+        "focus must return to the Open control"
     );
 }
 
 // [docs/specs/browser_llm_messages.md] SCENARIO: 35.3
-async fn check_focused_llm_row_keeps_focus_across_panel_refresh(
+async fn check_focused_open_control_keeps_focus_across_panel_load(
     page: playwright_rs::Page,
-    _stub: StubServer,
+    stub: StubServer,
 ) {
     open_llm_messages_tab(&page).await;
+    stop_page_timer(&page).await;
 
-    let header = page.locator(".llm-message-header").await;
-    header.focus().await.unwrap();
-
-    stash_header_node(&page).await;
+    page.locator(OPEN_CONTROL).await.focus().await.unwrap();
     page.evaluate::<(), ()>(
-            r#"() => { htmx.ajax("GET", "/fragment/llm-messages", { target: ".llm-messages-panel", swap: "innerHTML" }); }"#,
+        r#"() => { window.__openBefore = document.querySelector('.llm-message-open'); }"#,
+        None,
+    )
+    .await
+    .unwrap();
+    let changes = stub.changes_handle();
+    let before = changes.loads("llm-messages");
+    changes.bump(ChangeKind::LLM_MESSAGES);
+    ask_once(&page).await;
+    assert_eq!(
+        changes.loads("llm-messages"),
+        before + 1,
+        "a moved `llm` number must load the panel once"
+    );
+
+    let same_node = page
+        .evaluate::<(), bool>(
+            r#"() => document.querySelector('.llm-message-open') === window.__openBefore"#,
             None,
         )
         .await
         .unwrap();
-    wait_for_header_replacement(&page).await;
+    assert!(same_node, "the load must keep the row's Open control node");
+    assert!(
+        wait_until_focused(&page, OPEN_CONTROL, Duration::from_millis(1000)).await,
+        "the panel load must keep focus on the Open control"
+    );
+}
+
+// [docs/specs/browser_llm_messages.md] SCENARIO: 35.4
+async fn check_a_new_llm_message_appears_after_a_record_was_opened_and_closed(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    open_llm_messages_tab(&page).await;
+    for _ in 0..2 {
+        press_open_and_wait_for_the_record(&page).await;
+        page.locator("#edit-dialog [data-close-dialog]")
+            .await
+            .click(None)
+            .await
+            .unwrap();
+        wait_until_dialog_closed(&page, "Close must close the dialog").await;
+    }
+
+    // The page's own timer loads the panel, with nothing paused by the opens.
+    stub.llm_handle().record_message();
+    let appeared = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(50),
+        || async { card_count(&page).await == 2 },
+    )
+    .await;
+    assert!(
+        appeared,
+        "a new LLM message must appear in the panel with no reload of the page"
+    );
+}
+
+// [docs/specs/browser_llm_messages.md] SCENARIO: 35.5
+async fn check_an_open_record_stays_as_it_is_when_the_panel_loads(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    open_llm_messages_tab(&page).await;
+    stop_page_timer(&page).await;
+    press_open_and_wait_for_the_record(&page).await;
+    let before = text_of(&page, RECORD).await;
+
+    stub.llm_handle().record_message();
+    ask_once(&page).await;
+    let appeared = wait_for_condition_async(
+        Duration::from_secs(5),
+        Duration::from_millis(50),
+        || async { card_count(&page).await == 2 },
+    )
+    .await;
+    assert!(
+        appeared,
+        "the load must list the new message behind the dialog"
+    );
 
     assert!(
-            wait_for_condition_async(
-                Duration::from_millis(1000),
-                Duration::from_millis(20),
-                || async {
-                    page.evaluate::<(), bool>(
-                        r#"() => document.activeElement === document.querySelector('.llm-message-header')"#,
-                        None,
-                    )
-                    .await
-                    .unwrap_or(false)
-                },
-            )
-            .await,
-            "the panel refresh must keep focus on the row header"
-        );
+        dialog_is_open(&page).await,
+        "a panel load must leave the dialog open"
+    );
+    assert_eq!(
+        text_of(&page, RECORD).await,
+        before,
+        "a panel load must leave the record as it was"
+    );
+}
+
+// Retention keeps 50 records, so the record of a row can be gone when Open asks for it.
+// [docs/specs/browser_llm_messages.md] SCENARIO: 35.6
+async fn check_a_missing_record_reports_in_the_notice_and_keeps_focus(
+    page: playwright_rs::Page,
+    stub: StubServer,
+) {
+    open_llm_messages_tab(&page).await;
+    stub.llm_handle().prune_records();
+    page.locator(OPEN_CONTROL).await.focus().await.unwrap();
+    page.locator(OPEN_CONTROL).await.click(None).await.unwrap();
+
+    wait_for_error_disclosure(&page, NOTICE, "the report shows in the notice").await;
+    let (_, message, _) = read_error_disclosure(&page, NOTICE).await;
+    assert_eq!(
+        message, "The form was not opened: LLM message not found.",
+        "the sentence names what was not done, with the engine's explanation"
+    );
+    assert!(
+        !dialog_is_open(&page).await,
+        "a missing record opens no dialog"
+    );
+    assert!(
+        wait_until_focused(&page, OPEN_CONTROL, WAIT).await,
+        "a missing record must leave focus on the Open control"
+    );
 }
 
 #[tokio::test]
@@ -238,19 +257,37 @@ async fn run_llm_messages_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_llm_message_row_toggles_from_the_keyboard,
+            check_open_shows_the_record_in_the_dialog_from_the_keyboard,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_expanded_llm_row_survives_panel_refresh,
+            check_close_returns_focus_to_the_open_control,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_focused_llm_row_keeps_focus_across_panel_refresh,
+            check_focused_open_control_keeps_focus_across_panel_load,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_new_llm_message_appears_after_a_record_was_opened_and_closed,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_an_open_record_stays_as_it_is_when_the_panel_loads,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_a_missing_record_reports_in_the_notice_and_keeps_focus,
         )
         .await;
     runner.finish().await;

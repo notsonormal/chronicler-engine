@@ -24,12 +24,14 @@ mod tests {
 
         while start.elapsed() < timeout {
             if let Ok(resp) = client
-                .get(format!("http://127.0.0.1:{port}/fragment/llm-messages"))
+                .get(format!("http://127.0.0.1:{port}/screen?parts=llm-messages"))
                 .send()
                 .await
             {
                 if let Ok(text) = resp.text().await {
-                    if text.contains("llm-message-list") && !text.contains("No LLM messages yet") {
+                    let panel = part_of_screen(&text, "llm-messages").unwrap_or_default();
+                    if panel.contains("llm-message-list") && !panel.contains("No LLM messages yet")
+                    {
                         return;
                     }
                 }

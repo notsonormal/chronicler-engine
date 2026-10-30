@@ -3,7 +3,9 @@
 
 use crate::adapters::driven::storage::core::WriteOverrides;
 use crate::adapters::driven::storage::utils::require_message_of_game;
+use crate::adapters::driven::storage::write_guard::WriteGuard;
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
+use crate::domain::model::change::ChangeKind;
 use crate::domain::model::dock::{DockRecord, OptionsFailure};
 use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::message::{Message, Swipe, SwipeAt};
@@ -49,7 +51,7 @@ impl TxToken {
 /// the unit already holds.
 pub struct Tx<'a> {
     conn: rusqlite::Transaction<'a>,
-    writes: WriteOverrides,
+    guard: WriteGuard,
     game: GameId,
 }
 
@@ -59,11 +61,25 @@ impl<'a> Tx<'a> {
         writes: WriteOverrides,
         game: GameId,
     ) -> Self {
-        Self { conn, writes, game }
+        Self {
+            conn,
+            guard: WriteGuard::new(writes),
+            game,
+        }
     }
 
-    /// The row lands before the `Tx` exists, so the unit's writes already know the
-    /// Game they write.
+    /// The create unit: the row of the new Game goes first, so the unit's writes
+    /// already know the Game they write.
+    pub(crate) fn create(
+        conn: rusqlite::Transaction<'a>,
+        writes: WriteOverrides,
+        request: &NewGame,
+    ) -> Result<Self, EngineError> {
+        let mut guard = WriteGuard::new(writes);
+        let game = guard.write(TxWrite::InsertGame, || Self::write_game_row(&conn, request))?;
+        Ok(Self { conn, guard, game })
+    }
+
     pub(crate) fn write_game_row(
         conn: &rusqlite::Connection,
         request: &NewGame,
@@ -95,28 +111,39 @@ impl<'a> Tx<'a> {
         Ok(GameId(conn.last_insert_rowid() as u64))
     }
 
+    /// The one way a write runs: `write` names the `TxWrite` once, for its failure
+    /// injection and for the kinds it raises. The body gets the connection and the
+    /// Game of the unit.
+    fn write<T>(
+        &mut self,
+        write: TxWrite,
+        body: impl FnOnce(&rusqlite::Connection, GameId) -> Result<T, EngineError>,
+    ) -> Result<T, EngineError> {
+        let (conn, game) = (&*self.conn, self.game);
+        self.guard.write(write, || body(conn, game))
+    }
+
     /// The Game row, with the records the schema cascades from it. A reset removes
     /// the active Game in this unit and creates the new one in its own.
     pub fn delete_game(&mut self) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::DeleteGame)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::DeleteGame, |conn, game| {
+            conn.execute(
                 "DELETE FROM games WHERE id = ?1",
-                rusqlite::params![self.game.0 as i64],
+                rusqlite::params![game.0 as i64],
             )
             .db_context("Failed to delete game")?;
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn insert_message(&mut self, message: &Message) -> Result<u64, EngineError> {
-        self.writes.fail_if_injected(TxWrite::InsertMessage)?;
-        let message_type_json = serde_json::to_string(&message.message_type)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::InsertMessage, |conn, game| {
+            let message_type_json = serde_json::to_string(&message.message_type)?;
+            conn.execute(
                 "INSERT INTO messages (game_id, message_type, kind, timestamp, active_swipe_index)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![
-                    self.game.0 as i64,
+                    game.0 as i64,
                     message_type_json,
                     serde_json::to_string(&message.kind)?,
                     message.timestamp.to_rfc3339(),
@@ -124,39 +151,39 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to insert message")?;
-        Ok(self.conn.last_insert_rowid() as u64)
+            Ok(conn.last_insert_rowid() as u64)
+        })
     }
 
     pub fn set_active_swipe(&mut self, at: SwipeAt) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::SetActiveSwipe)?;
-        require_message_of_game(&self.conn, at.message, self.game)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::SetActiveSwipe, |conn, game| {
+            require_message_of_game(conn, at.message, game)?;
+            conn.execute(
                 "UPDATE messages SET active_swipe_index = ?1 WHERE id = ?2",
                 rusqlite::params![at.swipe as i64, at.message as i64],
             )
             .db_context("Failed to set the active swipe")?;
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Deleting the Message takes the rows the schema cascades from it.
     pub fn delete_message(&mut self, message: u64) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::DeleteMessage)?;
-        require_message_of_game(&self.conn, message, self.game)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::DeleteMessage, |conn, game| {
+            require_message_of_game(conn, message, game)?;
+            conn.execute(
                 "DELETE FROM messages WHERE id = ?1",
                 rusqlite::params![message as i64],
             )
             .db_context("Failed to delete message")?;
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn insert_swipe(&mut self, at: SwipeAt, swipe: &Swipe) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::InsertSwipe)?;
-        require_message_of_game(&self.conn, at.message, self.game)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::InsertSwipe, |conn, game| {
+            require_message_of_game(conn, at.message, game)?;
+            conn.execute(
                 "INSERT INTO message_swipes (message_id, swipe_index, text, event_header, impersonated, guide_text, impersonate_direction, state, maker)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 rusqlite::params![
@@ -172,26 +199,26 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to insert swipe")?;
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn set_swipe_text(&mut self, at: SwipeAt, text: &str) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::SetSwipeText)?;
-        require_message_of_game(&self.conn, at.message, self.game)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::SetSwipeText, |conn, game| {
+            require_message_of_game(conn, at.message, game)?;
+            conn.execute(
                 "UPDATE message_swipes SET text = ?1 WHERE message_id = ?2 AND swipe_index = ?3",
                 rusqlite::params![text, at.message as i64, at.swipe as i64],
             )
             .db_context("Failed to set the swipe text")?;
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn set_swipe_state(&mut self, at: SwipeAt, state: &SwipeState) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::SetSwipeState)?;
-        require_message_of_game(&self.conn, at.message, self.game)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::SetSwipeState, |conn, game| {
+            require_message_of_game(conn, at.message, game)?;
+            conn.execute(
                 "UPDATE message_swipes SET state = ?1 WHERE message_id = ?2 AND swipe_index = ?3",
                 rusqlite::params![
                     serde_json::to_string(state)?,
@@ -200,122 +227,131 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to set the swipe state")?;
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn set_game_failure(
         &mut self,
         failure: Option<&GenerationFailure>,
     ) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::SetGameFailure)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::SetGameFailure, |conn, game| {
+            conn.execute(
                 "UPDATE games SET failure = ?1 WHERE id = ?2",
                 rusqlite::params![
                     failure.map(serde_json::to_string).transpose()?,
-                    self.game.0 as i64
+                    game.0 as i64
                 ],
             )
             .db_context("Failed to set the failure line")?;
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Writes the columns `change` names on the Game row the `Tx` holds, and
     /// `updated_at`. Every other column stays as it is.
     pub fn set_game_config(&mut self, change: &ConfigChange) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::SetGameConfig)?;
-        let now = chrono::Utc::now().to_rfc3339();
-        let game = self.game.0 as i64;
-        let affected = match change {
-            ConfigChange::Posture { perspective, tense } => self.conn.execute(
-                "UPDATE games SET narrative_perspective=?, narrative_tense=?, updated_at=? WHERE id=?",
-                rusqlite::params![perspective.as_str(), tense.as_str(), &now, game],
-            ),
-            ConfigChange::Mode {
-                mode,
-                system_id,
-                quantifier_id,
-                impersonate_id,
-                perspective,
-            } => self.conn.execute(
-                "UPDATE games SET narrator_mode=?, narrative_perspective=?, active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, updated_at=? WHERE id=?",
-                rusqlite::params![
-                    mode.as_str(),
-                    perspective.as_str(),
+        self.write(TxWrite::SetGameConfig, |conn, game| {
+            let now = chrono::Utc::now().to_rfc3339();
+            let id = game.0 as i64;
+            let affected = match change {
+                ConfigChange::Posture { perspective, tense } => conn.execute(
+                    "UPDATE games SET narrative_perspective=?, narrative_tense=?, updated_at=? WHERE id=?",
+                    rusqlite::params![perspective.as_str(), tense.as_str(), &now, id],
+                ),
+                ConfigChange::Mode {
+                    mode,
                     system_id,
                     quantifier_id,
                     impersonate_id,
-                    &now,
-                    game,
-                ],
-            ),
-            ConfigChange::Presets(selection) => self.conn.execute(
-                "UPDATE games SET active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, active_options_prompt_preset_id=?, updated_at=? WHERE id=?",
-                rusqlite::params![
-                    selection.system_id,
-                    selection.quantifier_id,
-                    selection.impersonate_id,
-                    selection.options_id,
-                    &now,
-                    game,
-                ],
-            ),
-        }
-        .db_context("Failed to update game config")?;
-        if affected == 0 {
-            return Err(EngineError::GameNotFound(self.game.0));
-        }
-        Ok(())
+                    perspective,
+                } => conn.execute(
+                    "UPDATE games SET narrator_mode=?, narrative_perspective=?, active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, updated_at=? WHERE id=?",
+                    rusqlite::params![
+                        mode.as_str(),
+                        perspective.as_str(),
+                        system_id,
+                        quantifier_id,
+                        impersonate_id,
+                        &now,
+                        id,
+                    ],
+                ),
+                ConfigChange::Presets(selection) => conn.execute(
+                    "UPDATE games SET active_system_prompt_preset_id=?, active_quantifier_prompt_preset_id=?, active_impersonate_prompt_preset_id=?, active_options_prompt_preset_id=?, updated_at=? WHERE id=?",
+                    rusqlite::params![
+                        selection.system_id,
+                        selection.quantifier_id,
+                        selection.impersonate_id,
+                        selection.options_id,
+                        &now,
+                        id,
+                    ],
+                ),
+            }
+            .db_context("Failed to update game config")?;
+            if affected == 0 {
+                return Err(EngineError::GameNotFound(game.0));
+            }
+            Ok(())
+        })
     }
 
     pub fn put_dock(&mut self, record: &DockRecord) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::PutDock)?;
-        self.write_dock(record)
+        self.write(TxWrite::PutDock, |conn, game| {
+            Self::write_dock(conn, game, record)
+        })
     }
 
     /// Replaces the Options failure and keeps the offered set the row holds.
     pub fn put_options_failure(&mut self, failure: &OptionsFailure) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::PutOptionsFailure)?;
-        self.conn
-            .execute(
+        self.write(TxWrite::PutOptionsFailure, |conn, game| {
+            conn.execute(
                 "INSERT INTO game_docks (game_id, notice) VALUES (?1, ?2) \
                  ON CONFLICT(game_id) DO UPDATE SET notice = excluded.notice",
-                rusqlite::params![self.game.0 as i64, serde_json::to_string(failure)?],
+                rusqlite::params![game.0 as i64, serde_json::to_string(failure)?],
             )
             .db_context("Failed to write the Options failure")?;
-        Ok(())
+            Ok(())
+        })
     }
 
     /// The row stays, with no offered set and no Options failure: a Game holds one dock
     /// record.
     pub fn clear_dock(&mut self) -> Result<(), EngineError> {
-        self.writes.fail_if_injected(TxWrite::ClearDock)?;
-        self.write_dock(&DockRecord::default())
+        self.write(TxWrite::ClearDock, |conn, game| {
+            Self::write_dock(conn, game, &DockRecord::default())
+        })
     }
 
-    fn write_dock(&mut self, record: &DockRecord) -> Result<(), EngineError> {
+    fn write_dock(
+        conn: &rusqlite::Connection,
+        game: GameId,
+        record: &DockRecord,
+    ) -> Result<(), EngineError> {
         let offered = serde_json::to_string(&record.offered)?;
-        self.conn
-            .execute(
-                "INSERT OR REPLACE INTO game_docks (game_id, offered, notice) VALUES (?1, ?2, ?3)",
-                rusqlite::params![
-                    self.game.0 as i64,
-                    offered,
-                    record
-                        .failure
-                        .as_ref()
-                        .map(serde_json::to_string)
-                        .transpose()?,
-                ],
-            )
-            .db_context("Failed to write the dock record")?;
+        conn.execute(
+            "INSERT OR REPLACE INTO game_docks (game_id, offered, notice) VALUES (?1, ?2, ?3)",
+            rusqlite::params![
+                game.0 as i64,
+                offered,
+                record
+                    .failure
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()?,
+            ],
+        )
+        .db_context("Failed to write the dock record")?;
         Ok(())
     }
 
-    fn commit(self) -> Result<(), EngineError> {
+    /// The kinds the unit raises: the writes that succeeded, once the commit has landed.
+    fn commit(self) -> Result<Vec<ChangeKind>, EngineError> {
         self.conn
             .commit()
-            .db_context("Failed to commit transaction")
+            .db_context("Failed to commit transaction")?;
+        Ok(self.guard.into_changed())
     }
 }
 
@@ -361,16 +397,14 @@ impl Storage {
                 let unit = conn
                     .unchecked_transaction()
                     .db_context("Failed to begin transaction")?;
-                let game = match unit_game {
-                    UnitGame::Existing(game) => game,
-                    UnitGame::New(request) => {
-                        writes.fail_if_injected(TxWrite::InsertGame)?;
-                        Tx::write_game_row(&unit, request)?
-                    }
+                let mut tx = match unit_game {
+                    UnitGame::Existing(game) => Tx::new(unit, writes, game),
+                    UnitGame::New(request) => Tx::create(unit, writes, request)?,
                 };
-                let mut tx = Tx::new(unit, writes, game);
+                let game = tx.game;
                 let value = f(game, &mut tx)?;
-                tx.commit()?;
+                let changed = tx.commit()?;
+                self.changes().raise_unit(game, &changed);
                 Ok(value)
             }
         })

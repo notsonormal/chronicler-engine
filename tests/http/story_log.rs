@@ -12,13 +12,15 @@ use chronicler_engine::test_support::{
     TestDataBuilder, TestCharacter,
 };
 
-use crate::support::app_wiring::app_after_an_impersonate_with_a_failed_event;
+use crate::support::app_wiring::{app_after_an_impersonate_with_a_failed_event, app_with_script};
 use crate::support::http_assertions::{
-    icon_buttons_without_matching_name, svgs_not_hidden_from_assistive_technology,
+    assert_a_stale_message_is_refused, icon_buttons_without_matching_name,
+    svgs_not_hidden_from_assistive_technology,
 };
 use crate::support::http_fixtures::{append_narrations, story_of};
 use crate::support::http_requests::{
-    fetch_body, fetch_busy_status, post_action, post_empty, post_form, response_body, wait_settled,
+    fetch_status_label, assert_answers_nothing, post_action, post_empty, post_form, response_body,
+    wait_settled, post_on_last_message, fetch_part,
 };
 
 // [docs/specs/story_log.md] SCENARIO: 8.1
@@ -43,7 +45,7 @@ async fn test_delete_last_between_actions_http() {
         .next_back()
         .expect("narration A should be persisted");
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     let resp = post_action(&app, "look around").await;
@@ -95,7 +97,7 @@ async fn test_delete_mid_sequence_http() {
         .next_back()
         .expect("narration B should be the latest narration");
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     let _ = post_action(&app, "check door").await;
@@ -151,7 +153,7 @@ async fn test_delete_of_the_only_message_is_refused_http() {
         "the seeded Game holds only its opening Narration"
     );
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let body = response_body(resp).await;
     assert!(
@@ -183,10 +185,10 @@ async fn test_delete_input_then_retry_fails_gracefully_http() {
     assert!(wait_settled(&state, 1000).await);
 
     // The delete leaves an Input with no anchor narration.
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let resp = post_empty(&app, "/swipe/new").await;
+    let resp = post_on_last_message(&app, "/swipe/new").await;
     assert_ne!(
         resp.status(),
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -208,17 +210,17 @@ async fn test_delete_removes_entry_from_fragment_http() {
     let _ = post_action(&app, "examine room").await;
     assert!(wait_settled(&state, 1000).await, "narration should persist");
 
-    let before = fetch_body(&app, "/fragment/story-log").await;
+    let before = fetch_part(&app, "story-log").await;
     let before_count = before.matches("class=\"log-entry").count();
     assert!(
         before_count >= 2,
         "the fragment must render at least 2 entries to delete one: {before}"
     );
 
-    let resp = post_empty(&app, "/history/delete").await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    let resp = post_on_last_message(&app, "/history/delete").await;
+    assert_answers_nothing(resp).await;
 
-    let after = fetch_body(&app, "/fragment/story-log").await;
+    let after = fetch_part(&app, "story-log").await;
     let after_count = after.matches("class=\"log-entry").count();
     assert_eq!(
         after_count,
@@ -258,13 +260,23 @@ fn long_story_app() -> (
     (app, state)
 }
 
+// [docs/specs/story_log.md] SCENARIO: 8.17
+#[tokio::test]
+async fn test_a_delete_that_names_a_message_that_is_not_the_last_is_refused() {
+    assert_a_stale_message_is_refused(
+        "/history/delete",
+        "The last Message changed, so the Message was not deleted.",
+    )
+    .await;
+}
+
 // [docs/specs/story_log.md] SCENARIO: 8.11
 #[tokio::test]
 async fn test_the_story_log_of_a_long_story_ends_at_the_last_message() {
     let (app, state) = long_story_app();
     let story = story_of(&state);
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     let entries = log_entries(&body);
     assert_eq!(entries.len(), 50, "the window holds 50 entries: {body}");
@@ -298,13 +310,13 @@ async fn test_the_story_log_of_a_long_story_ends_at_the_last_message() {
 async fn test_delete_last_in_a_long_story_removes_the_entry_the_player_sees() {
     let (app, state) = long_story_app();
     let story = story_of(&state);
-    let before = fetch_body(&app, "/fragment/story-log").await;
+    let before = fetch_part(&app, "story-log").await;
     assert_eq!(log_entries(&before).len(), 50);
 
-    let resp = post_empty(&app, "/history/delete").await;
+    let resp = post_on_last_message(&app, "/history/delete").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let after = fetch_body(&app, "/fragment/story-log").await;
+    let after = fetch_part(&app, "story-log").await;
     let entries = log_entries(&after);
     assert_eq!(entries.len(), 50, "the window stays full: {after}");
     let deleted = story[52].id;
@@ -332,7 +344,7 @@ async fn test_story_log_fragment_declares_no_log_container() {
     // The seeded Game's opening Narration is the entry the fragment renders.
     let app = TestAppBuilder::default_app();
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     assert!(
         body.contains(r#"class="log-entry"#),
@@ -376,7 +388,7 @@ async fn test_story_log_icon_buttons_have_accessible_names() {
         "the Action should settle after its failed continuation"
     );
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     for control in ["edit-btn", "delete-btn", "retrigger-btn", "swipe-btn"] {
         assert!(
@@ -418,11 +430,11 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
     );
 
     assert_eq!(
-        fetch_busy_status(&app).await,
-        "quantifying",
+        fetch_status_label(&app).await,
+        "Quantifying...",
         "the status names the step the held call runs in"
     );
-    let log = fetch_body(&app, "/fragment/story-log").await;
+    let log = fetch_part(&app, "story-log").await;
     assert!(
         log.contains("The room waits."),
         "the story log shows the text from the save on: {log}"
@@ -440,7 +452,7 @@ async fn test_story_log_shows_the_text_while_the_analysis_holds_the_job() {
 async fn test_in_a_long_story_the_oldest_entry_shows_its_room() {
     let (app, _state) = long_story_app();
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     let entries = log_entries(&body);
     assert_eq!(entries.len(), 50, "the window holds 50 entries: {body}");
@@ -467,7 +479,7 @@ async fn test_the_story_log_offers_retrigger_on_an_impersonate_input() {
         "the story ends on the Impersonate Input"
     );
 
-    let body = fetch_body(&app, "/fragment/story-log").await;
+    let body = fetch_part(&app, "story-log").await;
 
     let entries = log_entries(&body);
     let (_, markup) = entries.last().expect("the last .log-entry");
@@ -483,4 +495,165 @@ async fn test_the_story_log_offers_retrigger_on_an_impersonate_input() {
         1,
         "only the last .log-entry offers Retrigger"
     );
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.15
+#[tokio::test]
+async fn test_edit_answers_nothing_and_the_log_shows_the_new_text_http() {
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().turn("You examine the room.")))
+        .build_with_state();
+    let _ = post_action(&app, "examine room").await;
+    assert!(wait_settled(&state, 1000).await, "narration should persist");
+    let last = story_of(&state)
+        .last()
+        .expect("the Action wrote a Narration")
+        .id;
+
+    let resp = post_form(
+        &app,
+        &format!("/history/{last}"),
+        "text=The+room+is+silent.",
+    )
+    .await;
+    assert_answers_nothing(resp).await;
+
+    let log = fetch_part(&app, "story-log").await;
+    assert!(
+        log.contains("The room is silent."),
+        "the story log shows the edited text: {log}"
+    );
+}
+
+fn tag_holding<'a>(markup: &'a str, marker: &str) -> &'a str {
+    let at = markup
+        .find(marker)
+        .unwrap_or_else(|| panic!("the markup holds no {marker}: {markup}"));
+    let start = markup[..at].rfind('<').expect("the marker sits in a tag");
+    let end = at + markup[at..].find('>').expect("the tag closes");
+    &markup[start..=end]
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.16
+#[tokio::test]
+async fn test_the_story_log_sends_its_requests_through_htmx_and_renders_the_edit_controls() {
+    let (app, _state) = app_after_an_impersonate_with_a_failed_event().await;
+
+    let body = fetch_part(&app, "story-log").await;
+
+    let entries = log_entries(&body);
+    assert!(
+        entries.len() > 1,
+        "the fixture shows an entry with Delete: {body}"
+    );
+    for (id, entry) in &entries {
+        let save = tag_holding(entry, r#"class="save-btn""#);
+        assert!(
+            save.contains(&format!(r#"hx-post="/history/{id}""#))
+                && save.contains(r##"hx-include="#edit-textarea""##),
+            "entry {id} renders a Save that sends the textarea: {save}"
+        );
+        assert!(
+            tag_holding(entry, r#"class="cancel-btn""#).contains(r#"aria-label="Cancel""#),
+            "entry {id} renders a Cancel"
+        );
+        assert_eq!(
+            entry.matches("data-error-slot=").count(),
+            1,
+            "entry {id} renders one slot"
+        );
+        assert!(
+            entry.contains(&format!(
+                r#"data-error-slot="edit-{id}" hidden></div></div>"#
+            )),
+            "the slot of entry {id} closes the edit group, hidden: {entry}"
+        );
+    }
+    let (last_id, last) = entries.last().expect("the last .log-entry");
+    let names_the_last_message = format!(r#"hx-vals='{{"message": {last_id}}}'"#);
+    let delete = tag_holding(last, "delete-btn");
+    assert!(
+        delete.contains(r#"hx-post="/history/delete""#)
+            && delete.contains(r#"hx-confirm="Delete this message?""#),
+        "Delete asks first: {delete}"
+    );
+    assert!(
+        delete.contains(&names_the_last_message),
+        "Delete names its Message: {delete}"
+    );
+    let retrigger = tag_holding(last, "retrigger-btn");
+    let retry = tag_holding(last, r#"title="Retry""#);
+    assert!(retrigger.contains(r#"hx-post="/retrigger""#), "{retrigger}");
+    assert!(retry.contains(r#"hx-post="/swipe/new""#), "{retry}");
+    assert!(
+        retrigger.contains(&names_the_last_message),
+        "Retrigger names its Message: {retrigger}"
+    );
+    assert!(
+        retry.contains(&names_the_last_message),
+        "Retry names its Message: {retry}"
+    );
+    assert_buttons_send_through_htmx(&body);
+}
+
+fn assert_buttons_send_through_htmx(fragment: &str) {
+    let buttons: Vec<&str> = fragment
+        .split("<button")
+        .skip(1)
+        .map(|rest| &rest[..rest.find('>').expect("the button tag closes")])
+        .collect();
+    assert!(!buttons.is_empty(), "the fragment renders buttons");
+    for tag in buttons {
+        let sends_nothing = tag.contains(r#"onclick="showEditForm("#)
+            || tag.contains(r#"onclick="cancelEdit()""#)
+            || tag.contains("disabled");
+        assert!(
+            tag.contains("hx-post=") || sends_nothing,
+            "a button of the log sends through htmx, or sends nothing: {tag}"
+        );
+        assert!(
+            !tag.contains("hx-post=") || !tag.contains("onclick"),
+            "an htmx button calls no script that sends the request: {tag}"
+        );
+    }
+}
+
+// [docs/specs/story_log.md] SCENARIO: 8.16
+#[tokio::test]
+async fn test_the_swipe_controls_of_the_story_log_send_through_htmx() {
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .turn("You look around again."),
+    );
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 1000).await);
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
+    assert!(wait_settled(&state, 1000).await);
+    let message_id = story_of(&state).last().expect("the story is not empty").id;
+
+    let second_swipe = fetch_part(&app, "story-log").await;
+    assert!(
+        second_swipe.contains(&format!(r#"hx-post="/message/{message_id}/swipe/0""#)),
+        "the Previous swipe control posts the switch: {second_swipe}"
+    );
+    assert_buttons_send_through_htmx(&second_swipe);
+
+    assert!(
+        post_empty(&app, &format!("/message/{message_id}/swipe/0"))
+            .await
+            .status()
+            .is_success()
+    );
+    let first_swipe = fetch_part(&app, "story-log").await;
+    assert!(
+        first_swipe.contains(&format!(r#"hx-post="/message/{message_id}/swipe/1""#)),
+        "the Next swipe control posts the switch: {first_swipe}"
+    );
+    assert_buttons_send_through_htmx(&first_swipe);
 }

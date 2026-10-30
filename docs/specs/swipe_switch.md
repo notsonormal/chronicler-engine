@@ -11,8 +11,8 @@ Endpoint: `POST /message/:id/swipe/:index`
 ```gherkin
 Given a game whose last Message has two Swipes
 When the client switches to the other Swipe
-And the client reads the generation status
-Then the generation status is idle
+Then the response is 200 with an empty body
+And the generation status is idle
 ```
 
 #### Scenario 36.2: Switching to another swipe drops the offered options
@@ -30,7 +30,7 @@ Then the dock renders no options strip
 Given a Game whose Message has two Swipes
 And a Job of that Game held at its narrator call
 When the client POST /message/:id/swipe/:index for the other Swipe of that Message
-Then the response is 200 carrying the "Still thinking..." status
+Then the response is 409 carrying the "Still thinking..." line
 And the active Swipe of that Message does not change
 ```
 
@@ -48,7 +48,7 @@ Then the player stands in "room_1"
 And the story log shows no room on that Narration
 ```
 
-#### Scenario 36.5: A swipe index past the last Swipe is refused
+#### Scenario 36.5: A swipe index past the last Swipe answers 400
 
 ```gherkin
 Given a Game whose last Message has two Swipes
@@ -56,4 +56,15 @@ When the client POST /message/:id/swipe/2
 Then the response is 400 Bad Request carrying "Swipe index out of bounds"
 And the last Message keeps the active Swipe it had
 And the last Message keeps its two Swipes
+```
+
+#### Scenario 36.6: A swipe switch on a Message that is no longer the last is refused
+
+```gherkin
+Given a Game whose story holds an Input followed by a Narration
+When the client POST /message/:id/swipe/0 with the id of the Input
+Then the response is 409 Conflict
+And the first line of the body is "The last Message changed, so the Swipe was not switched."
+And the second line of the body is "The page showed a Message that is no longer the last one."
+And no Message of the story changes
 ```

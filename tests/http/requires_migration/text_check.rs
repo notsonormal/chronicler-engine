@@ -14,7 +14,7 @@ use chronicler_engine::TestAppBuilder;
 async fn story_log_contains(app: &axum::Router, needle: &str) -> bool {
     for _ in 0..100 {
         let req = Request::builder()
-            .uri("/fragment/story-log")
+            .uri("/screen?parts=story-log")
             .method(http::Method::GET)
             .body(Body::empty())
             .unwrap();
@@ -66,8 +66,8 @@ async fn test_action_check_disabled_forwards_to_action() {
         .unwrap();
     let body_str = String::from_utf8_lossy(&body);
     assert!(
-        body_str.contains("status"),
-        "Expected status fragment: {body_str}"
+        body_str.is_empty(),
+        "Expected the command to dispatch with an empty answer: {body_str}"
     );
 }
 
@@ -162,10 +162,12 @@ async fn test_action_check_auto_check_disabled() {
     let response = app.oneshot(req).await.unwrap();
 
     assert!(response.status().is_success());
-    let hx_retarget = response.headers().get("HX-Retarget");
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
     assert!(
-        hx_retarget.is_some(),
-        "Expected HX-Retarget header when auto-check is disabled"
+        body.is_empty(),
+        "Expected the command to dispatch with an empty answer when auto-check is disabled"
     );
 }
 
@@ -215,9 +217,11 @@ async fn test_action_check_no_issues() {
     let response = app.oneshot(req).await.unwrap();
 
     assert!(response.status().is_success());
-    let hx_retarget = response.headers().get("HX-Retarget");
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
     assert!(
-        hx_retarget.is_some(),
-        "Expected HX-Retarget header when no issues and forwarding to action"
+        body.is_empty(),
+        "Expected the command to dispatch with an empty answer when no issues are found"
     );
 }

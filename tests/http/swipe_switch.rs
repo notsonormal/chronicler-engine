@@ -5,33 +5,37 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
 };
 
 use crate::support::app_wiring::app_with_script;
 use crate::support::http_fixtures::{room_header_of, story_of, OFFERED_SET};
-use crate::support::http_requests::{fetch_body, post_action, post_empty, response_body, wait_settled};
+use crate::support::http_requests::{
+    assert_answers_nothing, fetch_status_label, post_action, post_empty, response_body,
+    wait_settled, post_on_last_message, fetch_part,
+};
 
 fn first_switch_target(log_fragment: &str) -> (u64, usize) {
-    let marker = "switchSwipe(";
+    let marker = r#"hx-post="/message/"#;
     let start = log_fragment
         .find(marker)
         .expect("the log must render an enabled swipe switch")
         + marker.len();
     let rest = &log_fragment[start..];
-    let end = rest.find(')').expect("the switch call must close");
-    let mut args = rest[..end].split(',').map(str::trim);
-    let id = args
+    let end = rest.find('"').expect("the switch route must close");
+    let mut parts = rest[..end].split("/swipe/");
+    let id = parts
         .next()
-        .expect("switch call has an id")
+        .expect("switch route has an id")
         .parse::<u64>()
-        .expect("switch call id is numeric");
-    let index = args
+        .expect("switch route id is numeric");
+    let index = parts
         .next()
-        .expect("switch call has an index")
+        .expect("switch route has an index")
         .parse::<usize>()
-        .expect("switch call index is numeric");
+        .expect("switch route index is numeric");
     (id, index)
 }
 
@@ -39,10 +43,15 @@ async fn last_message_with_two_swipes(app: &axum::Router, state: &AppState) -> (
     assert!(post_action(app, "look").await.status().is_success());
     assert!(wait_settled(state, 1000).await, "the turn should complete");
 
-    assert!(post_empty(app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(state, 1000).await, "the retry should complete");
 
-    let log = fetch_body(app, "/fragment/story-log").await;
+    let log = fetch_part(app, "story-log").await;
     first_switch_target(&log)
 }
 
@@ -58,12 +67,11 @@ async fn test_switch_swipe_leaves_the_game_idle_http() {
     let (message_id, target) = last_message_with_two_swipes(&app, &state).await;
 
     let resp = post_empty(&app, &format!("/message/{message_id}/swipe/{target}")).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_answers_nothing(resp).await;
 
-    let status = fetch_body(&app, "/status/busy").await;
+    let status = fetch_status_label(&app).await;
     assert_eq!(
-        status.trim(),
-        "idle",
+        status, "Ready",
         "a restored swipe must leave the game idle, not stuck generating"
     );
 }
@@ -91,7 +99,7 @@ async fn test_switch_swipe_drops_the_offered_option_set_http() {
 
     assert!(post_action(&app, "/options").await.status().is_success());
     assert!(wait_settled(&state, 1000).await);
-    let before = fetch_body(&app, "/fragment/options-dock").await;
+    let before = fetch_part(&app, "options-dock").await;
     assert!(
         before.contains("options-strip"),
         "the dock must show a set before the switch: {before}"
@@ -100,7 +108,7 @@ async fn test_switch_swipe_drops_the_offered_option_set_http() {
     let resp = post_empty(&app, &format!("/message/{message_id}/swipe/{target}")).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         !dock.contains("options-strip"),
         "the restored swipe carries no option set, so the dock must not: {dock}"
@@ -203,4 +211,48 @@ async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
         "the second Swipe's state comes back"
     );
     assert_eq!(room_header_of(&state, message_id), None);
+}
+
+// [docs/specs/swipe_switch.md] SCENARIO: 36.6
+#[tokio::test]
+async fn test_switch_swipe_on_a_message_that_is_not_the_last_is_refused_http() {
+    let (app, state, _storage) = app_with_script(ScriptedModel::new().turn("You look around."));
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job settles");
+    let story = || {
+        story_of(&state)
+            .iter()
+            .map(|message| {
+                (
+                    message.id,
+                    message.swipe_count(),
+                    message.active_swipe_index,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let before = story();
+    let input = story_of(&state)
+        .iter()
+        .find(|message| message.message_type == MessageType::Input)
+        .expect("the story holds the Input")
+        .id;
+
+    let resp = post_empty(&app, &format!("/message/{input}/swipe/0")).await;
+
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The last Message changed, so the Swipe was not switched."),
+        "the refusal names the changed last Message: {body}"
+    );
+    assert!(
+        body.contains("The page showed a Message that is no longer the last one."),
+        "the second line is the engine's line: {body}"
+    );
+    assert_eq!(
+        story(),
+        before,
+        "the refused switch changes no story record"
+    );
 }

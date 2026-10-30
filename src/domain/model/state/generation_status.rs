@@ -234,14 +234,3 @@ pub enum Step {
     /// Options LLM producing the Options to pick from.
     Options,
 }
-
-impl Step {
-    pub fn as_endpoint_str(&self) -> &'static str {
-        match self {
-            Self::Narrating => "narrating",
-            Self::Quantifying => "quantifying",
-            Self::GeneratingEvent => "generating-event",
-            Self::Options => "options",
-        }
-    }
-}

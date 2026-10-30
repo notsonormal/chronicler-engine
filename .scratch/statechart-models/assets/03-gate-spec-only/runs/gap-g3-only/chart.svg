@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="pele pele-state" viewBox="0 0 1508 779" width="1508" height="779" style="max-width:100%;height:auto;--_bg:var(--pele-bg,#fff);--_fg:var(--pele-fg,#1f1f1f);--_m:var(--pele-muted,#6e6e6e);--_l:var(--pele-line,#1f1f1f);--_s:var(--pele-surface,#f3f3f3);--_a:var(--pele-surface-alt,#e6e6e6);--_b:var(--pele-border,#8a8a8a);--_c:var(--pele-accent,#5b7bd5);color:var(--_fg);--_tw:var(--pele-title-weight,bold);--_fm:var(--pele-font-mono,monospace);font:16px sans-serif;letter-spacing:normal;word-spacing:normal;text-transform:none;direction:ltr;font-family:var(--pele-font,sans-serif)" fill="var(--_fg)" role="graphics-document document" aria-roledescription="state">
+<style>
+.pele {
+  --pele-bg: #ffffff;
+  --pele-fg: #1c1c1c;
+  --pele-muted: #656565;
+  --pele-line: #808080;
+  --pele-surface: #fcfcfc;
+  --pele-surface-alt: #f1f1f1;
+  --pele-border: #c9c9c9;
+}
+.pele .blue rect { fill: #c3e0ff; }
+.pele .orange rect { fill: #f0d3bf; }
+.pele .purple rect { fill: #e3d5ff; }
+.pele .yellow rect { fill: #f0dcbf; }
+.pele .teal rect { fill: #bfe3df; }
+.pele .tan rect { fill: #e5d9ce; }
+.pele .pink rect { fill: #ffcbe6; }
+.pele .breaks rect {
+  fill: #ffecee !important;
+  stroke: #e72e3b !important;
+  stroke-width: 2.5px !important;
+}
+.pele .breaks text {
+  fill: #cd2834 !important;
+}
+.pele .mayBreak rect {
+  fill: #fff3e6 !important;
+  stroke: #e8730c !important;
+  stroke-width: 2.5px !important;
+}
+.pele .mayBreak text {
+  fill: #b85a06 !important;
+}
+.pele .bugPath rect {
+  stroke: #1680f3 !important;
+  stroke-width: 2.5px !important;
+}
+.pele .repeats rect {
+  stroke: #9b35d6 !important;
+  stroke-width: 2.5px !important;
+  stroke-dasharray: 6 3;
+}
+@media (prefers-color-scheme: dark) {
+  .pele {
+    --pele-bg: #1f1f1f;
+    --pele-fg: #f5f5f5;
+    --pele-muted: #acacac;
+    --pele-line: #939393;
+    --pele-surface: #121212;
+    --pele-surface-alt: #2c2c2c;
+    --pele-border: #4e4e4e;
+  }
+  .pele .blue rect { fill: #1b3857; }
+  .pele .orange rect { fill: #573117; }
+  .pele .purple rect { fill: #3c2e57; }
+  .pele .yellow rect { fill: #573d17; }
+  .pele .teal rect { fill: #174641; }
+  .pele .tan rect { fill: #3d3127; }
+  .pele .pink rect { fill: #57233e; }
+  .pele .breaks rect {
+    fill: #2e2021 !important;
+    stroke: #cf2b35 !important;
+  }
+  .pele .breaks text {
+    fill: #ff6463 !important;
+  }
+  .pele .mayBreak rect {
+    fill: #2e2619 !important;
+    stroke: #d0700f !important;
+  }
+  .pele .mayBreak text {
+    fill: #ffa257 !important;
+  }
+  .pele .bugPath rect {
+    stroke: #116dd2 !important;
+  }
+  .pele .repeats rect {
+    stroke: #9a3fcf !important;
+  }
+}
+</style><text class="pele-title" font-weight="var(--_tw)" text-anchor="middle" xml:space="preserve"><tspan x="754" y="25.6">The gate of one Game, written from the docs only</tspan></text><g transform="translate(0,36)"><g class="pele-clusters"><g class="pele-cluster pele-state-composite" data-id="legend"><rect x="381.8" y="8" width="1117.63" height="151" rx="10" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"/><path d="M381.8,44H1499.43" fill="none" stroke="var(--_b)"/><text class="pele-cluster-label" x="940.61" y="31.6" text-anchor="middle">Legend</text></g></g><g class="pele-edges" fill="none" stroke="var(--_l)" stroke-linecap="round"><g class="pele-edge pele-transition" data-id="edge0"><path d="M334.8,159L334.8,196"/><path class="pele-marker" d="M334.8,203L331.44,195L338.16,195Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge pele-transition" data-id="edge1"><path d="M334.8,247L334.8,309"/><path class="pele-marker" d="M334.8,316L331.44,308L338.16,308Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge pele-transition" data-id="edge2"><path d="M429.95,330C455.95,322 455.95,354 436.64,348.06"/><path class="pele-marker" d="M429.95,346L438.58,345.14L436.61,351.56Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge pele-transition" data-id="edge3"><path d="M334.8,360L334.8,422"/><path class="pele-marker" d="M334.8,429L331.44,421L338.16,421Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge pele-transition" data-id="edge4"><path d="M432.17,452C458.17,444 458.17,476 438.86,470.06"/><path class="pele-marker" d="M432.17,468L440.81,467.14L438.83,473.56Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge pele-transition" data-id="edge5"><path d="M334.8,491L334.8,553"/><path class="pele-marker" d="M334.8,560L331.44,552L338.16,552Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge pele-transition" data-id="edge6"><path d="M273.33,604L273.33,666"/><path class="pele-marker" d="M273.33,673L269.97,665L276.69,665Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge pele-transition" data-id="edge7"><path d="M396.27,673L396.27,611"/><path class="pele-marker" d="M396.27,604L399.63,612L392.91,612Z" fill="var(--_l)" stroke="none"/></g></g><g class="pele-edge-labels" font-size="14"><g class="pele-edge-label" data-id="edge1"><rect x="271.26" y="267.5" width="127.07" height="21" rx="3" fill="var(--_bg)"/><text x="334.8" y="282.9" text-anchor="middle">you send an Action</text></g><g class="pele-edge-label" data-id="edge2"><rect x="461.95" y="327.5" width="147.3" height="21" rx="3" fill="var(--_bg)"/><text x="535.6" y="342.9" text-anchor="middle">the Job saves its Input</text></g><g class="pele-edge-label" data-id="edge3"><rect x="249.48" y="380.5" width="170.64" height="21" rx="3" fill="var(--_bg)"/><text x="334.8" y="395.9" text-anchor="middle">the Job starts its next step</text></g><g class="pele-edge-label" data-id="edge4"><rect x="464.17" y="442" width="199.42" height="36" rx="3" fill="var(--_bg)"/><text text-anchor="middle" xml:space="preserve"><tspan x="563.89" y="455.9">the narrator call of the Job fails</tspan><tspan x="563.89" y="473.9">or the Job saves a failure line</tspan></text></g><g class="pele-edge-label" data-id="edge5"><rect x="272.82" y="511.5" width="123.95" height="21" rx="3" fill="var(--_bg)"/><text x="334.8" y="526.9" text-anchor="middle">the engine restarts</text></g><g class="pele-edge-label" data-id="edge6"><rect x="213.3" y="628" width="120.06" height="21" rx="3" fill="var(--_bg)"/><text x="273.33" y="643.4" text-anchor="middle">you start Autoplay</text></g><g class="pele-edge-label" data-id="edge7"><rect x="353.36" y="628" width="85.83" height="21" rx="3" fill="var(--_bg)"/><text x="396.27" y="643.4" text-anchor="middle">the run ends</text></g></g><g class="pele-nodes"><g class="pele-node pele-state teal bugPath" data-id="s0" transform="translate(334.8,225)"><rect x="-28.9" y="-22" width="57.79" height="44" rx="10" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" x="0" y="5.6" text-anchor="middle">Idle</text></g><g class="pele-node pele-state blue bugPath" data-id="s1" transform="translate(334.8,338)"><rect x="-95.15" y="-22" width="190.3" height="44" rx="10" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" x="0" y="5.6" text-anchor="middle">A Job holds the Game</text></g><g class="pele-node pele-state blue bugPath" data-id="s2" transform="translate(334.8,460)"><rect x="-97.38" y="-31" width="194.75" height="62" rx="10" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-4.9">A Job holds the Game,</tspan><tspan x="0" y="16.1">narrating</tspan></text></g><g class="pele-node pele-state teal mayBreak bugPath" data-id="s3" transform="translate(334.8,582)"><rect x="-90.7" y="-22" width="181.39" height="44" rx="10" fill="var(--_s)" stroke="var(--_b)" style="fill:#fff3e6;stroke:#e8730c;stroke-width:2.5px;"/><text class="pele-label" style="fill:#b85a06;" x="0" y="5.6" text-anchor="middle">Idle with a failure line</text></g><g class="pele-node pele-state purple bugPath" data-id="s4" transform="translate(334.8,704)"><rect x="-93.82" y="-31" width="187.63" height="62" rx="10" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-4.9">A run holds the Game</tspan><tspan x="0" y="16.1">between Jobs</tspan></text></g><g class="pele-node pele-state-start" data-id="root_start" transform="translate(334.8,152)"><circle r="7" fill="var(--_l)"/></g><g class="pele-node pele-state teal" data-id="lg0" transform="translate(426.69,101.5)"><rect x="-28.9" y="-22" width="57.79" height="44" rx="10" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" x="0" y="5.6" text-anchor="middle">Idle</text></g><g class="pele-node pele-state blue" data-id="lg1" transform="translate(529.37,101.5)"><rect x="-33.78" y="-22" width="67.57" height="44" rx="10" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" x="0" y="5.6" text-anchor="middle">Busy</text></g><g class="pele-node pele-state purple" data-id="lg2" transform="translate(650.29,101.5)"><rect x="-47.13" y="-22" width="94.26" height="44" rx="10" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" x="0" y="5.6" text-anchor="middle">Autoplay</text></g><g class="pele-node pele-state mayBreak" data-id="lg3" transform="translate(913.92,101.5)"><rect x="-176.5" y="-41.5" width="353.01" height="83" rx="10" fill="var(--_s)" stroke="var(--_b)" style="fill:#fff3e6;stroke:#e8730c;stroke-width:2.5px;"/><text class="pele-label" style="fill:#b85a06;" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-15.4">Breaks</tspan><tspan x="0" y="5.6">R10_ARunEndsOnAFailureOfItsOwnJobOnly</tspan><tspan x="0" y="26.6">in some cases</tspan></text></g><g class="pele-node pele-state bugPath" data-id="lg4" transform="translate(1306.93,101.5)"><rect x="-176.5" y="-41.5" width="353.01" height="83" rx="10" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-15.4">Path to the</tspan><tspan x="0" y="5.6">R10_ARunEndsOnAFailureOfItsOwnJobOnly</tspan><tspan x="0" y="26.6">bug</tspan></text></g></g></g></svg>

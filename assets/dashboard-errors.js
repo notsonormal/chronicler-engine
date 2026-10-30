@@ -1,6 +1,4 @@
-// Failure surfaces: inline error slots, the failure banner, the details popovers and the htmx error hooks.
-
-console.log("[HTMX] Initializing...");
+// Failure surfaces: the one reader and reporter of a request answer, the form slots, the notice place, the failure banner and the details popovers.
 
 function escapeHtml(value) {
   const entities = {
@@ -13,38 +11,21 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => entities[ch]);
 }
 
-// Mirrors the server's disclosure shape for a request with no response body:
-// the short line carries its own text element, which the status column's line
-// clamp is applied to.
+// The markup mirrors the server's disclosure shape, which the status column's line
+// clamp and the Details popover both key off.
 function errorDisclosureHtml(popoverId, message, rawText) {
+  const details = rawText
+    ? '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
+      escapeHtml(popoverId) + '" data-keep="aria-expanded">Details</button>' +
+      '<div class="error-detail-popover" id="' + escapeHtml(popoverId) + '" hidden data-keep="hidden style">' +
+      '<pre class="error-detail-raw">' + escapeHtml(rawText) + "</pre></div>"
+    : "";
   return (
-    '<div class="error-disclosure">' +
+    '<div class="error-disclosure' + (rawText ? "" : " error-disclosure-plain") + '">' +
     '<span class="error-disclosure-message">' +
     '<span class="error-disclosure-text">' + escapeHtml(message) + "</span></span>" +
-    '<button type="button" class="error-details-toggle" aria-expanded="false" aria-controls="' +
-    escapeHtml(popoverId) + '">Details</button>' +
-    '<div class="error-detail-popover" id="' + escapeHtml(popoverId) + '" hidden>' +
-    '<pre class="error-detail-raw">' + escapeHtml(rawText) + "</pre></div></div>"
+    details + "</div>"
   );
-}
-
-const INLINE_ERROR_CONTAINERS =
-  "form, .world-item, .preset-card, .game-item, .llm-message-card, .posture-override, .posture-group, .worlds-panel, .games-panel";
-
-let generatedErrorSlots = 0;
-
-function inlineErrorSlotFor(elt, create) {
-  if (!elt || !elt.closest) return null;
-  const container = elt.closest(INLINE_ERROR_CONTAINERS);
-  if (!container) return null;
-  const existing = container.querySelector(":scope > [data-error-slot]");
-  if (existing || !create) return existing;
-  const slot = document.createElement("div");
-  slot.className = "inline-error-slot";
-  slot.dataset.errorSlot = "generated-" + ++generatedErrorSlots;
-  slot.hidden = true;
-  container.appendChild(slot);
-  return slot;
 }
 
 function renderInlineError(slot, message, rawText) {
@@ -60,6 +41,11 @@ function clearInlineError(slot) {
   slot.hidden = true;
 }
 
+function formSlotOf(elt) {
+  const container = elt && elt.closest ? elt.closest("form, .edit-actions") : null;
+  return container ? container.querySelector(":scope > [data-error-slot]") : null;
+}
+
 function refreshFailureBanner() {
   const banner = document.getElementById("failure-banner");
   const degraded = document.getElementById("failure-banner-degraded");
@@ -70,6 +56,9 @@ function refreshFailureBanner() {
   banner.hidden = !(degradedUp || unreachableUp);
   banner.classList.toggle("unreachable", unreachableUp);
   banner.setAttribute("role", unreachableUp ? "alert" : "status");
+  fireScreenEvent("banner:changed", {
+    text: unreachableUp ? unreachable.textContent.trim() : "",
+  });
 }
 
 function markUnreachable() {
@@ -93,130 +82,122 @@ function clearUnreachable() {
   refreshFailureBanner();
 }
 
-// A transport failure's message is false the moment the engine answers again,
-// so every slot it wrote clears with the banner instead of at the surface's
-// next successful request.
-function clearUnreachableSlots() {
-  document
-    .querySelectorAll("[data-error-slot][data-unreachable]")
-    .forEach((slot) => {
-      delete slot.dataset.unreachable;
-      clearInlineError(slot);
-    });
-}
-
-// A server error body is an HTML fragment, so the disclosure shows its text.
+// The body is escaped HTML, so only a parse gives the real characters and keeps
+// the line break between the two lines.
 function plainResponseText(body) {
-  return (body || "").replace(/<[^>]*>/g, "").trim();
+  if (!body) return "";
+  return new DOMParser().parseFromString(body, "text/html").body.textContent.trim();
 }
 
-// A refused request (4xx) carries the explanation the engine wrote for this
-// slot, so it leads the short line; any other failure keeps the generic line,
-// with the server's own text behind the disclosure.
-function refusalSummary(body, status) {
-  const detail =
-    status >= 400 && status < 500
-      ? plainResponseText(body).split("\n")[0].trim()
-      : "";
-  return detail ? "That action failed. " + detail : "That action failed.";
+const REFUSED_STATUS = 409;
+
+function outcomeOfStatus(status) {
+  if (status === 0) return "none";
+  if (status < 400) return "done";
+  if (status === REFUSED_STATUS) return "refused";
+  return status < 500 ? "invalid" : "failed";
 }
 
-function reportSlotFailure(slot, xhr) {
-  if (xhr && xhr.status !== 0) {
-    renderInlineError(
-      slot,
-      refusalSummary(xhr.responseText, xhr.status),
-      plainResponseText(xhr.responseText)
-    );
+function requestAnswer(event) {
+  const xhr = event && event.detail ? event.detail.xhr : null;
+  const status = xhr ? xhr.status : 0;
+  return {
+    outcome: outcomeOfStatus(status),
+    status: status,
+    stamp: xhr ? xhr.getResponseHeader("X-Revision") : null,
+  };
+}
+
+// The place holds one report, and its `data-source` decides which clear applies:
+// a screen load never clears the report of a request.
+function noticeElement() {
+  return document.getElementById("notice");
+}
+
+function noticeShows(place, summary, detail, source) {
+  if (place.hidden || place.dataset.source !== source) return false;
+  const shownSummary = place.querySelector(".error-disclosure-text");
+  const shownDetail = place.querySelector(".error-detail-raw");
+  return (
+    !!shownSummary &&
+    shownSummary.textContent === summary &&
+    (shownDetail ? shownDetail.textContent : "") === detail
+  );
+}
+
+// Rewriting the report would close an open Details and fire the alert again, so a
+// notice that already shows it is left alone. The dialog is modal, so it hears the
+// summary through `notice:changed`.
+function showNotice(summary, detail, source) {
+  const place = noticeElement();
+  const report = place ? place.querySelector("[data-report]") : null;
+  if (!place || !report || noticeShows(place, summary, detail, source)) return;
+  renderInlineError(report, summary, detail);
+  place.dataset.source = source;
+  place.hidden = false;
+  fireScreenEvent("notice:changed", { summary: summary });
+}
+
+function clearNotice() {
+  const place = noticeElement();
+  if (!place || place.hidden) return;
+  clearInlineError(place.querySelector("[data-report]"));
+  delete place.dataset.source;
+  place.hidden = true;
+  fireScreenEvent("notice:changed", { summary: "" });
+}
+
+// htmx dispatches `htmx:afterRequest` to the body before it runs the handler of the
+// control, so the sender is still in the page when a network error arrives.
+function reportAnswer(event) {
+  const answer = requestAnswer(event);
+  if (answer.outcome === "none") {
+    markUnreachable();
     return;
   }
-  markUnreachable();
-  if (!slot) return;
-  renderInlineError(slot, "The engine is unreachable.", "No response from the server.");
-  slot.dataset.unreachable = "true";
-}
-
-function throwServerDetail(response) {
-  return response.text().then((body) => {
-    throw new Error(
-      plainResponseText(body) || `The server answered ${response.status}.`
-    );
-  });
-}
-
-// A server that answered is reachable, so only a failed poll marks the engine unreachable.
-function isPollRequest(elt) {
-  if (!elt || !elt.getAttribute) return false;
-  const trigger = elt.getAttribute("hx-trigger") || "";
-  return trigger.includes("every");
-}
-
-document.body.addEventListener("htmx:responseError", function (evt) {
-  const slot = inlineErrorSlotFor(evt.detail.elt, true);
-  if (slot) {
-    reportSlotFailure(slot, evt.detail.xhr);
-  } else if (isPollRequest(evt.detail.elt)) {
-    markUnreachable();
-  }
-});
-
-document.body.addEventListener("htmx:sendError", function (evt) {
-  reportSlotFailure(inlineErrorSlotFor(evt.detail.elt, true), null);
-});
-
-document.body.addEventListener("htmx:afterRequest", function (evt) {
-  if (!evt.detail.successful) return;
   clearUnreachable();
-  clearInlineError(inlineErrorSlotFor(evt.detail.elt));
-  clearUnreachableSlots();
+  if (answer.outcome === "done") return;
+  const text = plainResponseText(event.detail.xhr.responseText);
+  const [sentence, ...engineLines] = text.split("\n");
+  const summary = sentence.trim() || "The server answered " + answer.status + ".";
+  const detail = engineLines.join("\n").trim();
+  const slot = answer.outcome === "invalid" ? formSlotOf(event.detail.elt) : null;
+  if (slot) renderInlineError(slot, summary, detail);
+  else showNotice(summary, detail, "request");
+}
+
+document.body.addEventListener("htmx:afterRequest", reportAnswer);
+
+document.body.addEventListener("htmx:beforeRequest", function (evt) {
+  clearNotice();
+  clearInlineError(formSlotOf(evt.detail.elt));
 });
 
-document.body.addEventListener("htmx:afterSettle", refreshFailureBanner);
+document.addEventListener("click", function (evt) {
+  const target = evt.target;
+  if (!(target instanceof Element) || !target.closest("[data-close-notice]")) return;
+  clearNotice();
+  const main = document.getElementById("main-content");
+  if (main) main.focus();
+});
 
-// A swap replaces the open disclosure node, which collapses it and drops focus.
-let openErrorDetails = null;
+document.addEventListener("screen:loaded", refreshFailureBanner);
 
+// A load of the part keeps the open state and the position of a popover: each
+// lives in an attribute that `data-keep` lists.
 function closeErrorPopover(popover) {
   if (!popover) return;
-  popover.classList.remove("open");
   popover.hidden = true;
-  if (openErrorDetails && openErrorDetails.popoverId === popover.id) {
-    openErrorDetails = null;
-  }
   const toggle = document.querySelector(
     '.error-details-toggle[aria-controls="' + popover.id + '"]',
   );
   if (toggle) toggle.setAttribute("aria-expanded", "false");
 }
 
-function rememberOpenErrorDetails(popover, toggle) {
-  openErrorDetails = {
-    popoverId: popover.id,
-    hadFocus: document.activeElement === toggle,
-  };
-}
-
-function restoreOpenErrorDetails() {
-  if (!openErrorDetails) return;
-  const popover = document.getElementById(openErrorDetails.popoverId);
-  const toggle = document.querySelector(
-    '.error-details-toggle[aria-controls="' + openErrorDetails.popoverId + '"]',
-  );
-  if (!popover || !toggle) {
-    openErrorDetails = null;
-    return;
-  }
-  popover.classList.add("open");
-  popover.hidden = false;
-  toggle.setAttribute("aria-expanded", "true");
-  const focusFell =
-    !document.activeElement || document.activeElement === document.body;
-  if (openErrorDetails.hadFocus && focusFell) toggle.focus();
-  positionErrorPopover(popover, toggle);
-}
-
 function closeAllErrorPopovers() {
-  document.querySelectorAll(".error-detail-popover.open").forEach(closeErrorPopover);
+  document
+    .querySelectorAll(".error-detail-popover:not([hidden])")
+    .forEach(closeErrorPopover);
 }
 
 function positionErrorPopover(popover, toggle) {
@@ -239,12 +220,11 @@ document.addEventListener("click", function (evt) {
   if (toggle) {
     const popover = document.getElementById(toggle.getAttribute("aria-controls"));
     if (popover) {
-      const open = popover.classList.toggle("open");
+      const open = popover.hidden;
       popover.hidden = !open;
       toggle.setAttribute("aria-expanded", String(open));
       if (open) {
         positionErrorPopover(popover, toggle);
-        rememberOpenErrorDetails(popover, toggle);
       } else {
         closeErrorPopover(popover);
       }
@@ -254,13 +234,14 @@ document.addEventListener("click", function (evt) {
   if (!target.closest(".error-detail-popover")) closeAllErrorPopovers();
 });
 
+// Escape must not also reach the modal dialog, which would close and discard the
+// draft that the error is about.
 document.addEventListener("keydown", function (evt) {
-  if (evt.key === "Escape") closeAllErrorPopovers();
+  if (evt.key !== "Escape") return;
+  const anyOpen = document.querySelector(".error-detail-popover:not([hidden])");
+  closeAllErrorPopovers();
+  if (anyOpen) evt.preventDefault();
 });
 
 window.addEventListener("resize", closeAllErrorPopovers);
 window.addEventListener("scroll", closeAllErrorPopovers, true);
-
-// `afterSettle` fires on the final DOM after out-of-band processing, so the restore runs on both events.
-document.body.addEventListener("htmx:afterSwap", restoreOpenErrorDetails);
-document.body.addEventListener("htmx:afterSettle", restoreOpenErrorDetails);

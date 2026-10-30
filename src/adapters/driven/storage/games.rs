@@ -15,7 +15,7 @@ impl Storage {
                     .prepare(
                         "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on, display_name, failure
                          FROM games
-                         ORDER BY updated_at DESC",
+                         ORDER BY updated_at DESC, id DESC",
                     )
                     .db_context("Failed to prepare list games")?;
 
@@ -26,6 +26,57 @@ impl Storage {
                     .db_context("Failed to read game row")?;
 
                 db_games.iter().map(DbGame::to_game).collect()
+            }
+        })
+    }
+
+    /// One page of the Games other than the active one, newest `updated_at` first. Equal
+    /// `updated_at` lists the greater id first, so a page is stable.
+    pub fn list_saved_games_page(
+        &self,
+        active: Option<GameId>,
+        limit: u64,
+        offset: u64,
+    ) -> Result<Vec<Game>, EngineError> {
+        self.with_backend_mut(StorageCall::ListSavedGames, |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id, world_name, name, created_at, updated_at, world_key, persona_key, persona_name, narrator_mode, narrative_perspective, narrative_tense, active_system_prompt_preset_id, active_quantifier_prompt_preset_id, active_impersonate_prompt_preset_id, active_options_prompt_preset_id, options_always_on, display_name, failure
+                         FROM games
+                         WHERE id IS NOT ?1
+                         ORDER BY updated_at DESC, id DESC
+                         LIMIT ?2 OFFSET ?3",
+                    )
+                    .db_context("Failed to prepare list saved games")?;
+
+                let db_games: Vec<DbGame> = stmt
+                    .query_map(
+                        rusqlite::params![active.map(|id| id.0 as i64), limit as i64, offset as i64],
+                        DbGame::from_row,
+                    )
+                    .db_context("Failed to list saved games")?
+                    .collect::<Result<Vec<_>, _>>()
+                    .db_context("Failed to read game row")?;
+
+                db_games.iter().map(DbGame::to_game).collect()
+            }
+        })
+    }
+
+    pub fn count_saved_games(&self, active: Option<GameId>) -> Result<u64, EngineError> {
+        self.with_backend_mut(StorageCall::CountSavedGames, |backend| match backend {
+            Backend::Sqlite { pool } => {
+                let conn = pool.conn();
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM games WHERE id IS NOT ?1",
+                        rusqlite::params![active.map(|id| id.0 as i64)],
+                        |row| row.get(0),
+                    )
+                    .db_context("Failed to count saved games")?;
+                Ok(count as u64)
             }
         })
     }

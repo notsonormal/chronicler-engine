@@ -5,7 +5,7 @@ use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrit
 use chronicler_engine::domain::model::game::{ConfigChange, GameId, NewGame, PresetSelection};
 use chronicler_engine::domain::model::message::SwipeAt;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
-use chronicler_engine::test_support::tx_token;
+use chronicler_engine::test_support::{test_new_game, tx_token};
 
 const WORLD_KEY: &str = "seam_world";
 const FUTURE_MESSAGE_TIME: &str = "2099-01-01T00:00:00+00:00";
@@ -16,21 +16,13 @@ fn sqlite() -> Storage {
 }
 
 fn new_game(name: &str, world_key: &str) -> NewGame {
-    NewGame {
-        world_name: "Seam World".to_string(),
-        world_key: world_key.to_string(),
-        persona_key: "seam_persona".to_string(),
-        persona_name: "Seam Persona".to_string(),
-        name: name.to_string(),
-        narrator_mode: NarratorMode::Novel,
-        narrative_perspective: NarrativePerspective::Third,
-        narrative_tense: NarrativeTense::Past,
-        system_prompt_preset_id: "system_default".to_string(),
-        quantifier_prompt_preset_id: "quantifier_default".to_string(),
-        impersonate_prompt_preset_id: "impersonate_default".to_string(),
-        options_prompt_preset_id: "options_default".to_string(),
-        options_always_on: false,
-    }
+    test_new_game(
+        "Seam World",
+        world_key,
+        "seam_persona",
+        "Seam Persona",
+        name,
+    )
 }
 
 fn create_game(storage: &Storage, name: &str) -> GameId {

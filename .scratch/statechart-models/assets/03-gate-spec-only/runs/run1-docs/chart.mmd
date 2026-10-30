@@ -1,0 +1,69 @@
+---
+title: "The gate of one Game, written from the docs only"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Idle
+    lg1: Busy
+    lg2: Autoplay
+    lg3: Breaks R02_ARunningJobKeepsItsEntry or R04_AnEndedRunStartsNoJob or R05_TheGameStaysIdleAfterAStop
+    lg4: Breaks R03_ARunHoldsTheGameUntilItEnds or R10_ARunEndsOnAFailureOfItsOwnJobOnly in some cases
+    lg5: Path to the R02_ARunningJobKeepsItsEntry or R03_ARunHoldsTheGameUntilItEnds or R04_AnEndedRunStartsNoJob or R05_TheGameStaysIdleAfterAStop or R10_ARunEndsOnAFailureOfItsOwnJobOnly bug
+  }
+  class lg0 teal
+  class lg1 blue
+  class lg2 purple
+  class lg3 breaks
+  class lg4 mayBreak
+  class lg5 bugPath
+  s0: Idle
+  s1: A run holds the Game between Jobs
+  s2: A Job holds the Game
+  s3: Idle#59; a stopped run's loop still runs
+  s4: A run holds the Game between Jobs#59; a stopped run's loop still runs
+  s5: A Job holds the Game#59; a stopped run's loop still runs
+  s6: A run holds the Game, its Job starts#59; a stopped run's loop still runs
+  s7: A Job holds the Game, narrating
+  s8: Idle#59; a Job runs with no entry
+  s9: Idle with a failure line
+  [*] --> s0
+  s0 --> s1: you start Autoplay
+  s0 --> s2: you send an Action
+  s1 --> s3: you press Stop
+  s2 --> s2: the Job saves its Input
+  s3 --> s4: you start Autoplay
+  s3 --> s5: you send an Action
+  s3 --> s6: the run starts its next Job
+  s2 --> s7: the Job starts its next step
+  s4 --> s0: the run finds another holder and ends
+  s5 --> s8: the run finds another holder and ends
+  s7 --> s7: the narrator call of the Job fails or the Job saves a failure line
+  s7 --> s9: the engine restarts
+  s9 --> s1: you start Autoplay
+  s1 --> s9: the run ends
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  classDef mayBreak fill:#fff3e6,stroke:#e8730c,stroke-width:2.5px,color:#b85a06
+  class s0 teal
+  class s0 mayBreak
+  class s0 bugPath
+  class s1 purple
+  class s1 bugPath
+  class s2 blue
+  class s2 bugPath
+  class s3 teal
+  class s3 bugPath
+  class s4 purple
+  class s4 bugPath
+  class s5 blue
+  class s5 bugPath
+  class s6 purple
+  class s6 breaks
+  class s6 bugPath
+  class s7 blue
+  class s7 bugPath
+  class s8 teal
+  class s8 breaks
+  class s8 bugPath
+  class s9 teal
+  class s9 mayBreak
+  class s9 bugPath

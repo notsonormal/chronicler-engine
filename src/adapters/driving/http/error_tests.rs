@@ -4,6 +4,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 
 use crate::application::errors::ApplicationError;
+use crate::application::generation::gate::NotAccepted;
 use crate::error::EngineError;
 use crate::test_support::body_text;
 
@@ -16,10 +17,10 @@ async fn validation_into_response_returns_400_with_message() {
 }
 
 #[tokio::test]
-async fn engine_displayable_into_response_returns_500_with_engine_message() {
+async fn engine_displayable_into_response_returns_400_with_engine_message() {
     let resp =
         ApplicationError::Engine(EngineError::WorldHasGames { game_count: 1 }).into_response();
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let body = body_text(resp).await;
     assert!(!body.contains("Internal Server Error"), "body: {body}");
     assert!(
@@ -55,5 +56,23 @@ async fn html_escape_in_body() {
     assert!(
         !body.contains("<script>"),
         "body must escape <script>: {body}"
+    );
+}
+
+#[test]
+fn validation_into_engine_error_keeps_the_reason_as_validation() {
+    let error = ApplicationError::validation("bad input").into_engine_error();
+    assert!(
+        matches!(&error, EngineError::Validation(reason) if reason == "bad input"),
+        "got: {error:?}"
+    );
+}
+
+#[test]
+fn refused_into_engine_error_keeps_the_refusal_line_as_validation() {
+    let error = ApplicationError::NotAccepted(NotAccepted::StillThinking).into_engine_error();
+    assert!(
+        matches!(&error, EngineError::Validation(line) if line == "Still thinking..."),
+        "got: {error:?}"
     );
 }

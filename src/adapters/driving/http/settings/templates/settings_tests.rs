@@ -7,7 +7,6 @@ use crate::domain::model::settings::{AppSettings, LlmConnection, TextCheckMode, 
 use crate::adapters::driving::http::settings::templates::{
     ConnectionFormTemplate, SettingsTemplate, TextCheckCardTemplate,
 };
-use crate::error::EngineError;
 use crate::test_support::test_connection;
 
 fn two_connection_settings() -> AppSettings {
@@ -43,7 +42,7 @@ fn health(role: Role, backend: Option<&str>, error: Option<&str>) -> RoleHealth 
 #[test]
 fn test_settings_template_renders_the_sub_tabs_and_role_rows() {
     let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[], None)
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
@@ -57,7 +56,7 @@ fn test_settings_template_renders_the_sub_tabs_and_role_rows() {
     assert!(html.contains(r#"<option value="conn-1" selected>"#));
     assert!(html.contains(r#"<option value="conn-2" selected>"#));
     assert!(html.contains("Add Connection"));
-    assert!(html.contains(r#"<div class="connection-row">"#));
+    assert!(html.contains(r#"<div class="connection-row" id="connection-conn-1">"#));
     assert!(!html.contains("Set as Narrator"));
     assert!(!html.contains("Set as Quantifier"));
 }
@@ -65,7 +64,7 @@ fn test_settings_template_renders_the_sub_tabs_and_role_rows() {
 #[test]
 fn test_narrator_badge_renders() {
     let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[], None)
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
@@ -75,7 +74,7 @@ fn test_narrator_badge_renders() {
 #[test]
 fn test_quantifier_badge_renders() {
     let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[], None)
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
@@ -85,7 +84,7 @@ fn test_quantifier_badge_renders() {
 #[test]
 fn test_no_calls_yet_health_renders_for_each_role() {
     let settings = two_connection_settings();
-    let html = SettingsTemplate::from_settings(&settings, &[], None)
+    let html = SettingsTemplate::from_settings(&settings, &[])
         .render()
         .unwrap();
 
@@ -105,7 +104,7 @@ fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
         Some("Mock mock"),
         Some("connection refused"),
     )];
-    let html = SettingsTemplate::from_settings(&settings, &roles, None)
+    let html = SettingsTemplate::from_settings(&settings, &roles)
         .render()
         .unwrap();
 
@@ -133,7 +132,7 @@ fn test_degraded_role_renders_the_details_disclosure_and_marks_the_subtab() {
 fn test_healthy_role_renders_healthy() {
     let settings = two_connection_settings();
     let roles = vec![health(Role::Quantifier, Some("Mock mock"), None)];
-    let html = SettingsTemplate::from_settings(&settings, &roles, None)
+    let html = SettingsTemplate::from_settings(&settings, &roles)
         .render()
         .unwrap();
 
@@ -142,56 +141,26 @@ fn test_healthy_role_renders_healthy() {
 }
 
 #[test]
-fn test_refusal_message_rides_inside_the_connections_panel() {
-    let settings = two_connection_settings();
-    let refusal = EngineError::Validation("Narrator uses this connection".to_string());
-    let roles = vec![health(
-        Role::Narrator,
-        Some("Mock mock"),
-        Some("connection refused"),
-    )];
-    let html = SettingsTemplate::from_settings(&settings, &roles, Some(&refusal))
-        .render()
-        .unwrap();
-
-    assert!(
-        html.contains(
-            r#"<span class="error-disclosure-message"><span class="error-disclosure-text">Narrator uses this connection</span></span>"#
-        ),
-        "the refusal's short message must be the disclosure's visible text: {html}"
-    );
-    assert!(
-        html.contains(r#"class="error-details-toggle""#),
-        "the refusal must carry the Details toggle: {html}"
-    );
-    assert!(
-        html.contains(
-            r#"<pre class="error-detail-raw">Validation error: Narrator uses this connection</pre>"#
-        ),
-        "the popover must carry the raw failure text: {html}"
-    );
-    for popover_id in ["settings-panel-error", "role-health-narrator-popover"] {
-        assert_eq!(
-            html.matches(&format!(r#"id="{popover_id}""#)).count(),
-            1,
-            "the panel refusal and a role-health disclosure must not share a popover id: {html}"
-        );
-    }
-}
-
-#[test]
 fn test_connection_form_template_add_and_edit() {
     let settings = two_connection_settings();
     let add = ConnectionFormTemplate::new(None).render().unwrap();
-    assert!(add.contains(r#"<h2>Add Connection</h2>"#));
+    assert!(add.contains(r#"<h2 id="edit-dialog-title">Add Connection</h2>"#));
     assert!(add.contains(r#"hx-post="/connections/add""#));
-    assert!(add.contains("</svg> Connections</button>"));
+    assert!(add.contains("data-close-dialog"));
+    assert!(
+        add.contains(r#"<div class="connection-form" data-dialog-form>"#),
+        "the form is a dialog fragment: {add}"
+    );
+    assert!(
+        add.contains(r#"hx-swap="none""#),
+        "a save swaps nothing: {add}"
+    );
     assert!(add.contains(r#"name="conn_name" value=""#));
 
     let edit = ConnectionFormTemplate::new(Some(&settings.connections[0]))
         .render()
         .unwrap();
-    assert!(edit.contains(r#"<h2>Edit Test Narrator</h2>"#));
+    assert!(edit.contains(r#"<h2 id="edit-dialog-title">Edit Test Narrator</h2>"#));
     assert!(edit.contains(r#"hx-post="/connections/conn-1/edit""#));
     assert!(edit.contains(r#"name="conn_model" value="openai/gpt-4o-mini""#));
     assert!(edit.contains(r#"name="conn_api_key" value="sk-test""#));
@@ -247,7 +216,7 @@ fn test_text_check_card_disabled_mode_renders_the_checkbox_unchecked() {
         ..AppSettings::default()
     };
 
-    let html = TextCheckCardTemplate::from_settings(&settings, "")
+    let html = TextCheckCardTemplate::from_settings(&settings)
         .render()
         .unwrap();
 

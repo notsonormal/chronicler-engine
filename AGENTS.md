@@ -1,7 +1,7 @@
 # Chronicler Engine Knowledge Base
 
 ## Overview
-Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
+Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboard, LLM-powered narrative generation, data-driven game state from JSON configs.
 
 ## Structure
 <!-- AUTO-STRUCTURE START -->
@@ -26,6 +26,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `request.rs` — LLM request building
             - `response.rs` — LLM response parsing
       - **storage/**
+        - `changes.rs` — The change counters: one number for each kind of data, raised after the data is committed
         - `characters.rs` — Character storage backend operations
         - `core.rs` — Storage backend and core abstractions
         - `db.rs` — SQLite database connection pool
@@ -40,6 +41,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - `test_support.rs` — Test infrastructure types for storage failure injection
         - `transaction.rs` — The transaction: one unit of record writes that lands whole
         - `worlds.rs` — World storage backend operations
+        - `write_guard.rs` — The write guard: the one place a `Tx` write checks its injected failure and records the kinds it changed
         - **mappers/**
           - `llm_message.rs` — LLM message mapper
           - `message.rs` — Message mapper
@@ -90,7 +92,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - `server.rs` — Server implementation
         - **builders/**
           - `forms.rs` — Form field HTML builders.
-          - `headers.rs` — Header fragment, Settings role-health cell and status-swap header builders.
+          - `headers.rs` — Header and failure-banner fragment builders, and the Settings role-health cell builders.
           - `mod.rs` — HTTP builders — composition fns that assemble HTML, headers, and routes.
           - `presets.rs` — Prompt-preset card + form HTML builders.
           - `router.rs` — HTTP router composition.
@@ -120,7 +122,8 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
         - **layout/**
           - `mod.rs` — Layout module (route handlers).
           - **handlers/**
-            - `endpoints.rs` — Fragment endpoints
+            - `action_controls.rs` — The action control parts: Send, and Autoplay with Stop, each rendered from the busy state of the Game
+            - `endpoints.rs` — The status display, the changes answer, the LLM record dialog and the busy reset.
             - `mod.rs` — Layout route handlers (partials + status endpoints).
         - **prompt_presets/**
           - `mod.rs` — Prompt presets module.
@@ -130,6 +133,12 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
           - **templates/**
             - `mod.rs` — Prompt presets askama templates.
             - `prompt_presets.rs` — Prompt preset templates
+        - **screen/**
+          - `mod.rs` — Screen route handlers.
+          - **handlers/**
+            - `mod.rs` — Screen route handlers.
+            - `parts.rs` — The parts of the screen: the one list of part names, each with its renderer.
+            - `screen.rs` — The screen load: one request that renders the parts the page names.
         - **settings/**
           - `mod.rs` — Settings module.
           - **handlers/**
@@ -139,11 +148,13 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
             - `mod.rs` — Settings askama templates.
             - `settings.rs` — Settings templates
         - **utils/**
+          - `answer_words.rs` — The words of a failed answer: one table of routes, and the layer that writes the first line of every failed answer.
           - `current_game.rs` — `CurrentGame` — the request's Game, read once per request.
           - `error.rs` — Error rendering helpers for HTTP fragments.
-          - `fragment.rs` — Fragment-rendering glue: the try-render wrapper for AppState renderers and the template render helpers.
-          - `handler_helpers.rs` — Handler-level utilities: option string and storage-id helpers.
+          - `fragment.rs` — Fragment-rendering glue: the template render helpers.
+          - `handler_helpers.rs` — Handler-level utilities: option string and storage-id helpers, and the form of a control that names the last Message.
           - `mod.rs` — HTTP utility modules.
+          - `request_layers.rs` — The two route layers of the request answers: the revision stamp, and the Game header check.
           - `response.rs` — HTTP response helpers
           - `template_helpers.rs` — Shared template rendering helpers: the Askama renderer for `<option>`
           - `view_mappers.rs` — Domain → view aggregators used by HTTP handlers. Distinct from `mappers/`, which convert DB rows ↔ domain.
@@ -237,6 +248,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
     - **model/**
       - `action.rs` — Action enum and semantic command types (slash-command steering entry)
       - `agent.rs` — Agent definitions and behavior types
+      - `change.rs` — The change kinds the server counts, and one snapshot of their numbers
       - `character.rs` — Character sheet data and Character card definitions
       - `dock.rs` — The dock record: the offered set and the one Options failure of a Game
       - `game.rs` — Game state and Game management
@@ -248,6 +260,7 @@ Interactive fiction/text adventure engine in Rust. HTTP/WebSocket server with HT
       - `mod.rs` — Core data models and domain types
       - `prompt_preset.rs` — Prompt preset configurations
       - `quantifier.rs` — The Quantifier result and the Character transitions the Game rules derive from it
+      - `saved_games_page.rs` — The pages of saved Games: the page size, and the rule that names the page a request gets.
       - `scenario.rs` — Scenario definitions and world data
       - `settings.rs` — Settings and configuration types
       - `story_window.rs` — The story window: the newest entries of the story, with the room each one shows, and the end-of-story facts that go with them

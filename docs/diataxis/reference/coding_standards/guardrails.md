@@ -72,6 +72,10 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 
 | Rule | Description | Source |
 |------|-------------|--------|
+| post routes have words | A route without a row would answer a failure with no sentence of what was not done. | `tests/infrastructure/guardrails/answer_words.rs:12` |
+| words rows are router routes | The layer finds a row by the matched route, written as the router writes it: a row with | `tests/infrastructure/guardrails/answer_words.rs:40` |
+| request paths have words | A value that is wholly a placeholder names its route in a Rust string, so only the | `tests/infrastructure/guardrails/answer_words.rs:86` |
+| post handlers can answer an error | A handler that returns `Html<String>` cannot answer an error status, so the answer | `tests/infrastructure/guardrails/answer_words.rs:132` |
 | enum variant docs | Requires every enum variant to have a `///` doc unless the enum is marked `/// [TRIVIAL_ENUM]`. | `tests/infrastructure/guardrails/enums.rs:119` |
 | free fn location | Restricts top-level free functions to allowlisted category folders or exempt paths. | `tests/infrastructure/guardrails/free_fn.rs:31` |
 | inherent impl locality | Checks all files in `src/` for inherent impls that violate the module-per-type rule. | `tests/infrastructure/guardrails/inherent_impl.rs:15` |
@@ -84,6 +88,21 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | test file pairing | Requires every `_tests.rs` file in `src/` to have a matching source file or module directory. | `tests/infrastructure/guardrails/location.rs:42` |
 | test file location | Combines test-file naming and pairing checks for `src/` test files. | `tests/infrastructure/guardrails/location.rs:86` |
 | nesting depth | Fails when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`. | `tests/infrastructure/guardrails/nesting.rs:12` |
+| parts in shell | Checks the dashboard shell, `assets/index.html`. A part element has a `data-part` | `tests/infrastructure/guardrails/screen.rs:48` |
+| shell parts match the server | Checks the part names of the shell against the names that the server renders | `tests/infrastructure/guardrails/screen.rs:147` |
+| stub answers the parts of the server | Checks the source of the stub server against the names that the server renders | `tests/infrastructure/guardrails/screen.rs:191` |
+| part table matches shell | Checks a hand-written table of parts against the parts of the shell: each part of | `tests/infrastructure/guardrails/screen.rs:240` |
+| scripts write no part | Checks one `assets/dashboard-*.js` script other than `dashboard-screen.js`, the | `tests/infrastructure/guardrails/screen.rs:344` |
+| scripts fetch only the screen reads | A control sends its request through htmx, so the one answer reader hears it and the end of the | `tests/infrastructure/guardrails/screen.rs:384` |
+| no abort or timeout source | htmx fires `htmx:afterRequest` with status 0 for an abort and a timeout as well as for | `tests/infrastructure/guardrails/screen.rs:408` |
+| handler headers | Checks one handler file of the HTTP adapter. A handler answers its own element | `tests/infrastructure/guardrails/screen.rs:448` |
+| template targets | Checks one template source: a file of the HTTP adapter that renders markup, or | `tests/infrastructure/guardrails/screen.rs:478` |
+| no out of band swaps | Checks one template source for out-of-band swaps. An element that shows data | `tests/infrastructure/guardrails/screen.rs:538` |
+| draft controls only in dialog forms | Checks one source file of the HTTP adapter. A draft control is a form control | `tests/infrastructure/guardrails/screen.rs:631` |
+| dialog fragments carry the title | Checks that a literal of a dialog fragment carries the title that names the | `tests/infrastructure/guardrails/screen.rs:675` |
+| draft control exceptions are used | Checks the exceptions of the draft-control rule against the files they name: a | `tests/infrastructure/guardrails/screen.rs:693` |
+| scripts listen no part swaps | Checks one `assets/dashboard-*.js` script. A direct morph writes each part, so an | `tests/infrastructure/guardrails/screen.rs:734` |
+| scripts write no disabled | Checks one first-party script of `assets/`. The server renders every control | `tests/infrastructure/guardrails/screen.rs:766` |
 | doc standards | Enforces module-level doc-anchor standards on production files and rejects DOC anchors in test files. | `tests/infrastructure/guardrails/structure.rs:38` |
 | mod purity | Enforces mod.rs purity: only module declarations, imports, and module docs are allowed. | `tests/infrastructure/guardrails/structure.rs:128` |
 | empty rust file | Flags `.rs` files that contain only comments and blank lines. | `tests/infrastructure/guardrails/structure.rs:204` |

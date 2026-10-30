@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! GameWriter and JobWriter — the writer rule and the guard: the one registry of the busy state, and the transactions a Job writes through.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -11,8 +11,9 @@ use crate::domain::model::character::CharacterCard;
 use crate::domain::model::dock::{DockRecord, OptionsFailure};
 use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::agent::Kind;
+use crate::domain::model::change::{EngineKind, GameKind};
 use crate::domain::model::generation::{
-    GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanRefusal, Place, StoryEnd,
+    GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanError, Place, StoryEnd,
 };
 use crate::domain::model::message::{Maker, Message, Swipe, SwipeAt};
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
@@ -22,9 +23,11 @@ use crate::domain::model::tail::Tail;
 use crate::error::EngineError;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Refusal {
-    /// The Game is busy: `200` "Still thinking...".
+pub enum NotAccepted {
+    /// The Game is busy: `409` "Still thinking...".
     StillThinking,
+    /// The Message that the request names is no longer the last one: `409`.
+    LastMessageChanged,
     /// The request itself is wrong: `400`, with the reason line.
     BadRequest(String),
     /// The request could not run: `500`, carrying the failure's own line. The
@@ -33,19 +36,21 @@ pub enum Refusal {
     Failed(GenerationFailure),
 }
 
-impl Refusal {
-    /// The line the user reads for the refusal, also when it surfaces as an error
+impl NotAccepted {
+    /// The line the user reads for the request that was not accepted, also when it surfaces as an error
     /// outside the HTTP answer.
     pub fn line(&self) -> String {
         match self {
             Self::StillThinking => "Still thinking...".to_string(),
+            Self::LastMessageChanged => {
+                "The page showed a Message that is no longer the last one.".to_string()
+            }
             Self::BadRequest(line) => line.clone(),
             Self::Failed(failure) => failure.line(),
         }
     }
 }
 
-/// Why a step or a transaction of a Job did not finish.
 #[derive(Debug)]
 pub enum JobFailure {
     /// The Game's Job entry no longer holds this Job's id: a stop or a reset
@@ -95,7 +100,7 @@ impl SavedText {
     }
 }
 
-/// The record of a Job that runs: the Job's own methods are its only writers.
+/// The record of a Job that runs.
 struct JobEntry {
     /// The Job that owns the entry; a transaction whose id differs is refused.
     id: u64,
@@ -150,6 +155,16 @@ impl Holder {
     fn is_autoplay_run(&self, id: AutoplayRunId) -> bool {
         matches!(self, Self::Autoplay { run, .. } if *run == id)
     }
+
+    fn busy(&self) -> Busy {
+        match self {
+            Self::Job(entry) => Busy::Job(entry.step.clone()),
+            Self::Autoplay { progress, job, .. } => Busy::Autoplay {
+                progress: *progress,
+                step: job.as_ref().map(|entry| entry.step.clone()),
+            },
+        }
+    }
 }
 
 /// Absent means idle.
@@ -170,6 +185,8 @@ impl BusyRegistry {
 
     /// A writer's check and its transactions happen in one critical section, and the lock
     /// order stays the guard, then the backend mutex, then the connection mutex.
+    ///
+    /// The busy state is memory only, so this is the one place that sees it change.
     fn hold<T>(&self, storage: &Arc<Storage>, f: impl FnOnce(&mut Holders, &TxOpener) -> T) -> T {
         let opener = TxOpener {
             storage: Arc::clone(storage),
@@ -179,7 +196,41 @@ impl BusyRegistry {
             .busy
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        f(&mut busy, &opener)
+        let before = Self::busy_of_each(&busy);
+        let result = f(&mut busy, &opener);
+        let after = Self::busy_of_each(&busy);
+        Self::raise_busy_changes(storage, &before, &after);
+        result
+    }
+
+    fn busy_of_each(holders: &Holders) -> HashMap<GameId, Busy> {
+        holders
+            .iter()
+            .map(|(game, holder)| (*game, holder.busy()))
+            .collect()
+    }
+
+    /// The Games list marks the Games that a run holds, so a change to that set raises it.
+    fn raise_busy_changes(
+        storage: &Storage,
+        before: &HashMap<GameId, Busy>,
+        after: &HashMap<GameId, Busy>,
+    ) {
+        let changes = storage.changes();
+        for game in before.keys().chain(after.keys()).collect::<HashSet<_>>() {
+            if before.get(game) != after.get(game) {
+                changes.raise_game(*game, &[GameKind::BusyState]);
+            }
+        }
+        let run_games = |held: &HashMap<GameId, Busy>| -> HashSet<GameId> {
+            held.iter()
+                .filter(|(_, busy)| matches!(busy, Busy::Autoplay { .. }))
+                .map(|(game, _)| *game)
+                .collect()
+        };
+        if run_games(before) != run_games(after) {
+            changes.raise_engine(&[EngineKind::Games]);
+        }
     }
 }
 
@@ -248,10 +299,10 @@ pub enum AutoplayAccept {
     /// The holder of the Game is gone or holds another run's id: a stop, a reset or
     /// a delete ended the run. Nothing is written.
     Ended,
-    /// The accept refused and wrote the Game's failure line if the refusal has one.
-    /// A refusal of the plan or of the story read removed the holder; the run's own
+    /// The accept did not accept and wrote the Game's failure line if the outcome is `Failed`.
+    /// A plan error or a failed story read removed the holder; the run's own
     /// Job in flight (unreachable) leaves it for `end_autoplay`.
-    Refused(Refusal),
+    NotAccepted(NotAccepted),
 }
 
 pub struct AcceptedJob {
@@ -297,20 +348,19 @@ impl GameWriter {
         )
     }
 
-    /// The busy rule: a Game with a holder answers "Still thinking..." before any
-    /// other check.
-    fn require_idle(holders: &Holders, game: GameId) -> Result<(), Refusal> {
+    /// The busy rule: the busy refusal comes before any other check of the request.
+    fn require_idle(holders: &Holders, game: GameId) -> Result<(), NotAccepted> {
         if holders.contains_key(&game) {
-            return Err(Refusal::StillThinking);
+            return Err(NotAccepted::StillThinking);
         }
         Ok(())
     }
 
-    pub fn accept(&self, game: GameId, request: JobRequest) -> Result<AcceptedJob, Refusal> {
+    pub fn accept(&self, game: GameId, request: JobRequest) -> Result<AcceptedJob, NotAccepted> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
             let job_id = self.next_job_id();
-            let story = self.story_end_or_refuse(game, opener)?;
+            let story = self.story_end_or_not_accepted(game, opener)?;
             let (plan, step) = self.plan_and_start(opener, game, story, &request)?;
             holders.insert(game, Holder::Job(JobEntry { id: job_id, step }));
             Ok(self.accepted(game, job_id, plan))
@@ -335,11 +385,11 @@ impl GameWriter {
                 None => return AutoplayAccept::Ended,
                 // The loop accepts one Job at a time, so its own Job in flight is
                 // unreachable; the Game is busy, and nothing is written.
-                Some(false) => return AutoplayAccept::Refused(Refusal::StillThinking),
+                Some(false) => return AutoplayAccept::NotAccepted(NotAccepted::StillThinking),
                 Some(true) => {}
             }
             let accepted = self.accept_in_autoplay_hold(holders, opener, game, run, decide);
-            if matches!(accepted, AutoplayAccept::Refused(_)) {
+            if matches!(accepted, AutoplayAccept::NotAccepted(_)) {
                 holders.remove(&game);
             }
             accepted
@@ -355,9 +405,9 @@ impl GameWriter {
         decide: impl FnOnce(&StoryEnd) -> Decision,
     ) -> AutoplayAccept {
         let job_id = self.next_job_id();
-        let story = match self.story_end_or_refuse(game, opener) {
+        let story = match self.story_end_or_not_accepted(game, opener) {
             Ok(story) => story,
-            Err(refusal) => return AutoplayAccept::Refused(refusal),
+            Err(not_accepted) => return AutoplayAccept::NotAccepted(not_accepted),
         };
         let (progress, request) = match decide(&story) {
             Decision::Finish(progress) => {
@@ -368,7 +418,7 @@ impl GameWriter {
         };
         let (plan, step) = match self.plan_and_start(opener, game, story, &request) {
             Ok(started) => started,
-            Err(refusal) => return AutoplayAccept::Refused(refusal),
+            Err(not_accepted) => return AutoplayAccept::NotAccepted(not_accepted),
         };
         holders.insert(
             game,
@@ -381,19 +431,19 @@ impl GameWriter {
         AutoplayAccept::Accepted(self.accepted(game, job_id, plan), progress)
     }
 
-    /// The plan of the request, and the transactions that make it a started Job. The transaction
-    /// lands before the caller makes the entry: a refused accept makes no entry, so
-    /// a Game is never busy for a Job that never started.
+    /// The transaction lands before the caller makes the entry: a refused accept makes
+    /// no entry, so a Game is never busy for a Job that never started.
     fn plan_and_start(
         &self,
         opener: &TxOpener,
         game: GameId,
         story: StoryEnd,
         request: &JobRequest,
-    ) -> Result<(JobPlan, Step), Refusal> {
-        let plan = JobPlan::for_request(request, story).map_err(|refusal| match refusal {
-            PlanRefusal::BadRequest(line) => Refusal::BadRequest(line),
-            PlanRefusal::Missing(record) => self.missing(game, record, opener),
+    ) -> Result<(JobPlan, Step), NotAccepted> {
+        let plan = JobPlan::for_request(request, story).map_err(|plan_error| match plan_error {
+            PlanError::BadRequest(line) => NotAccepted::BadRequest(line),
+            PlanError::Missing(record) => self.missing(game, record, opener),
+            PlanError::LastMessageChanged => NotAccepted::LastMessageChanged,
         })?;
         self.require_records(game, &plan, opener)?;
         let step = plan.first_step();
@@ -417,7 +467,7 @@ impl GameWriter {
         &self,
         game: GameId,
         progress: AutoplayProgress,
-    ) -> Result<AutoplayRunId, Refusal> {
+    ) -> Result<AutoplayRunId, NotAccepted> {
         let run = self.next_autoplay_run_id();
         self.hold(|holders, _opener| {
             Self::require_idle(holders, game)?;
@@ -433,7 +483,6 @@ impl GameWriter {
         })
     }
 
-    /// A holder of another run, or none, stays as it is.
     pub fn end_autoplay(&self, game: GameId, run: AutoplayRunId) {
         self.hold(|holders, _opener| {
             if holders
@@ -447,11 +496,11 @@ impl GameWriter {
 
     /// The write of the config columns `change` names, refused while an Autoplay run
     /// holds the Game. The check and the transaction run in one registry hold, so a run
-    /// cannot start between them. The caller read and validated `change` before.
+    /// cannot start between them.
     pub fn save_config(&self, game: GameId, change: &ConfigChange) -> Result<(), ApplicationError> {
         self.hold(|holders, opener| {
             if matches!(holders.get(&game), Some(Holder::Autoplay { .. })) {
-                return Err(ApplicationError::Refused(Refusal::StillThinking));
+                return Err(ApplicationError::NotAccepted(NotAccepted::StillThinking));
             }
             opener.open(game, |tx| tx.set_game_config(change))?;
             Ok(())
@@ -459,15 +508,7 @@ impl GameWriter {
     }
 
     pub fn busy(&self, game: GameId) -> Option<Busy> {
-        self.hold(|holders, _opener| {
-            holders.get(&game).map(|holder| match holder {
-                Holder::Job(entry) => Busy::Job(entry.step.clone()),
-                Holder::Autoplay { progress, job, .. } => Busy::Autoplay {
-                    progress: *progress,
-                    step: job.as_ref().map(|entry| entry.step.clone()),
-                },
-            })
-        })
+        self.hold(|holders, _opener| holders.get(&game).map(Holder::busy))
     }
 
     pub fn stop(&self, game: GameId) -> Result<(), EngineError> {
@@ -483,19 +524,24 @@ impl GameWriter {
         })
     }
 
-    pub fn switch_swipe(&self, game: GameId, message: u64, index: usize) -> Result<(), Refusal> {
+    pub fn switch_swipe(
+        &self,
+        game: GameId,
+        message: u64,
+        index: usize,
+    ) -> Result<(), NotAccepted> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
-            let tail = self.tail_or_refuse(game, opener)?;
+            let tail = self.tail_or_not_accepted(game, opener)?;
             let last =
-                tail.ok_or_else(|| Refusal::BadRequest("No message to switch".to_string()))?;
+                tail.ok_or_else(|| NotAccepted::BadRequest("No message to switch".to_string()))?;
             if last.last.id != message {
-                return Err(Refusal::BadRequest(
-                    "Only the last message can be swiped".to_string(),
-                ));
+                return Err(NotAccepted::LastMessageChanged);
             }
             if index >= last.last.swipes.len() {
-                return Err(Refusal::BadRequest("Swipe index out of bounds".to_string()));
+                return Err(NotAccepted::BadRequest(
+                    "Swipe index out of bounds".to_string(),
+                ));
             }
             let at = SwipeAt {
                 message,
@@ -510,12 +556,12 @@ impl GameWriter {
         })
     }
 
-    pub fn edit(&self, game: GameId, message: u64, text: &str) -> Result<(), Refusal> {
+    pub fn edit(&self, game: GameId, message: u64, text: &str) -> Result<(), NotAccepted> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
             let at = match self.storage.stories().active_swipe(game, message) {
                 Ok(Some(at)) => at,
-                Ok(None) => return Err(Refusal::BadRequest("Message not found".to_string())),
+                Ok(None) => return Err(NotAccepted::BadRequest("Message not found".to_string())),
                 Err(error) => return Err(self.unreadable(game, Record::Message, &error, opener)),
             };
             opener
@@ -524,14 +570,17 @@ impl GameWriter {
         })
     }
 
-    pub fn delete_last(&self, game: GameId) -> Result<(), Refusal> {
+    pub fn delete_last(&self, game: GameId, named: u64) -> Result<(), NotAccepted> {
         self.hold(|holders, opener| {
             Self::require_idle(holders, game)?;
-            let tail = self.tail_or_refuse(game, opener)?;
+            let tail = self.tail_or_not_accepted(game, opener)?;
             let last =
-                tail.ok_or_else(|| Refusal::BadRequest("No message to delete".to_string()))?;
+                tail.ok_or_else(|| NotAccepted::BadRequest("No message to delete".to_string()))?;
+            if last.last.id != named {
+                return Err(NotAccepted::LastMessageChanged);
+            }
             if !last.can_delete() {
-                return Err(Refusal::BadRequest(
+                return Err(NotAccepted::BadRequest(
                     "The story keeps its last message".to_string(),
                 ));
             }
@@ -561,6 +610,7 @@ impl GameWriter {
             opener.open(old, |tx| tx.delete_game())?;
             Ok(new_id)
         })
+        .inspect(|_| self.storage.changes().forget_game(old))
     }
 
     /// One hold: the Game's holder ends under the same guard as its rows, so the
@@ -570,6 +620,7 @@ impl GameWriter {
             holders.remove(&game);
             opener.open(game, |tx| tx.delete_game())
         })
+        .inspect(|()| self.storage.changes().forget_game(game))
     }
 
     fn create_in_tx(
@@ -596,54 +647,58 @@ impl GameWriter {
         Ok(self.storage.docks().get(game)?.unwrap_or_default())
     }
 
-    fn tail_or_refuse(&self, game: GameId, opener: &TxOpener) -> Result<Option<Tail>, Refusal> {
+    fn tail_or_not_accepted(
+        &self,
+        game: GameId,
+        opener: &TxOpener,
+    ) -> Result<Option<Tail>, NotAccepted> {
         self.storage
             .stories()
             .tail(game)
             .map_err(|error| self.unreadable(game, Record::Story, &error, opener))
     }
 
-    /// A record the request needs that the engine has no row for: the failure line
-    /// names it.
-    fn missing(&self, game: GameId, record: Record, opener: &TxOpener) -> Refusal {
-        self.refuse(game, GenerationFailure::missing(record), opener)
+    fn missing(&self, game: GameId, record: Record, opener: &TxOpener) -> NotAccepted {
+        self.not_accepted_with_failure(game, GenerationFailure::missing(record), opener)
     }
 
-    /// A record the request needs that the engine cannot read: the line names it,
-    /// and the disclosure holds the error behind it.
+    /// The disclosure holds the read error behind the line that names the record.
     fn unreadable(
         &self,
         game: GameId,
         record: Record,
         error: &EngineError,
         opener: &TxOpener,
-    ) -> Refusal {
-        self.refuse(game, GenerationFailure::unreadable(record, error), opener)
+    ) -> NotAccepted {
+        self.not_accepted_with_failure(game, GenerationFailure::unreadable(record, error), opener)
     }
 
-    /// The write the request asked for failed: the line is the design's save line,
-    /// and the disclosure holds the error behind it.
-    fn save_failed(&self, game: GameId, error: &EngineError, opener: &TxOpener) -> Refusal {
-        self.refuse(game, GenerationFailure::save_failed(error), opener)
+    /// The disclosure holds the save error behind the design's save line.
+    fn save_failed(&self, game: GameId, error: &EngineError, opener: &TxOpener) -> NotAccepted {
+        self.not_accepted_with_failure(game, GenerationFailure::save_failed(error), opener)
     }
 
-    /// The one refusal path of a request that cannot run: the Game's failure line
+    /// The one not-accepted path of a request that cannot run: the Game's failure line
     /// and the answer come from the same failure.
-    fn refuse(&self, game: GameId, failure: GenerationFailure, opener: &TxOpener) -> Refusal {
+    fn not_accepted_with_failure(
+        &self,
+        game: GameId,
+        failure: GenerationFailure,
+        opener: &TxOpener,
+    ) -> NotAccepted {
         if let Err(error) = opener.open(game, |tx| tx.set_game_failure(Some(&failure))) {
             tracing::error!("accept: writing the failure line failed: {error}");
         }
-        Refusal::Failed(failure)
+        NotAccepted::Failed(failure)
     }
 
-    /// The Game row, the Persona and the start state that the plan names: the
-    /// records a Job reads, checked before the Game turns busy.
+    /// The records a Job reads, checked before the Game turns busy.
     fn require_records(
         &self,
         game: GameId,
         plan: &JobPlan,
         opener: &TxOpener,
-    ) -> Result<(), Refusal> {
+    ) -> Result<(), NotAccepted> {
         let row = match self.storage.get_game(game.0) {
             Ok(Some(row)) => row,
             Ok(None) => return Err(self.missing(game, Record::Game, opener)),
@@ -663,20 +718,22 @@ impl GameWriter {
         }
     }
 
-    fn story_end_or_refuse(&self, game: GameId, opener: &TxOpener) -> Result<StoryEnd, Refusal> {
-        let tail = self.tail_or_refuse(game, opener)?;
+    fn story_end_or_not_accepted(
+        &self,
+        game: GameId,
+        opener: &TxOpener,
+    ) -> Result<StoryEnd, NotAccepted> {
+        let tail = self.tail_or_not_accepted(game, opener)?;
         let has_text = self.story_has_text(game, opener)?;
         Ok(StoryEnd { tail, has_text })
     }
 
-    /// The end of a request that changes the story under a Game with no running
-    /// Job: the failure line goes, and the dock holds `record`.
     fn clear_failure_and_put_dock(tx: &mut Tx<'_>, record: &DockRecord) -> Result<(), EngineError> {
         tx.set_game_failure(None)?;
         tx.put_dock(record)
     }
 
-    fn accept_in_tx(&self, game: GameId, opener: &TxOpener) -> Result<(), Refusal> {
+    fn accept_in_tx(&self, game: GameId, opener: &TxOpener) -> Result<(), NotAccepted> {
         opener
             .open(game, |tx| tx.set_game_failure(None))
             .map_err(|error| self.save_failed(game, &error, opener))
@@ -684,7 +741,7 @@ impl GameWriter {
 
     /// `/options` needs a story with text to work from, which is a question about
     /// every Message.
-    fn story_has_text(&self, game: GameId, opener: &TxOpener) -> Result<bool, Refusal> {
+    fn story_has_text(&self, game: GameId, opener: &TxOpener) -> Result<bool, NotAccepted> {
         self.storage
             .stories()
             .has_text(game)
@@ -734,8 +791,8 @@ impl JobWriter {
         self.id
     }
 
-    /// One hold for this Job: the Job entry of the Game's holder must still hold
-    /// this Job's id, and the transactions of `f` open under the same lock.
+    /// One hold for this Job: the id check and the transactions of `f` run under the same
+    /// lock.
     fn hold<T>(
         &self,
         f: impl FnOnce(&mut JobEntry, &TxOpener) -> Result<T, JobFailure>,

@@ -28,8 +28,9 @@ use crate::support::app_wiring::{
 use crate::support::http_assertions::assert_still_thinking;
 use crate::support::http_fixtures::{create_game_from, story_of_game};
 use crate::support::http_requests::{
-    fetch_body, fetch_busy_status, post_action, post_empty, post_form, response_body,
-    wait_for_jobs, wait_for_jobs_running_at_most, wait_settled,
+    assert_answers_nothing, fetch_body, fetch_busy_status, post_action, post_empty, post_form,
+    response_body, wait_for_jobs, wait_for_jobs_running_at_most, wait_settled,
+    post_on_last_message, fetch_part,
 };
 
 // [docs/specs/autoplay.md] SCENARIO: 41.1
@@ -46,11 +47,7 @@ async fn test_a_run_on_a_fresh_game_plays_its_cycles_and_the_game_is_then_idle()
     let game = active_game_of(&state);
 
     let started = start_autoplay(&app, "cycles=2").await;
-    assert!(started.status().is_success(), "the start should accept");
-    assert!(
-        response_body(started).await.contains("Thinking..."),
-        "the start answers with the thinking status"
-    );
+    assert_answers_nothing(started).await;
     wait_for_run(&state, game).await;
 
     assert_eq!(
@@ -63,7 +60,7 @@ async fn test_a_run_on_a_fresh_game_plays_its_cycles_and_the_game_is_then_idle()
         ],
         "the run writes an Impersonate Input and a Narration, twice"
     );
-    assert_status(&app, "idle", "the Game is idle after the run").await;
+    assert_status(&app, "Ready", "the Game is idle after the run").await;
 
     let calls = narrator_calls(&model);
     assert_eq!(calls.len(), 4, "two cycles make four narrator calls");
@@ -211,7 +208,7 @@ async fn test_a_trigger_in_an_impersonate_job_answers_the_input_and_ends_the_cyc
         "the event Narration answers the first Input and ends the first cycle: \
          three Jobs run, and an unscripted fourth call would fail the run"
     );
-    assert_status(&app, "idle", "the Game is idle after the run").await;
+    assert_status(&app, "Ready", "the Game is idle after the run").await;
 }
 
 // [docs/specs/autoplay.md] SCENARIO: 41.4
@@ -237,7 +234,7 @@ async fn test_a_failed_narrator_call_ends_the_run_and_its_failure_line_stays() {
     let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("answer could not be read"),
-        "the status poll shows the failure line of the Job, got: {status}"
+        "the status load shows the failure line of the Job, got: {status}"
     );
     assert_eq!(
         narrator_calls(&model).len(),
@@ -287,12 +284,12 @@ async fn test_a_failed_options_run_writes_its_options_failure_and_the_run_goes_o
         vec![FIRST_INPUT, FIRST_NARRATION, SECOND_INPUT, SECOND_NARRATION],
         "a failed Options run does not stop the run: both cycles are in the story"
     );
-    let dock = fetch_body(&app, "/fragment/options-dock").await;
+    let dock = fetch_part(&app, "options-dock").await;
     assert!(
         dock.contains("options-notice-line") && dock.contains("Options generation failed"),
         "the dock shows the Options failure of the failed Options run, got: {dock}"
     );
-    assert_status(&app, "idle", "a failed Options run leaves no failure line").await;
+    assert_status(&app, "Ready", "a failed Options run leaves no failure line").await;
 }
 
 fn always_on_world() -> WorldCard {
@@ -325,7 +322,7 @@ async fn test_a_stop_during_a_job_of_a_run_ends_the_run() {
     );
 
     stop(&app).await;
-    assert_status(&app, "idle", "a stopped run leaves the Game idle at once").await;
+    assert_status(&app, "Ready", "a stopped run leaves the Game idle at once").await;
 
     hold.release();
     assert!(hold.wait_taken(1000), "the stopped call takes its answer");
@@ -367,13 +364,13 @@ async fn test_a_stop_between_two_jobs_of_a_run_ends_the_run() {
     let pause = pause_between_two_jobs(&app, &state, game).await;
     assert_status(
         &app,
-        "autoplay 1/2",
+        "Autoplay: cycle 1/2",
         "the run holds the Game between its Jobs",
     )
     .await;
 
     stop(&app).await;
-    assert_status(&app, "idle", "a stopped run leaves the Game idle").await;
+    assert_status(&app, "Ready", "a stopped run leaves the Game idle").await;
     assert!(!state.game_view_query.is_busy(game), "the Game is not busy");
 
     pause.release();
@@ -411,7 +408,7 @@ async fn test_a_start_on_a_busy_game_answers_still_thinking() {
     );
 
     let refused = start_autoplay(&app, "cycles=1").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     assert_still_thinking(&response_body(refused).await);
 
     hold.release();
@@ -446,7 +443,7 @@ async fn test_a_start_on_a_game_that_a_run_holds_answers_still_thinking() {
     );
 
     let refused = start_autoplay(&app, "cycles=5").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     assert_still_thinking(&response_body(refused).await);
 
     hold.release();
@@ -474,7 +471,7 @@ async fn test_a_budget_that_is_zero_above_the_maximum_or_not_a_whole_number_answ
     ] {
         let refused = start_autoplay(&app, body).await;
         assert_eq!(refused.status(), StatusCode::BAD_REQUEST, "{body}");
-        assert_status(&app, "idle", body).await;
+        assert_status(&app, "Ready", body).await;
         assert!(!state.game_view_query.is_busy(game), "{body}");
     }
     assert!(model.calls().is_empty(), "a refused start makes no call");
@@ -537,7 +534,7 @@ async fn test_a_budget_of_the_maximum_starts_a_run() {
     );
     assert_status(
         &app,
-        "autoplay 1/100 narrating",
+        "Autoplay: cycle 1/100 Generating narration...",
         "100 is the largest budget",
     )
     .await;
@@ -560,7 +557,12 @@ async fn test_a_start_with_no_cycles_field_runs_with_a_budget_of_ten() {
         hold.wait_started(1000),
         "the first Job should reach its narrator call"
     );
-    assert_status(&app, "autoplay 1/10 narrating", "the default budget is 10").await;
+    assert_status(
+        &app,
+        "Autoplay: cycle 1/10 Generating narration...",
+        "the default budget is 10",
+    )
+    .await;
 
     stop(&app).await;
     hold.release();
@@ -581,7 +583,12 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
 
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 2000).await, "the first Job settles");
-    assert!(post_empty(&app, "/swipe/new").await.status().is_success());
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
     assert!(wait_settled(&state, 2000).await, "the Retry settles");
     let swiped = story_of_game(&state, game);
     let narration = swiped
@@ -599,7 +606,7 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
 
     let writes = [
         post_action(&app, "look").await,
-        post_empty(&app, "/swipe/new").await,
+        post_on_last_message(&app, "/swipe/new").await,
         post_empty(
             &app,
             &format!("/message/{}/swipe/{other_swipe}", narration.id),
@@ -611,10 +618,10 @@ async fn test_while_a_run_holds_the_game_every_story_write_is_refused_between_tw
             "text=Rewritten",
         )
         .await,
-        post_empty(&app, "/history/delete").await,
+        post_on_last_message(&app, "/history/delete").await,
     ];
     for response in writes {
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::CONFLICT);
         assert_still_thinking(&response_body(response).await);
     }
 
@@ -689,7 +696,7 @@ async fn test_while_a_run_holds_the_game_the_config_writes_are_refused_and_the_c
         .await,
     ];
     for response in refused {
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::CONFLICT);
         assert_still_thinking(&response_body(response).await);
     }
     let during = state
@@ -719,7 +726,7 @@ async fn test_while_a_run_holds_the_game_the_config_writes_are_refused_and_the_c
 
 // [docs/specs/autoplay.md] SCENARIO: 41.13
 #[tokio::test]
-async fn test_the_status_poll_answers_with_the_progress_while_a_run_holds_the_game() {
+async fn test_the_status_load_answers_with_the_progress_while_a_run_holds_the_game() {
     let model = Arc::new(
         ScriptedModel::new()
             .turn(FIRST_INPUT)
@@ -737,7 +744,7 @@ async fn test_the_status_poll_answers_with_the_progress_while_a_run_holds_the_ga
     assert!(impersonate_narrator.wait_started(1000));
     assert_status(
         &app,
-        "autoplay 1/2 narrating",
+        "Autoplay: cycle 1/2 Generating narration...",
         "the Impersonate Job of cycle 1",
     )
     .await;
@@ -745,14 +752,19 @@ async fn test_the_status_poll_answers_with_the_progress_while_a_run_holds_the_ga
     let impersonate_analysis = model.hold(Role::Quantifier);
     impersonate_narrator.release();
     assert!(impersonate_analysis.wait_started(1000));
-    assert_status(&app, "autoplay 1/2 quantifying", "the analysis of cycle 1").await;
+    assert_status(
+        &app,
+        "Autoplay: cycle 1/2 Quantifying...",
+        "the analysis of cycle 1",
+    )
+    .await;
 
     let continue_narrator = model.hold(Role::Narrator);
     impersonate_analysis.release();
     assert!(continue_narrator.wait_started(1000));
     assert_status(
         &app,
-        "autoplay 1/2 narrating",
+        "Autoplay: cycle 1/2 Generating narration...",
         "the Continue Job of cycle 1",
     )
     .await;
@@ -762,26 +774,31 @@ async fn test_the_status_poll_answers_with_the_progress_while_a_run_holds_the_ga
     assert!(second_impersonate.wait_started(1000));
     assert_status(
         &app,
-        "autoplay 2/2 narrating",
+        "Autoplay: cycle 2/2 Generating narration...",
         "the Impersonate Job of cycle 2",
     )
     .await;
 
     second_impersonate.release();
     wait_for_run(&state, game).await;
-    assert_status(&app, "idle", "the Game is idle after the run").await;
+    assert_status(&app, "Ready", "the Game is idle after the run").await;
 }
 
 // [docs/specs/autoplay.md] SCENARIO: 41.13
 #[tokio::test]
-async fn test_the_status_poll_names_no_step_between_two_jobs_of_a_run() {
+async fn test_the_status_load_names_no_step_between_two_jobs_of_a_run() {
     let model = Arc::new(ScriptedModel::new().turn(FIRST_INPUT));
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
 
     let pause = pause_between_two_jobs(&app, &state, game).await;
 
-    assert_status(&app, "autoplay 1/2", "a run between two Jobs names no step").await;
+    assert_status(
+        &app,
+        "Autoplay: cycle 1/2",
+        "a run between two Jobs names no step",
+    )
+    .await;
     assert_eq!(
         fetch_body(&app, "/debug/is_busy").await.trim(),
         "true",
@@ -859,7 +876,7 @@ async fn test_a_reset_of_the_game_ends_its_run() {
         story_after_opening(&state, after).is_empty(),
         "the new Game holds its opening Narration only"
     );
-    assert_status(&app, "idle", "the new Game is idle").await;
+    assert_status(&app, "Ready", "the new Game is idle").await;
     assert_eq!(
         narrator_calls(&model).len(),
         1,
@@ -947,12 +964,12 @@ async fn test_the_end_of_a_stopped_run_does_not_release_the_run_that_started_aft
 
     assert_status(
         &app,
-        "autoplay 1/1 narrating",
+        "Autoplay: cycle 1/1 Generating narration...",
         "run B still holds the Game after run A ended",
     )
     .await;
     let refused = post_action(&app, "look").await;
-    assert_eq!(refused.status(), StatusCode::OK);
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
     assert_still_thinking(&response_body(refused).await);
 
     hold_b.release();
@@ -990,7 +1007,7 @@ async fn test_a_run_whose_story_cannot_be_read_ends_with_the_failure_line_of_the
     let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("the story read failed"),
-        "the status poll shows the failure line of the unreadable story, got: {status}"
+        "the status load shows the failure line of the unreadable story, got: {status}"
     );
     assert!(model.calls().is_empty(), "no model call is made");
 }
@@ -1024,7 +1041,7 @@ async fn test_a_run_whose_quantifier_fails_at_each_attempt_plays_its_whole_budge
         ],
         "a fallback of the Quantifier does not stop the run: both cycles are in the story"
     );
-    assert_status(&app, "idle", "the Game is idle after the run").await;
+    assert_status(&app, "Ready", "the Game is idle after the run").await;
 }
 
 // [docs/specs/autoplay.md] SCENARIO: 41.23
@@ -1052,7 +1069,7 @@ async fn test_a_run_whose_start_state_cannot_be_read_ends_with_the_failure_line_
     let status = fetch_busy_status(&app).await;
     assert!(
         status.contains("status-error-popover") && status.contains("the start state"),
-        "the status poll names the start state, got: {status}"
+        "the status load names the start state, got: {status}"
     );
     assert!(
         status.contains("the start state is unreadable"),

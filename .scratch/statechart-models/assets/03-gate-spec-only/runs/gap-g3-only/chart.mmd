@@ -1,0 +1,41 @@
+---
+title: "The gate of one Game, written from the docs only"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Idle
+    lg1: Busy
+    lg2: Autoplay
+    lg3: Breaks R10_ARunEndsOnAFailureOfItsOwnJobOnly in some cases
+    lg4: Path to the R10_ARunEndsOnAFailureOfItsOwnJobOnly bug
+  }
+  class lg0 teal
+  class lg1 blue
+  class lg2 purple
+  class lg3 mayBreak
+  class lg4 bugPath
+  s0: Idle
+  s1: A Job holds the Game
+  s2: A Job holds the Game, narrating
+  s3: Idle with a failure line
+  s4: A run holds the Game between Jobs
+  [*] --> s0
+  s0 --> s1: you send an Action
+  s1 --> s1: the Job saves its Input
+  s1 --> s2: the Job starts its next step
+  s2 --> s2: the narrator call of the Job fails or the Job saves a failure line
+  s2 --> s3: the engine restarts
+  s3 --> s4: you start Autoplay
+  s4 --> s3: the run ends
+  classDef mayBreak fill:#fff3e6,stroke:#e8730c,stroke-width:2.5px,color:#b85a06
+  class s0 teal
+  class s0 bugPath
+  class s1 blue
+  class s1 bugPath
+  class s2 blue
+  class s2 bugPath
+  class s3 teal
+  class s3 mayBreak
+  class s3 bugPath
+  class s4 purple
+  class s4 bugPath

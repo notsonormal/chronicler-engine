@@ -3,7 +3,8 @@
 use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::test_support::STRAY_CALL_MARKER;
 use axum::body::Body;
-use axum::http::{self, Method, Request};
+use axum::http::{self, Method, Request, StatusCode};
+use regex::Regex;
 use tower::util::ServiceExt;
 
 use chronicler_engine::adapters::driving::http::AppState;
@@ -19,6 +20,8 @@ pub async fn response_body(resp: axum::response::Response<Body>) -> String {
     String::from_utf8_lossy(&bytes).to_string()
 }
 
+pub use chronicler_engine::test_support::assert_answers_nothing;
+
 pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
@@ -26,10 +29,66 @@ pub async fn fetch_body(app: &axum::Router, uri: &str) -> String {
     response_body(response).await
 }
 
-/// The status endpoint answers `idle`, a step endpoint string, or the failure
-/// disclosure.
+/// The templates of a screen body: each part name with its content, in order.
+pub fn templates_of(body: &str) -> Vec<(String, String)> {
+    const OPEN: &str = "<template data-part=\"";
+    let mut found = Vec::new();
+    let mut rest = body;
+    while let Some(at) = rest.find(OPEN) {
+        let after = &rest[at + OPEN.len()..];
+        let name_end = after.find("\">").expect("the template tag closes");
+        let content_start = name_end + 2;
+        let content_end = after.find("</template>").expect("the template closes");
+        found.push((
+            after[..name_end].to_string(),
+            after[content_start..content_end].to_string(),
+        ));
+        rest = &after[content_end + "</template>".len()..];
+    }
+    found
+}
+
+/// The content of one part, as the client gets it: the template of
+/// `GET /screen?parts=<name>`.
+pub async fn fetch_part(app: &axum::Router, name: &str) -> String {
+    let screen = fetch_body(app, &format!("/screen?parts={name}")).await;
+    let mut templates = templates_of(&screen);
+    assert_eq!(templates.len(), 1, "{name}: one template in {screen}");
+    templates.remove(0).1
+}
+
+/// The status and the raw body of one read. A failed screen read carries no
+/// template, so the body is the failure answer. A page of 50 saved Games is
+/// larger than the cap of `response_body`, so this reads up to 4 MB.
+pub async fn fetch_answer(app: &axum::Router, uri: &str) -> (StatusCode, String) {
+    let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .expect("read the response body");
+    (status, String::from_utf8_lossy(&bytes).to_string())
+}
+
+/// The status display answers `idle`, a step label, or the failure disclosure.
 pub async fn fetch_busy_status(app: &axum::Router) -> String {
-    fetch_body(app, "/status/busy").await
+    fetch_part(app, "status-display").await
+}
+
+/// The label the status display shows: the text of the status-display part.
+pub async fn fetch_status_label(app: &axum::Router) -> String {
+    let body = fetch_busy_status(app).await;
+    let mut label = String::new();
+    let mut in_tag = false;
+    for ch in body.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => label.push(ch),
+            _ => {}
+        }
+    }
+    label.trim().to_string()
 }
 
 pub async fn post_form(
@@ -37,16 +96,28 @@ pub async fn post_form(
     uri: &str,
     body: &str,
 ) -> axum::response::Response<Body> {
-    let req = Request::builder()
-        .uri(uri)
-        .method(Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from(body.to_string()))
-        .unwrap();
-    app.clone().oneshot(req).await.unwrap()
+    post_form_with_headers(app, uri, body, &[]).await
+}
+
+/// A form POST that also carries the given request headers, such as the Game
+/// header of a page.
+pub async fn post_form_with_headers(
+    app: &axum::Router,
+    uri: &str,
+    body: &str,
+    headers: &[(&str, &str)],
+) -> axum::response::Response<Body> {
+    let mut request = Request::builder().uri(uri).method(Method::POST).header(
+        http::header::CONTENT_TYPE,
+        "application/x-www-form-urlencoded",
+    );
+    for (name, value) in headers {
+        request = request.header(*name, *value);
+    }
+    app.clone()
+        .oneshot(request.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
 }
 
 pub async fn post_action(app: &axum::Router, command: &str) -> axum::response::Response<Body> {
@@ -77,6 +148,27 @@ pub async fn post_empty(app: &axum::Router, uri: &str) -> axum::response::Respon
         .body(Body::empty())
         .unwrap();
     app.clone().oneshot(req).await.unwrap()
+}
+
+/// Sent as the page sends it: `message` names the Message the control was rendered on.
+pub async fn post_on_message(
+    app: &axum::Router,
+    uri: &str,
+    message: u64,
+) -> axum::response::Response<Body> {
+    post_form(app, uri, &format!("message={message}")).await
+}
+
+/// Names the last Message that the story log shows now; with no entry it names the
+/// Message 0, which no story holds.
+pub async fn post_on_last_message(app: &axum::Router, uri: &str) -> axum::response::Response<Body> {
+    let story_log = fetch_part(app, "story-log").await;
+    let last = Regex::new(r#"data-id="(\d+)""#)
+        .expect("entry id")
+        .captures_iter(&story_log)
+        .last()
+        .map_or(0, |entry| entry[1].parse().expect("entry id is a number"));
+    post_on_message(app, uri, last).await
 }
 
 pub async fn post_form_with_hx(

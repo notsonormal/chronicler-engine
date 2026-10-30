@@ -2,10 +2,8 @@
 
 use axum::http::StatusCode;
 
-use crate::adapters::driving::http::utils::response::{
-    bad_request, html_escape, internal_error, ok, ok_refresh,
-};
-use crate::adapters::driving::http::utils::error::render_error;
+use crate::adapters::driving::http::utils::response::{bad_request, html_escape, internal_error, ok};
+use crate::adapters::driving::http::utils::error::error_fragment;
 use crate::test_support::body_text;
 
 #[tokio::test]
@@ -13,19 +11,6 @@ async fn ok_returns_200_with_body() {
     let resp = ok("hello");
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(body_text(resp).await, "hello");
-}
-
-#[tokio::test]
-async fn ok_refresh_sets_hx_refresh_header_and_empty_body() {
-    let resp = ok_refresh();
-    assert_eq!(resp.status(), StatusCode::OK);
-    assert_eq!(
-        resp.headers()
-            .get("HX-Refresh")
-            .map(|v| v.to_str().unwrap()),
-        Some("true")
-    );
-    assert_eq!(body_text(resp).await, "");
 }
 
 #[tokio::test]
@@ -73,24 +58,23 @@ fn html_escape_is_not_idempotent() {
 }
 
 #[test]
-fn render_error_wraps_in_error_div() {
-    let html = render_error("disk failed");
+fn error_fragment_wraps_in_error_div() {
+    let html = error_fragment("disk failed");
     assert!(html.contains("error-message"));
-    assert!(html.contains("Error:"));
     assert!(html.contains("disk failed"));
 }
 
 #[test]
-fn render_error_escapes_html_in_message() {
-    let html = render_error("<script>alert('xss')</script>");
+fn error_fragment_escapes_html_in_message() {
+    let html = error_fragment("<script>alert('xss')</script>");
     assert!(!html.contains("<script>"));
     assert!(html.contains("&lt;script&gt;"));
 }
 
 #[test]
-fn render_error_preserves_long_messages() {
+fn error_fragment_preserves_long_messages() {
     let long_msg = "x".repeat(10_000);
-    let html = render_error(&long_msg);
+    let html = error_fragment(&long_msg);
     assert!(html.len() > 10_000);
     assert!(html.contains(&long_msg[..100]));
 }

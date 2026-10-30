@@ -1,4 +1,4 @@
-// The story log: edit mode, its entry locks, the swipe/retry/delete requests, the follow-new-entries scroll and its own error slot.
+// The story log: edit mode, its entry lock, what follows the swipe, retry, retrigger and delete requests, and the follow-new-entries scroll.
 
 const noticeClearTimers = new WeakMap();
 
@@ -14,38 +14,7 @@ function scheduleNoticeClear(element, onClear, delayMs) {
   );
 }
 
-function storyLogErrorSlot() {
-  return document.getElementById("story-log-error");
-}
-
-function showStoryLogError(message, rawText) {
-  renderInlineError(storyLogErrorSlot(), message, rawText);
-}
-
 let editState = null;
-let originalTrigger = null;
-
-function pausePolling() {
-  const storyLog = document.getElementById("story-log");
-  if (storyLog) {
-    // A second pause would overwrite the saved trigger with "none", so the
-    // poll would never resume.
-    if (originalTrigger === null) {
-      originalTrigger = storyLog.getAttribute("hx-trigger");
-    }
-    storyLog.setAttribute("hx-trigger", "none");
-    htmx.process(storyLog);
-  }
-}
-
-function resumePolling() {
-  const storyLog = document.getElementById("story-log");
-  if (storyLog && originalTrigger) {
-    storyLog.setAttribute("hx-trigger", originalTrigger);
-    htmx.process(storyLog);
-    originalTrigger = null;
-  }
-}
 
 function autoResizeTextarea(textarea) {
   textarea.style.height = "auto";
@@ -55,21 +24,41 @@ function autoResizeTextarea(textarea) {
   textarea.style.height = textarea.scrollHeight + border + "px";
 }
 
-function lockOtherEditButtons() {
-  document.querySelectorAll("#story-log .edit-btn").forEach((btn) => {
-    btn.disabled = true;
-  });
+// The root carries `data-editing-entry` for the whole edit, so the lock survives
+// every load, which morphs only its children, and ends once the entry shows the
+// saved text.
+function storyLogRoot() {
+  return document.getElementById("story-log");
 }
 
-function unlockEditButtons() {
-  document.querySelectorAll("#story-log .edit-btn").forEach((btn) => {
-    btn.disabled = false;
-  });
+function lockEditing() {
+  const root = storyLogRoot();
+  if (root) root.setAttribute("data-editing-entry", "");
 }
+
+function unlockEditing() {
+  const root = storyLogRoot();
+  if (root) root.removeAttribute("data-editing-entry");
+}
+
+document.addEventListener(
+  "click",
+  function (evt) {
+    const target = evt.target;
+    if (!(target instanceof Element)) return;
+    const locked = target.closest(
+      "#story-log[data-editing-entry] :is(.edit-btn, .swipe-controls .action-btn)",
+    );
+    if (!locked) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+  },
+  true,
+);
 
 function showEditForm(id) {
   if (editState !== null) return;
-  editState = { id: id, text: null, actions: null, swipeControls: null };
+  editState = { id: id, text: null };
   const entry = document.querySelector(`[data-id="${id}"]`);
   if (entry) {
     const textSpan = entry.querySelector(".text");
@@ -81,6 +70,7 @@ function showEditForm(id) {
     textSpan.innerHTML = "";
     const textarea = document.createElement("textarea");
     textarea.id = "edit-textarea";
+    textarea.name = "text";
     textarea.className = "edit-textarea";
     textarea.textContent = rawText;
     textSpan.appendChild(textarea);
@@ -95,31 +85,29 @@ function showEditForm(id) {
         cancelEdit();
       } else if (evt.key === "Enter" && (evt.ctrlKey || evt.metaKey)) {
         evt.preventDefault();
-        submitEdit();
+        if (editState === null) return;
+        entry.querySelector(".save-btn").click();
       }
     });
 
-    const actionsContainer = entry.querySelector(".message-actions");
-    if (actionsContainer) {
-      editState.actions = actionsContainer.innerHTML;
-      actionsContainer.innerHTML = `<button class="save-btn" onclick="submitEdit()" title="Save" aria-label="Save"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></button><button class="cancel-btn" onclick="cancelEdit()" title="Cancel" aria-label="Cancel"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>`;
-    }
-    const swipeControls = entry.querySelector(".swipe-controls");
-    if (swipeControls) {
-      editState.swipeControls = swipeControls.innerHTML;
-      swipeControls.querySelectorAll(".action-btn").forEach((btn) => {
-        btn.disabled = true;
-      });
-    }
-
-    lockOtherEditButtons();
-    pausePolling();
+    // A load skips the entry in edit, so new narration shows around the draft.
+    entry.setAttribute("data-editing", "");
+    entry.setAttribute("data-draft-game", screenRoot.dataset.game || "");
+    lockEditing();
     textarea.focus();
   }
 }
 
 function clearEditState() {
+  document
+    .querySelectorAll("#story-log [data-editing]")
+    .forEach((entry) => {
+      entry.removeAttribute("data-editing");
+      entry.removeAttribute("data-draft-game");
+    });
   editState = null;
+  forgetScreenStamp();
+  askNow();
 }
 
 function revertEdit() {
@@ -128,102 +116,32 @@ function revertEdit() {
   if (entry) {
     const textSpan = entry.querySelector(".text");
     textSpan.innerHTML = editState.text;
-    const actionsContainer = entry.querySelector(".message-actions");
-    if (actionsContainer && editState.actions !== null) {
-      actionsContainer.innerHTML = editState.actions;
-    }
-    const swipeControls = entry.querySelector(".swipe-controls");
-    if (swipeControls && editState.swipeControls !== null) {
-      swipeControls.innerHTML = editState.swipeControls;
-    }
   }
   clearEditState();
-  unlockEditButtons();
+  unlockEditing();
 }
 
 function cancelEdit() {
   if (editState === null) return;
   const entryId = editState.id;
   revertEdit();
-  resumePolling();
   const entry = document.querySelector(`[data-id="${entryId}"]`);
   const editBtn = entry ? entry.querySelector(".edit-btn") : null;
   if (editBtn) editBtn.focus();
 }
 
-// A 200 can still refuse a story write: a Job or an Autoplay run holds the Game.
-function answeredWaitStatus(body) {
-  return body.includes('class="status wait"');
-}
-
-const GAME_BUSY_DETAIL = "Still thinking...";
-
-// True when the body is the busy answer; the story-log error then says what the
-// refused action was.
-function reportedBusy(body, message) {
-  if (!answeredWaitStatus(body)) return false;
-  showStoryLogError(message, GAME_BUSY_DETAIL);
-  return true;
-}
-
-function submitEdit() {
+// The lock of a done Save is released only once the screen shows the saved entry, so a
+// second editor cannot open on a stale textarea.
+function onEditSaved(event) {
   if (editState === null) return;
-  clearInlineError(storyLogErrorSlot());
-  const newText = document.getElementById("edit-textarea").value;
-  const formData = new URLSearchParams();
-  formData.append("text", newText);
-  let editKeptOpen = false;
-  // Kept set until the outcome is known, so a failed save can restore the entry.
-  fetch(`/history/${editState.id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: formData,
-  })
-    .then((response) => {
-      if (!response.ok) return throwServerDetail(response);
-      return response.text();
-    })
-    .then((body) => {
-      if (reportedBusy(body, "The Game is busy, so the edit was not saved.")) {
-        editKeptOpen = true;
-        return;
-      }
-      // The lock stays until the resumed poll replaces the entry's
-      // controls, so a second editor cannot open on a stale textarea.
-      clearEditState();
-    })
-    .catch((err) => {
-      console.error("Failed to save message:", err);
-      revertEdit();
-      showStoryLogError("Failed to save the message.", err.message);
-    })
-    .finally(() => {
-      if (!editKeptOpen) resumePolling();
-    });
-}
-
-// Retry and retrigger run through raw fetch, so the failure path reports
-// its own error and resets the status the htmx swaps never restored.
-function submitGenerationRequest(url, failureMessage) {
-  updateToThinking();
-  fetch(url, { method: "POST" })
-    .then((response) => {
-      if (!response.ok) return throwServerDetail(response);
-      return response.text();
-    })
-    .catch((err) => {
-      console.error(`${failureMessage}:`, err);
-      resetStatusToReady();
-      showStatusError(failureMessage, err.message);
-    });
-}
-
-function submitNewSwipe() {
-  submitGenerationRequest("/swipe/new", "Failed to generate a new swipe");
-}
-
-function submitRetrigger() {
-  submitGenerationRequest("/retrigger", "Failed to retrigger the event");
+  const answer = requestAnswer(event);
+  if (answer.outcome === "refused" || answer.outcome === "invalid") return;
+  if (answer.outcome !== "done") {
+    revertEdit();
+    return;
+  }
+  clearEditState();
+  afterScreenShows(answer.stamp).then(unlockEditing);
 }
 
 // A restored swipe leaves no state signal, so the restore is announced explicitly.
@@ -238,31 +156,13 @@ function announceSwipeRestore() {
   }, 4000);
 }
 
-function switchSwipe(messageId, index) {
-  clearInlineError(storyLogErrorSlot());
-  fetch(`/message/${messageId}/swipe/${index}`, { method: "POST" })
-    .then((response) => {
-      if (!response.ok) return throwServerDetail(response);
-      return response.text();
-    })
-    .then((html) => {
-      if (reportedBusy(html, "The Game is busy, so the swipe was not switched.")) {
-        return;
-      }
-      document.getElementById("story-log").innerHTML = html;
-      // The restore is settled: drop any stale generating label without waiting for the 5s poll.
-      resetStatusToReady();
-      announceSwipeRestore();
-    })
-    .catch((err) => {
-      console.error("Swipe switch failed:", err);
-      showStoryLogError("Failed to switch the swipe.", err.message);
-    });
+function onSwipeSwitched(event) {
+  const answer = requestAnswer(event);
+  if (answer.outcome === "done") afterScreenShows(answer.stamp).then(announceSwipeRestore);
 }
 
-// The Delete control lives on the last entry, so the swap replaces the node that
-// had focus. The entry that becomes the last one carries the equivalent
-// controls, and the command input is the landing spot for a log left empty.
+// The Delete control lives on the last entry, so the swap replaces the node that had
+// focus. The entry that becomes the last one carries the equivalent controls.
 function focusAfterLogDelete() {
   const entries = document.querySelectorAll("#story-log .log-entry");
   const lastEntry = entries.length ? entries[entries.length - 1] : null;
@@ -272,34 +172,14 @@ function focusAfterLogDelete() {
   if (landing) landing.focus();
 }
 
-function deleteMessage() {
-  if (!confirm("Delete this message?")) return;
-  clearInlineError(storyLogErrorSlot());
-  fetch("/history/delete", { method: "POST" })
-    .then((response) => {
-      if (!response.ok) return throwServerDetail(response);
-      return response.text().then((body) => {
-        if (reportedBusy(body, "The Game is busy, so the message was not deleted.")) {
-          return;
-        }
-        return htmx
-          .ajax("GET", "/fragment/story-log", {
-            target: "#story-log",
-            swap: "innerHTML",
-          })
-          .then(() => focusAfterLogDelete());
-      });
-    })
-    .catch((err) => {
-      console.error("Delete failed:", err);
-      showStoryLogError("Failed to delete the message.", err.message);
-    });
+function onMessageDeleted(event) {
+  const answer = requestAnswer(event);
+  if (answer.outcome === "done") afterScreenShows(answer.stamp).then(focusAfterLogDelete);
 }
 
-// A poll morphs the log in place, so its scroll position survives the swap and
-// a new entry would land below the fold. A swap that adds an entry scrolls the
-// log back to its bottom, but only when the log was already there: a player
-// reading further up keeps their place.
+// A load morphs the log in place, so a new entry would land below the fold. The
+// follow then scrolls back to the bottom, but only when the log was already there:
+// a player reading further up keeps their place.
 const STORY_LOG_BOTTOM_SLACK_PX = 8;
 let storyLogSwapStart = null;
 
@@ -318,12 +198,10 @@ function storyLogCanScroll(log) {
   return log.scrollHeight > log.clientHeight;
 }
 
-// The log's height is what the flex column has left over, so its box settles
-// only once the regions beside it have loaded (the options dock alone takes
-// ~150px of it). An assignment made in the swap, or in the next frame, can
-// therefore still measure a log that does not overflow yet and clamp to the
-// top. While the log cannot scroll there is no position of the player's to
-// respect, so the follow retries each frame until the box can hold the bottom.
+// The log's box settles only once the parts beside it have loaded (the options dock
+// alone takes ~150px of it), so a scroll assignment made in the swap or in the next
+// frame can measure a log that does not overflow yet and clamp to the top. The
+// follow retries each frame until the box can hold the bottom.
 const STORY_LOG_FOLLOW_TIMEOUT_MS = 1000;
 
 function followStoryLogBottom(log) {
@@ -342,23 +220,27 @@ function followStoryLogBottom(log) {
   requestAnimationFrame(retry);
 }
 
-document.body.addEventListener("htmx:beforeSwap", function (evt) {
-  const target = evt.detail && evt.detail.target;
-  if (!target || target.id !== "story-log") return;
+document.addEventListener("screen:beforemorph", function (evt) {
+  const log = storyLogRoot();
+  if (!log || !evt.detail.parts.includes("story-log")) return;
   storyLogSwapStart = {
-    atBottom: storyLogIsAtBottom(target),
-    entries: storyLogEntryCount(target),
+    atBottom: storyLogIsAtBottom(log),
+    entries: storyLogEntryCount(log),
   };
 });
 
-document.body.addEventListener("htmx:afterSwap", function (evt) {
+document.addEventListener("screen:loaded", function (evt) {
   const start = storyLogSwapStart;
   storyLogSwapStart = null;
-  const target = evt.detail && (evt.detail.target || evt.detail.elt);
-  if (!start || !target || target.id !== "story-log") return;
-  // An open edit owns the log's position, and the poll is paused for it.
+  const log = storyLogRoot();
+  if (!start || !log || !evt.detail.parts.includes("story-log")) return;
   if (editState !== null) return;
   if (!start.atBottom) return;
-  if (storyLogEntryCount(target) <= start.entries) return;
-  followStoryLogBottom(target);
+  if (storyLogEntryCount(log) <= start.entries) return;
+  followStoryLogBottom(log);
+});
+
+document.addEventListener("screen:cleared", function () {
+  editState = null;
+  unlockEditing();
 });

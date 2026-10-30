@@ -21,7 +21,7 @@ async fn test_form_stays_static_after_submission() {
             .await
             .unwrap();
 
-            // A command submit retargets to #status-display, so the form is
+            // A command submit swaps into #action-preview, so the form is
             // never re-registered and has no registering settle to race.
             send_action(&page, "look").await;
 
@@ -55,21 +55,29 @@ async fn test_status_updates_during_generation() {
         CONFIG_PATH,
         TEST_WORLD,
         TEST_PERSONA,
-        |page, _port| async move {
+        |page, port| async move {
+            // The mock model answers at once, so the narrator that holds the Job at
+            // its call is a model that never answers.
+            let _silent_model = inject_silent_narrator(port).await;
             send_action(&page, "wait").await;
 
-            let status_text = page
-                .locator("#status-display")
-                .await
-                .inner_text()
-                .await
-                .unwrap_or_default();
+            let shows_the_step = wait_for_condition_async(
+                Duration::from_millis(500),
+                Duration::from_millis(25),
+                || async {
+                    let status_text = page
+                        .locator("#status-display")
+                        .await
+                        .inner_text()
+                        .await
+                        .unwrap_or_default();
+                    status_text.contains("Generating narration")
+                },
+            )
+            .await;
             assert!(
-                status_text.contains("Thinking")
-                    || status_text.contains("Narrating")
-                    || status_text.contains("Generating")
-                    || status_text.contains("Quantifying"),
-                "Status should show generating state, got: {status_text}"
+                shows_the_step,
+                "the status display should show the step of the generation within 500ms"
             );
         },
     )
@@ -100,13 +108,9 @@ async fn test_confirm_preview_leaves_form_ready_and_usable() {
             // Submit a misspelled command; the settle waits for the preview's
             // swap into #action-preview.
             fill_command_input(&page, "i recieve a letter").await;
-            click_and_settle(
-                &page,
-                "#command-form button[type=\"submit\"]",
-                "#action-preview",
-            )
-            .await
-            .expect_settled("submit intercepted command");
+            click_and_settle(&page, "#submit-btn", "#action-preview")
+                .await
+                .expect_settled("submit intercepted command");
             wait_until_visible(&page, ".text-check-preview", Duration::from_secs(5)).await;
 
             click_and_settle(

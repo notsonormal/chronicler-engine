@@ -5,13 +5,12 @@ use askama::Template;
 
 use crate::adapters::driving::http::builders::presets::preset_card_view;
 use crate::adapters::driving::http::view_models::SafeHtml;
-use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::AppSettings;
 
 #[derive(Template)]
 #[template(
     source = r##"
-<div class="prompt-presets-panel">
     <div class="preset-section">
         <h2>System Prompts</h2>
         <p class="preset-section-desc">These prompts are sent as the system message to the narration LLM.</p>
@@ -19,36 +18,7 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <details class="preset-add">
-            <summary class="btn-cyan preset-add-toggle">Add System Prompt Preset</summary>
-            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
-                <input type="hidden" name="preset_type" value="system" />
-                <div class="form-group">
-                    <label for="system-preset-name">Name</label>
-                    <input type="text" id="system-preset-name" name="name" placeholder="My Custom System Prompt" required />
-                </div>
-                <div class="form-group">
-                    <label for="system-preset-role">Role</label>
-                    <textarea id="system-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="system-preset-instructions">Instructions</label>
-                    <textarea id="system-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="system-preset-style">Writing Style</label>
-                    <textarea id="system-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="system-preset-output">Output Format</label>
-                    <textarea id="system-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
-                </div>
-                <div class="inline-error-slot" data-error-slot="preset-add-system" hidden></div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">Add Preset</button>
-                </div>
-            </form>
-        </details>
+        <button type="button" class="btn-cyan" id="preset-add-open-system" hx-get="/fragment/prompt-presets/new?type=system" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add System Prompt Preset</button>
     </div>
 
     <div class="preset-section">
@@ -58,32 +28,7 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <details class="preset-add">
-            <summary class="btn-cyan preset-add-toggle">Add Quantifier Prompt Preset</summary>
-            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
-                <input type="hidden" name="preset_type" value="quantifier" />
-                <div class="form-group">
-                    <label for="quantifier-preset-name">Name</label>
-                    <input type="text" id="quantifier-preset-name" name="name" placeholder="My Custom Quantifier Prompt" required />
-                </div>
-                <div class="form-group">
-                    <label for="quantifier-preset-role">Role</label>
-                    <textarea id="quantifier-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="quantifier-preset-instructions">Instructions</label>
-                    <textarea id="quantifier-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="quantifier-preset-output">Output Format</label>
-                    <textarea id="quantifier-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
-                </div>
-                <div class="inline-error-slot" data-error-slot="preset-add-quantifier" hidden></div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">Add Preset</button>
-                </div>
-            </form>
-        </details>
+        <button type="button" class="btn-cyan" id="preset-add-open-quantifier" hx-get="/fragment/prompt-presets/new?type=quantifier" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Quantifier Prompt Preset</button>
     </div>
 
     <div class="preset-section">
@@ -93,36 +38,7 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <details class="preset-add">
-            <summary class="btn-cyan preset-add-toggle">Add Impersonate Prompt Preset</summary>
-            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
-                <input type="hidden" name="preset_type" value="impersonate" />
-                <div class="form-group">
-                    <label for="impersonate-preset-name">Name</label>
-                    <input type="text" id="impersonate-preset-name" name="name" placeholder="My Custom Impersonate Prompt" required />
-                </div>
-                <div class="form-group">
-                    <label for="impersonate-preset-role">Role</label>
-                    <textarea id="impersonate-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="impersonate-preset-instructions">Instructions</label>
-                    <textarea id="impersonate-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="impersonate-preset-style">Writing Style</label>
-                    <textarea id="impersonate-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="impersonate-preset-output">Output Format</label>
-                    <textarea id="impersonate-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
-                </div>
-                <div class="inline-error-slot" data-error-slot="preset-add-impersonate" hidden></div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">Add Preset</button>
-                </div>
-            </form>
-        </details>
+        <button type="button" class="btn-cyan" id="preset-add-open-impersonate" hx-get="/fragment/prompt-presets/new?type=impersonate" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Impersonate Prompt Preset</button>
     </div>
 
     <div class="preset-section">
@@ -132,38 +48,8 @@ use crate::domain::model::settings::AppSettings;
         {{ card }}
         {% endfor %}
 
-        <details class="preset-add">
-            <summary class="btn-cyan preset-add-toggle">Add Options Prompt Preset</summary>
-            <form hx-post="/prompt-presets" hx-target=".prompt-presets-panel" hx-swap="outerHTML">
-                <input type="hidden" name="preset_type" value="options" />
-                <div class="form-group">
-                    <label for="options-preset-name">Name</label>
-                    <input type="text" id="options-preset-name" name="name" placeholder="My Custom Options Prompt" required />
-                </div>
-                <div class="form-group">
-                    <label for="options-preset-role">Role</label>
-                    <textarea id="options-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="options-preset-instructions">Instructions</label>
-                    <textarea id="options-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="options-preset-style">Writing Style</label>
-                    <textarea id="options-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="options-preset-output">Output Format</label>
-                    <textarea id="options-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
-                </div>
-                <div class="inline-error-slot" data-error-slot="preset-add-options" hidden></div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">Add Preset</button>
-                </div>
-            </form>
-        </details>
+        <button type="button" class="btn-cyan" id="preset-add-open-options" hx-get="/fragment/prompt-presets/new?type=options" hx-target="#edit-dialog-body" hx-swap="innerHTML">Add Options Prompt Preset</button>
     </div>
-</div>
 "##,
     ext = "html"
 )]
@@ -199,5 +85,67 @@ impl PromptPresetsTemplate {
 
     pub fn options_cards(&self) -> Vec<SafeHtml> {
         Self::cards(&self.options_presets, &self.settings)
+    }
+}
+
+/// The Quantifier preset has no Writing Style.
+#[derive(Template)]
+#[template(
+    source = r##"
+<div class="preset-add-form" data-dialog-form>
+    <h2 id="edit-dialog-title">Add {{ title }} Preset</h2>
+    <form hx-post="/prompt-presets" hx-swap="none">
+        <input type="hidden" name="preset_type" value="{{ preset_type }}" />
+        <div class="form-group">
+            <label for="{{ preset_type }}-preset-name">Name</label>
+            <input type="text" id="{{ preset_type }}-preset-name" name="name" placeholder="My Custom {{ title }}" required />
+        </div>
+        <div class="form-group">
+            <label for="{{ preset_type }}-preset-role">Role</label>
+            <textarea id="{{ preset_type }}-preset-role" name="role" rows="4" placeholder="Enter role description..."></textarea>
+        </div>
+        <div class="form-group">
+            <label for="{{ preset_type }}-preset-instructions">Instructions</label>
+            <textarea id="{{ preset_type }}-preset-instructions" name="instructions" rows="8" placeholder="Enter instructions..."></textarea>
+        </div>
+        {% if has_writing_style %}
+        <div class="form-group">
+            <label for="{{ preset_type }}-preset-style">Writing Style</label>
+            <textarea id="{{ preset_type }}-preset-style" name="writing_style" rows="4" placeholder="Enter writing style..."></textarea>
+        </div>
+        {% endif %}
+        <div class="form-group">
+            <label for="{{ preset_type }}-preset-output">Output Format</label>
+            <textarea id="{{ preset_type }}-preset-output" name="output_format" rows="6" placeholder="Enter output format..."></textarea>
+        </div>
+        <div class="inline-error-slot" data-error-slot="preset-add-{{ preset_type }}" hidden></div>
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">Add Preset</button>
+            <button type="button" class="btn-cyan" data-close-dialog>Cancel</button>
+        </div>
+    </form>
+</div>
+"##,
+    ext = "html"
+)]
+pub struct PresetAddFormTemplate {
+    preset_type: &'static str,
+    title: &'static str,
+    has_writing_style: bool,
+}
+
+impl PresetAddFormTemplate {
+    pub fn for_type(preset_type: PresetType) -> Self {
+        let title = match preset_type {
+            PresetType::System => "System Prompt",
+            PresetType::Quantifier => "Quantifier Prompt",
+            PresetType::Impersonate => "Impersonate Prompt",
+            PresetType::Options => "Options Prompt",
+        };
+        Self {
+            preset_type: preset_type.as_str(),
+            title,
+            has_writing_style: preset_type != PresetType::Quantifier,
+        }
     }
 }

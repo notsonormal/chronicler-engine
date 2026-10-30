@@ -1,127 +1,117 @@
 //! [DOC: docs/diataxis/reference/frontend/dashboard.md]
-//! Fragment endpoints
+//! The status display, the changes answer, the LLM record dialog and the busy reset.
 
 use axum::body::Body;
-use axum::{extract::State, response::Html, response::Response};
+use axum::{
+    extract::{Path, State},
+    response::{Html, IntoResponse, Response},
+    Json,
+};
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::{error_disclosure, raw_error_detail};
-use crate::adapters::driving::http::utils::fragment::render_fragment;
+use crate::adapters::driving::http::utils::error::{
+    AnswerPolicy, answer_for_error, failed_answer, not_found_answer, error_disclosure,
+    raw_error_detail,
+};
+use crate::adapters::driving::http::utils::response::{html_escape, ok};
 use crate::adapters::driving::http::AppState;
 use crate::application::games::view_query::Status;
 use crate::application::generation::gate::Busy;
-use crate::domain::model::state::generation_status::{GenerationFailure, Record};
+use crate::domain::model::change::ChangeVersions;
+use crate::domain::model::game::GameId;
+use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 
-pub async fn header_fragment(
+/// The dialog opens only on a 2xx answer: a missing record answers a 404 and a failed
+/// read a 500, and the notice reports either.
+pub async fn llm_message_record_fragment(
     State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
+    Path(id): Path<i64>,
 ) -> Response<Body> {
-    render_fragment(&state, |s| s.render_header(game_id), "header_fragment")
+    match state.render_llm_message_record(id) {
+        Ok(Some(html)) => Html(html).into_response(),
+        Ok(None) => not_found_answer("LLM message not found"),
+        Err(e) => failed_answer(e),
+    }
 }
 
-pub async fn story_log_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_story_log(game_id),
-        "story_log_fragment",
-    )
-}
-
-pub async fn visual_sidebar_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_visual_sidebar(game_id),
-        "visual_sidebar_fragment",
-    )
-}
-
-pub async fn options_dock_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_options_dock(game_id),
-        "options_dock_fragment",
-    )
-}
-
-pub async fn character_headshots_fragment(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-) -> Response<Body> {
-    render_fragment(
-        &state,
-        |s| s.render_character_headshots(game_id),
-        "character_headshots_fragment",
-    )
-}
-
-pub async fn llm_messages_fragment(State(state): State<AppState>) -> Response<Body> {
-    render_fragment(&state, |s| s.render_llm_messages(), "llm_messages_fragment")
-}
-
-pub async fn busy_status_handler(
+pub async fn changes_handler(
     State(state): State<AppState>,
     current: Option<CurrentGame>,
-) -> Html<String> {
-    let Some(CurrentGame(game_id)) = current else {
-        return Html("idle".to_string());
+) -> Json<ChangeVersions> {
+    Json(
+        state
+            .game_view_query
+            .change_versions(current.map(|CurrentGame(game_id)| game_id)),
+    )
+}
+
+/// A Game whose status cannot be read shows its failure line in the display, not an
+/// error answer.
+pub fn render_status_display(state: &AppState, game: Option<GameId>) -> String {
+    let Some(game_id) = game else {
+        return idle_answer();
     };
     match state.game_view_query.status(game_id) {
-        Ok(Status::Busy(busy)) => Html(busy_answer(&busy)),
-        Ok(Status::Failed(failure)) => Html(failure_disclosure(&failure)),
-        Ok(Status::Idle) => Html("idle".to_string()),
+        Ok(Status::Busy(busy)) => busy_answer(&busy),
+        Ok(Status::Failed(failure)) => failure_answer(&failure),
+        Ok(Status::Idle) => idle_answer(),
         Err(e) => {
-            tracing::error!("busy_status_handler: {e}");
-            Html(failure_disclosure(&GenerationFailure::unreadable(
-                Record::Game,
-                &e,
-            )))
+            tracing::error!("render_status_display: {e}");
+            failure_answer(&GenerationFailure::unreadable(Record::Game, &e))
         }
     }
 }
 
-fn busy_answer(busy: &Busy) -> String {
+pub fn idle_answer() -> String {
+    status_element("idle", "ready", "Ready")
+}
+
+/// `data-status` holds the machine state that the action area reads.
+fn status_element(state: &str, class: &str, label: &str) -> String {
+    format!(
+        "<span class=\"status {class}\" data-status=\"{state}\">{}</span>",
+        html_escape(label)
+    )
+}
+
+fn step_label(step: &Step) -> &'static str {
+    match step {
+        Step::Narrating => "Generating narration...",
+        Step::Quantifying => "Quantifying...",
+        Step::GeneratingEvent => "Generating event...",
+        Step::Options => "Generating options...",
+    }
+}
+
+pub fn busy_answer(busy: &Busy) -> String {
     match busy {
-        Busy::Job(step) => step.as_endpoint_str().to_string(),
+        Busy::Job(step) => status_element("thinking", "thinking", step_label(step)),
         Busy::Autoplay { progress, step } => {
-            let mut answer = format!("autoplay {}/{}", progress.cycle(), progress.budget);
+            let mut label = format!("Autoplay: cycle {}/{}", progress.cycle(), progress.budget);
             if let Some(step) = step {
-                answer.push(' ');
-                answer.push_str(step.as_endpoint_str());
+                label.push(' ');
+                label.push_str(step_label(step));
             }
-            answer
+            status_element("autoplay", "thinking autoplay", &label)
         }
     }
 }
 
-fn failure_disclosure(failure: &GenerationFailure) -> String {
-    error_disclosure(
+pub fn failure_answer(failure: &GenerationFailure) -> String {
+    let disclosure = error_disclosure(
         "status-error-popover",
         &failure.line(),
         &raw_error_detail(&failure.raw),
-    )
+    );
+    format!("<div data-status=\"failed\">{disclosure}</div>")
 }
 
 pub async fn reset_busy_handler(
     State(state): State<AppState>,
-    current: Option<CurrentGame>,
-) -> Html<String> {
-    let Some(CurrentGame(game_id)) = current else {
-        return Html("failed".to_string());
-    };
+    CurrentGame(game_id): CurrentGame,
+) -> Response<Body> {
     match state.game_writer.stop(game_id) {
-        Ok(()) => Html("reset".to_string()),
-        Err(e) => {
-            tracing::error!("reset_busy_handler: {e}");
-            Html("failed".to_string())
-        }
+        Ok(()) => ok("reset"),
+        Err(e) => answer_for_error(e.into(), None, AnswerPolicy::EngineText),
     }
 }

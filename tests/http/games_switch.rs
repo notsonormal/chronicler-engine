@@ -12,6 +12,7 @@ use chronicler_engine::test_support::{
 use chronicler_engine::TestAppBuilder;
 
 use crate::support::app_wiring::two_game_app;
+use crate::support::http_requests::assert_answers_nothing;
 
 // [docs/specs/games.md] SCENARIO: 18.1
 #[tokio::test]
@@ -23,12 +24,7 @@ async fn test_switch_game_handler_success() {
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("HX-Refresh").unwrap(),
-        "true",
-        "Should return HX-Refresh header"
-    );
+    assert_answers_nothing(response).await;
     assert_eq!(active_game_of(&state).0, other_id);
 }
 
@@ -92,10 +88,6 @@ async fn test_switch_the_storage_rejects_keeps_the_active_game_http() {
     let response = app.oneshot(req).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(
-        response.headers().get("HX-Refresh").is_none(),
-        "a rejected switch must not refresh the page"
-    );
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();

@@ -1,19 +1,59 @@
-// The action area: the command form, its Checking/Generating state machine, the status display and the live-region announcements.
+// The action area: the command form, its Checking/Generating state machine, the reading of the status display and the live-region announcements.
 
-// The DOM carries every action-area state except an in-flight check.
+// The DOM carries every action-area state except an in-flight check and a send
+// that the status display has not shown yet.
 let checkInFlight = false;
 
-function statusShows(selector) {
+// The action area's own state between an accepted request and the screen that
+// shows its effect: the status display is a part, which the action area reads and
+// never writes.
+let sendPending = false;
+
+function renderActionStatus() {
+  const own = document.getElementById("action-status");
+  if (!own) return;
+  own.innerHTML = sendPending
+    ? '<span class="status thinking">Thinking...</span>'
+    : "";
+}
+
+function beginPending() {
+  sendPending = true;
+  renderActionStatus();
+}
+
+function endPending() {
+  sendPending = false;
+  renderActionStatus();
+  syncActionState();
+}
+
+function endPendingWhenScreenShows(stamp) {
+  afterScreenShows(stamp).then(endPending);
+}
+
+function beginPendingUntilScreenShows(stamp) {
+  beginPending();
+  endPendingWhenScreenShows(stamp);
+}
+
+function statusShows(state) {
   const statusDisplay = document.getElementById("status-display");
-  return !!(statusDisplay && statusDisplay.querySelector(selector));
+  return !!(
+    statusDisplay && statusDisplay.querySelector('[data-status="' + state + '"]')
+  );
 }
 
 function statusIsGenerating() {
-  return statusShows(".status.thinking");
+  return statusShows("thinking");
 }
 
 function statusIsAutoplay() {
-  return statusShows(".status.autoplay");
+  return statusShows("autoplay");
+}
+
+function actionIsGenerating() {
+  return sendPending || statusIsGenerating();
 }
 
 function previewIsOpen() {
@@ -24,38 +64,16 @@ function previewIsOpen() {
 function deriveActionState() {
   if (checkInFlight) return "checking";
   if (statusIsAutoplay()) return "autoplay";
-  if (statusIsGenerating()) return "generating";
+  if (actionIsGenerating()) return "generating";
   if (previewIsOpen()) return "preview";
   return "idle";
 }
 
-// The CSS swaps the command form for Stop off `data-state`.
-function applyAutoplayControls(state) {
+// The server renders the disabled state of every control, so no script writes
+// `disabled`.
+function applyActionState(state) {
   const area = document.getElementById("action-area");
   if (area) area.dataset.state = state;
-  const startable = state === "idle";
-  ["autoplay-btn", "autoplay-cycles"].forEach((id) => {
-    const control = document.getElementById(id);
-    if (control) control.disabled = !startable;
-  });
-}
-
-function applyActionState(state) {
-  applyAutoplayControls(state);
-  const btn = document.getElementById("submit-btn");
-  const input = document.querySelector('#command-form input[name="command"]');
-  if (btn) {
-    if (state === "generating") {
-      btn.innerHTML = '<svg class="icon icon-spin" aria-hidden="true"><use href="#i-loader-circle"></use></svg> Generating…';
-      btn.disabled = true;
-    } else {
-      btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-send"></use></svg> Send';
-      btn.disabled = state === "checking";
-    }
-  }
-  if (input) {
-    input.disabled = state === "checking";
-  }
 }
 
 function focusCorrectedTextarea() {
@@ -70,24 +88,8 @@ function focusCommandInput() {
 
 let previewWasOpen = false;
 
-// The server renders the run mark and the disabled controls, so a run's start or
-// end refetches those regions. `null` is the unread baseline.
-let runWasHeld = null;
-
-function refreshRunRegionsOnRunChange() {
-  const held = statusIsAutoplay();
-  const changed = runWasHeld !== null && held !== runWasHeld;
-  runWasHeld = held;
-  if (!changed) return;
-  ["#games-tab > .games-panel", "#story-log"].forEach((selector) => {
-    const region = document.querySelector(selector);
-    if (region) htmx.trigger(region, "refresh");
-  });
-}
-
 function syncActionState() {
   applyActionState(deriveActionState());
-  refreshRunRegionsOnRunChange();
   const open = previewIsOpen();
   if (open && !previewWasOpen) {
     focusCorrectedTextarea();
@@ -97,50 +99,15 @@ function syncActionState() {
   previewWasOpen = open;
 }
 
-function setStatus(label, statusClass) {
-  const statusDisplay = document.getElementById("status-display");
-  if (statusDisplay) {
-    statusDisplay.innerHTML =
-      '<span class="status ' + statusClass + '">' + label + "</span>";
-  }
-}
-
-// The container's own class colours whatever it holds, and a server-rendered
-// error disclosure replaces the inner span without touching it, so the state is
-// read back off the content instead of being remembered. Only the state classes
-// are touched, so htmx's own transient classes survive.
-const STATUS_STATE_CLASSES = ["ready", "thinking", "wait", "error"];
-
-function statusDisplayState(statusDisplay) {
-  if (statusDisplay.querySelector(".error-disclosure, .status.error")) {
-    return "error";
-  }
-  if (statusIsGenerating()) return "thinking";
-  if (statusDisplay.querySelector(".status.wait")) return "wait";
-  return "ready";
-}
-
-function syncStatusClass() {
-  const statusDisplay = document.getElementById("status-display");
-  if (!statusDisplay) return;
-  statusDisplay.classList.remove(...STATUS_STATE_CLASSES);
-  statusDisplay.classList.add(statusDisplayState(statusDisplay));
-}
-
-// A 200 answer can still refuse the command: the engine reports a generation
-// already in flight as the wait state, and that command was never taken.
-function commandWasRefused() {
-  const statusDisplay = document.getElementById("status-display");
-  return !!statusDisplay && statusDisplayState(statusDisplay) === "wait";
-}
-
 function writeLiveRegion(id, text) {
   const region = document.getElementById(id);
   if (!region || region.textContent === text) return;
   region.textContent = text;
 }
 
-let announcedStatusLabel = null;
+// The page starts at the label of an idle display, so a page that opens during a
+// Job announces the step at its first load, and an idle page announces nothing.
+let announcedStatusLabel = "Ready";
 
 function announceStatusDisplay() {
   const statusDisplay = document.getElementById("status-display");
@@ -149,10 +116,6 @@ function announceStatusDisplay() {
   }
   const label = statusDisplay.textContent.trim();
   if (label === "") return;
-  if (announcedStatusLabel === null) {
-    announcedStatusLabel = label;
-    return;
-  }
   if (label === announcedStatusLabel) return;
   announcedStatusLabel = label;
   writeLiveRegion("status-announcer", label);
@@ -169,7 +132,6 @@ function announceGenerationError(statusDisplay) {
 function applyStatusDisplay() {
   const statusDisplay = document.getElementById("status-display");
   if (!statusDisplay) return;
-  syncStatusClass();
   syncActionState();
   announceGenerationError(statusDisplay);
   announceStatusDisplay();
@@ -231,125 +193,120 @@ function announceOptions() {
 }
 
 function updateToThinking() {
-  setStatus("Thinking...", "thinking");
-  applyStatusDisplay();
-}
-
-const PHASE_LABELS = {
-  narrating: "Generating narration...",
-  quantifying: "Quantifying...",
-  "generating-event": "Generating event...",
-  options: "Generating options...",
-};
-
-const AUTOPLAY_ANSWER = /^autoplay (\d+)\/(\d+)(?: (\S+))?$/;
-
-function autoplayLabel(match) {
-  const progress = "Autoplay: cycle " + match[1] + "/" + match[2];
-  const step = PHASE_LABELS[match[3]];
-  return step ? progress + " " + step : progress;
-}
-
-function pollStatusNow() {
-  htmx.trigger("#status-display", "statuspoll");
-}
-
-function onAutoplayAfterRequest(event) {
-  if (requestSucceeded(event)) pollStatusNow();
-}
-
-// /status/busy returns a bare phase name, an autoplay progress answer or
-// "idle" as plain text, or an error fragment, which stays in place for
-// applyStatusDisplay.
-function onStatusPoll(el) {
-  const text = el.textContent.trim();
-  const run = AUTOPLAY_ANSWER.exec(text);
-  if (text === "idle") {
-    setStatus("Ready", "ready");
-  } else if (run) {
-    setStatus(autoplayLabel(run), "thinking autoplay");
-  } else if (PHASE_LABELS[text]) {
-    setStatus(PHASE_LABELS[text], "thinking");
-  }
-  applyStatusDisplay();
-}
-
-// The status poll replaces this disclosure on its next cycle.
-function showStatusError(message, rawText) {
-  const statusDisplay = document.getElementById("status-display");
-  if (!statusDisplay) return;
-  statusDisplay.innerHTML = errorDisclosureHtml(
-    "status-error-popover",
-    message,
-    rawText
-  );
-  applyStatusDisplay();
-}
-
-document.body.addEventListener("htmx:afterSwap", function (evt) {
+  beginPending();
   syncActionState();
-  const target = evt.detail && (evt.detail.target || evt.detail.elt);
-  if (!target || !target.id) return;
-  if (target.id === "status-display") {
-    syncStatusClass();
-  } else if (target.id === "story-log") {
-    announceNewNarration();
-  } else if (target.id === "options-dock") {
-    announceOptions();
-  }
-});
-
-// Raw-fetch paths get no htmx swap, so a failure would otherwise leave
-// "Thinking..." with Send stuck as a generating indicator.
-function resetStatusToReady() {
-  setStatus("Ready", "ready");
-  applyStatusDisplay();
 }
+
+document.addEventListener("screen:loaded", function (evt) {
+  const parts = evt.detail.parts;
+  if (parts.includes("status-display")) applyStatusDisplay();
+  else syncActionState();
+  if (parts.includes("story-log")) announceNewNarration();
+  if (parts.includes("options-dock")) announceOptions();
+});
 
 function onCommandBeforeRequest() {
   checkInFlight = true;
   syncActionState();
 }
 
-// htmx marks a transport failure and a non-2xx answer unsuccessful, so a
-// command the engine never took keeps the text the player typed.
-function requestSucceeded(event) {
-  return !!(event && event.detail && event.detail.successful);
+// The input clears only if it still holds the text that was sent: the player can
+// type the next action before the screen shows the last one.
+function clearCommandInputAfterScreenShows(stamp, sentText) {
+  afterScreenShows(stamp).then(() => {
+    const input = commandInput();
+    if (input && input.value === sentText) clearCommandInput();
+  });
 }
 
 function clearCommandInput() {
   const form = document.getElementById("command-form");
   if (form) form.reset();
+  syncCommandDraft();
+}
+
+// The draft pins the Game that the screen showed when it began, so a send names
+// that Game even after a load shows another one.
+function syncCommandDraft() {
+  const form = document.getElementById("command-form");
+  const input = commandInput();
+  if (!form || !input) return;
+  if (input.value === "") form.removeAttribute("data-draft-game");
+  else if (!form.hasAttribute("data-draft-game")) {
+    form.setAttribute("data-draft-game", screenRoot.dataset.game || "");
+  }
+}
+
+// An Option comes from the screen of the current Game, so it starts a new draft.
+function startNewCommandDraft() {
+  const form = document.getElementById("command-form");
+  if (form) form.removeAttribute("data-draft-game");
+  syncCommandDraft();
+}
+
+// A `409` of a request of the Action input is a busy Game or a Game that is no
+// longer active. The draft then takes the Game that the screen shows once it
+// shows the answer.
+function retakeDraftGameWhenScreenShows(stamp) {
+  afterScreenShows(stamp).then(() => {
+    const form = document.getElementById("command-form");
+    if (form && form.hasAttribute("data-draft-game")) {
+      form.setAttribute("data-draft-game", screenRoot.dataset.game || "");
+    }
+  });
+}
+
+document.addEventListener("input", function (event) {
+  if (event.target === commandInput()) syncCommandDraft();
+});
+
+// A swap that throws skips the after-request event of the form, so the check is
+// over here: the area must not stay in the state "checking".
+function onCommandLoadError() {
+  checkInFlight = false;
+  syncActionState();
 }
 
 function onCommandAfterRequest(event) {
   checkInFlight = false;
-  // The preview keeps the flagged command for editing, and a dispatched
-  // command has been consumed, so clear the input. A refused one was not.
-  if (requestSucceeded(event) && !previewIsOpen() && !commandWasRefused()) {
-    clearCommandInput();
+  const answer = requestAnswer(event);
+  if (answer.outcome === "refused") retakeDraftGameWhenScreenShows(answer.stamp);
+  if (answer.outcome === "done" && !previewIsOpen()) {
+    clearCommandInputAfterScreenShows(answer.stamp, event.detail.requestConfig.parameters.command);
+    beginPendingUntilScreenShows(answer.stamp);
   }
   syncActionState();
 }
 
-// Both of the preview's send controls post a command the engine consumes.
+// The player can type on while a preview send is in flight, so the send consumes
+// the text that the input held when the request began.
+let previewSentText = "";
+
+function onPreviewBeforeRequest() {
+  const input = commandInput();
+  previewSentText = input ? input.value : "";
+}
+
 function onPreviewSendAfterRequest(event) {
-  if (requestSucceeded(event)) {
-    clearCommandInput();
-  } else {
-    reportConfirmFailure(event);
-  }
+  const answer = requestAnswer(event);
+  if (answer.outcome === "refused") retakeDraftGameWhenScreenShows(answer.stamp);
+  if (answer.outcome !== "done") return;
+  clearCommandInputAfterScreenShows(answer.stamp, previewSentText);
+  beginPendingUntilScreenShows(answer.stamp);
   closeActionPreview();
 }
 
-// A confirm the engine never took reports on the command form's own slot: the
-// preview closes here, and a slot inside it would go with it. htmx fires this
-// request's sendError after this event, on a preview that is already gone.
-function reportConfirmFailure(event) {
-  reportSlotFailure(
-    document.querySelector('#command-form [data-error-slot="action"]'),
-    event && event.detail ? event.detail.xhr : null,
-  );
+function onAutoplayAfterRequest(event) {
+  const answer = requestAnswer(event);
+  if (answer.outcome !== "done") return;
+  beginPendingUntilScreenShows(answer.stamp);
+  syncActionState();
+}
+
+function endPendingAfterRequest(event) {
+  const answer = requestAnswer(event);
+  if (answer.outcome === "done") endPendingWhenScreenShows(answer.stamp);
+  else endPending();
 }
 
 function closeActionPreview() {
@@ -360,22 +317,17 @@ function closeActionPreview() {
 
 function useOption(btn) {
   const input = commandInput();
-  // The input is disabled only during a text check, so a generation in
-  // flight needs the explicit statusIsGenerating() guard.
-  if (!input || input.disabled || statusIsGenerating()) return;
+  if (!input || checkInFlight || actionIsGenerating()) return;
   input.value = btn.textContent;
+  startNewCommandDraft();
   document.getElementById("command-form").requestSubmit();
 }
 
 function editOption(btn) {
   const input = commandInput();
-  if (!input || input.disabled) return;
+  if (!input || checkInFlight) return;
   const optionBtn = btn.closest(".option-item").querySelector(".option-btn");
   input.value = optionBtn.textContent;
+  startNewCommandDraft();
   input.focus();
 }
-
-document.addEventListener("DOMContentLoaded", function () {
-  // A page loaded mid-generation renders a thinking status span, so the reconciler must run at load.
-  applyStatusDisplay();
-});

@@ -14,12 +14,11 @@ use crate::application::pipeline::job::Job;
 use crate::domain::model::action::Action;
 use crate::domain::model::game::GameId;
 use crate::adapters::driving::http::AppState;
-use crate::adapters::driving::http::builders::headers::add_status_swap_headers;
 use crate::adapters::driving::http::templates::TextCheckPreviewTemplate;
 
 use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::error::render_error;
-use crate::adapters::driving::http::utils::response::{internal_error, ok, THINKING_STATUS};
+use crate::adapters::driving::http::utils::error::failed_answer;
+use crate::adapters::driving::http::utils::response::ok;
 
 #[derive(Deserialize, Serialize)]
 pub struct ActionForm {
@@ -34,8 +33,8 @@ fn dispatch_action(state: &AppState, game_id: GameId, command: String) -> Respon
         Action::Options => JobRequest::Options,
     };
     match Job::start(&state.game_writer, state.job_deps.clone(), game_id, request) {
-        Ok(()) => ok(THINKING_STATUS),
-        Err(refusal) => refusal.into_response(),
+        Ok(()) => ok(""),
+        Err(not_accepted) => not_accepted.into_response(),
     }
 }
 
@@ -48,25 +47,6 @@ pub async fn action_handler(
     dispatch_action(&state, game_id, command)
 }
 
-pub async fn action_confirm_handler(
-    State(state): State<AppState>,
-    CurrentGame(game_id): CurrentGame,
-    Form(form): Form<ActionForm>,
-) -> Response<Body> {
-    let command = form.command.trim().to_string();
-    dispatch_with_status_headers(&state, game_id, command).await
-}
-
-async fn dispatch_with_status_headers(
-    state: &AppState,
-    game_id: GameId,
-    command: String,
-) -> Response<Body> {
-    let mut response = dispatch_action(state, game_id, command);
-    add_status_swap_headers(&mut response);
-    response
-}
-
 pub async fn action_check_handler(
     State(state): State<AppState>,
     CurrentGame(game_id): CurrentGame,
@@ -75,19 +55,19 @@ pub async fn action_check_handler(
     let command = form.command.trim().to_string();
 
     if Action::parse(&command).is_engine_command() {
-        return dispatch_with_status_headers(&state, game_id, command).await;
+        return dispatch_action(&state, game_id, command);
     }
 
     let settings = match state.settings() {
         Ok(s) => s,
         Err(e) => {
             tracing::error!("Failed to read settings for text check: {e}");
-            return dispatch_with_status_headers(&state, game_id, command).await;
+            return dispatch_action(&state, game_id, command);
         }
     };
 
     if !settings.text_check.effective_enable_auto_check() {
-        return dispatch_with_status_headers(&state, game_id, command).await;
+        return dispatch_action(&state, game_id, command);
     }
 
     let result = match state.text_check_service().check_player_input(
@@ -98,7 +78,7 @@ pub async fn action_check_handler(
         Ok(result) => result,
         Err(e) => {
             tracing::error!("Text check failed: {e}");
-            return dispatch_with_status_headers(&state, game_id, command).await;
+            return dispatch_action(&state, game_id, command);
         }
     };
 
@@ -107,9 +87,9 @@ pub async fn action_check_handler(
             let template = TextCheckPreviewTemplate::from_check_result(&check_result);
             match template.render() {
                 Ok(html) => ok(html),
-                Err(e) => internal_error(render_error(&format!("Template error: {e}"))),
+                Err(e) => failed_answer(format!("Template error: {e}")),
             }
         }
-        None => dispatch_with_status_headers(&state, game_id, command).await,
+        None => dispatch_action(&state, game_id, command),
     }
 }

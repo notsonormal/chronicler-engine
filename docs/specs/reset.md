@@ -45,3 +45,14 @@ When the client POST /reset
 Then the response status is "400 BAD_REQUEST"
 And the response body mentions "No active game"
 ```
+
+#### Scenario 7.5: A reset answers nothing and makes the new Game active
+
+```gherkin
+Given an active Game
+When the client POST /reset
+Then the response status is "200 OK"
+And the response body is empty
+And the response has no "HX-Refresh" header
+And the active Game is a new Game
+```

@@ -1,39 +1,43 @@
 # Feature Spec: Dashboard
 
 Endpoints:
-- `GET /status/busy` (the dashboard chrome's status poll)
+- `GET /screen?parts=status-display` (the status display)
+- `GET /screen?parts=send-control` (the Send control) and `GET /screen?parts=autoplay-controls` (the Autoplay and Stop controls)
 - `POST /status/reset-busy` (the stop)
-- `GET /fragment/options-dock`
+- `GET /screen?parts=options-dock`
 - `GET /debug/is_busy`
 - `GET /debug/state`
 - `GET /` (the shell that defines the icons)
 
 ## Scenarios
 
-#### Scenario 39.1: The status poll answers with the step of a running Job, else the failure line, else idle
+#### Scenario 39.1: The status display answers with the label of a running Job, else the failure line, else Ready
+
+The answer is one element. Its `data-status` attribute holds the machine state: `idle`, `thinking`, `autoplay` or `failed`. The label inside it is the text the status display shows.
 
 ```gherkin
 Given a Game whose Job is at the narrator call of a Narration
-When the client requests GET /status/busy
-Then the response body is "narrating"
+When the client requests GET /screen?parts=status-display
+Then the template of status-display is a status element with data-status "thinking" and the label "Generating narration..."
 
 Given a Game whose Job is at its analysis
-When the client requests GET /status/busy
-Then the response body is "quantifying"
+When the client requests GET /screen?parts=status-display
+Then the template of status-display is a status element with data-status "thinking" and the label "Quantifying..."
 
 Given a Game with no Job and a failure line
-When the client requests GET /status/busy
-Then the response body carries that failure line
+When the client requests GET /screen?parts=status-display
+Then the response body carries data-status "failed"
+And the response body carries that failure line
 
 Given a Game with no Job and no failure line
-When the client requests GET /status/busy
-Then the response body is "idle"
+When the client requests GET /screen?parts=status-display
+Then the template of status-display is a status element with data-status "idle" and the label "Ready"
 ```
 
 #### Scenario 39.2: The shell defines each referenced icon exactly once
 ```gherkin
 Given a game with at least 2 Messages and a stored trigger
-When the client requests GET / and GET /fragment/story-log, /fragment/games and /fragment/connections/new
+When the client requests GET / and GET /screen?parts=story-log and /screen?parts=games
 Then the shell defines each icon exactly once
 And every icon the shell or a fragment named above references is one the shell defines
 And each fragment named above shows at least one icon
@@ -43,12 +47,12 @@ And each fragment named above shows at least one icon
 
 ```gherkin
 Given a Game with an offered set and a Job
-When the client requests GET /fragment/options-dock and GET /debug/is_busy
+When the client requests GET /screen?parts=options-dock and GET /debug/is_busy
 Then the dock's controls are disabled
 And the debug response body is "true"
 
 Given a Game with an offered set and no Job
-When the client requests GET /fragment/options-dock and GET /debug/is_busy
+When the client requests GET /screen?parts=options-dock and GET /debug/is_busy
 Then the dock's controls are enabled
 And the debug response body is "false"
 ```
@@ -57,17 +61,17 @@ And the debug response body is "false"
 
 ```gherkin
 Given a Game whose Job is held at one model call of the Examples table below
-And the status poll answers with the step name of that row
+And the status display answers with the label of the step of that row
 When the client POST /status/reset-busy
 Then the stop answers "reset"
 And the Game is idle
-And the status poll answers with no failure line
+And the status display answers with no failure line
 When the Job's model answer arrives after the stop
 Then the story log holds exactly the records of that row
 
 Examples:
 | Kind of Job | Model call | Status while held | Records in the story log after the stop |
-| Narration | the narrator call | narrating | the Input of the Job, and no Narration |
+| Narration | the narrator call | Generating narration... | the Input of the Job, and no Narration |
 | Narration | the analysis call | quantifying | the Input of the Job and the Narration, with no room on the Narration and no event Narration |
 | Narration | the Options call | options | the Input of the Job, the Narration, and the room the Narration arrived in |
 | Impersonate | the narrator call | narrating | no Message of the Job |
@@ -122,34 +126,93 @@ Then the response status is "500 Internal Server Error"
 Given a Game whose Job is held at its narrator call
 And a storage that rejects the read of the dock record
 When the client POST /status/reset-busy
-Then the stop answers "failed"
-And the status poll still answers with the step of the Job
+Then the response status is "500 Internal Server Error"
+And the first line of the body is "The Autoplay run was not stopped."
+And the status display still answers with the step of the Job
 When the Job's model answer arrives
 Then the Job saves its Narration and the Game is idle
 ```
 
-#### Scenario 39.9: A status poll that cannot read the Game answers with a failure line
+#### Scenario 39.9: A status display that cannot read the Game answers with a failure line
 
 ```gherkin
 Given a Game with no Job
 And a storage that rejects the read of the Game
-When the client requests GET /status/busy
+When the client requests GET /screen?parts=status-display
 Then the response body carries the line "The data for this request is missing: the game."
-And the response body is not "idle"
+And the template of status-display is not a status element with data-status "idle"
 ```
 
-#### Scenario 39.10: With no active Game, the stop answers "failed"
+#### Scenario 39.10: With no active Game, the stop answers 400
 
 ```gherkin
 Given no active Game
 When the client POST /status/reset-busy
-Then the stop answers "failed"
+Then the response status is "400 Bad Request"
+And the response body mentions "No active game"
 ```
 
-#### Scenario 39.11: With no active Game, the status poll answers "idle"
+#### Scenario 39.11: With no active Game, the status display answers Ready
 
 ```gherkin
 Given no active Game
-When the client requests GET /status/busy
-Then the response body is "idle"
+When the client requests GET /screen?parts=status-display
+Then the template of status-display is a status element with data-status "idle" and the label "Ready"
+```
+
+#### Scenario 39.12: The action controls render Send and Autoplay enabled while the Game is idle
+
+The action controls are two parts of the screen: `send-control` holds Send, and `autoplay-controls` holds Autoplay and Stop. The server renders their `disabled` state from the busy state of the Game, and no script writes it. Send belongs to `#command-form` and Autoplay belongs to `#autoplay-form` through the `form` attribute, so each submits the form that stays in the shell. Each scenario below requests both parts.
+
+```gherkin
+Given a Game with no Job and no failure line
+When the client requests GET /screen?parts=send-control,autoplay-controls
+Then the send answer holds #submit-btn with form "command-form" and the label "Send"
+And #submit-btn does not carry the disabled attribute
+And the autoplay answer holds #autoplay-btn with form "autoplay-form"
+And #autoplay-btn does not carry the disabled attribute
+And the autoplay answer holds no #stop-btn
+```
+
+#### Scenario 39.13: While a Job runs, Send renders disabled as a generating indicator and Autoplay renders disabled
+
+```gherkin
+Given a Game whose Job is at the narrator call of a Narration
+When the client requests GET /screen?parts=send-control,autoplay-controls
+Then #submit-btn carries the disabled attribute and the label "Generating…"
+And #autoplay-btn carries the disabled attribute
+And the autoplay answer holds no #stop-btn
+
+When the Job ends
+And the client requests GET /screen?parts=send-control,autoplay-controls
+Then #submit-btn does not carry the disabled attribute and has the label "Send"
+And #autoplay-btn does not carry the disabled attribute
+```
+
+#### Scenario 39.14: A Game with a failure line is not busy, so its action controls render enabled
+
+```gherkin
+Given a Game with no Job and a failure line
+When the client requests GET /screen?parts=send-control,autoplay-controls
+Then #submit-btn and #autoplay-btn do not carry the disabled attribute
+And the autoplay answer holds no #stop-btn
+```
+
+#### Scenario 39.15: With no active Game, the action controls render as for an idle Game
+
+```gherkin
+Given no active Game
+When the client requests GET /screen?parts=send-control,autoplay-controls
+Then the answer is 200
+And #submit-btn and #autoplay-btn do not carry the disabled attribute
+And the autoplay answer holds no #stop-btn
+```
+
+#### Scenario 39.16: A status that cannot be read does not fail the action controls
+
+```gherkin
+Given a Game whose record cannot be read
+When the client requests GET /screen?parts=send-control,autoplay-controls
+Then the answer is 200
+And #submit-btn and #autoplay-btn do not carry the disabled attribute
 ```

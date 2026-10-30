@@ -4,9 +4,8 @@ use std::time::Duration;
 
 use playwright_rs::AriaRole;
 
-use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
+use chronicler_engine::domain::model::state::generation_status::{GenerationFailureKind, Step};
 
-use super::support::poll_now;
 use super::*;
 use super::support::StubRunner;
 
@@ -69,8 +68,8 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
     watch_live_region(&page, "status-announcer").await;
     watch_live_region(&page, "status-error-announcer").await;
 
-    status.set(StubStatus::Step("narrating".to_string()));
-    poll_now(&page, "#status-display").await;
+    status.set(StubStatus::Step(Step::Narrating));
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -91,18 +90,18 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
         "the phase change should be announced exactly once"
     );
 
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert_eq!(
         live_region_changes(&page, "status-announcer").await,
         1,
-        "an unchanged phase must not be re-announced on a later poll"
+        "an unchanged phase must not be re-announced on a later load"
     );
 
     status.set(StubStatus::Error(
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -124,7 +123,7 @@ async fn check_status_changes_are_announced_once(page: playwright_rs::Page, stub
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -156,7 +155,7 @@ async fn check_new_narration_and_options_are_announced_once(
     );
 
     log.append_narration("A new dawn breaks over the courtyard.");
-    poll_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -184,7 +183,7 @@ async fn check_new_narration_and_options_are_announced_once(
 
     wait_for_element_children(&page, "#options-dock .option-item", 3).await;
     options.serve_alternate_set(true);
-    poll_now(&page, "#options-dock").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(8),
@@ -205,17 +204,17 @@ async fn check_new_narration_and_options_are_announced_once(
         "the changed option set should be announced exactly once"
     );
 
-    poll_now(&page, "#story-log").await;
-    poll_now(&page, "#options-dock").await;
+    load_screen_now(&page).await;
+    load_screen_now(&page).await;
     assert_eq!(
         live_region_changes(&page, "narration-announcer").await,
         1,
-        "a later poll must not re-announce the narration"
+        "a later load must not re-announce the narration"
     );
     assert_eq!(
         live_region_changes(&page, "options-announcer").await,
         1,
-        "a later poll must not re-announce the options"
+        "a later load must not re-announce the options"
     );
 }
 

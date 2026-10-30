@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/storage.md]
 //! Storage layer and database access
 
+pub mod changes;
 pub mod characters;
 pub mod core;
 pub mod db;
@@ -16,6 +17,7 @@ pub mod stories;
 pub mod transaction;
 pub mod utils;
 pub mod worlds;
+mod write_guard;
 
 pub use core::*;
 pub use transaction::{Tx, TxToken, TxWrite};

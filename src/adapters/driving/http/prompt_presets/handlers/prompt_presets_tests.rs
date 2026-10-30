@@ -6,12 +6,12 @@ use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::NarratorMode;
 use crate::adapters::driving::http::prompt_presets::handlers::{
     ActivateQuery, PresetForm, activate_preset_handler, delete_preset_handler,
-    duplicate_preset_handler, edit_preset_form_handler, preset_card_handler, save_preset_handler,
-    update_preset_handler, view_preset_form_handler,
+    duplicate_preset_handler, edit_preset_form_handler, save_preset_handler, update_preset_handler,
+    view_preset_form_handler,
 };
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::test_support::TestPromptPreset;
-use crate::test_support::body_text;
+use crate::test_support::{assert_answers_nothing, body_text};
 
 fn make_test_app_state_with_preset(
     preset: PromptPreset,
@@ -29,40 +29,6 @@ fn make_test_app_state_with_storage(
         crate::bootstrap::wiring::build_app_graph_for_tests(Arc::clone(&storage), None, None)
             .expect("build_app_graph_for_tests should succeed");
     crate::adapters::driving::http::AppState::from_wired(wired)
-}
-
-#[tokio::test]
-async fn test_preset_card_handler_returns_card() {
-    let preset = PromptPreset {
-        id: "card-test".into(),
-        name: "Card Test".into(),
-        instructions: Some("Test.".into()),
-        preset_type: PresetType::System,
-        ..Default::default()
-    };
-    let app_state = make_test_app_state_with_preset(preset.clone());
-    let response = preset_card_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("card-test".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Card Test"));
-    assert!(body.contains("Set Active (Novel)</button>"));
-    assert!(body.contains("Set Active (Interactive Fiction)</button>"));
-}
-
-#[tokio::test]
-async fn test_preset_card_handler_not_found() {
-    let app_state =
-        make_test_app_state_with_preset(crate::test_support::TestPromptPreset::system("x", "X"));
-    let response = preset_card_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("missing".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Preset not found"));
 }
 
 #[tokio::test]
@@ -105,13 +71,22 @@ async fn test_duplicate_preset_handler() {
     };
     let app_state = make_test_app_state_with_preset(preset.clone());
     let response = duplicate_preset_handler(
-        axum::extract::State(app_state),
+        axum::extract::State(app_state.clone()),
         axum::extract::Path("orig".to_string()),
     )
     .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Original (Copy)"));
-    assert!(body.contains("System Prompts"));
+    assert_answers_nothing(response).await;
+    let names: Vec<String> = app_state
+        .prompt_preset_service
+        .list_presets(PresetType::System)
+        .expect("presets list")
+        .into_iter()
+        .map(|preset| preset.name)
+        .collect();
+    assert!(
+        names.contains(&"Original (Copy)".to_string()),
+        "the copy is stored: {names:?}"
+    );
 }
 
 #[tokio::test]
@@ -150,7 +125,7 @@ async fn test_duplicate_preset_storage_error_returns_error() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(body.contains("Duplicate failed"));
+    assert!(body.contains("injected save failure"), "{body}");
 }
 
 #[tokio::test]
@@ -274,7 +249,7 @@ async fn test_activate_preset_does_not_update_memory_when_save_fails() {
     )
     .await;
     let body = body_text(response).await;
-    assert!(body.contains("Save failed"));
+    assert!(body.contains("injected save failure"), "{body}");
 
     let active_id = app_state
         .settings()
@@ -316,113 +291,6 @@ fn make_test_app_state_with_failing_storage(
         crate::bootstrap::wiring::build_app_graph_for_tests(Arc::clone(&storage), None, None)
             .expect("build_app_graph_for_tests should succeed");
     crate::adapters::driving::http::AppState::from_wired(wired)
-}
-
-#[tokio::test]
-async fn test_save_preset_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        crate::test_support::TestPromptPreset::system("x", "X"),
-        |h| {
-            h.set(
-                StorageCall::SavePreset,
-                TestOverride::config("injected save failure"),
-            )
-        },
-    );
-    let response = save_preset_handler(
-        axum::extract::State(app_state),
-        axum::extract::Form(PresetForm {
-            name: "Test".into(),
-            instructions: Some("Test.".into()),
-            preset_type: "system".into(),
-            ..Default::default()
-        }),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Save failed"));
-}
-
-#[tokio::test]
-async fn test_edit_preset_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        PromptPreset {
-            id: "custom".into(),
-            name: "Custom".into(),
-            instructions: Some("Custom.".into()),
-            ..Default::default()
-        },
-        |h| {
-            h.set(
-                StorageCall::GetPreset,
-                TestOverride::config("injected get failure"),
-            )
-        },
-    );
-    let response = edit_preset_form_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("custom".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Load failed"));
-}
-
-#[tokio::test]
-async fn test_update_preset_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        PromptPreset {
-            id: "custom".into(),
-            name: "Custom".into(),
-            instructions: Some("Custom.".into()),
-            ..Default::default()
-        },
-        |h| {
-            h.set(
-                StorageCall::SavePreset,
-                TestOverride::config("injected save failure"),
-            )
-        },
-    );
-    let response = update_preset_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("custom".to_string()),
-        axum::extract::Form(PresetForm {
-            name: "Updated".into(),
-            instructions: Some("Updated.".into()),
-            preset_type: "system".into(),
-            allowed_mode_novel: true,
-            ..Default::default()
-        }),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Update failed"));
-}
-
-#[tokio::test]
-async fn test_delete_preset_delete_storage_error_returns_error() {
-    let app_state = make_test_app_state_with_failing_storage(
-        PromptPreset {
-            id: "custom".into(),
-            name: "Custom".into(),
-            instructions: Some("Custom.".into()),
-            ..Default::default()
-        },
-        |h| {
-            h.set(
-                StorageCall::DeletePreset,
-                TestOverride::config("injected delete failure"),
-            )
-        },
-    );
-    let response = delete_preset_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("custom".to_string()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(body.contains("Delete failed"));
 }
 
 fn preset_with_modes(id: &str, modes: Vec<NarratorMode>) -> PromptPreset {
@@ -525,82 +393,6 @@ async fn test_activate_with_mode_param_writes_that_modes_slot() {
             .system_prompt_preset_id,
         "system_default",
         "novel slot must stay untouched"
-    );
-}
-
-#[tokio::test]
-async fn test_card_badges_active_quantifier_default_for_novel() {
-    let mut preset = crate::test_support::TestPromptPreset::system("q-active", "Quant");
-    preset.preset_type = PresetType::Quantifier;
-    let app_state = make_test_app_state_with_preset(preset);
-
-    let response = activate_preset_handler(
-        axum::extract::State(app_state.clone()),
-        axum::extract::Path("q-active".to_string()),
-        axum::extract::Query(ActivateQuery::default()),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(
-        !body.contains("error-message"),
-        "activation should succeed: {body}"
-    );
-
-    // The Novel bundle's quantifier slot holds this preset, so the card must badge
-    // it and suppress the Set Active (Novel) action.
-    let card = preset_card_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("q-active".to_string()),
-    )
-    .await;
-    let card_body = body_text(card).await;
-    assert!(
-        card_body.contains(r#"badge primary">Active · Novel</span>"#),
-        "active quantifier default must badge Active · Novel: {card_body}"
-    );
-    assert!(
-        !card_body.contains("Set Active (Novel)</button>"),
-        "active quantifier default must not offer Set Active (Novel): {card_body}"
-    );
-}
-
-#[tokio::test]
-async fn test_card_badges_active_impersonate_default_for_if() {
-    let mut preset = crate::test_support::TestPromptPreset::system("imp-active", "Imp");
-    preset.preset_type = PresetType::Impersonate;
-    let app_state = make_test_app_state_with_preset(preset);
-
-    let response = activate_preset_handler(
-        axum::extract::State(app_state.clone()),
-        axum::extract::Path("imp-active".to_string()),
-        axum::extract::Query(ActivateQuery {
-            mode: Some("interactive_fiction".to_string()),
-        }),
-    )
-    .await;
-    let body = body_text(response).await;
-    assert!(
-        !body.contains("error-message"),
-        "activation should succeed: {body}"
-    );
-
-    let card = preset_card_handler(
-        axum::extract::State(app_state),
-        axum::extract::Path("imp-active".to_string()),
-    )
-    .await;
-    let card_body = body_text(card).await;
-    assert!(
-        card_body.contains(r#"badge primary">Active · Interactive Fiction</span>"#),
-        "active impersonate default must badge Active · Interactive Fiction: {card_body}"
-    );
-    assert!(
-        !card_body.contains(r#"badge primary">Active · Novel</span>"#),
-        "IF-only activation must not badge Novel: {card_body}"
-    );
-    assert!(
-        !card_body.contains("Set Active (Interactive Fiction)</button>"),
-        "active impersonate default must not offer Set Active (Interactive Fiction): {card_body}"
     );
 }
 

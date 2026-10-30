@@ -15,6 +15,7 @@ pub mod games;
 pub mod history;
 pub mod layout;
 pub mod prompt_presets;
+pub mod screen;
 pub mod settings;
 pub mod templates;
 pub mod utils;

@@ -10,6 +10,7 @@ use crate::domain::model::settings::{NarratorMode, ReasoningEffort};
 use crate::domain::model::state::message_types::MessageType;
 use crate::domain::model::story_window::StoryWindowEntry;
 use crate::application::ports::text_checker::CheckResult;
+use crate::adapters::driving::http::utils::template_helpers::truncated_preview;
 use crate::adapters::driving::http::utils::view_models::markdown_to_html;
 
 #[derive(Debug, Clone)]
@@ -199,22 +200,46 @@ impl PreviewIssueView {
     }
 }
 
+/// One row of the LLM Messages list: the header of an attempt, with no text of its
+/// prompts or its response.
 #[derive(Debug, Clone)]
-pub struct LlmMessageView {
+pub struct LlmMessageRowView {
     pub id: i64,
     pub agent_name: String,
     pub backend_name: String,
     pub model_name: String,
     pub timestamp: String,
-    pub system_prompt_preview: String,
-    pub user_prompt_preview: String,
-    pub parsed_response_preview: String,
+    pub error_summary: Option<String>,
+}
+
+impl From<&LlmMessage> for LlmMessageRowView {
+    fn from(msg: &LlmMessage) -> Self {
+        Self {
+            id: msg.id,
+            agent_name: msg.agent_name.clone(),
+            backend_name: msg.backend_name.clone(),
+            model_name: msg.model_name.clone(),
+            timestamp: msg.created_at.format("%H:%M:%S").to_string(),
+            error_summary: msg.error_message.as_deref().map(truncated_preview),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LlmMessageRecordView {
+    pub agent_name: String,
+    pub backend_name: String,
+    pub model_name: String,
+    pub timestamp: String,
+    pub system_prompt: String,
+    pub user_prompt: String,
+    pub parsed_response: String,
     pub error_message: Option<String>,
     pub raw_request_json: String,
     pub raw_response_json: String,
 }
 
-impl From<&LlmMessage> for LlmMessageView {
+impl From<&LlmMessage> for LlmMessageRecordView {
     fn from(msg: &LlmMessage) -> Self {
         let pretty_json = |s: &str| -> String {
             let trimmed = s.trim();
@@ -227,14 +252,13 @@ impl From<&LlmMessage> for LlmMessageView {
                 .unwrap_or_else(|| trimmed.to_string())
         };
         Self {
-            id: msg.id,
             agent_name: msg.agent_name.clone(),
             backend_name: msg.backend_name.clone(),
             model_name: msg.model_name.clone(),
             timestamp: msg.created_at.format("%H:%M:%S").to_string(),
-            system_prompt_preview: msg.system_prompt.clone(),
-            user_prompt_preview: msg.user_prompt.clone(),
-            parsed_response_preview: msg.parsed_response.clone(),
+            system_prompt: msg.system_prompt.clone(),
+            user_prompt: msg.user_prompt.clone(),
+            parsed_response: msg.parsed_response.clone(),
             error_message: msg.error_message.clone(),
             raw_request_json: pretty_json(&msg.raw_request_json),
             raw_response_json: pretty_json(&msg.raw_response_json),

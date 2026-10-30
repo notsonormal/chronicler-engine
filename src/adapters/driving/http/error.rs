@@ -1,45 +1,21 @@
 //! [DOC: docs/diataxis/reference/architecture_system.md]
 //! HTTP driving adapter — maps application `ApplicationError` to axum `Response`.
 
-use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use super::utils::error::render_error;
-use super::utils::response::BUSY_STATUS;
+use super::utils::error::{AnswerPolicy, answer_for_error};
 
 use crate::application::errors::ApplicationError;
-use crate::application::generation::gate::Refusal;
+use crate::application::generation::gate::NotAccepted;
 
 impl IntoResponse for ApplicationError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self {
-            ApplicationError::Refused(refusal) => return refusal.clone().into_response(),
-            ApplicationError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            ApplicationError::Engine(_) if self.is_user_displayable() => {
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
-            }
-            ApplicationError::Engine(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error".to_string(),
-            ),
-        };
-
-        (status, render_error(&message)).into_response()
+        answer_for_error(self, None, AnswerPolicy::GenericText)
     }
 }
 
-impl IntoResponse for Refusal {
+impl IntoResponse for NotAccepted {
     fn into_response(self) -> Response {
-        match self {
-            Refusal::StillThinking => (StatusCode::OK, BUSY_STATUS.to_string()).into_response(),
-            Refusal::BadRequest(message) => {
-                (StatusCode::BAD_REQUEST, render_error(&message)).into_response()
-            }
-            Refusal::Failed(failure) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                render_error(&failure.line()),
-            )
-                .into_response(),
-        }
+        ApplicationError::NotAccepted(self).into_response()
     }
 }

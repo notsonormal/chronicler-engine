@@ -1,0 +1,37 @@
+---
+title: "The gate of one Game, written from the docs only"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Idle
+    lg1: Busy
+    lg2: Breaks R02_ARunningJobKeepsItsEntry
+    lg3: Path to the R02_ARunningJobKeepsItsEntry bug
+  }
+  class lg0 teal
+  class lg1 blue
+  class lg2 breaks
+  class lg3 bugPath
+  s0: Idle
+  s1: A Job holds the Game
+  s2: Idle#59; a stopped Job still runs
+  s3: A Job holds the Game#59; a stopped Job still runs
+  s4: Idle#59; a Job runs with no entry
+  [*] --> s0
+  s0 --> s1: you send an Action
+  s1 --> s2: you press Stop
+  s2 --> s3: you send an Action
+  s3 --> s3: a save of the stopped Job is refused
+  s3 --> s4: the stopped Job ends
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s0 teal
+  class s0 bugPath
+  class s1 blue
+  class s1 bugPath
+  class s2 teal
+  class s2 bugPath
+  class s3 blue
+  class s3 bugPath
+  class s4 teal
+  class s4 breaks
+  class s4 bugPath

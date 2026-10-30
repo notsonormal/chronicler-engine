@@ -15,13 +15,13 @@ async fn test_world_posture_change_autosaves_server_state() {
         |page, _port| async move {
             open_world_edit(&page).await;
 
-            // The posture status span is the swap target: the pollers never
-            // touch it, so the wait cannot satisfy itself on poller noise.
-            select_option_and_settle(
+            // The auto-save answers nothing: the browser flags the save after the
+            // request ended well.
+            select_option_and_await_saved(
                 &page,
-                r#"#worlds-tab select[name="narrative_tense"]"#,
+                r#"#edit-dialog select[name="narrative_tense"]"#,
                 "present",
-                "#world-posture-status",
+                "world-posture-status",
             )
             .await;
 
@@ -34,7 +34,7 @@ async fn test_world_posture_change_autosaves_server_state() {
             let selected: String = page
                 .evaluate::<(), String>(
                     r#"(() => {
-                        const sel = document.querySelector('#worlds-tab select[name="narrative_tense"]');
+                        const sel = document.querySelector('#edit-dialog select[name="narrative_tense"]');
                         return sel ? sel.value : '';
                     })()"#,
                     None,
@@ -60,9 +60,11 @@ async fn test_world_edit_cancel_keeps_focus_in_the_panel() {
         |page, _port| async move {
             open_world_edit(&page).await;
 
-            let cancel = r#".worlds-panel button:has-text("Cancel")"#;
+            let cancel = r#"#edit-dialog button:has-text("Cancel")"#;
             page.locator(cancel).await.focus().await.unwrap();
-            click_and_settle(&page, cancel, ".worlds-panel").await;
+            start_counting_requests(&page).await;
+            click_and_close_dialog(&page, cancel).await;
+            assert_eq!(requests_counted(&page).await, 0, "Cancel sends no request");
 
             let kept = wait_for_condition_async(
                 std::time::Duration::from_secs(2),

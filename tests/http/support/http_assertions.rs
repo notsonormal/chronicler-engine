@@ -1,6 +1,16 @@
 //! Rendered-HTML assertions shared by the http test binary.
 
+use std::sync::Arc;
+
+use axum::http::StatusCode;
+
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::state::message_types::MessageType;
+use chronicler_engine::test_support::ScriptedModel;
+
+use super::app_wiring::app_with_model;
+use super::http_fixtures::story_of;
+use super::http_requests::{post_action, post_on_message, response_body, wait_settled};
 
 /// The status line the busy refusal carries while a Job holds the Game.
 pub const STILL_THINKING: &str = "Still thinking...";
@@ -157,4 +167,108 @@ pub fn referenced_icons(html: &str) -> Vec<String> {
 
 pub fn defined_icons(shell: &str) -> Vec<String> {
     icon_ids(shell, "<symbol id=\"i-")
+}
+
+pub fn opening_tag_of_id(html: &str, id: &str) -> Option<String> {
+    let marker = format!("id=\"{id}\"");
+    let at = html.find(&marker)?;
+    let start = html[..at].rfind('<')?;
+    let end = at + html[at..].find('>')?;
+    Some(html[start..=end].to_string())
+}
+
+/// The two parts of the action controls, as the client fetches them: the body of
+/// `GET /screen?parts=send-control` and the content of `GET /screen?parts=autoplay-controls`.
+pub struct ActionControls {
+    pub send: String,
+    pub autoplay: String,
+}
+
+/// Asserts what the two action control parts render for one busy state: whether
+/// Send and Autoplay carry `disabled`, and whether Stop is rendered. Send belongs
+/// to `#command-form` and Autoplay to `#autoplay-form` through `form`. Send is the
+/// whole of the first part, and Autoplay and Stop are the whole of the second.
+pub fn assert_action_controls(
+    controls: &ActionControls,
+    send_disabled: bool,
+    autoplay_disabled: bool,
+    stop_rendered: bool,
+    label: &str,
+) {
+    let ActionControls { send, autoplay } = controls;
+    let send_tag = opening_tag_of_id(send, "submit-btn")
+        .unwrap_or_else(|| panic!("{label}: the send part renders #submit-btn: {send}"));
+    let autoplay_tag = opening_tag_of_id(autoplay, "autoplay-btn")
+        .unwrap_or_else(|| panic!("{label}: the autoplay part renders #autoplay-btn: {autoplay}"));
+    assert!(
+        send_tag.contains(r#"form="command-form""#),
+        "{label}: Send submits #command-form: {send_tag}"
+    );
+    assert!(
+        autoplay_tag.contains(r#"form="autoplay-form""#),
+        "{label}: Autoplay submits #autoplay-form: {autoplay_tag}"
+    );
+    assert_eq!(
+        send_tag.contains(" disabled"),
+        send_disabled,
+        "{label}: Send disabled: {send_tag}"
+    );
+    assert_eq!(
+        autoplay_tag.contains(" disabled"),
+        autoplay_disabled,
+        "{label}: Autoplay disabled: {autoplay_tag}"
+    );
+    assert!(
+        !send.contains("autoplay-btn") && !send.contains("stop-btn"),
+        "{label}: the send part holds only Send: {send}"
+    );
+    assert!(
+        !autoplay.contains("submit-btn"),
+        "{label}: the autoplay part holds no Send: {autoplay}"
+    );
+    let stop = opening_tag_of_id(autoplay, "stop-btn");
+    assert_eq!(
+        stop.is_some(),
+        stop_rendered,
+        "{label}: Stop rendered: {autoplay}"
+    );
+    if let Some(stop) = stop {
+        assert!(
+            stop.contains(r#"hx-post="/status/reset-busy""#),
+            "{label}: Stop posts to /status/reset-busy: {stop}"
+        );
+    }
+}
+
+/// A story of one Action and its Narration, then a request to `uri` that names the
+/// Input, which is no longer the last Message: the answer is a `409` with the
+/// sentence and the engine's line, and the story does not change.
+pub async fn assert_a_stale_message_is_refused(uri: &str, sentence: &str) {
+    let model = Arc::new(ScriptedModel::new().turn("You look around."));
+    let (app, state) = app_with_model(Arc::clone(&model));
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Job settles");
+    let story = || {
+        story_of(&state)
+            .iter()
+            .map(|message| (message.id, message.swipes.len()))
+            .collect::<Vec<_>>()
+    };
+    let before = story();
+    let input = story_of(&state)
+        .iter()
+        .find(|message| message.message_type == MessageType::Input)
+        .expect("the story holds the Input")
+        .id;
+
+    let response = post_on_message(&app, uri, input).await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT, "POST {uri}");
+    let body = response_body(response).await;
+    assert!(body.contains(sentence), "POST {uri}: {body}");
+    assert!(
+        body.contains("The page showed a Message that is no longer the last one."),
+        "POST {uri}: {body}"
+    );
+    assert_eq!(story(), before, "the refused request wrote nothing");
 }

@@ -1,11 +1,13 @@
 //! Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
 
+pub mod answer_words;
 pub mod enums;
 pub mod free_fn;
 pub mod inherent_impl;
 pub mod layers;
 pub mod location;
 pub mod nesting;
+pub mod screen;
 pub mod structure;
 pub mod style;
 pub mod test_hygiene;
@@ -13,11 +15,17 @@ pub mod unit_test_allowlist;
 pub mod walker_rows;
 pub mod walkers;
 
+#[allow(dead_code)]
+#[path = "../../test_utils/screen_part_table.rs"]
+mod screen_part_table;
+
+pub use answer_words::*;
 pub use inherent_impl::*;
 pub use enums::*;
 pub use free_fn::*;
 pub use layers::*;
 pub use nesting::*;
+pub use screen::*;
 pub use structure::*;
 pub use style::*;
 pub use test_hygiene::*;
@@ -27,10 +35,16 @@ pub use walker_rows::*;
 pub use walkers::*;
 
 #[cfg(test)]
+mod answer_words_tests;
+
+#[cfg(test)]
 mod inherent_impl_tests;
 
 #[cfg(test)]
 mod free_fn_tests;
+
+#[cfg(test)]
+mod screen_tests;
 
 #[cfg(test)]
 mod location_tests;
@@ -177,8 +191,8 @@ fn dead_scope_violation(rule_name: &str, scope: &str) -> Violation {
     )
 }
 
-/// Runs a path-limited guardrail over `src/`, and fails it when its scope matches no
-/// file.
+/// Fails when its scope matches no file, so a stale scope cannot pass by checking
+/// nothing.
 fn check_src_files_in_scope(
     rule_name: &str,
     scope: &str,
@@ -439,6 +453,260 @@ fn guardrails_browser_interactions_use_htmx_settle() {
 }
 
 #[test]
+fn guardrails_parts_in_shell() {
+    let path = "assets/index.html";
+    let content = std::fs::read_to_string(path).unwrap();
+    let errors = check_parts_in_shell(path, &content);
+    assert_violations(&errors, "parts in the dashboard shell");
+}
+
+#[test]
+fn guardrails_part_table_matches_the_shell() {
+    let table: Vec<ListedPart> = screen_part_table::PARTS
+        .iter()
+        .map(|part| ListedPart {
+            selector: part.selector.to_string(),
+            name: part.name.to_string(),
+        })
+        .collect();
+    let path = "assets/index.html";
+    let content = std::fs::read_to_string(path).unwrap();
+    let errors = check_part_table_matches_shell(path, &content, &table);
+    assert_violations(&errors, "the part table of the screen page tests");
+}
+
+#[test]
+fn guardrails_shell_parts_match_the_server() {
+    let server_parts: Vec<&str> =
+        chronicler_engine::adapters::driving::http::screen::handlers::screen_part_names().collect();
+    let path = "assets/index.html";
+    let content = std::fs::read_to_string(path).unwrap();
+    let errors = check_shell_parts_match_the_server(path, &content, &server_parts);
+    assert_violations(
+        &errors,
+        "the parts of the shell are the parts the server renders",
+    );
+}
+
+#[test]
+fn guardrails_stub_answers_the_parts_of_the_server() {
+    let server_parts: Vec<&str> =
+        chronicler_engine::adapters::driving::http::screen::handlers::screen_part_names().collect();
+    let path = "tests/test_utils/stub_server.rs";
+    let source = std::fs::read_to_string(path).unwrap();
+    let errors = check_stub_answers_the_parts_of_the_server(path, &source, &server_parts);
+    assert_violations(
+        &errors,
+        "the stub answers the parts that the server renders",
+    );
+}
+
+fn scripts_of_assets(wanted: impl Fn(&str) -> bool) -> Vec<(String, String)> {
+    let mut scripts: Vec<(String, String)> = std::fs::read_dir("assets")
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(&wanted)
+                .unwrap_or(false)
+        })
+        .map(|path| {
+            let content = std::fs::read_to_string(&path).unwrap();
+            (path.to_string_lossy().to_string(), content)
+        })
+        .collect();
+    scripts.sort();
+    assert!(!scripts.is_empty(), "no matching script found in assets/");
+    scripts
+}
+
+fn dashboard_scripts() -> Vec<(String, String)> {
+    scripts_of_assets(|name| name.starts_with("dashboard-") && name.ends_with(".js"))
+}
+
+/// Every script of `assets/` that this repo wrote: all but the vendored minified
+/// libraries.
+fn first_party_scripts() -> Vec<(String, String)> {
+    scripts_of_assets(|name| name.ends_with(".js") && !name.ends_with(".min.js"))
+}
+
+fn shell_parts() -> Vec<String> {
+    part_element_names(&std::fs::read_to_string("assets/index.html").unwrap())
+}
+
+fn scripts_that_do_not_write_parts() -> Vec<(String, String)> {
+    dashboard_scripts()
+        .into_iter()
+        .filter(|(path, _)| !path.ends_with("dashboard-screen.js"))
+        .collect()
+}
+
+#[test]
+fn guardrails_scripts_write_no_part() {
+    let parts = shell_parts();
+    let errors: Vec<Violation> = scripts_that_do_not_write_parts()
+        .iter()
+        .flat_map(|(path, script)| check_scripts_write_no_part(path, script, &parts))
+        .collect();
+    assert_violations(
+        &errors,
+        "dashboard scripts other than the screen script write no part element",
+    );
+}
+
+#[test]
+fn guardrails_scripts_listen_no_part_swaps() {
+    let parts = shell_parts();
+    let errors: Vec<Violation> = dashboard_scripts()
+        .iter()
+        .flat_map(|(path, script)| check_scripts_listen_no_part_swaps(path, script, &parts))
+        .collect();
+    assert_violations(
+        &errors,
+        "no dashboard script listens for the htmx swap of a part",
+    );
+}
+
+#[test]
+fn guardrails_scripts_write_no_disabled() {
+    let errors: Vec<Violation> = first_party_scripts()
+        .iter()
+        .flat_map(|(path, script)| check_scripts_write_no_disabled(path, script))
+        .collect();
+    assert_violations(
+        &errors,
+        "no first-party script writes `disabled`: the server renders every control state",
+    );
+}
+
+#[test]
+fn guardrails_scripts_fetch_only_the_screen_reads() {
+    let errors: Vec<Violation> = dashboard_scripts()
+        .iter()
+        .flat_map(|(path, script)| check_scripts_fetch_only_the_screen_reads(path, script))
+        .collect();
+    assert_violations(
+        &errors,
+        "no dashboard script calls `fetch(` except the two reads of dashboard-screen.js",
+    );
+}
+
+#[test]
+fn guardrails_no_source_aborts_a_request_or_times_one_out() {
+    let errors: Vec<Violation> = first_party_scripts()
+        .iter()
+        .chain(template_sources().iter())
+        .flat_map(|(path, content)| check_no_abort_or_timeout_source(path, content))
+        .collect();
+    assert_violations(
+        &errors,
+        "no script or template aborts a request or times one out: status 0 reads as no answer",
+    );
+}
+
+#[test]
+fn guardrails_handler_headers() {
+    let parts = shell_parts();
+    let errors: Vec<Violation> = src_snapshot()
+        .iter()
+        .filter(|file| file.path.starts_with("adapters/driving/http/"))
+        .flat_map(|file| check_handler_headers(&file.path, &file.content, &parts))
+        .collect();
+    assert_violations(
+        &errors,
+        "handlers steer no answer: no part retarget, no page refresh",
+    );
+}
+
+fn template_sources() -> Vec<(String, String)> {
+    let mut sources: Vec<(String, String)> = src_snapshot()
+        .iter()
+        .filter(|file| file.path.starts_with("adapters/driving/http/"))
+        .filter(|file| !file.path.ends_with("_tests.rs"))
+        .map(|file| (file.path.clone(), file.content.clone()))
+        .collect();
+    sources.push((
+        "assets/index.html".to_string(),
+        std::fs::read_to_string("assets/index.html").unwrap(),
+    ));
+    sources
+}
+
+#[test]
+fn guardrails_templates_target_no_part() {
+    let parts = shell_parts();
+    let errors: Vec<Violation> = template_sources()
+        .iter()
+        .flat_map(|(path, content)| check_template_targets(path, content, &parts))
+        .collect();
+    assert_violations(
+        &errors,
+        "no template targets a part element or swaps one with outerHTML",
+    );
+}
+
+#[test]
+fn guardrails_templates_have_no_out_of_band_swaps() {
+    let errors: Vec<Violation> = template_sources()
+        .iter()
+        .flat_map(|(path, content)| check_no_out_of_band_swaps(path, content))
+        .collect();
+    assert_violations(&errors, "no template has hx-swap-oob");
+}
+
+fn http_adapter_template_files() -> Vec<(String, String)> {
+    src_snapshot()
+        .iter()
+        .filter(|file| file.path.starts_with("adapters/driving/http/"))
+        .filter(|file| !file.path.ends_with("_tests.rs"))
+        .map(|file| (file.path.clone(), file.content.clone()))
+        .collect()
+}
+
+#[test]
+fn guardrails_draft_controls_only_in_dialog_forms() {
+    let errors: Vec<Violation> = http_adapter_template_files()
+        .iter()
+        .filter(|(path, _)| {
+            !DRAFT_CONTROL_EXCEPTIONS
+                .iter()
+                .any(|row| row.path == path.as_str())
+        })
+        .flat_map(|(path, source)| check_draft_controls_only_in_dialog_forms(path, source))
+        .collect();
+    assert_violations(
+        &errors,
+        "a literal with a draft control carries data-dialog-form or data-shell-form",
+    );
+}
+
+#[test]
+fn guardrails_dialog_fragments_carry_the_title() {
+    let errors: Vec<Violation> = http_adapter_template_files()
+        .iter()
+        .flat_map(|(path, source)| check_dialog_fragments_carry_the_title(path, source))
+        .collect();
+    assert_violations(
+        &errors,
+        "a dialog fragment carries the id edit-dialog-title",
+    );
+}
+
+#[test]
+fn guardrails_draft_control_exceptions_are_used() {
+    let errors = check_draft_control_exceptions_are_used(
+        &http_adapter_template_files(),
+        DRAFT_CONTROL_EXCEPTIONS,
+    );
+    assert_violations(
+        &errors,
+        "every draft-control exception names a file that needs it",
+    );
+}
+
+#[test]
 fn guardrails_walker_banned_name() {
     let files = src_snapshot();
     let errors = check_banned_name_rows(&files, BANNED_NAME_ROWS);
@@ -471,4 +739,54 @@ fn guardrails_unit_test_allowlist() {
     let files = src_snapshot();
     let errors = check_unit_test_allowlist(&files, LEGACY_UNIT_TEST_FILES, SEAM_CONTRACT_FILES);
     assert_violations(&errors, "legacy unit-test allowlist");
+}
+
+fn routes_with_words() -> Vec<&'static str> {
+    chronicler_engine::adapters::driving::http::utils::answer_words::ANSWER_WORDS
+        .iter()
+        .map(|row| row.route)
+        .collect()
+}
+
+#[test]
+fn guardrails_post_routes_have_words() {
+    let path = "src/adapters/driving/http/builders/router.rs";
+    let source = std::fs::read_to_string(path).unwrap();
+    let errors = check_post_routes_have_words(path, &source, &routes_with_words());
+    assert_violations(&errors, "every post route has a row in the words table");
+}
+
+#[test]
+fn guardrails_post_handlers_can_answer_an_error() {
+    let path = "src/adapters/driving/http/builders/router.rs";
+    let source = std::fs::read_to_string(path).unwrap();
+    let http_sources = template_sources();
+    let errors =
+        check_post_handlers_can_answer_an_error(path, &source, &http_sources, HTML_ANSWER_ALLOWED);
+    assert_violations(&errors, "no post handler returns a plain Html<String>");
+}
+
+#[test]
+fn guardrails_words_rows_are_router_routes() {
+    let router = std::fs::read_to_string("src/adapters/driving/http/builders/router.rs").unwrap();
+    let words_path = "src/adapters/driving/http/utils/answer_words.rs";
+    let words = std::fs::read_to_string(words_path).unwrap();
+    let errors = check_words_rows_are_router_routes(&router, words_path, &words);
+    assert_violations(
+        &errors,
+        "every row of the words table is a route of the router",
+    );
+}
+
+#[test]
+fn guardrails_request_paths_have_words() {
+    let rows = routes_with_words();
+    let errors: Vec<Violation> = template_sources()
+        .iter()
+        .flat_map(|(path, content)| check_request_paths_have_words(path, content, &rows))
+        .collect();
+    assert_violations(
+        &errors,
+        "every hx-get and hx-post path of a template matches a row of the words table",
+    );
 }

@@ -12,7 +12,7 @@ use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection};
-use chronicler_engine::test_support::body_text;
+use chronicler_engine::test_support::{assert_answers_nothing, body_text};
 use chronicler_engine::test_support::fixtures::llm_message;
 use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::empty_sqlite_storage;
@@ -20,7 +20,7 @@ use chronicler_engine::test_support::empty_sqlite_storage;
 use crate::SettingsTestGuard;
 use crate::support::app_wiring::app_with_production_graph;
 use crate::support::http_fixtures::mock_connection;
-use crate::support::http_requests::post_form;
+use crate::support::http_requests::{fetch_part, post_form};
 use crate::test_utils::card_html_slice;
 
 async fn get_body(app: &axum::Router, uri: &str) -> String {
@@ -56,26 +56,46 @@ fn connection_row<'a>(panel: &'a str, id: &str) -> &'a str {
 async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
     let app = TestAppBuilder::default_app();
 
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
 
-    assert!(body.contains(r#"<div class="settings-panel">"#));
+    assert!(
+        !body.contains("settings-panel"),
+        "the shell's .settings-panel is the part: the fragment repeats no root: {body}"
+    );
+    assert!(
+        !body.contains("connection-editor") && !body.contains("editor-slot"),
+        "the connection forms open in the dialog, so the panel renders no editor slot: {body}"
+    );
     assert!(body.contains(r#"role="tablist""#));
     assert!(body.contains(
-        r#"id="subtab-connections" aria-controls="settings-connections" aria-selected="true""#
+        r#"id="subtab-connections" aria-controls="settings-connections" aria-selected="true" data-keep="aria-selected""#
     ));
+    assert!(
+        body.contains(r#"id="settings-text-check" role="tabpanel" aria-labelledby="subtab-text-check" hidden data-keep="hidden""#),
+        "the Text Check panel starts hidden, and its state is kept through a load: {body}"
+    );
+    assert!(body.contains(r#"id="role-row-narrator""#));
+    assert!(body.contains(r#"id="role-row-quantifier""#));
     assert!(body.contains(r#"id="subtab-text-check""#));
     assert!(body.contains(r#"id="settings-connections""#));
     assert!(body.contains(r#"id="settings-text-check""#));
     assert!(body.contains(r#"id="role-select-narrator""#));
     assert!(body.contains(r#"id="role-select-quantifier""#));
-    assert!(body.contains(r#"<div class="connection-row">"#));
+    assert!(body.contains(r#"<div class="connection-row" id="connection-"#));
     assert!(body.contains(r#"<span class="connection-name">openrouter-gpt-4o-mini</span>"#));
     assert!(body.contains("OpenRouter - openai/gpt-4o-mini"));
     assert!(
         body.contains(">Test</button>"),
         "each connection row must offer a Test control: {body}"
     );
-    assert!(body.contains("connection-test-slot"));
+    assert!(
+        !body.contains("connection-test-slot"),
+        "the result of a row Test opens in the dialog, so a row renders no result slot: {body}"
+    );
+    assert!(
+        !body.contains("settings-subtab active") && !body.contains("settings-subtab-panel active"),
+        "the active sub-tab is no class: {body}"
+    );
     assert!(body.contains("Add Connection"));
     assert!(!body.contains("Set as Narrator"));
     assert!(!body.contains("Set as Quantifier"));
@@ -86,6 +106,105 @@ async fn test_settings_panel_renders_the_sub_tabs_and_role_rows() {
     assert!(body.contains(r#"id="text-check-card""#));
     assert!(body.contains(r#"id="check_mode""#));
     assert!(body.contains(r#"name="enable_auto_check""#));
+    assert!(
+        body.contains(
+            r#"class="text-check-status saved-flag" id="text-check-status" data-keep="data-saved""#
+        ),
+        "the text-check status must be a saved-flag that a load keeps, so the browser can show Saved: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.34
+#[tokio::test]
+async fn test_role_rows_connection_rows_and_the_text_check_card_hold_no_error_slot() {
+    let app = TestAppBuilder::default_app();
+
+    let body = fetch_part(&app, "settings").await;
+
+    assert!(
+        body.contains("connection-openrouter-gpt-4o-mini") && body.contains("role-select-narrator"),
+        "the panel renders its rows: {body}"
+    );
+    assert!(
+        !body.contains("data-error-slot"),
+        "a report of the panel shows in the notice place, so no row or card holds a slot: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.35
+#[tokio::test]
+async fn test_panel_controls_swap_nothing_into_the_panel() {
+    let app = TestAppBuilder::default_app();
+
+    let body = fetch_part(&app, "settings").await;
+
+    assert!(
+        body.contains(r#"hx-trigger="change" hx-swap="none""#),
+        "a role select saves on change and swaps nothing: {body}"
+    );
+    assert!(
+        body.contains(r##"hx-get="/fragment/connections/new" hx-target="#edit-dialog-body""##),
+        "Add Connection opens the dialog: {body}"
+    );
+    assert!(
+        body.contains(r##"hx-get="/fragment/connections/openrouter-gpt-4o-mini/edit" hx-target="#edit-dialog-body""##),
+        "Edit opens the dialog: {body}"
+    );
+    assert!(
+        body.contains(
+            r##"hx-post="/connections/openrouter-gpt-4o-mini/test" hx-target="#edit-dialog-body""##
+        ),
+        "Test shows its result in the dialog: {body}"
+    );
+    assert!(
+        !body.contains(r#"hx-target=".settings-panel""#),
+        "no control targets the panel: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.36
+#[tokio::test]
+async fn test_connection_forms_answer_dialog_fragments() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let add = get_body(&app, "/fragment/connections/new").await;
+    assert!(
+        add.contains("data-dialog-form")
+            && add.contains(r#"<h2 id="edit-dialog-title">Add Connection</h2>"#),
+        "the Add form is a dialog fragment with its own title: {add}"
+    );
+    assert!(add.contains(r#"hx-post="/connections/add""#), "{add}");
+
+    let edit = get_body(&app, "/fragment/connections/openrouter-gpt-4o-mini/edit").await;
+    assert!(
+        edit.contains("data-dialog-form")
+            && edit.contains(r#"<h2 id="edit-dialog-title">Edit openrouter-gpt-4o-mini</h2>"#),
+        "the Edit form is a dialog fragment with its own title: {edit}"
+    );
+    assert!(
+        edit.contains(r#"hx-post="/connections/openrouter-gpt-4o-mini/edit""#),
+        "{edit}"
+    );
+    for form in [&add, &edit] {
+        assert!(
+            form.contains("data-close-dialog"),
+            "a Cancel control: {form}"
+        );
+        assert!(
+            form.contains(r#"hx-post="/connections/test""#)
+                && form.contains(r#"hx-include="closest form""#),
+            "a Test control for the typed values: {form}"
+        );
+        assert!(
+            form.contains(r#"data-error-slot="connection-form""#),
+            "the form holds a slot for an invalid answer: {form}"
+        );
+        assert!(
+            !form.contains("data-close-editor") && !form.contains("data-work"),
+            "no editor-slot marker: {form}"
+        );
+    }
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.12
@@ -101,18 +220,9 @@ async fn test_text_check_autosave_stores_mode_and_check_before_sending() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    assert!(
-        body.contains(r#"id="text-check-card"#),
-        "the auto-save must return the re-rendered card: {body}"
-    );
-    assert!(
-        body.contains("Saved"),
-        "the card must carry its own save feedback: {body}"
-    );
+    assert_answers_nothing(response).await;
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"<option value="spell" selected>"#),
         "the stored mode must render selected: {panel}"
@@ -137,7 +247,7 @@ async fn test_text_check_disabled_clears_check_before_sending() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"<option value="disabled" selected>"#),
         "the stored mode must render Disabled selected: {panel}"
@@ -204,25 +314,46 @@ async fn test_failed_settings_panel_load_reports_inside_the_panel() {
         TestOverride::internal("settings read failure"),
     );
 
-    let body = get_body(&app, "/fragment/settings").await;
+    let request = Request::builder()
+        .uri("/screen?parts=settings")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "a failed load answers non-2xx, so the screen load that reads it fails"
+    );
+    assert!(response.headers().get("HX-Reswap").is_none());
+    let body = body_text(response).await;
 
     assert!(
         body.contains("settings read failure"),
         "a panel that cannot read settings must render the failure: {body}"
     );
     assert!(
-        !body.contains(r#"<div class="settings-panel">"#),
+        !body.contains(r#"id="subtab-connections""#),
         "the panel must not render a settings panel it could not read: {body}"
     );
 }
 
 // [docs/specs/settings.md] SCENARIO: 20.24
 #[tokio::test]
-async fn test_unknown_connection_edit_form_reports_inside_the_panel() {
+async fn test_unknown_connection_edit_form_answers_not_found_and_opens_no_dialog() {
     let _guard = SettingsTestGuard::new();
     let app = TestAppBuilder::default_app();
 
-    let body = get_body(&app, "/fragment/connections/does-not-exist/edit").await;
+    let request = Request::builder()
+        .uri("/fragment/connections/does-not-exist/edit")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::NOT_FOUND,
+        "a gone record answers non-2xx, so no dialog opens"
+    );
+    let body = body_text(response).await;
 
     assert!(
         body.contains("Connection not found"),
@@ -257,11 +388,15 @@ async fn test_narrator_role_select_applies_at_once() {
     );
 
     let response = post_form(&app, "/connections/set-narrator", "connection_id=mock-b").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    assert_answers_nothing(response).await;
+    let panel = fetch_part(&app, "settings").await;
+    let narrator_row = panel
+        .split(r#"id="role-row-quantifier""#)
+        .next()
+        .expect("the Narrator row comes first");
     assert!(
-        body.contains(r#"<option value="mock-b" selected>"#),
-        "the role row must render the new selection: {body}"
+        narrator_row.contains(r#"<option value="mock-b" selected>"#),
+        "the role row must render the new selection: {panel}"
     );
 
     let backend = get_body(&app, "/debug/backend").await;
@@ -288,11 +423,15 @@ async fn test_quantifier_role_select_applies_at_once() {
     let (app, state, _storage) = app_with_production_graph(settings);
 
     let response = post_form(&app, "/connections/set-quantifier", "connection_id=mock-b").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
+    assert_answers_nothing(response).await;
+    let panel = fetch_part(&app, "settings").await;
+    let quantifier_row = panel
+        .split(r#"id="role-row-quantifier""#)
+        .nth(1)
+        .expect("the Quantifier row follows the Narrator row");
     assert!(
-        body.contains(r#"<option value="mock-b" selected>"#),
-        "the role row must render the new selection: {body}"
+        quantifier_row.contains(r#"<option value="mock-b" selected>"#),
+        "the role row must render the new selection: {panel}"
     );
 
     let stored = state
@@ -320,7 +459,7 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
     let (app, _state, _storage) = app_with_production_graph(settings);
 
     let response = post_form(&app, "/connections/mock-a/delete", "").await;
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert!(
         body.contains("Narrator uses this connection"),
@@ -330,12 +469,14 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
         body.contains("role above"),
         "the refusal must point at the role rows: {body}"
     );
+    let panel = fetch_part(&app, "settings").await;
     assert!(
-        body.contains(r#"hx-get="/fragment/connections/mock-a/edit"#),
-        "the refused connection must stay in the list: {body}"
+        panel.contains(r#"hx-get="/fragment/connections/mock-a/edit"#),
+        "the refused connection must stay in the list: {panel}"
     );
 
     let response = post_form(&app, "/connections/mock-b/delete", "").await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = body_text(response).await;
     assert!(
         body.contains("Quantifier uses this connection"),
@@ -343,10 +484,11 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
     );
 
     let response = post_form(&app, "/connections/mock-c/delete", "").await;
-    let body = body_text(response).await;
+    assert_answers_nothing(response).await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
-        !body.contains(r#"hx-get="/fragment/connections/mock-c/edit"#),
-        "an unused connection must still be deletable: {body}"
+        !panel.contains(r#"hx-get="/fragment/connections/mock-c/edit"#),
+        "an unused connection must still be deletable: {panel}"
     );
 }
 
@@ -356,7 +498,7 @@ async fn test_role_rows_show_each_roles_health() {
     let (state, storage) = TestAppBuilder::default_test().build_service_with_storage();
     let app = build_router(state);
 
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
     assert_eq!(
         body.matches("No calls yet").count(),
         2,
@@ -372,7 +514,7 @@ async fn test_role_rows_show_each_roles_health() {
             -10,
         ))
         .unwrap();
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
     assert!(
         body.contains("Degraded"),
         "the failed role must degrade: {body}"
@@ -397,7 +539,7 @@ async fn test_role_rows_show_each_roles_health() {
     storage
         .save_llm_message(&llm_message("narrator", "mock", None, 0))
         .unwrap();
-    let body = get_body(&app, "/fragment/settings").await;
+    let body = fetch_part(&app, "settings").await;
     assert!(
         body.contains("Healthy"),
         "a later success must report Healthy: {body}"
@@ -434,7 +576,7 @@ async fn test_connection_add_duplicate_name_is_refused() {
     assert!(body.contains("Duplicate Probe"), "body: {body}");
     assert!(body.contains("already exists"), "body: {body}");
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert_eq!(
         panel
             .matches(r#"<span class="connection-name">Duplicate Probe</span>"#)
@@ -486,7 +628,7 @@ async fn test_connection_edit_keeps_its_own_name() {
     )
     .await;
     assert_eq!(added.status(), StatusCode::OK);
-    let panel = body_text(added).await;
+    let panel = fetch_part(&app, "settings").await;
     let id = added_connection_id(&panel);
 
     let response = post_form(
@@ -495,9 +637,9 @@ async fn test_connection_edit_keeps_its_own_name() {
         "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model-2&conn_api_key=&conn_base_url=",
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = body_text(response).await;
-    let row = connection_row(&body, &id);
+    assert_answers_nothing(response).await;
+    let panel = fetch_part(&app, "settings").await;
+    let row = connection_row(&panel, &id);
     assert!(
         row.contains(r#"<span class="connection-name">Alpha</span>"#),
         "the row must keep the connection's own name: {row}"
@@ -531,11 +673,10 @@ async fn test_connection_add_unknown_provider_answers_non_2xx() {
         "the failure must name the rejected provider: {body}"
     );
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
-        panel.contains(r#"<div class="settings-panel">"#)
-            && panel.contains(r#"<span class="connection-name">"#),
-        "the panel and its connection rows must survive the refused add: {panel}"
+        panel.contains(r#"<span class="connection-name">"#),
+        "the connection rows must survive the refused add: {panel}"
     );
 }
 
@@ -552,7 +693,7 @@ async fn test_connection_edit_unknown_provider_answers_non_2xx() {
     )
     .await;
     assert_eq!(added.status(), StatusCode::OK);
-    let panel = body_text(added).await;
+    let panel = fetch_part(&app, "settings").await;
     let id = added_connection_id(&panel);
 
     let response = post_form(
@@ -569,10 +710,162 @@ async fn test_connection_edit_unknown_provider_answers_non_2xx() {
     let body = body_text(response).await;
     assert!(body.contains("bogus_provider"), "body: {body}");
 
-    let panel = get_body(&app, "/fragment/settings").await;
+    let panel = fetch_part(&app, "settings").await;
     assert!(
         panel.contains(r#"<span class="connection-name">Alpha</span>"#),
         "the connection must survive the refused edit: {panel}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.46
+#[tokio::test]
+async fn test_connection_edit_failure_names_the_typed_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let added = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Alpha&conn_provider=mock&conn_model=alpha-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
+    assert_eq!(added.status(), StatusCode::OK);
+    let panel = fetch_part(&app, "settings").await;
+    let alpha = added_connection_id(&panel);
+
+    let added = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Beta&conn_provider=mock&conn_model=beta-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
+    assert_eq!(added.status(), StatusCode::OK);
+    let panel = fetch_part(&app, "settings").await;
+    let beta = panel
+        .match_indices("hx-get=\"/fragment/connections/conn-")
+        .map(|(at, _)| added_connection_id(&panel[at..]))
+        .find(|candidate| candidate != &alpha)
+        .expect("the second connection edit link");
+    let renamed = post_form(
+        &app,
+        &format!("/connections/{beta}/edit"),
+        "conn_name=Alpha&conn_provider=mock&conn_model=beta-model&conn_api_key=&conn_base_url=",
+    )
+    .await;
+    assert_eq!(renamed.status(), StatusCode::BAD_REQUEST);
+    let body = body_text(renamed).await;
+    assert!(
+        body.contains("The Connection &quot;Alpha&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+    assert!(
+        !body.contains("Beta"),
+        "the sentence does not name the stored name: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.47
+#[tokio::test]
+async fn test_a_gone_connection_is_invalid_and_a_setup_fault_is_a_failure() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let edit = post_form(
+        &app,
+        "/connections/no-such/edit",
+        "conn_name=Alpha&conn_provider=mock&conn_model=m&conn_api_key=&conn_base_url=",
+    )
+    .await;
+    assert_eq!(
+        edit.status(),
+        StatusCode::BAD_REQUEST,
+        "the Edit of a gone Connection is invalid"
+    );
+    let body = body_text(edit).await;
+    assert!(body.contains("Connection not found"), "body: {body}");
+
+    let delete = post_form(&app, "/connections/no-such/delete", "").await;
+    assert_eq!(
+        delete.status(),
+        StatusCode::BAD_REQUEST,
+        "the Delete of a gone Connection is invalid"
+    );
+    let body = body_text(delete).await;
+    assert!(body.contains("Connection not found"), "body: {body}");
+
+    let (single_app, _state, _storage) =
+        app_with_production_graph(single_mock_settings("only-one", "only-model"));
+    let last = post_form(&single_app, "/connections/only-one/delete", "").await;
+    assert_eq!(
+        last.status(),
+        StatusCode::BAD_REQUEST,
+        "the last Connection cannot be deleted"
+    );
+    let body = body_text(last).await;
+    assert!(
+        body.contains("Cannot delete the last connection"),
+        "body: {body}"
+    );
+
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        StorageCall::UpdateSettings,
+        TestOverride::config("settings setup fault"),
+    ));
+    let faulty_app = TestAppBuilder::default_test().storage(storage).build();
+    let fault = post_form(
+        &faulty_app,
+        "/connections/openrouter-gpt-4o-mini/delete",
+        "",
+    )
+    .await;
+    assert_eq!(
+        fault.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "a configuration fault of the engine is a failure, not an invalid value"
+    );
+    let body = body_text(fault).await;
+    assert!(body.contains("settings setup fault"), "body: {body}");
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.48
+#[tokio::test]
+async fn test_connection_edit_with_an_invalid_form_names_the_typed_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let response = post_form(
+        &app,
+        "/connections/any-id/edit",
+        "conn_name=Typed&conn_provider=bogus_provider&conn_model=m&conn_api_key=&conn_base_url=",
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = body_text(response).await;
+    assert!(
+        body.contains("The Connection &quot;Typed&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.49
+#[tokio::test]
+async fn test_connection_add_with_an_invalid_form_names_the_typed_name() {
+    let _guard = SettingsTestGuard::new();
+    let app = TestAppBuilder::default_app();
+
+    let response = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Typed&conn_provider=bogus_provider&conn_model=m&conn_api_key=&conn_base_url=",
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = body_text(response).await;
+    assert!(
+        body.contains("The Connection &quot;Typed&quot; was not saved"),
+        "the sentence names the typed name: {body}"
     );
 }
 
@@ -618,7 +911,12 @@ async fn test_saved_connection_test_reports_success_and_records_nothing() {
         body.contains(" ms"),
         "the reply must carry the reply time: {body}"
     );
-
+    assert!(
+        body.contains("data-dialog-form")
+            && body.contains(r#"<h2 id="edit-dialog-title">Test "#)
+            && body.contains("data-close-dialog"),
+        "the answer is a dialog fragment with a title and a Close control: {body}"
+    );
     assert!(
         state
             .game_view_query
@@ -670,6 +968,10 @@ async fn test_failed_saved_connection_test_renders_the_error_disclosure() {
     assert!(
         body.contains("configured_failure"),
         "the raw failure text must name the provider error: {body}"
+    );
+    assert!(
+        body.contains("data-dialog-form") && body.contains("data-close-dialog"),
+        "the failure shows in the dialog too: {body}"
     );
     assert!(
         state

@@ -5,6 +5,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use super::browser::capture_failure_state;
+use super::html::part_of_screen;
 
 pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     let start = std::time::Instant::now();
@@ -12,12 +13,15 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
 
     while start.elapsed() < timeout {
         if let Ok(resp) = client
-            .get(format!("http://127.0.0.1:{port}/status/busy"))
+            .get(format!(
+                "http://127.0.0.1:{port}/screen?parts=status-display"
+            ))
             .send()
             .await
         {
             if let Ok(text) = resp.text().await {
-                if text == "idle" {
+                let status = part_of_screen(&text, "status-display").unwrap_or_default();
+                if status.contains(r#"data-status="idle""#) {
                     return Ok(());
                 }
             }
@@ -110,6 +114,19 @@ pub async fn wait_until_hidden(page: &playwright_rs::Page, selector: &str, timeo
     }
 }
 
+/// The action area is idle when no send is pending, no check runs and no preview
+/// is open. A stale "Ready" in the status display, before the load that shows
+/// the generation a send started, is not idle: the area keeps its own state until
+/// that load arrives.
+async fn action_area_is_idle(page: &playwright_rs::Page) -> bool {
+    page.evaluate::<(), bool>(
+        "() => { const area = document.getElementById('action-area'); return !!area && area.dataset.state === 'idle'; }",
+        None,
+    )
+    .await
+    .unwrap_or(false)
+}
+
 pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     let locator = page.locator("#status-display").await;
     let start = std::time::Instant::now();
@@ -117,12 +134,12 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
 
     while start.elapsed() < timeout {
         match locator.inner_text().await {
-            Ok(text) if text.contains("Ready") => return,
+            Ok(text) if text.contains("Ready") && action_area_is_idle(page).await => return,
             _ => sleep(Duration::from_millis(200)).await,
         }
     }
     if let Ok(text) = locator.inner_text().await {
-        if text.contains("Ready") {
+        if text.contains("Ready") && action_area_is_idle(page).await {
             return;
         }
         tracing::debug!("Final status-display='{text}'");
@@ -131,16 +148,41 @@ pub async fn wait_for_status_ready(page: &playwright_rs::Page) {
     panic!("Status did not become Ready");
 }
 
-/// Wait for `#status-display` to leave the "Ready" state — i.e. confirm the
-/// submitted action was acknowledged and generation has started.
+/// Wait until the engine has taken or refused a typed command: the command input
+/// is empty (an accepted send consumes it) or the text-check preview is open.
 ///
-/// `send_action` must call this before any `wait_for_status_ready` so the
-/// latter cannot return on the STALE pre-action "Ready" (a race where the
-/// `/action/check` "Thinking..." swap has not yet arrived). The 5s timeout
-/// comfortably covers the `/action/check` round-trip under parallel test load;
-/// the `/status/busy` poll that returns the generating/phase text fires
-/// within 5s of page load, so the status leaves "Ready" promptly once the
-/// action is acknowledged.
+/// `send_action` must call this before any `wait_for_status_ready`. The mock model
+/// answers at once, so the Job can end before the status display ever shows it:
+/// the consumed input is the one signal that stays.
+pub async fn wait_for_action_acknowledged(page: &playwright_rs::Page) {
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+    let acknowledged = || async {
+        page.evaluate::<(), bool>(
+            r#"() => {
+                const input = document.querySelector('#command-form input[name="command"]');
+                return (!!input && input.value === '')
+                    || !!document.querySelector('.text-check-preview');
+            }"#,
+            None,
+        )
+        .await
+        .unwrap_or(false)
+    };
+    while start.elapsed() < timeout {
+        if acknowledged().await {
+            return;
+        }
+        sleep(Duration::from_millis(50)).await;
+    }
+    capture_failure_state(page, "wait_for_action_acknowledged").await;
+    panic!("The command was neither consumed nor held in a preview after 5s");
+}
+
+/// Wait for `#status-display` to leave the "Ready" state: the page asked after a
+/// send, the busy number moved, and the display loaded the generation. A stub test
+/// that sets the stub's status uses it; a full-stack test whose model answers at
+/// once uses `wait_for_action_acknowledged`.
 pub async fn wait_for_status_busy(page: &playwright_rs::Page) {
     let locator = page.locator("#status-display").await;
     let start = std::time::Instant::now();

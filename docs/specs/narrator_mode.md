@@ -36,12 +36,13 @@ Then the new narration's recorded system prompt carries the Interactive Fiction 
 And it no longer carries the Novel system preset
 ```
 
-#### Scenario 23.3: The mode switch re-renders the posture fragment with the IF bundle and nudges the perspective
+#### Scenario 23.3: The mode switch answers nothing, and the Games fragment shows the IF bundle and the nudged perspective
 
 ```gherkin
 Given an active game in Novel mode with perspective "third"
 When the client POST /games/{game_id}/mode with narrator_mode="interactive_fiction"
-Then the response re-renders the posture controls with narrative_perspective "second" selected (the nudge)
+Then the response status is "200 OK" and its body is empty
+And a GET /screen?parts=games renders the posture controls with narrative_perspective "second" selected (the nudge)
 And the system_preset_id select shows the Interactive Fiction bundle's system preset selected
 And the next narration's recorded user prompt resolves the perspective macro to "second" (posture macros render into the post-history splice of the user prompt, not the system prompt)
 ```
@@ -51,7 +52,7 @@ And the next narration's recorded user prompt resolves the perspective macro to 
 ```gherkin
 Given an active game in Novel mode whose perspective was set to "second" through the posture auto-save
 When the client POST /games/{game_id}/mode with narrator_mode="interactive_fiction"
-Then the re-rendered posture controls still show narrative_perspective "second" selected
+Then a GET /screen?parts=games renders the posture controls with narrative_perspective "second" selected
 And the next narration's recorded user prompt still resolves the perspective macro to "second"
 ```
 

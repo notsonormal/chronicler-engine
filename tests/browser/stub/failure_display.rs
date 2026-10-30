@@ -1,18 +1,22 @@
-//! Stub-browser tests for the failure display: the banner, the in-place slots and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for the failure display: the banner, the notice and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
 
-// A failing action route answers 500, so htmx fires `htmx:responseError` with no
+// A failing request answers 500, so htmx fires `htmx:responseError` with no
 // dispatched event.
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::change::ChangeKind;
 use chronicler_engine::domain::model::state::generation_status::GenerationFailureKind;
 use playwright_rs::Viewport;
 
 use super::*;
-use super::support::{StubRunner, active_element_is, poll_now, read_banner, read_command_input};
+use super::support::{
+    StubRunner, active_element_is, ask_once_without_waiting, eval_string, read_banner,
+    read_command_input, start_current,
+};
 
-/// A failed action leaves Send locked until the next idle poll and swaps nothing
-/// on its 500, so this submits the form directly rather than clicking Send.
+/// A failed request swaps nothing on its 500, and the form is submitted directly so the
+/// check does not depend on the Send control.
 async fn submit_command(page: &playwright_rs::Page, command: &str) {
     fill_command_input(page, command).await;
     page.evaluate::<(), ()>(
@@ -30,7 +34,7 @@ async fn error_detail_popover_open(page: &playwright_rs::Page, popover_id: &str)
     page.evaluate::<String, bool>(
         r#"(id) => {
             const popover = document.getElementById(id);
-            return !!popover && popover.classList.contains('open') && !popover.hidden;
+            return !!popover && !popover.hidden;
         }"#,
         Some(&popover_id.to_string()),
     )
@@ -57,9 +61,9 @@ async fn read_inline_error_sizes(page: &playwright_rs::Page) -> InlineErrorSizes
         r#"() => {
             const submit = document.getElementById('submit-btn');
             const toggle = document.querySelector(
-                '#command-form .inline-error-slot .error-details-toggle');
+                '#notice .error-details-toggle');
             const message = document.querySelector(
-                '#command-form .inline-error-slot .error-disclosure-message');
+                '#notice .error-disclosure-message');
             const size = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
             return {
                 sendHeight: submit ? submit.getBoundingClientRect().height : 0,
@@ -95,7 +99,7 @@ async fn measure_action_area(page: &playwright_rs::Page) -> (f64, f64) {
 async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stub: StubServer) {
     let failures = stub.failure_handle();
     failures.set_header_degraded(true);
-    poll_now(&page, "#header").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -126,15 +130,15 @@ async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stu
         .await
         .unwrap();
     let (open, detail) = page
-                .evaluate::<(), (bool, String)>(
-                    r#"() => {
+        .evaluate::<(), (bool, String)>(
+            r#"() => {
                         const popover = document.getElementById('failure-banner-popover');
-                        return [!!popover && popover.classList.contains('open'), popover ? popover.textContent : ''];
+                        return [!!popover && !popover.hidden, popover ? popover.textContent : ''];
                     }"#,
-                    None,
-                )
-                .await
-                .unwrap();
+            None,
+        )
+        .await
+        .unwrap();
     assert!(open, "Details should open the banner's anchored disclosure");
     assert!(
         detail.contains("Mock mock"),
@@ -143,89 +147,110 @@ async fn check_degraded_role_raises_status_banner(page: playwright_rs::Page, stu
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.18
-async fn check_failed_poll_keeps_region_and_marks_banner(
+async fn check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_screen_error(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
-    let failures = stub.failure_handle();
+    let changes = stub.changes_handle();
+    start_current(&page).await;
     let before: String = page
         .evaluate::<(), String>("() => document.getElementById('story-log').innerHTML", None)
         .await
         .unwrap();
 
-    failures.set_polls_failing(true);
-    poll_now(&page, "#story-log").await;
+    changes.set_loads_failing(true);
+    stub.story_log_handle()
+        .append_narration("A line that arrives late.");
+    changes.bump(ChangeKind::STORY);
+    ask_once_without_waiting(&page).await;
+    let shown = || async { read_error_disclosure(&page, "#notice").await };
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
-            Duration::from_millis(100),
-            || async { read_banner(&page).await.0 },
+            Duration::from_millis(50),
+            || async { shown().await.0 }
         )
         .await,
-        "a failed poll should raise the banner"
+        "a failed screen load should show the screen error"
     );
-    let (visible, role, text) = read_banner(&page).await;
-    assert!(visible, "the banner should be up on a failed poll");
-    assert_eq!(role, "alert", "an unreachable banner reports role alert");
+    let (_, line, raw) = shown().await;
+    assert!(line.contains("GET /screen answered 500"), "got {line:?}");
     assert!(
-        text.contains("unreachable"),
-        "the banner should say the engine is unreachable, got {text:?}"
+        raw.contains("read failed"),
+        "the detail names the failure, got {raw:?}"
     );
-
+    let (banner_visible, _, _) = read_banner(&page).await;
+    assert!(
+        !banner_visible,
+        "the engine answered, so the banner must not report it unreachable"
+    );
     let after: String = page
         .evaluate::<(), String>("() => document.getElementById('story-log').innerHTML", None)
         .await
         .unwrap();
     assert_eq!(
         after, before,
-        "a failed poll must leave the story log's last good content in place"
+        "a failed load must leave the story log's last good content in place"
     );
 
-    failures.set_polls_failing(false);
-    poll_now(&page, "#story-log").await;
+    changes.set_loads_failing(false);
+    ask_once(&page).await;
     assert!(
-        wait_for_condition_async(
-            Duration::from_secs(10),
-            Duration::from_millis(100),
-            || async { !read_banner(&page).await.0 },
-        )
-        .await,
-        "a later successful poll should clear the banner"
+        !read_error_disclosure(&page, "#notice").await.0,
+        "a later successful load should clear the screen error"
+    );
+}
+
+// [docs/specs/browser_dashboard.md] SCENARIO: 16.83
+async fn check_a_two_line_answer_shows_its_sentence_once_and_details_hold_only_line_two(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
+    submit_command(&page, "Internal server error").await;
+
+    wait_for_error_disclosure(&page, "#notice", "a failed Action shows in the notice").await;
+    let (_, message, raw) = read_error_disclosure(&page, "#notice").await;
+    assert_eq!(message, "The Action was not sent.");
+    assert_eq!(
+        raw, "Failed to process action: Internal server error",
+        "Details hold only the line after the sentence"
+    );
+    let sentence_count: String = eval_string(
+        &page,
+        "() => String(document.getElementById('notice').textContent.split('The Action was not sent.').length - 1)",
+    )
+    .await;
+    assert_eq!(
+        sentence_count, "1",
+        "the sentence shows once in the report, Details included"
     );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.19
-async fn check_failed_action_renders_inline_slot(page: playwright_rs::Page, _stub: StubServer) {
+async fn check_failed_action_renders_in_the_notice(page: playwright_rs::Page, _stub: StubServer) {
     submit_command(&page, "Internal server error").await;
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(5),
-            Duration::from_millis(50),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
-        )
-        .await,
-        "a failed action should render into the form's inline slot"
-    );
-    let (visible, message, raw) =
-        read_error_disclosure(&page, "#command-form [data-error-slot]").await;
-    assert!(visible, "the inline slot should be shown");
-    assert!(
-        message.contains("action failed"),
-        "the inline message should name the failed action, got {message:?}"
+    wait_for_error_disclosure(&page, "#notice", "a failed Action shows in the notice").await;
+    let (visible, message, raw) = read_error_disclosure(&page, "#notice").await;
+    assert!(visible, "the notice should be shown");
+    assert_eq!(
+        message, "The Action was not sent.",
+        "the short line is the sentence that the server wrote"
     );
     assert!(
         raw.contains("Failed to process action"),
         "the raw server text belongs in the disclosure, got {raw:?}"
     );
+    assert!(
+        !read_error_disclosure(&page, "#command-form [data-error-slot]")
+            .await
+            .0,
+        "a failure shows in the notice, not in the form"
+    );
     let (banner_visible, _, _) = read_banner(&page).await;
     assert!(
         !banner_visible,
-        "an action failure with the server up must not raise the banner"
+        "a failed Action with the server up must not raise the banner"
     );
 
     let sizes = read_inline_error_sizes(&page).await;
@@ -249,10 +274,11 @@ async fn check_failed_action_renders_inline_slot(page: playwright_rs::Page, _stu
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.25
-async fn check_failed_non_poll_action_does_not_raise_unreachable_banner(
+async fn check_failed_request_does_not_raise_unreachable_banner(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
+    open_games_tab(&page).await;
     wait_for_element_children(&page, "#game-posture-controls select", 1).await;
     let stashed = page
         .evaluate::<(), bool>(
@@ -278,28 +304,17 @@ async fn check_failed_non_poll_action_does_not_raise_unreachable_banner(
     .await
     .unwrap();
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(8),
-            Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#game-posture-controls [data-error-slot]")
-                    .await
-                    .0
-            },
-        )
-        .await,
-        "a failed posture save must report in the posture controls' own slot"
-    );
-    let (slot_visible, slot_message, slot_raw) =
-        read_error_disclosure(&page, "#game-posture-controls [data-error-slot]").await;
-    assert!(
-        slot_visible,
-        "a failed non-poll action must report on its own surface"
-    );
-    assert!(
-        slot_message.contains("action failed"),
-        "the slot carries a short line, got {slot_message:?}"
+    wait_for_error_disclosure(
+        &page,
+        "#notice",
+        "a failed posture save shows in the notice",
+    )
+    .await;
+    let (slot_visible, slot_message, slot_raw) = read_error_disclosure(&page, "#notice").await;
+    assert!(slot_visible, "a failed request must report in the notice");
+    assert_eq!(
+        slot_message, "The change was not saved.",
+        "the notice carries the sentence that the server wrote"
     );
     assert!(
         slot_raw.contains("Failed to save posture"),
@@ -309,10 +324,10 @@ async fn check_failed_non_poll_action_does_not_raise_unreachable_banner(
     let (banner_visible, role, banner_text) = read_banner(&page).await;
     assert!(
         !banner_visible,
-        "a failed action on a reachable server must not raise the banner, got {banner_text:?} ({role})"
+        "a failed request on a reachable server must not raise the banner, got {banner_text:?} ({role})"
     );
 
-    let region_kept = page
+    let part_kept = page
         .evaluate::<(), bool>(
             r#"() => {
                     const now = document.getElementById('game-posture-controls');
@@ -322,20 +337,17 @@ async fn check_failed_non_poll_action_does_not_raise_unreachable_banner(
         )
         .await
         .unwrap();
-    assert!(
-        region_kept,
-        "a failed action must leave its region in place"
-    );
+    assert!(part_kept, "a failed request must leave its part in place");
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.26
-async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page, stub: StubServer) {
+async fn check_status_details_popover_survives_a_load(page: playwright_rs::Page, stub: StubServer) {
     let status = stub.status_handle();
     status.set(StubStatus::Error(
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -350,7 +362,7 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
             },
         )
         .await,
-        "the status poll should swap in the clamped error disclosure"
+        "the status load should swap in the clamped error disclosure"
     );
 
     page.locator("#status-display .error-details-toggle")
@@ -373,7 +385,7 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
             .await
             .unwrap();
 
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
 
     assert!(
                 wait_for_condition_async(
@@ -385,9 +397,9 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
                                 const now = document.querySelector('#status-display .error-details-toggle');
                                 const popover = document.getElementById('status-error-popover');
                                 return !!now
-                                    && now !== window.__statusToggleBefore
+                                    && now === window.__statusToggleBefore
                                     && !!popover
-                                    && popover.classList.contains('open');
+                                    && !popover.hidden;
                             }"#,
                             None,
                         )
@@ -396,11 +408,11 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
                     },
                 )
                 .await,
-                "a poll that replaced the disclosure must not collapse it"
+                "a load must keep the disclosure and not collapse it"
             );
     assert!(
         active_element_is(&page, "#status-display .error-details-toggle").await,
-        "focus should return to the disclosure's toggle after the poll"
+        "focus should return to the disclosure's toggle after the load"
     );
 
     page.keyboard().press("Escape", None).await.unwrap();
@@ -416,13 +428,13 @@ async fn check_status_details_popover_survives_a_poll(page: playwright_rs::Page,
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.27
-async fn check_banner_details_popover_survives_a_header_poll(
+async fn check_banner_details_popover_survives_a_banner_load(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let failures = stub.failure_handle();
     failures.set_header_degraded(true);
-    poll_now(&page, "#header").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -453,7 +465,7 @@ async fn check_banner_details_popover_survives_a_header_poll(
             .await
             .unwrap();
 
-    poll_now(&page, "#header").await;
+    load_screen_now(&page).await;
 
     assert!(
                 wait_for_condition_async(
@@ -465,9 +477,9 @@ async fn check_banner_details_popover_survives_a_header_poll(
                                 const now = document.querySelector('#failure-banner-degraded .error-details-toggle');
                                 const popover = document.getElementById('failure-banner-popover');
                                 return !!now
-                                    && now !== window.__bannerToggleBefore
+                                    && now === window.__bannerToggleBefore
                                     && !!popover
-                                    && popover.classList.contains('open');
+                                    && !popover.hidden;
                             }"#,
                             None,
                         )
@@ -476,16 +488,16 @@ async fn check_banner_details_popover_survives_a_header_poll(
                     },
                 )
                 .await,
-                "the header poll's out-of-band banner refresh must not collapse the open disclosure"
+                "a load of the banner must keep its open disclosure, on the same node"
             );
     assert!(
         active_element_is(&page, "#failure-banner-degraded .error-details-toggle").await,
-        "focus should return to the banner disclosure's toggle after the poll"
+        "focus should return to the banner disclosure's toggle after the load"
     );
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.20
-async fn check_dead_engine_renders_inline_error_for_pending_action(
+async fn check_dead_engine_shows_only_the_banner_for_a_pending_request(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -498,25 +510,17 @@ async fn check_dead_engine_renders_inline_error_for_pending_action(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { read_banner(&page).await.0 },
         )
         .await,
-        "a dead engine should still render the form's inline error"
-    );
-    let (visible, message, raw) =
-        read_error_disclosure(&page, "#command-form [data-error-slot]").await;
-    assert!(visible, "the inline slot should be shown");
-    assert!(
-        message.contains("unreachable"),
-        "the inline message should say the engine is unreachable, got {message:?}"
+        "a dead engine raises the banner"
     );
     assert!(
-        raw.contains("No response"),
-        "a dead engine's request has no response body, got {raw:?}"
+        !read_error_disclosure(&page, "#notice").await.0
+            && !read_error_disclosure(&page, "#command-form [data-error-slot]")
+                .await
+                .0,
+        "no answer shows in the banner only: no notice and no slot holds a report"
     );
 
     let (banner_visible, role, _) = read_banner(&page).await;
@@ -528,7 +532,7 @@ async fn check_dead_engine_renders_inline_error_for_pending_action(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.40
-async fn check_failed_confirm_reports_on_the_command_form_slot(
+async fn check_a_confirm_with_no_answer_raises_the_banner_and_keeps_the_preview(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
@@ -545,31 +549,35 @@ async fn check_failed_confirm_reports_on_the_command_form_slot(
         .click(None)
         .await
         .unwrap();
-    wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
 
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { read_banner(&page).await.0 },
         )
         .await,
-        "a confirm that cannot reach the engine must report on the command form's slot"
-    );
-    let (visible, message, raw) =
-        read_error_disclosure(&page, "#command-form [data-error-slot]").await;
-    assert!(visible, "the command form's slot should be shown");
-    assert!(
-        message.contains("unreachable"),
-        "the slot should say the engine is unreachable, got {message:?}"
+        "a confirm that cannot reach the engine raises the banner"
     );
     assert!(
-        raw.contains("No response"),
-        "a dead engine's request has no response body, got {raw:?}"
+        read_banner(&page).await.2.contains("unreachable"),
+        "the banner says the engine is unreachable"
+    );
+    assert!(
+        !read_error_disclosure(&page, "#notice").await.0
+            && !read_error_disclosure(&page, "#command-form [data-error-slot]")
+                .await
+                .0,
+        "no notice and no slot holds a report"
+    );
+    assert_eq!(
+        page.locator("#corrected-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "look at the castle",
+        "the preview stays open with the corrected text"
     );
     assert_eq!(
         read_command_input(&page).await,
@@ -579,7 +587,7 @@ async fn check_failed_confirm_reports_on_the_command_form_slot(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.40
-async fn check_refused_confirm_reports_on_the_command_form_slot(
+async fn check_a_failed_confirm_reports_in_the_notice_and_keeps_the_preview(
     page: playwright_rs::Page,
     _stub: StubServer,
 ) {
@@ -591,41 +599,37 @@ async fn check_refused_confirm_reports_on_the_command_form_slot(
         .click(None)
         .await
         .unwrap();
-    wait_until_hidden(&page, ".text-check-preview", Duration::from_secs(5)).await;
 
-    assert!(
-        wait_for_condition_async(
-            Duration::from_secs(10),
-            Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
-        )
-        .await,
-        "a refused confirm must report on the command form's slot"
+    wait_for_error_disclosure(&page, "#notice", "a failed confirm reports in the notice").await;
+    let (visible, message, raw) = read_error_disclosure(&page, "#notice").await;
+    assert!(visible, "the notice should be shown");
+    assert_eq!(
+        message, "The Action was not sent.",
+        "the short line is the sentence that the server wrote"
     );
-    let (visible, message, _) =
-        read_error_disclosure(&page, "#command-form [data-error-slot]").await;
-    assert!(visible, "the command form's slot should be shown");
-    assert!(
-        message.contains("action failed"),
-        "the short line names the failed action, got {message:?}"
-    );
-    assert!(
-        !message.contains("Failed to process action"),
-        "a 500's server text stays behind the disclosure, got {message:?}"
-    );
-    let (_, _, raw) = read_error_disclosure(&page, "#command-form [data-error-slot]").await;
     assert!(
         raw.contains("Failed to process action"),
         "the server's own text belongs in the disclosure, got {raw:?}"
     );
+    assert!(
+        !read_error_disclosure(&page, "#command-form [data-error-slot]")
+            .await
+            .0,
+        "the form's slot holds no report"
+    );
+    assert_eq!(
+        page.locator("#corrected-textarea")
+            .await
+            .input_value(None)
+            .await
+            .unwrap(),
+        "look at the castle",
+        "the preview stays open with the corrected text"
+    );
     assert_eq!(
         read_command_input(&page).await,
         "look at the casle",
-        "a refused confirm must keep the typed command"
+        "a failed confirm must keep the typed command"
     );
 }
 
@@ -641,7 +645,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
         GenerationFailureKind::Other,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
@@ -656,7 +660,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
             },
         )
         .await,
-        "the status poll should swap in the clamped error disclosure"
+        "the status load should swap in the clamped error disclosure"
     );
 
     let (message, raw) = page
@@ -679,7 +683,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
     );
     let raw_hidden: bool = page
                 .evaluate::<(), bool>(
-                    "() => { const p = document.querySelector('#status-error-popover'); return !!p && !p.classList.contains('open'); }",
+                    "() => { const p = document.querySelector('#status-error-popover'); return !!p && p.hidden; }",
                     None,
                 )
                 .await
@@ -705,23 +709,23 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
         .await
         .unwrap();
     let (open, raw_shown) = page
-                .evaluate::<(), (bool, String)>(
-                    r#"() => {
+        .evaluate::<(), (bool, String)>(
+            r#"() => {
                         const popover = document.getElementById('status-error-popover');
                         const raw = popover ? popover.querySelector('.error-detail-raw') : null;
-                        return [!!popover && popover.classList.contains('open'), raw ? raw.textContent.trim() : ''];
+                        return [!!popover && !popover.hidden, raw ? raw.textContent.trim() : ''];
                     }"#,
-                    None,
-                )
-                .await
-                .unwrap();
+            None,
+        )
+        .await
+        .unwrap();
     assert!(open, "Details should open the anchored disclosure");
     assert_eq!(raw, raw_shown, "the disclosure shows the raw text");
 
     page.keyboard().press("Escape", None).await.unwrap();
     let closed: bool = page
                 .evaluate::<(), bool>(
-                    "() => { const p = document.getElementById('status-error-popover'); return !!p && !p.classList.contains('open'); }",
+                    "() => { const p = document.getElementById('status-error-popover'); return !!p && p.hidden; }",
                     None,
                 )
                 .await
@@ -729,7 +733,7 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
     assert!(closed, "Escape should close the disclosure");
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     wait_for_status_ready(&page).await;
     let gone: bool = page
         .evaluate::<(), bool>(
@@ -744,14 +748,8 @@ async fn check_generation_error_clamps_to_one_line_with_popover(
     );
 }
 
-fn carries_state(class_name: &str, state: &str) -> bool {
-    class_name.split_whitespace().any(|class| class == state)
-}
-
 #[derive(serde::Deserialize)]
 struct StatusState {
-    #[serde(rename = "className")]
-    class_name: String,
     #[serde(rename = "textColour")]
     text_colour: String,
     #[serde(rename = "paletteError")]
@@ -778,7 +776,6 @@ async fn read_status_state(page: &playwright_rs::Page) -> StatusState {
                     measured.neededHeight <= measured.boxHeight + 1;
             }
             return {
-                className: display.className,
                 textColour: text ? getComputedStyle(text).color : '',
                 paletteError,
                 fits: readable,
@@ -807,60 +804,50 @@ const MEASURE_CLAMPED_TEXT: &str = r#"
                     clientWidth: text.clientWidth,
                     overhang: box.right - display.getBoundingClientRect().right,
                 };
-                text.style.display = 'block';
-                text.style.overflow = 'visible';
-                text.style.maxHeight = 'none';
-                text.style.webkitLineClamp = 'none';
+                text.setAttribute(
+                    'style',
+                    'display: block; overflow: visible; max-height: none; -webkit-line-clamp: none;',
+                );
                 measured.neededHeight = text.getBoundingClientRect().height;
-                text.style.display = '';
-                text.style.overflow = '';
-                text.style.maxHeight = '';
-                text.style.webkitLineClamp = '';
+                text.removeAttribute('style');
                 return measured;
             };
 "#;
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.41
-async fn check_generation_error_takes_the_error_class_and_reads_without_details(
+async fn check_generation_error_is_drawn_in_the_error_colour_and_reads_without_details(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let status = stub.status_handle();
     let ready = read_status_state(&page).await;
-    assert!(
-        carries_state(&ready.class_name, "ready") && !carries_state(&ready.class_name, "error"),
-        "an idle dashboard must carry the ready state, got {:?}",
-        ready.class_name
+    assert_ne!(
+        ready.text_colour, ready.palette_error,
+        "Ready is not drawn in the error colour"
     );
 
     status.set(StubStatus::Error(
         GenerationFailureKind::PromptTooLong,
         "narration failed".to_string(),
     ));
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async { read_status_state(&page).await.class_name.contains("error") },
+            || async {
+                let state = read_status_state(&page).await;
+                state.text_colour == state.palette_error
+            },
         )
         .await,
-        "a generation error must put the status display into its error state"
+        "a generation error must be drawn in the palette's error colour"
     );
 
     let error = read_status_state(&page).await;
-    assert!(
-        carries_state(&error.class_name, "error") && !carries_state(&error.class_name, "ready"),
-        "the error state must replace the ready state, not sit under it, got {:?}",
-        error.class_name
-    );
     assert_ne!(
         error.text_colour, ready.text_colour,
         "the error must not be drawn in the Ready colour"
-    );
-    assert_eq!(
-        error.text_colour, error.palette_error,
-        "the error must be drawn in the palette's error colour"
     );
     assert!(
         error.fits,
@@ -868,22 +855,15 @@ async fn check_generation_error_takes_the_error_class_and_reads_without_details(
     );
 
     status.set(StubStatus::Idle);
-    poll_now(&page, "#status-display").await;
+    load_screen_now(&page).await;
     wait_for_status_ready(&page).await;
     let recovered = read_status_state(&page).await;
-    assert!(
-        carries_state(&recovered.class_name, "ready")
-            && !carries_state(&recovered.class_name, "error"),
-        "returning to Ready must restore the ready state, got {:?}",
-        recovered.class_name
-    );
     assert_ne!(
         recovered.text_colour, error.palette_error,
         "Ready must not keep the error's colour"
     );
 }
 
-/// `needed_height` is the height the sentence needs once the clamp is lifted off it.
 #[derive(serde::Deserialize)]
 struct ClampedLine {
     text: String,
@@ -973,7 +953,7 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
             };
             let sentence = kind.line(&raw);
             status.set(StubStatus::Error(kind, raw));
-            poll_now(&page, "#status-display").await;
+            load_screen_now(&page).await;
             assert!(
                 wait_for_condition_async(
                     Duration::from_secs(10),
@@ -1027,42 +1007,53 @@ async fn check_every_failure_sentence_reads_in_full(page: playwright_rs::Page, s
     }
 }
 
-// The two load-only tab panels fetch once per page load, so this test arms the
-// stub and reloads rather than waiting for a poll cycle.
+// The stub fails every panel load from the start, so the first load of each tab
+// reports the failure.
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.33
-async fn check_failed_panel_load_reports_inside_the_panel(
+async fn check_failed_panel_load_reports_in_the_screen_error(
     page: playwright_rs::Page,
     stub: StubServer,
 ) {
     let url = stub.url();
     stub.failure_handle().set_panel_loads_failing(true);
     page.goto(&url, None).await.unwrap();
+    wait_for_screen_current(&page).await;
 
-    for (tab, panel) in [("worlds", ".worlds-panel"), ("games", ".games-panel")] {
+    for (tab, panel) in [
+        ("worlds", ".worlds-panel"),
+        ("games", ".games-panel"),
+        ("settings", ".settings-panel"),
+        ("prompt-presets", ".prompt-presets-panel"),
+    ] {
         page.locator(&format!(r#"[data-tab="{tab}"]"#))
             .await
             .click(None)
             .await
             .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
 
-        let slot = format!("{panel} [data-error-slot]");
+        wait_for_error_disclosure(
+            &page,
+            "#notice",
+            "a failed {tab} panel load must report in the screen error",
+        )
+        .await;
+        let (_, message, raw) = read_error_disclosure(&page, "#notice").await;
         assert!(
-            wait_for_condition_async(
-                Duration::from_secs(5),
-                Duration::from_millis(50),
-                || async { read_error_disclosure(&page, &slot).await.0 },
-            )
-            .await,
-            "a failed {tab} panel load must report inside the panel"
-        );
-        let (_, message, raw) = read_error_disclosure(&page, &slot).await;
-        assert!(
-            !message.is_empty() && !message.contains("panel load failed"),
-            "the panel shows a short line, got {message:?}"
+            message.contains("GET /screen answered 500") && !message.contains("panel load failed"),
+            "the slot shows a short line, got {message:?}"
         );
         assert!(
             raw.contains("panel load failed"),
             "the server's own text belongs in the disclosure, got {raw:?}"
+        );
+        assert!(
+            page.evaluate::<String, bool>(
+                "(selector) => document.querySelector(selector).childNodes.length === 0",
+                Some(&panel.to_string()),
+            )
+            .await
+            .unwrap(),
+            "the {tab} part never loaded, so it holds nothing"
         );
     }
 
@@ -1074,23 +1065,28 @@ async fn check_failed_panel_load_reports_inside_the_panel(
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.34
-async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _stub: StubServer) {
+async fn check_failed_row_button_reports_in_the_notice(
+    page: playwright_rs::Page,
+    _stub: StubServer,
+) {
     page.on_dialog(|dialog| async move { dialog.accept(None).await })
         .await
         .unwrap();
 
-    for (tab, row, control, failure) in [
+    for (tab, row, control, failure, sentence) in [
         (
             "worlds",
             ".world-item",
             ".worlds-list .world-item:first-child .btn-danger",
             "Stub world delete failure",
+            "The World \"Redmist Estate\" was not deleted.",
         ),
         (
             "games",
             ".game-item",
             ".game-item.active .btn-reset-small",
             "Stub reset failure",
+            "The Game was not reset.",
         ),
     ] {
         page.locator(&format!(r#"[data-tab="{tab}"]"#))
@@ -1099,6 +1095,9 @@ async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _
             .await
             .unwrap_or_else(|e| panic!("click tab '{tab}' failed: {e}"));
 
+        // A section loads its panel when it opens, so the rows exist once the
+        // control does.
+        wait_until_visible(&page, control, Duration::from_secs(5)).await;
         let rows_before = page.query_selector_all(row).await.unwrap_or_default().len();
         page.locator(control)
             .await
@@ -1106,20 +1105,22 @@ async fn check_failed_row_action_reports_in_the_row(page: playwright_rs::Page, _
             .await
             .unwrap_or_else(|e| panic!("click '{control}' failed: {e}"));
 
-        let slot = format!("{row} > [data-error-slot]");
+        wait_for_error_disclosure(
+            &page,
+            "#notice",
+            "a failed request in a row must report in the notice",
+        )
+        .await;
+        let (_, message, raw) = read_error_disclosure(&page, "#notice").await;
         assert!(
-            wait_for_condition_async(
-                Duration::from_secs(5),
-                Duration::from_millis(50),
-                || async { read_error_disclosure(&page, &slot).await.0 },
-            )
-            .await,
-            "a failed action in a {tab} row must report in that row"
+            message == sentence,
+            "the notice shows the sentence of the server, got {message:?}"
         );
-        let (_, message, raw) = read_error_disclosure(&page, &slot).await;
         assert!(
-            !message.is_empty() && !message.contains(failure),
-            "the row shows a short line, got {message:?}"
+            !read_error_disclosure(&page, &format!("{row} > [data-error-slot]"))
+                .await
+                .0,
+            "the row holds no report"
         );
         assert!(
             raw.contains(failure),
@@ -1153,14 +1154,10 @@ async fn check_dead_engine_keeps_the_typed_command(page: playwright_rs::Page, st
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { read_banner(&page).await.0 },
         )
         .await,
-        "a dead engine should still render the form's inline error"
+        "a dead engine raises the banner"
     );
     assert_eq!(
         read_command_input(&page).await,
@@ -1170,10 +1167,7 @@ async fn check_dead_engine_keeps_the_typed_command(page: playwright_rs::Page, st
 }
 
 // [docs/specs/browser_dashboard.md] SCENARIO: 16.38
-async fn check_engine_recovery_clears_the_inline_error_and_banner(
-    page: playwright_rs::Page,
-    stub: StubServer,
-) {
+async fn check_engine_recovery_clears_the_banner(page: playwright_rs::Page, stub: StubServer) {
     let lifecycle = stub.lifecycle_handle();
     lifecycle.stop();
     wait_until_port_closed(lifecycle.addr()).await;
@@ -1183,34 +1177,22 @@ async fn check_engine_recovery_clears_the_inline_error_and_banner(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { read_banner(&page).await.0 },
         )
         .await,
-        "a dead engine must render the form's inline error before the recovery"
+        "a dead engine raises the banner before the recovery"
     );
 
     lifecycle.restart().await;
-    poll_now(&page, "#story-log").await;
+    load_screen_now(&page).await;
     assert!(
         wait_for_condition_async(
             Duration::from_secs(10),
             Duration::from_millis(100),
-            || async {
-                !read_error_disclosure(&page, "#command-form [data-error-slot]")
-                    .await
-                    .0
-            },
+            || async { !read_banner(&page).await.0 },
         )
         .await,
-        "the engine's recovery must clear the inline error"
-    );
-    assert!(
-        !read_banner(&page).await.0,
-        "the inline error and the banner must clear together"
+        "the engine's recovery must clear the banner"
     );
     assert_eq!(
         read_command_input(&page).await,
@@ -1231,19 +1213,19 @@ async fn run_failure_display_banner_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_poll_keeps_region_and_marks_banner,
+            check_failed_screen_load_leaves_the_parts_unchanged_and_shows_the_screen_error,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_status_details_popover_survives_a_poll,
+            check_status_details_popover_survives_a_load,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_banner_details_popover_survives_a_header_poll,
+            check_banner_details_popover_survives_a_banner_load,
         )
         .await;
     runner.finish().await;
@@ -1255,31 +1237,39 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Error,
-            check_failed_action_renders_inline_slot,
-        )
-        .await;
-    runner
-        .run(
-            StubActionOutcome::Pending,
-            check_failed_non_poll_action_does_not_raise_unreachable_banner,
-        )
-        .await;
-    runner
-        .run(
-            StubActionOutcome::Pending,
-            check_dead_engine_renders_inline_error_for_pending_action,
-        )
-        .await;
-    runner
-        .run(
-            StubActionOutcome::Pending,
-            check_failed_confirm_reports_on_the_command_form_slot,
+            check_failed_action_renders_in_the_notice,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Error,
-            check_refused_confirm_reports_on_the_command_form_slot,
+            check_a_two_line_answer_shows_its_sentence_once_and_details_hold_only_line_two,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Pending,
+            check_failed_request_does_not_raise_unreachable_banner,
+        )
+        .await;
+    runner
+        .run_without_convergence(
+            "the engine stays stopped",
+            StubActionOutcome::Pending,
+            check_dead_engine_shows_only_the_banner_for_a_pending_request,
+        )
+        .await;
+    runner
+        .run_without_convergence(
+            "the engine stays stopped",
+            StubActionOutcome::Pending,
+            check_a_confirm_with_no_answer_raises_the_banner_and_keeps_the_preview,
+        )
+        .await;
+    runner
+        .run(
+            StubActionOutcome::Error,
+            check_a_failed_confirm_reports_in_the_notice_and_keeps_the_preview,
         )
         .await;
     runner
@@ -1291,7 +1281,7 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_generation_error_takes_the_error_class_and_reads_without_details,
+            check_generation_error_is_drawn_in_the_error_colour_and_reads_without_details,
         )
         .await;
     runner
@@ -1301,19 +1291,21 @@ async fn run_failure_display_slot_checks() {
         )
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the panel loads keep failing",
             StubActionOutcome::Pending,
-            check_failed_panel_load_reports_inside_the_panel,
+            check_failed_panel_load_reports_in_the_screen_error,
         )
         .await;
     runner
         .run(
             StubActionOutcome::Pending,
-            check_failed_row_action_reports_in_the_row,
+            check_failed_row_button_reports_in_the_notice,
         )
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the engine stays stopped",
             StubActionOutcome::Pending,
             check_dead_engine_keeps_the_typed_command,
         )
@@ -1321,7 +1313,7 @@ async fn run_failure_display_slot_checks() {
     runner
         .run(
             StubActionOutcome::Pending,
-            check_engine_recovery_clears_the_inline_error_and_banner,
+            check_engine_recovery_clears_the_banner,
         )
         .await;
     runner.finish().await;

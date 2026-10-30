@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure.
+//! HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure, and the Edit form of an unknown World.
 
 use std::sync::Arc;
 
@@ -10,7 +10,9 @@ use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{TestAppBuilder, TestMap, empty_sqlite_storage};
 
 use crate::support::http_fixtures::world_form_body;
-use crate::support::http_requests::{fetch_body, post_form, post_form_with_hx, response_body};
+use crate::support::http_requests::{
+    fetch_body, post_form, post_form_with_hx, response_body, fetch_part,
+};
 use crate::support::http_assertions::assert_option_selected;
 
 fn posture_world() -> WorldCard {
@@ -124,12 +126,13 @@ async fn test_world_posture_autosave_returns_saved_span_http() {
         "narrative_tense=present",
     )
     .await;
-    assert!(resp.status().is_success(), "the auto-save should succeed");
-    let body = response_body(resp).await;
-    assert!(
-        body.contains("Saved") && body.contains("posture-status"),
-        "the auto-save must return the Saved status span, got: {body:?}"
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::OK,
+        "the auto-save should succeed"
     );
+    let body = response_body(resp).await;
+    assert_eq!(body, "", "a saved posture answers nothing");
 
     let (stored, _) = updated_world(&state).await;
     assert_eq!(
@@ -150,9 +153,10 @@ async fn test_world_posture_invalid_value_returns_error_span_http() {
         "narrator_mode=warp_drive",
     )
     .await;
-    assert!(
-        resp.status().is_success(),
-        "an invalid value is a form error, not a 500"
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::BAD_REQUEST,
+        "an invalid value is a refusal: non-2xx, so the select goes back"
     );
     let body = response_body(resp).await;
     assert!(
@@ -295,7 +299,15 @@ async fn test_world_edit_form_renders_posture_selects_http() {
 
     assert!(
         html.contains(r#"id="world-posture-status""#),
-        "the posture status target must be rendered: {html}"
+        "the posture status flag must be rendered: {html}"
+    );
+    assert!(
+        !html.contains(r#"data-error-slot="world-posture""#),
+        "the posture group is no form with typed input, so its report shows in the notice: {html}"
+    );
+    assert!(
+        html.contains("data-dialog-form") && html.contains(r#"<h2 id="edit-dialog-title">"#),
+        "the editor is a dialog form with the title that names the dialog: {html}"
     );
     // The slot a failed create or update reports into, so the client keeps the
     // panel the failure describes.
@@ -307,6 +319,10 @@ async fn test_world_edit_form_renders_posture_selects_http() {
         html.contains(r#"hx-post="/worlds/posture_world/posture""#),
         "the posture selects must auto-save to this world: {html}"
     );
+    assert!(
+        !html.contains("hx-target"),
+        "the editor targets no element: its saves swap nothing: {html}"
+    );
 }
 
 // The world list is a plain server render; a GET observes the pluralised
@@ -317,8 +333,25 @@ async fn test_worlds_fragment_pluralises_game_count_http() {
     // `default_test` seeds one World with exactly one game in it.
     let (app, state) = TestAppBuilder::default_test().build_with_state();
 
-    let html = fetch_body(&app, "/fragment/worlds").await;
+    let html = fetch_part(&app, "worlds").await;
 
+    assert!(
+        html.contains(r#"<li class="world-item" id="world-test">"#),
+        "a World row carries a stable id, so a load keeps the row: {html}"
+    );
+    assert!(
+        html.contains(r##"hx-get="/fragment/worlds/new" hx-target="#edit-dialog-body""##)
+            && html.contains(r##"hx-get="/worlds/test/edit" hx-target="#edit-dialog-body""##),
+        "the Create and Edit controls open the dialog: {html}"
+    );
+    assert!(
+        !html.contains("world-editor") && !html.contains("editor-slot"),
+        "the list renders no editor slot: {html}"
+    );
+    assert!(
+        !html.contains("worlds-panel"),
+        "the shell's .worlds-panel is the part: the fragment repeats no root: {html}"
+    );
     assert!(
         html.contains("(1 game)"),
         "a World with one game must show a singular count: {html}"
@@ -333,7 +366,7 @@ async fn test_worlds_fragment_pluralises_game_count_http() {
         .create_game("test", "test_player")
         .expect("create a second game");
 
-    let html = fetch_body(&app, "/fragment/worlds").await;
+    let html = fetch_part(&app, "worlds").await;
     assert!(
         html.contains("(2 games)"),
         "a World with two games must use the plural count: {html}"
@@ -386,8 +419,8 @@ async fn test_world_create_existing_key_is_refused_http() {
 }
 
 // A storage failure is not a client refusal: the create handler answers the
-// shared error fragment with a 500, so the client reports it in the world
-// form's own slot rather than swapping it into the panel it describes.
+// shared error fragment with a 500, so the client reports it in the notice
+// rather than swapping it into the panel it describes.
 // [docs/specs/worlds.md] SCENARIO: 25.9
 #[tokio::test]
 async fn test_world_create_storage_failure_renders_error_fragment_http() {
@@ -431,7 +464,11 @@ async fn test_world_delete_refusal_pluralises_the_game_count_http() {
     let (app, state) = TestAppBuilder::default_test().build_with_state();
 
     let resp = post_form(&app, "/worlds/test/delete", "").await;
-    assert_eq!(resp.status(), http::StatusCode::OK);
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::BAD_REQUEST,
+        "a refusal is non-2xx, so the row stays and its slot shows the refusal"
+    );
     let html = response_body(resp).await;
     assert!(
         html.contains("Cannot delete world with 1 game"),
@@ -483,6 +520,11 @@ async fn test_world_delete_removes_a_world_with_no_games_http() {
             .is_none(),
         "the deleted World is no longer stored"
     );
+    let list = fetch_part(&app, "worlds").await;
+    assert!(
+        !list.contains(r#"id="world-posture_world""#),
+        "a following list does not hold the deleted World: {list}"
+    );
 
     let resp = post_form(&app, "/worlds/nonexistent/delete", "").await;
     assert_eq!(resp.status(), http::StatusCode::OK);
@@ -510,5 +552,231 @@ async fn test_world_delete_storage_failure_renders_error_fragment_http() {
     assert!(
         body.contains("error-message") && body.contains("delete_world failure"),
         "the error fragment must name the storage failure: {body:?}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.14
+#[tokio::test]
+async fn test_unknown_world_edit_form_answers_not_found_and_opens_no_dialog_http() {
+    let (app, _state) = TestAppBuilder::default_test().build_with_state();
+
+    let request = http::Request::builder()
+        .uri("/worlds/does-not-exist/edit")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp = tower::util::ServiceExt::oneshot(app.clone(), request)
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        http::StatusCode::NOT_FOUND,
+        "a gone record answers non-2xx, so no dialog opens"
+    );
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("does-not-exist") && body.contains("not found"),
+        "the body names the unknown World: {body}"
+    );
+    assert!(
+        !body.contains("<form"),
+        "an unknown World must not render an edit form: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.15
+#[tokio::test]
+async fn test_world_update_storage_failure_names_the_typed_name_http() {
+    let storage = Arc::new(empty_sqlite_storage().with_failure(
+        StorageCall::UpdateWorld,
+        TestOverride::internal("update_world failure"),
+    ));
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    let world = posture_world();
+    storage
+        .seed_world(&world, &TestMap::single_room("start"))
+        .expect("seed posture world");
+
+    let typed = WorldCard {
+        name: "Typed Name".to_string(),
+        ..world
+    };
+    let resp = post_form(
+        &app,
+        "/worlds/posture_world",
+        &world_form_body(&typed, &TestMap::single_room("start")),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+    assert!(
+        !body.contains("Posture World"),
+        "the sentence does not name the stored name: {body}"
+    );
+    assert!(
+        body.contains("update_world failure"),
+        "the engine text follows: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.16
+#[tokio::test]
+async fn test_world_update_of_a_gone_world_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+    let typed = WorldCard {
+        key: "no_such_world".to_string(),
+        name: "Typed Name".to_string(),
+        ..posture_world()
+    };
+
+    let resp = post_form(
+        &app,
+        "/worlds/no_such_world",
+        &world_form_body(&typed, &TestMap::single_room("start")),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not saved"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+/// The field of a World form that holds text that is not JSON.
+enum BrokenField {
+    /// The map field holds text that is not JSON.
+    Map,
+    /// The Scenarios field holds text that is not JSON.
+    Scenarios,
+}
+
+/// A World form whose map or Scenarios field holds text that is not JSON.
+fn world_form_with_broken(field: BrokenField) -> String {
+    let broken = "{broken".to_string();
+    let valid_map = serde_json::to_string(&TestMap::single_room("start")).expect("map serializes");
+    let (map, scenarios) = match field {
+        BrokenField::Map => (broken, "[]".to_string()),
+        BrokenField::Scenarios => (valid_map, broken),
+    };
+    serde_urlencoded::to_string([
+        ("key", "posture_world"),
+        ("name", "Typed Name"),
+        ("description", "d"),
+        ("global_rules", ""),
+        ("map_json", map.as_str()),
+        ("scenarios_json", scenarios.as_str()),
+    ])
+    .expect("form serializes")
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.17
+#[tokio::test]
+async fn test_world_update_with_a_map_that_does_not_parse_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+
+    let resp = post_form(
+        &app,
+        "/worlds/posture_world",
+        &world_form_with_broken(BrokenField::Map),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not saved: Invalid map JSON"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.18
+#[tokio::test]
+async fn test_world_update_with_scenarios_that_do_not_parse_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+
+    let resp = post_form(
+        &app,
+        "/worlds/posture_world",
+        &world_form_with_broken(BrokenField::Scenarios),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not saved: Invalid scenarios JSON"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.19
+#[tokio::test]
+async fn test_world_create_with_a_map_that_does_not_parse_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+
+    let resp = post_form(&app, "/worlds", &world_form_with_broken(BrokenField::Map)).await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not created: Invalid map JSON"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.20
+#[tokio::test]
+async fn test_world_create_with_scenarios_that_do_not_parse_names_the_typed_name_http() {
+    let (app, _state) = posture_world_app();
+
+    let resp = post_form(
+        &app,
+        "/worlds",
+        &world_form_with_broken(BrokenField::Scenarios),
+    )
+    .await;
+
+    assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    let body = response_body(resp).await;
+    assert!(
+        body.contains("The World &quot;Typed Name&quot; was not created: Invalid scenarios JSON"),
+        "the sentence names the typed name: {body}"
+    );
+}
+
+// [docs/specs/worlds.md] SCENARIO: 25.13
+#[tokio::test]
+async fn test_world_row_shows_a_shortened_description_http() {
+    let storage_world = WorldCard {
+        key: "long_world".to_string(),
+        name: "Long World".to_string(),
+        description: format!("Opening {} FINAL-WORD", "lantern ".repeat(60)),
+        ..posture_world()
+    };
+    let storage = Arc::new(empty_sqlite_storage());
+    let (app, _state) = TestAppBuilder::default_test()
+        .storage(Arc::clone(&storage))
+        .build_with_state();
+    storage
+        .seed_world(&storage_world, &TestMap::single_room("start"))
+        .expect("seed the long World");
+
+    let html = fetch_part(&app, "worlds").await;
+
+    assert!(
+        html.contains("Opening lantern") && html.contains('…'),
+        "the row shows the start of the description and a cut mark: {html}"
+    );
+    assert!(
+        !html.contains("FINAL-WORD"),
+        "the row does not show the end of a long description: {html}"
     );
 }

@@ -308,9 +308,9 @@ fn test_preset_edit_form_html_escapes_special_chars() {
     };
     let html = preset_edit_form_html(&preset, "quantifier");
     assert!(!html.contains("<Name>"));
-    assert!(html.contains("&lt;Name&gt;"));
+    assert!(html.contains("&#60;Name&#62;"));
     assert!(html.contains("&quot;Text&quot;"));
-    assert!(html.contains(r#"hx-post="/prompt-presets/&lt;id&gt;""#));
+    assert!(html.contains(r#"hx-post="/prompt-presets/&#60;id&#62;""#));
 }
 
 #[test]
@@ -337,7 +337,7 @@ fn test_preset_view_form_html_renders() {
     assert!(html.contains("readonly"));
     assert!(html.contains("Close</button>"));
     assert!(!html.contains("Save</button>"));
-    assert!(html.contains(r#"hx-get="/fragment/prompt-presets/view-1""#));
+    assert!(html.contains("data-close-dialog"));
 }
 
 #[test]
@@ -392,7 +392,6 @@ fn test_preset_view_form_html_escapes_special_chars() {
     };
     let html = preset_view_form_html(&preset);
     assert!(!html.contains("<Name>"));
-    assert!(html.contains("&lt;Name&gt;"));
+    assert!(html.contains("&#60;Name&#62;"));
     assert!(html.contains("&quot;Text&quot;"));
-    assert!(html.contains(r#"hx-get="/fragment/prompt-presets/&lt;id&gt;""#));
 }

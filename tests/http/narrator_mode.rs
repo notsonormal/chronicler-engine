@@ -8,7 +8,9 @@ use chronicler_engine::test_support::{ScriptedModel, TestMap};
 
 use crate::support::app_wiring::app_with_script;
 use crate::support::http_fixtures::{if_world, story_of};
-use crate::support::http_requests::{post_action, post_form, wait_settled};
+use crate::support::http_requests::{
+    assert_answers_nothing, post_action, post_form, wait_settled, fetch_part,
+};
 
 fn narrator_prompts(state: &AppState) -> Vec<(String, String)> {
     state
@@ -141,9 +143,8 @@ async fn test_mode_switch_renders_if_bundle_and_nudges_perspective_http() {
         "narrator_mode=interactive_fiction",
     )
     .await;
-    assert!(resp.status().is_success());
-    let body = axum::body::to_bytes(resp.into_body(), 16384).await.unwrap();
-    let html = String::from_utf8_lossy(&body);
+    assert_answers_nothing(resp).await;
+    let html = fetch_part(&app, "games").await;
     assert!(
         html.contains(r#"value="second" selected"#),
         "the nudge must select second person: {html}"
@@ -193,8 +194,7 @@ async fn test_deliberate_perspective_survives_mode_switch_http() {
     )
     .await;
     assert!(resp.status().is_success());
-    let body = axum::body::to_bytes(resp.into_body(), 16384).await.unwrap();
-    let html = String::from_utf8_lossy(&body);
+    let html = fetch_part(&app, "games").await;
     assert!(
         html.contains(r#"value="second" selected"#),
         "the deliberate perspective must survive the switch: {html}"

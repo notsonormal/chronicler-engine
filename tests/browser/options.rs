@@ -72,12 +72,13 @@ async fn test_options_use_click_submits_rendered_option_text() {
                 .unwrap();
             assert!(!option_text.is_empty(), "the dock must show an option");
 
-            // `useOption` submits `/action/check`, whose response is retargeted
-            // to `#status-display`, so that span is the POST's own swap.
+            // `useOption` submits `/action/check`. The status display is the part
+            // that the screen load writes once it shows the Job of the send, so
+            // its settle is the end of the send.
             click_and_settle(&page, first_option_btn, "#status-display").await;
             wait_for_status_ready(&page).await;
 
-            // `#story-log` polls, so the readiness gates are the settle gate
+            // `#story-log` is a part of the screen, so the readiness gates are the settle gate
             // above plus `wait_for_status_ready`.
             wait_for_element_children(&page, "#story-log .log-entry.input", 1).await;
             let newest_input: String = page

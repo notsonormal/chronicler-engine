@@ -3,11 +3,7 @@
 
 use axum::{body::Body, http::StatusCode, response::Response};
 
-/// `dashboard-action-area.js` keys the wait state on the `.status.wait` class in this
-/// markup; the stub server answers a refused Action with it.
-pub const BUSY_STATUS: &str = "<span class=\"status wait\">Still thinking...</span>";
-
-pub const THINKING_STATUS: &str = "<span class=\"status thinking\">Thinking...</span>";
+use super::answer_words::{ErrorAnswer, RefusalKind, answer_response};
 
 #[allow(clippy::expect_used)]
 fn status_response(status: StatusCode, body: impl Into<String>) -> Response<Body> {
@@ -21,17 +17,13 @@ pub fn ok(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::OK, body)
 }
 
-#[allow(clippy::expect_used)]
-pub fn ok_refresh() -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("HX-Refresh", "true")
-        .body(Body::empty())
-        .expect("static response body is valid")
-}
-
 pub fn bad_request(body: impl Into<String>) -> Response<Body> {
     status_response(StatusCode::BAD_REQUEST, body)
+}
+
+/// The body is empty: the words layer writes it from the kind and the route.
+pub fn refused(kind: RefusalKind) -> Response<Body> {
+    answer_response(StatusCode::CONFLICT, ErrorAnswer::refused(kind))
 }
 
 pub fn internal_error(body: impl Into<String>) -> Response<Body> {

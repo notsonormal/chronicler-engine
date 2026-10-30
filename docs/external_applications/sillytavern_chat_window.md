@@ -379,5 +379,5 @@ The `sillytavern_chat_window_example.html` file contains a **runtime snapshot** 
 
 ## Document References
 
-- [dashboard.md](../diataxis/reference/frontend/dashboard.md) — chronicler dashboard regions and states
+- [dashboard.md](../diataxis/reference/frontend/dashboard.md) — chronicler dashboard parts and states
 - [prompt_system.md](../diataxis/reference/narrative/prompt_system.md) — chronicler prompt architecture

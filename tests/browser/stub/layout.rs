@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use chronicler_engine::domain::model::state::generation_status::Step;
 use playwright_rs::{EmulateMediaOptions, ForcedColors, Page, Viewport};
 
 use super::support::StubRunner;
@@ -17,7 +18,8 @@ async fn run_layout() {
         .run(StubActionOutcome::Pending, check_no_horizontal_overflow)
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the check appends its own entry to the story log by script",
             StubActionOutcome::Pending,
             check_log_entry_text_wraps_within_bubble,
         )
@@ -68,7 +70,8 @@ async fn run_layout() {
         )
         .await;
     runner
-        .run(
+        .run_without_convergence(
+            "the check writes its own markup into the status display by script",
             StubActionOutcome::Pending,
             check_a_long_status_sentence_clamps_with_a_visible_cut,
         )
@@ -141,37 +144,52 @@ async fn check_log_entry_text_wraps_within_bubble(page: Page, _stub: StubServer)
     );
 }
 
-async fn check_command_input_width_is_stable(page: Page, _stub: StubServer) {
-    let widths: (f64, f64, f64, f64) = page
-        .evaluate::<(), (f64, f64, f64, f64)>(
-            r#"() => {
-                const input = document.querySelector('#command-form input[name="command"]');
-                const button = document.querySelector('#command-form button[type="submit"]');
-                const idle = input.getBoundingClientRect().width;
-                applyActionState('generating');
-                const generating = input.getBoundingClientRect().width;
-                const clipped = button.scrollWidth - button.clientWidth;
-                applyActionState('idle');
-                return [idle, generating, clipped, button.getBoundingClientRect().width];
-            }"#,
-            None,
-        )
+async fn check_command_input_width_is_stable(page: Page, stub: StubServer) {
+    const MEASURE: &str = r#"() => {
+        const input = document.querySelector('#command-form input[name="command"]');
+        const button = document.getElementById('submit-btn');
+        return [
+            input.getBoundingClientRect().width,
+            button.scrollWidth - button.clientWidth,
+            button.getBoundingClientRect().width,
+            button.textContent.trim(),
+        ];
+    }"#;
+    wait_for_screen_current(&page).await;
+    let idle: (f64, f64, f64, String) = page
+        .evaluate::<(), (f64, f64, f64, String)>(MEASURE, None)
         .await
         .unwrap();
+    assert_eq!(idle.3, "Send", "an idle Game labels the button Send");
+
+    stub.status_handle().set(StubStatus::Step(Step::Narrating));
+    ask_once(&page).await;
+    let generating: (f64, f64, f64, String) = page
+        .evaluate::<(), (f64, f64, f64, String)>(MEASURE, None)
+        .await
+        .unwrap();
+    assert!(
+        generating.3.contains("Generating"),
+        "a Job that runs makes the server render the generating label, got {:?}",
+        generating.3
+    );
 
     assert!(
-        (widths.0 - widths.1).abs() < 0.5,
+        (idle.0 - generating.0).abs() < 0.5,
         "the command input must not resize while the button reads Generating… \
          (idle {} against generating {})",
-        widths.0,
-        widths.1
+        idle.0,
+        generating.0
     );
     assert!(
-        widths.2 <= 0.5,
+        generating.1 <= 0.5,
         "the Generating… label must fit the button (overflows by {}px, button {}px)",
-        widths.2,
-        widths.3
+        generating.1,
+        generating.2
     );
+
+    stub.status_handle().set(StubStatus::Idle);
+    ask_once(&page).await;
 }
 
 async fn check_element_positioning(page: Page, _stub: StubServer) {

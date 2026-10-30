@@ -1,26 +1,13 @@
 use axum::{body::to_bytes, http::StatusCode};
 
-use crate::adapters::driving::http::utils::current_game::CurrentGame;
 use crate::adapters::driven::storage::{StorageCall, TestOverride};
 use crate::adapters::driving::http::games::handlers::{
-    list_games_fragment, switch_game_handler, switch_game_mode_handler,
-    update_game_posture_handler, update_game_presets_handler, GameModeForm, GamePostureForm,
-    GamePresetsForm,
+    render_games_panel, switch_game_handler, switch_game_mode_handler, update_game_posture_handler,
+    update_game_presets_handler, GameModeForm, GamePostureForm, GamePresetsForm,
 };
 use crate::test_support::active_game_of;
 use crate::domain::model::settings::{NarratorMode, NarrativePerspective, NarrativeTense};
 use crate::test_support::TestAppBuilder;
-
-#[tokio::test]
-async fn test_list_games_empty() {
-    let state = TestAppBuilder::default_test().build_service();
-    let response = list_games_fragment(
-        axum::extract::State(state.clone()),
-        Some(CurrentGame(active_game_of(&state))),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-}
 
 #[tokio::test]
 async fn test_switch_game_ok() {
@@ -35,7 +22,7 @@ async fn test_switch_game_ok() {
 }
 
 #[tokio::test]
-async fn test_switch_game_mode_handler_retargets_and_nudges() {
+async fn test_switch_game_mode_handler_answers_nothing_and_nudges() {
     let state = TestAppBuilder::default_test().build_service();
     state
         .game_catalogue
@@ -55,10 +42,7 @@ async fn test_switch_game_mode_handler_retargets_and_nudges() {
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8_lossy(&body);
-    assert!(
-        body.contains("posture-override"),
-        "mode switch must re-render the override fragment"
-    );
+    assert!(body.is_empty(), "a saved mode answers nothing: {body}");
 
     let game = state.game_catalogue.active_game().unwrap().unwrap();
     assert_eq!(game.narrator_mode, NarratorMode::InteractiveFiction);
@@ -83,6 +67,7 @@ async fn test_switch_game_mode_handler_invalid_mode_returns_error_span() {
         }),
     )
     .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8_lossy(&body);
     assert!(body.contains("Unknown narrator mode"));
@@ -217,14 +202,8 @@ async fn test_posture_fragment_renders_preset_load_error_span() {
         TestOverride::internal("simulated preset library failure"),
     );
 
-    let response = list_games_fragment(
-        axum::extract::State(state.clone()),
-        Some(CurrentGame(active_game_of(&state))),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let body = String::from_utf8_lossy(&body);
+    let body = render_games_panel(&state, Some(active_game_of(&state)), 1)
+        .expect("the Games part renders");
     assert!(
         body.contains(r#"class="error-message""#),
         "preset load failure should render the error fragment: {body}"

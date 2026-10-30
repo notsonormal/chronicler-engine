@@ -5,15 +5,16 @@ use std::sync::Arc;
 
 use askama::Template;
 
-use crate::adapters::driving::http::builders::headers::header_fragment_html;
+use crate::adapters::driving::http::builders::headers::{failure_banner_html, header_fragment_html};
 use crate::adapters::driving::http::templates::{
-    CharacterHeadshotsTemplate, LlmMessagesTemplate, NarrationLogTemplate, OptionsDockTemplate,
+    LlmMessageRecordTemplate, LlmMessagesTemplate, NarrationLogTemplate, OptionsDockTemplate,
     VisualSidebarTemplate,
 };
 use crate::adapters::driving::http::view_models::{
     CharacterPortraitView, OptionsDockViewModel, VisualSidebarViewModel,
 };
 use crate::application::connection_test_service::ConnectionTestService;
+use crate::application::errors::ApplicationError;
 use crate::application::games::catalogue::GameCatalogue;
 use crate::application::games::view_query::GameViewQuery;
 use crate::application::generation::gate::GameWriter;
@@ -77,7 +78,7 @@ impl AppState {
         &self.text_check_service
     }
 
-    fn render_error_context(name: &str, e: impl std::fmt::Display) -> String {
+    fn template_failure_context(name: &str, e: impl std::fmt::Display) -> String {
         format!("Failed to render {name}: {e}")
     }
 
@@ -89,35 +90,39 @@ impl AppState {
                 tracing::warn!("header: the game name could not be read: {error}");
                 "Unknown".to_string()
             });
+        header_fragment_html(game_name)
+    }
+
+    pub fn render_failure_banner(&self) -> Result<String> {
         let roles = self
             .game_view_query
             .role_health()
-            .map_err(|e| EngineError::Config(Self::render_error_context("header", e)))?;
-        header_fragment_html(game_name, &roles)
+            .map_err(ApplicationError::into_engine_error)?;
+        Ok(failure_banner_html(&roles))
     }
 
     pub fn render_story_log(&self, game_id: GameId) -> Result<String> {
         let window = self
             .game_view_query
             .story_window(game_id)
-            .map_err(|e| EngineError::Config(Self::render_error_context("story log", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
 
         let view_only = self.game_view_query.autoplay_holds(game_id);
         NarrationLogTemplate::new(&window.entries, window.retrigger_allowed, view_only)
             .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("story log", e)))
+            .map_err(|e| EngineError::Template(Self::template_failure_context("story log", e)))
     }
 
     pub fn render_visual_sidebar(&self, game_id: GameId) -> Result<String> {
         let (room_name, image_path) = self
             .game_view_query
             .get_current_room_view(game_id)
-            .map_err(|e| EngineError::Config(Self::render_error_context("visual sidebar", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
 
         let character_data = self
             .game_view_query
-            .get_character_headshots(game_id, true)
-            .map_err(|e| EngineError::Config(Self::render_error_context("visual sidebar", e)))?;
+            .get_character_headshots(game_id)
+            .map_err(ApplicationError::into_engine_error)?;
 
         let character_portraits: Vec<CharacterPortraitView> = character_data
             .into_iter()
@@ -128,14 +133,14 @@ impl AppState {
         let template = VisualSidebarTemplate::new(vm);
         template
             .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("visual sidebar", e)))
+            .map_err(|e| EngineError::Template(Self::template_failure_context("visual sidebar", e)))
     }
 
     pub fn render_options_dock(&self, game_id: GameId) -> Result<String> {
         let dock = self
             .game_view_query
             .dock(game_id)
-            .map_err(|e| EngineError::Config(Self::render_error_context("options dock", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
         // The one registry, not a saved record, answers "is something generating?".
         let is_busy = self.game_view_query.is_busy(game_id);
 
@@ -143,37 +148,35 @@ impl AppState {
         let template = OptionsDockTemplate::new(vm);
         template
             .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("options dock", e)))
-    }
-
-    pub fn render_character_headshots(&self, game_id: GameId) -> Result<String> {
-        let character_data = self
-            .game_view_query
-            .get_character_headshots(game_id, false)
-            .map_err(|e| {
-                EngineError::Config(Self::render_error_context("character headshots", e))
-            })?;
-
-        let character_portraits: Vec<CharacterPortraitView> = character_data
-            .into_iter()
-            .map(|(image_path, name)| CharacterPortraitView { image_path, name })
-            .collect();
-
-        let template = CharacterHeadshotsTemplate::new(character_portraits);
-        template.render().map_err(|e| {
-            EngineError::Template(Self::render_error_context("character headshots", e))
-        })
+            .map_err(|e| EngineError::Template(Self::template_failure_context("options dock", e)))
     }
 
     pub fn render_llm_messages(&self) -> Result<String> {
         let messages = self
             .game_view_query
             .list_latest_llm_messages(50)
-            .map_err(|e| EngineError::Config(Self::render_error_context("LLM messages", e)))?;
+            .map_err(ApplicationError::into_engine_error)?;
 
         let template = LlmMessagesTemplate::new(&messages);
         template
             .render()
-            .map_err(|e| EngineError::Template(Self::render_error_context("LLM messages", e)))
+            .map_err(|e| EngineError::Template(Self::template_failure_context("LLM messages", e)))
+    }
+
+    /// `None` when no record has this id: retention removes the oldest records.
+    pub fn render_llm_message_record(&self, id: i64) -> Result<Option<String>> {
+        let message = self
+            .game_view_query
+            .llm_message(id)
+            .map_err(ApplicationError::into_engine_error)?;
+        message
+            .map(|message| {
+                LlmMessageRecordTemplate::new(&message)
+                    .render()
+                    .map_err(|e| {
+                        EngineError::Template(Self::template_failure_context("LLM message", e))
+                    })
+            })
+            .transpose()
     }
 }

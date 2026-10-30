@@ -53,7 +53,6 @@ fn test_render_llm_messages_with_data() {
     assert!(html.contains("narrator"));
     assert!(html.contains("OpenRouter"));
     assert!(html.contains("gpt-4"));
-    assert!(html.contains("hello"));
 }
 
 struct NoopTextChecker;

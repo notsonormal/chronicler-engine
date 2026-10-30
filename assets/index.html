@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-poll-ms="1000">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chronicler Engine</title>
     <script src="/assets/htmx.min.js?v=1"></script>
     <script src="/assets/idiomorph-ext.min.js?v=1"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=7" />
-    <link rel="stylesheet" href="/assets/worlds.css?v=6" />
-    <link rel="stylesheet" href="/assets/games.css?v=4" />
+    <link rel="stylesheet" href="/assets/styles.css?v=25" />
+    <link rel="stylesheet" href="/assets/worlds.css?v=8" />
+    <link rel="stylesheet" href="/assets/games.css?v=6" />
   </head>
-  <body hx-ext="morph">
+  <body>
     <!-- Icons are Lucide (ISC; the Feather-derived ones MIT); licence text in /assets/LICENSE-lucide.txt. -->
     <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
       <symbol id="i-pencil" viewBox="0 0 24 24">
@@ -73,17 +73,22 @@
     </svg>
     <a class="skip-link" href="#main-content">Skip to content</a>
     <div class="header-bar">
-      <div
-        class="header"
-        id="header"
-        hx-get="/fragment/header"
-        hx-trigger="load, every 5s"
-        hx-swap="innerHTML"
-      ></div>
+      <div class="header" id="header" data-part="header"></div>
     </div>
     <div id="failure-banner" class="failure-banner" role="status" hidden>
-      <div id="failure-banner-degraded" class="failure-banner-degraded"></div>
+      <div
+        id="failure-banner-degraded"
+        class="failure-banner-degraded"
+        data-part="failure-banner"
+      ></div>
       <div id="failure-banner-unreachable" class="failure-banner-unreachable"></div>
+    </div>
+    <!-- The notice place, outside the parts: a report here leaves the parts' content alone. -->
+    <div id="notice" class="notice" role="alert" hidden>
+      <div class="notice-report" data-error-slot="notice" data-report></div>
+      <button type="button" class="notice-close" data-close-notice aria-label="Close the notice">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+      </button>
     </div>
     <div class="tab-bar" role="tablist" aria-label="Dashboard sections">
       <button class="tab active" role="tab" id="tab-game" aria-controls="game-tab" aria-selected="true" data-tab="game">Game</button>
@@ -101,23 +106,12 @@
           id="story-log"
           tabindex="0"
           aria-label="Story log"
-          hx-get="/fragment/story-log"
-          hx-trigger="load, every 2s, refresh"
-          hx-swap="morph:innerHTML"
+          data-part="story-log"
         ></div>
-        <div
-          class="visual-sidebar"
-          hx-get="/fragment/visual-sidebar"
-          hx-trigger="load, every 5s"
-        ></div>
+        <div class="visual-sidebar" data-part="visual-sidebar"></div>
       </div>
 
-      <div
-        id="options-dock"
-        hx-get="/fragment/options-dock"
-        hx-trigger="load, every 2s"
-        hx-swap="innerHTML"
-      ></div>
+      <div id="options-dock" data-part="options-dock"></div>
       <div class="action-area" id="action-area">
         <div id="action-preview" class="action-preview"></div>
         <form
@@ -128,6 +122,7 @@
           hx-sync="this:drop"
           hx-on::before-request="onCommandBeforeRequest()"
           hx-on::after-request="onCommandAfterRequest(event)"
+          hx-on::on-load-error="onCommandLoadError()"
         >
           <label class="visually-hidden" for="command-input">Action</label>
           <input
@@ -141,16 +136,13 @@
             aria-controls="slash-menu"
             aria-autocomplete="list"
           />
-          <button type="submit" id="submit-btn">
-            <svg class="icon" aria-hidden="true"><use href="#i-send" /></svg> Send
-          </button>
           <div class="inline-error-slot" data-error-slot="action" hidden></div>
         </form>
+        <div id="send-control" data-part="send-control"></div>
         <form
           id="autoplay-form"
           hx-post="/autoplay"
-          hx-target="#status-display"
-          hx-swap="innerHTML"
+          hx-swap="none"
           hx-sync="this:drop"
           hx-on::after-request="onAutoplayAfterRequest(event)"
         >
@@ -165,30 +157,16 @@
             step="1"
             title="Cycles to play"
           />
-          <button type="submit" id="autoplay-btn" title="Let the engine play the Persona for this many cycles">
-            <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg> Autoplay
-          </button>
           <div class="inline-error-slot" data-error-slot="autoplay" hidden></div>
         </form>
-        <button
-          type="button"
-          id="stop-btn"
-          hx-post="/status/reset-busy"
-          hx-swap="none"
-          hx-on::after-request="pollStatusNow()"
-        >
-          <svg class="icon" aria-hidden="true"><use href="#i-x" /></svg> Stop
-        </button>
+        <div id="autoplay-controls" data-part="autoplay-controls"></div>
+        <!-- The action area's own state, next to the live status display that it never writes. -->
+        <div class="status thinking" id="action-status"></div>
         <div
-          class="status ready"
+          class="status"
           id="status-display"
-          hx-get="/status/busy"
-          hx-trigger="load, every 5s, statuspoll"
-          hx-swap="innerHTML"
-          hx-on::after-swap="onStatusPoll(this)"
-        >
-          <span class="status ready">Ready</span>
-        </div>
+          data-part="status-display"
+        ></div>
       </div>
       <div
         id="restore-notice"
@@ -196,14 +174,7 @@
         role="status"
         aria-live="polite"
       ></div>
-      <!-- Outside the polled log, so a poll cannot drop a failure the log reported. -->
-      <div
-        id="story-log-error"
-        class="story-log-error"
-        data-error-slot="story-log"
-        hidden
-      ></div>
-      <!-- Separate regions so a poll does not re-announce unchanged content every cycle. -->
+      <!-- Separate regions so a load does not re-announce unchanged content. -->
       <div
         id="narration-announcer"
         class="visually-hidden"
@@ -229,49 +200,34 @@
       ></div>
     </div>
     <div class="tab-content" id="settings-tab" role="tabpanel" aria-labelledby="tab-settings">
-      <div
-        class="settings-panel"
-        hx-get="/fragment/settings"
-        hx-trigger="load"
-      ></div>
+      <div class="settings-panel" data-part="settings"></div>
     </div>
     <div class="tab-content" id="prompt-presets-tab" role="tabpanel" aria-labelledby="tab-prompt-presets">
-      <div
-        class="prompt-presets-panel"
-        hx-get="/fragment/prompt-presets"
-        hx-trigger="load"
-      ></div>
+      <div class="prompt-presets-panel" data-part="prompt-presets"></div>
     </div>
     <div class="tab-content" id="worlds-tab" role="tabpanel" aria-labelledby="tab-worlds">
-      <div
-        class="worlds-panel"
-        hx-get="/fragment/worlds"
-        hx-trigger="load"
-      ></div>
+      <div class="worlds-panel" data-part="worlds"></div>
     </div>
     <div class="tab-content" id="games-tab" role="tabpanel" aria-labelledby="tab-games">
-      <div
-        class="games-panel"
-        hx-get="/fragment/games"
-        hx-trigger="load, refresh, every 5s [document.querySelector('#games-tab .run-badge')]"
-      ></div>
+      <div class="games-panel" data-part="games"></div>
     </div>
     <div class="tab-content" id="llm-messages-tab" role="tabpanel" aria-labelledby="tab-llm-messages">
-      <div
-        class="llm-messages-panel"
-        hx-get="/fragment/llm-messages"
-        hx-trigger="load, every 4s"
-        hx-swap="innerHTML"
-        hx-on::after-settle="restoreLlmExpandedState()"
-      ></div>
+      <div class="llm-messages-panel" data-part="llm-messages"></div>
     </div>
     </main>
+    <dialog id="edit-dialog" aria-labelledby="edit-dialog-title">
+      <div id="edit-dialog-body"></div>
+      <div id="edit-dialog-status" class="edit-dialog-status" role="status"></div>
+    </dialog>
 
 
-    <script src="/assets/dashboard-errors.js?v=1"></script>
-    <script src="/assets/dashboard-action-area.js?v=3"></script>
-    <script src="/assets/dashboard-story-log.js?v=2"></script>
+    <script src="/assets/dashboard-errors.js?v=17"></script>
+    <script src="/assets/dashboard-screen.js?v=12"></script>
+    <script src="/assets/dashboard-saves.js?v=5"></script>
+    <script src="/assets/dashboard-action-area.js?v=18"></script>
+    <script src="/assets/dashboard-story-log.js?v=15"></script>
     <script src="/assets/dashboard-slash-menu.js?v=1"></script>
-    <script src="/assets/dashboard-panels.js?v=1"></script>
+    <script src="/assets/dashboard-panels.js?v=9"></script>
+    <script src="/assets/dashboard-dialog.js?v=12"></script>
   </body>
 </html>

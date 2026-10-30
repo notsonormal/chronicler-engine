@@ -3,4 +3,4 @@
 
 pub mod games;
 
-pub use self::games::GameRowView;
+pub use self::games::{GameRenameFormTemplate, GameRowView, NewGameFormTemplate};

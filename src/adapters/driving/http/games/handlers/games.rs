@@ -6,7 +6,7 @@ use std::str::FromStr;
 use askama::Template;
 use axum::{
     extract::{Form, Path, State},
-    response::{IntoResponse, Response},
+    response::Response,
 };
 
 use crate::adapters::driving::http::AppState;
@@ -17,28 +17,34 @@ use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, Narra
 use crate::error::EngineError;
 
 use crate::adapters::driving::http::games::templates::games::{
-    GamePostureTemplate, GamesPanelTemplate, PersonaRowView,
+    GamePostureTemplate, GameRenameFormTemplate, GamesPagerView, GamesPanelTemplate,
+    NewGameFormTemplate, PersonaRowView,
 };
-use crate::adapters::driving::http::utils::current_game::CurrentGame;
-use crate::adapters::driving::http::utils::fragment::{render_failure_response, render_response};
-use crate::adapters::driving::http::utils::error::{action_error_response, render_error};
-use crate::adapters::driving::http::utils::response::{internal_error, ok, ok_refresh};
+use crate::adapters::driving::http::utils::fragment::render_response;
+use crate::adapters::driving::http::utils::error::{AnswerPolicy, not_found_answer, answer_for_error};
+use crate::adapters::driving::http::utils::response::ok;
 use crate::adapters::driving::http::utils::view_mappers::game_to_view;
-use crate::adapters::driving::http::view_models::SafeHtml;
 
-pub async fn list_games_fragment(
-    State(state): State<AppState>,
-    current: Option<CurrentGame>,
-) -> Response<axum::body::Body> {
-    let Ok((active_game, saved_games)) = current_and_saved_games(&state, current) else {
-        return internal_error("Failed to list games");
+pub fn render_games_panel(
+    state: &AppState,
+    active_id: Option<GameId>,
+    requested_page: u64,
+) -> Result<String, EngineError> {
+    let active_game = match active_id {
+        Some(game_id) => state
+            .game_catalogue
+            .game(game_id)
+            .map_err(ApplicationError::into_engine_error)?,
+        None => None,
     };
+    let saved = state
+        .game_catalogue
+        .saved_games_page(active_id, requested_page)
+        .map_err(ApplicationError::into_engine_error)?;
 
     let posture_html = match &active_game {
-        Some(game) => match posture_controls_html(&state, game) {
-            Ok(html) => html,
-            Err(e) => return render_failure_response(&e),
-        },
+        Some(game) => posture_controls_html(state, game)
+            .map_err(|e| EngineError::Template(format!("Template error: {e}")))?,
         None => String::new(),
     };
 
@@ -47,13 +53,26 @@ pub async fn list_games_fragment(
         game_to_view(game, run_held)
     };
     let active_game = active_game.map(view_of);
-    let saved_games: Vec<_> = saved_games.into_iter().map(view_of).collect();
+    let saved_games: Vec<_> = saved.games.into_iter().map(view_of).collect();
 
-    let Ok(worlds) = state.world_catalogue.list_worlds() else {
-        return internal_error("Failed to list worlds");
-    };
+    let worlds = state
+        .world_catalogue
+        .list_worlds()
+        .map_err(ApplicationError::into_engine_error)?;
 
-    let personas: Vec<PersonaRowView> = match state.persona_catalogue.list_personas() {
+    GamesPanelTemplate {
+        active_game,
+        saved_games,
+        pager: GamesPagerView::new(saved.page, saved.page_count),
+        worlds,
+        posture_html,
+    }
+    .render()
+    .map_err(|e| EngineError::Template(format!("Template error: {e}")))
+}
+
+fn persona_rows(state: &AppState) -> Vec<PersonaRowView> {
+    match state.persona_catalogue.list_personas() {
         Ok(p) => p,
         Err(e) => {
             tracing::warn!("Failed to load personas: {e}");
@@ -65,39 +84,34 @@ pub async fn list_games_fragment(
         key: p.key,
         name: p.sheet.name,
     })
-    .collect();
-
-    let template = GamesPanelTemplate {
-        active_game,
-        saved_games,
-        worlds,
-        personas,
-        posture_html,
-        saved_games_empty: SafeHtml::new(GamesPanelTemplate::saved_games_empty_html()),
-    };
-
-    render_response(&template)
+    .collect()
 }
 
-fn current_and_saved_games(
-    state: &AppState,
-    current: Option<CurrentGame>,
-) -> Result<(Option<Game>, Vec<Game>), ApplicationError> {
-    let games = state.game_catalogue.list_games()?;
-    let active_id = current.map(|CurrentGame(game_id)| game_id);
-    let mut active_game = None;
-    let saved_games = games
-        .into_iter()
-        .filter_map(|game| {
-            if Some(GameId(game.id)) == active_id {
-                active_game = Some(game);
-                None
-            } else {
-                Some(game)
-            }
-        })
-        .collect();
-    Ok((active_game, saved_games))
+/// The Rename form opens in the dialog. A Game that is gone, or one that
+/// cannot be read, opens no dialog: the notice reports it.
+pub async fn rename_game_form_handler(
+    State(state): State<AppState>,
+    Path(id): Path<u64>,
+) -> Response<axum::body::Body> {
+    match state.game_catalogue.game(GameId(id)) {
+        Ok(Some(game)) => render_response(&GameRenameFormTemplate {
+            id: game.id,
+            display_name: game.display_name,
+        }),
+        Ok(None) => not_found_answer("Game not found"),
+        Err(e) => answer_for_error(e, None, AnswerPolicy::EngineText),
+    }
+}
+
+pub async fn new_game_form_handler(State(state): State<AppState>) -> Response<axum::body::Body> {
+    let worlds = match state.world_catalogue.list_worlds() {
+        Ok(worlds) => worlds,
+        Err(e) => return answer_for_error(e, None, AnswerPolicy::EngineText),
+    };
+    render_response(&NewGameFormTemplate {
+        worlds,
+        personas: persona_rows(&state),
+    })
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -113,13 +127,27 @@ pub async fn create_game_handler(
     state
         .game_catalogue
         .create_game(&form.world_key, &form.persona_key)?;
-    Ok(ok_refresh())
+    Ok(ok(""))
+}
+
+/// Read on the failure path only: the row button named a Game that may be gone.
+fn display_name_of_game(state: &AppState, id: u64) -> Option<String> {
+    state
+        .game_catalogue
+        .game(GameId(id))
+        .ok()
+        .flatten()
+        .map(|game| game.display_name)
 }
 
 pub async fn switch_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
     match state.game_catalogue.switch_game(id) {
-        Ok(()) => ok_refresh(),
-        Err(e) => action_error_response(e, "Failed to switch game"),
+        Ok(()) => ok(""),
+        Err(e) => answer_for_error(
+            e,
+            display_name_of_game(&state, id),
+            AnswerPolicy::EngineText,
+        ),
     }
 }
 
@@ -134,28 +162,17 @@ pub async fn rename_game_handler(
     Form(form): Form<RenameGameForm>,
 ) -> Result<Response, ApplicationError> {
     state.game_catalogue.rename_game(id, &form.display_name)?;
-    Ok(ok_refresh())
+    Ok(ok(""))
 }
 
-pub async fn delete_game_handler(
-    State(state): State<AppState>,
-    current: Option<CurrentGame>,
-    Path(id): Path<u64>,
-) -> Result<Response, ApplicationError> {
-    state.game_catalogue.delete_game(id)?;
-    Ok(ok(remaining_saved_games_empty_state(&state, current)))
-}
-
-/// The list's own empty state only renders with the whole panel, so a delete that
-/// empties the list answers with this instead.
-fn remaining_saved_games_empty_state(state: &AppState, current: Option<CurrentGame>) -> String {
-    let Ok((_, saved_games)) = current_and_saved_games(state, current) else {
-        return String::new();
-    };
-    if saved_games.is_empty() {
-        GamesPanelTemplate::saved_games_empty_html()
-    } else {
-        String::new()
+pub async fn delete_game_handler(State(state): State<AppState>, Path(id): Path<u64>) -> Response {
+    match state.game_catalogue.delete_game(id) {
+        Ok(()) => ok(""),
+        Err(e) => answer_for_error(
+            e,
+            display_name_of_game(&state, id),
+            AnswerPolicy::GenericText,
+        ),
     }
 }
 
@@ -188,7 +205,7 @@ pub async fn switch_game_mode_handler(
         Ok(mode) => state.game_catalogue.switch_mode(id, mode),
         Err(e) => Err(ApplicationError::validation(e)),
     };
-    render_posture_result(&state, game)
+    config_save_result(game)
 }
 
 pub async fn update_game_posture_handler(
@@ -202,7 +219,7 @@ pub async fn update_game_posture_handler(
         (Ok(perspective), Ok(tense)) => state.game_catalogue.set_posture(id, perspective, tense),
         (Err(e), _) | (_, Err(e)) => Err(ApplicationError::validation(e)),
     };
-    render_posture_result(&state, result)
+    config_save_result(result)
 }
 
 pub async fn update_game_presets_handler(
@@ -219,20 +236,15 @@ pub async fn update_game_presets_handler(
             form.options_preset_id,
         ),
     );
-    render_posture_result(&state, result)
+    config_save_result(result)
 }
 
-/// Validation failures answer with an error fragment at 200 (house style); storage
-/// failures stay 500s so htmx leaves the page alone.
-fn render_posture_result(state: &AppState, result: Result<Game, ApplicationError>) -> Response {
+/// A saved config answers nothing: the Games panel loads the new value. A refusal
+/// or a failure answers a non-2xx error fragment, which the notice reports.
+fn config_save_result(result: Result<Game, ApplicationError>) -> Response {
     match result {
-        Ok(game) => match posture_controls_html(state, &game) {
-            Ok(html) => ok(html),
-            Err(e) => render_failure_response(&e),
-        },
-        Err(ApplicationError::Refused(refusal)) => refusal.into_response(),
-        Err(e) if e.is_user_displayable() => ok(render_error(&e.to_string())),
-        Err(e) => internal_error(render_error(&e.to_string())),
+        Ok(_) => ok(""),
+        Err(e) => answer_for_error(e, None, AnswerPolicy::EngineText),
     }
 }
 

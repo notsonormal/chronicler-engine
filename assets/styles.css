@@ -344,6 +344,7 @@ body {
 }
 
 .log-entry .text q {
+    /* Long prose: quoted dialogue differs from narration by hue and slant, and both stay at body weight. */
     color: var(--color-accent-orange);
     font-style: italic;
 }
@@ -573,9 +574,11 @@ body {
     white-space: nowrap;
 }
 
-/* The submit control only: the form's inline-error slot injects a Details
-   toggle that must stay a small inline button, not a second Send button. */
-#command-form #submit-btn,
+/* The Send, Autoplay and Stop buttons come from the server-rendered
+   #send-control and #autoplay-controls parts. The Send rule names the button by id: the form's
+   inline-error slot injects a Details toggle that must stay a small inline
+   button, not a second Send button. */
+#submit-btn,
 #autoplay-btn,
 #stop-btn {
     background: linear-gradient(180deg, var(--color-button-send-start) 0%, var(--color-button-send-end) 100%);
@@ -597,28 +600,28 @@ body {
     gap: 6px;
 }
 
-#command-form #submit-btn .icon,
+#submit-btn .icon,
 #autoplay-btn .icon,
 #stop-btn .icon {
     width: 16px;
     height: 16px;
 }
 
-#command-form #submit-btn:hover:not(:disabled),
+#submit-btn:hover:not(:disabled),
 #autoplay-btn:hover:not(:disabled),
 #stop-btn:hover:not(:disabled) {
     background: var(--color-button-send-start);
     filter: brightness(1.15);
 }
 
-#command-form #submit-btn:active:not(:disabled),
+#submit-btn:active:not(:disabled),
 #autoplay-btn:active:not(:disabled),
 #stop-btn:active:not(:disabled) {
     background: var(--color-button-send-end);
     filter: none;
 }
 
-#command-form #submit-btn:disabled,
+#submit-btn:disabled,
 #autoplay-btn:disabled,
 #stop-btn:disabled {
     opacity: 0.5;
@@ -655,7 +658,6 @@ body {
 }
 
 #stop-btn {
-    display: none;
     background: var(--color-tint-red);
     border-color: var(--color-accent-red);
     color: var(--color-accent-red);
@@ -666,13 +668,34 @@ body {
     background: var(--color-tint-red);
 }
 
-.action-area[data-state="autoplay"] #command-form,
-.action-area[data-state="autoplay"] #autoplay-form {
+/* The Autoplay part renders Stop only while a run holds the Game, and then the
+   run's controls replace the command and Autoplay forms. */
+.action-area:has(#stop-btn) #command-form,
+.action-area:has(#stop-btn) #autoplay-form,
+.action-area:has(#stop-btn) #submit-btn,
+.action-area:has(#stop-btn) #autoplay-btn {
     display: none;
 }
 
-.action-area[data-state="autoplay"] #stop-btn {
-    display: flex;
+/* The two parts hold the buttons that the shell's two forms submit. A part is no
+   box of its own: its buttons are items of the action area's row, in the order of
+   the shell. */
+#send-control,
+#autoplay-controls {
+    display: contents;
+}
+
+/* Send and Autoplay look busy and take no click while the form that each one
+   submits has a request in flight, and between an accepted send and the load that
+   shows its Job: the part still renders them as idle there. The state attribute of
+   the area says that a send is pending. Neither is `disabled`: the server renders
+   that. */
+.action-area:has(#command-form.htmx-request) #submit-btn,
+.action-area:has(#autoplay-form.htmx-request) #autoplay-btn,
+.action-area[data-state="generating"] #submit-btn,
+.action-area[data-state="generating"] #autoplay-btn {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .status {
@@ -690,20 +713,31 @@ body {
     color: var(--color-accent-yellow);
 }
 
-.status.wait {
-    color: var(--color-text-primary);
-}
-
 .status.error {
     color: var(--color-accent-red);
 }
 
+/* The failure answer is a bare element with no class, so the display takes its
+   colour from its content. No script writes the part root. */
+#status-display:has([data-status="failed"]) {
+    color: var(--color-accent-red);
+}
+
 /* The action area must not resize as the status text changes. */
-#status-display {
+#status-display,
+#action-status {
     flex: 0 0 240px;
     width: 240px;
     min-width: 0;
     overflow: hidden;
+}
+
+#action-status:empty {
+    display: none;
+}
+
+.action-area:has(#action-status:not(:empty)) #status-display {
+    display: none;
 }
 
 #status-display .error-disclosure {
@@ -944,7 +978,7 @@ body {
     color: var(--color-text-primary);
 }
 
-.settings-subtab.active {
+.settings-subtab[aria-selected="true"] {
     color: var(--color-accent-ok);
     border-bottom-color: var(--color-accent-ok);
 }
@@ -957,13 +991,17 @@ body {
 }
 
 .settings-subtab-panel {
-    display: none;
+    display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
 }
 
-.settings-subtab-panel.active {
-    display: flex;
+.settings-subtab-panel[hidden] {
+    display: none;
+}
+
+.saved-flag[data-saved]::before {
+    content: "Saved";
 }
 
 .section-heading {
@@ -1087,21 +1125,15 @@ body {
     justify-content: flex-start;
 }
 
-.connection-form-page .back-link {
-    align-self: flex-start;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    background: transparent;
-    border: none;
-    color: var(--color-accent-cyan);
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    cursor: pointer;
-    padding: 0;
+.connection-form,
+.connection-test-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
 }
 
-.connection-form-page .form-actions {
+.connection-form .form-actions,
+.connection-test-dialog .form-actions {
     display: flex;
     gap: var(--spacing-sm);
     margin-top: var(--spacing-sm);
@@ -1146,21 +1178,26 @@ body {
     line-height: 1.5;
 }
 
-.settings-panel .form-group {
+.settings-panel .form-group,
+#edit-dialog .form-group {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
     margin-bottom: var(--spacing-sm);
 }
 
-.settings-panel label {
+.settings-panel label,
+#edit-dialog label {
     font-size: var(--font-size-small);
     color: var(--color-text-muted);
 }
 
 .settings-panel input,
 .settings-panel select,
-.settings-panel textarea {
+.settings-panel textarea,
+#edit-dialog input,
+#edit-dialog select,
+#edit-dialog textarea {
     background: var(--color-bg-primary);
     border: 1px solid var(--color-border);
     border-radius: 4px;
@@ -1172,7 +1209,10 @@ body {
 
 .settings-panel input:focus,
 .settings-panel select:focus,
-.settings-panel textarea:focus {
+.settings-panel textarea:focus,
+#edit-dialog input:focus,
+#edit-dialog select:focus,
+#edit-dialog textarea:focus {
     outline: none;
     border-color: var(--color-accent-ok);
     box-shadow: var(--shadow-focus-ring);
@@ -1221,6 +1261,15 @@ body {
     white-space: nowrap;
 }
 
+.error-disclosure-plain,
+.error-disclosure-plain .error-disclosure-message {
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+}
+
 .error-details-toggle {
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.08);
@@ -1238,7 +1287,7 @@ body {
 }
 
 .error-detail-popover {
-    display: none;
+    display: block;
     position: fixed;
     z-index: 1200;
     min-width: 220px;
@@ -1254,8 +1303,8 @@ body {
     text-align: left;
 }
 
-.error-detail-popover.open {
-    display: block;
+.error-detail-popover[hidden] {
+    display: none;
 }
 
 .error-detail-raw {
@@ -1309,16 +1358,55 @@ body {
     font-size: var(--font-size-small);
 }
 
-/* The story log sits in a column flex parent, so this slot sizes to its text
-   instead of taking the full height .inline-error-slot claims for its row. */
-.story-log-error {
-    flex-shrink: 0;
-    padding: 0 var(--spacing-md);
+.notice {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
     font-size: var(--font-size-small);
 }
 
-.story-log-error[hidden] {
+.notice[hidden] {
     display: none;
+}
+
+.notice-report {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.notice-close {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.notice-close:hover {
+    border-color: var(--color-accent-cyan);
+    color: var(--color-accent-cyan);
+}
+
+.edit-dialog-status:empty {
+    display: none;
+}
+
+.edit-dialog-status {
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+}
+
+#edit-dialog[data-saving] #edit-dialog-body {
+    opacity: 0.6;
 }
 
 .connection-test-slot:empty {
@@ -1355,6 +1443,29 @@ body {
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+}
+
+.edit-actions {
+    display: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+}
+
+.log-entry[data-editing] .message-actions > :not(.edit-actions) {
+    display: none;
+}
+
+.log-entry[data-editing] .edit-actions {
+    display: flex;
+}
+
+.edit-actions .inline-error-slot {
+    flex: 0 0 100%;
+    width: 22rem;
+    max-width: 60vw;
+    font-size: var(--font-size-small);
 }
 
 .action-btn {
@@ -1438,6 +1549,49 @@ body {
     background: var(--color-tint-red);
     border-color: var(--color-accent-red);
     color: var(--color-accent-red);
+}
+
+/* An entry in edit locks the Edit buttons and the swipe controls. The root
+   attribute is set by the story-log script, and a load keeps it until the edit
+   ends. The root attribute also covers the time between a saved edit and the
+   load that shows the saved entry. */
+#story-log[data-editing-entry] .edit-btn,
+#story-log[data-editing-entry] .swipe-controls .action-btn {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* A Job or an Autoplay run holds the Game, so the engine refuses the save. The
+   Save shows as disabled, and its hover and focus text says why. A save by click
+   or by keyboard still reaches the engine, which refuses it. */
+body:has(#status-display [data-status="thinking"], #status-display [data-status="autoplay"]) .save-btn {
+    position: relative;
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+body:has(#status-display [data-status="thinking"], #status-display [data-status="autoplay"]) .save-btn:hover,
+body:has(#status-display [data-status="thinking"], #status-display [data-status="autoplay"]) .save-btn:hover::after,
+body:has(#status-display [data-status="thinking"], #status-display [data-status="autoplay"]) .save-btn:focus-visible::after {
+    background: var(--color-bg-tertiary);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+}
+
+body:has(#status-display [data-status="thinking"], #status-display [data-status="autoplay"]) .save-btn:hover::after,
+body:has(#status-display [data-status="thinking"], #status-display [data-status="autoplay"]) .save-btn:focus-visible::after {
+    content: "Wait for the narration to finish";
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    padding: 4px 8px;
+    white-space: nowrap;
+    font-size: var(--font-size-small);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    z-index: 10;
 }
 
 .text-check-preview {
@@ -1650,8 +1804,31 @@ input[type="checkbox"]:focus {
     line-height: 1.4;
 }
 
-.settings-panel .checkbox-label {
+.settings-panel .checkbox-label,
+#edit-dialog .checkbox-label {
     color: var(--color-text-primary);
+}
+
+/* The reset `* { margin: 0 }` removes the `margin: auto` that centres a modal
+   dialog. */
+#edit-dialog {
+    margin: auto;
+    width: min(90vw, 560px);
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: var(--spacing-lg);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+
+#edit-dialog:has(.world-form-container, .preset-form, .preset-add-form, .llm-message-record) {
+    width: min(90vw, 720px);
+}
+
+#edit-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.6);
 }
 
 @media (max-width: 768px) {
@@ -1693,7 +1870,7 @@ input[type="checkbox"]:focus {
     }
 
     #command-form input,
-    #command-form #submit-btn {
+    #submit-btn {
         width: 100%;
         min-width: unset;
     }
@@ -1707,7 +1884,8 @@ input[type="checkbox"]:focus {
         margin-left: 0;
     }
 
-    #status-display {
+    #status-display,
+    #action-status {
         flex: 0 0 auto;
         width: auto;
     }
@@ -1735,17 +1913,6 @@ input[type="checkbox"]:focus {
     gap: var(--spacing-sm);
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--color-bg-tertiary);
-    cursor: pointer;
-    user-select: none;
-    width: 100%;
-    border: none;
-    font: inherit;
-    color: inherit;
-    text-align: left;
-}
-
-.llm-message-header:hover {
-    background: var(--color-bg-header);
 }
 
 .llm-message-agent {
@@ -1775,6 +1942,24 @@ input[type="checkbox"]:focus {
     padding: 2px 6px;
     border: 1px solid var(--color-accent-red);
     border-radius: 4px;
+}
+
+/* A short line of the failure text, under the header: the whole text is in the record. */
+.llm-message-error-summary {
+    padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    overflow-wrap: anywhere;
+}
+
+.llm-message-record-model {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    margin-bottom: var(--spacing-md);
+}
+
+.llm-message-record .llm-message-raw {
+    margin-bottom: var(--spacing-md);
 }
 
 .llm-message-failure {
@@ -1808,16 +1993,6 @@ input[type="checkbox"]:focus {
     word-break: break-word;
 }
 
-.llm-message-body {
-    display: none;
-    padding: var(--spacing-md);
-    border-top: 1px solid var(--color-border);
-}
-
-.llm-message-card.expanded .llm-message-body {
-    display: block;
-}
-
 .llm-message-prompts {
     display: flex;
     flex-direction: column;
@@ -1825,24 +2000,11 @@ input[type="checkbox"]:focus {
     margin-bottom: var(--spacing-md);
 }
 
-/* The disclosure blocks end the card body, so their trailing gaps would read as
-   an empty region under the last one. */
-.llm-message-body > *:last-child,
+/* The disclosure blocks end the record, so their trailing gaps would read as an
+   empty region above the Close control. */
 .llm-message-prompts .llm-message-prompt-details:last-child,
 .llm-message-raw details:last-child {
     margin-bottom: 0;
-}
-
-.llm-message-prompt {
-    font-size: var(--font-size-small);
-    color: var(--color-text-primary);
-    line-height: 1.5;
-    word-break: break-word;
-}
-
-.llm-message-prompt strong {
-    color: var(--color-accent-green-bright);
-    font-weight: 600;
 }
 
 .llm-message-prompt-pre {
@@ -2017,59 +2179,19 @@ input[type="checkbox"]:focus {
     flex-wrap: wrap;
 }
 
-.preset-add-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    cursor: pointer;
-    list-style: none;
-    user-select: none;
-}
-
-.preset-add-toggle:focus-visible {
-    outline: none;
-    border-color: var(--color-accent-ok);
-    box-shadow: var(--shadow-focus-ring);
-}
-
-.preset-add-toggle::-webkit-details-marker {
-    display: none;
-}
-
-.preset-add-toggle::marker {
-    content: "";
-}
-
-.preset-add-toggle::before {
-    content: "";
-    width: 0;
-    height: 0;
-    border-left: 5px solid currentColor;
-    border-top: 4px solid transparent;
-    border-bottom: 4px solid transparent;
-}
-
-.preset-add[open] > .preset-add-toggle::before {
-    transform: rotate(90deg);
-}
-
-.preset-add > form {
-    margin-top: var(--spacing-sm);
-}
-
-.prompt-presets-panel .form-group {
+#edit-dialog :is(.preset-form, .preset-add-form) .form-group {
     margin-bottom: var(--spacing-sm);
 }
 
-.prompt-presets-panel label {
+#edit-dialog :is(.preset-form, .preset-add-form) label {
     display: block;
     margin-bottom: 4px;
     color: var(--color-text-muted);
     font-size: var(--font-size-small);
 }
 
-.prompt-presets-panel input[type="text"],
-.prompt-presets-panel textarea {
+#edit-dialog :is(.preset-form, .preset-add-form) input[type="text"],
+#edit-dialog :is(.preset-form, .preset-add-form) textarea {
     width: 100%;
     padding: 8px 12px;
     background: var(--color-bg-primary);
@@ -2080,20 +2202,20 @@ input[type="checkbox"]:focus {
     font-size: var(--font-size-base);
 }
 
-.prompt-presets-panel input[type="text"]:focus,
-.prompt-presets-panel textarea:focus {
+#edit-dialog :is(.preset-form, .preset-add-form) input[type="text"]:focus,
+#edit-dialog :is(.preset-form, .preset-add-form) textarea:focus {
     outline: none;
     border-color: var(--color-accent-ok);
     box-shadow: var(--shadow-focus-ring);
 }
 
-.prompt-presets-panel textarea {
+#edit-dialog :is(.preset-form, .preset-add-form) textarea {
     resize: vertical;
     min-height: 120px;
     line-height: 1.5;
 }
 
-.prompt-presets-panel .form-actions {
+#edit-dialog :is(.preset-form, .preset-add-form) .form-actions {
     display: flex;
     gap: var(--spacing-sm);
     margin-top: var(--spacing-sm);
