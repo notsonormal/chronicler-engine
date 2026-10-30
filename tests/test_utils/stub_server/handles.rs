@@ -82,14 +82,15 @@ impl StubChangesHandle {
             .load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// The requests the stub received for a fragment path or `/status/busy`,
-    /// failed ones included.
-    pub fn loads(&self, path: &str) -> usize {
+    /// The loads the stub received for a key, failed ones included. A key is a
+    /// part name (`games`), counted for each `GET /screen` that names the part;
+    /// `/screen`, counted for each request; or a `/fragment/` path (a dialog opener).
+    pub fn loads(&self, key: &str) -> usize {
         self.state
-            .fragment_loads
+            .loads
             .lock()
             .expect("stub load counts lock poisoned")
-            .get(path)
+            .get(key)
             .copied()
             .unwrap_or(0)
     }
@@ -103,7 +104,7 @@ impl StubChangesHandle {
             .clone()
     }
 
-    /// Fails every fragment, `/status/busy` and `/screen` request with a 500 and
+    /// Fails every `/fragment/` request (a dialog opener) and every `/screen` request with a 500 and
     /// leaves `GET /changes` working, so a screen load fails after a good ask.
     pub fn set_loads_failing(&self, failing: bool) {
         self.state

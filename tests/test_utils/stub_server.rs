@@ -560,7 +560,7 @@ struct StubState {
     changes: std::sync::Mutex<StubChanges>,
     settings: std::sync::Mutex<AppSettings>,
     change_asks: std::sync::atomic::AtomicUsize,
-    fragment_loads: std::sync::Mutex<HashMap<String, usize>>,
+    loads: std::sync::Mutex<HashMap<String, usize>>,
     screen_requests: std::sync::Mutex<Vec<Vec<String>>>,
     loads_failing: std::sync::atomic::AtomicBool,
     story_log_delay_ms: std::sync::atomic::AtomicU64,
@@ -730,7 +730,7 @@ impl StubServer {
             changes: std::sync::Mutex::new(StubChanges::new()),
             settings: std::sync::Mutex::new(AppSettings::default()),
             change_asks: std::sync::atomic::AtomicUsize::new(0),
-            fragment_loads: std::sync::Mutex::new(HashMap::new()),
+            loads: std::sync::Mutex::new(HashMap::new()),
             screen_requests: std::sync::Mutex::new(Vec::new()),
             loads_failing: std::sync::atomic::AtomicBool::new(false),
             story_log_delay_ms: std::sync::atomic::AtomicU64::new(0),
@@ -948,27 +948,16 @@ fn stub_router(state: Arc<StubState>) -> Router {
         // The real switch makes another Swipe active; the stub scripts only the two
         // log shapes and the dock drop a switch test observes.
         .route("/message/:id/swipe/:index", post(switch_swipe))
-        .route("/status/busy", get(status_busy))
         .route("/status/reset-busy", post(reset_busy))
         .route("/changes", get(changes_answer))
         .route("/screen", get(screen_answer))
         .route("/stub/touch", get(touch_revision))
         // A button that a check adds to a part posts here, so its request ends with 200.
         .route("/probe/:name", post(|| async { StatusCode::OK }))
-        .route("/fragment/header", get(header_fragment))
-        .route("/fragment/failure-banner", get(failure_banner_fragment))
-        .route("/fragment/story-log", get(story_log_fragment))
-        .route(
-            "/fragment/visual-sidebar",
-            get(|| async { Html(FIXTURE_VISUAL_SIDEBAR) }),
-        )
-        .route("/fragment/options-dock", get(options_dock_fragment))
-        .route("/fragment/llm-messages", get(llm_messages_fragment))
         .route(
             "/fragment/llm-messages/:id",
             get(llm_message_record_fragment),
         )
-        .route("/fragment/settings", get(settings_fragment))
         .route(
             "/fragment/connections/new",
             get(|| async { Html(connection_form_html(None)) }),
@@ -980,7 +969,6 @@ fn stub_router(state: Arc<StubState>) -> Router {
                 Html(connection_form_html(Some(&settings.connections[0])))
             }),
         )
-        .route("/fragment/prompt-presets", get(presets_fragment))
         .route(
             "/fragment/prompt-presets/new",
             get(preset_add_form_fragment),
@@ -993,13 +981,11 @@ fn stub_router(state: Arc<StubState>) -> Router {
             "/fragment/prompt-presets/:id/view",
             get(preset_view_form_fragment),
         )
-        .route("/fragment/worlds", get(worlds_fragment))
         .route(
             "/fragment/worlds/new",
             get(|| async { Html(world_form_html(None)) }),
         )
         .route("/worlds/:key/edit", get(edit_world_form_fragment))
-        .route("/fragment/games", get(games_fragment))
         .route("/fragment/games/new", get(new_game_form_fragment))
         .route("/fragment/games/:id/rename", get(rename_game_form_fragment))
         .nest_service("/assets", tower_http::services::ServeDir::new("assets"))
@@ -1028,11 +1014,6 @@ async fn switch_game(
         .set_game(Some(id));
     state.bump(&[ChangeKind::GAMES]);
     (StatusCode::OK, "").into_response()
-}
-
-async fn games_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
-    let games = state.games.lock().expect("stub games lock poisoned");
-    Html(games_html(&games, 1))
 }
 
 async fn new_game_form_fragment() -> Html<String> {
@@ -1212,12 +1193,8 @@ fn story_log_entries_with_extra_oldest() -> Vec<StoryRow> {
     entries
 }
 
-const PANEL_LOAD_PATHS: [&str; 4] = [
-    "/fragment/worlds",
-    "/fragment/games",
-    "/fragment/settings",
-    "/fragment/prompt-presets",
-];
+/// The parts of the panels, which a failing panel load fails.
+const PANEL_PARTS: [&str; 4] = ["worlds", "games", "settings", "prompt-presets"];
 
 async fn request_answers_middleware(
     State(state): State<Arc<StubState>>,
@@ -1245,30 +1222,31 @@ async fn count_and_fail_reads_middleware(
     use std::sync::atomic::Ordering::SeqCst;
     let path = request.uri().path().to_string();
     let query = request.uri().query().unwrap_or_default().to_string();
-    let is_load = path.starts_with("/fragment/") || path == "/status/busy" || path == "/screen";
-    let names_part = |part: &str| query.split(['=', ',', '&']).any(|name| name == part);
+    let is_load = path.starts_with("/fragment/") || path == "/screen";
+    let parts: Vec<&str> = if path == "/screen" {
+        query
+            .split('&')
+            .filter_map(|pair| pair.strip_prefix("parts="))
+            .flat_map(|names| names.split(','))
+            .collect()
+    } else {
+        Vec::new()
+    };
     if is_load {
-        *state
-            .fragment_loads
-            .lock()
-            .expect("stub load counts lock poisoned")
-            .entry(path.clone())
-            .or_insert(0) += 1;
+        let mut loads = state.loads.lock().expect("stub load counts lock poisoned");
+        *loads.entry(path.clone()).or_insert(0) += 1;
+        for part in &parts {
+            *loads.entry(part.to_string()).or_insert(0) += 1;
+        }
     }
     if path == "/changes" {
         state.change_asks.fetch_add(1, SeqCst);
     }
     let delay_ms = state.story_log_delay_ms.load(SeqCst);
-    let loads_story_log =
-        path == "/fragment/story-log" || (path == "/screen" && names_part("story-log"));
-    if loads_story_log && delay_ms > 0 {
+    if parts.contains(&"story-log") && delay_ms > 0 {
         tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
     }
-    let is_panel_load = PANEL_LOAD_PATHS.contains(&path.as_str())
-        || (path == "/screen"
-            && ["worlds", "games", "settings", "prompt-presets"]
-                .iter()
-                .any(|part| names_part(part)));
+    let is_panel_load = parts.iter().any(|part| PANEL_PARTS.contains(part));
     if is_panel_load && state.panel_loads_failing.load(SeqCst) {
         return failed_answer("panel load failed");
     }
@@ -1284,10 +1262,6 @@ async fn count_and_fail_reads_middleware(
         return failed_answer("read failed");
     }
     next.run(request).await
-}
-
-async fn header_fragment() -> Html<String> {
-    Html(header_html())
 }
 
 async fn failure_banner_fragment(State(state): State<Arc<StubState>>) -> Html<String> {
@@ -1507,7 +1481,7 @@ async fn screen_part_html(state: &Arc<StubState>, name: &str, games_page: u64) -
 }
 
 /// `GET /screen?parts=`: the canned parts, each answered as the engine answers it.
-/// The request is recorded, and each part counts as a load of its own route.
+/// The request is recorded; the load counter counts each part it names.
 async fn screen_answer(
     State(state): State<Arc<StubState>>,
     axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
@@ -1537,17 +1511,6 @@ async fn screen_answer(
         let Some(html) = screen_part_html(&state, name, games_page).await else {
             return (StatusCode::BAD_REQUEST, format!("unknown part {name}")).into_response();
         };
-        if let Some(part) = super::screen_part_table::PARTS
-            .iter()
-            .find(|part| part.name == name)
-        {
-            *state
-                .fragment_loads
-                .lock()
-                .expect("stub load counts lock poisoned")
-                .entry(part.name.to_string())
-                .or_insert(0) += 1;
-        }
         body.push_str(&format!("<template data-part=\"{name}\">{html}</template>"));
     }
     (

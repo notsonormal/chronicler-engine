@@ -36,3 +36,13 @@ pub fn panel_section_html_slice<'a>(body: &'a str, heading: &str) -> Option<&'a 
         .unwrap_or(body.len());
     Some(&body[start..end])
 }
+
+/// The inner HTML of the `<template data-part="{name}">` of a `GET /screen`
+/// body: the part as the client gets it. `None` when the body has no such part,
+/// as with a failed read.
+pub fn part_of_screen<'a>(screen_body: &'a str, name: &str) -> Option<&'a str> {
+    let opening = format!("<template data-part=\"{name}\">");
+    let start = screen_body.find(&opening)? + opening.len();
+    let length = screen_body[start..].find("</template>")?;
+    Some(&screen_body[start..start + length])
+}

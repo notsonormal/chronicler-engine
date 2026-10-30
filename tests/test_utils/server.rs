@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
+use super::html::part_of_screen;
+
 static SERVER_MANAGED: AtomicBool = AtomicBool::new(false);
 
 /// Registry of `port -> spawned_child_pid` so `kill_existing_server` can terminate
@@ -335,14 +337,16 @@ async fn add_connection(
         resp.status()
     );
     let body = reqwest::Client::new()
-        .get(format!("http://127.0.0.1:{port}/fragment/settings"))
+        .get(format!("http://127.0.0.1:{port}/screen?parts=settings"))
         .send()
         .await
         .unwrap_or_else(|e| panic!("load the settings panel for the {name} connection: {e}"))
         .text()
         .await
         .expect("settings panel body");
-    extract_connection_id(&body, name).unwrap_or_else(|| {
+    let body = part_of_screen(&body, "settings")
+        .unwrap_or_else(|| panic!("the screen answer has no settings part: {body}"));
+    extract_connection_id(body, name).unwrap_or_else(|| {
         panic!("could not find the {name} connection in the rendered settings panel")
     })
 }

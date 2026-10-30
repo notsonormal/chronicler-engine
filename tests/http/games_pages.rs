@@ -6,7 +6,7 @@ use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::test_support::{seed_game_row, test_new_game, TestAppBuilder};
 
 use crate::support::http_requests::{fetch_answer, post_form};
-use crate::test_utils::panel_section_html_slice;
+use crate::test_utils::{panel_section_html_slice, part_of_screen};
 
 const PAGE_SIZE: usize = 50;
 
@@ -38,15 +38,7 @@ fn app_with_saved_games(saved: usize) -> (axum::Router, Vec<u64>) {
 }
 
 fn games_part(screen: &str) -> &str {
-    let opening = r#"<template data-part="games">"#;
-    let start = screen
-        .find(opening)
-        .expect("the answer holds the games part")
-        + opening.len();
-    let end = screen[start..]
-        .find("</template>")
-        .expect("the games part ends");
-    &screen[start..start + end]
+    part_of_screen(screen, "games").expect("the answer holds the games part")
 }
 
 fn saved_section(part: &str) -> &str {

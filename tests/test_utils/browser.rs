@@ -7,7 +7,7 @@ use playwright_rs::Playwright;
 
 use super::convergence::assert_screen_converged;
 use super::htmx_settle::{await_panel_ready, click_and_settle, install_htmx_settle};
-use super::html::preset_card_html_slice;
+use super::html::{part_of_screen, preset_card_html_slice};
 use super::server::{buffer_text, get_config_port, registered_server_logs, tail_lines, TestServer};
 use super::screen::{wait_for_screen_current, WAIT_FOR_SCREEN_INIT_SCRIPT};
 use super::stub_server::StubServer;
@@ -307,15 +307,20 @@ pub async fn seed_system_preset(port: u16, name: &str, instructions: &str) {
         "seed_system_preset('{name}') must answer nothing: {body}"
     );
     let panel = client
-        .get(format!("http://127.0.0.1:{port}/fragment/prompt-presets"))
+        .get(format!(
+            "http://127.0.0.1:{port}/screen?parts=prompt-presets"
+        ))
         .send()
         .await
         .unwrap_or_else(|e| panic!("load the preset panel after seeding '{name}': {e}"))
         .text()
         .await
         .unwrap_or_default();
+    let panel = part_of_screen(&panel, "prompt-presets").unwrap_or_else(|| {
+        panic!("load the preset panel after seeding '{name}' gave no part: {panel}")
+    });
     assert!(
-        preset_card_rendered(&panel, name),
+        preset_card_rendered(panel, name),
         "seed_system_preset('{name}') found no card for the new preset in the panel: {panel}"
     );
 }

@@ -5,6 +5,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use super::browser::capture_failure_state;
+use super::html::part_of_screen;
 
 pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
     let start = std::time::Instant::now();
@@ -12,12 +13,15 @@ pub async fn wait_for_llm_idle(port: u16, timeout: Duration) -> Result<(), ()> {
 
     while start.elapsed() < timeout {
         if let Ok(resp) = client
-            .get(format!("http://127.0.0.1:{port}/status/busy"))
+            .get(format!(
+                "http://127.0.0.1:{port}/screen?parts=status-display"
+            ))
             .send()
             .await
         {
             if let Ok(text) = resp.text().await {
-                if text.contains(r#"data-status="idle""#) {
+                let status = part_of_screen(&text, "status-display").unwrap_or_default();
+                if status.contains(r#"data-status="idle""#) {
                     return Ok(());
                 }
             }

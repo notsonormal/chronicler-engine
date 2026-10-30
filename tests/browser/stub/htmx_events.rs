@@ -125,7 +125,7 @@ async fn check_after_request_fires_with_status_zero_for_every_request_that_got_n
     stub.changes_handle().set_story_log_delay_ms(3000);
     record_events(&page).await;
 
-    add_probe(&page, r#"hx-get="/fragment/story-log" hx-swap="none""#).await;
+    add_probe(&page, r#"hx-get="/screen?parts=story-log" hx-swap="none""#).await;
     press_probe(&page).await;
     page.evaluate::<(), ()>(
         "() => { htmx.trigger(document.getElementById('probe-button'), 'htmx:abort'); }",
@@ -142,7 +142,7 @@ async fn check_after_request_fires_with_status_zero_for_every_request_that_got_n
     assert_eq!(seen[0]["status"], 0, "an abort has status 0");
 
     forget_events(&page).await;
-    add_probe(&page, r#"hx-get="/fragment/story-log" hx-swap="none""#).await;
+    add_probe(&page, r#"hx-get="/screen?parts=story-log" hx-swap="none""#).await;
     page.evaluate::<(), ()>(
         "() => { document.body.addEventListener('htmx:beforeSend', (evt) => { evt.detail.xhr.timeout = 100; }, { once: true }); }",
         None,

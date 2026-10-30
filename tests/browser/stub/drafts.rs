@@ -25,13 +25,16 @@ async fn select_state(page: &playwright_rs::Page) -> (String, bool) {
     .unwrap()
 }
 
+/// The read is a `GET /screen`, so it counts as a load of the `settings` part:
+/// a check reads the server value before it records the load count.
 async fn server_value_of_quantifier(page: &playwright_rs::Page) -> String {
     page.evaluate::<(), String>(
         r#"async () => {
-            const answer = await fetch('/fragment/settings', { cache: 'no-store' });
-            const template = document.createElement('template');
-            template.innerHTML = await answer.text();
-            return template.content.querySelector('#role-select-quantifier option[selected]').value;
+            const answer = await fetch('/screen?parts=settings', { cache: 'no-store' });
+            const screen = document.createElement('template');
+            screen.innerHTML = await answer.text();
+            const settings = screen.content.querySelector('template[data-part="settings"]');
+            return settings.content.querySelector('#role-select-quantifier option[selected]').value;
         }"#,
         None,
     )
