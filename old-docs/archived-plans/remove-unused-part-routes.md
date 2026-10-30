@@ -1,6 +1,6 @@
 # Plan: Remove the part routes that the page does not call, and the second Action route
 
-**Status:** Approved by the owner on 2026-10-30 (O1 = A, O2 = remove `/action/confirm`, per-stage commits). Not started.
+**Status:** Done, 2026-10-30. Built in three stages: `ddaea736`, `ff4703ca`, `d4e67887`. Approved by the owner on 2026-10-30 (O1 = A, O2 = remove `/action/confirm`, per-stage commits).
 **Goal:** Every screen part has one route, `GET /screen?parts=…`, and sending an Action has one route, `POST /action`. The tests use the routes that the page uses, so they check the answers that the page gets.
 **Branch:** `wf/change-driven-dashboard-refresh` (HEAD `a4dc7228` when this draft was written).
 **Origin:** owner decisions Q9 = A (2026-10-29) and O2 = A (2026-10-30), after the review of the dashboard design (`tmp/dashboard-design-review/impl-review.md`, finding M3). Inventory: `tmp/part-routes/inventory.md` (all counts and lines below come from it).
