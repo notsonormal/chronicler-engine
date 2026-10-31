@@ -1,0 +1,23 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 0 and seed -2906281397564003069 with 1 worker on 3 cores with 1820MB heap and 64MB offheap memory [pid: 2281681] (Linux 6.12.111+deb13-amd64 amd64, Eclipse Adoptium 21.0.13 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /workspace/chronicler-engine/tmp/tla-ts-run/GateSpecOnly.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module GateSpecOnly
+Starting... (2026-10-31 13:10:35)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-10-31 13:10:36.
+Progress(12) at 2026-10-31 13:10:39: 41,911 states generated (41,911 s/min), 11,838 distinct states found (11,838 ds/min), 4,047 states left on queue.
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 5.4E-9
+  based on the actual fingerprints:  val = 1.7E-8
+810277 states generated, 152135 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 32.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 7 and the 95th percentile is 4).
+Finished in 24s at (2026-10-31 13:10:57)

@@ -9,7 +9,7 @@ One decision on the role of the statechart skill (`.agents/skills/statechart/`) 
 ## Notes
 
 - **Plan, don't do.** Tickets produce decisions. The trial TLA+ model of ticket 03 is the one artifact the map makes, and it is the outside check of the decision. Ticket 03 lists the tests it finds as candidates; it lands no test and changes no code (owner, 2026-10-29).
-- **Charted 2026-10-29.** Tickets 01 to 04. New tickets number from 05.
+- **Charted 2026-10-29.** Tickets 01 to 04. Ticket 05 (tla-ts) added 2026-10-31. New tickets number from 06.
 - **Origin.** A session that installed the skill and drew three charts: the life of one Job, one Autoplay run, and the state of a new Swipe. The TLA+ models, the views, the reports and the SVGs are in `tmp/statechart/` (git-ignored; its `README.md` holds the commands). Those three TLA+ models were written after a read of `job.rs`, `gate.rs` and `driver.rs`, so they mirror the code and are not spec-only TLA+ models. One rule broke (a stop or a restart between the text save and the state update), and `docs/diataxis/reference/game_flow.md` already accepts that outcome. No code defect was found.
 - **The owner's question.** The code, the spec (`docs/specs/`, enforced by the tagged tests) and the docs (`docs/diataxis/`, enforced for structure only) are three sources of truth. Can a TLA+ model find gaps between the spec and the code, or tie the docs to the code, or is it only a mechanical check of the code, like a mutation test?
 - **Read first.** The closed platform-choice map ruled on nearby questions:
@@ -18,7 +18,7 @@ One decision on the role of the statechart skill (`.agents/skills/statechart/`) 
   - [Decide the race tests and guardrail rule 18](../_closed/platform-choice/issues/12-decide-race-tests-and-rule-18.md) — no scheduler tool; the race scenarios live in `tests/http/races.rs`.
 
   This map asks what a TLA+ model adds on top of those rulings and `races.rs`, not whether model checking is good in general.
-- **Toolchain (known).** The skill's runner needs a JDK 11+ and `tla2tools.jar`, or `mise`. This host has neither. The first session used Temurin 21 in `/tmp/statechart-tools/jdk` and `tla2tools.jar` 1.7.4 (checksum matches the pinned one) through the `JAVA` and `TLA2TOOLS` variables. Pele 1.9.0 for the SVGs is in `/tmp/pele-render`. `/tmp` may be cleared.
+- **Toolchain (known).** The skill's runner needs a JDK 11+ and `tla2tools.jar`, or `mise`. This host has no system JDK and no system `tla2tools.jar`. The first session used Temurin 21 in `/tmp/statechart-tools/jdk` and `tla2tools.jar` 1.7.4 (checksum matches the pinned one) through the `JAVA` and `TLA2TOOLS` variables. Pele 1.9.0 for the SVGs is in `/tmp/pele-render`. `/tmp` may be cleared; both tools were still there on 2026-10-31. tla-ts (`npx --yes tla-ts@0.0.3`, Node only) checks the same TLA+ models with no JDK, but the skill's charts still need TLC (ticket 05).
 - **The vendored skill.** Copied from `cursor/plugins` `pstack/skills/statechart` on 2026-10-29, without its `scripts/test/` folder (3.8 MB). It is untracked and has no `skills-lock.json` entry.
 - **Terms.** Use `CONTEXT.md`: Game, Job, Message, Swipe, Persona, Trigger, Autoplay run.
 - **"Model" has two meanings here; never write it alone.** A **TLA+ model** is the state-machine file that TLC checks: its variables, its start state, its actions and its rules. A **model call** and the **LLM** are the language model, as in `CONTEXT.md`; `ScriptedModel` is the **LLM fake**. **Model checking** is the name of the technique that TLC runs. The two assets of tickets 01 and 02 were written before this rule and use "model" alone for the TLA+ model.
@@ -35,7 +35,7 @@ One decision on the role of the statechart skill (`.agents/skills/statechart/`) 
 All of these hang on the decision of the role:
 
 - **Where a rule of a TLA+ model pairs: a spec scenario or a doc sentence.** A validator pairs each invariant with one rule, as `validate_feature_spec.py` pairs scenarios with tests. The owner's leaning (ticket 03) is that `game_flow.md` need not hold every rule, which favours the spec scenario. The rules that broke in ticket 03 already map to spec scenarios (39.4, 39.5, 41.6, 41.7, 41.17, the intro of autoplay.md).
-- **The toolchain.** `mise` config in the repo, a `build.py` step, a CI step, or none.
+- **The toolchain.** It has two parts (ticket 05). The check of a TLA+ model can run on tla-ts with Node only. The chart of the statechart skill still needs TLC and a JDK 11+, until a tla-ts release writes `-tool`, `-dump` and SANY XML (tla-ts #228, #232). For each part: `mise` config in the repo, a `build.py` step, a CI step, or none.
 - **A repo-local addendum to the skill.** The spec-only discipline (read `src/` only for the replay), where TLA+ models live, the `CONTEXT.md` terms in labels, each gap of the docs as a constant, the "all off" check for rules that hold by construction, small bounds, and a tier-1 sketch for each break (ticket 03).
 - **The trigger for a new audit.** What starts a new one-time TLA+ model, for example a new flow or a change to the gate. Candidate flows: the Autoplay loop with stop and reset, a config write against a busy Game, the status rule of `GameViewQuery`.
 - **Provenance of the vendored skill.** An entry in `skills-lock.json`, the skill's own tests, or neither.

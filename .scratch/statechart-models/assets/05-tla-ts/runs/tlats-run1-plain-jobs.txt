@@ -1,0 +1,251 @@
+Checking GateSpecOnly.tla with run1-plain-jobs.cfg
+Error: Invariant R02_ARunningJobKeepsItsEntry is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ nextJob = 1
+/\ cut = {}
+/\ lastIsInput = FALSE
+/\ storyWriteWhileBusy = FALSE
+/\ gameExists = TRUE
+/\ loops = <<>>
+/\ wrongRunEnds = {}
+/\ lastAccepted = 0
+/\ optFail = [on |-> FALSE, by |-> 0]
+/\ endedRuns = {}
+/\ holder = [kind |-> "none", run |-> 0, job |-> 0, step |-> "none", cycles |-> 0]
+/\ failure = [on |-> FALSE, by |-> 0]
+/\ nextRun = 1
+/\ late = {}
+/\ justRestarted = FALSE
+/\ configWriteUnderRun = FALSE
+/\ restarts = 0
+/\ sinceStop = FALSE
+/\ jobs = << [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ] >>
+/\ stateWrites = <<0, 0, 0>>
+/\ staleAccepts = {}
+/\ gameActive = TRUE
+
+State 2: <YouSendAnAction line 130, col 3 to line 140, col 59 of module GateSpecOnly>
+/\ nextJob = 2
+/\ cut = {}
+/\ lastIsInput = FALSE
+/\ storyWriteWhileBusy = FALSE
+/\ gameExists = TRUE
+/\ loops = <<>>
+/\ wrongRunEnds = {}
+/\ lastAccepted = 1
+/\ optFail = [on |-> FALSE, by |-> 0]
+/\ endedRuns = {}
+/\ holder = [kind |-> "job", run |-> 0, job |-> 1, step |-> "none", cycles |-> 0]
+/\ failure = [on |-> FALSE, by |-> 0]
+/\ nextRun = 1
+/\ late = {}
+/\ justRestarted = FALSE
+/\ configWriteUnderRun = FALSE
+/\ restarts = 0
+/\ sinceStop = FALSE
+/\ jobs = << [ kind |-> "action",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "input",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ] >>
+/\ stateWrites = <<0, 0, 0>>
+/\ staleAccepts = {}
+/\ gameActive = TRUE
+
+State 3: <YouPressStop line 157, col 3 to line 166, col 73 of module GateSpecOnly>
+/\ nextJob = 2
+/\ cut = {1}
+/\ lastIsInput = FALSE
+/\ storyWriteWhileBusy = FALSE
+/\ gameExists = TRUE
+/\ loops = <<>>
+/\ wrongRunEnds = {}
+/\ lastAccepted = 1
+/\ optFail = [on |-> FALSE, by |-> 0]
+/\ endedRuns = {}
+/\ holder = [kind |-> "none", run |-> 0, job |-> 0, step |-> "none", cycles |-> 0]
+/\ failure = [on |-> FALSE, by |-> 0]
+/\ nextRun = 1
+/\ late = {}
+/\ justRestarted = FALSE
+/\ configWriteUnderRun = FALSE
+/\ restarts = 0
+/\ sinceStop = TRUE
+/\ jobs = << [ kind |-> "action",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "input",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ] >>
+/\ stateWrites = <<0, 0, 0>>
+/\ staleAccepts = {}
+/\ gameActive = TRUE
+
+State 4: <YouSendAnAction line 130, col 3 to line 140, col 59 of module GateSpecOnly>
+/\ nextJob = 3
+/\ cut = {1}
+/\ lastIsInput = FALSE
+/\ storyWriteWhileBusy = FALSE
+/\ gameExists = TRUE
+/\ loops = <<>>
+/\ wrongRunEnds = {}
+/\ lastAccepted = 2
+/\ optFail = [on |-> FALSE, by |-> 0]
+/\ endedRuns = {}
+/\ holder = [kind |-> "job", run |-> 0, job |-> 2, step |-> "none", cycles |-> 0]
+/\ failure = [on |-> FALSE, by |-> 0]
+/\ nextRun = 1
+/\ late = {}
+/\ justRestarted = FALSE
+/\ configWriteUnderRun = FALSE
+/\ restarts = 0
+/\ sinceStop = FALSE
+/\ jobs = << [ kind |-> "action",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "input",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "action",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "input",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ] >>
+/\ stateWrites = <<0, 0, 0>>
+/\ staleAccepts = {}
+/\ gameActive = TRUE
+
+State 5: <ASaveIsRefused(1) line 350, col 3 to line 352, col 52 of module GateSpecOnly>
+/\ nextJob = 3
+/\ cut = {1}
+/\ lastIsInput = FALSE
+/\ storyWriteWhileBusy = FALSE
+/\ gameExists = TRUE
+/\ loops = <<>>
+/\ wrongRunEnds = {}
+/\ lastAccepted = 2
+/\ optFail = [on |-> FALSE, by |-> 0]
+/\ endedRuns = {}
+/\ holder = [kind |-> "job", run |-> 0, job |-> 2, step |-> "none", cycles |-> 0]
+/\ failure = [on |-> FALSE, by |-> 0]
+/\ nextRun = 1
+/\ late = {}
+/\ justRestarted = FALSE
+/\ configWriteUnderRun = FALSE
+/\ restarts = 0
+/\ sinceStop = FALSE
+/\ jobs = << [ kind |-> "action",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "end",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "action",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "input",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ] >>
+/\ stateWrites = <<0, 0, 0>>
+/\ staleAccepts = {}
+/\ gameActive = TRUE
+
+State 6: <TheJobEnds(1) line 358, col 3 to line 367, col 60 of module GateSpecOnly>
+/\ nextJob = 3
+/\ cut = {}
+/\ lastIsInput = FALSE
+/\ storyWriteWhileBusy = FALSE
+/\ gameExists = TRUE
+/\ loops = <<>>
+/\ wrongRunEnds = {}
+/\ lastAccepted = 2
+/\ optFail = [on |-> FALSE, by |-> 0]
+/\ endedRuns = {}
+/\ holder = [kind |-> "none", run |-> 0, job |-> 0, step |-> "none", cycles |-> 0]
+/\ failure = [on |-> FALSE, by |-> 0]
+/\ nextRun = 1
+/\ late = {}
+/\ justRestarted = FALSE
+/\ configWriteUnderRun = FALSE
+/\ restarts = 0
+/\ sinceStop = FALSE
+/\ jobs = << [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "ended",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "action",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "input",
+     narration |-> FALSE,
+     failed |-> FALSE ],
+   [ kind |-> "none",
+     run |-> 0,
+     step |-> "none",
+     pc |-> "unborn",
+     narration |-> FALSE,
+     failed |-> FALSE ] >>
+/\ stateWrites = <<0, 0, 0>>
+/\ staleAccepts = {}
+/\ gameActive = TRUE
+
+285 states generated, 116 distinct states found, 58 states left on queue.
+The depth of the complete state graph search is 6.

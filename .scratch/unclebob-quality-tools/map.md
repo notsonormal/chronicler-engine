@@ -24,15 +24,16 @@ Labels: wayfinder:map
 
 <!-- one line per closed ticket: [title](link) — gist -->
 
+- [Research: what a CRAP report shows on this codebase](./issues/01-research-crap-report.md) — on fresh coverage the report runs in 4 s; whether `?` counts as a branch decides the ranking (it is 25.7 % of all CC and puts 7 `from_row` lists in the top 20); 85.5 % of functions are fully covered, so the report is mostly a complexity list; no branch coverage on this toolchain. Value decision graduated to [Grilling: does the CRAP report have value here, and which CC rule?](./issues/05-grilling-crap-report-value.md).
+- [Research: what a structural duplicate report shows beside jscpd](./issues/02-research-duplicate-report.md) — dryer finds 52 production pairs at defaults: 10 real (2 that jscpd misses), 42 idiom noise that 7 structural rules remove; dryer has no ignore mechanism; test code gives 409 + 1,016 pairs. Value decision graduated to [Grilling: does the duplicate report have value here…](./issues/04-grilling-duplicate-report-value.md).
+
 ## Not yet specified
 
-- **Value decision per tool.** A grilling ticket graduates from each of 01, 02 and 03 when it resolves: does the tool have value here, and against which bar?
+- **Value decision per tool.** A grilling ticket graduates from 03 when it resolves: does mutation testing have value here, and against which bar? (01 and 02 have graduated their tickets.)
 - **Safe mutation runs in a shared tree** (was retro-issue-bucket ticket 83, deleted 2026-10-25; evidence carried into [03](./issues/03-research-mutation-engines.md)). Restore by hash, run on the final tree, report which tree the result came from. Its form depends on the engine 03 finds.
 - **Form of each kept tool:** upstream, vendored, or a port (`syn` in Rust beside the guardrails, Python in `scripts/`, or both).
 - **Place in `build.py`** for each kept tool: on-demand subcommand, report-only full-gate step scoped to changed files (as `duplicates`), or a gate. The closed pilot and the 2026 study said "never a gate"; the user left this open.
 - **Home:** `scripts/healthcheck.py` subcommand (it already dispatches `duplicates`) or a separate script.
-- **jscpd:** whether the duplicate tool replaces it or runs beside it.
-- **Coverage freshness for CRAP:** reuse the last `--coverage` run (293–499 s) or run coverage on demand.
 - **Differential runs:** per-function hash snapshots so a run redoes only changed functions (mutator does this; `cargo-mutants` has `--iterate` and `--in-diff`).
 
 ## Out of scope

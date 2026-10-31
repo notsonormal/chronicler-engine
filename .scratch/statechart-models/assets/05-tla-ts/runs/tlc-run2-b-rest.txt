@@ -1,0 +1,28 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 0 and seed -7858467605527747841 with 1 worker on 3 cores with 1820MB heap and 64MB offheap memory [pid: 2316608] (Linux 6.12.111+deb13-amd64 amd64, Eclipse Adoptium 21.0.13 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /workspace/chronicler-engine/tmp/tla-ts-run/GateSpecOnly.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module GateSpecOnly
+Starting... (2026-10-31 13:19:17)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-10-31 13:19:20.
+Progress(11) at 2026-10-31 13:19:23: 17,284 states generated (17,284 s/min), 6,583 distinct states found (6,583 ds/min), 3,274 states left on queue.
+Progress(20) at 2026-10-31 13:20:23: 1,499,497 states generated (1,482,213 s/min), 412,871 distinct states found (406,288 ds/min), 108,484 states left on queue.
+Progress(23) at 2026-10-31 13:21:23: 3,122,295 states generated (1,622,798 s/min), 814,488 distinct states found (401,617 ds/min), 175,573 states left on queue.
+Progress(26) at 2026-10-31 13:22:23: 6,068,465 states generated (2,946,170 s/min), 1,472,754 distinct states found (658,266 ds/min), 204,832 states left on queue.
+Progress(29) at 2026-10-31 13:23:23: 9,007,565 states generated (2,939,100 s/min), 2,112,406 distinct states found (639,652 ds/min), 217,173 states left on queue.
+Progress(31) at 2026-10-31 13:24:23: 11,270,143 states generated (2,262,578 s/min), 2,541,817 distinct states found (429,411 ds/min), 154,186 states left on queue.
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 1.5E-6
+  based on the actual fingerprints:  val = 1.7E-7
+12696691 states generated, 2728171 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 37.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 7 and the 95th percentile is 3).
+Finished in 05min 54s at (2026-10-31 13:25:08)

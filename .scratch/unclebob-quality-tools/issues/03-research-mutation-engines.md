@@ -1,7 +1,7 @@
 # Research: which mutation engine works on this codebase, and what it shows
 
 Type: research (AFK)
-Status: open
+Status: claimed
 Blocked by:
 
 ## Question

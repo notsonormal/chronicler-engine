@@ -1,0 +1,9 @@
+Checking GateSpecOnly.tla with run1b-c-restart.cfg
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 2.1E-9
+  based on the actual fingerprints:  val = 1.7E-8
+511478 states generated, 95286 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 32.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 7 and the 95th percentile is 4).
