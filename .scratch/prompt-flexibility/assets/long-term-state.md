@@ -225,7 +225,7 @@ the Swipe row (`message_swipes.state`), so a Retry makes a row with its own stat
 | **zTracker** | a status badge per run with an elapsed timer and a cancel. A chooser gates a Manual Module. A hidden world info filter cuts the noise | per-part regenerate of one section, one list item or one field, plus a cleanup of stale sections | [README](https://github.com/Zaakh/SillyTavern-zTracker) (`known`) |
 | **ST World Info timed effects** | the effect is dropped when the entry is missing or is no longer configured for that effect | `/wi-set-timed-effect` and `/wi-get-timed-effect` read and write it by hand | `public/scripts/world-info.js:617-653`, `:1950-1967` (`known`) |
 | **AI Dungeon script** | an error is contained, and the other Scripts keep running. The order of the list decides who has the last word | the author edits `state`, or the script rewrites the memory text | [Scripting](https://help.aidungeon.com/scripting) (`known`) |
-| **Our engine, the Quantifier** | the Agent failure is logged as a warning and the Quantifier result is `default()`: no Characters present and no destination. `game_rules::apply` then **clears `characters_present`** and keeps the Room. Nothing reaches the player | no check, no re-extraction, no hand edit of the Swipe state | `src/application/agents/runner.rs:71-79`, `src/domain/model/utils/game_rules.rs:53-58` (`known`) |
+| **Our engine, the Quantifier** | the Agent failure is logged as a warning and the Quantifier result is `default()`: no Characters present and no destination. `game_rules::apply` then **clears `characters_present`** and keeps the Room. Nothing reaches the player | no check, no re-extraction, no hand edit of the Swipe state | `src/application/agents/runner.rs:71-79`, `src/domain/model/utils/game_rules.rs:53-58` (`known`). **Correction:** wrong for a model failure, which keeps the previous Characters present through the `Low` confidence fallback. See [Decide what the state does when a state writer fails](../issues/15-failed-state-writer.md) |
 
 **known** The stored Game 6 shows this in numbers. `llm_messages` holds 30 Quantifier calls and 24 of them
 failed with `HTTP 400` (the `content_filter` fault of [10-quantifier-options-layout](../issues/10-quantifier-options-layout.md)).
@@ -303,6 +303,8 @@ carries it.
   The two failure rules differ, and ours is the unsafe one.
 
 > **Coordinator check (known).** The player is not fully blind to the failure. A failure banner exists since commit `29fb773a` (2026-10-09), and the Settings page has a Quantifier role-health row (`src/adapters/driving/http/builders/headers.rs`). But the banner text is "Quantifier failed — keeping the Characters present" (`role_failure_effect`), and the code does the opposite: `game_rules::apply` sets `characters_present` from the empty result (`src/domain/model/utils/game_rules.rs:67-71`). The doc comment on `AgentRunner::after_narration` (`src/application/agents/runner.rs:69-70`) says this empty result is intended. Whether the banner showed during the Game 6 run is unknown.
+>
+> **Correction (2026-10-31).** The check above is wrong for a model failure. After 2 failed attempts, the Quantifier falls back to the previous Characters present (`Low` confidence, `static_character_result`), so the banner is correct. Only the runner's `Err` path clears them. See [Decide what the state does when a state writer fails](../issues/15-failed-state-writer.md).
 
 ### For [08-test-setup-and-trial](../issues/08-test-setup-and-trial.md): state changes in the reading pack
 

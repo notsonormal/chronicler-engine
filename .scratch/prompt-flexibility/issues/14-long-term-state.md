@@ -70,6 +70,7 @@ Asset: [How ST, ME and other tools keep long-term state](../assets/long-term-sta
 - **known** The failure rule is the unsafe part. A failed Quantifier is a logged warning and
   `QuantifierResult::default()`, and `game_rules::apply` then clears `characters_present` and keeps the Room.
   In the stored Game 6, 24 of 30 Quantifier calls failed. Coordinator check (known): a failure banner and a Settings role-health row exist, but the banner says "keeping the Characters present" while the code clears them.
+  **Correction (2026-10-31, [Decide what the state does when a state writer fails](15-failed-state-writer.md)):** wrong. A failed model call keeps the previous Characters present through the `Low` confidence fallback. Only the `Err` path of the runner (no saved text or no Room) clears them. The banner is correct.
 
 Facts the later tickets need:
 
