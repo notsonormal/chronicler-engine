@@ -3,9 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::adapters::driven::llm::providers::{
-    DeepSeekBackend, MockBackend, OllamaBackend, OpenRouterBackend,
-};
+use crate::adapters::driven::llm::providers::{ChatCompletionsBackend, MockBackend};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::text_check::HarperTextChecker;
 use crate::application::agents::AgentRunner;
@@ -36,9 +34,9 @@ use crate::error::Result;
 fn provider_from_config(config: &LlmConnection) -> Arc<dyn LlmProvider> {
     match config.provider {
         LlmBackendType::Mock => Arc::new(MockBackend::new().with_model(config.model.as_str())),
-        LlmBackendType::DeepSeek => Arc::new(DeepSeekBackend::from_config(config)),
-        LlmBackendType::OpenRouter => Arc::new(OpenRouterBackend::from_config(config)),
-        LlmBackendType::Ollama => Arc::new(OllamaBackend::from_config(config)),
+        LlmBackendType::OpenRouter | LlmBackendType::Ollama | LlmBackendType::OpenCodeGo => {
+            Arc::new(ChatCompletionsBackend::from_config(config))
+        }
     }
 }
 
@@ -55,8 +53,8 @@ fn recorder_with_storage(
         let config = pick(&settings)?;
         config.check_api_key_available()?;
         tracing::info!(
-            "Resolved LLM provider for {role}: provider={:?}, model={}, api_key={}",
-            config.provider,
+            "Resolved LLM provider for {role}: provider={}, model={}, api_key={}",
+            config.provider.display_label(),
             config.model,
             if config.resolve_api_key().is_some() {
                 "present"

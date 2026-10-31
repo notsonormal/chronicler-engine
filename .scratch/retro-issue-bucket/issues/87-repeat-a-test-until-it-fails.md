@@ -22,3 +22,7 @@ How should a repeat run work, and when must a gate use it?
 ## Further evidence (2026-10-30, design-review fix pass, builder session `d0ca6bc4-7364-47ab-98b4-b354d422cbf8`)
 
 - The brief required each added or changed stub check to pass 10 runs in a row. The builder wrote its own loop script (`tmp/dd-fixpass/loop10.sh`) and ran all 27 `*_checks` runners 10 times (`logs/loop10-run1.log` … `run10.log`), then a second hand loop for the review fixes (`tmp/dd-fixpass/rev-loop.result`). A third hand-written repeat loop in the same effort.
+
+## Further evidence (2026-10-31, generic chat-completions connections, session `01a122c2-4e16-73db-89b0-50a2465e456b`)
+
+- A full gate failed one stub check (`check_escape_closes_an_open_error_detail_before_it_closes_the_dialog`, `logs/build_20261031_011652.log`). The lead wrote two more hand loops of `test-pattern "run_dialog_checks" --test-target browser`: 3 runs to tell a flake from a real failure (0 of 3 passed), then 3 runs to confirm the fix (3 of 3). Root cause is ticket 92.

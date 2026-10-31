@@ -390,6 +390,25 @@ Then the response is 200
 And the stored new Connection holds the reasoning effort "low"
 ```
 
+#### Scenario 20.50: The provider order field stores the typed order
+
+```gherkin
+Given a fresh app state with a Connection that has no provider order
+When the client edits that Connection with the provider order field set to "deepinfra, , novita" and "Use only these providers" checked
+Then the response is 200
+And the stored Connection holds the provider order ["deepinfra", "novita"] and uses only those providers
+And a following GET /fragment/connections/{id}/edit renders "deepinfra, novita" in the provider order field and "Use only these providers" checked
+```
+
+#### Scenario 20.51: An empty provider order field stores no order
+
+```gherkin
+Given a fresh app state with a Connection whose provider order is ["deepinfra"] and that uses only those providers
+When the client edits that Connection with an empty provider order field and "Use only these providers" not sent
+Then the response is 200
+And the stored Connection holds no provider order and allows other providers
+```
+
 ### POST /connections/{id}/test — connection test
 
 The test sends one short fixed prompt to a connection and reports the result
@@ -436,5 +455,15 @@ Given a saved mock connection
 When the client tests the Add/Edit form with the reasoning effort field set to "low"
 Then the response is 200
 And the provider that runs the test is built from a connection that holds the reasoning effort "low"
+And the saved connections are unchanged
+```
+
+#### Scenario 20.52: The form test hands the typed provider order to the provider
+
+```gherkin
+Given a saved mock connection
+When the client tests the Add/Edit form with the provider order field set to "deepinfra" and "Use only these providers" checked
+Then the response is 200
+And the provider that runs the test is built from a connection that holds the provider order ["deepinfra"] and uses only those providers
 And the saved connections are unchanged
 ```

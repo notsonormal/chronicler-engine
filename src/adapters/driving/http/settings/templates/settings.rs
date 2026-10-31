@@ -49,7 +49,7 @@ pub struct RoleRowView {
         <div class="connection-row" id="connection-{{ conn.id }}">
             <div class="connection-meta">
                 <span class="connection-name">{{ conn.name }}</span>
-                <span class="connection-provider">{{ conn.provider|fmt("{:?}") }} - {{ conn.model }}</span>
+                <span class="connection-provider">{{ conn.provider.display_label() }} - {{ conn.model }}</span>
             </div>
             <div class="connection-roles">
                 {% if conn.id == narration_connection_id %}<span class="badge">Narrator</span>{% endif %}
@@ -179,6 +179,16 @@ impl SettingsTemplate {
                 Single User Message (merge system + user for models that ignore system prompts)
             </label>
         </div>
+        <div class="form-group">
+            <label for="conn_provider_order">Provider order (OpenRouter only)</label>
+            <input type="text" id="conn_provider_order" name="conn_provider_order" value="{{ provider_order }}" placeholder="deepinfra, novita — empty lets OpenRouter choose" />
+        </div>
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" name="pin_provider_order" value="true" {% if pin_provider_order %}checked{% endif %} />
+                Use only these providers (no fallback: a busy host fails the call)
+            </label>
+        </div>
         <div class="inline-error-slot" data-error-slot="connection-form" hidden></div>
         <div class="form-actions">
             <button type="submit" class="btn-primary">Save</button>
@@ -201,17 +211,14 @@ pub struct ConnectionFormTemplate {
     pub api_key: String,
     pub base_url: String,
     pub single_user_message: bool,
+    pub provider_order: String,
+    pub pin_provider_order: bool,
     pub form_action: String,
 }
 
 impl ConnectionFormTemplate {
     pub fn new(connection: Option<&LlmConnection>) -> Self {
-        let provider = connection.map(|conn| match conn.provider {
-            crate::domain::model::llm_backend::LlmBackendType::OpenRouter => "openrouter",
-            crate::domain::model::llm_backend::LlmBackendType::DeepSeek => "deepseek",
-            crate::domain::model::llm_backend::LlmBackendType::Ollama => "ollama",
-            crate::domain::model::llm_backend::LlmBackendType::Mock => "mock",
-        });
+        let provider = connection.map(|conn| conn.provider.wire_id());
         Self {
             editing: connection.is_some(),
             name: connection.map(|conn| conn.name.clone()).unwrap_or_default(),
@@ -235,6 +242,10 @@ impl ConnectionFormTemplate {
                 .and_then(|conn| conn.base_url.clone())
                 .unwrap_or_default(),
             single_user_message: connection.is_some_and(|conn| conn.single_user_message),
+            provider_order: connection
+                .map(|conn| conn.provider_order.join(", "))
+                .unwrap_or_default(),
+            pin_provider_order: connection.is_some_and(|conn| conn.pin_provider_order),
             form_action: connection
                 .map(|conn| format!("/connections/{}/edit", conn.id))
                 .unwrap_or_else(|| "/connections/add".to_string()),

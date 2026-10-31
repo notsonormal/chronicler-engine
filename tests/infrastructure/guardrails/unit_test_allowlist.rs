@@ -5,7 +5,6 @@ use crate::{SourceFile, Violation};
 // An entry goes when the file's tests move under the one rule of
 // `tests/STRATEGY.md`, "The one rule". The list holds files, not test counts.
 pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
-    "adapters/driven/llm/providers/deepseek_tests.rs",
     "adapters/driven/llm/providers/mock_tests.rs",
     "adapters/driven/llm/transport/utils/response_tests.rs",
     "adapters/driven/storage/characters_tests.rs",
@@ -87,8 +86,7 @@ pub const LEGACY_UNIT_TEST_FILES: &[&str] = &[
 // Agent is a box behind the LLM port, so its test file declares its cases.
 pub const SEAM_CONTRACT_FILES: &[&str] = &[
     // The LLM providers and the transport are boxes behind the LLM port.
-    "adapters/driven/llm/providers/ollama_tests.rs",
-    "adapters/driven/llm/providers/openrouter_tests.rs",
+    "adapters/driven/llm/providers/chat_completions_tests.rs",
     "adapters/driven/llm/transport/utils/request_tests.rs",
     "application/agents/options/agent_tests.rs",
     "application/agents/quantifier/agent_tests.rs",

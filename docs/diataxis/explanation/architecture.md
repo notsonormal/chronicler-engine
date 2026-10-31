@@ -9,7 +9,7 @@ The engine is organised around one rule: **domain and application code never imp
 
 It buys testability. Domain logic runs without an HTTP server, without SQLite, without an LLM endpoint. The persistence seam and the LLM seam are traits the application core owns and the adapters implement; tests substitute fakes at the trait boundary without booting infrastructure.
 
-It buys substitutability. Swapping OpenRouter for Ollama is a wiring change in `bootstrap/`. No application-layer code is edited. The four LLM impls exist because the seam makes them cheap; without the seam, every consumer would carry its own dispatch and the impls would fan out through the codebase.
+It buys substitutability. A backend for another wire format is a new impl and one wiring arm in `bootstrap/`. No application-layer code is edited. The LLM impls exist because the seam makes them cheap; without the seam, every consumer would carry its own dispatch and the impls would fan out through the codebase.
 
 It costs a fixed amount of indirection. The application layer reaches LLM, storage, and text-check through port traits; the cost is one trait declaration per seam and one impl per backend. Where only one impl exists and the consumer is not in core (the storage seam), the trait is rejected as phantom — the rule says you only pay for indirection where the substitution is the point.
 
@@ -37,9 +37,7 @@ flowchart LR
 
     subgraph driven["adapters/driven"]
         storage["Storage<br/>(Backend enum)"]
-        openrouter["OpenRouter"]
-        deepseek["DeepSeek"]
-        ollama["Ollama"]
+        chat["ChatCompletionsBackend<br/>(OpenRouter, OpenCode Go, Ollama)"]
         harper["harper_text_checker"]
     end
 
@@ -52,9 +50,7 @@ flowchart LR
     app -. uses .-> tc
     app --> storage
 
-    openrouter -.-> llm
-    deepseek -.-> llm
-    ollama -.-> llm
+    chat -.-> llm
     harper -.-> tc
 
     bootstrap -. wires .-> driving

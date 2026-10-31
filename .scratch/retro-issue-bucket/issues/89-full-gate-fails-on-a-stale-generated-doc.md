@@ -22,3 +22,7 @@ Should the full gate regenerate the generated indexes and docs instead of failin
 - Builder session `d0ca6bc4-7364-47ab-98b4-b354d422cbf8`, review fixes: "The gate first stopped at `guardrails.md freshness` because the L6 doc comment changed the generated doc. I regenerated it … and reran." (`tmp/dd-fixpass/report.md:106`). One full gate lost.
 - Comment-pass session `db6713bb-c2f4-41df-855a-1919bd74f177`: deleting guardrail doc comments shifted the Source line numbers in `guardrails.md`, so the fixer regenerated it by hand before `guardrails` and `validate-docs` passed.
 - The commit hook regenerated `guardrails.md` and both structure indexes again at commit `4a074808`.
+
+## Further evidence (2026-10-31, generic chat-completions connections, branch `opencode-go-provider`)
+
+- Session `01a122c2-4e16-73db-89b0-50a2465e456b`. Removing an entry from `LEGACY_UNIT_TEST_FILES` (`tests/infrastructure/guardrails/unit_test_allowlist.rs`) made `guardrails.md` stale. The full gate stopped at "Checking guardrails.md freshness..." (`logs/build_20261031_004226.log`). One full gate lost; after that the lead ran all three generators by hand before every gate.

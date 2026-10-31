@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test requests take.
+//! HTTP E2E tests for the connection form: the context window, the reasoning effort and the provider order the Add, Edit and Test requests take.
 
 use std::sync::{Arc, Mutex};
 
@@ -447,6 +447,124 @@ async fn test_form_connection_test_hands_the_typed_reasoning_effort_to_the_provi
     assert_eq!(tested.len(), 1, "the test builds one provider");
     assert_eq!(tested[0].model, "typed-model");
     assert_eq!(tested[0].reasoning_effort, Some(ReasoningEffort::Low));
+    let stored = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    assert_eq!(
+        stored.connections.len(),
+        1,
+        "a form test must not save the typed connection"
+    );
+}
+
+fn app_with_one_routed_connection(
+    provider_order: Vec<String>,
+    pin_provider_order: bool,
+) -> (axum::Router, AppState) {
+    let mut connection = mock_connection("routed-conn", "mock-model");
+    connection.name = "Routed".into();
+    connection.provider_order = provider_order;
+    connection.pin_provider_order = pin_provider_order;
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "routed-conn".into(),
+        quantifier_connection_id: "routed-conn".into(),
+        ..AppSettings::default()
+    };
+    TestAppBuilder::default_test()
+        .settings(settings)
+        .build_with_state()
+}
+
+fn stored_routed_connection(state: &AppState) -> LlmConnection {
+    state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed")
+        .find_connection("routed-conn")
+        .expect("the connection must still be stored")
+        .clone()
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.50
+#[tokio::test]
+async fn test_provider_order_field_stores_the_typed_order() {
+    let _guard = SettingsTestGuard::new();
+    let (app, state) = app_with_one_routed_connection(Vec::new(), false);
+
+    let response = post_form(
+        &app,
+        "/connections/routed-conn/edit",
+        "conn_name=Routed&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_provider_order=deepinfra%2C+%2C+novita&pin_provider_order=true",
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let stored = stored_routed_connection(&state);
+    assert_eq!(stored.provider_order, ["deepinfra", "novita"]);
+    assert!(stored.pin_provider_order);
+    let form = fetch_body(&app, "/fragment/connections/routed-conn/edit").await;
+    assert!(
+        form.contains(r#"name="conn_provider_order" value="deepinfra, novita""#),
+        "the edit form must show the stored order: {form}"
+    );
+    assert!(
+        form.contains(r#"name="pin_provider_order" value="true" checked"#),
+        "the edit form must show the pin: {form}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.51
+#[tokio::test]
+async fn test_empty_provider_order_field_stores_no_order() {
+    let _guard = SettingsTestGuard::new();
+    let (app, state) = app_with_one_routed_connection(vec!["deepinfra".into()], true);
+
+    let response = post_form(
+        &app,
+        "/connections/routed-conn/edit",
+        "conn_name=Routed&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_provider_order=",
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let stored = stored_routed_connection(&state);
+    assert!(
+        stored.provider_order.is_empty(),
+        "{:?}",
+        stored.provider_order
+    );
+    assert!(!stored.pin_provider_order);
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.52
+#[tokio::test]
+async fn test_form_connection_test_hands_the_typed_provider_order_to_the_provider() {
+    let _guard = SettingsTestGuard::new();
+    let (state, _storage) = TestAppBuilder::default_test()
+        .settings(single_mock_settings("saved-conn", "saved-model"))
+        .build_service_with_storage();
+    let tested: Arc<Mutex<Vec<LlmConnection>>> = Arc::default();
+    let capture = Arc::clone(&tested);
+    let factory: ProviderFactory = Arc::new(move |config: &LlmConnection| {
+        capture.lock().unwrap().push(config.clone());
+        Arc::new(MockBackend::new()) as Arc<dyn LlmProvider>
+    });
+    let app = build_router(state.clone().with_connection_test_provider(factory));
+
+    let response = post_form(
+        &app,
+        "/connections/test",
+        "conn_name=Typed&conn_provider=mock&conn_model=typed-model&conn_api_key=&conn_base_url=&conn_provider_order=deepinfra&pin_provider_order=true",
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let tested = tested.lock().unwrap();
+    assert_eq!(tested.len(), 1, "the test builds one provider");
+    assert_eq!(tested[0].provider_order, ["deepinfra"]);
+    assert!(tested[0].pin_provider_order);
     let stored = state
         .settings_service
         .get_settings()

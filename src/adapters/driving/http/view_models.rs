@@ -4,6 +4,7 @@
 use std::fmt;
 
 use crate::domain::model::dock::OptionsFailure;
+use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{NarratorMode, ReasoningEffort};
@@ -47,18 +48,14 @@ impl SelectOptionView {
     }
 
     pub fn providers(selected: &str) -> Vec<Self> {
-        [
-            ("openrouter", "OpenRouter"),
-            ("deepseek", "DeepSeek"),
-            ("ollama", "Ollama"),
-        ]
-        .into_iter()
-        .map(|(value, label)| Self {
-            value: value.to_string(),
-            label: label.to_string(),
-            selected: value == selected,
-        })
-        .collect()
+        LlmBackendType::SELECTABLE
+            .into_iter()
+            .map(|provider| Self {
+                value: provider.wire_id().to_string(),
+                label: provider.display_label().to_string(),
+                selected: provider.wire_id() == selected,
+            })
+            .collect()
     }
 
     pub fn reasoning_efforts(selected: Option<ReasoningEffort>) -> Vec<Self> {

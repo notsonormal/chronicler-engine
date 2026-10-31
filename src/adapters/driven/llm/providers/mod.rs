@@ -1,21 +1,13 @@
 //! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! LLM provider implementations
 
-pub mod deepseek;
+pub mod chat_completions;
 pub mod mock;
-pub mod ollama;
-pub mod openrouter;
 
 #[cfg(test)]
-mod deepseek_tests;
+mod chat_completions_tests;
 #[cfg(test)]
 mod mock_tests;
-#[cfg(test)]
-mod ollama_tests;
-#[cfg(test)]
-mod openrouter_tests;
 
-pub use deepseek::DeepSeekBackend;
+pub use chat_completions::ChatCompletionsBackend;
 pub use mock::MockBackend;
-pub use ollama::OllamaBackend;
-pub use openrouter::OpenRouterBackend;

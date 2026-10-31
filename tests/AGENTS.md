@@ -113,7 +113,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `screen.rs` — HTTP E2E tests for what every request answer carries: the `X-Revision` stamp, the busy refusal as `409`, and the Game header that a page sends with a Game-bound request. Tagged against `docs/specs/screen.md`.
     - `screen_load.rs` — HTTP E2E tests for the screen load (`GET /screen?parts=`): the templates it answers, its stamp and Game, its refusals, and the failure of one part. Tagged against `docs/specs/screen.md`.
     - `settings.rs` — HTTP E2E tests for the settings endpoints: sub-tabs, role rows, and the text-check auto-save.
-    - `settings_connection_form.rs` — HTTP E2E tests for the connection form: the context window and the reasoning effort the Add, Edit and Test requests take.
+    - `settings_connection_form.rs` — HTTP E2E tests for the connection form: the context window, the reasoning effort and the provider order the Add, Edit and Test requests take.
     - `story_log.rs` — HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
@@ -124,7 +124,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `mod.rs` — HTTP E2E tests for Autoplay (autoplay.md 41.*), shared helpers: `run` holds the run of Jobs, its ends, the progress status and the refused writes; `fragments` holds the view-only Game's rendering.
       - `run.rs` — HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
     - **requires_migration/**
-      - `connections.rs` — HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
+      - `connections.rs` — HTTP integration tests for the connections UI: add an OpenRouter connection, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.
       - `debug.rs` — HTTP integration tests for the debug endpoints: `/debug/state` returns the expected JSON shape and `/debug/is_busy` reflects the actual busy state.
       - `fragment.rs` — HTTP integration tests for fragment rendering.

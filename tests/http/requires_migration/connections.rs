@@ -1,4 +1,4 @@
-//! HTTP integration tests for the connections UI: add OpenRouter/DeepSeek connections, switch the narrator, and switch the quantifier.
+//! HTTP integration tests for the connections UI: add an OpenRouter connection, switch the narrator, and switch the quantifier.
 
 use axum::{body::Body, http::Request};
 use tower::util::ServiceExt;
@@ -36,32 +36,6 @@ async fn test_add_connection_openrouter() {
     let body_str = settings_panel(&app).await;
     assert!(
         body_str.contains("My OpenRouter"),
-        "Expected new connection name in the panel: {body_str}"
-    );
-}
-
-#[tokio::test]
-async fn test_add_connection_deepseek() {
-    let _guard = SettingsTestGuard::new();
-    let app = TestAppBuilder::default_app();
-
-    let req = Request::builder()
-        .uri("/connections/add")
-        .method(http::Method::POST)
-        .header(
-            http::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
-        .body(Body::from(
-            "conn_name=My+DeepSeek&conn_provider=deepseek&conn_model=deepseek-chat&conn_api_key=&conn_base_url=",
-        ))
-        .unwrap();
-    let response = app.clone().oneshot(req).await.unwrap();
-
-    assert_answers_nothing(response).await;
-    let body_str = settings_panel(&app).await;
-    assert!(
-        body_str.contains("My DeepSeek"),
         "Expected new connection name in the panel: {body_str}"
     );
 }

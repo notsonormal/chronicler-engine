@@ -1,13 +1,11 @@
 //! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! LLM client implementation
 
-use super::request::ChatCompletionRequest;
+use super::request::{ChatCompletionRequest, ChatCompletionsEndpoint};
 use crate::error::{EngineError, LlmFailure};
 
 pub fn call_chat_completions(
-    base_url: &str,
-    api_key: Option<&str>,
-    title: Option<&str>,
+    endpoint: &ChatCompletionsEndpoint<'_>,
     request: &ChatCompletionRequest<'_>,
 ) -> crate::error::Result<super::request::ChatCompletionResult> {
     use super::request::{build_request_payload, configure_request, next_request_id};
@@ -20,6 +18,7 @@ pub fn call_chat_completions(
         reasoning_effort,
         ..
     } = *request;
+    let base_url = endpoint.base_url;
     let max_tokens = request.resolved_max_tokens();
     let req_id = next_request_id();
     let start_time = std::time::Instant::now();
@@ -51,7 +50,7 @@ pub fn call_chat_completions(
 
     let (payload, raw_request_json) = build_request_payload(request);
     let url = format!("{base_url}/chat/completions");
-    let http_request = configure_request(&client, &url, &payload, api_key, title);
+    let http_request = configure_request(&client, &url, &payload, endpoint);
     tracing::info!("[LLM][req:{req_id}] Sending request to {url}");
     let res = http_request.send();
     match res {

@@ -20,7 +20,7 @@
           },
           "provider": {
             "type": "string",
-            "enum": ["OpenRouter", "DeepSeek", "Mock", "Ollama"],
+            "enum": ["OpenRouter", "Mock", "Ollama", "OpenCodeGo"],
             "description": "LLM backend provider."
           },
           "model": {
@@ -53,7 +53,17 @@
           "reasoning_effort": {
             "type": "string",
             "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
-            "description": "Optional reasoning effort sent to OpenRouter and Ollama as reasoning.effort. When absent, no reasoning field is sent and the model default applies."
+            "description": "Optional reasoning effort, sent to every provider as the flat reasoning_effort field. When absent, no reasoning field is sent and the model default applies."
+          },
+          "provider_order": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Optional upstream hosts an OpenRouter connection tries, in order. Sent as provider.order. Other providers ignore it."
+          },
+          "pin_provider_order": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to use only the hosts of provider_order, with no fallback to other hosts. Sent as provider.allow_fallbacks = false."
           }
         },
         "required": ["id", "name", "provider", "model"]

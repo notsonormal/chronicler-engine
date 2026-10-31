@@ -72,23 +72,6 @@ fn mock_backend_recorder_persists_forensics_to_storage() {
 }
 
 #[test]
-fn deepseek_path_returns_recorder() {
-    let connection = LlmConnection {
-        name: "Test DeepSeek".to_string(),
-        model: "deepseek-chat".to_string(),
-        api_key: Some("fake-key".to_string()),
-        base_url: Some("https://api.deepseek.com".to_string()),
-        ..test_connection("test-deepseek", LlmBackendType::DeepSeek)
-    };
-    let storage = Arc::new(Storage::new_in_memory());
-
-    let wired = wired_app(connection, storage);
-    let recorder = wired.job_deps.narrator.recorder();
-
-    assert_eq!(recorder.provider().expect("resolves").name(), "DeepSeek");
-}
-
-#[test]
 fn openrouter_path_returns_recorder() {
     let connection = LlmConnection {
         name: "Test OpenRouter".to_string(),
@@ -119,29 +102,6 @@ fn ollama_path_returns_recorder() {
     let recorder = wired.job_deps.narrator.recorder();
 
     assert_eq!(recorder.provider().expect("resolves").name(), "Ollama");
-}
-
-#[test]
-fn deepseek_missing_base_url_still_returns_recorder_defers_error() {
-    let connection = LlmConnection {
-        name: "Test DeepSeek Missing".to_string(),
-        model: "deepseek-chat".to_string(),
-        ..test_connection("test-deepseek-missing", LlmBackendType::DeepSeek)
-    };
-    let storage = Arc::new(Storage::new_in_memory());
-
-    let wired = wired_app(connection, storage);
-
-    assert_eq!(
-        wired
-            .job_deps
-            .narrator
-            .recorder()
-            .provider()
-            .expect("resolves")
-            .name(),
-        "DeepSeek"
-    );
 }
 
 #[test]

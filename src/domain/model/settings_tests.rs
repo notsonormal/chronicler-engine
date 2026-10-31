@@ -492,6 +492,26 @@ fn resolve_api_key_blank_counts_as_absent() {
 }
 
 #[test]
+fn opencode_go_connection_falls_back_to_its_own_env_var() {
+    let keyless = LlmConnection::new("go-1", "Go", LlmBackendType::OpenCodeGo);
+    let lookup = |name: &str| (name == "OPENCODE_GO_API_KEY").then(|| "go-env-key".to_string());
+
+    assert_eq!(
+        keyless.resolve_api_key_with(lookup),
+        Some("go-env-key".to_string())
+    );
+    let keyed = LlmConnection {
+        api_key: Some("go-stored-key".into()),
+        ..keyless
+    };
+    assert_eq!(
+        keyed.resolve_api_key_with(lookup),
+        Some("go-stored-key".to_string()),
+        "a stored key wins over the environment"
+    );
+}
+
+#[test]
 fn check_api_key_available() {
     let keyless = LlmConnection::new("or-1", "Narrator", LlmBackendType::OpenRouter);
 
@@ -520,11 +540,7 @@ fn check_api_key_available() {
         "the environment fallback satisfies the check"
     );
 
-    for provider in [
-        LlmBackendType::Ollama,
-        LlmBackendType::Mock,
-        LlmBackendType::DeepSeek,
-    ] {
+    for provider in [LlmBackendType::Ollama, LlmBackendType::Mock] {
         let conn = LlmConnection::new("keyless", "Keyless", provider);
         assert!(
             conn.check_api_key_available_with(|_| None).is_ok(),
@@ -558,10 +574,6 @@ fn connection_resolve_max_context_tokens_defaults() {
     );
     assert_eq!(
         LlmConnection::new("t", "T", LlmBackendType::OpenRouter).resolve_max_context_tokens(),
-        32768
-    );
-    assert_eq!(
-        LlmConnection::new("t", "T", LlmBackendType::DeepSeek).resolve_max_context_tokens(),
         32768
     );
     assert_eq!(
@@ -658,18 +670,19 @@ fn settings_schema_reasoning_effort_enum_lists_every_effort() {
 }
 
 #[test]
-fn seed_settings_turn_reasoning_off_for_deepseek_v4_flash() {
+fn seed_settings_turn_reasoning_off_for_every_deepseek_flash() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/data/settings.json");
     let settings: AppSettings =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let flash: Vec<_> = settings
         .connections
         .iter()
-        .filter(|connection| connection.name == "deepseek-v4-flash")
+        .filter(|connection| connection.model.contains("deepseek-v4"))
         .collect();
-    assert!(
-        !flash.is_empty(),
-        "the seed lists a deepseek-v4-flash connection"
+    assert_eq!(
+        flash.len(),
+        2,
+        "the seed lists DeepSeek Flash on OpenRouter and on OpenCode Go"
     );
     for connection in flash {
         assert_eq!(connection.reasoning_effort, Some(ReasoningEffort::Off));

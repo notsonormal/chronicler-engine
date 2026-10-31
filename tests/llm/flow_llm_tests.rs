@@ -52,6 +52,7 @@ mod tests {
             eprintln!("Skipping: OPENROUTER_API_KEY not set");
             return;
         }
+        eprintln!("Running against OpenRouter: OPENROUTER_API_KEY is set");
 
         let port = get_config_port(CONFIG_PATH).expect("Failed to get config port");
         let _server = TestServer::new(port, TEST_WORLD, TEST_PERSONA).await;
@@ -129,5 +130,51 @@ mod tests {
             verify_llm_messages_logged(port).await;
         })
         .await;
+    }
+
+    /// One real call to OpenCode Go checks the key fallback, the session
+    /// header and the flat reasoning field against the host itself.
+    #[ignore = "slow: requires OPENCODE_GO_API_KEY"]
+    #[test]
+    fn test_real_opencode_go_answers_without_reasoning() {
+        use chronicler_engine::adapters::driven::llm::providers::ChatCompletionsBackend;
+        use chronicler_engine::application::ports::llm_provider::LlmProvider;
+        use chronicler_engine::domain::model::llm_backend::LlmBackendType;
+        use chronicler_engine::domain::model::settings::{LlmConnection, ReasoningEffort};
+
+        dotenv::dotenv().ok();
+        if std::env::var("OPENCODE_GO_API_KEY").is_err() {
+            eprintln!("Skipping: OPENCODE_GO_API_KEY not set");
+            return;
+        }
+        eprintln!("Running against OpenCode Go: OPENCODE_GO_API_KEY is set");
+        let connection = LlmConnection {
+            model: "deepseek-v4.1-flash".into(),
+            reasoning_effort: Some(ReasoningEffort::Off),
+            ..LlmConnection::new(
+                "llm-test-opencode-go",
+                "OpenCode Go",
+                LlmBackendType::OpenCodeGo,
+            )
+        };
+
+        let result = ChatCompletionsBackend::from_config(&connection)
+            .complete(
+                "llm-test",
+                "Answer with one short word.",
+                "Reply OK.",
+                Some(256),
+            )
+            .expect("OpenCode Go answers");
+
+        assert!(!result.text.trim().is_empty(), "an answer: {result:?}");
+        let response: serde_json::Value =
+            serde_json::from_str(&result.raw_response_json).expect("a JSON response");
+        assert_eq!(
+            response["usage"]["completion_tokens_details"]["reasoning_tokens"].as_u64(),
+            Some(0),
+            "effort none spends no reasoning tokens: {}",
+            result.raw_response_json
+        );
     }
 }

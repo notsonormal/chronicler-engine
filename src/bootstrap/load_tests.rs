@@ -268,8 +268,12 @@ fn test_shipped_settings_file_seeds_the_settings_row() {
 
     let stored = storage.get_settings().expect("get settings");
     assert_eq!(
-        stored.narration_connection_id, "deepseek-v4-flash",
+        stored.narration_connection_id, "opencode-go-deepseek-v4.1-flash",
         "a fresh database must serve the narrator the shipped file names"
+    );
+    assert_eq!(
+        stored.quantifier_connection_id, "opencode-go-deepseek-v4.1-flash",
+        "a fresh database must serve the quantifier the shipped file names"
     );
     stored
         .narration_connection()

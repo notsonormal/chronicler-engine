@@ -5,4 +5,6 @@ mod utils;
 
 pub use utils::client::call_chat_completions;
 
-pub use utils::request::{ChatCompletionRequest, ChatCompletionResult};
+pub use utils::request::{
+    ChatCompletionRequest, ChatCompletionResult, ChatCompletionsEndpoint, ProviderRouting,
+};

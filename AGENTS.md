@@ -13,11 +13,9 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
       - **llm/**
         - `mod.rs` — LLM driven adapters: provider implementations and HTTP transport
         - **providers/**
-          - `deepseek.rs` — DeepSeek LLM provider
+          - `chat_completions.rs` — The chat-completions provider: one backend for every OpenAI-compatible host.
           - `mock.rs` — Mock LLM provider for testing
           - `mod.rs` — LLM provider implementations
-          - `ollama.rs` — Ollama LLM provider
-          - `openrouter.rs` — OpenRouter LLM provider
         - **transport/**
           - `mod.rs` — LLM client interface
           - **utils/**

@@ -202,6 +202,8 @@ async fn test_add_connection_handler_adds_connection() {
         conn_max_context_tokens: "".into(),
         conn_reasoning_effort: "".into(),
         single_user_message: false,
+        conn_provider_order: "".into(),
+        pin_provider_order: false,
     };
 
     let response =
@@ -229,6 +231,8 @@ async fn test_add_connection_handler_empty_base_url_is_none() {
         conn_max_context_tokens: "".into(),
         conn_reasoning_effort: "".into(),
         single_user_message: false,
+        conn_provider_order: "".into(),
+        pin_provider_order: false,
     };
 
     let _response =
@@ -251,6 +255,8 @@ async fn test_add_connection_handler_non_empty_base_url_is_some() {
         conn_max_context_tokens: "".into(),
         conn_reasoning_effort: "".into(),
         single_user_message: false,
+        conn_provider_order: "".into(),
+        pin_provider_order: false,
     };
 
     let _response =
@@ -271,13 +277,15 @@ async fn test_edit_connection_handler_updates_connection() {
 
     let form = ConnectionForm {
         conn_name: "New Name".into(),
-        conn_provider: "deepseek".into(),
+        conn_provider: "ollama".into(),
         conn_model: "new-model".into(),
         conn_api_key: "new-key".into(),
         conn_base_url: "http://new.url".into(),
         conn_max_context_tokens: "".into(),
         conn_reasoning_effort: "".into(),
         single_user_message: true,
+        conn_provider_order: "".into(),
+        pin_provider_order: false,
     };
 
     let response = edit_connection_handler(

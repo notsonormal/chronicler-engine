@@ -166,9 +166,10 @@ use.
 
 ### 8 — Real-LLM tests
 
-The tests in `tests/llm/` are `#[ignore]`d and also return early when
-`has_llm_api_key()` is false. `python build.py --llm-only` runs them. CI does not
-run them, so run `--llm-only` once with a valid key after a change to
+The tests in `tests/llm/` are `#[ignore]`d and also return early when the key
+of their provider is not set: `OPENROUTER_API_KEY` or `OPENCODE_GO_API_KEY`.
+`python build.py --llm-only` runs them. CI does not run them, so run
+`--llm-only` once with both keys after a change to
 `src/application/prompting/`, `src/adapters/driven/llm/` or LLM-parsing code.
 
 ### 9 — XSS regression

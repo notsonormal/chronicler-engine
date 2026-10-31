@@ -73,6 +73,12 @@ pub struct ConnectionForm {
     pub conn_reasoning_effort: String,
     #[serde(default)]
     pub single_user_message: bool,
+    /// Comma-separated host names.
+    #[serde(default)]
+    pub conn_provider_order: String,
+    /// An unchecked box sends nothing, so an absent value keeps the fallbacks.
+    #[serde(default)]
+    pub pin_provider_order: bool,
 }
 
 impl ConnectionForm {
@@ -107,6 +113,15 @@ impl ConnectionForm {
         })
     }
 
+    fn resolved_provider_order(&self) -> Vec<String> {
+        self.conn_provider_order
+            .split(',')
+            .map(str::trim)
+            .filter(|host| !host.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+
     fn resolved_provider(&self) -> Result<LlmBackendType, String> {
         self.conn_provider
             .as_str()
@@ -121,6 +136,7 @@ impl ConnectionForm {
         let provider = self.resolved_provider()?;
         let max_context_tokens = self.resolved_max_context_tokens()?;
         let reasoning_effort = self.resolved_reasoning_effort()?;
+        let provider_order = self.resolved_provider_order();
         Ok(LlmConnection {
             id,
             name: self.conn_name,
@@ -132,6 +148,8 @@ impl ConnectionForm {
             max_tokens: None,
             max_context_tokens,
             reasoning_effort,
+            provider_order,
+            pin_provider_order: self.pin_provider_order,
         })
     }
 }

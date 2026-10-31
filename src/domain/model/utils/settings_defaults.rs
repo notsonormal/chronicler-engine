@@ -5,10 +5,6 @@ pub fn default_enable_auto_check() -> bool {
     true
 }
 
-pub fn default_ollama_base_url() -> String {
-    "http://localhost:11434/v1".into()
-}
-
 pub fn default_response_length() -> String {
     "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.".to_string()
 }

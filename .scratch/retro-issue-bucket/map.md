@@ -17,7 +17,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **Evidence is re-checked, not trusted.** A finding is a hypothesis, and the tree moves. Re-check the cited `file:line` before deciding.
 - **Concurrency.** Other efforts edit this checkout at the same time. The user decides the scope of each commit.
 - **Skills.** `/grilling` and `/domain-modeling` for every ticket. `/writing-for-agents` for any skill or `AGENTS.md` edit. `/code-review` for an implementation ticket.
-- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 90.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
+- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 93.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
 - **Audit.** [`audit.md`](./audit.md) (2026-10-25) sorts the open tickets by whether the fix changes what the next agent does.
 
 ## Decisions so far
@@ -51,6 +51,8 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **49 — the probe marker is not a comment.** `tests/browser/stub/failure_display.rs` uses `__MEASURE_CLAMPED_TEXT__`, so the comment finder cannot list it.
 - **`validate_docs.py --path` (found in the audit, 2026-10-25).** It compared a tuple with a list, so it rejected every file. Fixed, with a test that fails on the old code.
 - **79 — `ScriptedModel` fails on an unused reply.** `Drop` also fails when a scripted reply was never used, and names each one. `.optional()` marks one reply as allowed to stay unused; only the stop-row script in `tests/http/races.rs` uses it. 23 tests lost a dead script line; no assertion changed.
+
+- **91 — a live test says whether it ran.** The `llm` nextest profile shows the output of passing tests (`success-output = "immediate"`), and each test in `tests/llm/` prints `Running against <provider>` or `Skipping: <KEY> not set`, so the `--llm-only` log names what reached a provider.
 
 ## Won't do
 

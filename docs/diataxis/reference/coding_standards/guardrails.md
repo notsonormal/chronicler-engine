@@ -117,7 +117,7 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:260` |
 | no ignored tests | Rejects every `#[ignore]`d fn, also through `cfg_attr`; the caller exempts `tests/llm/`. | `tests/infrastructure/guardrails/test_hygiene.rs:12` |
 | sleep has reason | Rejects a `sleep(..)` call in a test that has no `//` comment on the line above it. | `tests/infrastructure/guardrails/test_hygiene.rs:37` |
-| unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:180` |
+| unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:178` |
 | banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:168` |
 | call site rows | Runs the call-site table: only what a row allows may call its callees. | `tests/infrastructure/guardrails/walkers.rs:395` |
 | type check rows | Runs the type-check table: no listed field or parameter holds a banned type. | `tests/infrastructure/guardrails/walkers.rs:427` |

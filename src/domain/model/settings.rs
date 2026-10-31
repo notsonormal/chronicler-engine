@@ -114,7 +114,7 @@ impl ReasoningEffort {
         Self::Max,
     ];
 
-    /// The value the provider receives in `reasoning.effort`.
+    /// The value the provider receives in `reasoning_effort`.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Off => "none",
@@ -351,6 +351,13 @@ pub struct LlmConnection {
     pub max_context_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffort>,
+    /// The upstream hosts a routing provider tries, in order. Empty lets the
+    /// provider choose.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provider_order: Vec<String>,
+    /// Use only the hosts of `provider_order`, with no fallback to others.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pin_provider_order: bool,
 }
 
 impl LlmConnection {
@@ -366,6 +373,8 @@ impl LlmConnection {
             max_tokens: None,
             max_context_tokens: None,
             reasoning_effort: None,
+            provider_order: Vec::new(),
+            pin_provider_order: false,
         }
     }
 
@@ -394,11 +403,6 @@ impl LlmConnection {
         &self,
         lookup: impl Fn(&str) -> Option<String>,
     ) -> Result<(), EngineError> {
-        // Delete this guard once the DeepSeek backend lands: its stub currently
-        // reports a more truthful not-implemented error than a missing key would.
-        if self.provider == LlmBackendType::DeepSeek {
-            return Ok(());
-        }
         let Some(env_var) = self.provider.api_key_env_var() else {
             return Ok(());
         };
@@ -411,9 +415,9 @@ impl LlmConnection {
             &self.name
         };
         Err(EngineError::Config(format!(
-            "{:?} connection '{label}' has no API key: set one on the connection \
+            "{} connection '{label}' has no API key: set one on the connection \
              in Settings, or export {env_var}",
-            self.provider,
+            self.provider.display_label(),
         )))
     }
 
@@ -421,21 +425,12 @@ impl LlmConnection {
         if let Some(url) = &self.base_url {
             return url.clone();
         }
-        match self.provider {
-            LlmBackendType::Ollama => settings_defaults::default_ollama_base_url(),
-            LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => {
-                "https://openrouter.ai/api/v1".into()
-            }
-            LlmBackendType::Mock => String::new(),
-        }
+        self.provider.default_base_url().to_string()
     }
 
     pub fn resolve_max_context_tokens(&self) -> u32 {
-        self.max_context_tokens.unwrap_or(match self.provider {
-            LlmBackendType::Ollama => 8192,
-            LlmBackendType::OpenRouter | LlmBackendType::DeepSeek => 32768,
-            LlmBackendType::Mock => 4096,
-        })
+        self.max_context_tokens
+            .unwrap_or(self.provider.default_max_context_tokens())
     }
 }
 

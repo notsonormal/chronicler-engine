@@ -42,3 +42,6 @@ store-success-output = true
 [profile.llm]
 inherits = "default"
 slow-timeout = { period = "300s", terminate-after = 1, on-timeout = "fail" }
+# A live test that finds no key returns early and passes. Its output says
+# "Skipping" or "Running", so the log shows which live tests reached a provider.
+success-output = "immediate"

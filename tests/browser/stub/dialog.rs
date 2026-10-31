@@ -257,11 +257,19 @@ async fn check_escape_closes_an_open_error_detail_before_it_closes_the_dialog(
         "a failed Test reports in the form's result slot",
     )
     .await;
-    page.locator(&format!("{slot} .error-details-toggle"))
-        .await
-        .click(None)
-        .await
-        .unwrap();
+    let toggle = format!("{slot} .error-details-toggle");
+    // Any scroll closes an open popover, and the scroll event of the click's
+    // own scroll-into-view fires a frame after the click.
+    page.evaluate::<String, bool>(
+        r#"(selector) => new Promise((resolve) => {
+            document.querySelector(selector).scrollIntoView({ block: "center" });
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
+        })"#,
+        Some(&toggle),
+    )
+    .await
+    .unwrap();
+    page.locator(&toggle).await.click(None).await.unwrap();
     assert!(error_details_open(&page, slot).await, "Details opens");
 
     page.keyboard().press("Escape", None).await.unwrap();
