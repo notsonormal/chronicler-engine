@@ -14,17 +14,17 @@ checks outside the tier model.
 |---|---|---|---|---|
 | `src/**/*_tests.rs` | **Unit** | both driven ports (`MockBackend`, SQLite `:memory:` `Storage`) | nothing | [the one rule](#the-one-rule): a seam contract's `CASE`s, a pure `domain/model/` function, or a file on the legacy list |
 | `tests/http/` | **HTTP E2E (tier 1)** | LLM (`ScriptedModel`, one script entry per call) | axum router, SQLite `:memory:` storage | spec scenarios, asserted on [domain outcomes](#domain-outcome-the-tier-1-rule) |
-| `tests/http/requires_migration/` | tier 1, quarantine | as `tests/http/` | as `tests/http/` | legacy tests that wait for a spec; untagged, size pinned |
+| `tests/http/requires_migration/` | tier 1, quarantine | as `tests/http/` | as `tests/http/` | legacy tests that wait for a spec, untagged, with size pinned |
 | `tests/http/support/` | support for tier 1 | — | — | request builders, seeding fixtures, HTML assertions, app wiring |
 | `tests/browser/stub/` | **Stub browser (tier 2)** | the whole engine | stub server (real shell, real or canned fragments) + browser, a fresh page per test | client-side behaviour of the shipped JS |
 | `tests/browser/` | **Full-stack browser (tier 3)** | LLM | browser + engine server | the full-stack hop: a client request whose effect is server state |
 | `tests/storage/` | **Driven-adapter** | nothing | SQLite | the storage seam: CRUD, errors, referential integrity, queries |
 | `tests/bootstrap/` | bootstrap smoke | nothing | `bootstrap::run()` | startup branches |
-| `tests/llm/` | real provider | nothing | an LLM provider | provider flows; `#[ignore]`d, run with `--llm-only` |
+| `tests/llm/` | real provider | nothing | an LLM provider | provider flows, `#[ignore]`d and run with `--llm-only` |
 | `tests/infrastructure/` | architecture | — | source tree | `arch-lint.toml` layer rules |
 | `tests/infrastructure/guardrails/` | guardrails | — | source tree | source and test structure rules |
 | `tests/helpers/` | support for driven-adapter | — | — | storage fixtures shared by the `storage` binary |
-| `tests/test_utils/` | support for the `http`, `browser`, `storage`, `bootstrap` and `llm` binaries | — | — | server, browser, htmx-settle, convergence and wait helpers; the stub server |
+| `tests/test_utils/` | support for the `http`, `browser`, `storage`, `bootstrap` and `llm` binaries | — | — | server, browser, htmx-settle, convergence and wait helpers, and the stub server |
 | `tests/test_utils/stub_fixtures/` | support for tier 2 | — | — | canned fragments the stub server serves |
 
 A `#[tokio::test]` with fakes is a unit test.
@@ -41,7 +41,7 @@ A unit test lives in one of three places, and nowhere else:
    `// CASE <id>: <what it pins>`, or `// CASE <id> [<label>]: <what it pins>`.
    Every test in a declaring file carries one tag. A unit test in a declaring
    file calls only that box's entry point. **Check:** `seam-cases` and the
-   `guardrails` binary (the `unit test allowlist` rule); the entry-point clause
+   `guardrails` binary (the `unit test allowlist` rule). The entry-point clause
    is review-only.
 
    The shape of a case:
@@ -54,14 +54,14 @@ A unit test lives in one of three places, and nowhere else:
      `Storage::with_failure` with `TestOverride::internal`. Do not mock an
      internal part.
    - **The call record**: a box that records its model call through
-     `LlmCallRecorder` has a case for the record of a good call and of a
-     failed call.
+     `LlmCallRecorder` has two cases. One case is the record of a good call.
+     One case is the record of a failed call.
 2. **A pure function in `domain/model/`**, as a plain unit test. The function's
    own branches are its cases. **Check:** the `guardrails` binary checks the
    folder. Purity is review-only.
 3. **A file on the legacy list**, in
    `tests/infrastructure/guardrails/unit_test_allowlist.rs`. The list holds
-   today's `src/**/*_tests.rs` files; it only shrinks, one module at a time.
+   today's `src/**/*_tests.rs` files. It only shrinks, one module at a time.
    A legacy test that breaks only by a mechanical change (a new parameter, a
    renamed type) changes in place. A legacy test whose behaviour breaks moves
    to its seam contract or its scenario. **Check:** the `guardrails` binary,
@@ -84,17 +84,17 @@ The coverage percentage stays a diagnostic: no step fails on it.
 
 A tier-1 test asserts **domain outcomes** only. A domain outcome is one of:
 
-- the HTTP response: status, headers, body;
-- stored state read back through a **read seam**.
+- the HTTP response: status, headers, body
+- stored state read back through a **read seam**
 
-A **read seam** is a read the application exposes to a driving adapter: an
+A **read seam** is a read the application exposes to a driving adapter. It is an
 HTTP GET, or a method on an application read service or port
 (`GameViewQuery`, `GameCatalogue`, `SettingsService`,
 `PromptPresetService`, `WorldCatalogue`). `Storage` is a driven adapter, not
 a read seam.
 
 A read seam that no driving adapter calls is allowed only when a test checks
-a stored fact that no production read returns, such as the stored inputs of a
+a stored fact that no production read returns. An example is the stored inputs of a
 Swipe. Its doc comment names that fact, so a reviewer can see why it exists.
 The same holds for any production method that only tests call.
 
@@ -173,8 +173,8 @@ Place a new UI test by this rule.
 lower belongs there.
 
 **Stub-tier shape.** A tier-2 test is an `async fn check_*(page, stub)` that a
-`run_*` runner test passes to `StubRunner::run`. The runner shares one Chromium;
-each check gets its own `StubServer` and page. The SCENARIO tag goes above the
+`run_*` runner test passes to `StubRunner::run`. The runner shares one Chromium.
+Each check gets its own `StubServer` and page. The SCENARIO tag goes above the
 `check_*` function, and `scripts/validate_feature_spec.py` exempts `run_*`.
 Split a runner when it becomes the longest browser test by a wide margin.
 
@@ -199,9 +199,11 @@ It puts its markup in place with client-side JS, not through a real failure.
 The stub server renders some fragments through the real Askama templates and
 serves the rest from `tests/test_utils/stub_fixtures/`. A canned fragment
 drifts from its template, and regenerating it is the upkeep this tier
-demands. The failure is loud: the fixture keeps the structural elements the
-shipped client JS addresses, so editing either side out of sync fails the
-stub-tier test on a missing element. A stub-tier test asserts the client's
+demands. The failure is loud. The fixture keeps the structural elements the
+shipped client JS addresses. So editing either side out of sync fails the
+stub-tier test on a missing element.
+
+A stub-tier test asserts the client's
 behaviour. A test that asserts a canned fragment's own content belongs a tier
 higher. **Check:** review-only.
 
@@ -212,7 +214,7 @@ Full-stack interaction goes through the htmx-settle helpers in
 `tests/test_utils/browser.rs`. The `stub/` tests drive a stub with no htmx
 swap lifecycle and need no gate. **Check:** `guardrails`
 (`check_browser_interactions_use_htmx_settle` fails a raw interaction call in
-a `tests/browser/` file outside `stub/`; a line that ends in
+a `tests/browser/` file outside `stub/`, and a line that ends in
 `// settle-guard-exempt: <why>` is exempt).
 
 Wait on an htmx-settle helper or a DOM condition. `networkidle` never
@@ -226,8 +228,8 @@ Every stub check and every tier-3 check ends with the convergence check
 `StubRunner::run` and `with_test_page` run it after the check, before the page
 closes. The check waits until the page is quiet. Then it compares each visible
 part with a fresh `GET /screen?parts=<name>`, and it fails with the part, the route
-and a short diff. It also checks that each part of a closed tab is empty, and that
-each part element has the attributes of the shell, apart from the focus fallback and
+and a short diff. It also checks that each part of a closed tab is empty. It checks too that
+each part element has the attributes of the shell. The exceptions are the focus fallback and
 the lock of the entry in edit.
 
 The comparison drops what a load keeps or skips by design: the attributes that
@@ -255,11 +257,11 @@ panel owns live in `docs/specs/browser_dashboard.md`.
 **Check:** `spec-coverage` (`scripts/validate_feature_spec.py`) fails when:
 
 - a declared spec scenario has no covering test, or a tag cites an undeclared
-  scenario;
+  scenario.
 - a `browser_*.md` spec is tagged from outside `tests/browser/`, or another
-  spec is tagged from `tests/browser/`;
+  spec is tagged from `tests/browser/`.
 - a test under `tests/http/` or `tests/browser/` has no tag and no declared
-  exemption. The script lists each exemption with its reason;
+  exemption. The script lists each exemption with its reason.
 - the untagged test count in `tests/http/requires_migration/` differs from
   its pin. Migrating a test out of the quarantine lowers the pin
   deliberately.
@@ -267,7 +269,7 @@ panel owns live in `docs/specs/browser_dashboard.md`.
 The validator scans `tests/http/` and `tests/browser/` only, so a tag belongs
 in one of those two folders.
 
-Two kinds of stub-tier file carry no tag: layout and computed-style checks
-(`layout.rs`), which have no HTTP surface, and probes of the vendored htmx
-event contract (`htmx_events.rs`), which pin the library the page relies on
+Two kinds of stub-tier file carry no tag. One kind is layout and computed-style checks
+(`layout.rs`), which have no HTTP surface. The other kind is probes of the vendored htmx
+event contract (`htmx_events.rs`). These probes pin the library the page relies on
 and not a scenario. The exemptions are in `TAG_EXEMPT_FILES`.

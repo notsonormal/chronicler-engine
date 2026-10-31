@@ -6,7 +6,7 @@ An interactive fiction / text-adventure engine in Rust. An LLM-driven narrative 
 
 - **Rust 1.88.0** — pinned in `rust-toolchain.toml` (edition 2024, requires 1.85+).
 - **Python 3.12** — for the build/validate gate (`build.py`, `scripts/`).
-- **An LLM provider** — to generate narration at runtime. Connections live in `data/settings.json` (OpenRouter and Ollama examples ship with the repo). Not needed to build or run the test suite; live-LLM tests are `#[ignore]`d by default.
+- **An LLM provider** — to generate narration at runtime. Connections live in `data/settings.json` (OpenRouter and Ollama examples ship with the repo). Not needed to build or run the test suite. Live-LLM tests are `#[ignore]`d by default.
 
 ## Quick start
 

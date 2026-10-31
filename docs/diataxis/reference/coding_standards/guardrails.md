@@ -5,7 +5,7 @@ title: Architecture Guardrails
 
 ## Overview
 
-The Chronicler Engine enforces coding standards through three complementary layers: clippy lints at compile time, declarative `arch-lint` rules at test time, and custom `syn`-based convention walkers at test time. A coverage exclusion policy (`cargo-llvm-cov` with `--ignore-filename-regex`) keeps the wiring/lifecycle code from being unit-tested separately from its integration tests.
+The Chronicler Engine enforces coding standards through three complementary layers. Clippy lints work at compile time. Declarative `arch-lint` rules work at test time. Custom `syn`-based convention walkers also work at test time. A coverage exclusion policy (`cargo-llvm-cov` with `--ignore-filename-regex`) keeps the wiring/lifecycle code from being unit-tested separately from its integration tests.
 
 ## 1. Clippy (Compile-Time)
 
@@ -14,7 +14,7 @@ Clippy lints are denied at the crate root in `src/lib.rs` via `#![deny(...)]`. T
 <!-- AUTO-GUARDRAILS: clippy START -->
 | Lint | Rationale |
 |------|-----------|
-| `clippy::unwrap_used` | Prevent panics in production; propagate errors with `?`. |
+| `clippy::unwrap_used` | Prevent panics in production. Propagate errors with `?`. |
 | `clippy::expect_used` | No "should never happen" assumptions in production. |
 | `clippy::dbg_macro` | No debug prints in committed code. |
 | `clippy::todo` | No unfinished code in production. |
@@ -22,7 +22,7 @@ Clippy lints are denied at the crate root in `src/lib.rs` via `#![deny(...)]`. T
 | `clippy::print_stdout` | No `println!` in library code. |
 | `clippy::print_stderr` | No `eprintln!` in library code. |
 | `clippy::panic` | No explicit panics in production. |
-| `clippy::let_underscore_must_use` | No silently dropped `#[must_use]` result; propagate or log it. |
+| `clippy::let_underscore_must_use` | No silently dropped `#[must_use]` result. Propagate or log it. |
 <!-- AUTO-GUARDRAILS: clippy END -->
 
 ## 2. arch-lint (Test-Time)
@@ -34,41 +34,43 @@ Scan scope: `root = "./src"`, excluding `**/target/**`, `**/tests/**`, `**/*_tes
 
 | From Scope | To Scope(s) | Rationale |
 |------------|-------------|----------|
-| `model` | `server, narrative, application` | Model layer must be pure; cannot depend on outer layers. |
-| `model` | `storage` | Model layer must be pure; the game rules cannot depend on the storage adapter. |
+| `model` | `server, narrative, application` | Model layer must be pure. It cannot depend on outer layers. |
+| `model` | `storage` | Model layer must be pure. The game rules cannot depend on the storage adapter. |
 | `application` | `server` | Application layer must not depend on server layer. |
-| `agent-edge` | `storage` | Agents and the narrator get values; the step owns the storage reads and writes. |
+| `agent-edge` | `storage` | Agents and the narrator get values. The step owns the storage reads and writes. |
 | `model` | `storage-models` | Model layer must not depend on storage DB models/mappers. |
 | `narrative` | `storage-models` | Narrative layer must not depend on storage DB models/mappers. |
 | `application` | `storage-models` | Application layer must not depend on storage DB models/mappers. |
 | `server` | `storage-models` | Server layer must not depend on storage DB models/mappers. |
 | `bootstrap` | `storage-models` | Bootstrap layer must not depend on storage DB models/mappers. |
 | `test-support` | `storage-models` | Test support must not depend on storage DB models/mappers. |
-| `server` | `storage` | Server layer must not import from storage directly; use ApplicationService instead. |
+| `server` | `storage` | Server layer must not import from storage directly. Use ApplicationService instead. |
 | `ports` | `driven-llm, driven-text-check, narrative, server, storage, storage-models, bootstrap, test-support` | Port traits must not depend on adapter impls, application services, or outer layers. |
 | `driven-llm` | `driven-text-check` | driven-llm adapter must not depend on driven-text-check adapter. |
 | `driven-text-check` | `driven-llm` | driven-text-check adapter must not depend on driven-llm adapter. |
-| `storage` | `application` | Storage adapter must not depend on the application layer; depend on domain models only. |
+| `storage` | `application` | Storage adapter must not depend on the application layer. Depend on domain models only. |
 <!-- AUTO-GUARDRAILS: arch-lint END -->
 
-Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline comments and the hexagonal-reorganization superplan. The four arch-lint rules (`no-unwrap-expect`, `require-doc-comments`, `require-tracing`, `no-sync-io`) are configured in the same file with their severities (`error`, `warning`, `disabled`, `disabled`); two are disabled, and the project logs through `tracing` with no `log` or `env_logger` dependency, while startup performs sync I/O by design.
+Deferred rules and the `DebugPort` exemption live in `arch-lint.toml`'s inline comments and the hexagonal-reorganization superplan. The four arch-lint rules (`no-unwrap-expect`, `require-doc-comments`, `require-tracing`, `no-sync-io`) are configured in the same file with their severities (`error`, `warning`, `disabled`, `disabled`). Two are disabled. The project logs through `tracing` with no `log` or `env_logger` dependency. Startup performs sync I/O by design.
 
 ## 3. Custom syn-Based Convention Tests
 
 `tests/infrastructure/guardrails/` holds the AST walkers and the registered convention set (see `tests/infrastructure/guardrails/mod.rs` for the current rule count and per-rule registration). Per-rule details (which patterns are checked, which scopes apply, which exemptions exist) live in the individual rule files alongside the walker code. The walker code is the source for each rule's standard and severity — this section is a navigation pointer, not a content restatement.
 
-Four table-driven walkers enforce the design rules of the game-state lifecycle: banned name in a scope, call-site allowlist, type check, and call count. Their rows live in `tests/infrastructure/guardrails/walker_rows.rs`, one row per rule, and each row carries its reason on the comment lines above it. The Rule column holds the design rule's number. The two tables below are generated from those rows and from the `pub fn check_*` docs. A row with no reason or no `rule:` field fails the generator. It fails `build.py guardrails-doc`, which the full gate runs. It also fails `build.py guardrails-doc-check`, which `--no-fmt` runs.
+Four table-driven walkers enforce the design rules of the game-state lifecycle: banned name in a scope, call-site allowlist, type check, and call count. Their rows live in `tests/infrastructure/guardrails/walker_rows.rs`, one row per rule, and each row carries its reason on the comment lines above it. The Rule column holds the design rule's number. The two tables below are generated from those rows and from the `pub fn check_*` docs.
+
+A row with no reason or no `rule:` field fails the generator. It fails `build.py guardrails-doc`, which the full gate runs. It also fails `build.py guardrails-doc-check`, which `--no-fmt` runs.
 
 <!-- AUTO-GUARDRAILS: syn START -->
 | Rule | Kind | Reason | Source |
 |------|------|--------|--------|
 | 1 | banned name | Rule 1: every read and write names its Game. The active-Game pointer lives in `ActiveGame`, so a `static` item or an `Atomic*` type in the storage adapter would be a second hidden Game id. | `tests/infrastructure/guardrails/walker_rows.rs:14` |
-| 6 | banned name | Rule 6: the guard never spans a model call. `gate.rs` holds the guard for one check and its writes, so the narrator or an Agent (an after-narration Agent, an end-of-Job Agent, their runner) named in that file would let a call run under it. | `tests/infrastructure/guardrails/walker_rows.rs:22` |
-| 2 | call site | Rule 2: the active-Game pointer has one reader and one writer. `GameCatalogue` is both — `CurrentGame` reads through it once per request — and `ActiveGame::set` is `pub(super)`, so the compiler holds the write side too. | `tests/infrastructure/guardrails/walker_rows.rs:49` |
-| 3 | call site | Rule 3: only `GameWriter` writes game records. The unit of record writes is opened with a capability token, so `gate.rs` is where a unit starts and no other caller can open one; the storage seam contract gets its token from `test_support`, because its crate cannot call a crate-only constructor. | `tests/infrastructure/guardrails/walker_rows.rs:59` |
-| 13 | call site | Rule 13: one generation path. Only `job.rs` calls the narrator and the hooks of the Agent runner, and its step functions are the one place that does, so no second route to a model call grows beside the Job. The row sees files, not functions, and `job.rs` holds only Job code. A method call is matched through the receiver's name (`narrator`, `agent_runner`), which `JobDeps` keeps. | `tests/infrastructure/guardrails/walker_rows.rs:71` |
-| 7 | type check | Rule 7: between steps, pass ids. A Job holds no record field, so a record a step loads cannot go stale in another step's hands; and no function of `job.rs` takes a record parameter, because each step loads the records it uses itself. | `tests/infrastructure/guardrails/walker_rows.rs:95` |
-| 18 | call count | Rule 18: each writer takes the guard once, so a check and its writes are one critical section. Look again when a second lock (for example one guard per Game), an atomic with weak ordering in the write path, or a background Agent save that checks "this Swipe is still active" outside `hold` arrives; then the new primitive earns a `loom` seam contract. | `tests/infrastructure/guardrails/walker_rows.rs:109` |
+| 6 | banned name | Rule 6: the guard never spans a model call. `gate.rs` holds the guard for one check and its writes. So the narrator or an Agent (an after-narration Agent, an end-of-Job Agent, their runner) named in that file would let a call run under it. | `tests/infrastructure/guardrails/walker_rows.rs:22` |
+| 2 | call site | Rule 2: the active-Game pointer has one reader and one writer. `GameCatalogue` is both. `CurrentGame` reads through it once per request. `ActiveGame::set` is `pub(super)`, so the compiler holds the write side too. | `tests/infrastructure/guardrails/walker_rows.rs:48` |
+| 3 | call site | Rule 3: only `GameWriter` writes game records. The unit of record writes is opened with a capability token. So `gate.rs` is where a unit starts, and no other caller can open one. The storage seam contract gets its token from `test_support`, because its crate cannot call a crate-only constructor. | `tests/infrastructure/guardrails/walker_rows.rs:58` |
+| 13 | call site | Rule 13: one generation path. Only `job.rs` calls the narrator and the hooks of the Agent runner. Its step functions are the one place that does. So no second route to a model call grows beside the Job. The row sees files, not functions, and `job.rs` holds only Job code. A method call is matched through the receiver's name (`narrator`, `agent_runner`), which `JobDeps` keeps. | `tests/infrastructure/guardrails/walker_rows.rs:70` |
+| 7 | type check | Rule 7: between steps, pass ids. A Job holds no record field, so a record a step loads cannot go stale in another step's hands. No function of `job.rs` takes a record parameter, because each step loads the records it uses itself. | `tests/infrastructure/guardrails/walker_rows.rs:94` |
+| 18 | call count | Rule 18: each writer takes the guard once, so a check and its writes are one critical section. Look again when a second lock arrives (for example one guard per Game). Look again when an atomic with weak ordering arrives in the write path. Look again when a background Agent save arrives that checks "this Swipe is still active" outside `hold`. Then the new primitive earns a `loom` seam contract. | `tests/infrastructure/guardrails/walker_rows.rs:109` |
 
 | Rule | Description | Source |
 |------|-------------|--------|
@@ -115,7 +117,7 @@ Four table-driven walkers enforce the design rules of the game-state lifecycle: 
 | template raw strings | Flags `r#"` raw-string literals in askama template sources. | `tests/infrastructure/guardrails/style.rs:166` |
 | separator comments | Warns on visual separator comments such as `// === ... ===`. | `tests/infrastructure/guardrails/style.rs:245` |
 | single letter vars | Warns on single-letter variable names in functions with more than ten statements. | `tests/infrastructure/guardrails/style.rs:260` |
-| no ignored tests | Rejects every `#[ignore]`d fn, also through `cfg_attr`; the caller exempts `tests/llm/`. | `tests/infrastructure/guardrails/test_hygiene.rs:12` |
+| no ignored tests | Rejects every `#[ignore]`d fn, also through `cfg_attr`. The caller exempts `tests/llm/`. | `tests/infrastructure/guardrails/test_hygiene.rs:12` |
 | sleep has reason | Rejects a `sleep(..)` call in a test that has no `//` comment on the line above it. | `tests/infrastructure/guardrails/test_hygiene.rs:37` |
 | unit test allowlist | Fails a unit test outside the one rule, and a list entry that names no file. | `tests/infrastructure/guardrails/unit_test_allowlist.rs:178` |
 | banned name rows | Runs the banned-name table: each row's scope must not name a banned name. | `tests/infrastructure/guardrails/walkers.rs:168` |

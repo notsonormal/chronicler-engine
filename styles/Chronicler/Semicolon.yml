@@ -1,0 +1,7 @@
+# ASD-STE100 rule 8.1: no semicolons. Write two sentences.
+extends: existence
+message: "STE 8.1: do not use a semicolon. Write two sentences."
+level: error
+nonword: true
+tokens:
+  - ';'

@@ -1,4 +1,4 @@
-//! Stub-browser tests for the rules that keep a draft out of a part: a load skips a control whose request is in flight, and no part of any tab holds a form that waits for a Save. Tagged against `docs/specs/browser_screen.md`.
+//! Stub-browser tests for the rules that keep a draft out of a part. A load skips a control whose request is in flight. No part of any tab holds a form that waits for a Save. Tagged against `docs/specs/browser_screen.md`.
 
 use std::time::Duration;
 

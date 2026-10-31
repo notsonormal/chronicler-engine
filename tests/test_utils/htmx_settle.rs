@@ -1,4 +1,4 @@
-//! htmx settle harness primitive: a counter of `htmx:afterSettle` and `screen:loaded` installed at page load, and a target-scoped wait for an interaction's own swap or the screen load that shows it.
+//! htmx settle harness primitive: a counter of `htmx:afterSettle` and `screen:loaded` installed at page load. It also has a target-scoped wait for an interaction's own swap or the screen load that shows it.
 
 // htmx attaches an element's `hx-trigger` listeners at the end of the settle
 // task for the swap that registered it. A test that interacts as soon as the

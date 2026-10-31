@@ -1,4 +1,4 @@
-//! Stub-browser tests for failed form requests: the form keeps its place, and an invalid answer shows in its slot while a refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for failed form requests. The form keeps its place. An invalid answer shows in its slot. A refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 

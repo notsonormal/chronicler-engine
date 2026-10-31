@@ -3,8 +3,8 @@
 Endpoint: browser DOM.
 
 An LLM Messages row is a header. Its Open control loads the full record into the
-edit dialog (`#edit-dialog-body`). The panel is a part of the screen (`llm-messages`), and the dialog
-lies outside it, so a load of the panel never changes an open record.
+edit dialog (`#edit-dialog-body`). The panel is a part of the screen (`llm-messages`). The dialog
+lies outside the panel, so a load of the panel never changes an open record.
 
 ## Scenarios
 

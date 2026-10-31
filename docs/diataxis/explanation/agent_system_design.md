@@ -5,7 +5,9 @@ title: Agent System Design
 
 ## The agent abstraction
 
-The trait-plus-runner shape keeps the Job indifferent to which post-processing concerns exist. Adding an agent of a known type is a wiring change in bootstrap; a new agent type also needs an arm in `AgentRunner::from_configs`. Removing one is removing it from the runner. None of these changes require editing the Job itself. Each Agent gives one kind of result, and each kind of result has one landing. The compiler rejects an Agent whose answer the hook cannot save.
+The trait-plus-runner shape keeps the Job indifferent to which post-processing concerns exist. Adding an agent of a known type is a wiring change in bootstrap. A new agent type also needs an arm in `AgentRunner::from_configs`. Removing one is removing it from the runner. None of these changes require editing the Job itself.
+
+Each Agent gives one kind of result, and each kind of result has one landing. The compiler rejects an Agent whose answer the hook cannot save.
 
 ## Per-agent Connections
 
@@ -21,7 +23,7 @@ The two hooks separate what a generation's own result lands in (the Quantifier r
 
 The model reports which Characters are present now. The engine derives who entered and who left, from a diff of the previous result and the current one.
 
-Presence detection and transition reasoning are different jobs. Presence detection is structured extraction over a fixed schema: the model names the Characters it can see in the scene. Transition reasoning would require the model to track prior state across calls and infer who moved since the last result, which is less reliable than a set diff the engine computes over two lists it already holds. Asking the model for the harder job would couple observation and inference in the same call.
+Presence detection and transition reasoning are different jobs. Presence detection is structured extraction over a fixed schema: the model names the Characters it can see in the scene. Transition reasoning would require the model to track prior state across calls and infer who moved since the last result. This is less reliable than a set diff. The engine computes that diff over two lists it already holds. Asking the model for the harder job would couple observation and inference in the same call.
 
 ## Document References
 

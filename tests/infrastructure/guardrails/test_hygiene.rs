@@ -7,7 +7,7 @@ use syn::{Attribute, Meta, Token};
 
 use crate::Violation;
 
-/// Rejects every `#[ignore]`d fn, also through `cfg_attr`; the caller exempts `tests/llm/`.
+/// Rejects every `#[ignore]`d fn, also through `cfg_attr`. The caller exempts `tests/llm/`.
 /// An ignored test anywhere else hides a failure from the gate.
 pub fn check_no_ignored_tests(path: &str, content: &str) -> Vec<Violation> {
     let ast = match syn::parse_file(content) {

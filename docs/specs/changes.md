@@ -19,10 +19,10 @@ What raises each number:
 
 | Number | Raised by |
 |---|---|
-| `story` | A write of a Message or a Swipe of the Game: a new Message, a new Swipe, a text, a Swipe state, or the active Swipe. |
+| `story` | A write of a Message or a Swipe of the Game. It is a new Message, a new Swipe, a text, a Swipe state, or the active Swipe. |
 | `options` | A write of the dock record of the Game: the offered set, the Options failure, or their removal. |
 | `busy` | A change of the busy state of the Game, such as the start of a Job, a new step or the end of a Job. Also a write of the failure line of the Game. |
-| `games` | A new, a removed or a renamed Game, a change of the config of a Game, a Game that becomes active, a new or a removed Message of any Game, and the start or the end of an Autoplay run. A change of the step of a run does not raise it. |
+| `games` | A new, a removed or a renamed Game, a change of the config of a Game, or a Game that becomes active. Also a new or a removed Message of any Game, and the start or the end of an Autoplay run. A change of the step of a run does not raise it. |
 | `worlds` | A new, an edited or a removed World. |
 | `settings` | A save of the settings: a Connection, a Role, the text check, or an active prompt preset. |
 | `presets` | A new, an edited or a removed prompt preset. |
@@ -258,4 +258,4 @@ When the client saves one of these in turn, reading GET /changes before and afte
 Then the `revision` after each save is greater than the `revision` before it
 ```
 
-Every other scenario of this chapter that names the numbers a step moved also holds the `revision` to the same step: it goes up when the step moved a number, and stays when it moved none. So a failed save (Scenario 43.9) leaves it as it was.
+Every other scenario of this chapter that names the numbers a step moved also holds the `revision` to the same step. The `revision` goes up when the step moved a number, and stays when it moved none. So a failed save (Scenario 43.9) leaves it as it was.

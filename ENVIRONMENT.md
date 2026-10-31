@@ -17,14 +17,14 @@ run builds. Numbers are single runs from 2026-10-02 on a shared host, so treat g
 Each script's docstring has its details. These are the reasons and measurements the code can't show.
 
 - **Build slot** (`scripts/build_slot.py`): one heavy cargo step runs at a time, because overlapping
-  builds exceed the memory limit. Check the slot with `python scripts/build_slot.py --status`; a
-  build that gave up waiting (`CHRONICLER_BUILD_SLOT_WAIT`) or runs with the slot disabled holds no
-  flock, so `--status` reports free while it compiles.
+  builds exceed the memory limit. Check the slot with `python scripts/build_slot.py --status`. A
+  build that gave up waiting (`CHRONICLER_BUILD_SLOT_WAIT`), or that runs with the slot disabled,
+  holds no flock. So `--status` reports free while it compiles.
 - **Target seeding** (`scripts/target_seed.py`): a cold target dir copies dependency artifacts from
   a worktree with the same build signature. A seeded new-worktree gate took 344 s, against 728 s
   unseeded.
 - **Stale target pruning** (`scripts/remove_worktrees.py --prune-targets`): a pruned target dir
-  costs build time, not correctness — the next build re-seeds from a warm sibling, 344 s against
+  costs build time, not correctness. The next build re-seeds from a warm sibling, 344 s against
   728 s cold. That recovery cost is why the gate reclaims on idleness alone, without the git-level
   vetoes that guard worktree removal.
 - **lld linker** (`build.py`, `scripts/lld-linker.sh`): it links about 4 times faster than GNU ld.
@@ -43,20 +43,20 @@ Each script's docstring has its details. These are the reasons and measurements 
   runs three test processes at once.
 - **Seeded build outputs carry absolute paths:** seeding copies `build/<pkg>/output`, and the
   outputs of four C-building crates (`aws-lc-sys`, `zstd-sys`, `ring`, `libsqlite3-sys`) hold
-  absolute `-L` paths into the source checkout's target dir. A relink does not read those paths:
-  each crate links its C code as a `static=` library, which rustc bundles into the crate's `.rlib`,
-  and a missing `-L` directory is not an error. Removing the sibling's target dir therefore leaves
-  the seeded profile working. Measured 2026-10-03; the evidence is in
+  absolute `-L` paths into the source checkout's target dir. A relink does not read those paths.
+  Each crate links its C code as a `static=` library, which rustc bundles into the crate's `.rlib`.
+  A missing `-L` directory is not an error. Removing the sibling's target dir therefore leaves
+  the seeded profile working. Measured 2026-10-03. The evidence is in
   `old-docs/archived-plans/target-seed-absolute-paths-plan.md`.
 - **Per-test cost:** nextest runs each test in its own process, so an in-process cache never carries
   across tests. Each Harper text-check test builds its own dictionary, which `Cargo.toml` speeds up.
 - **Coverage** (`cargo-llvm-cov`, `python build.py --coverage`): it overrides `RUSTC_WRAPPER`, so
   sccache is bypassed and every crate rebuilds under instrumentation. It also runs the gate first,
-  so a coverage run is a full gate plus the coverage build; give it a dedicated `--target-dir`.
+  so a coverage run is a full gate plus the coverage build. Give it a dedicated `--target-dir`.
   Two things install outside the repo, and `cargo-llvm-cov` lands in the user home (`~/.cargo/bin`),
   so a rebuilt container drops it. Reinstall with `rustup component add llvm-tools-preview` and
   `cargo install cargo-llvm-cov --locked` (v0.9.1, installed 2026-10-03). On rustup 1.29 the
-  component is reported as `llvm-tools`; the `-preview` name still resolves.
+  component is reported as `llvm-tools`. The `-preview` name still resolves.
 
 ## Typical gate cost
 
@@ -86,7 +86,7 @@ The `guardrails` column is the architecture and guardrails binaries together. Th
 | Toolchain bump, or an edit to `.cargo/config.toml`, `scripts/lld-linker.sh`, `rust-toolchain.toml`, or `RUSTFLAGS` | New build signature, so every seed misses once. |
 | `Cargo.toml` profile or dependency change | Seeds still copy. Cargo rebuilds the affected units. |
 | Switching `--target-dir` mid-task | The new dir is cold. |
-| A raw `cargo build`/`cargo run` or IDE build in a `build.py` target dir | `build.py` exports `CARGO_TARGET_<host>_LINKER`, and cargo hashes the linker value into every unit fingerprint. A raw build sets no such variable, so it recompiles the tree, and the next `build.py` run recompiles it back. Measured 2026-10-03: raw `cargo run` recompiled 243 crates in 2m11s; the immediate second raw build was a no-op in 0.85s. |
+| A raw `cargo build`/`cargo run` or IDE build in a `build.py` target dir | `build.py` exports `CARGO_TARGET_<host>_LINKER`, and cargo hashes the linker value into every unit fingerprint. A raw build sets no such variable, so it recompiles the tree, and the next `build.py` run recompiles it back. Measured 2026-10-03: raw `cargo run` recompiled 243 crates in 2m11s. The immediate second raw build was a no-op in 0.85s. |
 
 Start the dev server with `python build.py run [-- <server flags>]`. The step builds the binary in this same environment and links it with lld. It then replaces the `build.py` process with the binary. Switching between a build step and the server recompiles nothing. Ctrl-C and stdio behave as with `cargo run`, because the server is the same process.
 

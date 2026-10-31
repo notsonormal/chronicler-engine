@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the write path while a Job runs: the races (actions.md 3.4, 3.5; options.md 24.21), the stop at each model call (dashboard.md 39.4, 39.5), the reset (reset.md 7.3), the Job of another Game (games.md 18.4), the edit, delete and swipe switch (story_log.md 8.7; swipe_switch.md 36.3), and the preset an event Narration uses (actions.md 6.4).
+//! HTTP E2E tests for the write path while a Job runs. They cover the races (actions.md 3.4, 3.5 and options.md 24.21) and the stop at each model call (dashboard.md 39.4, 39.5). They cover the reset (reset.md 7.3) and the Job of another Game (games.md 18.4). They cover the edit, delete and swipe switch (story_log.md 8.7 and swipe_switch.md 36.3). They also cover the preset an event Narration uses (actions.md 6.4).
 
 use std::sync::Arc;
 

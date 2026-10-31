@@ -9,18 +9,20 @@ The engine assembles a structured prompt for every Game Master call from the act
 
 ## Layered Prompt Architecture
 
-The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3 and 7 are conditional — Layer 3 (`<Persona>`) is dropped on an Impersonate generation, and persona data then reaches the prompt through the impersonate preset's template macros; Layer 7 (`<Guide>`) renders only on a Guided Generation. The remaining six layers are always present. A post-history splice of `<writing_style>` and `<output_format>` sits between Layer 5 and Layer 6.
+The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3 and 7 are conditional. Layer 3 (`<Persona>`) is dropped on an Impersonate generation. Persona data then reaches the prompt through the impersonate preset's template macros. Layer 7 (`<Guide>`) renders only on a Guided Generation.
+
+The remaining six layers are always present. A post-history splice of `<writing_style>` and `<output_format>` sits between Layer 5 and Layer 6.
 
 | Layer | Name | SillyTavern Equivalent | Role | Content |
 |-------|------|----------------------|------|---------|
 | 0 | System | Main Prompt | System | XML-wrapped `<role>` and `<instructions>` from the active preset, plus `<global_rules>` injected from `world.json` |
 | 1 | Game State | Context | User (data) | Current room name and description |
-| 2 | Character Cards | Character Description | User (data) | `<KnownCharacters>` condensed entry for every World Character; `<CharactersPresent>` full cards, only for Characters in the current room |
+| 2 | Character Cards | Character Description | User (data) | `<KnownCharacters>` condensed entry for every World Character. `<CharactersPresent>` full cards, only for Characters in the current room |
 | 3 | Player | Persona Description | User (data) | `<Persona>` persona sheet |
 | 4 | World Info | World Info / Lorebook | User (data) | `<WorldLore>` world name + description |
 | 5 | History | Chat History | User (data) | `<ConversationHistory>` conversation history |
 | 6 | User Input | User Message | User (data) | `<PlayerInput>` sanitized current player input |
-| 7 | Guide | — | User (data) | Transient guide text on a Guided Generation; omitted otherwise |
+| 7 | Guide | — | User (data) | Transient guide text on a Guided Generation. Omitted otherwise |
 
 The narrator makes Layer 6 from the kind of the generation (see Narration System).
 

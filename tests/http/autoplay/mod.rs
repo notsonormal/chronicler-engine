@@ -1,4 +1,4 @@
-//! HTTP E2E tests for Autoplay (autoplay.md 41.*), shared helpers: `run` holds the run of Jobs, its ends, the progress status and the refused writes; `fragments` holds the view-only Game's rendering.
+//! HTTP E2E tests for Autoplay (autoplay.md 41.*), shared helpers. `run` holds the run of Jobs, its ends, the progress status and the refused writes. `fragments` holds the view-only Game's rendering.
 
 mod fragments;
 mod run;

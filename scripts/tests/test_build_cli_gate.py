@@ -36,9 +36,9 @@ class GatePlanTests(unittest.TestCase):
     def by_label(self, **overrides):
         return {step.label: step for step in self.plan(**overrides)}
 
-    def test_full_gate_has_19_steps_and_starts_with_the_housekeeping(self):
+    def test_full_gate_has_20_steps_and_starts_with_the_housekeeping(self):
         plan = self.plan()
-        self.assertEqual(len(plan), 19)
+        self.assertEqual(len(plan), 20)
         self.assertEqual(
             labels(plan)[:3],
             [
@@ -78,13 +78,13 @@ class GatePlanTests(unittest.TestCase):
         plan = self.plan(no_browser=True)
         self.assertNotIn("Running browser tests...", labels(plan))
         self.assertIn("Running integration tests...", labels(plan))
-        self.assertEqual(len(plan), 18)
+        self.assertEqual(len(plan), 19)
 
     def test_no_fmt_prunes_fmt_only(self):
         plan = self.plan(no_fmt=True)
         self.assertNotIn("Formatting...", labels(plan))
         self.assertIn("Installing git hooks...", labels(plan))
-        self.assertEqual(len(plan), 18)
+        self.assertEqual(len(plan), 19)
 
     def test_fmt_regenerates_the_two_generated_docs(self):
         self.assert_doc_steps(self.plan(), present=_REGENERATE_DOC_LABELS, absent=_CHECK_DOC_LABELS)

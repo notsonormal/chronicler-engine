@@ -1,4 +1,4 @@
-//! Stub-browser tests for the action controls: what a check request does to the controls of the action area, the view states of the action area, and the load that follows a request. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for the action controls: what a check request does to the controls of the action area. They also cover the view states of the action area and the load that follows a request. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 

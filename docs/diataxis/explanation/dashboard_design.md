@@ -5,7 +5,7 @@ title: Dashboard Design
 
 ## The SillyTavern lineage
 
-The dashboard takes its interaction model from SillyTavern, a chat front end for LLM roleplay. A player who knows SillyTavern finds the chat layout, the Swipes of the last Message and the inline edit of a Message where they expect them.
+The dashboard takes its interaction model from SillyTavern, a chat front end for LLM roleplay. A player who knows SillyTavern finds the chat layout where they expect it. The Swipes of the last Message and the inline edit of a Message are also where they expect them.
 
 ## How the dashboard keeps the screen current
 
@@ -13,12 +13,12 @@ The browser keeps no copy of engine data. The server renders all of it, and the 
 
 ### One revision, one screen load
 
-The engine has one revision. The page asks `GET /changes`, and when the revision moves, one `GET /screen` load writes the parts of the visible tab. The page needs no table from a kind of data to the parts that show it, so a new part needs only a renderer and a place in the shell. The page converges after any change, because the load does not depend on what changed. The page polls and holds no stream, so a lost answer costs one ask.
+The engine has one revision. The page asks `GET /changes`, and when the revision moves, one `GET /screen` load writes the parts of the visible tab. The page needs no table from a kind of data to the parts that show it. So a new part needs only a renderer and a place in the shell. The page converges after any change, because the load does not depend on what changed. The page polls and holds no stream, so a lost answer costs one ask.
 
 The costs:
 
 - A move of the revision loads the whole visible tab, also when no visible part shows the change. The morph keeps each unchanged node, so the player sees nothing.
-- The server reads the parts one after the other. A load shows at least the revision that it names, and one Game. A story log from before a Narration can show beside a status display from after it, until the next ask. "No part lags" holds for each load as a lower bound, not as a snapshot.
+- The server reads the parts one after the other. A load shows at least the revision that it names, and one Game. A story log from before a Narration can show beside a status display from after it. This lasts until the next ask. "No part lags" holds for each load as a lower bound, not as a snapshot.
 
 ### A request answers only its outcome
 
@@ -38,7 +38,7 @@ Every request ends in Done, Refused, Invalid, Failed or No answer. Each outcome 
 
 A request with no answer within its time limit is No answer, so one hung ask cannot stop the screen. The limit covers the ask and the load. A request that a control sends has no limit, and its control stays busy while it waits.
 
-The server writes the sentence of every failed answer, because only the engine knows what it did not do and which item it read. The sentence names the item, so it reads correctly away from its control. Details hold only the engine lines after the sentence. The Unreachable text, the summary of a failed screen load and the line for an answer with no body stay in the page, because the engine cannot write them.
+The server writes the sentence of every failed answer, because only the engine knows what it did not do and which item it read. The sentence names the item, so it reads correctly away from its control. Details hold only the engine lines after the sentence. The Unreachable text, the summary of a failed screen load and the line for an answer with no body stay in the page. The engine cannot write them.
 
 ### A request names what its control showed
 
@@ -50,7 +50,7 @@ The cost is a refusal that the player did not cause. Another browser tab, an Aut
 
 An invalid answer to a form with typed input shows in that form, because the fix is in that text. Every other report shows in the one notice place under the header, because its cause is the state of the engine. An open dialog repeats the summary, because the modal hides the page. The latest report wins, and a one-line report wraps.
 
-The costs: a refusal shows away from the control that the player pressed, so its sentence names what was not done. A failing screen load repeats each second and replaces the notice of a request, so the player can lose a refusal report after about one second.
+The costs: a refusal shows away from the control that the player pressed, so its sentence names what was not done. A failing screen load repeats each second and replaces the notice of a request. So the player can lose a refusal report after about one second.
 
 ### One reader reports every answer
 
@@ -66,7 +66,7 @@ The cost is that the busy state of a request is CSS only. Assistive technology g
 
 ### A draft lives outside the screen
 
-A form that waits for a Save opens in one modal dialog outside the screen, so no load meets a draft and the page needs no check of what counts as a draft. The Action input and the Autoplay form live in the shell for the same reason. The cost is that the dialog takes the player out of the list, and it shows the data as it was when it opened. The last save wins.
+A form that waits for a Save opens in one modal dialog outside the screen. So no load meets a draft, and the page needs no check of what counts as a draft. The Action input and the Autoplay form live in the shell for the same reason. The cost is that the dialog takes the player out of the list, and it shows the data as it was when it opened. The last save wins.
 
 The inline Message edit is the one draft inside a part. The edit stays in the story, next to the text that it changes. Its cost is a list of rules that no other draft needs:
 

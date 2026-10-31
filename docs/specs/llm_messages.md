@@ -5,10 +5,12 @@ Endpoints:
 - `GET /screen?parts=llm-messages`
 - `GET /fragment/llm-messages/:id`
 
-`GET /screen?parts=llm-messages` answers a header for each of the 50 newest attempts:
-the Agent, the backend and model, the time, and for a failed attempt the error mark
-with a short line of its failure text. A header holds no prompt, no response and no
-Raw JSON. The Open control of a header loads the record of the attempt into the edit
+`GET /screen?parts=llm-messages` answers a header for each of the 50 newest attempts.
+A header holds the Agent, the backend and model, and the time. A header of a failed
+attempt also holds the error mark with a short line of its failure text. A header
+holds no prompt, no response and no Raw JSON.
+
+The Open control of a header loads the record of the attempt into the edit
 dialog (`#edit-dialog-body`) through `GET /fragment/llm-messages/:id`. The record is
 read-only. Its root (`data-dialog-form`) carries the title of the dialog.
 

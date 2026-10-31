@@ -400,8 +400,8 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
 - **I.2** A player-input message always appears in the story log
   before its associated Narration message (the input is persisted first).
 - **I.3** No scenario produces more than one main Narration message
-  per `POST /action` call (trigger continuations are separate
-  Narration messages; no duplicates from streaming, retry, or
-  retrigger).
+  per `POST /action` call. Trigger continuations are separate
+  Narration messages. Streaming, retry, and retrigger produce no
+  duplicates.
 - **I.4** Failed narration never adds a Narration message to history
   (no empty/broken narrations persisted).

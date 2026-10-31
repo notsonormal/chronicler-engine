@@ -38,24 +38,24 @@ The holder of a busy Game lives in memory and holds the busy mark.
 
 `Storage::stories()` and `Storage::docks()` return read handles. Each read names its Game.
 
-- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, the entries before a Message, and the story window: the newest entries, each with its Swipe state, and the end-of-story facts, in one read. It reads no more of the story than its answer needs.
+- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, the entries before a Message, and the story window. The story window is the newest entries, each with its Swipe state, and the end-of-story facts, in one read. It reads no more of the story than its answer needs.
 - **`DockReads`** (`docks.rs`) reads the dock record of a Game.
 
 ## Transactions
 
-One `Storage::transaction` call runs one **transaction**: a group of record writes that lands whole. A request can run several transactions. A Job opens one transaction for each save it makes. A transaction holds the backend mutex for its whole run, so the closure of a transaction makes no `Storage` call: that call would wait on the mutex.
+One `Storage::transaction` call runs one **transaction**: a group of record writes that lands whole. A request can run several transactions. A Job opens one transaction for each save it makes. A transaction holds the backend mutex for its whole run, so the closure of a transaction makes no `Storage` call. That call would wait on the mutex.
 
 - **`Tx`** holds the record writes of one transaction, and every record write exists only on `Tx`. It exists on SQLite only. A `Tx` serves one Game, so no write reaches another Game.
 - **`TxToken`** is the capability that opens a transaction. Its constructor is crate-private, and guardrail Rule 3 (call site) limits its callers to `GameWriter`'s registry and `test_support/`.
 - **`StorageCall`** is the typed key of one `Storage` method. The test layer fails a method by its `StorageCall`, so a test can fail one `Storage` method.
 - **`TxWrite`** is the typed key of one record write. A write checks its key before it writes, so a test can fail one write in the middle of a transaction.
-- **`Storage::transaction_new_game`** opens a transaction that creates a Game: it writes the Game row first, so the writes that follow it in the same transaction know the new Game.
+- **`Storage::transaction_new_game`** opens a transaction that creates a Game. It writes the Game row first. So the writes that follow it in the same transaction know the new Game.
 
 A transaction lands **whole, or not at all**. A closure that fails and a closure that panics both roll the transaction back.
 
 ## Change Counters
 
-`Storage` owns one `ChangeCounters`: a server id, made when `Storage` is built, and one number for each kind of data. `ChangeKind` names the eight kinds: story, Options, busy state, games, worlds, settings, prompt presets and LLM messages. `GameKind` holds the first three, which are counted for each Game, and `EngineKind` holds the other five, which are engine-wide. A raise names its Game (`raise_game`) or no Game (`raise_engine`), so a per-Game raise cannot lose its Game. `ChangeKind::token` gives the field name of a kind in `GET /changes`. A `Tx` write runs through one guard that checks its injected failure and records the kinds of its `TxWrite`. Every raise, through `raise_game` or `raise_engine`, also raises `revision`, one engine-wide number that no kind owns, so a client can tell that anything changed with one comparison. The screen load reads the revision before it renders, so the screen holds at least that revision, and a request answers the revision after its commit in `X-Revision`. `ChangeVersions` is one snapshot of all numbers and the revision; its `stamp` is `<server>:<revision>`. `GET /changes` answers it for the active Game, and the screen of the dashboard loads when it moves (see the Dashboard reference).
+`Storage` owns one `ChangeCounters`: a server id, made when `Storage` is built, and one number for each kind of data. `ChangeKind` names the eight kinds: story, Options, busy state, games, worlds, settings, prompt presets and LLM messages. `GameKind` holds the first three, which are counted for each Game, and `EngineKind` holds the other five, which are engine-wide. A raise names its Game (`raise_game`) or no Game (`raise_engine`), so a per-Game raise cannot lose its Game. `ChangeKind::token` gives the field name of a kind in `GET /changes`. A `Tx` write runs through one guard that checks its injected failure and records the kinds of its `TxWrite`. Every raise, through `raise_game` or `raise_engine`, also raises `revision`, one engine-wide number that no kind owns, so a client can tell that anything changed with one comparison. The screen load reads the revision before it renders. So the screen holds at least that revision. A request answers the revision after its commit in `X-Revision`. `ChangeVersions` is one snapshot of all numbers and the revision. Its `stamp` is `<server>:<revision>`. `GET /changes` answers it for the active Game, and the screen of the dashboard loads when it moves (see the Dashboard reference).
 
 - **A number rises only after its data is committed.** `Storage` raises the kinds of a `StorageCall` after the call returns `Ok`, while the backend mutex is still held. A transaction raises the kinds of its `TxWrite`s once, after the commit. A read, a failed call and a rolled-back transaction raise nothing.
 - **Two exhaustive maps give the kinds.** One maps each `StorageCall` to its kinds, and one maps each `TxWrite` to its kinds. Neither has a wildcard arm, so a new call or write does not compile until it names its kinds.
@@ -90,7 +90,7 @@ The tables form three logical clusters:
 
 1. **Game state** — the story and the dock of a Game, rooted at `games`.
 2. **World catalogue** — the static world definitions and Characters, rooted at `worlds`.
-3. **Standalone** — settings, prompt presets, and LLM messages; independent of any game or world.
+3. **Standalone** — settings, prompt presets, and LLM messages. They are independent of any game or world.
 
 ### Game state cluster
 
@@ -127,7 +127,7 @@ flowchart TD
     messages -->|"1 → ∞, cascades, UNIQUE(message_id, swipe_index)"| swipes
 ```
 
-A Swipe holds its own Swipe state, so a swipe switch needs no second record: the active Swipe of the last Message gives the current state.
+A Swipe holds its own Swipe state, so a swipe switch needs no second record. The active Swipe of the last Message gives the current state.
 
 ### World catalogue cluster
 

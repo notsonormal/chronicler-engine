@@ -308,7 +308,7 @@ And the body has no form
 
 ### Pages of saved Games
 
-The Saved Games section lists 50 Games for each page, newest `updated_at` first, and a Game with the same `updated_at` as another lists after the Game with the greater id. The active Game is not in the list: it shows in the Active Game section above. The page is asked for with `games_page` on `GET /screen`; a request without it asks for page 1. A section with more than one page shows the pager with Previous, Next and the page position.
+The Saved Games section lists 50 Games for each page, newest `updated_at` first. A Game with the same `updated_at` as another lists after the Game with the greater id. The active Game is not in the list: it shows in the Active Game section above. The page is asked for with `games_page` on `GET /screen`. A request without it asks for page 1. A section with more than one page shows the pager with Previous, Next and the page position.
 
 #### Scenario 20.41: The first page lists 50 saved Games and offers the next page
 

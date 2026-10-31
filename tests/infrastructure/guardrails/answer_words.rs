@@ -1,4 +1,4 @@
-//! Answer-words guardrails: every `post` route of the router has a row in the words table, every request path that a template or the shell names matches a row, and no `post` handler returns a plain `Html<String>`.
+//! Answer-words guardrails: every `post` route of the router has a row in the words table. Every request path that a template or the shell names matches a row. No `post` handler returns a plain `Html<String>`.
 
 use regex::Regex;
 

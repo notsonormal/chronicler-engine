@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the view-only Game of Autoplay (autoplay.md 41.18-41.20, 41.22): the controls the story log, the dock and the Games panel render while a run holds the Game.
+//! HTTP E2E tests for the view-only Game of Autoplay (autoplay.md 41.18-41.20, 41.22). They check the controls that the story log, the dock and the Games panel render while a run holds the Game.
 
 use std::sync::Arc;
 

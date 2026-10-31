@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
-//! Generation status enums: the step and the status are independent axes; the Job in `application/pipeline/` drives them.
+//! Generation status enums. The step and the status are independent axes. The Job in `application/pipeline/` drives them.
 
 use serde::{Deserialize, Serialize};
 

@@ -11,9 +11,11 @@ Endpoints:
 - `POST /prompt-presets/{id}/delete`
 - `POST /prompt-presets/{id}/duplicate`
 
-The Prompt Presets panel is a part of the screen (`prompt-presets`). Its fragment carries no root element of its own, and each preset
+The Prompt Presets panel is a part of the screen (`prompt-presets`). Its fragment carries no root element of its own. Each preset
 card carries a stable id (`preset-card-{id}`), so a load keeps the cards it does
-not change. The panel holds no form that waits for a Save. The Add control of each
+not change. The panel holds no form that waits for a Save.
+
+The Add control of each
 type, and the Edit and View controls of a card, load a form into the edit dialog
 (`#edit-dialog-body`). The root of each such form (`data-dialog-form`) carries the
 title of the dialog (`edit-dialog-title`). A form fragment that cannot open answers a
@@ -189,7 +191,7 @@ And the response body is one `<div class="error-message">` that holds the text o
 The same failure shape applies to `POST /prompt-presets/{id}` (update) and
 `POST /{id}/delete` — a non-2xx carrying a
 `<div class="error-message">…</div>` fragment that holds the text of the failure. Not
-enumerated as separate scenarios; this one covers the shape.
+enumerated as separate scenarios. This one covers the shape.
 
 ### POST /prompt-presets/{id} — update
 
@@ -354,7 +356,7 @@ And that preset's card does not contain a "Set Active (Novel)" button (it is now
 
 Activating a quantifier preset follows the same shape, writing to the
 quantifier slot instead of the system slot. Not enumerated as a
-separate scenario; this one covers the shape.
+separate scenario. This one covers the shape.
 
 Activation is per narrator mode: the `mode` query parameter selects the
 bundle the preset becomes active in (absent or invalid falls back to
@@ -470,8 +472,8 @@ And the preset named "Beta" is unchanged
 ### Options prompts — mode-agnostic
 
 Options prompts have no `ModePresetBundle` slot, so the panel's Options
-section is mode-agnostic: each card carries one Set Active button and
-activating it writes the settings-level default
+section is mode-agnostic. Each card carries one Set Active button.
+Activating it writes the settings-level default
 (`active_options_prompt_preset_id`). A game-level selection still takes
 precedence at resolution time.
 

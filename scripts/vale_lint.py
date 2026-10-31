@@ -2,7 +2,8 @@
 
 Thin wrapper around `vale` (https://vale.sh) that:
   - Loads the .vale.ini config
-  - Restricts scope to STANDARD docs (mirrors scripts/validate_docs.py)
+  - Restricts scope to STANDARD docs (mirrors scripts/validate_docs.py) and the root docs
+    in ROOT_DOCS
   - Skips TRANSIENT (plans/, old-docs/) and EXCLUDED paths
   - Supports single-file, multi-file, --all, --json, and --fix modes
 
@@ -12,10 +13,10 @@ Vale itself is responsible for rule evaluation. This wrapper owns:
   - Exit code (0 = clean, 1 = violations found, 2 = vale missing/errored)
 
 Prerequisites:
-  - `vale` on PATH (brew install vale)
+  - `vale` on PATH (the module docstring of build.py has the install command)
 
 Usage:
-    python scripts/vale_lint.py                          # all STANDARD docs
+    python scripts/vale_lint.py                          # all STANDARD docs + ROOT_DOCS
     python scripts/vale_lint.py --all                    # explicit --all
     python scripts/vale_lint.py docs/system/action_pipeline.md
     python scripts/vale_lint.py docs/system/action_pipeline.md docs/system/llm_processing.md
@@ -48,7 +49,8 @@ DOCS_ROOT = ENGINE_ROOT / "docs"
 VALE_INI = ENGINE_ROOT / ".vale.ini"
 
 # Transient — historical/forward-looking, no prose rules apply.
-TRANSIENT_DIR_NAMES: set[str] = {"plans", "old-docs"}
+# external_applications/ captures third-party prompts and notes, so its text is not ours to rewrite.
+TRANSIENT_DIR_NAMES: set[str] = {"plans", "old-docs", "external_applications"}
 
 # Excluded file names — auto-generated indexes, AGENTS meta.
 # AGENTS.mdAUTO-INDEX block is auto-regenerated; prose preamble is owned by
@@ -57,6 +59,20 @@ EXCLUDED_FILE_NAMES: set[str] = {
     "AGENTS.md",
     "README.md",
 }
+
+# Docs outside docs/ that the default run also lints.
+ROOT_DOCS: tuple[Path, ...] = tuple(
+    ENGINE_ROOT / name
+    for name in (
+        "AGENTS.md",
+        "CODING_STANDARDS.md",
+        "CONTEXT.md",
+        "ENVIRONMENT.md",
+        "README.md",
+        "tests/AGENTS.md",
+        "tests/STRATEGY.md",
+    )
+)
 
 
 
@@ -185,7 +201,7 @@ def main() -> int:
         help=(
             "Specific .md files or dirs to lint. "
             "If omitted, lints all in-scope STANDARD docs (mirror of "
-            "validate_docs.py)."
+            "validate_docs.py) and the root docs in ROOT_DOCS."
         ),
     )
     parser.add_argument(
@@ -218,7 +234,7 @@ def main() -> int:
     if not vale_bin:
         print(
             "ERROR: vale not found on PATH.\n"
-            "Install: brew install vale\n"
+            "Install: see the module docstring of build.py\n"
             "Docs:   https://vale.sh/docs",
             file=sys.stderr,
         )
@@ -238,7 +254,7 @@ def main() -> int:
             )
             return 3
     else:
-        targets = collect_targets([DOCS_ROOT])
+        targets = collect_targets([DOCS_ROOT, *ROOT_DOCS])
 
     if not args.quiet:
         print(f"Vale: {vale_bin}", file=sys.stderr)

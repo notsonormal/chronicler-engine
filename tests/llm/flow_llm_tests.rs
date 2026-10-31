@@ -1,4 +1,4 @@
-//! LLM-driven flow tests: exercises real LLM provider flows end-to-end (ignored by default; run with `python build.py --llm-only`).
+//! LLM-driven flow tests. They exercise real LLM provider flows end-to-end. They are ignored by default. Run them with `python build.py --llm-only`.
 
 #[path = "../test_utils/mod.rs"]
 mod test_utils;

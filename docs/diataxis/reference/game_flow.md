@@ -15,7 +15,7 @@ These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/opti
 - A Game has at most one Job. A second request for a busy Game is refused.
 - A Job runs at most two generations: the Narration, and the event Narration of a Trigger that the game rules fired. It then runs at most one Options run.
 - A part that fails ends the Job. Every transaction that landed before the failure stays.
-- When the Job saved a Narration or an event Narration, the Options run follows a failure of any later part: the state update, the event generation or the save of the event text. A Job whose entry moved on runs no Options run. The status shows the first failure. A failure of that Options run goes to the log.
+- When the Job saved a Narration or an event Narration, the Options run follows a failure of any later part. The later parts are the state update, the event generation and the save of the event text. A Job whose entry moved on runs no Options run. The status shows the first failure. A failure of that Options run goes to the log.
 
 ## The Plan of a Request
 
@@ -23,9 +23,9 @@ These requests start a Job: a free-text Action, `/guide`, `/impersonate`, `/opti
 
 A `GenerationOrder` is the order of one generation. It holds ids and texts only. The kind of the generation carries the data that only that kind has, such as the event record of an event generation.
 
-`GenerationOrder::write` makes the new Swipe of a generation. It is the one place that decides the Message kind, the message type, the maker, the stored inputs, the event header and the Swipe state of the text save.
+`GenerationOrder::write` makes the new Swipe of a generation. It is the one place that decides the Message kind, the message type and the maker. It also decides the stored inputs, the event header and the Swipe state of the text save.
 
-A Retrigger is allowed when `Tail::retrigger_allowed` says so: the last Message is a Narration that is not an event Narration, or an Impersonate Input, and the current state holds an event record. The story log button reads the same rule from the story window.
+A Retrigger is allowed when `Tail::retrigger_allowed` says so. That is the case when the last Message is a Narration that is not an event Narration, or an Impersonate Input. The current state must also hold an event record. The story log button reads the same rule from the story window.
 
 ## The Busy State and Its Holder
 
@@ -42,7 +42,7 @@ No saved record holds the holder, the step or the progress. A restart loses ever
 
 ## The Autoplay Loop
 
-`AutoplayRun` in `application/autoplay/` is a loop on top of Jobs. It starts ordinary Jobs one after the other, and it owns the budget, the cycles and the cycle rule. The loop makes one accept for each Job. In one hold of the registry, the accept reads the end of the story, counts the cycle that the last Job ended, and either finishes the run or accepts the next Job.
+`AutoplayRun` in `application/autoplay/` is a loop on top of Jobs. It starts ordinary Jobs one after the other, and it owns the budget, the cycles and the cycle rule. The loop makes one accept for each Job. In one hold of the registry, the accept reads the end of the story and counts the cycle that the last Job ended. Then it either finishes the run or accepts the next Job.
 
 ## The Writer Rule
 
@@ -94,7 +94,9 @@ One rule picks the failure line of a part. `accept` and the Job use the same rul
 
 ## Status
 
-The status of a Game has one rule. A Game with a job entry shows its step. A Game that an Autoplay run holds also shows the progress of the run: the number of the cycle in progress and the budget. A Game that is not busy and holds a failure line shows that line. Any other Game is idle. The accept clears the failure line in its transaction, and a stop, a swipe switch and a delete clear it too. A failure line has no process to end it, so it stays until the player acts. The accept clears it in storage, because a restart during the new Job would otherwise show the old failure again.
+The status of a Game has one rule. A Game with a job entry shows its step. A Game that an Autoplay run holds also shows the progress of the run: the number of the cycle in progress and the budget. A Game that is not busy and holds a failure line shows that line. Any other Game is idle.
+
+The accept clears the failure line in its transaction, and a stop, a swipe switch and a delete clear it too. A failure line has no process to end it, so it stays until the player acts. The accept clears it in storage, because a restart during the new Job would otherwise show the old failure again.
 
 `GameViewQuery` holds the rule. The reason for its two sources is in the Explanation doc listed below.
 
@@ -110,7 +112,7 @@ Each Swipe holds one **Swipe state**: the room, the added rooms, the Characters 
 
 - The **current state** is the Swipe state of the active Swipe of the last Message.
 - The **start state** of a Message is the Swipe state of the active Swipe of the Message before it. For the opening Narration, it is the Swipe state of its first Swipe. `Tail` derives both.
-- Only the Job that makes a Swipe writes its Swipe state, at most twice: the **pre-analysis state** at the text save, and the analysed state at the state update. `SavedText` carries the Swipe from the first write to the second.
+- Only the Job that makes a Swipe writes its Swipe state, at most twice. The writes are the **pre-analysis state** at the text save and the analysed state at the state update. `SavedText` carries the Swipe from the first write to the second.
 - A stop or a restart between the two writes leaves the Swipe with its pre-analysis state.
 - An edit changes the text of a Swipe only. A swipe switch and a delete change which Swipe state is current. They write no Swipe state.
 

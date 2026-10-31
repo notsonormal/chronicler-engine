@@ -1,15 +1,25 @@
 # Feature Spec: Autoplay
 
 Endpoints:
-- `POST /autoplay` (the start; form field `cycles`)
+- `POST /autoplay` (the start, with the form field `cycles`)
 - `POST /status/reset-busy` (the stop)
 - `GET /screen?parts=status-display` (the status display)
 
-An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one after the other: an `/impersonate` Job, then a Continue Job that answers the Input the first one wrote. The run holds its Game from its start to its end, also between two Jobs. A **cycle** ends when a Job of the run ends without a failure line and leaves the story on a Narration. So an Input is answered by a Continue Job, or by the event Narration of a Trigger that fires in the Job that wrote the Input. The **budget** is the number of cycles: it counts the answered Inputs of the run.
+An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one after the other: an `/impersonate` Job, then a Continue Job that answers the Input the first one wrote. The run holds its Game from its start to its end, also between two Jobs.
+
+A **cycle** ends when a Job of the run ends without a failure line and leaves the story on a Narration. So a Continue Job answers an Input. Or the event Narration of a Trigger answers it, when the Trigger fires in the Job that wrote the Input. The **budget** is the number of cycles: it counts the answered Inputs of the run.
 
 The next Job of a run is a Continue when the last Message is an Input, and an Impersonate in every other case. This rule also picks the first Job.
 
-A run ends for one of these reasons: a stop, a reset or a delete of the Game, the budget, a Job that ends with a failure line, or an accept that cannot read a record of the Game. A failed Options run and a fallback of the Quantifier do not stop it.
+A run ends for one of these reasons:
+
+- A stop.
+- A reset or a delete of the Game.
+- The budget.
+- A Job that ends with a failure line.
+- An accept that cannot read a record of the Game.
+
+A failed Options run and a fallback of the Quantifier do not stop it.
 
 The status display of a Game that a run holds answers the status `autoplay` with the label `Autoplay: cycle <cycle>/<budget> <step label>` while a Job runs, and `Autoplay: cycle <cycle>/<budget>` between two Jobs. The cycle is the number of the cycle that is in progress. The step labels are the ones of Scenario 39.1.
 
@@ -250,7 +260,7 @@ And the Game is idle
 
 #### Scenario 41.18: While a run holds the Game, the story log and the options dock render their story-changing controls disabled
 
-While a plain Job runs, the story log and the config controls render enabled (the server still refuses a story write as busy), and the options dock renders disabled. While an Autoplay run holds the Game, the story log, the dock and the config controls render disabled. The reason (owner, Q4): a plain Job is short and the player stays in control of it; an Autoplay run is long and writes the story by itself, so the Game is view-only. This rule covers Scenarios 41.18 to 41.22.
+While a plain Job runs, the story log and the config controls render enabled (the server still refuses a story write as busy), and the options dock renders disabled. While an Autoplay run holds the Game, the story log, the dock and the config controls render disabled. The reason (owner, Q4): a plain Job is short and the player stays in control of it. An Autoplay run is long and writes the story by itself, so the Game is view-only. This rule covers Scenarios 41.18 to 41.22.
 
 ```gherkin
 Given a Game whose last Message is a Narration with two Swipes, the second one active

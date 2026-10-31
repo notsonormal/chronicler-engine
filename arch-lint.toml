@@ -89,7 +89,7 @@ paths = ["src/adapters/driving/http/**"]
 [[deny-scope-dep]]
 from = "model"
 to = ["server", "narrative", "application"]
-message = "Model layer must be pure; cannot depend on outer layers."
+message = "Model layer must be pure. It cannot depend on outer layers."
 
 # ── The game rules are pure ──
 # The game rules decide the game state, so a pure function can be tested with no storage
@@ -97,7 +97,7 @@ message = "Model layer must be pure; cannot depend on outer layers."
 [[deny-scope-dep]]
 from = "model"
 to = ["storage"]
-message = "Model layer must be pure; the game rules cannot depend on the storage adapter."
+message = "Model layer must be pure. The game rules cannot depend on the storage adapter."
 
 # Application must not depend on server.
 [[deny-scope-dep]]
@@ -108,7 +108,7 @@ message = "Application layer must not depend on server layer."
 [[deny-scope-dep]]
 from = "agent-edge"
 to = ["storage"]
-message = "Agents and the narrator get values; the step owns the storage reads and writes."
+message = "Agents and the narrator get values. The step owns the storage reads and writes."
 
 # ── Storage model isolation ──
 # DB models and mappers are an internal storage concern.
@@ -163,7 +163,7 @@ message = "Test support must not depend on storage DB models/mappers."
 [[deny-scope-dep]]
 from = "server"
 to = ["storage"]
-message = "Server layer must not import from storage directly; use ApplicationService instead."
+message = "Server layer must not import from storage directly. Use ApplicationService instead."
 
 # Port traits must not reach into adapter impls or outer layers.
 # `ports` is a subset of `application/**`; do NOT add `application` to the
@@ -190,4 +190,4 @@ message = "driven-text-check adapter must not depend on driven-llm adapter."
 [[deny-scope-dep]]
 from = "storage"
 to = ["application"]
-message = "Storage adapter must not depend on the application layer; depend on domain models only."
+message = "Storage adapter must not depend on the application layer. Depend on domain models only."

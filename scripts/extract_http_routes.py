@@ -171,7 +171,7 @@ def group_routes_by_area(routes: list[Route]) -> dict[str, list[Route]]:
 _OVERVIEW_PROSE = (
     "Generated from `src/adapters/driving/http/builders/router.rs` — "
     "re-run `python scripts/extract_http_routes.py` after any `router.rs` change. "
-    "Covers `.route()` calls only; `.nest_service` (assets/data) and "
+    "Covers `.route()` calls only. `.nest_service` (assets/data) and "
     "`fallback_service` live in `router.rs` but aren't enumerated."
 )
 

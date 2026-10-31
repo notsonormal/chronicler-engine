@@ -2,7 +2,7 @@
 
 ## Test Strategy
 
-Read [`STRATEGY.md`](STRATEGY.md) before placing a test or writing a spec scenario: the tier of every `tests/` directory, the tier-1 **domain outcome** rule, the UI placement rule, and the SCENARIO-tag rules.
+Read [`STRATEGY.md`](STRATEGY.md) before placing a test or writing a spec scenario. It holds the tier of every `tests/` directory, the tier-1 **domain outcome** rule, the UI placement rule, and the SCENARIO-tag rules.
 
 ## Failure handling
 
@@ -12,7 +12,7 @@ When tests fail, you must:
 2. **Read the test code** — understand what the test is actually checking before explaining why it failed.
 3. **Verify your assumptions** — if you claim "this test skips when X is missing", verify X is actually missing and the skip logic exists.
 4. **Never rationalize failures away** — a test failure is a real signal that requires investigation, not dismissal.
-5. **Investigate pre-existing and flaky failures too** — a failure that looks unrelated is often related; even when it isn't, failing tests need fixing regardless.
+5. **Investigate pre-existing and flaky failures too** — a failure that looks unrelated is often related. Even when it isn't, failing tests need fixing regardless.
 
 If you're unsure why a test failed, say so and investigate — don't invent explanations.
 
@@ -22,11 +22,11 @@ If you're unsure why a test failed, say so and investigate — don't invent expl
 
 ## Engine log tee
 
-Every spawned test server tees engine stdout/stderr incrementally to `tmp/test_server_logs/{port}_{stream}.log` (`tests/test_utils/server.rs::drain_to_buffer_and_tee`). Files persist after the run, pass or fail — read them to diagnose engine-side behaviour without editing tests (one log per port; ports are recycled, so check the timestamp).
+Every spawned test server tees engine stdout/stderr incrementally to `tmp/test_server_logs/{port}_{stream}.log` (`tests/test_utils/server.rs::drain_to_buffer_and_tee`). Files persist after the run, pass or fail — read them to diagnose engine-side behaviour without editing tests. One log exists per port, and ports are recycled, so check the timestamp.
 
 ### Test Mirror Convention
 
-Integration test structure mirrors `src/` paths **within each test binary**. The tier table in [`STRATEGY.md`](STRATEGY.md) picks the directory; inside it, file paths mirror `src/` subpaths.
+Integration test structure mirrors `src/` paths **within each test binary**. The tier table in [`STRATEGY.md`](STRATEGY.md) picks the directory. Inside it, file paths mirror `src/` subpaths.
 
 Examples:
 - `src/application/narration/narrator.rs` ↔ `src/application/narration/narrator_tests.rs` (unit test mirror)
@@ -36,11 +36,11 @@ Examples:
 
 ## Seam recipes
 
-Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep API details there.
+Recurring HTTP/spec-test seams — the exemplar file is the documentation. Keep API details there.
 
 - Assert what the narrator was sent → storage-backed recorder (`make_test_recorder_with_storage`, `src/test_support/fixtures.rs`) + `GameViewQuery::list_latest_llm_messages`
 - Inject a storage failure → `Storage::with_failure` + `TestOverride::internal`, exemplar `tests/http/settings.rs`
-- Wire an options agent → an `options`-type `AgentConfig` through `AgentRunner::from_configs` (`configured_runner` in test support; `configured_runner_without` leaves one type out), exemplar `src/application/agents/options/agent_tests.rs`
+- Wire an options agent → an `options`-type `AgentConfig` through `AgentRunner::from_configs` (`configured_runner` in test support, and `configured_runner_without` leaves one type out), exemplar `src/application/agents/options/agent_tests.rs`
 - Observe generated options in the UI → `fetch_part(app, "options-dock")` (`tests/http/support/http_requests.rs`), which reads `GET /screen?parts=options-dock`
 
 ## STRUCTURE
@@ -57,30 +57,30 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `prompt_presets.rs` — Browser prompt-presets tests: the duplicate → edit → save click chain wiring guard. Tagged against `docs/specs/browser_prompt_presets.md`.
     - `worlds.rs` — Browser worlds-panel tests: world posture auto-save wiring guard. Tagged against `docs/specs/browser_worlds.md`.
     - **stub/**
-      - `action_controls.rs` — Stub-browser tests for the action controls: what a check request does to the controls of the action area, the view states of the action area, and the load that follows a request. Tagged against `docs/specs/browser_dashboard.md`.
+      - `action_controls.rs` — Stub-browser tests for the action controls: what a check request does to the controls of the action area. They also cover the view states of the action area and the load that follows a request. Tagged against `docs/specs/browser_dashboard.md`.
       - `announcements.rs` — Stub-browser tests for the live-region announcements: each change is announced exactly once. Tagged against `docs/specs/browser_dashboard.md`.
       - `autoplay.rs` — Stub-browser tests for the Autoplay control: the progress status and the action area while a run holds the Game. Tagged against `docs/specs/browser_autoplay.md`.
       - `dashboard.rs` — Stub-browser tests for dashboard chrome: the action-area state machine, the tab bar, the landmarks and the status display. Tagged against `docs/specs/browser_dashboard.md`.
-      - `dialog.rs` — Stub-browser tests for the edit dialog: an htmx swap into its body opens it, Cancel and Escape close it and return focus to the opener, a save closes it only when the engine accepts it and the screen shows it, an answer from outside never replaces its form, and the dialog forms that a screen load never reaches. Tagged against `docs/specs/browser_dashboard.md`, `docs/specs/browser_games.md` and `docs/specs/browser_screen.md`.
-      - `drafts.rs` — Stub-browser tests for the rules that keep a draft out of a part: a load skips a control whose request is in flight, and no part of any tab holds a form that waits for a Save. Tagged against `docs/specs/browser_screen.md`.
+      - `dialog.rs` — Stub-browser tests for the edit dialog. An htmx swap into its body opens it, and Cancel and Escape close it and return focus to the opener. A save closes it only when the engine accepts it and the screen shows it. An answer from outside never replaces its form. Other tests cover the dialog forms that a screen load never reaches. Tagged against `docs/specs/browser_dashboard.md`, `docs/specs/browser_games.md` and `docs/specs/browser_screen.md`.
+      - `drafts.rs` — Stub-browser tests for the rules that keep a draft out of a part. A load skips a control whose request is in flight. No part of any tab holds a form that waits for a Save. Tagged against `docs/specs/browser_screen.md`.
       - `failure_display.rs` — Stub-browser tests for the failure display: the banner, the notice and the clamped disclosures. Tagged against `docs/specs/browser_dashboard.md`.
-      - `form_failures.rs` — Stub-browser tests for failed form requests: the form keeps its place, and an invalid answer shows in its slot while a refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
-      - `game_header.rs` — Stub-browser tests for the Game header of a request: the page names the Game it shows, and the engine refuses a request for a Game that is no longer active. Tagged against `docs/specs/browser_dashboard.md`.
+      - `form_failures.rs` — Stub-browser tests for failed form requests. The form keeps its place. An invalid answer shows in its slot. A refusal or a failure shows in the notice. Tagged against `docs/specs/browser_dashboard.md`.
+      - `game_header.rs` — Stub-browser tests for the Game header of a request. The page names the Game it shows. The engine refuses a request for a Game that is no longer active. Tagged against `docs/specs/browser_dashboard.md`.
       - `games.rs` — Stub-browser tests for the Games panel: the keyboard-focus landing after a saved-game delete, and the pages of saved Games. Tagged against `docs/specs/browser_games.md`.
       - `htmx_events.rs` — Probes of the vendored htmx (declared exemption in the spec-coverage validator): the order and the reach of the events that the one answer reader relies on. No spec link: the probes pin the contract of the library, and the scenarios of `docs/specs/browser_dashboard.md` rely on it.
-      - `layout.rs` — Layout checks (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Twelve checks share one browser through the shared runner; each runs on a fresh page against its own stub server, with panic isolation and a per-check timing summary.
-      - `llm_messages.rs` — Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row, the record that opens in the dialog, and the load that leaves the open dialog alone. Tagged against `docs/specs/browser_llm_messages.md`.
+      - `layout.rs` — Layout checks (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Twelve checks share one browser through the shared runner. Each runs on a fresh page against its own stub server, with panic isolation and a per-check timing summary.
+      - `llm_messages.rs` — Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row. They also cover the record that opens in the dialog and the load that leaves the open dialog alone. Tagged against `docs/specs/browser_llm_messages.md`.
       - `mod.rs` — Stub-browser tests: browser-only behaviour against a fake engine.
       - `options.rs` — Stub-browser tests for the options dock: the client-side edit action filling the command input. Tagged against `docs/specs/browser_options.md`.
-      - `prompt_presets.rs` — Stub-browser tests for the Prompt Presets panel: the keyboard-focus landing after a preset card delete and when an editor opens, and the report of a refused editor. Tagged against `docs/specs/browser_prompt_presets.md`.
+      - `prompt_presets.rs` — Stub-browser tests for the Prompt Presets panel: the keyboard-focus landing after a preset card delete and when an editor opens. They also cover the report of a refused editor. Tagged against `docs/specs/browser_prompt_presets.md`.
       - `reports.rs` — Stub-browser tests for where a report shows: the notice place under the header, the slot of a form with typed input, and the Unreachable banner. Tagged against `docs/specs/browser_dashboard.md`.
       - `screen.rs` — Stub-browser tests for the screen loop: the ask, the load of the visible tab, the tab change, the stamp and the failure slots. Tagged against `docs/specs/browser_screen.md`.
       - `screen_keeps.rs` — Stub-browser tests for what a screen load keeps: the story-log entry in edit, the engaged state of each part. Tagged against `docs/specs/browser_screen.md`.
       - `screen_morph.rs` — Stub-browser tests for the direct morph of the screen script: htmx processes the morphed nodes, and the Idiomorph callbacks keep what a load keeps. Tagged against `docs/specs/browser_screen.md`.
-      - `screen_saves.rs` — Stub-browser tests for a save that waits for the screen: the dialog that says Saving until the screen shows the save, and what a late, repeated, failed or restarted save does. Tagged against `docs/specs/browser_screen.md`.
+      - `screen_saves.rs` — Stub-browser tests for a save that waits for the screen: the dialog that says Saving until the screen shows the save. They also cover what a late, repeated, failed or restarted save does. Tagged against `docs/specs/browser_screen.md`.
       - `settings.rs` — Stub-browser tests for the Settings panel: the client-side sub-tabs and the connection form in the dialog. Tagged against `docs/specs/browser_settings.md`.
       - `slash_menu.rs` — Stub-browser tests for the slash menu: the client-side command palette rendered from the shipped shell's `input` listener. Tagged against `docs/specs/browser_slash_menu.md`.
-      - `slot_sweep.rs` — Stub-browser sweeps of the server's markup: each form with typed input renders one slot, no other element but the report container of the notice holds a slot, and each control that opens the dialog renders an id. Tagged against `docs/specs/browser_screen.md`.
+      - `slot_sweep.rs` — Stub-browser sweeps of the server's markup. Each form with typed input renders one slot. No other element but the report container of the notice holds a slot. Each control that opens the dialog renders an id. Tagged against `docs/specs/browser_screen.md`.
       - `story_log.rs` — Stub-browser tests for the story log's load: the morph that keeps selection, focus, scroll position and the surviving entries. Tagged against `docs/specs/browser_story_log.md`.
       - `story_log_edit.rs` — Stub-browser tests for the story log's edit flow: edit mode, the entry locks and where a failed request shows. Tagged against `docs/specs/browser_story_log.md`.
       - `support.rs` — Shared stub-browser helpers: the check runner, page probes and node reads used by more than one stub test module.
@@ -91,8 +91,8 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `storage_ext.rs` — Test-only `Storage` extension trait for seeding deterministic test worlds.
 - **http/**
     - `actions.rs` — HTTP E2E tests for the action endpoint (POST /action).
-    - `answer_words.rs` — HTTP E2E tests for the words of a failed answer: every row of the words table pinned by a hand-written sentence, the second line that holds only the engine's text, and the two answers that an extractor writes (`415` and `422`). Tagged against `docs/specs/screen.md`.
-    - `changes.rs` — HTTP E2E tests for the change numbers (`GET /changes`): which numbers each save path moves, and which numbers a read, a failed save and a rolled-back transaction leave as they were. Tagged against `docs/specs/changes.md`.
+    - `answer_words.rs` — HTTP E2E tests for the words of a failed answer: every row of the words table pinned by a hand-written sentence. They also cover the second line that holds only the engine's text, and the two answers that an extractor writes (`415` and `422`). Tagged against `docs/specs/screen.md`.
+    - `changes.rs` — HTTP E2E tests for the change numbers (`GET /changes`): which numbers each save path moves. They also check which numbers a read, a failed save and a rolled-back transaction leave as they were. Tagged against `docs/specs/changes.md`.
     - `dashboard.rs` — HTTP E2E tests for dashboard chrome: the shell's icon sprite, the busy-status surfaces, and the debug state. Tagged against `docs/specs/dashboard.md`.
     - `failure_display.rs` — HTTP E2E tests for the failure display, tagged against `docs/specs/failure_display.md`.
     - `games_config.rs` — HTTP E2E tests for the per-game config endpoints (posture, presets, mode): storage failures surface as 500 error fragments instead of panics.
@@ -102,15 +102,15 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `games_pages.rs` — HTTP E2E tests for the pages of the saved Games on `GET /screen?parts=games`: the page size, the order, the clamp and the pager. Tagged against `docs/specs/games.md` and `docs/specs/screen.md`.
     - `games_rename.rs` — HTTP E2E tests for game rename (POST /games/:id/rename).
     - `games_switch.rs` — HTTP E2E tests for game switching (POST /games/:id/switch).
-    - `llm_messages.rs` — HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders, the list sends a header for each attempt, and the record of one attempt opens in the dialog.
+    - `llm_messages.rs` — HTTP E2E tests for the LLM Messages panel. A failed attempt is recorded and its failure text renders. The list sends a header for each attempt. The record of one attempt opens in the dialog.
     - `mod.rs` — HTTP test binary root: real-request integration tests for action handlers, fragment rendering, connections UI, debug endpoints, and server wiring.
     - `narrator_mode.rs` — HTTP E2E tests for narrator mode: world-to-game posture inheritance, mode switching, and steering availability.
     - `options.rs` — HTTP E2E tests for options-autogeneration: on-demand /options, the always-on Options run at the end of a Job, and response-shape parsing.
     - `prompt_presets.rs` — HTTP E2E tests for the prompt-presets endpoints.
-    - `races.rs` — HTTP E2E tests for the write path while a Job runs: the races (actions.md 3.4, 3.5; options.md 24.21), the stop at each model call (dashboard.md 39.4, 39.5), the reset (reset.md 7.3), the Job of another Game (games.md 18.4), the edit, delete and swipe switch (story_log.md 8.7; swipe_switch.md 36.3), and the preset an event Narration uses (actions.md 6.4).
+    - `races.rs` — HTTP E2E tests for the write path while a Job runs. They cover the races (actions.md 3.4, 3.5 and options.md 24.21) and the stop at each model call (dashboard.md 39.4, 39.5). They cover the reset (reset.md 7.3) and the Job of another Game (games.md 18.4). They cover the edit, delete and swipe switch (story_log.md 8.7 and swipe_switch.md 36.3). They also cover the preset an event Narration uses (actions.md 6.4).
     - `reset.rs` — HTTP E2E tests for the reset endpoint (POST /reset).
     - `retrigger.rs` — HTTP E2E tests for the retrigger endpoint (POST /retrigger).
-    - `screen.rs` — HTTP E2E tests for what every request answer carries: the `X-Revision` stamp, the busy refusal as `409`, and the Game header that a page sends with a Game-bound request. Tagged against `docs/specs/screen.md`.
+    - `screen.rs` — HTTP E2E tests for what every request answer carries: the `X-Revision` stamp and the busy refusal as `409`. They also cover the Game header that a page sends with a Game-bound request. Tagged against `docs/specs/screen.md`.
     - `screen_load.rs` — HTTP E2E tests for the screen load (`GET /screen?parts=`): the templates it answers, its stamp and Game, its refusals, and the failure of one part. Tagged against `docs/specs/screen.md`.
     - `settings.rs` — HTTP E2E tests for the settings endpoints: sub-tabs, role rows, and the text-check auto-save.
     - `settings_connection_form.rs` — HTTP E2E tests for the connection form: the context window, the reasoning effort and the provider order the Add, Edit and Test requests take.
@@ -118,10 +118,10 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
     - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar part of the screen — the portrait labels.
-    - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure, and the Edit form of an unknown World.
+    - `worlds.rs` — HTTP E2E tests for the worlds endpoints: the update posture merge contract and the options-toggle checkbox grammar. They also cover the auto-save posture endpoint and the duplicate-identifier create refusal. The World delete has tests for its removal, its counted refusal and its storage failure. They also check the Edit form of an unknown World.
     - **autoplay/**
-      - `fragments.rs` — HTTP E2E tests for the view-only Game of Autoplay (autoplay.md 41.18-41.20, 41.22): the controls the story log, the dock and the Games panel render while a run holds the Game.
-      - `mod.rs` — HTTP E2E tests for Autoplay (autoplay.md 41.*), shared helpers: `run` holds the run of Jobs, its ends, the progress status and the refused writes; `fragments` holds the view-only Game's rendering.
+      - `fragments.rs` — HTTP E2E tests for the view-only Game of Autoplay (autoplay.md 41.18-41.20, 41.22). They check the controls that the story log, the dock and the Games panel render while a run holds the Game.
+      - `mod.rs` — HTTP E2E tests for Autoplay (autoplay.md 41.*), shared helpers. `run` holds the run of Jobs, its ends, the progress status and the refused writes. `fragments` holds the view-only Game's rendering.
       - `run.rs` — HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add an OpenRouter connection, switch the narrator, and switch the quantifier.
@@ -141,9 +141,9 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `http_requests.rs` — HTTP request plumbing for the http test binary: POST builders, body readers, and the waits for a Job to end (`wait_idle`, `wait_settled`, `wait_for_jobs`).
       - `mod.rs` — Concept modules for the HTTP test binary's shared surface (requests, fixtures, assertions, app wiring).
 - **infrastructure/**
-    - `architecture.rs` — Architecture guardrail tests using arch-lint — fail the build on any violation defined in `arch-lint.toml`; run with `cargo nextest run --test architecture`.
+    - `architecture.rs` — Architecture guardrail tests using arch-lint. They fail the build on any violation defined in `arch-lint.toml`. Run them with `cargo nextest run --test architecture`.
     - **guardrails/**
-      - `answer_words.rs` — Answer-words guardrails: every `post` route of the router has a row in the words table, every request path that a template or the shell names matches a row, and no `post` handler returns a plain `Html<String>`.
+      - `answer_words.rs` — Answer-words guardrails: every `post` route of the router has a row in the words table. Every request path that a template or the shell names matches a row. No `post` handler returns a plain `Html<String>`.
       - `answer_words_tests.rs` — Detection tests for the answer-words guardrails.
       - `enums.rs` — Enum variant doc guardrail: every enum variant must carry `///` doc, OR the enum must be marked `/// [TRIVIAL_ENUM]` with all variants bare.
       - `free_fn.rs` — Free fn location guardrail: top-level free fns must live in a folder named `mappers`, `utils`, `builders`, `test_support`, `bootstrap`, or `handlers`.
@@ -156,7 +156,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `mod.rs` — Infrastructure test binary root: shared guardrail harness (rule definitions, `Violation` type, file discovery, `check_src_files` / `check_tests_files` runners).
       - `nesting.rs` — Nesting depth guardrail — fails the build when function-body control-flow nesting exceeds `MAX_NESTING_DEPTH`.
       - `registry_tests.rs` — Guardrail registry tests: every rule is reachable from `mod.rs` and has a detection test, and every design-rule walker table is registered with a detection case.
-      - `screen.rs` — Screen guardrails: each element of the dashboard shell that holds a part of the screen is written by the one screen script, and no script or handler writes a part by another path.
+      - `screen.rs` — Screen guardrails: each element of the dashboard shell that holds a part of the screen is written by the one screen script. No script or handler writes a part by another path.
       - `screen_tests.rs` — Tests for the screen guardrail.
       - `structure.rs` — Structure guardrail tests: doc-anchor standards, mod.rs purity, no-std-thread, file length, and the new test module-header rule.
       - `structure_tests.rs` — Tests for `structure.rs` guardrail.
@@ -170,28 +170,28 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation; keep 
       - `walker_tests.rs` — Detection tests for the four design-rule walkers: one table-driven test per kind, each case running its walker over synthetic files.
       - `walkers.rs` — Table-driven design-rule walkers: the four kinds, their row types, and the checks that run one row table.
 - **llm/**
-    - `flow_llm_tests.rs` — LLM-driven flow tests: exercises real LLM provider flows end-to-end (ignored by default; run with `python build.py --llm-only`).
-    - `mod.rs` — LLM test binary: real LLM provider flows (ignored by default; run with `python build.py --llm-only`).
+    - `flow_llm_tests.rs` — LLM-driven flow tests. They exercise real LLM provider flows end-to-end. They are ignored by default. Run them with `python build.py --llm-only`.
+    - `mod.rs` — LLM test binary: real LLM provider flows. The tests are ignored by default. Run them with `python build.py --llm-only`.
 - **storage/**
-    - `changes.rs` — The storage seam of the change counters: what a committed transaction, a rolled-back transaction, a storage call, a failed call and a read do to the numbers.
+    - `changes.rs` — The storage seam of the change counters. The tests check what a committed transaction, a rolled-back transaction, a storage call, a failed call and a read do to the numbers.
     - `games_pages_storage.rs` — The storage seam of the saved-Games pages: the Games that a page lists, their order, and the count that the page rules read.
     - `llm_message_storage.rs` — Integration tests for LLM message persistence: save/list/get by id, error-message preservation, global-cap pruning, and pagination across a real SQLite-backed `Storage`.
     - `mod.rs` — Driven-adapter storage seam tests: repositories exercised against a real SQLite-backed `Storage`.
     - `preset_storage.rs` — Tests for Storage preset methods: list_presets, get_preset, save_preset, delete_preset
     - `story_storage.rs` — The storage seam of the new records: the story reads, the dock record, the Game's failure line and the record writes of a transaction.
     - `transaction_storage.rs` — The storage transaction seam: one unit of record writes that lands whole, and the newest Game of a World.
-    - `world_storage.rs` — Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
+    - `world_storage.rs` — Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s. They also cover the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 - **test_utils/**
     - `browser.rs` — Browser test helpers: Playwright bootstrap (`TestServer`, `LaunchOptions`), page builders, and the tab/panel open helpers.
-    - `convergence.rs` — The convergence check: once the page is quiet, each visible part equals a fresh `GET /screen` of that part, apart from the story-log entry in edit; the parts of a closed tab are empty; and each part element has the attributes of the shell. The stub and the full-stack browser tests run it at the end of each check.
+    - `convergence.rs` — The convergence check: once the page is quiet, each visible part equals a fresh `GET /screen` of that part, apart from the story-log entry in edit. The parts of a closed tab are empty. Each part element has the attributes of the shell. The stub and the full-stack browser tests run it at the end of each check.
     - `html.rs` — HTML slicing helpers for panel markup — locate a region by a stable anchor string.
-    - `htmx_settle.rs` — htmx settle harness primitive: a counter of `htmx:afterSettle` and `screen:loaded` installed at page load, and a target-scoped wait for an interaction's own swap or the screen load that shows it.
+    - `htmx_settle.rs` — htmx settle harness primitive: a counter of `htmx:afterSettle` and `screen:loaded` installed at page load. It also has a target-scoped wait for an interaction's own swap or the screen load that shows it.
     - `mod.rs` — Shared test utilities re-exported across all test binaries: `browser`, `convergence`, `screen`, `server`, `settings_guard`, `stub_request_layers`, `wait`, plus the `TEST_WORLD` / `TEST_PERSONA` constants.
-    - `screen.rs` — Waits on the stamp of the page: the page shows the screen of the server when `<html data-revision>` equals the `server:revision` of `GET /changes` and no ask or load is in flight.
+    - `screen.rs` — Waits on the stamp of the page. The page shows the screen of the server when `<html data-revision>` equals the `server:revision` of `GET /changes` and no ask or load is in flight.
     - `screen_part_table.rs` — The parts of the dashboard screen, as the stub-browser tests list them: the selector, the name, and its section. The guardrails check the table against `assets/index.html` and `SCREEN_PARTS`.
     - `server.rs` — Test server helpers: spawn the real engine binary on a free port, track lifecycle via `SERVER_MANAGED`, and expose `TestServer` / `wait_for_server` / `get_config_port`.
     - `settings_guard.rs` — `SettingsTestGuard` — serializes tests that mutate global settings state via a process-wide `Mutex`.
-    - `stub_request_layers.rs` — What the engine's two request layers do, for the stub server: record the Game header of each `POST`, refuse a Game-bound one that names another Game, and stamp the answer with `X-Revision`.
+    - `stub_request_layers.rs` — What the engine's two request layers do, for the stub server. They record the Game header of each `POST`. They refuse a Game-bound one that names another Game. They stamp the answer with `X-Revision`.
     - `stub_server.rs` — Stub-browser server: the real dashboard shell plus canned fragments, with no engine behind it.
     - `wait.rs` — Polling helpers: `wait_for_llm_idle`, `wait_for_status_ready`, and `wait_for_element_children` — retry-based waits used by browser and HTTP tests.
     - **stub_server/**

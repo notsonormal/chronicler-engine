@@ -1,4 +1,4 @@
-//! The storage seam of the change counters: what a committed transaction, a rolled-back transaction, a storage call, a failed call and a read do to the numbers.
+//! The storage seam of the change counters. The tests check what a committed transaction, a rolled-back transaction, a storage call, a failed call and a read do to the numbers.
 
 use chronicler_engine::adapters::driven::storage::{Storage, StorageCall, TestOverride, Tx, TxWrite};
 use chronicler_engine::domain::model::change::{ChangeKind, ChangeVersions};

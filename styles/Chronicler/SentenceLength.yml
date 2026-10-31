@@ -1,0 +1,8 @@
+# ASD-STE100 rule 6.3: a descriptive sentence has a maximum of 25 words.
+# Word count per rules 8.5-8.7: text in parentheses, quoted text and a hyphenated word count as one word.
+extends: occurrence
+message: "STE 6.3: this sentence has more than 25 words. Split it."
+level: error
+scope: sentence
+max: 25
+token: '\([^)]*\)|"[^"]*"|“[^”]*”|[\w''’]+(?:-[\w''’]+)*'

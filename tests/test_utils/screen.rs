@@ -1,4 +1,4 @@
-//! Waits on the stamp of the page: the page shows the screen of the server when `<html data-revision>` equals the `server:revision` of `GET /changes` and no ask or load is in flight.
+//! Waits on the stamp of the page. The page shows the screen of the server when `<html data-revision>` equals the `server:revision` of `GET /changes` and no ask or load is in flight.
 
 use std::time::Duration;
 

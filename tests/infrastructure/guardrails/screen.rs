@@ -1,4 +1,4 @@
-//! Screen guardrails: each element of the dashboard shell that holds a part of the screen is written by the one screen script, and no script or handler writes a part by another path.
+//! Screen guardrails: each element of the dashboard shell that holds a part of the screen is written by the one screen script. No script or handler writes a part by another path.
 
 use regex::Regex;
 

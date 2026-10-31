@@ -1,4 +1,4 @@
-//! Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s, the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
+//! Integration tests for world persistence: create/list/re-seed/delete `WorldCard`s. They also cover the referential-integrity rule that blocks world deletion when games still reference it, and the characters a deleted world drops.
 
 use chronicler_engine::domain::model::map::{MapDef, Overworld};
 use chronicler_engine::domain::model::character::{CharacterSheet, CharacterCard};

@@ -1,7 +1,7 @@
 # Plan: STE structural prose rules in the gate, and a passive-voice review check
 
 **Date:** 2026-10-31
-**Status:** Draft — not started
+**Status:** Done (2026-10-31). The full gate passes with the `vale` step.
 **Goal:** The gate fails on three STE faults in the docs in scope: a sentence of more than 25 words, a paragraph of more than six sentences, and a semicolon. `document-review` asks the reviewer to name the actor of each passive verb.
 
 ## Origin

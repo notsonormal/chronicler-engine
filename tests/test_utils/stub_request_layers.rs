@@ -1,4 +1,4 @@
-//! What the engine's two request layers do, for the stub server: record the Game header of each `POST`, refuse a Game-bound one that names another Game, and stamp the answer with `X-Revision`.
+//! What the engine's two request layers do, for the stub server. They record the Game header of each `POST`. They refuse a Game-bound one that names another Game. They stamp the answer with `X-Revision`.
 
 use axum::body::Body;
 use axum::extract::Request;

@@ -1,0 +1,7 @@
+# ASD-STE100 rule 6.6: no paragraph has more than six sentences.
+extends: occurrence
+message: "STE 6.6: this paragraph has more than six sentences. Split it."
+level: error
+scope: paragraph
+max: 6
+token: '[^.!?]+[.!?]+(?:\s|$)'

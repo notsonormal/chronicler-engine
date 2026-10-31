@@ -11,8 +11,10 @@ Endpoints:
 
 The Worlds panel is a part of the screen (`worlds`). Its fragment
 carries no root element of its own. A World row shows a shortened description. The World editor opens in the edit dialog
-(`#edit-dialog-body`): the Create and Edit controls load it, and its root
-(`data-dialog-form`) carries the title of the dialog. A World save answers nothing on success:
+(`#edit-dialog-body`). The Create and Edit controls load it, and its root
+(`data-dialog-form`) carries the title of the dialog.
+
+A World save answers nothing on success:
 an empty 200. An invalid value answers a 400 error fragment, and a failure a 500 error
 fragment. The page shows the report of a save in the notice place, or in the form that
 holds the typed input. The saved World reaches the screen when the panel loads.
@@ -50,7 +52,7 @@ And the stored world's mode is the Novel default
 
 ### Options toggle grammar
 
-The options toggle is a urlencoded checkbox: a checked box posts "true"; an unchecked box is absent from the post.
+The options toggle is a urlencoded checkbox: a checked box posts "true". An unchecked box is absent from the post.
 
 #### Scenario 25.4: The options toggle obeys the checkbox grammar
 
@@ -64,7 +66,7 @@ Then the stored world's options_always_on is false
 
 ### World posture auto-save
 
-The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers an empty 200 for a saved change. The browser shows "Saved" in `#world-posture-status`, and a refused or failed save puts the select back to its rendered value, and the notice reports the failure. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment, so the contract is verified at request level and the browser keeps only a wiring check.
+The edit form's posture selects post their `closest .posture-group` to `POST /worlds/:key/posture`. The handler patches only the fields present in the post and answers an empty 200 for a saved change. The browser shows "Saved" in `#world-posture-status`, and a refused or failed save puts the select back to its rendered value, and the notice reports the failure. This is the contract the ticket-03 flake surfaced: the browser's `change` event races htmx's trigger attachment. So the contract is verified at request level, and the browser keeps only a wiring check.
 
 #### Scenario 25.5: The posture endpoint patches and reports per outcome
 

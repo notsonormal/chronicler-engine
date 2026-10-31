@@ -1,4 +1,4 @@
-//! Stub-browser sweeps of the server's markup: each form with typed input renders one slot, no other element but the report container of the notice holds a slot, and each control that opens the dialog renders an id. Tagged against `docs/specs/browser_screen.md`.
+//! Stub-browser sweeps of the server's markup. Each form with typed input renders one slot. No other element but the report container of the notice holds a slot. Each control that opens the dialog renders an id. Tagged against `docs/specs/browser_screen.md`.
 
 use std::time::Duration;
 

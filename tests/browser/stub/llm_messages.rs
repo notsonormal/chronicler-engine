@@ -1,4 +1,4 @@
-//! Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row, the record that opens in the dialog, and the load that leaves the open dialog alone. Tagged against `docs/specs/browser_llm_messages.md`.
+//! Stub-browser tests for the LLM Messages panel: the shipped client's keyboard path over a canned row. They also cover the record that opens in the dialog and the load that leaves the open dialog alone. Tagged against `docs/specs/browser_llm_messages.md`.
 
 // The Open control is a native button with an `hx-get` into the edit dialog, so
 // Enter and Space fire the same click a mouse uses. The stub server renders the

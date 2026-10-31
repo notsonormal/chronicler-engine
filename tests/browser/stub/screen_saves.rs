@@ -1,4 +1,4 @@
-//! Stub-browser tests for a save that waits for the screen: the dialog that says Saving until the screen shows the save, and what a late, repeated, failed or restarted save does. Tagged against `docs/specs/browser_screen.md`.
+//! Stub-browser tests for a save that waits for the screen: the dialog that says Saving until the screen shows the save. They also cover what a late, repeated, failed or restarted save does. Tagged against `docs/specs/browser_screen.md`.
 
 use std::time::Duration;
 

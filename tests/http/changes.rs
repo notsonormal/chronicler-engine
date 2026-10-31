@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the change numbers (`GET /changes`): which numbers each save path moves, and which numbers a read, a failed save and a rolled-back transaction leave as they were. Tagged against `docs/specs/changes.md`.
+//! HTTP E2E tests for the change numbers (`GET /changes`): which numbers each save path moves. They also check which numbers a read, a failed save and a rolled-back transaction leave as they were. Tagged against `docs/specs/changes.md`.
 
 use std::sync::Arc;
 

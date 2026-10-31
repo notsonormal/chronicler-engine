@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the LLM Messages panel: a failed attempt is recorded and its failure text renders, the list sends a header for each attempt, and the record of one attempt opens in the dialog.
+//! HTTP E2E tests for the LLM Messages panel. A failed attempt is recorded and its failure text renders. The list sends a header for each attempt. The record of one attempt opens in the dialog.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};

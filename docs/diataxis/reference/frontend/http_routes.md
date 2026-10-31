@@ -5,7 +5,7 @@ title: HTTP Routes
 
 ## Overview
 
-Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python scripts/extract_http_routes.py` after any `router.rs` change. Covers `.route()` calls only; `.nest_service` (assets/data) and `fallback_service` live in `router.rs` but aren't enumerated.
+Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python scripts/extract_http_routes.py` after any `router.rs` change. Covers `.route()` calls only. `.nest_service` (assets/data) and `fallback_service` live in `router.rs` but aren't enumerated.
 
 ## Core
 

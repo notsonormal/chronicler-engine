@@ -70,6 +70,12 @@ Do not run it while another checkout is testing.
 
 A full gate takes about 2 minutes on a warm target dir, about 15 on a cold unseeded one, plus any
 wait for the build lock. Use a tool timeout of at least 1200 seconds. ``--coverage`` takes longer.
+
+The ``vale`` step needs Vale (the prose linter) on ``PATH``. It installs outside the repo, so a
+rebuilt container drops it. Install it with::
+
+    curl -sSL https://github.com/vale-cli/vale/releases/download/v3.25.1/vale_3.25.1_Linux_64-bit.tar.gz \
+        | tar -xz -C ~/.local/bin vale
 """
 
 from __future__ import annotations
@@ -402,6 +408,15 @@ REGISTRY: dict[str, StepSpec] = {
             "Validating markdown docs...",
             "python scripts/validate_docs.py",
             help="Validate markdown docs and DOC anchors under docs/.",
+        ),
+        StepSpec(
+            "vale",
+            "Linting prose with Vale...",
+            "python scripts/vale_lint.py --quiet",
+            help=(
+                "Lint docs/ and the root docs with Vale. The ASD-STE100 sentence-length,"
+                " paragraph-length and semicolon rules fail the step. Needs vale on PATH."
+            ),
         ),
         StepSpec(
             "guardrails",
@@ -1184,6 +1199,7 @@ _GATE_CHECKS = (
     "http-routes-check",
     "guardrails-doc-check",
     "validate-docs",
+    "vale",
 )
 
 # The two generated docs, and the spec that rewrites each one. A run with fmt

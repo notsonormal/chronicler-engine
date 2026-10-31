@@ -89,9 +89,9 @@ concurrent runs give a transient "disk I/O error".
 
 ## Pattern 7 — Arch-lint rule self-tests
 
-**Purpose.** Test an arch-lint rule function with paired cases: one source string
-that violates the rule, with the violation count and message fragment, and one
-that does not, with an empty set. The rules and their self-tests live in
+**Purpose.** Test an arch-lint rule function with paired cases. One source string
+violates the rule, and the case states the violation count and message fragment.
+One source string does not violate the rule, and the case states an empty set. The rules and their self-tests live in
 `tests/infrastructure/guardrails/`.
 
 **Exemplars.** `structure_tests.rs`, `free_fn_tests.rs`.

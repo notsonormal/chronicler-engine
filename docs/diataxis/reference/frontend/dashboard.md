@@ -9,7 +9,7 @@ The dashboard is the player's single-page view of the engine, served at `/`. Pla
 
 ## Shell and Fragments
 
-A static shell holds the page frame. The server owns all domain content: it renders each part of the screen as an HTML fragment from the current game state, and the shell loads the parts with one request.
+A static shell holds the page frame. The server owns all domain content. It renders each part of the screen as an HTML fragment from the current game state. The shell loads the parts with one request.
 
 Six statements hold for every part and every request:
 
@@ -23,29 +23,37 @@ Six statements hold for every part and every request:
 Every request ends in one of five outcomes. The status chooses the outcome:
 
 - **Done**: a `2xx`.
-- **Refused**: a `409`. It means a busy Game, a request that names a Game that is no longer active, or a Message that is no longer the last one.
+- **Refused**: a `409`. It means a busy Game. It also means a request that names a Game that is no longer active, or a Message that is no longer the last one.
 - **Invalid**: any other `4xx`, such as a `400` for a bad value or a `404` for a dialog that opens a record that is gone.
 - **Failed**: a `5xx`.
 - **No answer**: a network error, or no answer within the time limit.
 
-Every `POST` answer carries `X-Revision`, the stamp `<server>:<revision>` of the engine after the request. A dialog closes, a "Saved" line shows and the Action input clears only when the screen shows that stamp. When the engine refuses, it takes nothing and writes nothing. The server writes the first line of every failed answer, which the page shows as the summary of the report. Delete, Retry and Retrigger send the id of the Message that their page rendered them on. A swipe switch names that id in its address. The engine compares the id with the last Message in the same step as the busy check, so no write lands between the check and the act. The page sends `X-Chronicler-Game` with each request that is not a read, taken from the `X-Game` of its last screen load, and a route layer refuses a Game-bound request that names another Game than the active Game. The page keeps the Game of its last load after a create, a switch or a Reset that it sent itself. A send before the next load gets the `409` of a changed Game, and its text stays. Two drafts name the Game they were written for (`data-draft-game`): the Action input with its preview, and the story-log entry in edit. A request from inside one of them names that Game. Every other request names the Game of the screen. A draft that outlives a change of the active Game gets the same `409`. After that `409`, the Action input's draft takes the Game that the screen shows, so the next send goes to the Game that the player sees. An Option fills the Action input from the screen of the current Game, so it starts a new draft. The entry in edit keeps its Game until the edit ends.
+Every `POST` answer carries `X-Revision`, the stamp `<server>:<revision>` of the engine after the request. A dialog closes, a "Saved" line shows and the Action input clears only when the screen shows that stamp. When the engine refuses, it takes nothing and writes nothing. The server writes the first line of every failed answer, which the page shows as the summary of the report.
+
+Delete, Retry and Retrigger send the id of the Message that their page rendered them on. A swipe switch names that id in its address. The engine compares the id with the last Message in the same step as the busy check. So no write lands between the check and the act.
+
+The page sends `X-Chronicler-Game` with each request that is not a read. Its value comes from the `X-Game` of its last screen load. A route layer refuses a Game-bound request that names another Game than the active Game. The page keeps the Game of its last load after a create, a switch or a Reset that it sent itself. A send before the next load gets the `409` of a changed Game, and its text stays.
+
+Two drafts name the Game they were written for (`data-draft-game`): the Action input with its preview, and the story-log entry in edit. A request from inside one of them names that Game. Every other request names the Game of the screen. A draft that outlives a change of the active Game gets the same `409`.
+
+After that `409`, the Action input's draft takes the Game that the screen shows. So the next send goes to the Game that the player sees. An Option fills the Action input from the screen of the current Game, so it starts a new draft. The entry in edit keeps its Game until the edit ends.
 
 The shell owns only client state:
 
-- the active tab, the active Settings sub-tab and the page of the saved Games, which `sessionStorage` keeps for a reload;
-- the open state of an error popover or a Details disclosure, which a load keeps (`data-keep`);
-- the stamp of the screen that the page shows (`data-revision` and `data-game` on `<html>`);
-- the report that the notice place shows, and its source (`data-source` on `#notice`);
-- the id of the control that opened the edit dialog;
-- the action-area state, and the action area's own status element `#action-status`;
-- the Unreachable health state;
-- the slash palette.
+- the active tab, the active Settings sub-tab and the page of the saved Games, which `sessionStorage` keeps for a reload
+- the open state of an error popover or a Details disclosure, which a load keeps (`data-keep`)
+- the stamp of the screen that the page shows (`data-revision` and `data-game` on `<html>`)
+- the report that the notice place shows, and its source (`data-source` on `#notice`)
+- the id of the control that opened the edit dialog
+- the action-area state, and the action area's own status element `#action-status`
+- the Unreachable health state
+- the slash palette
 
 ## Parts of the Game Tab
 
 The page has a header, a failure banner, a tab bar, and the body of the active tab. The header shows the display name of the active Game.
 
-The Game tab has six parts of the screen: the story log, the visual sidebar, the options dock, the send control, the autoplay controls, and the status display. The action area holds the last three and the controls that are no part: the Action input and the cycle budget.
+The Game tab has six parts of the screen. They are the story log, the visual sidebar, the options dock, the send control, the autoplay controls, and the status display. The action area holds the last three and the controls that are no part: the Action input and the cycle budget.
 
 - **Story log** — the story window of the Game: its newest Messages, in order.
 - **Visual sidebar** — the image of the current room and the portraits of the Characters in it.
@@ -54,11 +62,15 @@ The Game tab has six parts of the screen: the story log, the visual sidebar, the
 
 The action area is in one of five states: **Idle**, **Checking**, **Generating**, **Autoplay**, and **Preview**. When the text check is on, the text check sits between a typed send and the request to the engine. The status display shows the step of the running Job, or the failure line of the last Job. The action area reads the status display and writes nothing into it. The state of a send that no Job has shown yet (Generating before the status display moves) shows in `#action-status`.
 
-The action controls are two parts: `send-control` holds Send, and `autoplay-controls` holds Autoplay and Stop. The DOM order is the visual order, so Tab goes from the Action input to Send, the cycle budget, and Autoplay. The server renders Send and Autoplay as disabled while any Job or run holds the Game, and renders Stop only while an Autoplay run holds the Game. Send and Autoplay belong to the command form and the Autoplay form through their `form` attribute, and the forms stay in the shell. Autoplay takes clicks while the state is Checking or Preview, and the cycle budget is enabled while a plain Job runs. No script writes `disabled`: the server renders every control state. While the request of its form runs, CSS shows Send or Autoplay as busy and takes no click, and the Action input and the cycle budget stay enabled. While an Autoplay run holds the Game, the action area is in the Autoplay state: it shows a Stop control in place of the Action input and the Autoplay control, and the status display shows the cycle of the run. The Game is view-only: the controls that change the story and the Game's config are disabled, and the Games list marks the Game. Reading, scrolling and the Game switch stay open.
+The action controls are two parts: `send-control` holds Send, and `autoplay-controls` holds Autoplay and Stop. The DOM order is the visual order, so Tab goes from the Action input to Send, the cycle budget, and Autoplay. The server renders Send and Autoplay as disabled while any Job or run holds the Game. It renders Stop only while an Autoplay run holds the Game. Send and Autoplay belong to the command form and the Autoplay form through their `form` attribute, and the forms stay in the shell. Autoplay takes clicks while the state is Checking or Preview, and the cycle budget is enabled while a plain Job runs.
+
+No script writes `disabled`: the server renders every control state. While the request of its form runs, CSS shows Send or Autoplay as busy and takes no click. The Action input and the cycle budget stay enabled. While an Autoplay run holds the Game, the action area is in the Autoplay state. It shows a Stop control in place of the Action input and the Autoplay control. The status display shows the cycle of the run.
+
+The Game is view-only: the controls that change the story and the Game's config are disabled, and the Games list marks the Game. Reading, scrolling and the Game switch stay open.
 
 ## The Screen
 
-The screen is the header, the failure banner and the parts of the visible tab. Each part is an element with `data-part`. The server holds one renderer for each part name (`SCREEN_PARTS`), and the browser names the parts it wants: `GET /screen?parts=<names>` answers one `<template data-part>` for each name, with the headers `X-Revision` and `X-Game`.
+The screen is the header, the failure banner and the parts of the visible tab. Each part is an element with `data-part`. The server holds one renderer for each part name (`SCREEN_PARTS`). The browser names the parts it wants. `GET /screen?parts=<names>` answers one `<template data-part>` for each name, with the headers `X-Revision` and `X-Game`.
 
 | Section | Parts |
 |---|---|
@@ -70,17 +82,40 @@ The screen is the header, the failure banner and the parts of the visible tab. E
 | Games | `games` |
 | LLM Messages | `llm-messages` |
 
-The page asks `GET /changes` every `data-poll-ms` (1 s) while the browser shows the page, and asks at once when the page becomes visible and when a request ends. When the stamp of the answer differs from `<html data-revision>`, one load fetches the screen of the visible tab and a direct morph writes each part, followed by `htmx.process`. An ask and a load each have a time limit (`data-ask-timeout-ms`). No answer within that time is "No answer": the Unreachable banner shows, and the loop goes on. One load is in flight at a time. An answer for a tab that is no longer visible is dropped, and the loop loads the visible tab. The end of every request that is not a read forgets the stamp and asks, so a control that a load skipped shows the server value in the next load.
+The page asks `GET /changes` every `data-poll-ms` (1 s) while the browser shows the page. It asks at once when the page becomes visible and when a request ends. When the stamp of the answer differs from `<html data-revision>`, one load fetches the screen of the visible tab. A direct morph then writes each part, followed by `htmx.process`.
 
-A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes, so the story-log edit and its lock are gone, and loads the tab that opens. The loop fires `screen:beforemorph`, `screen:loaded` and `screen:cleared`; the scripts of the action area, the story log, the failure banner and the Settings sub-tab listen to them, because a direct morph fires no htmx swap event.
+An ask and a load each have a time limit (`data-ask-timeout-ms`). No answer within that time is "No answer": the Unreachable banner shows, and the loop goes on. One load is in flight at a time. An answer for a tab that is no longer visible is dropped, and the loop loads the visible tab. The end of every request that is not a read forgets the stamp and asks. So a control that a load skipped shows the server value in the next load.
 
-The saved Games have pages of 50, newest change first. The active Game shows above the pages and is not in them. A Previous or Next control carries the page that it goes to; a click sets `<html data-games-page>`, and each load of the Games part asks for that page. The server clamps a page past the end to the last page, and renders a control at an end of the list with `aria-disabled="true"` and not `disabled`, so that the control keeps keyboard focus through the load. The click handler ignores such a control. A list of one page has no pager.
+A tab's parts exist only while the tab is open. A tab change empties each part of the tab that closes. So the story-log edit and its lock are gone. The change then loads the tab that opens.
 
-A load skips the two kinds of element that hold unsaved input: the story-log entry in edit, and a control whose request is in flight. A save that fails keeps the form open in the dialog. A control that saves on change goes back to its rendered value, and a report says that the value was not saved: in the notice, or in the Unreachable banner when no answer came.
+The loop fires `screen:beforemorph`, `screen:loaded` and `screen:cleared`. The scripts of the action area, the story log, the failure banner and the Settings sub-tab listen to them. They listen because a direct morph fires no htmx swap event.
 
-An entry in edit carries `data-editing`, and the root of the story log carries `data-editing-entry` while any entry is in edit. A load morphs only the children of the root, so the attribute survives every load. The attribute locks every Edit control and every swipe control of the story log. After a saved edit, the lock ends when the screen shows the saved entry. A load that skipped the entry counts as current while the edit is open. When the edit ends, the page forgets its stamp and loads again, so the entry shows the engine's render. Each entry renders its own Save and Cancel, which show only while the entry is in edit. The Save, Retry, Retrigger, swipe and Delete controls are htmx controls like the controls of every other part, so their answers reach the one reader. A refused or invalid Save keeps the draft and the lock, and any other failed Save reverts the entry. The Save control of the edit looks disabled while the status display shows a running Job or Autoplay run; a save by click or by keyboard in that state gets the busy refusal. The locked controls are inert for pointer and keyboard, and they keep their button role for assistive technology, because a script cannot keep an `aria-disabled` attribute through a load.
+The saved Games have pages of 50, newest change first. The active Game shows above the pages and is not in them. A Previous or Next control carries the page that it goes to. A click sets `<html data-games-page>`, and each load of the Games part asks for that page.
 
-The edit dialog is one modal dialog of the shell (`#edit-dialog`), outside every part, so no load meets it. The forms that wait for a Save open there: the connection forms (Add and Edit), the Test result of a saved connection, the Game Rename and New Game forms, the preset Add, Edit and View forms, the World Create and Edit forms with their posture selects, and the record of an LLM message. A swap into `#edit-dialog-body` opens the dialog, and the root of the fragment carries `data-dialog-form` and a heading with the id `edit-dialog-title`. Cancel, Escape and a save that the screen shows close it. The dialog says "Saving…" between the answer and the screen, takes no second submit of its form in that time, and names a failed screen load in the same line. A click on the backdrop does not close it. An Escape that closes an open error detail closes only that detail. Closing the dialog discards the form and returns focus to the control that opened it. The server renders an `id` on each control that opens the dialog, and the dialog focuses the control with that `id`. A save that was sent before Escape still applies, because closing the dialog does not cancel the request. An answer that comes from a control outside the dialog never replaces a form that is open in it. A refused or failed save keeps the dialog open with its draft, and the notice reports it. The dialog repeats the summary of the notice and the Unreachable text in its status line, because the modal hides the page.
+The server clamps a page past the end to the last page. It renders a control at an end of the list with `aria-disabled="true"` and not `disabled`. So the control keeps keyboard focus through the load. The click handler ignores such a control. A list of one page has no pager.
+
+A load skips the two kinds of element that hold unsaved input: the story-log entry in edit, and a control whose request is in flight. A save that fails keeps the form open in the dialog. A control that saves on change goes back to its rendered value. A report says that the value was not saved. The report shows in the notice, or in the Unreachable banner when no answer came.
+
+An entry in edit carries `data-editing`, and the root of the story log carries `data-editing-entry` while any entry is in edit. A load morphs only the children of the root, so the attribute survives every load. The attribute locks every Edit control and every swipe control of the story log.
+
+After a saved edit, the lock ends when the screen shows the saved entry. A load that skipped the entry counts as current while the edit is open. When the edit ends, the page forgets its stamp and loads again, so the entry shows the engine's render. Each entry renders its own Save and Cancel, which show only while the entry is in edit. The Save, Retry, Retrigger, swipe and Delete controls are htmx controls like the controls of every other part, so their answers reach the one reader.
+
+A refused or invalid Save keeps the draft and the lock, and any other failed Save reverts the entry. The Save control of the edit looks disabled while the status display shows a running Job or Autoplay run. A save by click or by keyboard in that state gets the busy refusal. The locked controls are inert for pointer and keyboard. They keep their button role for assistive technology, because a script cannot keep an `aria-disabled` attribute through a load.
+
+The edit dialog is one modal dialog of the shell (`#edit-dialog`), outside every part, so no load meets it. The forms that wait for a Save open there:
+
+- the connection forms (Add and Edit)
+- the Test result of a saved connection
+- the Game Rename and New Game forms
+- the preset Add, Edit and View forms
+- the World Create and Edit forms with their posture selects
+- the record of an LLM message
+
+A swap into `#edit-dialog-body` opens the dialog, and the root of the fragment carries `data-dialog-form` and a heading with the id `edit-dialog-title`. Cancel, Escape and a save that the screen shows close it. The dialog says "Saving…" between the answer and the screen. It takes no second submit of its form in that time. It names a failed screen load in the same line. A click on the backdrop does not close it.
+
+An Escape that closes an open error detail closes only that detail. Closing the dialog discards the form and returns focus to the control that opened it. The server renders an `id` on each control that opens the dialog, and the dialog focuses the control with that `id`.
+
+A save that was sent before Escape still applies, because closing the dialog does not cancel the request. An answer that comes from a control outside the dialog never replaces a form that is open in it. A refused or failed save keeps the dialog open with its draft, and the notice reports it. The dialog repeats the summary of the notice and the Unreachable text in its status line, because the modal hides the page.
 
 ### Markers
 
@@ -105,7 +140,7 @@ The edit dialog is one modal dialog of the shell (`#edit-dialog`), outside every
 | `data-shell-form` | On the root of a form that the shell renders outside every part, such as the text-check preview. |
 | `data-saving` | On the edit dialog: a save was sent and the screen does not show it yet. |
 | `data-close-dialog` | On a Cancel or Close control in the edit dialog: it closes the dialog with no request. |
-| `data-error-slot` | On the slot that a form with typed input renders as a direct child, on the slot that the message edit renders in its Save and Cancel group, and on the report container of the notice place. No other element holds one. |
+| `data-error-slot` | On the slot that a form with typed input renders as a direct child. Also on the slot that the message edit renders in its Save and Cancel group. Also on the report container of the notice place. No other element holds one. |
 | `data-report` | On the report container of the notice place `#notice`: the element that holds the report. The page also writes `hidden` and `data-source` on `#notice`. |
 | `data-source` | On `#notice`: `request` or `screen`, the kind of the report that it shows. A good screen load clears only a `screen` report. |
 | `data-close-notice` | On the Close control of the notice place: it clears the notice and moves focus to `#main-content`. |
@@ -118,7 +153,13 @@ The edit dialog is one modal dialog of the shell (`#edit-dialog`), outside every
 
 ## Failures and Health
 
-A failure shows where its scope is. The first line of a failed answer is the sentence of the report, and Details hold only the lines after it; an answer of one line has no Details. An invalid answer to a form with typed input shows in the slot of that form, and the typed text stays. Every other report, a refusal, a failure and a failed screen load included, shows in the notice place `#notice` under the header, on every tab, with a Close control. A notice stays until the next request, until a failing screen load works again, or until Close, and a dialog opener counts as a request. The latest report wins: a failed screen load replaces the notice of a request that shows, and the next good load clears it. A request that gets no answer raises the failure banner, and no notice or slot holds a report of it. A generation failure shows in the status display as a short sentence that names only a remedy the dashboard offers. The status display draws that sentence in full, and the raw error text stays behind its Details control. A failure that affects the whole engine shows in the failure banner. A change ask or a screen load that the engine answers with a failure shows in the notice place, and every part keeps its content. The engine answered, so it is reachable: only a network error or a request with no answer within its time limit raises the banner. The next ask loads the screen again.
+A failure shows where its scope is. The first line of a failed answer is the sentence of the report. Details hold only the lines after it. An answer of one line has no Details. An invalid answer to a form with typed input shows in the slot of that form, and the typed text stays.
+
+Every other report shows in the notice place `#notice` under the header, on every tab, with a Close control. This includes a refusal, a failure and a failed screen load. A notice stays until the next request, until a failing screen load works again, or until Close, and a dialog opener counts as a request. The latest report wins. A failed screen load replaces the notice of a request that shows. The next good load clears it.
+
+A request that gets no answer raises the failure banner, and no notice or slot holds a report of it. A generation failure shows in the status display as a short sentence that names only a remedy the dashboard offers. The status display draws that sentence in full, and the raw error text stays behind its Details control. A failure that affects the whole engine shows in the failure banner.
+
+A change ask or a screen load that the engine answers with a failure shows in the notice place, and every part keeps its content. The engine answered, so it is reachable: only a network error or a request with no answer within its time limit raises the banner. The next ask loads the screen again.
 
 Four health states describe the engine's roles and the engine itself:
 
@@ -127,7 +168,9 @@ Four health states describe the engine's roles and the engine itself:
 - **No calls yet** — the role has no recorded LLM call.
 - **Unreachable** — the client got no usable answer from the engine.
 
-The server owns the three role states. It reads them from the LLM Messages record. Role health is engine-wide: the newest call of a role covers all Games. Degraded and Unreachable raise the failure banner. Role health shows in three places: the failure banner, the Settings role rows, and the Connections sub-tab marker. The banner is the part `failure-banner`, and the Settings panel renders its own rows and marker. The banner loads with every screen load. The Settings rows load while the Settings tab is open.
+The server owns the three role states. It reads them from the LLM Messages record. Role health is engine-wide: the newest call of a role covers all Games. Degraded and Unreachable raise the failure banner.
+
+Role health shows in three places: the failure banner, the Settings role rows, and the Connections sub-tab marker. The banner is the part `failure-banner`, and the Settings panel renders its own rows and marker. The banner loads with every screen load. The Settings rows load while the Settings tab is open.
 
 ## Story Log and Swipes
 

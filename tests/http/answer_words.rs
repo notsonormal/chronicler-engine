@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the words of a failed answer: every row of the words table pinned by a hand-written sentence, the second line that holds only the engine's text, and the two answers that an extractor writes (`415` and `422`). Tagged against `docs/specs/screen.md`.
+//! HTTP E2E tests for the words of a failed answer: every row of the words table pinned by a hand-written sentence. They also cover the second line that holds only the engine's text, and the two answers that an extractor writes (`415` and `422`). Tagged against `docs/specs/screen.md`.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;

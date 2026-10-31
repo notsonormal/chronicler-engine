@@ -41,7 +41,7 @@ The JSON Schema files under `data/schemas/` are authoritative for seed-file fiel
 
 ### Character identity and file locations
 
-- `PersonaCard.key` is the JSON filename stem. The loader sets it from the persona filename; it is not part of the persona seed-file shape.
+- `PersonaCard.key` is the JSON filename stem. The loader sets it from the persona filename. It is not part of the persona seed-file shape.
 - `CharacterCard.id` is a field in the Character seed file.
 - Character files live at `data/characters/<group>/*.json`, where `<group>` is the world's `characters_dir` value. When that value is empty, the loader uses the world `id`.
 

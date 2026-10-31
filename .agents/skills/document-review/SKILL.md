@@ -86,12 +86,13 @@ On KEEP text only:
 
 On KEEP text only, apply `.agents/skills/unslop/SKILL.md` and this checklist from `.agents/skills/technical-writing/SKILL.md`:
 
-- One thought per sentence. Split a sentence longer than about 25 words.
+- One thought per sentence.
 - Put the condition before the instruction or fact it guards.
 - Put "only" and "not" next to the word they change.
 - Every "it", "this" and "they" points at one noun. Repeat the noun when in doubt.
 - One name for one thing, across the doc set and `CONTEXT.md`.
-- Periods, not semicolons or em dashes.
+- Name the actor of each passive verb, unless the actor is unknown. In a skill, the reader must know whether it does the action itself.
+- Periods, not em dashes.
 - Leave an unchanged sentence as it is. Rewording churn costs a reader the same as a new sentence.
 
 **Completion:** every KEEP sentence checked against each rule.

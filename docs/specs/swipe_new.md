@@ -95,7 +95,7 @@ When the client switches to its first swipe
 Then the story log shows the room "Room room2" on the Narration entry
 ```
 
-A switch to another Swipe gives back the state of that Swipe; `swipe_switch.md` 36.4 covers it.
+A switch to another Swipe gives back the state of that Swipe. `swipe_switch.md` 36.4 covers it.
 
 ### Event retry
 
@@ -387,8 +387,8 @@ through HTTP. Drift indicates a regression even if all scenarios pass.
   the story log. It appends a swipe to an existing message. Re-impersonate
   and Retry of a typed Input append the new swipe to the existing Input message.
 - **I.4** Retry never modifies the text of any prior swipe. Main
-  retry uses the input's current active swipe text, which the user may
-  have edited before clicking retry, but the retry itself does not
+  retry uses the input's current active swipe text. The user may
+  have edited this text before clicking retry, but the retry itself does not
   change it. Re-impersonate and Retry of a typed Input generate a new
   swipe without altering prior swipes.
 - **I.5** Each retry appends exactly one swipe. Repeated retries on the

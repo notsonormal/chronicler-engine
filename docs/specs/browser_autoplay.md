@@ -2,7 +2,9 @@
 
 Endpoint: browser DOM.
 
-The Autoplay control sits beside the command form. It holds a budget field `#autoplay-cycles` (default 10, from 1 to 100) and a start button `#autoplay-btn`. The start button posts the budget to `POST /autoplay`. The start button and `#stop-btn` are one part of the screen, `#autoplay-controls`, and Send is another, `#send-control`. The server renders both from the busy state. The budget field stays in the shell, and no script disables any control. The start button takes clicks while the action area is Checking or shows a preview, because the Game is idle then. The budget field is enabled while a plain Job runs.
+The Autoplay control sits beside the command form. It holds a budget field `#autoplay-cycles` (default 10, from 1 to 100) and a start button `#autoplay-btn`. The start button posts the budget to `POST /autoplay`. The start button and `#stop-btn` are one part of the screen, `#autoplay-controls`, and Send is another, `#send-control`. The server renders both from the busy state. The budget field stays in the shell, and no script disables any control.
+
+The start button takes clicks while the action area is Checking or shows a preview, because the Game is idle then. The budget field is enabled while a plain Job runs.
 
 While an Autoplay run holds the Game, the Game is view-only. The status display shows the progress of the run, and the action area offers `#stop-btn` in place of the command form and the Autoplay control. The story-changing controls of the story log and the config controls of the Games panel are disabled. Reading, scrolling and switching to another Game stay open.
 

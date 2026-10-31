@@ -11,8 +11,8 @@ A Game plays in one of two narrator modes:
 
 | Mode | Who writes the player character | Player input shape |
 |---|---|---|
-| Novel | The player writes the protagonist in prose; the narrator world-builds around it | Rich prose |
-| Interactive Fiction | The player directs with terse commands; the narrator elaborates them | Terse commands ("take vase", "go north") |
+| Novel | The player writes the protagonist in prose. The narrator world-builds around it | Rich prose |
+| Interactive Fiction | The player directs with terse commands. The narrator elaborates them | Terse commands ("take vase", "go north") |
 
 The mode is chosen on the World and inherited by every Game created from it. A Game can switch mode later.
 

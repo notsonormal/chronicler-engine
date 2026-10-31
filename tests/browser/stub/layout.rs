@@ -1,4 +1,4 @@
-//! Layout checks (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Twelve checks share one browser through the shared runner; each runs on a fresh page against its own stub server, with panic isolation and a per-check timing summary.
+//! Layout checks (declared exemption in the spec-coverage validator): no spec link, test code is the definition. CSS computed styles, layout measurements, text-wrap behavior — only a real browser can observe these. Twelve checks share one browser through the shared runner. Each runs on a fresh page against its own stub server, with panic isolation and a per-check timing summary.
 
 use std::time::Duration;
 

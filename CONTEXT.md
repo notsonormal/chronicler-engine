@@ -10,7 +10,7 @@ The dashboard, the World files and the prompt presets use these names. Product c
 
 **Game**:
 One play of a World by one Persona, with its own story. It has a stable generated name and a Display name.
-_Avoid_: Session, match, playthrough; "run" (a run is an Autoplay run)
+_Avoid_: Session, match, playthrough, "run" (a run is an Autoplay run)
 
 **Display name**:
 The name of a Game that the player sees and can change, distinct from its stable generated name.
@@ -21,7 +21,7 @@ A static, authored template: its map of Rooms, its Characters, its Triggers and 
 _Avoid_: Setting, environment
 
 **Scenario**:
-A part of a World: the starting state of a new Game, with its starting Room, its opening text and the Characters present at the start.
+A part of a World: the starting state of a new Game. It has its starting Room, its opening text and the Characters present at the start.
 _Avoid_: Campaign, module
 
 **Room**:
@@ -32,7 +32,7 @@ _Avoid_: Location, area
 
 **Persona**:
 The protagonist that the player plays in a Game, chosen when the Game is made and fixed for its life. A Persona belongs to no World.
-_Avoid_: Player character, avatar; "character" (a Character is never the player's)
+_Avoid_: Player character, avatar, "character" (a Character is never the player's)
 
 **Character**:
 A person in a World whom the player does not play.
@@ -157,7 +157,7 @@ _Avoid_: Scene, NPCs in the area, NPCs in the room
 ### State
 
 **Swipe state**:
-The part of a Game's state that one Swipe holds: the Room, the added Rooms, the Characters present, the encounters with Characters, the fired Triggers and the event record, if any. Every Swipe has one.
+The part of a Game's state that one Swipe holds. It has the Room, the added Rooms, the Characters present, the encounters with Characters, the fired Triggers and the event record, if any. Every Swipe has one.
 _Avoid_: Snapshot, save, checkpoint
 
 **Current state**:
@@ -174,7 +174,7 @@ _Avoid_: Trigger context
 Don't use. Say Cycle in an Autoplay run, Message and Swipe in the story, and Job for the background work.
 
 **Narrator Action**:
-Don't use. Player direction is transient (Guided Generation); lasting facts go in-world through Actions.
+Don't use. Player direction is transient (Guided Generation). Lasting facts go in-world through Actions.
 
 **Replay blob**:
 Don't use. What a Swipe stores about its generation has no name of its own.
@@ -183,7 +183,7 @@ Don't use. What a Swipe stores about its generation has no name of its own.
 
 - This glossary is the single source of truth for term meanings. An entry defines what a term IS, in at most two sentences. Behaviour, implementation details, field names and storage mechanics belong in `docs/diataxis/` and the source.
 - A term gets an entry when it is **shared** (writers in more than one module need it), **contested** (a competing word is in the repo or its history) and **not already general** (no general programming word means exactly this). An avoided word is a competing word from the repo or its history.
-- Add an entry when drift is observed, when a new concept lands and its name crosses a module boundary, or when another entry cannot be defined without it. A planned term waits in its plan until its first code lands. Remove an entry when its concept leaves the code. Candidate terms wait outside this file.
+- Add an entry when drift is observed. Also add one when a new concept lands and its name crosses a module boundary, or when another entry cannot be defined without it. A planned term waits in its plan until its first code lands. Remove an entry when its concept leaves the code. Candidate terms wait outside this file.
 - Prefer a plain word, or a plain word with an entry name in front of it (Options failure). Make up a word only when every plain word clashes with an entry, a programming meaning or a product word. A plain word that keeps its plain meaning gets no entry, and a code name that is a plain description needs none either.
 - An entry names a concept, not a place on the screen. `docs/diataxis/reference/frontend/dashboard.md` names the parts of the screen.
 - An entry goes under "Shown in the product" when the dashboard, the World files or the prompt presets use its word, in any word form. Otherwise it goes under "Used only in the code and docs".

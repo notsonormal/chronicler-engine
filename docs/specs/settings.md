@@ -19,12 +19,14 @@ Endpoints:
 ### Settings panel
 
 The panel splits into two client-side sub-tabs: **Connections** (default) and
-**Text Check**. The selected sub-tab is view state: it lives in `aria-selected`
-on the sub-tab buttons and in `hidden` on the sub-tab panels, and each lists
+**Text Check**. The selected sub-tab is view state. It lives in `aria-selected`
+on the sub-tab buttons and in `hidden` on the sub-tab panels. Each lists
 its attribute in `data-keep`, so a load of the panel keeps the selected
-sub-tab. The panel is a part of the screen (`settings`): its
+sub-tab.
+
+The panel is a part of the screen (`settings`): its
 fragment carries no root element of its own. The connection forms and the
-result of a connection Test open in the edit dialog, outside the panel, so a
+result of a connection Test open in the edit dialog, outside the panel. So a
 load of the panel never meets them.
 
 A save answers nothing on success: an empty 200. An invalid value answers a 400 error

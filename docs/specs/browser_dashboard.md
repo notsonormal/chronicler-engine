@@ -720,7 +720,18 @@ Then #notice is hidden and its report is empty
 And focus is on #main-content
 ```
 
-Where each kind of control reports a refusal or a failure is pinned by the scenarios of that control: 16.19 (the Action input), 16.25 and 44.18 (a control that saves on change), 16.29 (an invalid dialog form), 16.32 and 16.34 (row buttons), 16.40 (a preview confirm), 16.58 and 16.59 (a Game that is no longer active), 44.17 (a dialog form that fails), and 16.42 and 42.6 (the busy refusal, with only the second line in Details). A failure with no lead and a refusal with both lines are pinned there too.
+The scenarios of each kind of control pin where it reports a refusal or a failure:
+
+- 16.19: the Action input.
+- 16.25 and 44.18: a control that saves on change.
+- 16.29: an invalid dialog form.
+- 16.32 and 16.34: row buttons.
+- 16.40: a preview confirm.
+- 16.58 and 16.59: a Game that is no longer active.
+- 44.17: a dialog form that fails.
+- 16.42 and 42.6: the busy refusal, with only the second line in Details.
+
+A failure with no lead and a refusal with both lines are pinned there too.
 
 #### Scenario 16.73: A refused dialog form reports in the notice, and an invalid answer of a form with typed input reports in that form
 

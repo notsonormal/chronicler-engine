@@ -17,7 +17,7 @@ pub const BANNED_NAME_ROWS: &[BannedNameRow] = &[
         banned: &[StaticItem, NamePrefix("Atomic")],
     },
     // Rule 6: the guard never spans a model call. `gate.rs` holds the guard for one
-    // check and its writes, so the narrator or an Agent (an after-narration Agent, an
+    // check and its writes. So the narrator or an Agent (an after-narration Agent, an
     // end-of-Job Agent, their runner) named in that file would let a call run under it.
     BannedNameRow {
         rule: 6,
@@ -43,9 +43,8 @@ pub const GENERATION_CALLERS: &[&str] = &[
 
 pub const CALL_SITE_ROWS: &[CallSiteRow] = &[
     // Rule 2: the active-Game pointer has one reader and one writer.
-    // `GameCatalogue` is both — `CurrentGame` reads through it once per request
-    // — and `ActiveGame::set` is `pub(super)`, so the compiler holds the write
-    // side too.
+    // `GameCatalogue` is both. `CurrentGame` reads through it once per request.
+    // `ActiveGame::set` is `pub(super)`, so the compiler holds the write side too.
     CallSiteRow {
         rule: 2,
         scope: "",
@@ -53,8 +52,8 @@ pub const CALL_SITE_ROWS: &[CallSiteRow] = &[
         allowed: &["application/games/catalogue.rs"],
     },
     // Rule 3: only `GameWriter` writes game records. The unit of record writes is
-    // opened with a capability token, so `gate.rs` is where a unit starts and no
-    // other caller can open one; the storage seam contract gets its token from
+    // opened with a capability token. So `gate.rs` is where a unit starts, and no
+    // other caller can open one. The storage seam contract gets its token from
     // `test_support`, because its crate cannot call a crate-only constructor.
     CallSiteRow {
         rule: 3,
@@ -63,8 +62,8 @@ pub const CALL_SITE_ROWS: &[CallSiteRow] = &[
         allowed: &["application/generation/gate.rs", "test_support/"],
     },
     // Rule 13: one generation path. Only `job.rs` calls the narrator and the
-    // hooks of the Agent runner, and its step functions are the one place that
-    // does, so no second route to a model call grows beside the Job. The row sees
+    // hooks of the Agent runner. Its step functions are the one place that
+    // does. So no second route to a model call grows beside the Job. The row sees
     // files, not functions, and `job.rs` holds only Job code. A method call is
     // matched through the receiver's name (`narrator`, `agent_runner`), which
     // `JobDeps` keeps.
@@ -89,7 +88,7 @@ pub const JOB_RECORD_TYPES: &[&str] = &[
 
 pub const TYPE_CHECK_ROWS: &[TypeCheckRow] = &[
     // Rule 7: between steps, pass ids. A Job holds no record field, so a record a
-    // step loads cannot go stale in another step's hands; and no function of
+    // step loads cannot go stale in another step's hands. No function of
     // `job.rs` takes a record parameter, because each step loads the records it
     // uses itself.
     TypeCheckRow {
@@ -102,10 +101,11 @@ pub const TYPE_CHECK_ROWS: &[TypeCheckRow] = &[
 
 pub const CALL_COUNT_ROWS: &[CallCountRow] = &[
     // Rule 18: each writer takes the guard once, so a check and its writes are one
-    // critical section. Look again when a second lock (for example one guard per
-    // Game), an atomic with weak ordering in the write path, or a background Agent
-    // save that checks "this Swipe is still active" outside `hold` arrives; then
-    // the new primitive earns a `loom` seam contract.
+    // critical section. Look again when a second lock arrives (for example one
+    // guard per Game). Look again when an atomic with weak ordering arrives in the
+    // write path. Look again when a background Agent save arrives that checks
+    // "this Swipe is still active" outside `hold`. Then the new primitive earns a
+    // `loom` seam contract.
     CallCountRow {
         rule: 18,
         scope: "application/generation/gate.rs",

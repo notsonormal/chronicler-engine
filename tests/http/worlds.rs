@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the worlds endpoints: the update posture merge contract, the options-toggle checkbox grammar, the auto-save posture endpoint, the duplicate-identifier create refusal, and the World delete: its removal, its counted refusal and its storage failure, and the Edit form of an unknown World.
+//! HTTP E2E tests for the worlds endpoints: the update posture merge contract and the options-toggle checkbox grammar. They also cover the auto-save posture endpoint and the duplicate-identifier create refusal. The World delete has tests for its removal, its counted refusal and its storage failure. They also check the Edit form of an unknown World.
 
 use std::sync::Arc;
 

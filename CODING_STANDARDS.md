@@ -6,13 +6,13 @@ Do not preserve backward compatibility unless the user asks for it.
 
 Symbols (functions, types, variables) must use verbose, domain-aligned names that map 1-to-1 with concepts in the `docs/` (where such symbols are present).
 
-HTTP form structs (`axum::extract::Form` payloads) must deserialize from partial urlencoded bodies: mark fields a legacy poster may omit with `#[serde(default)]`, and encode checkbox groups as one boolean field per value.
+HTTP form structs (`axum::extract::Form` payloads) must deserialize from partial urlencoded bodies. Mark fields a legacy poster may omit with `#[serde(default)]`. Encode checkbox groups as one boolean field per value.
 
 ## Code comments
 
 Every file in `src/` (excluding `*_tests.rs` unit tests and `src/test_support/*.rs`) has:
- - Line 1: `//! [DOC: docs/diataxis/reference/<area>/<name>.md]` (links to reference documentation; `reference/` only — no `explanation/`, `how-to/`, or `tutorials/` targets). `src/test_support/*.rs` files must NOT carry a DOC anchor — the structure guardrail exempts them.
- - Line 2: `//! Human-readable summary` (used for auto-generating Structure section; required for `src/test_support/*.rs` too)
+ - Line 1: `//! [DOC: docs/diataxis/reference/<area>/<name>.md]` (links to reference documentation in `reference/` only — no `explanation/`, `how-to/`, or `tutorials/` targets). `src/test_support/*.rs` files must NOT carry a DOC anchor — the structure guardrail exempts them.
+ - Line 2: `//! Human-readable summary` (used for auto-generating Structure section, and required for `src/test_support/*.rs` too)
    Function-level anchors removed.
 
 Never write comments that paraphrase what the code does. If the code isn't clear, rename the symbols rather than comment. Comments explain the WHY only when non-obvious: a hidden constraint, behavior that would surprise a reader.
@@ -27,7 +27,7 @@ During code reviews, avoid vague architectural critiques and focus on actionable
 
 ## Testing
 
-Read `tests/AGENTS.md` and `tests/STRATEGY.md` when writing or reviewing tests; the unit-test rule is "The one rule" in `tests/STRATEGY.md`, and the integration-test patterns live in `docs/diataxis/reference/coding_standards/integration_test_standards.md`.
+Read `tests/AGENTS.md` and `tests/STRATEGY.md` when writing or reviewing tests. The unit-test rule is "The one rule" in `tests/STRATEGY.md`. The integration-test patterns live in `docs/diataxis/reference/coding_standards/integration_test_standards.md`.
 
 Tautological tests are considered harmful.
 

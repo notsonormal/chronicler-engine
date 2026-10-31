@@ -24,7 +24,7 @@ The record writes of a Game's story exist only on `Tx`, and only `GameWriter` op
 
 ## Settings
 
-The settings row is the read source for the whole engine. Every consumer resolves settings from storage at the point of use, so a connection or preset change takes effect on the next request without a restart. A connection reference that names no stored connection fails the operation that needs it instead of falling back to another backend.
+The settings row is the read source for the whole engine. Every consumer resolves settings from storage at the point of use. So a connection or preset change takes effect on the next request without a restart. A connection reference that names no stored connection fails the operation that needs it instead of falling back to another backend.
 
 ## Who Owns What
 
@@ -32,8 +32,8 @@ Each part owns one thing and writes only what its row names.
 
 | Part | Owns | May write |
 |---|---|---|
-| `GameWriter` (`generation/gate.rs`) | The busy-state registry (one holder for each busy Game, and the busy-state number that it raises through `Storage`), the guard, and the transactions of record writes | Every record of a Game's story and the config columns of the Game record, through a transaction: accept, stop, edit, delete, swipe switch, config save, create, reset, delete of a Game |
-| `JobWriter` (`generation/gate.rs`) | One Job's right to write | For its own Job only, while the job entry of its Game's holder holds its id: the Input save, the text save, the state update, the failure line, the Options save and the step name |
+| `GameWriter` (`generation/gate.rs`) | The busy-state registry (one holder for each busy Game, and the busy-state number that it raises through `Storage`), the guard, and the transactions of record writes | Every record of a Game's story and the config columns of the Game record. A write goes through a transaction: accept, stop, edit, delete, swipe switch, config save, create, reset, delete of a Game |
+| `JobWriter` (`generation/gate.rs`) | One Job's right to write | For its own Job only. This holds while the job entry of its Game's holder holds its id. The writes are: the Input save, the text save, the state update, the failure line, the Options save and the step name |
 | `Job` (`pipeline/job.rs`) | The plan of one request, its generations and their steps | Nothing directly. It writes through its `JobWriter` and passes ids between steps. |
 | `Narrator` (`narration/narrator.rs`) | The assembly and the model call of one Narration | Nothing. It returns text. |
 | `AgentRunner` and the Agents | The hooks and the value each hook returns | Nothing. An Agent returns values. |
@@ -55,10 +55,10 @@ An inherent `impl` of a type lives in the file that defines the type, or in a fo
 
 ## Deployment Contract
 
-- **HTTP port** — binds a single HTTP port (configurable); serves the dashboard, the fragment and `POST` endpoints, and `GET /changes`, which the page asks every second. TLS termination and reverse proxying are workspace-operator concerns.
-- **SQLite database** — one file per instance (e.g. `chronicler_3000.db`); auto-created on first access.
-- **File system** — reads JSON seeds from `data/`; writes the SQLite database file. Prompt presets and settings are database rows.
-- **Outbound LLM calls** — HTTPS to an OpenAI-compatible chat-completions host (OpenRouter, OpenCode Go, Ollama); endpoint URL configurable.
+- **HTTP port** — binds a single HTTP port (configurable). It serves the dashboard, the fragment and `POST` endpoints, and `GET /changes`, which the page asks every second. TLS termination and reverse proxying are workspace-operator concerns.
+- **SQLite database** — one file per instance (for example `chronicler_3000.db`). The engine creates it on first access.
+- **File system** — reads JSON seeds from `data/`. It writes the SQLite database file. Prompt presets and settings are database rows.
+- **Outbound LLM calls** — HTTPS to an OpenAI-compatible chat-completions host (OpenRouter, OpenCode Go, Ollama). The endpoint URL is configurable.
 - **In-process text check** — `harper_core` linked into the engine binary.
 
 ## Document References

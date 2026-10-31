@@ -46,6 +46,7 @@ class RegistryTests(unittest.TestCase):
             "guardrails-doc-check",
             "guardrails-doc",
             "validate-docs",
+            "vale",
             "guardrails",
             "integration",
             "test-pattern",
@@ -72,6 +73,11 @@ class RegistryTests(unittest.TestCase):
             labels.index(build.REGISTRY["validate-docs"].label),
             labels.index(build.REGISTRY["guardrails"].label),
             "registry guardrail steps must run after the doc steps",
+        )
+        self.assertLess(
+            labels.index(build.REGISTRY["validate-docs"].label),
+            labels.index(build.REGISTRY["vale"].label),
+            "vale lints the docs after the generated docs are rewritten and validated",
         )
 
     def test_test_pattern_spec_takes_pattern(self):
@@ -409,6 +415,7 @@ class StepCommandTests(unittest.TestCase):
         "guardrails-doc-check": "python scripts/generate_guardrails_doc.py --check",
         "guardrails-doc": "python scripts/generate_guardrails_doc.py",
         "validate-docs": "python scripts/validate_docs.py",
+        "vale": "python scripts/vale_lint.py --quiet",
         "guardrails": "cargo nextest run --test architecture --test guardrails",
         "integration": "cargo nextest run -E 'not binary(browser) and not binary(architecture) and not binary(guardrails)'",
         "browser": "cargo nextest run -E 'binary(browser)'",

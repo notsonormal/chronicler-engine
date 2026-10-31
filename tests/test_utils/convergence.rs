@@ -1,4 +1,4 @@
-//! The convergence check: once the page is quiet, each visible part equals a fresh `GET /screen` of that part, apart from the story-log entry in edit; the parts of a closed tab are empty; and each part element has the attributes of the shell. The stub and the full-stack browser tests run it at the end of each check.
+//! The convergence check: once the page is quiet, each visible part equals a fresh `GET /screen` of that part, apart from the story-log entry in edit. The parts of a closed tab are empty. Each part element has the attributes of the shell. The stub and the full-stack browser tests run it at the end of each check.
 
 use std::time::Duration;
 

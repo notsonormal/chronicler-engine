@@ -1,4 +1,4 @@
-//! Stub-browser tests for the Game header of a request: the page names the Game it shows, and the engine refuses a request for a Game that is no longer active. Tagged against `docs/specs/browser_dashboard.md`.
+//! Stub-browser tests for the Game header of a request. The page names the Game it shows. The engine refuses a request for a Game that is no longer active. Tagged against `docs/specs/browser_dashboard.md`.
 
 use std::time::Duration;
 

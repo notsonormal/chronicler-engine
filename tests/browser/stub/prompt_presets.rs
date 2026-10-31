@@ -1,4 +1,4 @@
-//! Stub-browser tests for the Prompt Presets panel: the keyboard-focus landing after a preset card delete and when an editor opens, and the report of a refused editor. Tagged against `docs/specs/browser_prompt_presets.md`.
+//! Stub-browser tests for the Prompt Presets panel: the keyboard-focus landing after a preset card delete and when an editor opens. They also cover the report of a refused editor. Tagged against `docs/specs/browser_prompt_presets.md`.
 
 use std::time::Duration;
 

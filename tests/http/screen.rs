@@ -1,4 +1,4 @@
-//! HTTP E2E tests for what every request answer carries: the `X-Revision` stamp, the busy refusal as `409`, and the Game header that a page sends with a Game-bound request. Tagged against `docs/specs/screen.md`.
+//! HTTP E2E tests for what every request answer carries: the `X-Revision` stamp and the busy refusal as `409`. They also cover the Game header that a page sends with a Game-bound request. Tagged against `docs/specs/screen.md`.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
