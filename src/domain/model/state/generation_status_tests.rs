@@ -74,6 +74,7 @@ fn test_empty_response_is_unreadable_answer() {
     assert_eq!(
         kind_of(EngineError::Llm(LlmFailure::EmptyResponse {
             raw_response: "{}".to_string(),
+            finish_reason: None,
         })),
         GenerationFailureKind::UnreadableAnswer
     );

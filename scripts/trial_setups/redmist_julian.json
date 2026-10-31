@@ -1,0 +1,22 @@
+{
+  "world": "redmist_estate",
+  "persona": "julian",
+  "mode": "novel",
+  "perspective": "third",
+  "tense": "past",
+  "presets": {
+    "system": "system_default",
+    "impersonate": "impersonate_default",
+    "quantifier": "quantifier_default",
+    "options": "options_default"
+  },
+  "connections": {
+    "narration": "conn-1793449507061-3a1cb15f",
+    "quantifier": "conn-1793449507061-3a1cb15f"
+  },
+  "cycles": 100,
+  "token_limit": 6000000,
+  "restart_limit": 5,
+  "repeats": 1,
+  "out": "tmp/pf18/redmist_julian"
+}

@@ -39,7 +39,7 @@ What does a test setup fix, how does a trial start, how many times does it repea
 A trial is one run of a fixed test setup through Autoplay on a probe server, driven by a script. The engine does not change for trials. The prototype answered each point (owner, 2026-10-31):
 
 - **The test setup.** One JSON file: World, Persona, connections, the four presets, `response_length`, mode, posture, Budget, token limit, restart limit and `repeats`. The script applies it through the HTTP routes before the run. The prototype did not apply a setup, so this is the one new part of the kept script.
-- **How a trial starts.** `python scripts/trial.py run <setup.json>` against a probe server (see `/chronicler-ui-investigator`). The prototype `prototype/PROTOTYPE_trial.py` becomes this script in the build plan, and the prototype is then deleted.
+- **How a trial starts.** `python scripts/trial.py run <setup.json>` against a probe server (see `/chronicler-ui-investigator`). The prototype `prototype/PROTOTYPE_trial.py` became this script, and the prototype folder is now deleted.
 - **What it saves.** The story comes from `messages` and `message_swipes`. The prompts, tokens, finish reasons and failed calls come from `llm_messages`, which is a debug record of 50 rows. So the script copies each new row while the trial runs. The engine record does not change.
 - **The connection and the cost limit.** OpenCode Go. A trial has a token limit, default 6,000,000. Millions to tens of millions of tokens a day is fine. One 100-cycle trial uses about 3 million tokens.
 - **Failed calls.** A filtered story call (`content_filter`) ends an Autoplay run. The script starts Autoplay again on the same Game, at most 5 times for each trial, and the pack marks the gap. The pack shows every failed call with its `finish_reason`.
@@ -49,4 +49,4 @@ A trial is one run of a fixed test setup through Autoplay on a probe server, dri
 
 Engine items for the build plan, from the trials: the card order; a failure text that names the `finish_reason` (today "LLM returned an empty response" hides `content_filter`). The Quantifier `<LatestNarration>` label went to [Decide which parts of a Quantifier or Options call an author can change](10-quantifier-options-layout.md). The Quantifier state after a failure went to [Decide what the state does when a state writer fails](15-failed-state-writer.md).
 
-Assets: [the trial prototype](../assets/trial-prototype.md), [the prototype script](../prototype/PROTOTYPE_trial.py).
+Assets: [the trial prototype](../assets/trial-prototype.md), [the trial script](../../../scripts/trial.py) and [the example setup file](../../../scripts/trial_setups/redmist_julian.json).

@@ -368,6 +368,19 @@ async fn test_a_busy_refusal_answers_409_with_the_wait_line_and_writes_nothing()
     assert!(wait_settled(&state, 2000).await, "the held Job ends");
 }
 
+/// The Game-bound `GET` routes: a read of the active Game that the Game layer also checks.
+pub(crate) const GAME_BOUND_READS: [&str; 1] = ["/debug/is_busy"];
+
+/// A `GET` that carries the Game header of a page.
+async fn get_with_game_header(app: &axum::Router, uri: &str, game: &str) -> StatusCode {
+    let request = Request::builder()
+        .uri(uri)
+        .header(GAME_HEADER, game)
+        .body(Body::empty())
+        .unwrap();
+    app.clone().oneshot(request).await.unwrap().status()
+}
+
 /// The Game-bound routes: every `POST` route whose handler acts on the active Game.
 pub(crate) fn game_bound_rows(message: u64) -> Vec<(&'static str, String, String)> {
     let named = format!("message={message}");
@@ -405,20 +418,26 @@ async fn test_a_stale_game_header_is_refused_on_each_game_bound_route() {
     let stale = second.to_string();
 
     let rows = game_bound_rows(message);
-    assert_eq!(rows.len(), 10, "the router has 10 Game-bound routes");
+    assert_eq!(rows.len(), 10, "the router has 10 Game-bound POST routes");
+    let post_rows = rows
+        .iter()
+        .map(|(route, _, _)| *route)
+        .collect::<BTreeSet<_>>();
     assert_eq!(
-        rows.iter()
-            .map(|(route, _, _)| *route)
+        post_rows
+            .iter()
+            .copied()
+            .chain(GAME_BOUND_READS)
             .collect::<BTreeSet<_>>(),
         game_bound_routes_of_router(),
-        "the table holds the routes that the router puts behind the Game layer"
+        "the tables hold the routes that the router puts behind the Game layer"
     );
     assert_eq!(
         crate::test_utils::stub_request_layers::GAME_BOUND_ROUTES
             .into_iter()
             .collect::<BTreeSet<_>>(),
-        game_bound_routes_of_router(),
-        "the stub server refuses a stale Game on the routes that the router does"
+        post_rows,
+        "the stub server refuses a stale Game on the POST routes that the router does"
     );
     for (route, uri, body) in rows {
         let response =
@@ -433,6 +452,13 @@ async fn test_a_stale_game_header_is_refused_on_each_game_bound_route() {
             stamp_of_changes(&app).await,
             stamp_before,
             "POST {route}: the refusal wrote nothing"
+        );
+    }
+    for route in GAME_BOUND_READS {
+        assert_eq!(
+            get_with_game_header(&app, route, &stale).await,
+            StatusCode::CONFLICT,
+            "GET {route} with a stale Game header is refused"
         );
     }
     assert_eq!(

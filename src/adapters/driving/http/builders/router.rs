@@ -22,7 +22,7 @@ use crate::adapters::driving::http::utils::request_layers::{refuse_stale_game, s
 use crate::adapters::driving::http::utils::answer_words::describe_answers;
 use crate::adapters::driving::http::worlds;
 
-/// The routes whose handler acts on the active Game. One layer checks the Game
+/// The routes whose handler acts on the active Game, or reads its busy state. One layer checks the Game
 /// header of the page for all of them, before any handler runs, `Option<CurrentGame>`
 /// handlers included.
 fn game_bound_routes(app_state: AppState) -> Router<AppState> {
@@ -55,6 +55,10 @@ fn game_bound_routes(app_state: AppState) -> Router<AppState> {
             "/status/reset-busy",
             post(layout::handlers::reset_busy_handler),
         )
+        .route(
+            "/debug/is_busy",
+            get(debug::handlers::debug_is_busy_handler),
+        )
         .route_layer(middleware::from_fn_with_state(app_state, refuse_stale_game))
 }
 
@@ -63,10 +67,6 @@ pub fn build_router(app_state: AppState) -> Router {
         .merge(game_bound_routes(app_state.clone()))
         .route("/", get(chat_window::handlers::index_handler))
         .route("/debug/state", get(debug::handlers::debug_state_handler))
-        .route(
-            "/debug/is_busy",
-            get(debug::handlers::debug_is_busy_handler),
-        )
         .route(
             "/debug/backend",
             get(debug::handlers::debug_backend_handler),

@@ -76,9 +76,10 @@ pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Res
                 return Ok(content.to_string());
             }
 
-            // `finish_reason: "length"` names the cause of the missing answer: the
-            // model spent its whole output budget before writing one.
-            if choice.get("finish_reason").and_then(|f| f.as_str()) == Some("length") {
+            // `"length"` is its own failure, because only a larger output budget fixes
+            // it. Every other reason is an empty answer that the model chose to give.
+            let finish_reason = choice.get("finish_reason").and_then(|f| f.as_str());
+            if finish_reason == Some("length") {
                 let (completion_tokens, reasoning_tokens) = token_counts(&json_response);
                 tracing::error!(
                     "[LLM][req:{req_id}] Token budget spent with no answer (completion_tokens: {completion_tokens:?}, reasoning_tokens: {reasoning_tokens:?})"
@@ -95,6 +96,7 @@ pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Res
             );
             Err(EngineError::Llm(LlmFailure::EmptyResponse {
                 raw_response: raw_response.to_string(),
+                finish_reason: finish_reason.map(str::to_string),
             }))
         }
         Err(e) => {

@@ -4,7 +4,7 @@ Made for [Shape the test setup and the trial](../issues/08-test-setup-and-trial.
 
 ## What was made
 
-- **Script.** [`PROTOTYPE_trial.py`](../prototype/PROTOTYPE_trial.py). It is throwaway. It has three commands:
+- **Script.** [`trial.py`](../../../scripts/trial.py), the kept script the prototype became. The prototype had three commands:
   - `run` creates a new Game on a probe server and starts Autoplay. While the run plays, it copies each new `llm_messages` row out of the DB. At the end it saves the setup, the story and the run facts, then calls `export`.
   - `export` writes the reading pack: `pack.md` and one file for each call in `calls/`.
   - `compare` writes the summary of two or more trials side by side, then the story of each trial, entry by entry.

@@ -17,7 +17,7 @@ use chronicler_engine::test_support::{
     active_game_of, empty_sqlite_storage, ScriptedModel, TestAppBuilder, TestMap, TestPromptPreset,
 };
 
-use crate::screen::{game_bound_rows, GAME_HEADER, STALE_GAME_LINE};
+use crate::screen::{game_bound_rows, GAME_BOUND_READS, GAME_HEADER, STALE_GAME_LINE};
 use crate::support::app_wiring::{app_with_model, two_game_app};
 use crate::support::http_fixtures::{story_of, world_form_body};
 use crate::support::http_requests::{
@@ -163,6 +163,23 @@ async fn test_a_stale_game_refusal_names_what_was_not_done_on_each_game_bound_ro
                 STALE_GAME_LINE.to_string()
             ],
             "stale {route}"
+        );
+    }
+    for route in GAME_BOUND_READS {
+        let request = Request::builder()
+            .uri(route)
+            .header(GAME_HEADER, stale.as_str())
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT, "stale GET {route}");
+        assert_eq!(
+            error_lines_of(route, &response_body(response).await),
+            [
+                format!("The active Game changed, so {}.", words_of(route)),
+                STALE_GAME_LINE.to_string()
+            ],
+            "stale GET {route}"
         );
     }
 }
@@ -593,11 +610,16 @@ const PINNED_WORDS: &[(&str, &str, &str)] = &[
         "/fragment/llm-messages/1",
         "The form was not opened.",
     ),
+    (
+        "/debug/is_busy",
+        "/debug/is_busy",
+        "The busy state was not read.",
+    ),
 ];
 
-/// The routes that a `GET` opener takes. Every other row of the table is a `POST` route.
+/// The routes that a `GET` opener or read takes. Every other row of the table is a `POST` route.
 fn takes_get(route: &str) -> bool {
-    route.starts_with("/fragment/") || route == "/worlds/:key/edit"
+    route.starts_with("/fragment/") || route == "/worlds/:key/edit" || route == "/debug/is_busy"
 }
 
 // [docs/specs/screen.md] SCENARIO: 45.21

@@ -105,6 +105,7 @@ fn complete_records_the_raw_body_of_an_empty_response() {
     let provider = Arc::new(BodyFailureProvider {
         failure: || LlmFailure::EmptyResponse {
             raw_response: EMPTY_BODY.to_string(),
+            finish_reason: None,
         },
     });
     let storage = Arc::new(Storage::new_in_memory());

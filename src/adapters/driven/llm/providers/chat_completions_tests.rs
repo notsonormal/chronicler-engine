@@ -6,6 +6,7 @@ use crate::adapters::driven::llm::providers::chat_completions::ChatCompletionsBa
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{LlmConnection, ReasoningEffort};
+use crate::error::{EngineError, LlmFailure};
 use crate::test_support::chat_completions_mock::{ChatCompletionsMock, STUB_ANSWER};
 use crate::test_support::test_connection;
 
@@ -273,6 +274,42 @@ fn chat_completions_opencode_go_names_the_session_of_an_unsaved_connection() {
             .get("x-opencode-session")
             .map(String::as_str),
         Some("unsaved-connection")
+    );
+}
+
+// CASE chat-completions-empty-answer-names-its-finish-reason [failure]: an empty answer names its finish_reason in both failure texts
+#[test]
+fn chat_completions_empty_answer_names_its_finish_reason() {
+    let endpoint = ChatCompletionsMock::answering(
+        r#"{"choices":[{"message":{"content":""},"finish_reason":"content_filter"}]}"#,
+    );
+    let backend = ChatCompletionsBackend::from_config(&connection_to(
+        &endpoint,
+        LlmBackendType::OpenCodeGo,
+        "deepseek-v4.1-flash",
+    ));
+
+    let failure = backend
+        .complete("narrator", "system", "user", None)
+        .expect_err("an empty content is a failure, never an answer");
+
+    assert!(
+        matches!(
+            failure,
+            EngineError::Llm(LlmFailure::EmptyResponse {
+                finish_reason: Some(ref reason),
+                ..
+            }) if reason == "content_filter"
+        ),
+        "{failure:?}"
+    );
+    assert_eq!(
+        failure.to_string(),
+        "LLM error: LLM returned an empty response (finish_reason: content_filter)"
+    );
+    assert_eq!(
+        failure.llm_error_string(),
+        "LLM Error: empty response (finish_reason: content_filter)"
     );
 }
 

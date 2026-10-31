@@ -5,7 +5,7 @@ use crate::error::{EngineError, LlmFailure};
 
 fn empty_response_body(error: EngineError) -> String {
     match error {
-        EngineError::Llm(LlmFailure::EmptyResponse { raw_response }) => raw_response,
+        EngineError::Llm(LlmFailure::EmptyResponse { raw_response, .. }) => raw_response,
         other => panic!("expected EmptyResponse, got: {other:?}"),
     }
 }

@@ -5,6 +5,7 @@ Endpoints:
 - every `POST` route
 - the `GET` routes that open a dialog, for a record that is gone: `GET /fragment/games/:id/rename`, `GET /fragment/prompt-presets/:id/edit`, `GET /fragment/prompt-presets/:id/view`
 - the Game-bound `POST` routes: `POST /action`, `POST /action/check`, `POST /autoplay`, `POST /swipe/new`, `POST /retrigger`, `POST /reset`, `POST /message/:id/swipe/:index`, `POST /history/:id`, `POST /history/delete` and `POST /status/reset-busy`
+- the Game-bound `GET` route: `GET /debug/is_busy`
 
 The screen is the header, the failure banner and the parts of the visible tab. `GET /screen` renders the parts that the page names, in one answer. The part names are `header`, `failure-banner`, `story-log`, `visual-sidebar`, `options-dock`, `send-control`, `autoplay-controls`, `status-display`, `settings`, `prompt-presets`, `worlds`, `games` and `llm-messages`.
 
@@ -58,7 +59,7 @@ And the `server:revision` of GET /changes is the same before and after the reque
 
 ```gherkin
 Given an active Game and a second saved Game
-When the client sends each Game-bound POST route with the header X-Chronicler-Game set to the id of the second Game
+When the client sends each Game-bound POST route and GET /debug/is_busy with the header X-Chronicler-Game set to the id of the second Game
 Then each response status is 409
 And the first line of each response body begins "The active Game changed, so "
 And the second line of each response body is "The request named a Game that is no longer active."
@@ -192,7 +193,7 @@ These properties hold across every Game-bound route (the endpoints above) and ar
 
 - **I.3** A request without the `X-Chronicler-Game` header acts on the active Game.
 - **I.4** A request whose `X-Chronicler-Game` header does not name the active Game is refused with `409`. The first line of the body is "The active Game changed, so <the words of the route>." and the second line is "The request named a Game that is no longer active.". The refusal writes nothing, and it comes before the handler runs.
-- **I.5** A `GET` route does not read the `X-Chronicler-Game` header.
+- **I.5** A `GET` route does not read the `X-Chronicler-Game` header, except `GET /debug/is_busy`, which is Game-bound.
 
 #### Scenario 45.15: A games_page that is not a whole number of at least 1 answers 400 and renders nothing
 
@@ -245,7 +246,7 @@ And no body starts with "Error: "
 
 ```gherkin
 Given an engine with an active Game and a second saved Game
-When the client sends each Game-bound POST route with the header X-Chronicler-Game set to the id of the second Game
+When the client sends each Game-bound POST route and GET /debug/is_busy with the header X-Chronicler-Game set to the id of the second Game
 Then each response status is 409
 And the first line of each body is "The active Game changed, so <the words of the route>."
 And the second line of each body is "The request named a Game that is no longer active."
@@ -308,7 +309,7 @@ And the story log still holds every Message
 
 ```gherkin
 Given an engine with an active Game
-When the client sends each route of the words table a request that the route does not take: GET to each POST route, and POST to each GET opener
+When the client sends each route of the words table a request that the route does not take: GET to each POST route, and POST to each GET opener and to GET /debug/is_busy
 Then each response is a 405
 And the body is one line, the sentence of that route: for example "The Game was not renamed." for /games/{id}/rename, "The Action was not sent." for /action and "The form was not opened." for /fragment/games/new
 ```

@@ -149,7 +149,7 @@ impl RouteWords {
     }
 }
 
-/// Each `post` route of the router, and each `GET` route that a dialog opener names.
+/// Each `post` route of the router, each `GET` route that a dialog opener names, and the Game-bound `GET` read of the busy state.
 pub const ANSWER_WORDS: &[RouteWords] = &[
     RouteWords::new("/action", "Action", "was not sent"),
     RouteWords::new("/action/check", "Action", "was not sent"),
@@ -219,6 +219,7 @@ pub const ANSWER_WORDS: &[RouteWords] = &[
         "was not opened",
     ),
     RouteWords::new("/fragment/llm-messages/:id", "form", "was not opened"),
+    RouteWords::new("/debug/is_busy", "busy state", "was not read"),
 ];
 
 fn words_of_route(route: &str) -> Option<&'static RouteWords> {

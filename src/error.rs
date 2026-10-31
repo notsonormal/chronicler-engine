@@ -6,9 +6,15 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum LlmFailure {
     /// The provider answered 200 OK with a blank, null or missing `content`; no answer to feed
-    /// downstream.
-    #[error("LLM returned an empty response")]
-    EmptyResponse { raw_response: String },
+    /// downstream. `finish_reason` is the provider's own name for why it stopped, when it gave one.
+    #[error(
+        "LLM returned an empty response{}",
+        LlmFailure::finish_reason_suffix(finish_reason.as_deref())
+    )]
+    EmptyResponse {
+        raw_response: String,
+        finish_reason: Option<String>,
+    },
     /// The model spent its whole output budget before writing an answer (`finish_reason: "length"`
     /// with an empty `content`). The counts are `None` when the provider reported no `usage`.
     #[error(
@@ -82,10 +88,18 @@ impl From<LlmFailure> for EngineError {
 impl LlmFailure {
     pub fn raw_response_body(&self) -> Option<&str> {
         match self {
-            Self::EmptyResponse { raw_response }
+            Self::EmptyResponse { raw_response, .. }
             | Self::TokenBudgetSpent { raw_response, .. }
             | Self::ParseError { raw_response, .. } => Some(raw_response),
             Self::Http { .. } | Self::Network { .. } | Self::Timeout => None,
+        }
+    }
+
+    /// Names the provider's own reason for the missing answer, when it gave one.
+    fn finish_reason_suffix(finish_reason: Option<&str>) -> String {
+        match finish_reason {
+            Some(reason) => format!(" (finish_reason: {reason})"),
+            None => String::new(),
         }
     }
 
@@ -246,9 +260,10 @@ impl EngineError {
             }) => {
                 format!("LLM Error: unexpected response format (expected {expected_format})")
             }
-            EngineError::Llm(LlmFailure::EmptyResponse { .. }) => {
-                "LLM Error: empty response".to_string()
-            }
+            EngineError::Llm(LlmFailure::EmptyResponse { finish_reason, .. }) => format!(
+                "LLM Error: empty response{}",
+                LlmFailure::finish_reason_suffix(finish_reason.as_deref())
+            ),
             EngineError::Llm(LlmFailure::TokenBudgetSpent {
                 completion_tokens,
                 reasoning_tokens,

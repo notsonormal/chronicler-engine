@@ -25,6 +25,7 @@ fn test_engine_error_display_variants() {
 
     let err = EngineError::Llm(LlmFailure::EmptyResponse {
         raw_response: String::new(),
+        finish_reason: None,
     });
     assert!(err.to_string().contains("empty response"));
 
@@ -64,6 +65,7 @@ fn test_llm_error_string_maps_user_facing_messages() {
         (
             EngineError::Llm(LlmFailure::EmptyResponse {
                 raw_response: "{}".to_string(),
+                finish_reason: None,
             }),
             "LLM Error: empty response",
         ),
@@ -156,6 +158,7 @@ fn test_token_budget_spent_display_counts_the_spend() {
 fn test_raw_response_body_is_present_for_the_body_carrying_kinds() {
     let empty = LlmFailure::EmptyResponse {
         raw_response: "{\"choices\":[]}".to_string(),
+        finish_reason: None,
     };
     assert_eq!(empty.raw_response_body(), Some("{\"choices\":[]}"));
 

@@ -1,7 +1,7 @@
 # Make the trial script
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -148,3 +148,36 @@ The failure text:
 ## Output
 
 Resolved when the check passes and `python build.py` passes. The answer records the setup file fields, the path of the check pack, and any route that did not act as the Facts say.
+
+## Answer
+
+Resolved on 2026-10-31, on the branch `prompt-flexibility` (not committed). A two-axis code review (Standards and Spec) followed the first pass, and every finding of both axes is fixed.
+
+**The check passed.** After the review fixes, `python scripts/trial.py run scripts/trial_setups/redmist_julian.json --cycles 5` on the probe server (port 3001, built from this branch) played 5 of 5 Cycles: 20 calls (4 Narration, 1 Event Narration, 5 Impersonate, 10 Quantifier), 53,333 tokens, 56 s, no failed call, no restart. The pack is `tmp/pf18/redmist_julian/trial-1/pack.md`, with `compare.md` one folder up. Its setup table holds the applied values, and `pack.md` and `compare.md` both count 5 Cycles. On the same server, `GET /debug/is_busy` with a header that names another Game answered `409`. The full gate `logs/build_20261031_210705.log` passed: guardrails 309, integration 1528, browser 44, and 37 tests in `scripts/tests/test_trial.py`.
+
+**One route did not act as the Facts say.** `GET /debug/is_busy` was outside `game_bound_routes`, so the `refuse_stale_game` layer did not check its Game header. A switch of the active Game during a trial made the poll read the other Game. The route is now Game-bound (`router.rs`), with the words-table row "busy state" / "was not read" (`answer_words.rs`). A request with no header acts on the active Game, as before. `docs/specs/screen.md` adds the route to scenarios 45.4, 45.17 and 45.21 and to invariant I.5. Their tests in `tests/http/screen.rs` and `tests/http/answer_words.rs` failed before the move. Every other setup route answered `200`, as the Facts say.
+
+**The setup file fields:** `world`, `persona`, `mode`, `perspective`, `tense`, `presets` (`system`, `impersonate`, `quantifier`, `options`), `connections` (`narration`, `quantifier`), `cycles`, `token_limit`, `restart_limit`, `repeats`, `out`. Defaults: `cycles` 10 (`Budget::DEFAULT`), `token_limit` 6,000,000, `restart_limit` 5, `repeats` 1. Flags: `--base`, `--db`, `--cycles`, and `--timeout`.
+
+**The failure text.** `LlmFailure::EmptyResponse` has a field `finish_reason: Option<String>`. The player sees "LLM error: LLM returned an empty response (finish_reason: content_filter)" in the status disclosure, and "LLM Error: empty response (finish_reason: content_filter)" in `llm_messages.error_message`. The case `chat-completions-empty-answer-names-its-finish-reason` pins the exact reason and both texts. The texts stay in this case, because `error_tests.rs` is on the legacy list and takes only mechanical edits.
+
+**Rules that the review made exact:**
+
+- **Restart.** The script restarts only when the newest call of the current run is a failed story call (any call that is not `quantifier` or `options`, so Narration, Event Narration and Impersonate) with `finish_reason: content_filter`, the token limit is not spent, and restarts are left. A filtered Quantifier call does not end a run, so it never causes a restart. `llm_messages` has no Game column, so "the newest failed call of the Game" cannot be read literally. The script reads the calls that it copied during the run.
+- **The poll.** `is_busy` checks the status. A `409` stops the trial with "the active Game changed". Any other refusal also stops it. The pack is written in both cases. A refused `POST /autoplay` writes no pack, because its `409` can mean "busy" as well as "Game changed".
+- **The cut Cycle.** At a token-limit stop, `run.json` lists the entries of the last Cycle (the newest Input and what follows it) in `cut_entries`. The pack marks them "cut by the token limit" and adds a Summary line.
+- **`--timeout`.** This flag is a second case of `reset-busy`, beyond the ticket's rule "only to stop a run at the token limit". A timed-out Autoplay run must be stopped. The script reads the failure line first, and the Stop line names `--timeout` and `reset-busy`.
+- **Tokens of other clients.** The copied calls cannot be filtered by Game. The pack says that the token count covers every model call of the server during the trial, and that a trial expects a probe server with no other client.
+- **Refusals beyond the ticket.** An unknown setup field, a Budget outside 1 to 100, and `repeats` below 1.
+
+**The poll is tested.** `play_trial` takes a `Clock(sleep, now)`. Tests drive it with a fake probe server and a real in-memory DB: restart and no restart, the restart limit, the cut Cycle, the timeout, a `409` and another refusal of `is_busy`, the Game header on every poll, and the Cycles count in `pack.md`, `summary.json` and `compare.md`. A temporary mutation of each rule made its test fail.
+
+**Standards fixes.** A `ProbeClient` holds the base, the transport and the Game id. A `Stop` enum carries the pack words of each stop reason. `cmd_export` is split into `load_pack`, `write_call_files`, `write_pack_markdown` and `write_summary`. One `failed_call_line` serves every failed-call line. `send` is the only status check. The Rust mock parameter is `body`.
+
+**Files:**
+
+- New: `scripts/trial.py`, `scripts/tests/test_trial.py`, `scripts/trial_setups/redmist_julian.json`.
+- Changed, engine: `src/error.rs`, `transport/utils/response.rs`, `test_support/chat_completions_mock.rs` (`answering(body)`), `router.rs`, `answer_words.rs`.
+- Changed, tests: `chat_completions_tests.rs`, `tests/http/screen.rs`, `tests/http/answer_words.rs`, and four test files for the new field.
+- Changed, docs: `docs/specs/screen.md`, the generated `http_routes.md`, the `AGENTS.md` structure index, and the links in [the trial prototype](../assets/trial-prototype.md) and [Shape the test setup and the trial](08-test-setup-and-trial.md).
+- Deleted: the prototype folder.

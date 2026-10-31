@@ -15,9 +15,9 @@ Generated from `src/adapters/driving/http/builders/router.rs` — re-run `python
 | POST | `/message/:id/swipe/:index` | `switch_swipe_handler` |
 | POST | `/retrigger` | `retrigger_handler` |
 | POST | `/reset` | `reset_handler` |
+| GET | `/debug/is_busy` | `debug_is_busy_handler` |
 | GET | `/` | `index_handler` |
 | GET | `/debug/state` | `debug_state_handler` |
-| GET | `/debug/is_busy` | `debug_is_busy_handler` |
 | GET | `/debug/backend` | `debug_backend_handler` |
 
 ## Action
