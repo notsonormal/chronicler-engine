@@ -199,10 +199,6 @@ EXCLUDED_FILE_NAMES: set[str] = {
 # Directories whose entire subtree is exempt (archives, etc.).
 EXCLUDED_DIR_NAMES: set[str] = {"old-docs"}
 
-# Auto-generated docs exempt from LINE_CITATION. Their line numbers are emitted
-# from the current source by the generator, and the `--check` freshness step
-# keeps them current — the citation cannot rot between generation and commit.
-# Paths are relative to docs/diataxis/.
 # Docs outside docs/diataxis/ that agents read first. They name source paths,
 # and a deletion otherwise leaves them pointing at files that are gone. Only
 # BROKEN_SOURCE_PATH applies: the other rules are written for the diataxis tree.
@@ -215,6 +211,11 @@ ROOT_DOCS: tuple[str, ...] = (
     "ENVIRONMENT.md",
 )
 
+# Auto-generated docs exempt from LINE_CITATION. Their line numbers are emitted
+# from the current source by the generator, and the full gate regenerates them
+# (a `--no-fmt` run checks them instead) — the citation cannot rot between
+# generation and commit.
+# Paths are relative to docs/diataxis/.
 GENERATED_DOC_PATHS: set[str] = {
     "reference/coding_standards/guardrails.md",  # generate_guardrails_doc.py
 }

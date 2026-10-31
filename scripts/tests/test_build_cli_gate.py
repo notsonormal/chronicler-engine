@@ -19,6 +19,10 @@ import build  # noqa: E402
 from build_cli_support import gate_args, make_ctx  # noqa: E402
 
 
+_REGENERATE_DOC_LABELS = ("Regenerating http_routes.md...", "Regenerating guardrails.md...")
+_CHECK_DOC_LABELS = ("Checking http_routes.md freshness...", "Checking guardrails.md freshness...")
+
+
 def labels(plan):
     return [step.label for step in plan]
 
@@ -81,6 +85,22 @@ class GatePlanTests(unittest.TestCase):
         self.assertNotIn("Formatting...", labels(plan))
         self.assertIn("Installing git hooks...", labels(plan))
         self.assertEqual(len(plan), 18)
+
+    def test_fmt_regenerates_the_two_generated_docs(self):
+        self.assert_doc_steps(self.plan(), present=_REGENERATE_DOC_LABELS, absent=_CHECK_DOC_LABELS)
+
+    def test_no_fmt_checks_the_two_generated_docs(self):
+        self.assert_doc_steps(
+            self.plan(no_fmt=True), present=_CHECK_DOC_LABELS, absent=_REGENERATE_DOC_LABELS
+        )
+
+    def assert_doc_steps(self, plan, *, present, absent):
+        order = labels(plan)
+        for label in present:
+            self.assertIn(label, order)
+            self.assertLess(order.index(label), order.index("Validating markdown docs..."))
+        for label in absent:
+            self.assertNotIn(label, order)
 
     def test_coverage_mode_swaps_test_and_report_steps(self):
         by_label = self.by_label(coverage=True)

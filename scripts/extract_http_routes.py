@@ -328,6 +328,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
 
+    current = (
+        output_path.read_text(encoding="utf-8") if output_path.exists() else None
+    )
+    if current == rendered:
+        print(f"{output_path} is unchanged.")
+        return 0
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(rendered, encoding="utf-8")
     print(f"Wrote {output_path} ({len(routes)} routes).")

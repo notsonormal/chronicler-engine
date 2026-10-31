@@ -5,11 +5,14 @@ Run via ``python -m unittest discover scripts/tests`` or via ``build.py``.
 
 from __future__ import annotations
 
+import io
+from contextlib import redirect_stdout
 import re
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -18,6 +21,12 @@ import extract_http_routes as er  # noqa: E402
 
 ENGINE_ROOT = REPO_ROOT
 
+
+def _run_main(argv: list[str]) -> tuple[int, str]:
+    """Run the script's ``main`` on ``argv``, returning its exit code and stdout."""
+    captured = io.StringIO()
+    with redirect_stdout(captured):
+        return er.main(argv), captured.getvalue()
 
 
 def _run_extract(source: str) -> list[er.Route]:
@@ -325,17 +334,29 @@ class TestWriter(unittest.TestCase):
             self.assertEqual(out_path.read_text(encoding="utf-8"), rendered)
 
     def test_stdout_flag_does_not_write_file(self) -> None:
-        import io
-
-        captured = io.StringIO()
-        old_stdout = sys.stdout
-        sys.stdout = captured
-        try:
-            rc = er.main(["--stdout", "--router", str(ENGINE_ROOT / er.ROUTER_REL)])
-        finally:
-            sys.stdout = old_stdout
+        rc, out = _run_main(["--stdout", "--router", str(ENGINE_ROOT / er.ROUTER_REL)])
         self.assertEqual(rc, 0)
-        self.assertTrue(captured.getvalue().startswith("---"))
+        self.assertTrue(out.startswith("---"))
+
+    def test_a_second_run_reports_the_doc_unchanged(self) -> None:
+        router_path = ENGINE_ROOT / er.ROUTER_REL
+        if not router_path.exists():
+            self.skipTest(f"router.rs not found: {router_path}")
+
+        with tempfile.TemporaryDirectory(prefix="http-routes-unchanged-") as tmp_str:
+            out_path = Path(tmp_str) / "http_routes.md"
+            argv = ["--router", str(router_path), "--output", str(out_path)]
+
+            rc, first = _run_main(argv)
+            self.assertEqual(rc, 0)
+            self.assertIn("Wrote", first)
+
+            with mock.patch.object(Path, "write_text") as write_text:
+                rc, second = _run_main(argv)
+
+            self.assertEqual(rc, 0)
+            self.assertIn("unchanged", second)
+            write_text.assert_not_called()
 
 
 if __name__ == "__main__":

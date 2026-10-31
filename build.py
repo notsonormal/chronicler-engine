@@ -380,10 +380,22 @@ REGISTRY: dict[str, StepSpec] = {
             help="Fail when the generated http_routes.md is stale.",
         ),
         StepSpec(
+            "http-routes",
+            "Regenerating http_routes.md...",
+            "python scripts/extract_http_routes.py",
+            help="Regenerate http_routes.md from router.rs.",
+        ),
+        StepSpec(
             "guardrails-doc-check",
             "Checking guardrails.md freshness...",
             "python scripts/generate_guardrails_doc.py --check",
             help="Fail when the generated guardrails doc is stale.",
+        ),
+        StepSpec(
+            "guardrails-doc",
+            "Regenerating guardrails.md...",
+            "python scripts/generate_guardrails_doc.py",
+            help="Regenerate the guardrails doc from the coding-standards sources.",
         ),
         StepSpec(
             "validate-docs",
@@ -532,7 +544,10 @@ def parse_args(argv=None):
         "--no-fmt",
         action="store_true",
         dest="no_fmt",
-        help="Skip cargo fmt",
+        help=(
+            "Skip cargo fmt, and check the two generated docs"
+            " (guardrails.md, http_routes.md) instead of regenerating them"
+        ),
     )
     parser.add_argument(
         "--no-browser",
@@ -1170,6 +1185,23 @@ _GATE_CHECKS = (
     "guardrails-doc-check",
     "validate-docs",
 )
+
+# The two generated docs, and the spec that rewrites each one. A run with fmt
+# rewrites them, because fmt also rewrites tracked files and a stale doc must
+# not stop the run that would refresh it. A run with --no-fmt checks them.
+_GATE_DOC_REWRITERS = {
+    "http-routes-check": "http-routes",
+    "guardrails-doc-check": "guardrails-doc",
+}
+
+
+def _gate_step_name(name: str, args) -> str:
+    """The spec the gate runs at one position of ``_GATE_CHECKS``."""
+    if args.no_fmt:
+        return name
+    return _GATE_DOC_REWRITERS.get(name, name)
+
+
 _LLM_SKIPPED_NOTE = (
     "    NOTE: 2 LLM tests were skipped. Run 'python build.py --llm-only' to execute them."
 )
@@ -1226,7 +1258,7 @@ def _plan_gate_steps(args) -> list[Step]:
     ]
     if not args.no_fmt:
         plan.append(_spec_step("fmt", args))
-    plan += [_spec_step(name, args) for name in _GATE_CHECKS]
+    plan += [_spec_step(_gate_step_name(name, args), args) for name in _GATE_CHECKS]
     plan += [
         _spec_step("duplicates", args, report_only=True),
         Step(
@@ -1298,7 +1330,7 @@ def _generate_coverage_report(ctx: Ctx) -> int:
 def run_gate(args, results):
     ctx = _prelude(args, results)
     if args.no_fmt:
-        both_print("Skipping formatting (--no-fmt set).")
+        both_print("Skipping formatting; checking the generated docs (--no-fmt set).")
     if args.no_browser:
         both_print("Skipping the browser tier (--no-browser set).")
     if _run_plan(_plan_gate_steps(args), ctx):

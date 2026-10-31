@@ -383,7 +383,7 @@ tail -n 10 "$(ls -t logs/build_*.log | head -1)"
 | `python build.py guardrails` | The architecture and guardrails test binaries | ~10 s |
 | `python build.py browser` | The browser (Playwright) binary only | ~92 s |
 | `python build.py --no-browser` | The full gate without the browser tier | ~50 s |
-| `python build.py` | The full gate: installs git hooks, removes safe-to-lose linked worktrees, fmt (rewrites files), data, doc and structure checks, Python tests, clippy, guardrails, integration, browser, packaging | ~145 s |
+| `python build.py` | The full gate: installs git hooks, removes safe-to-lose linked worktrees, fmt and the two doc generators (`guardrails.md`, `http_routes.md`), which rewrite tracked files (`--no-fmt` skips fmt and only checks the two docs); then data, doc and structure checks, Python tests, clippy, guardrails, integration, browser, packaging | ~145 s |
 | `python build.py validate-docs` | Markdown docs and DOC anchors under `docs/`, and the source paths that `AGENTS.md`, `tests/AGENTS.md` and the other root docs name | <1 s |
 | `python build.py run` | Builds and runs the dev server | see `ENVIRONMENT.md` |
 

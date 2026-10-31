@@ -11,16 +11,37 @@ fails the build if any live rule has no doc row.
 
 from __future__ import annotations
 
+import io
+from contextlib import redirect_stdout
 import sys
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import generate_guardrails_doc as ggd  # noqa: E402
+
+
+def _run_main() -> tuple[int, str]:
+    """Run the generator's ``main`` with no flags, returning its exit code and stdout."""
+    captured = io.StringIO()
+    with redirect_stdout(captured), mock.patch.object(sys, "argv", ["generate_guardrails_doc.py"]):
+        return ggd.main(), captured.getvalue()
+
+
+def _sentinel_doc() -> str:
+    """A doc that carries the three sentinel pairs and one prose line."""
+    return (
+        "---\ndiataxis: reference\ntitle: Guardrails\n---\n\n"
+        f"{ggd.CLIPPY_START}\n\n{ggd.CLIPPY_END}\n\n"
+        f"{ggd.ARCH_LINT_START}\n\n{ggd.ARCH_LINT_END}\n\n"
+        f"{ggd.SYN_START}\n\n{ggd.SYN_END}\n\n"
+        "A row with no reason fails the generator.\n"
+    )
 
 
 def _rule(name: str, doc: str = "A rule description.") -> str:
@@ -255,6 +276,32 @@ class WalkerRowTableTests(unittest.TestCase):
             self.assertGreater(rule, 0, f"row at line {line} has no rule number")
             self.assertTrue(kind, f"row at line {line} has no kind")
             self.assertTrue(reason, f"row at line {line} has no reason")
+
+
+class WriteOnChangeTests(unittest.TestCase):
+    """A full-gate run over an up-to-date doc must leave the file alone."""
+
+    def test_a_second_run_reports_the_doc_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="guardrails-unchanged-") as tmp:
+            doc_path = Path(tmp) / "guardrails.md"
+            doc_path.write_text(_sentinel_doc(), encoding="utf-8")
+            # An absolute DOC_REL wins over ROOT, so only the doc moves here and
+            # the generator still reads the live sources.
+            with mock.patch.object(ggd, "DOC_REL", str(doc_path)):
+                rc, first = _run_main()
+                self.assertEqual(rc, 0)
+                self.assertIn("Updated", first)
+                self.assertIn(
+                    "A row with no reason fails the generator.",
+                    doc_path.read_text(encoding="utf-8"),
+                )
+
+                with mock.patch.object(Path, "write_text") as write_text:
+                    rc, second = _run_main()
+
+                self.assertEqual(rc, 0)
+                self.assertIn("Unchanged", second)
+                write_text.assert_not_called()
 
 
 if __name__ == "__main__":

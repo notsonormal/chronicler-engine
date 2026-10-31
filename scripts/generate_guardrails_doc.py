@@ -6,7 +6,8 @@ Sources:
   - `tests/infrastructure/guardrails/*.rs` `pub fn check_*` `///` doc comments
   - `tests/infrastructure/guardrails/walker_rows.rs` design-rule row tables
 
-Default mode rewrites the four tables in place between sentinel comments.
+Default mode rewrites the four tables in place between sentinel comments, and
+writes the file only when the generated text differs from the text on disk.
 `--check` exits non-zero if the committed doc would change or if any source is
 missing its required comment.
 
@@ -389,6 +390,9 @@ def main() -> int:
         print(f"  {DOC_REL} is up to date")
         return 0
 
+    if doc_path.read_text(encoding="utf-8") == new_content:
+        print(f"  Unchanged {DOC_REL}")
+        return 0
     doc_path.write_text(new_content, encoding="utf-8")
     print(f"  Updated {DOC_REL}")
     return 0
