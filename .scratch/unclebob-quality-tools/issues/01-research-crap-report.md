@@ -45,32 +45,6 @@ Stability: changing the CC rule keeps 6 of the top 20; changing line → region 
 
 Asset: [01-crap-report.md](../assets/01-crap-report.md) — four variants side by side, the annotated top 20 of each, the traps, and the facts a value decision needs.
 
-## Proposed grilling ticket (for the coordinator to create)
+## Graduated
 
-```markdown
-# Grilling: does the CRAP report have value here, and which CC rule?
-
-Type: grilling
-Status: open
-Blocked by:
-
-## Question
-
-Does a CRAP report earn a place in `build.py`, and if so with which CC rule — `?` counted (upstream) or `?` dropped?
-
-## Evidence
-
-[Research asset](../assets/01-crap-report.md).
-
-- Upstream rule: 7 of the top 20 are `from_row` column lists; 9 of 20 are artefacts or unreachable code; 6 point at a coverage gap.
-- `?`-free rule: no artefacts, 18 rows at CRAP ≥ 10, of which 6 are complexity-only rows at 100 % coverage.
-- 85.5 % of functions sit at 100 % coverage, so CRAP = CC for them.
-
-## What the decision must settle
-
-1. Value: is a list that needs a seven-entry ignore list (`from_row`, `story_row`, `migrate_up_to`, `init_logging`, `start_server`, `source`, `provider_label`) worth 4 s per run?
-2. Rule: count `?` with an ignore list, or drop `?` and get a complexity list?
-3. Threshold: report-only, a CRAP bar, or nothing in the gate — and at which number (30 passes today with 2 rows; 10 fails today with 18–46)?
-4. Coverage source: reuse the last `coverage.json` (12 s + 4 s) or run coverage on demand (8m42s, 6.1 GiB)?
-5. Line or region coverage — 1 row of the top 20, at 12 s of export?
-```
+- [Grilling: does the CRAP report have value here, and which CC rule?](./05-grilling-crap-report-value.md)

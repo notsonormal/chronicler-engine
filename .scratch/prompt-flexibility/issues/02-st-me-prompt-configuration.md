@@ -1,7 +1,7 @@
 # How ST and ME let an author change a call
 
 Type: research
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -19,3 +19,13 @@ How do SillyTavern and Marinara Engine let an author change the layout and the p
 ## Output
 
 An asset `assets/st-me-prompt-configuration.md`: one table for each app (part of a call, mechanism, changeable by an author, source path), and an appendix with the default prompt texts verbatim. Mark known and inferred. List the corrections that `docs/external_applications/` needs; the build plan carries them.
+
+## Answer
+
+Both apps give an author the same four levers over a call: the text of each named part, the order of the parts, the role each part is sent as, and the depth at which a part joins the history. Each app also carries a per-preset and a per-chat override of those levers, and neither app lets the author change the engine's own token-budget maths.
+
+- **ST** builds the prompt in the browser. One OpenAI preset holds the connection, the samplers, `prompts[]` for text and role, and `prompt_order[]` for order and on/off. Each prompt also has `injection_position`, `injection_depth`, `injection_order`, `injection_trigger` and `forbid_overrides`. Markers, the utility prompts, the Author's Note, the card's `system_prompt`, `post_history_instructions` and `extensions.depth_prompt`, and eight World Info positions all reach the same message list. The impersonation prompt is a trailing `system` control prompt, and the engine fixes its place.
+- **ME** builds the prompt on the server from database rows. `sectionOrder` sets the order and `injectionOrder` does not. Sections carry a role, an on/off switch, an ordered-or-depth position and a `skipWrap`. Groups wrap and nest. 13 marker types inject runtime data, and choice blocks supply preset variables. The impersonation instruction is a final `user` message, and an impersonate call drops every non-marker section unless it resolves a dedicated impersonate preset. Agents and the game mode have their own prompt and parameter paths.
+- Reading the source was enough to answer the question. Three `docs/external_applications/` docs carry 32 stale statements, listed in the asset: `sillytavern_prompt_system.md`, `marinara_engine.md` and `marinara_engine_system_prompt.md`. The largest are the ST Post-History role, the ST "Absolute" position meaning, the ME section order mechanism, and the ME default preset texts.
+
+The asset holds one table per app, an appendix of the default prompt texts verbatim, and the correction list: [ST and ME prompt configuration](../assets/st-me-prompt-configuration.md)

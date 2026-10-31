@@ -197,6 +197,55 @@ Examples of what only jscpd sees on this tree: `fn complete(...)` signature agai
 
 The 30-token floor is what hides the setters from jscpd, not the 3-line floor. Same copy at `--min-tokens 10`: 852 clones, 19.8% duplicated lines, and the `mock.rs` setter pairs appear.
 
+## The gate's own jscpd run (added by the coordinator, 2026-10-31)
+
+The comparison above uses jscpd runs on copied scopes. This section checks the dryer pairs against the jscpd run that the build really makes.
+
+**Command:** `python build.py duplicates --all` (log `logs/build_20261031_143959.log`, report `report/jscpd-report.json`). It runs `scripts/healthcheck.py duplicates --all`: jscpd 5.4.2 over the whole repository root, `--format rust`, `--min-lines 3`, `--min-tokens 30`, ignoring `target`, `report`, `tmp`, `docs/external_applications`. Run time 2.10 s. Exit 0.
+
+**What it reports (known):**
+- Full report: 2,427 clones, 16,778 duplicated lines of 94,231 (17.81 %), 412 source files. Production code, test code and `tests/` are all in scope.
+- Printed summary: the step filters to clones of ≥ 5 lines that cross files: 681 clone pairs in 325 file pairs. It prints the top 25 file pairs. In 24 of the 25, both files are test code (`tests/`, `*_tests.rs`). Only one is production code: `options/prompt.rs` ↔ `quantifier/prompt.rs` (B5).
+- The gate runs the same step, but the summary shows only pairs where one side is a file changed against `main`.
+
+**The 10 real dryer pairs against the gate's report** (a pair counts as found when a jscpd clone overlaps both function spans; script `tmp/dup_gate_overlap.py`):
+
+| Pair | Functions | jscpd clones | Largest clone | Passes the summary filter (≥ 5 lines, cross-file) | In the printed top 25 |
+|---|---|---|---|---|---|
+| A1 | `Debug` `fmt`, options / quantifier agent | 0 | — | no | no |
+| A2 | `render_game_state_layer` / `render_world_info_layer` (same file) | 0 | — | no | no |
+| B1 | `column_result` ×2 (same file) | 1 | 8 lines | no: same file | no |
+| B2 | `set_narrator_handler` / `set_quantifier_handler` (same file) | 1 | 6 lines | no: same file | no |
+| B3 | `from_config` | 2 | 16 lines | yes | no |
+| B4 | `with_provider` | 1 | 16 lines (the same clone as B3) | yes | no |
+| B5 | `build_user_prompt` | 3 | 24 lines | yes | **yes** |
+| B6 | `get_world` / `get_world_by_id` (same file) | 2 | 10 lines | no: same file | no |
+| B7 | `to_card` | 2 | 12 lines | yes | no |
+| B8 | `list_games` / `list_personas` | **0** | — | no | no |
+
+**Corrections to the sections above (known):**
+- B8 is not in the gate's report. The class "jscpd also finds" is wrong for B8 with the gate's settings. So the gate's jscpd misses **3** real pairs (A1, A2, B8), not 2.
+- 4 of the real pairs (B1, B2, B6 and A2) are in one file. The printed summary drops every same-file clone, so even a jscpd hit on them never reaches a reader of the build output. Only the JSON report has them.
+- Of the 10 real pairs, jscpd's printed output shows **1** (B5). It shows that one only because it ranks in the top 25.
+
+**What this means for the value question (inferred):** the claim "dryer adds nothing that the build's jscpd already shows" does not hold. Against what a reader of the build output sees, dryer adds 9 of 10 real pairs. Against the full JSON report, dryer adds 3 (A1, A2, B8). The difference comes from two causes: the summary filter of `scripts/healthcheck.py` (cross-file only, top 25, which test clones fill), and the token matching of jscpd (it misses A1, A2 and B8 because names and literals differ). The first cause is a jscpd setting, so a change to the filter could fix it without dryer. The second cause is the reason to add dryer.
+
+### What dryer still finds after every jscpd clone is fixed (coordinator, 2026-10-31)
+
+Fresh dryer runs (defaults) on copies of HEAD `38043843` (`tmp/dup_now/`), against a fresh `python build.py duplicates --all` report of the same tree. A dryer pair "survives" when no jscpd clone overlaps both of its functions. Script: `tmp/dup_now/residual.py`.
+
+| Scope | dryer pairs | No linking jscpd clone (survives) | Clone covers < 50 % of a function | Clone covers ≥ 50 % |
+|---|---|---|---|---|
+| production | 54 | **43** | 3 | 8 |
+| unit tests (`*_tests.rs` + `src/test_support/`) | 409 | 271 | 66 | 72 |
+| `tests/` | 1,016 | 912 | 62 | 42 |
+
+- Production has 54 pairs, not 52: two new idiom pairs in `src/adapters/driven/storage/test_support.rs` (`set`/`set_write`, `config`/`internal`).
+- The 43 surviving production pairs: **3 real** (A1 `Debug` impls, A2 `assembler.rs` renderers, B8 `list_games`/`list_personas`) and 40 idiom (R1–R7 classes and the two new setter pairs).
+- 3 real pairs have a partial jscpd clone only: B5 `build_user_prompt` 37 %, B6 `get_world` 21 %, B7 `to_card` 48 %. Whether dryer still reports them after the jscpd clone is fixed depends on the fix (guessed: a fix of the cloned part removes most of the shared body, so likely not).
+- The test-scope survivors are not classified. Most dryer pairs on that scope are short helper wrappers (see *Test code* below), so the number of real duplicates among them is unknown.
+- Limit: this is a static overlap check. A real refactor can also add or remove dryer pairs elsewhere.
+
 ## Test code: worth a separate run?
 
 ### Counts

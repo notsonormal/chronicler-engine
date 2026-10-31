@@ -39,31 +39,6 @@ Settings: `--threshold` is the wrong knob (the noise scores 1.00 because the nor
 
 **Test code.** dryer reports 409 pairs for `*_tests.rs` + `src/test_support/` and 1,016 for `tests/`, against 52 for production, and 92.5% of the 2,427 clones in the gate's own jscpd report have a test side. The documented pain is real (`.scratch/_closed/test-strategy-execution/issues/05-retry-http-e2e.md:172,179-183`). The defaults on that scope are dominated by browser `page.evaluate` wrappers (286 call sites), so a test run needs its own rules. Verdict: production first.
 
-**Proposed grilling ticket** (for the coordinator to create):
+**Addendum: the gate's own jscpd run** (coordinator, 2026-10-31). `python build.py duplicates --all` (2.10 s, `logs/build_20261031_143959.log`): 2,427 clones over the whole repo, 17.81 % duplicated lines. Of the 10 real dryer pairs, the gate's report has no clone for 3: A1, A2 and B8 (`list_games`/`list_personas`; the class "jscpd also finds" above was wrong for it). Four real pairs sit in one file, and the printed summary drops same-file clones. The summary shows only the top 25 file pairs, and test files fill 24 of them. So a reader of the build output sees 1 of the 10 real pairs (B5). Detail: [asset, section *The gate's own jscpd run*](../assets/02-duplicate-report.md#the-gates-own-jscpd-run-added-by-the-coordinator-2026-10-31).
 
-```markdown
-# Grill: does the duplicate report have value here, which settings and ignore rules, and what happens to jscpd?
-
-Type: grill (user decides value)
-
-## Question
-
-Does a structural duplicate report (dryer) earn a place in the dev loop of Chronicler Engine, which settings and ignore rules does it run with, and does jscpd stay?
-
-## Context
-
-Evaluation: [asset](../assets/02-duplicate-report.md). At the defaults, 52 production pairs — 10 real, 42 idiom. Two real pairs are ones jscpd misses. Seven structural rules remove the 42 and cost one real pair. Test code yields 409 + 1,016 pairs, and 92.5% of the gate's jscpd report is test clones. dryer has no ignore mechanism and costs 7.8 s on production against jscpd's 0.2 s.
-
-## Decisions wanted
-
-1. Value: is A1 alone (one 10-line renderer pair) enough to carry a tool step?
-2. Rules: adopt R1–R7? They hide `from_config`, which is real.
-3. Settings: defaults plus rules, or `--min-nodes 100` plus rules?
-4. Scope: production only, or test code too (which needs a ninth rule)?
-5. Cost and place: on-demand subcommand, report-only gate step, or a gate?
-6. jscpd: keep as is, narrow to production, or run dryer beside it?
-
-## Out of scope
-
-The port itself. This ticket decides value and shape; the build ticket follows.
-```
+**Graduated:** [Grilling: does the duplicate report have value here, which settings and ignore rules, and what happens to jscpd?](./04-grilling-duplicate-report-value.md)
