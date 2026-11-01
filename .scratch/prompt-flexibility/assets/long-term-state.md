@@ -320,7 +320,7 @@ carries it.
 
 ## Limits
 
-- **known** No live run of ST or ME was made (see [11-live-run-of-st-and-me](../issues/11-live-run-of-st-and-me.md)).
+- **known** No live run of ST or ME was made (the live-run ticket moved to Layout trials as [Try the role of the Impersonate prompt](../../layout-trials/issues/08-impersonate-prompt-role.md)).
   Every ME Swipe, commit and error claim comes from code, not from a run.
 - **inferred** The swipe rule of zTracker is not stated in its README. Its store is per Message, so a
   rewind is likely. This note does not claim it.
