@@ -1,7 +1,7 @@
 # Cut the history in blocks
 
 Type: task (AFK)
-Status: open
+Status: claimed
 Blocked by: 18, 19
 
 ## Question

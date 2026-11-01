@@ -1,7 +1,7 @@
 # Add the connection slots and remove the global response length
 
 Type: task (AFK)
-Status: open
+Status: claimed
 Blocked by: 18
 
 ## Question
