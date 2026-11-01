@@ -355,10 +355,6 @@ Before implementing (e.g. during planning):
 
 These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-## The Test-First Philosophy
-
-A comprehensive suite of unit and integration tests is the ultimate source of truth for behavior. Read a component's tests in `tests/` before its source. Before fixing a bug, find or create a failing test case, and never rationalize a failure away. Integration tests go in `tests/`. The failure-handling protocol lives in `tests/AGENTS.md`.
-
 Avoid **analysis paralysis**: when reasoning stops converging, act instead. Read, run, or write a test, check the UI directly in the browser, or add logging and diagnostics to the production code.
 
 ## Documentation Index

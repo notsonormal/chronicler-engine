@@ -8,7 +8,7 @@ Blocked by: —
 
 Two dead tests survived a green gate because the masking was structural, not suspicious. `tests/http/games_switch.rs` asserted `fetch_generating_status(&app) == "idle"`, but `/status/generating` answers from the live registry and reports `idle` whatever the handler does. A fixture swallowed its setup result with `let _ = try_claim(...)`, so a rejected claim left two channels silently disagreeing.
 
-`tdd/SKILL.md:51` gates the mutation check on a test "looking suspicious". A structurally masked test does not look suspicious.
+The `tdd` skill gated the mutation check on a test "looking suspicious" (`.agents/skills/tdd/SKILL.md:51`, deleted 2026-11-01). A structurally masked test does not look suspicious. No written rule now asks for the check.
 
 Should the check be unconditional in some cases?
 
@@ -21,10 +21,11 @@ Should the check be unconditional in some cases?
 - Source: `/reflect` 2026-10-07, session `01a1175e` (standards axis) and its fix session.
 - Evidence: `assets/reflect-2026-10-07/synthesis.md` (Accepted row 16).
 - `tests/http/games_switch.rs` — scenario 18.3; the fix replaced `let _ = try_claim(...)` with `assert!(...)`.
-- `.agents/skills/tdd/SKILL.md:51` — "when a test looks suspicious".
+- `.agents/skills/tdd/SKILL.md:51` — "when a test looks suspicious". Deleted with the skill on 2026-11-01; the quoted rule is gone from the tree.
 - `tests/AGENTS.md` rule 5 — "Investigate pre-existing and flaky failures too".
 
 ## Comments
 
 - 2026-10-21, triage pass 2: Ticket 55 (closed; see the map) folded in: widen the trigger to "a test that turns green in a step that changes its subject".
 - 2026-10-25, audit: the user deferred this ticket. Do not implement it yet; it stays open.
+- 2026-11-01: the `tdd` skill was deleted at the user's request. This ticket now decides which *check* replaces the prose rule (option 3, a guardrail, or the mutation tool in `../unclebob-quality-tools/`), not how to reword it.

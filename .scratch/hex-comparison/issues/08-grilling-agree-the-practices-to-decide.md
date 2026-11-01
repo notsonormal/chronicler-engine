@@ -1,7 +1,7 @@
 # Agree the practices to decide
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 01, 02, 03, 04, 05, 06, 07, 09
 
 ## Question

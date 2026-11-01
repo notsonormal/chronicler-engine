@@ -17,7 +17,7 @@ Labels: wayfinder:map
 - **Build slot.** Every cargo compile or test run goes through `build.py` or the build slot. Never run `cargo test` bare: it runs the browser tier.
 - **Shared tree.** Other agents edit this checkout at the same time. A mutation run must never leave a mutated file, and must not use `git stash`.
 - **Prior work.** [Research asset](./assets/research-crapper-mutator-dryer.md) (2026-10-25: first runs of all three tools on a copy of `src/`); closed map [`crap-mutation-pilot`](../_closed/crap-mutation-pilot/map.md) (its ticket 01 holds the join evidence); closed map [`wayfinder-uncle-bob`](../_closed/wayfinder-uncle-bob/map.md). Related, not moved: retro-issue-bucket [23 — unconditional mutation check](../retro-issue-bucket/issues/23-unconditional-mutation-check.md) decides *when* a mutation check is required.
-- **Skills.** `/research` for the AFK tickets; `/grilling` and `/domain-modeling` for the value tickets; `/codebase-design` when a tool's form is chosen; `/tdd` and `/code-review` for a build ticket.
+- **Skills.** `/research` for the AFK tickets; `/grilling` and `/domain-modeling` for the value tickets; `/codebase-design` when a tool's form is chosen; `/code-review` for a build ticket.
 - **Scratch.** `tmp/unclebob/` holds the clones, a venv with the three tools installed, and the first run output. The system `python3` has no `pip`; the venv was bootstrapped with `get-pip.py`.
 
 ## Decisions so far

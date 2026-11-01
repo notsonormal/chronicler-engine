@@ -24,7 +24,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch. Each implementer subagent:
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
-   - uses the `/tdd` skill to build the ticket;
+   - writes and places its tests per `tests/STRATEGY.md`;
    - writes only its own ticket file — the coordinator owns `map.md`;
    - merges the integration branch tip into its own branch before reporting done
 

@@ -38,7 +38,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **52 — comment pass lists deleted reasons.** The `chronicler-comment-fixer` output format has a `DELETED REASONS` section: each deleted comment that states a why, in full, with the KEEP part it fails.
 - **57 — docs step after the code steps.** In both after-plan skills, the docs step runs after the steps that change code and before the comment pass and the full build. A fix pass after the reviews is not covered.
 - **83 — moved out (2026-10-25).** The mutation-check script question moved to the [`unclebob-quality-tools`](../unclebob-quality-tools/map.md) map; its evidence is in that map's ticket 03. The file is deleted.
-- **25 — `tdd` trigger.** The description also fires when an agent adds, strengthens or de-tautologizes tests.
+- **25 — dropped (2026-11-01).** The `tdd` skill is deleted, so its description trigger no longer exists.
 - **74 — `build_slot.py --status` gives one verdict.** A free slot prints only `Build slot: free.`; the stale-holder note is gone from the free branch. The held branch is unchanged.
 - **76 — the wait helpers are in the test index.** The `http_requests.rs` module summary names `wait_idle`, `wait_settled` and `wait_for_jobs`, so `tests/AGENTS.md` lists them.
 - **85 — comment finder flags change narration.** `comment_finder.py` ends a comment line that has a change word (`rename`, `renamed`, `became`, `stays`, `no longer`, `used to`, `was changed`) with `[change-word: …]`. Report-only; the fixer judges.
