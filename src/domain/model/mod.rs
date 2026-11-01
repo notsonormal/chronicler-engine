@@ -8,6 +8,7 @@ pub mod character;
 pub mod dock;
 pub mod game;
 pub mod generation;
+pub mod history_cut;
 pub mod llm_backend;
 pub mod llm_message;
 pub mod map;
@@ -35,6 +36,8 @@ mod character_tests;
 mod game_tests;
 #[cfg(test)]
 mod generation_tests;
+#[cfg(test)]
+mod history_cut_tests;
 #[cfg(test)]
 mod llm_backend_tests;
 #[cfg(test)]

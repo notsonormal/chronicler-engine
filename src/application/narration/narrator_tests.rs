@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narration::{NarrationValues, Narrated, Narrator};
-use crate::application::prompting::token_budget::{TokenBudget, MAX_CONTEXT_TOKENS, MAX_HISTORY_TOKENS};
+use crate::application::prompting::token_budget::{
+    estimate_tokens, TokenBudget, MAX_CONTEXT_TOKENS, MAX_HISTORY_TOKENS, SAFETY_MARGIN_TOKENS,
+};
 use crate::application::prompting::{CharacterContext, PromptAssembler};
 use crate::domain::model::agent::Role;
 use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard, Relationship};
@@ -167,6 +169,20 @@ impl Fixture {
             .collect()
     }
 
+    /// Entries whose text holds a newline, so a cut in the middle of one would show.
+    fn multiline_history_of(&self, count: usize) -> Vec<StoryRow> {
+        self.history_of(count)
+            .into_iter()
+            .map(|mut row| {
+                row.text = format!(
+                    "Entry {} first line.\nEntry {} second line.",
+                    row.id, row.id
+                );
+                row
+            })
+            .collect()
+    }
+
     fn narration<'a>(
         &'a self,
         history: &'a [StoryRow],
@@ -268,6 +284,47 @@ fn prompt_of(model: &ScriptedModel) -> ModelCall {
         .into_iter()
         .next()
         .expect("the narrator makes one call")
+}
+
+/// The text between the history tags.
+fn history_body(prompt: &str) -> &str {
+    let layer = layer(prompt, "<ConversationHistory>", "</ConversationHistory>");
+    layer
+        .strip_prefix("<ConversationHistory>\n")
+        .and_then(|rest| rest.strip_suffix("</ConversationHistory>"))
+        .expect("the history layer holds its tags")
+}
+
+/// The number in the first `Entry N` of the history, or `None` when no entry stays.
+fn first_kept_entry(prompt: &str) -> Option<usize> {
+    let body = history_body(prompt);
+    let digits: String = body
+        .split("Entry ")
+        .nth(1)?
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
+}
+
+fn window(max_context_tokens: u32, max_tokens: Option<u32>) -> TokenBudget {
+    TokenBudget {
+        max_context_tokens,
+        max_tokens,
+    }
+}
+
+/// The prompt that one narration of `history` and `input` sends, under `budget`.
+fn sent_under(
+    fixture: &Fixture,
+    history: &[StoryRow],
+    input: &str,
+    budget: TokenBudget,
+) -> ModelCall {
+    let case = fixture.narration(history, input);
+    let model = Arc::new(ScriptedModel::new().narration("Narration."));
+    narrate_with(&model, &case, &preset(), budget).expect("a narration is a result");
+    prompt_of(&model)
 }
 
 // CASE narrator-prompt-layers: every prompt layer renders.
@@ -453,7 +510,7 @@ fn test_the_output_format_layer_is_the_preset_text() {
     }
 }
 
-// CASE narrator-history-small-budget: a small context budget drops the oldest history entries.
+// CASE narrator-history-small-budget: a small context window drops the oldest history entries, whole.
 #[test]
 fn test_a_small_budget_drops_the_oldest_history() {
     let fixture = Fixture::new();
@@ -461,25 +518,17 @@ fn test_a_small_budget_drops_the_oldest_history() {
     let case = fixture.narration(&history, "I look around.");
     let model = Arc::new(ScriptedModel::new().narration("Narration."));
 
-    let narrated = narrate_with(
-        &model,
-        &case,
-        &preset(),
-        TokenBudget {
-            max_context_tokens: 2048,
-            max_tokens: None,
-        },
-    )
-    .expect("a narration is a result");
+    let narrated = narrate_with(&model, &case, &preset(), window(6144, None))
+        .expect("a narration is a result");
     let fitted = prompt_of(&model);
 
     let kept = fitted.user_prompt.matches("Entry ").count();
     assert!(
-        kept < history.len(),
-        "a 2048-token window must not carry 200 entries: {kept} kept"
+        0 < kept && kept < history.len(),
+        "a 6144-token window keeps some of 200 entries: {kept} kept"
     );
     assert!(
-        fitted.user_prompt.contains("Entry 199"),
+        fitted.user_prompt.contains("Entry 199 "),
         "the newest entry must stay: {}",
         fitted.user_prompt
     );
@@ -509,27 +558,154 @@ fn test_the_default_window_carries_the_whole_history() {
     );
 }
 
-// CASE narrator-history-cap: a history past the history cap keeps its newest text within the cap.
+// CASE narrator-history-cap: a history past the history cap keeps its newest entries within the cap.
 #[test]
-fn test_a_history_past_the_cap_keeps_its_newest_text() {
+fn test_a_history_past_the_cap_keeps_its_newest_entries() {
     let fixture = Fixture::new();
     let history = fixture.history_of(2000);
     let call = sent_prompt(&fixture.narration(&history, "I look around."), &preset());
 
-    let kept = layer(
-        &call.user_prompt,
-        "<ConversationHistory>",
-        "</ConversationHistory>",
-    );
-    let tags = "<ConversationHistory>\n</ConversationHistory>".len();
-    let cap_chars = MAX_HISTORY_TOKENS as usize * 4;
+    let kept = history_body(&call.user_prompt);
     assert!(
-        kept.chars().count() <= cap_chars + tags,
-        "the history stays within the cap: {} characters",
-        kept.chars().count()
+        estimate_tokens(kept) <= MAX_HISTORY_TOKENS as usize,
+        "the history stays within the cap: {} tokens",
+        estimate_tokens(kept)
     );
     assert!(kept.contains("Entry 1999 "), "the newest entry must stay");
     assert!(!kept.contains("Entry 0 "), "the oldest entry goes first");
+}
+
+// CASE narrator-history-cut-drops-whole-messages: a cut history starts at an entry and every kept entry keeps its sender label.
+#[test]
+fn test_a_cut_history_keeps_whole_entries() {
+    let fixture = Fixture::new();
+    let history = fixture.multiline_history_of(2000);
+    let call = sent_under(
+        &fixture,
+        &history,
+        "I look around.",
+        TokenBudget::fallback(),
+    );
+
+    let body = history_body(&call.user_prompt);
+    let kept = body.matches("first line.").count();
+    assert!(
+        0 < kept && kept < history.len(),
+        "the cut drops some: {kept} kept"
+    );
+    assert_eq!(
+        body.matches("second line.").count(),
+        kept,
+        "no entry loses its second line"
+    );
+    assert_eq!(
+        body.matches("Narrator: Entry ").count(),
+        kept,
+        "every kept entry has its sender label"
+    );
+    assert!(
+        body.starts_with("Narrator: Entry "),
+        "the history starts at an entry"
+    );
+}
+
+// CASE narrator-history-cut-holds-between-blocks: one more Message past the space leaves the history start where it was.
+#[test]
+fn test_the_history_start_holds_between_cuts() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(1101);
+
+    let first = sent_under(
+        &fixture,
+        &history[..1100],
+        "I look around.",
+        TokenBudget::fallback(),
+    );
+    let second = sent_under(
+        &fixture,
+        &history,
+        "I look around.",
+        TokenBudget::fallback(),
+    );
+
+    let start = first_kept_entry(&first.user_prompt).expect("the first call keeps entries");
+    assert!(0 < start, "the first call is past the space");
+    assert_eq!(first_kept_entry(&second.user_prompt), Some(start));
+}
+
+// CASE narrator-history-cut-ignores-the-player-input: a Player Input under the reserve does not move the history start.
+#[test]
+fn test_the_player_input_does_not_move_the_history_start() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(1100);
+    let long_input = "I look around the room slowly. ".repeat(100);
+
+    let short = sent_under(&fixture, &history, "Go.", TokenBudget::fallback());
+    let long = sent_under(&fixture, &history, &long_input, TokenBudget::fallback());
+
+    assert!(first_kept_entry(&short.user_prompt).is_some_and(|start| 0 < start));
+    assert_eq!(
+        first_kept_entry(&short.user_prompt),
+        first_kept_entry(&long.user_prompt)
+    );
+}
+
+// CASE narrator-history-cut-keeps-max-tokens: a cut history leaves the requested response length unchanged.
+#[test]
+fn test_a_cut_history_keeps_the_requested_response_length() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+
+    let call = sent_under(
+        &fixture,
+        &history,
+        "I look around.",
+        window(8192, Some(500)),
+    );
+
+    assert!(first_kept_entry(&call.user_prompt).is_some_and(|start| 0 < start));
+    assert_eq!(call.max_tokens, Some(500));
+}
+
+// CASE narrator-history-cut-marker-when-nothing-kept: Messages exist and the space keeps none, so the history holds the marker.
+#[test]
+fn test_a_history_with_no_kept_message_holds_the_marker() {
+    let fixture = Fixture::new();
+    let mut history = fixture.history_of(1);
+    history[0].text = "A very long entry. ".repeat(5000);
+
+    let call = sent_under(
+        &fixture,
+        &history,
+        "I look around.",
+        TokenBudget::fallback(),
+    );
+
+    assert_eq!(
+        history_body(&call.user_prompt),
+        "(History truncated to fit context window)\n"
+    );
+}
+
+// CASE narrator-history-cut-guards-the-limit: a Player Input past the reserve drops more Messages, and the prompt fits the input limit.
+#[test]
+fn test_a_long_player_input_drops_more_messages_to_fit() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+    let long_input = "I look around the room slowly. ".repeat(600);
+
+    let call = sent_under(&fixture, &history, &long_input, window(8192, Some(500)));
+
+    let input_limit = 8192 - SAFETY_MARGIN_TOKENS as usize - 500;
+    let sent = estimate_tokens(&call.system_prompt) + estimate_tokens(&call.user_prompt);
+    assert!(
+        sent <= input_limit,
+        "the prompt fits the input limit: {sent} of {input_limit}"
+    );
+    assert!(
+        call.user_prompt.contains("Entry 1999 "),
+        "the newest entry stays"
+    );
 }
 
 // CASE narrator-response-cap: the call asks for the budget's response length.

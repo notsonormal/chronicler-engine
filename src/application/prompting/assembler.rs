@@ -3,20 +3,22 @@
 
 use crate::error::EngineError;
 use crate::domain::model::character::{CharacterCard, PersonaCard};
+use crate::domain::model::history_cut::HistoryCut;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{StoryRow, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::world::WorldCard;
-use crate::application::prompting::token_budget as budget;
-use crate::application::prompting::token_budget::{truncate_to_budget, TokenBudget};
+use crate::application::prompting::token_budget::{estimate_tokens, TokenBudget, CHARS_PER_TOKEN};
 use crate::application::prompting::builders::sections::{
     build_post_history_prompt, build_system_prompt, render_known_character_entry,
     render_present_relationships, sanitize_for_prompt,
 };
 use crate::application::prompting::types::CharacterContext;
-use crate::application::prompting::utils::context::fit_messages_to_context;
+use crate::application::prompting::utils::context::{
+    fit_messages_to_context, history_space, input_limit,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledPrompt {
@@ -164,27 +166,72 @@ impl<'a> LayerRenderer<'a> {
         requested_max_tokens: Option<u32>,
     ) -> Result<(String, String, u32), EngineError> {
         let system = self.render_system_layer();
+        let system_tokens = estimate_tokens(&system);
+        let entries: Vec<String> = self
+            .history
+            .iter()
+            .map(|e| self.render_history_entry(e))
+            .collect();
+        let entry_tokens: Vec<usize> = entries.iter().map(|e| estimate_tokens(e)).collect();
 
-        let user = [
+        let fixed_user = self.join_user_layers(Self::history_slot(""), false);
+        let space = history_space(
+            max_context_tokens,
+            requested_max_tokens,
+            system_tokens,
+            estimate_tokens(&fixed_user),
+        );
+        let mut cut = HistoryCut::of(&entry_tokens, space);
+        let mut user = self.join_user_layers(self.render_history_layer(&entries, &cut), true);
+
+        // The overflow guard: a part outside the space (a long Player Input) can
+        // still pass the input limit. It drops more whole Messages, once. It counts
+        // characters, because a token cost rounds each entry up and the sum of those
+        // would drop too few.
+        let allowed_chars = input_limit(max_context_tokens, requested_max_tokens)
+            .saturating_sub(system_tokens)
+            * CHARS_PER_TOKEN;
+        let excess_chars = user.chars().count().saturating_sub(allowed_chars);
+        if excess_chars > 0 {
+            let mut freed_chars = 0;
+            let count = entries[cut.kept_from()..]
+                .iter()
+                .take_while(|entry| {
+                    let more = freed_chars < excess_chars;
+                    freed_chars += entry.chars().count();
+                    more
+                })
+                .count();
+            if count > 0 {
+                cut.drop_front(count);
+                user = self.join_user_layers(self.render_history_layer(&entries, &cut), true);
+            }
+        }
+
+        fit_messages_to_context(&system, &user, max_context_tokens, requested_max_tokens)
+    }
+
+    /// The user half in layer order. Without the tail it is the fixed part that
+    /// the history space subtracts: no Player Input and no Guide.
+    fn join_user_layers(&self, history_layer: String, with_tail: bool) -> String {
+        let mut layers = vec![
             self.render_game_state_layer(),
             self.render_character_cards_layer(),
             self.render_persona_layer(),
             self.render_world_info_layer(),
-            self.render_history_layer(),
+            history_layer,
             self.post_history_prompt.clone(),
-            self.render_user_layer(),
-            self.render_guide_layer(),
-        ]
-        .into_iter()
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n");
-        let user = format!("{user}\n\n");
-
-        let (fitted_system, fitted_user, actual_max_tokens) =
-            fit_messages_to_context(&system, &user, max_context_tokens, requested_max_tokens)?;
-
-        Ok((fitted_system, fitted_user, actual_max_tokens))
+        ];
+        if with_tail {
+            layers.push(self.render_user_layer());
+            layers.push(self.render_guide_layer());
+        }
+        let user = layers
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        format!("{user}\n\n")
     }
 
     fn render_system_layer(&self) -> String {
@@ -299,36 +346,30 @@ impl<'a> LayerRenderer<'a> {
         output
     }
 
-    fn render_history_layer(&self) -> String {
-        let mut output = String::from("<ConversationHistory>\n");
+    fn render_history_entry(&self, entry: &StoryRow) -> String {
+        let sender = match entry.message_type {
+            MessageType::Narration => "Narrator",
+            MessageType::Input => self.persona.sheet.name.as_str(),
+            MessageType::System => "System",
+        };
+        format!("{sender}: {}\n", entry.text)
+    }
 
-        if self.history.is_empty() {
-            output.push_str("(No history yet - this is the start of the conversation)\n");
-            output.push_str("</ConversationHistory>\n");
-            return output;
+    fn history_slot(body: &str) -> String {
+        format!("<ConversationHistory>\n{body}</ConversationHistory>\n")
+    }
+
+    /// The entries the cut keeps. The marker shows when Messages exist and none stays.
+    fn render_history_layer(&self, entries: &[String], cut: &HistoryCut) -> String {
+        if entries.is_empty() {
+            return Self::history_slot(
+                "(No history yet - this is the start of the conversation)\n",
+            );
         }
-
-        let mut history_text = String::new();
-        for entry in self.history {
-            match entry.message_type {
-                MessageType::Narration => {
-                    history_text.push_str(&format!("Narrator: {}\n", entry.text));
-                }
-                MessageType::Input => {
-                    history_text
-                        .push_str(&format!("{}: {}\n", self.persona.sheet.name, entry.text));
-                }
-                MessageType::System => {
-                    history_text.push_str(&format!("System: {}\n", entry.text));
-                }
-            }
+        if cut.kept_from() >= entries.len() {
+            return Self::history_slot("(History truncated to fit context window)\n");
         }
-
-        let truncated = truncate_to_budget(&history_text, budget::MAX_HISTORY_TOKENS as usize);
-        output.push_str(&truncated);
-
-        output.push_str("</ConversationHistory>\n");
-        output
+        Self::history_slot(&entries[cut.kept_from()..].concat())
     }
 
     fn render_user_layer(&self) -> String {

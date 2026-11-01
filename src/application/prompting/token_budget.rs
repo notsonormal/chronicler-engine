@@ -11,6 +11,17 @@ pub const SAFETY_MARGIN_TOKENS: u32 = 256;
 
 pub const MIN_INPUT_BUDGET_TOKENS: u32 = 512;
 
+/// The room the history leaves for the Player Input and the Guide, at most.
+pub const HISTORY_RESERVE_TOKENS: u32 = 1024;
+
+/// The reserve is at most this part of the window, so a small window keeps its history.
+const HISTORY_RESERVE_WINDOW_PART: u32 = 8;
+
+/// The tokens the history leaves for the Player Input and the Guide.
+pub fn history_reserve_tokens(max_context_tokens: u32) -> usize {
+    HISTORY_RESERVE_TOKENS.min(max_context_tokens / HISTORY_RESERVE_WINDOW_PART) as usize
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TokenBudget {
     pub max_context_tokens: u32,
@@ -25,19 +36,10 @@ impl TokenBudget {
         }
     }
 }
+
+/// The characters one token stands for in `estimate_tokens`.
+pub const CHARS_PER_TOKEN: usize = 4;
+
 pub fn estimate_tokens(text: &str) -> usize {
-    text.chars().count().div_ceil(4)
-}
-
-pub fn truncate_to_budget(text: &str, max_tokens: usize) -> String {
-    // Inverse of estimate_tokens' four characters per token.
-    let max_chars = max_tokens * 4;
-
-    if text.chars().count() <= max_chars {
-        return text.to_string();
-    }
-
-    let chars: Vec<char> = text.chars().collect();
-    let start_idx = chars.len().saturating_sub(max_chars);
-    chars[start_idx..].iter().collect()
+    text.chars().count().div_ceil(CHARS_PER_TOKEN)
 }

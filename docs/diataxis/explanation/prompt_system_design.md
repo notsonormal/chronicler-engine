@@ -23,6 +23,16 @@ A random order breaks the provider cache at the first card. It also makes two ru
 
 The card lists and the history write a fallback sentence in place of an empty body. The sentence tells the model a fact: no Character is present, or the story has no history yet.
 
+## The history cut in blocks
+
+The history is the longest part of the prompt, and it grows with each Cycle. A provider caches the start of a prompt, up to the first change. A history start that moves on every call ends the cache at the history. A cut in blocks holds the start still between two cuts, so the cache lasts until the next cut.
+
+The cut drops whole Messages. A cut of text can start in the middle of a Message and drop its sender label. The model then reads text with no speaker. A whole Message always keeps its label.
+
+The space that the cut fills leaves out the Player Input and the Guide. Both change on every call. A space that depended on them would move the history start on every call. The assembler keeps a reserve for them, and a guard drops more Messages when an Input passes the reserve.
+
+The cut records the blocks it drops. The record is the one place that states what left the prompt, so no second pass over the history is needed to find it.
+
 ## Prose constraints placed at the end of the user message
 
 The `<writing_style>` and `<output_format>` sections are rendered after `<ConversationHistory>` and before `<PlayerInput>` in the user message, rather than with the instruction sections in the system half.

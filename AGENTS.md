@@ -251,6 +251,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
       - `dock.rs` — The dock record: the offered set and the one Options failure of a Game
       - `game.rs` — Game state and Game management
       - `generation.rs` — The order of one generation, and the plan rules that turn one request into a plan
+      - `history_cut.rs` — The history cut: the oldest Messages that leave the history, dropped whole and in blocks
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM message DTO: the stored record of one model call
       - `map.rs` — Map and Room data structures

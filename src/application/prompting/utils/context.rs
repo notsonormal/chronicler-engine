@@ -5,6 +5,37 @@ use crate::error::EngineError;
 use crate::application::prompting::token_budget as budget;
 use crate::application::prompting::token_budget::estimate_tokens;
 
+/// The most tokens a call may send as input: the window, less the safety margin,
+/// less the response length the call asks for. One rule for the history space
+/// and for the fit of the whole prompt.
+pub fn input_limit(max_context_tokens: u32, requested_max_tokens: Option<u32>) -> usize {
+    let available =
+        (max_context_tokens as usize).saturating_sub(budget::SAFETY_MARGIN_TOKENS as usize);
+    let requested = requested_max_tokens.unwrap_or(budget::MAX_RESPONSE_TOKENS) as usize;
+
+    available
+        .saturating_sub(requested.min(available))
+        .max(budget::MIN_INPUT_BUDGET_TOKENS as usize)
+}
+
+/// The tokens the history entries may use. It depends on the window, the response
+/// length and the parts before the history, and on no Input or Guide, so it holds
+/// still between two calls of one kind.
+pub fn history_space(
+    max_context_tokens: u32,
+    requested_max_tokens: Option<u32>,
+    system_tokens: usize,
+    fixed_user_tokens: usize,
+) -> usize {
+    input_limit(max_context_tokens, requested_max_tokens)
+        .saturating_sub(system_tokens)
+        .saturating_sub(fixed_user_tokens)
+        .saturating_sub(budget::history_reserve_tokens(max_context_tokens))
+        .min(budget::MAX_HISTORY_TOKENS as usize)
+}
+
+/// Checks that the system half fits the window, and clamps the response length to
+/// the room the prompt leaves. It never trims: the history cut makes the prompt fit.
 pub fn fit_messages_to_context(
     system: &str,
     user: &str,
@@ -26,76 +57,10 @@ pub fn fit_messages_to_context(
 
     let requested = requested_max_tokens.unwrap_or(budget::MAX_RESPONSE_TOKENS) as usize;
 
-    let available_for_input = max_context.saturating_sub(safety_margin);
-    let max_input_tokens = available_for_input.saturating_sub(requested.min(available_for_input));
-
-    let max_input_tokens = max_input_tokens.max(min_input_budget);
-
-    let fitted_user = if user_tokens <= max_input_tokens.saturating_sub(system_tokens) {
-        user.to_string()
-    } else {
-        let remaining_user_budget = max_input_tokens.saturating_sub(system_tokens);
-        trim_history_to_budget(user, remaining_user_budget)
-    };
-    let fitted_user_tokens = estimate_tokens(&fitted_user);
-
     let actual_max_tokens = requested
-        .min(max_context.saturating_sub(system_tokens + fitted_user_tokens + safety_margin))
+        .min(max_context.saturating_sub(system_tokens + user_tokens + safety_margin))
         .min(max_context.saturating_sub(system_tokens + min_input_budget + safety_margin))
         .max(1) as u32;
 
-    Ok((system.to_string(), fitted_user, actual_max_tokens))
-}
-
-pub(crate) fn trim_history_to_budget(user: &str, target_user_tokens: usize) -> String {
-    const HISTORY_OPEN: &str = "<ConversationHistory>\n";
-    const HISTORY_CLOSE: &str = "\n</ConversationHistory>";
-
-    let Some(start_idx) = user.find(HISTORY_OPEN) else {
-        return user.to_string();
-    };
-    let Some(end_idx) = user.find(HISTORY_CLOSE) else {
-        return user.to_string();
-    };
-
-    let prefix = &user[..start_idx + HISTORY_OPEN.len()];
-    let suffix = &user[end_idx..];
-    let history_content = &user[start_idx + HISTORY_OPEN.len()..end_idx];
-
-    if estimate_tokens(user) <= target_user_tokens {
-        return user.to_string();
-    }
-
-    let lines: Vec<&str> = history_content.lines().collect();
-    if lines.is_empty() {
-        return format!("{prefix}(History truncated to fit context window){suffix}");
-    }
-
-    let target_bytes = target_user_tokens.saturating_mul(4);
-    let overhead = prefix.len() + suffix.len();
-    let total_line_bytes: usize = lines.iter().map(|l| l.len()).sum();
-
-    let mut dropped_bytes = 0;
-    let mut first_kept_idx = lines.len();
-
-    for (drop_count, line) in lines.iter().enumerate() {
-        let kept_count = lines.len() - drop_count;
-        let kept_newlines = kept_count.saturating_sub(1);
-        let kept_bytes = total_line_bytes - dropped_bytes;
-
-        if overhead + kept_bytes + kept_newlines <= target_bytes {
-            first_kept_idx = drop_count;
-            break;
-        }
-
-        dropped_bytes += line.len();
-    }
-
-    let trimmed_history = if first_kept_idx >= lines.len() {
-        "(History truncated to fit context window)"
-    } else {
-        &lines[first_kept_idx..].join("\n")
-    };
-
-    format!("{prefix}{trimmed_history}{suffix}")
+    Ok((system.to_string(), user.to_string(), actual_max_tokens))
 }

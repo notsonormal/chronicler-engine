@@ -24,11 +24,19 @@ Every card list renders in Character id order. Layer 2 sorts both of its lists, 
 | 2 | Character Cards | Character Description | User (data) | `<KnownCharacters>` condensed entry for every World Character, and `<CharactersPresent>` full cards for the Characters in the current room |
 | 3 | Player | Persona Description | User (data) | `<Persona>` persona sheet |
 | 4 | World Info | World Info / Lorebook | User (data) | `<WorldLore>` world name + description |
-| 5 | History | Chat History | User (data) | `<ConversationHistory>` conversation history |
+| 5 | History | Chat History | User (data) | `<ConversationHistory>` conversation history, cut as the History section says |
 | 6 | User Input | User Message | User (data) | `<PlayerInput>` sanitized current player input |
 | 7 | Guide | — | User (data) | Transient guide text on a Guided Generation. Omitted otherwise |
 
 The narrator makes Layer 6 from the kind of the generation (see Narration System).
+
+## History
+
+The history cut drops whole Messages from the front of the history, in blocks. It starts at the first Message and drops the oldest Messages when the kept Messages pass the history space. Between two cuts the history start stays where it is.
+
+The history space depends on the window, the response length and the parts before the history. It does not depend on the Player Input or the Guide, so it holds still between two calls of one kind. A Player Input or Guide that still passes the input limit makes the assembler drop more whole Messages, as one block.
+
+The cut records the blocks it dropped. The marker `(History truncated to fit context window)` shows when Messages exist and none is kept. The code holds the numbers (`HistoryCut`, `token_budget.rs`).
 
 ## Section Definitions
 
