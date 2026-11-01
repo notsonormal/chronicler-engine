@@ -146,7 +146,7 @@ The custom `gemma4-26b:latest` (i1-IQ2_XS quant) would exhibit the same empty-co
 | `services/game/gm-prompts.ts` | — | Game Master prompt builder with VN-style dialogue syntax |
 | `services/game/party-prompts.ts` | — | Party member controller prompt |
 | `services/sidecar/scene-analyzer.ts` | — | Local Gemma JSON-only scene state analyzer |
-| `shared/src/constants/agent-prompts.ts` | — | 20+ agent system prompts for sidecar quality enforcement |
+| `shared/src/constants/agent-prompts.ts` | — | Default prompts for the chat summary (with its combine and long-term-memory variants) and the Narrative Director secret plot. The agent prompts come from capability-package manifests |
 | `db/seed-mari.ts` | — | Built-in assistant character (Professor Mari) with app knowledge + command system |
 
 ---
@@ -154,14 +154,16 @@ The custom `gemma4-26b:latest` (i1-IQ2_XS quant) would exhibit the same empty-co
 ## Prompt Architecture (New Discovery)
 
 ### Preset-Based Assembly
-Unlike chronicler_engine's hardcoded `PromptBuilder` layers (`render_system_layer()`, `render_game_state_layer()`, etc.), Marinara uses a **preset system** where users can compose, reorder, and configure prompt sections via UI.
+Unlike chronicler_engine's hardcoded `PromptBuilder` layers (`render_system_layer()`, `render_game_state_layer()`, etc.), Marinara uses a **preset system** where users can compose, reorder, and configure prompt sections via UI. The same preset also holds `conversationPrompt`, `gamePrompt`, `parameters` and `wrapFormat`, so one preset decides the prompt of three chat modes.
+
+ME tries the presets in this order and uses the first one that exists: the Impersonate preset, the request preset, the connection preset (roleplay chats only), then the chat preset. An Impersonate drops the non-marker sections of the preset, unless a dedicated Impersonate preset is resolved. The impersonation instruction is a `user` message after the assembled sections. Only a generation guide can follow it. A generation guide adds one `system` message after the other messages.
 
 **Key concepts:**
-- **Sections** — Ordered prompt fragments with `injectionOrder` (0, 100, 200... 1200). Each has a `role` (system/user), `enabled` flag, and `wrapInXml` option.
-- **Markers** — Empty sections that act as injection points for runtime data (`lorebook`, `character`, `persona`, `chat_history`, `dialogue_examples`, `chat_summary`).
-- **Groups** — Logical containers (e.g., "Lore" group holds Setting, Characters, Persona, Past Events markers). Groups can be parented for nested XML wrapping.
-- **Variables / Choice Blocks** — User-selectable options injected via `{{variable_name}}`. The Default preset has 7 variables: `role`, `guidelines`, `narration`, `pov`, `tense`, `length`, `language`.
-- **Wrap Format** — `xml`, `markdown`, or `none`. XML wrapping places sections inside `<SectionName>` tags.
+- **Sections** — Prompt fragments. The assembler walks `preset.sectionOrder`, an array of section ids, to place them. `injectionOrder` only orders the database read and never places a section. The default preset's orders run 0 to 1000 in steps of 100. Each section has a `role` (system, user or assistant) and an `enabled` flag.
+- **Markers** — Empty sections that act as injection points for runtime data. There are 13 marker types: `lorebook`, `character`, `persona`, `chat_history`, `dialogue_examples`, `chat_summary`, `current_scene_summary`, `recalled_scenes`, `recalled_messages`, `id_macro_cards`, `world_info_before`, `world_info_after` and `agent_data`.
+- **Groups** — Logical containers (e.g., "Lore" group holds the Setting, Characters, Dialogue Examples, Persona and Past Events markers). The assembler wraps adjacent sections of one group in one wrapper. The group name becomes the wrapper tag (XML) or heading (Markdown). A group can be disabled. A group has a `parentGroupId` field, but the assembler does not read it, so the built prompt has no nested group wrappers.
+- **Variables / Choice Blocks** — User-selectable options injected via `{{variable_name}}`. The default preset, `Marinara's Universal Preset`, has 7 variables: `role`, `guidelines`, `narration`, `pov`, `tense`, `length`, `language`. A choice block also carries `displayMode`, `optionSort`, `multiSelect`, `separator` and `randomPick`.
+- **Wrap Format** — `xml`, `markdown`, or `none`. XML wrapping places each section inside a tag named after the section. `skipWrap` turns the wrapper off for one section that is not a marker.
 
 **File:** `packages/server/src/services/prompt/assembler.ts`
 
@@ -183,7 +185,7 @@ Marinara supports three distinct chat modes, each with fundamentally different p
 ---
 
 ### Built-in Agent Ecosystem
-Marinara runs 20+ specialized "agents" (sidecar prompts) alongside the main generation. Each agent has its own system prompt and processes the narration output for a specific purpose:
+Marinara runs specialized "agents" (sidecar prompts) alongside the main generation. It registers its built-in agents at startup from capability-package manifests, so no fixed count holds. Each agent has its own `promptTemplate`, `connectionId` and `settings`. The settings hold `maxTokens`. The temperature comes from the agent's connection. Each agent processes the narration output for a specific purpose. The table lists examples:
 
 | Agent | Purpose |
 |-------|---------|
@@ -210,7 +212,7 @@ Marinara runs 20+ specialized "agents" (sidecar prompts) alongside the main gene
 | `prompt-reviewer` | Analyze prompt quality |
 | `html` | Inline HTML/CSS/JS for visual storytelling |
 
-**File:** `packages/shared/src/constants/agent-prompts.ts`
+**File:** `packages/shared/src/constants/agent-prompts.ts` holds four default prompt constants: the chat-summary prompt, the chat-summary combine prompt, the long-term-memory summary prompt and the Narrative Director secret-plot prompt. `getDefaultAgentPrompt` reads the other agent prompts from the registered manifests.
 
 ---
 

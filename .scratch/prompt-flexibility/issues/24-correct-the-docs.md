@@ -1,7 +1,7 @@
 # Correct the docs that are wrong today
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -52,13 +52,15 @@ Known on 2026-10-31.
 
 1. Apply the 32 rows. Check each sentence against the pinned source first (see Decisions). Do not carry the asset's `file:line` numbers into the docs.
 2. Correct the three `prompt_system.md` statements. Read `docs/AGENTS.md` first: a Reference doc states what is, with no plan and no value. In the sanitizer sentence, change only the "any `{{…}}` pattern" clause. Keep each sentence under 25 words, and use no semicolon.
-3. Run `python build.py validate-docs` and `python build.py vale`, then `python build.py`.
+3. Run `python build.py validate-docs` and `python build.py vale`.
+4. **Doc review.** Run `/document-review` (`.agents/skills/document-review/SKILL.md`) in a `reviewer` subagent, as a diff review of the changed files: the three files of `docs/external_applications/` and `prompt_system.md`. The brief gives the skill path, the diff scope, the pinned source paths and the asset. The reviewer checks each changed sentence against the pinned source (step 4 of the skill) and against the wording rules (step 5). Verify each finding. Fix each valid finding in the changed text. List each rejected finding with its reason in the answer. A finding under **Pre-existing** (a keep-or-delete verdict on text this ticket did not change) is not fixed here, because a rewrite of the third-party docs is not in scope. The answer lists it.
+5. Run `python build.py`.
 
 ## Failure modes
 
 | Code path | Failure | Result | Handled by |
 |---|---|---|---|
-| A corrected third-party sentence | It is wrong in a new way | No check catches it | The pinned source is checked before each sentence |
+| A corrected third-party sentence | It is wrong in a new way | No check catches it | The pinned source is checked before each sentence, and the doc review checks it again |
 | A corrected third-party sentence | It holds a path that looks like an engine route | `validate-docs` fails with `UNKNOWN_ROUTE` | Keep the source's API paths as they are |
 | A `prompt_system.md` sentence | It passes 25 words or holds a semicolon | `vale` fails | Split it |
 | The asset | One of its rows is wrong | The doc would copy the error | The source wins, and the answer records it |
@@ -73,3 +75,30 @@ Known on 2026-10-31.
 ## Output
 
 Resolved when `python build.py` passes. The answer lists each correction that the asset got wrong, and what the source says instead.
+
+## Answer
+
+Resolved on 2026-11-01, on the branch `prompt-flexibility` (not committed). The owner added step 4 (the doc review) when the work started. A `strong-implementer` applied the 32 rows, and a `reviewer` ran `/document-review` on the diff. `python build.py` passes (`logs/build_20261101_134223.log`). No code changed, so no comment pass and no `/code-review` ran.
+
+**`prompt_system.md`.** An Impersonate uses the impersonate preset, and every other generation uses the system preset. The sanitizer replaces each non-empty `{{…}}` pattern. A default preset is read-only, and a copy of it is editable.
+
+**The 32 rows.** All are applied. ME system prompt row 8 needed no change: the Parameters block matches the source.
+
+**Where the asset was wrong** (the doc review confirmed each against the pinned source):
+
+- ST row 5: `enabled` is in the `prompt_order` entry, not the prompt. `forbid_overrides` applies only to `main` and `jailbreak`.
+- ST row 6: the utility prompts also include `impersonation_prompt`. `continue_postfix`, `assistant_prefill` and `assistant_impersonation` are preset keys outside the "Utility Prompts" block.
+- ST row 7: the depth prompt is always in-chat and has only a depth and a role. The position of the Author's Note is in-chat only by default.
+- ST row 9: the macros (`{{char}}`, `{{scenario}}` and others) work in both APIs. Only the Handlebars-style blocks (`{{#if}}`) are text-completion only.
+- ME row 3: the assembler never reads `parentGroupId`, so the built prompt has no nested group wrappers. The Lore group also holds Dialogue Examples.
+- ME row 6: `agent-prompts.ts` holds four constants, not three (`DEFAULT_CHAT_SUMMARY_COMBINE_PROMPT` too). The chat-summary and secret-plot ids are retired agents. The constants serve runtimes.
+- ME row 7: `maxTokens` is in the agent `settings`. The temperature comes from the agent's connection.
+
+**Doc review.** 17 findings, all accepted and fixed: 6 accuracy, 11 wording. Two of them go past the rows: the ME section `role` enum also has `assistant`, and `wrapInXml` is not read by the assembler, so it is no longer named.
+
+**Pre-existing, not fixed** (no row names them, and a rewrite is not in scope):
+
+- `sillytavern_prompt_system.md`: "Prompt Manager UI Concepts" repeats the layer list. The Token Budget keys are `openai_max_context` and `openai_max_tokens`. The WI entry fields are `comment`, `key` and `keysecondary`. The V1 example field is `mes_example`.
+- `marinara_engine.md`: the Multi-Mode table still names three sections. The agent table lists retired agents (`chat-summary`, `secret-plot-driver`, `prompt-reviewer`). A Conversation chat with a preset does not run the assembler (inferred). The engine type is `PromptAssembler`, not `PromptBuilder`.
+- `marinara_engine_system_prompt.md`: the `{{length}}` and `{{guidelines}}` defaults differ from the pinned `defaultChoices` in a few words.
+- `prompt_system.md`: "Game Master call" is not a `CONTEXT.md` term.

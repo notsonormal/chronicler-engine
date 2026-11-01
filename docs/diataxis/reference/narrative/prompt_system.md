@@ -5,7 +5,7 @@ title: Prompt System
 
 ## Overview
 
-The engine assembles a structured prompt for every Game Master call from the active system-prompt preset plus the current game state. The system half carries XML-sectioned instructions. The user half carries XML-wrapped game data and the player's input.
+The engine assembles a structured prompt for every Game Master call from an active preset of the Game plus the current game state. An Impersonate uses the impersonate preset, and every other generation uses the system preset. The system half carries XML-sectioned instructions. The user half carries XML-wrapped game data and the player's input.
 
 ## Layered Prompt Architecture
 
@@ -54,7 +54,7 @@ Some local/quantized models ignore or poorly handle the `system` role. Each conn
 
 ## Prompt Injection Sanitization
 
-User input enters the engine as `<PlayerInput>` content. The assembler passes it through `sanitize_for_prompt`, which replaces any `{{…}}` pattern with `[FILTERED]`.
+User input enters the engine as `<PlayerInput>` content. The assembler passes it through `sanitize_for_prompt`, which replaces each non-empty `{{…}}` pattern with `[FILTERED]`.
 
 ## Context Templates
 
@@ -66,7 +66,7 @@ The quantifier and options agents build their own prompts, separate from the lay
 
 ## Prompt Presets
 
-The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type. `PromptPresetService` gives the preset of a Game to the Narrator and to each hook, and every call reads the referenced preset fresh from storage. `PromptPreset::validate` refuses a preset that breaks the rules below. A save and the seed at startup both call it.
+The prompt system stores presets of four types: system (the narrator voice), quantifier, impersonate and options. A default preset is read-only, and a copy of it is editable. Each Game references one active preset per type. `PromptPresetService` gives the preset of a Game to the Narrator and to each hook, and every call reads the referenced preset fresh from storage. `PromptPreset::validate` refuses a preset that breaks the rules below. A save and the seed at startup both call it.
 
 A preset carries its generation parameters: the response length (`max_tokens`), the samplers `temperature` and `top_p`, and a free object `custom` for other samplers. The engine owns `model`, `messages`, `stream` and `max_tokens`, so `custom` cannot set them, and the refusal names the key. A key that the engine writes in the request replaces the same key of `custom`.
 

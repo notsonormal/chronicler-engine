@@ -16,18 +16,24 @@ This document explains SillyTavern's system as a reference for understanding its
 
 ## Layered Prompt Construction
 
-SillyTavern uses a layered prompt construction system where each layer serves a specific purpose. Each layer can be configured with:
+SillyTavern uses a layered prompt construction system where each layer serves a specific purpose. One OpenAI preset file holds the layers (`prompts` and `prompt_order`), the connection, the model, the samplers and the utility prompts. An author exports, imports and shares the preset as that file. Each layer can be configured with:
 - **Role**: System, User, or Assistant
-- **Position**: Absolute (top/bottom) or Relative (depth in history)
-- **Depth**: How far from end of history to inject
-- **Order**: Numeric ordering within same depth/role
-- **Triggers**: Conditional inclusion based on context
+- **Position**: Relative (placed by its index in the prompt list) or In-chat (placed at a depth in the chat history)
+- **Depth**: How far from end of history to inject (in-chat prompts only)
+- **Order**: Numeric ordering within same depth/role (in-chat prompts only)
+- **Triggers**: Conditional inclusion based on the generation type (`normal`, `continue`, `impersonate`, `swipe`, `regenerate`, `quiet`)
+
+The Main Prompt and the Post-History Instructions have a lock, `forbid_overrides`. The lock stops a character card from replacing the text of these two prompts. The on/off switch of a prompt is the `enabled` flag of its entry in `prompt_order`.
+
+The preset also holds the utility prompts: `impersonation_prompt`, `wi_format`, `scenario_format`, `personality_format`, `group_nudge_prompt`, `new_chat_prompt`, `new_group_chat_prompt`, `new_example_chat_prompt`, `continue_nudge_prompt` and `send_if_empty`. It also holds `continue_postfix`, `assistant_prefill` and `assistant_impersonation`.
+
+The Author's Note and the depth prompt of a character card are extension prompts. The Author's Note has a position, a depth, a role and an interval. Its default position is in-chat. The depth prompt is always in-chat, and it has a depth and a role.
 
 ### Layer Types
 
 #### Main Prompt (System)
 - **Role**: System
-- **Position**: Absolute (top)
+- **Position**: Relative by default. It is a normal entry of the prompt list.
 - **Content**: Global rules, AI persona, narrative style guidelines
 
 #### Character Description
@@ -41,21 +47,25 @@ SillyTavern uses a layered prompt construction system where each layer serves a 
 
 #### World Info / Lorebook
 - **Role**: System
-- **Trigger**: Keyword matching in conversation
+- **Trigger**: Keyword matching in conversation (the default)
 - **Content**: World lore, setting facts, background information
 - **Features**:
   - `name`: Entry identifier
   - `content`: The lore text
   - `keywords`: Array of trigger words
-  - `priority`: Order if multiple match
+  - `order`: Order if multiple match
   - Regex support for advanced pattern matching
   - Format templates to wrap content in specific tags
+  - Eight positions, with a depth and a role for the `atDepth` position
+  - Per-entry `sticky`, `cooldown`, `delay`, `group` and `probability`
+  - A keyword is not the only trigger: `constant` and vectorized entries also exist
 
 #### Chat History
 - **Role**: User/Assistant alternating
 - **Content**: Full conversation history (up to token limit)
 - **Features**:
-  - Injected at configurable "depth" relative to end
+  - `chatHistory` is a marker. The prompt order places it.
+  - Prompts and extension prompts reach into it at a configurable "depth" relative to the end
   - Can use "Continue" nudges to extend conversations
   - Supports "squashing" consecutive system messages
 
@@ -64,8 +74,8 @@ SillyTavern uses a layered prompt construction system where each layer serves a 
 - **Content**: The user's current message
 
 #### Post-History Instructions (PHI / Jailbreak)
-- **Role**: System (injected as user)
-- **Position**: After history, before response
+- **Role**: System by default. The author can change it.
+- **Position**: Set by the prompt order. The default preset puts it after the history.
 - **Content**: Final behavioral instructions
 
 ## Token Budget Management
@@ -80,7 +90,7 @@ SillyTavern uses a layered prompt construction system where each layer serves a 
 
 ## Context Templates
 
-SillyTavern uses template variables (Handlebars-style):
+SillyTavern uses Handlebars-style blocks such as `{{#if}}` only in the text-completion story string. The macros below work in the prompt text of both APIs.
 - `{{char}}` - Character name
 - `{{user}}` - User name
 - `{{description}}` - Character description
@@ -90,10 +100,10 @@ SillyTavern uses template variables (Handlebars-style):
 ## Prompt Manager UI Concepts
 
 SillyTavern provides drag-and-drop prompt ordering with:
-- **Position**: Absolute (top/bottom) or Relative (depth in history)
-- **Depth**: How far from end of history to inject
-- **Order**: Numeric ordering within same depth/role
-- **Triggers**: Conditional inclusion based on context
+- **Position**: Relative (placed by its index in the prompt list) or In-chat (placed at a depth in the chat history)
+- **Depth**: How far from end of history to inject (in-chat prompts only)
+- **Order**: Numeric ordering within same depth/role (in-chat prompts only)
+- **Triggers**: Conditional inclusion based on the generation type
 
 ## Character Card Format
 
@@ -107,6 +117,8 @@ SillyTavern character cards (Jailbreak format):
   "example_dialogue": "Sample conversations"
 }
 ```
+
+A card also carries `system_prompt`, `post_history_instructions`, `character_version` and `creator_notes`. It also carries `extensions.depth_prompt` with `prompt`, `depth` and `role`. `system_prompt` can replace the Main Prompt, `post_history_instructions` can replace the Post-History Instructions, and the depth prompt adds an in-chat prompt.
 
 ## References
 
