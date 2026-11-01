@@ -12,7 +12,7 @@ From [Decide whether this map designs memory and state, or only keeps room for t
 
 - The layout has an open list of block types and no fixed place for a new block.
 - The stepped history cut is one explicit engine step that knows which Messages it dropped and on which cycle. It fires no hook yet.
-- A writer is a new Agent on `AfterNarrationAgent` or a new hook trait. It keeps the previous state when it fails.
+- A writer is a new Agent on `AfterNarrationAgent` or a new hook trait. It keeps the previous state when it fails, and a writer that is turned off keeps it too ([Keep the state when a state writer fails](../prompt-flexibility/issues/23-keep-state-when-a-writer-fails.md)). The Quantifier is the only writer today. This effort names the category ("state writer" is not in `CONTEXT.md`) when it adds the second writer.
 - Memory and state that depend on the story are pinned to the Swipe. New `SwipeState` fields are optional JSON keys.
 
 ## Open questions

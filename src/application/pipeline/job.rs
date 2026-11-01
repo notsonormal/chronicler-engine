@@ -28,7 +28,7 @@ use crate::domain::model::generation::{
 use crate::domain::model::message::SwipeAt;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::quantifier::QuantifierResult;
-use crate::domain::model::settings::{AppSettings, DEFAULT_MAX_TOKENS};
+use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
@@ -486,11 +486,8 @@ impl Job {
             Record::Preset,
             self.presets.chosen_preset(&game, preset_type),
         )?;
-        // The recorder reports a missing Connection, so this fallback needs no ceiling.
-        let max_tokens = match settings.connection_for(preset_type) {
-            Ok(connection) => connection.max_tokens_for(preset.parameters.max_tokens),
-            Err(_) => preset.parameters.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
-        };
+        let connection = Self::read(Record::Settings, settings.connection_for(preset_type))?;
+        let max_tokens = connection.max_tokens_for(preset.parameters.max_tokens);
         Ok(AgentSettings {
             preset: Some(preset.assemble_text(&[], None)),
             call: CallSettings::of(&preset.parameters, max_tokens, self.writer.game()),
