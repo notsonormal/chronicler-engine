@@ -18,6 +18,8 @@ Each Hex practice that the research finds has a decision: adopt, already covered
 - **Sources.** Clones are in `tmp/hex-compare/anomalyco-hex/` and `tmp/hex-compare/kitlangton-hex/`. `tmp/` is git-ignored. If the clones are gone, clone the repos again at the commits in the findings asset. The GitHub REST API is public, but without a token it allows 60 requests an hour, and the search API allows 10 requests a minute. Keep raw API answers in `tmp/hex-compare/github/` so that no request runs twice. This repo has no `gh` CLI dependency.
 - **Skills.** `/research` for the research tickets. `/grilling` and `/domain-modeling` for the grilling tickets. `/codebase-design` when a decision concerns module or seam design.
 - **Writing.** Simplified Technical English, as in `AGENTS.md`.
+- **AFK first** (owner, 2026-11-01). Each kept practice gets an AFK ticket that measures it. The ticket ends with a recommendation and at most 2 questions. [Confirm the recommendations of tickets 10 to 15](./issues/16-grilling-confirm-the-recommendations.md) confirms them together, with at most 3 questions in each round. Only [Decide whether anything lands without the owner](./issues/17-grilling-decide-whether-anything-lands-without-the-owner.md) is a grilling of its own. The reason: after a grilling of about 33 questions, the owner had low confidence in his answers. New tickets number from 19.
+- **Terms of this map** (owner, 2026-11-01). "Spec" means only a Chronicler `docs/specs/` file. Hex's `AGENTS.md` is "the Hex instruction file". The **work report** is the durable record that one agent session leaves when it finishes a change: which checks ran, which did not, and the review verdict. "Run" alone is not used, because `CONTEXT.md` reserves it for an Autoplay run.
 
 ## Decisions so far
 
@@ -31,27 +33,34 @@ Each Hex practice that the research finds has a decision: adopt, already covered
 - [Research the Hex issue pipeline from its public PRs and issues](./issues/02-research-issue-pipeline.md) — one issue makes one run, one PR on `agent/issue-N` and one squash commit; the run also acknowledges, labels and closes the issue. 60 of 64 agent PRs merged; median issue to merge 6.7 min. Gates: `check.ts`, a second model's approval, a build on one host; no person and no platform CI holds the merge. 8 of 59 pipeline commits are `fix(ci)` repairs, 0 reverts. The pipeline code is not public, so the strict reviewer's criteria are unknown. Chronicler has no part of this loop. 12 practices, 6 new.
 - [Research the Hex feature map and its proof records](./issues/04-research-feature-map.md) — `docs/features/` holds 142 behaviors with stable dotted ids and keeps three states apart: built, a check exists, and someone saw it work (a dated paragraph naming the machine and build, with "Proof limit" and "not yet observed" lines). No code, test or gate reads the ids or the map, so drift survives (11 of 611 named checks no longer resolve). Chronicler enforces the spec-to-test link (`spec-coverage`, 554 scenarios) but has no record of what someone saw work and keeps known gaps in closed tickets. 15 practices, 3 new.
 - [Prepare the candidate list for the grilling](./issues/09-task-prepare-the-candidate-list.md) — 103 rows merge into 52 practices in 7 themes: keep 19, covered 13, drop 20. Proposed: 6 decision tickets (G1 landing and gates, G2 spec and docs as feature maps with an optional proof-records split, G4 golden images, G5 seams with env and clock, G6 gate scope, G7 planning). 47 checks: 5 claims wrong, none changes a keep or a drop. Three tests depend on the clock, not one. The two agent hook traits each have one impl. Corrections for this map are in part 7 of [candidates.md](./assets/candidates.md).
+- [Agree the practices to decide](./issues/08-grilling-agree-the-practices-to-decide.md) — of 52 practices: 15 kept, in 9 new tickets. 6 AFK tickets measure them, one grilling confirms their recommendations, one grilling decides landing without the owner, and the outside check comes last. 7 doc practices wait for research on how agents use the docs, 11 are covered and 19 are dropped. Terms: "spec" means only a `docs/specs/` file, and the "work report" is the record of one agent session. The part 7 corrections are now in the assets.
 
 ## Not yet specified
 
-- **The 8 candidate practices** from the [findings asset](./assets/findings.md). The research turns each one into a decision ticket, merges it with another, or removes it. Each ticket gets its type from what the research finds:
-  1. A deterministic risk gate on agent diffs (`.github/agent-policy/check.ts`).
-  2. Invariants in prose with exact values (`AGENTS.md`, `## Invariants`).
-  3. A feature map that states its proof (`docs/features/`).
-  4. Small units of work that land automatically (the issue pipeline, `.hivemind.toml`).
-  5. Golden-image UI tests (`tests/golden/`). Read the decision in the closed `ui-verification-redesign` map first.
-  6. Clippy `disallowed-methods` for env and clock reads. Hex writes this ban but turns it off (research 05). The findings asset lists the Chronicler call sites, and one test that needs a substitute clock. Options seen so far: ban env reads only, and make the clock a separate decision; ban both and mark each existing site; ban both and add an injected clock.
-  7. "No seam until there are two real adapters or a test needs one."
-  8. Labs: new features ship off by default behind a toggle.
-- **Linked candidates.** The owner agreed on 2026-11-01 that candidates 1 and 4 belong together, and that candidates 2 and 3 belong together. Candidates 2 and 3 may join `statechart-models` (it proposes paired rule ids) or `code-concepts`.
-- **Docs organized as feature maps** (owner, 2026-11-01). The owner finds it hard to decide how to organize the docs and which docs to create. Hex `docs/features/` and `pstack` both organize docs by user capability. Hex `AGENTS.md` says: "Organize by user capability, not Rust module or UI pane." Chronicler's reference docs follow the code: each `src/` file has a DOC anchor to `docs/diataxis/reference/`. Diátaxis decides the kind of a doc, not which docs exist (inferred). Sources:
-  - research 04
-  - Lauren Tan's talk, [excerpt](./assets/excerpt-poteto-feature-maps.md) ([08:55]–[11:23]; the full transcript is `tmp/poteto-2500-prs-talk-2026-09-21.md`): a feature map is "a form of materialized memory", like a site map, kept in the skill directory, maintained by an automation, and paired with a control CLI
-  - the `pstack` skills `create-verification-skill` and `maintain-verification-skill` (`tmp/hex-compare/cursor-plugins/`, commit `ae5650f`)
-  
-  The owner wants no more research on `pstack`. It may have reached the same idea as Hex on its own. This belongs with candidates 2 and 3.
-- **Smaller habits seen in the first look:** a `## Current Work` section in `AGENTS.md`; `ROADMAP.md` as the one work list; capability folders for modules; short commit bodies (median: 3 lines).
-- **The outside check ticket.** It is created when the decision tickets exist, and it is blocked by all of them.
+- **Docs organized as feature maps, and the doc practices.** This entry waits for [Research how agents use the current docs and plans](./issues/10-research-agent-use-of-docs-and-plans.md). The questions in its answer become tickets here.
+  - **The waiting practices** of [candidates.md](./assets/candidates.md):
+    - C-01: one always-loaded instruction file
+    - C-02: invariants with exact values
+    - C-03: docs change with the behaviour, in both directions
+    - C-09: docs by user capability
+    - C-10: a stable id for each behaviour
+    - C-11: a mechanical check on the doc map
+    - C-32: test names that carry the number of the invariant
+
+    The answer of [Agree the practices to decide](./issues/08-grilling-agree-the-practices-to-decide.md) holds the owner's first view of each one.
+  - **The owner's position** (2026-11-01). An AI writes the docs, and an AI reads them. A better structure for AI would help, but he wants no rewrite that rests on a hypothetical. Feature maps appealed to him for the same reason that Diátaxis did: a focused, logical structure.
+  - **What Chronicler has (known).** `docs/specs/` is already most of a feature map, and `chronicler-ui-investigator` uses the browser specs as its selector vocabulary. Four parts are missing:
+    - one page for each capability (Autoplay is split over two specs, by test surface)
+    - proof records (ticket 12)
+    - known gaps (ticket 12)
+    - a rule for which docs exist
+  - **Other maps.** C-02 and C-10 may join `statechart-models`, which plans TLA+ invariants paired with spec scenario ids, or `code-concepts`.
+  - **Sources.**
+    - research 04
+    - Lauren Tan's talk, [excerpt](./assets/excerpt-poteto-feature-maps.md) ([08:55]–[11:23]; the full transcript is `tmp/poteto-2500-prs-talk-2026-09-21.md`)
+    - the `pstack` skills `create-verification-skill` and `maintain-verification-skill` (`tmp/hex-compare/cursor-plugins/`, commit `ae5650f`)
+
+    The owner wants no more research on `pstack`.
 
 ## Out of scope
 

@@ -40,7 +40,7 @@ In weeks 43 and 44, Kit Langton made 422 commits and the author names `Dax Raad`
 
 Each entry gives the source file in `anomalyco/hex` and the status in Chronicler.
 
-1. **A deterministic risk gate on agent diffs.** `.github/agent-policy/check.ts` (about 130 lines, no AI) sorts a diff into `clean`, `flagged` or `dax`.
+1. **A deterministic risk gate on agent diffs.** `.github/agent-policy/check.ts` (118 lines, no AI; corrected 2026-11-01, [candidates](./candidates.md) K-02) sorts a diff into `clean`, `flagged` or `dax`.
    - Path rules: `Cargo.toml`, `Cargo.lock`, `build.rs`, `AGENTS.md`, build and install scripts, updater code.
    - Line rules: new URLs, process spawns, network APIs, `unsafe`, encoded data, invisible characters, secret env reads.
    - Size rule: more than 600 changed lines or 25 files.
@@ -59,7 +59,7 @@ Each entry gives the source file in `anomalyco/hex` and the status in Chronicler
    - Correction (research 05): Hex does not enforce this ban. `Cargo.toml` sets `disallowed_methods = "allow"` with the comment "shared: deny; 85 errors left (t1003)". The rule is written, but it is off.
    - Chronicler: `clippy.toml` sets thresholds only. See [Env and clock reads](#env-and-clock-reads) for the call sites.
 7. **"No seam until there are two real adapters or a test needs one."** This rule appears in `AGENTS.md` (`## Future Direction`) and in `CONTRIBUTING.md`.
-   - Chronicler: hexagonal ports, and the `antipattern-checker` skill. Inferred: a similar idea. The port layer was not checked against this rule.
+   - Chronicler: hexagonal ports, and the `antipattern-checker` skill. The port layer was checked later: `LlmProvider` and `TextChecker` pass the rule. `AfterNarrationAgent` and `EndOfJobAgent` each have one impl and no test impl, so they do not pass it (corrected 2026-11-01, [candidates](./candidates.md) K-31).
 8. **Labs.** New and user-requested features ship off by default behind a toggle.
    - Chronicler: no feature flags.
 
@@ -92,5 +92,5 @@ The pipeline prompts, `~/code/control/AGENTS.md` and the opencode configuration 
 Call sites in Chronicler on 2026-11-01:
 
 - `std::env::var`: 3 in `src/` (`src/bootstrap/logging.rs`, and two in `src/domain/model/settings.rs`). 6 in `tests/` (API keys, `HEADED`, `SLOW_MO`, `CARGO_TARGET_DIR`). `Settings::resolve_api_key_with` and `check_api_key_available_with` already take the lookup as a parameter.
-- Clock reads: about 20 production sites call `Utc::now`, `Local::now` or `SystemTime::now`. They are in the domain (`message.rs`, `utils/game_name.rs`, `map.rs`), the application layer and the storage adapters. No injected clock exists.
-- One test needs a substitute clock. `generate_game_name` reads the clock internally. `test_generate_game_name_increments` in `src/domain/model/game_tests.rs` reads the clock separately. The test fails if the UTC date changes between the two reads. By Hex's own rule (practice 7), this test justifies a clock seam.
+- Clock reads: 17 lines in 15 production files (corrected 2026-11-01, [candidates](./candidates.md) K-32) call `Utc::now`, `Local::now` or `SystemTime::now`. They are in the domain (`message.rs`, `utils/game_name.rs`, `map.rs`), the application layer and the storage adapters. No injected clock exists.
+- Three tests need a substitute clock (corrected 2026-11-01, [candidates](./candidates.md) K-32). `generate_game_name` reads the clock internally. `src/domain/model/game_tests.rs:15` and `:23` read the clock separately, and `src/application/games/catalogue_tests.rs:162` computes the date apart from `create_game`. Each test fails if the UTC date changes between the two reads. By Hex's own rule (practice 7), this test justifies a clock seam.
