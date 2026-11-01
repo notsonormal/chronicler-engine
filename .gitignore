@@ -240,6 +240,8 @@ vectors.db
 # .pi/ is tracked by default (config, skills, extension sources).
 # Only ignore regenerable/large state.
 .pi/rag/
+# Impeccable's 21 MB native engine. The launcher scripts/impeccable downloads it on its first run.
+.pi/skills/impeccable/scripts/bin/
 .pi/tasks/
 # Extension build artifacts + dependencies.
 .pi/extensions/**/*.js
@@ -261,3 +263,10 @@ tools/turbo-agent/.venv/
 tools/turbo-agent/.turbo-agent/
 tools/turbo-agent/proxy.log
 tools/turbo-agent/proxy.pid
+
+# Impeccable (design skill): track the shared design records, ignore runtime and local state.
+.impeccable/*
+!.impeccable/config.json
+!.impeccable/design.json
+!.impeccable/critique/
+!.impeccable/surfaces/
