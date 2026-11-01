@@ -42,6 +42,16 @@ export function writeState(state: LimitState, file = STATE_FILE): void {
 	}
 }
 
+// A missing value is unknown, not zero.
+export function pct(fraction: number | undefined): string {
+	return fraction === undefined ? "?" : `${Math.round(fraction * 100)}%`;
+}
+
+// A reset with no time is not an ended window: it is no data.
+export function windowEnded(reset: number | undefined, nowS: number): boolean {
+	return reset !== undefined && reset <= nowS;
+}
+
 function num(value: string | undefined): number | undefined {
 	if (value === undefined) return undefined;
 	const n = Number(value);

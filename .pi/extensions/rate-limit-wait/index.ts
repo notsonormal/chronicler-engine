@@ -12,7 +12,7 @@
  * `/rate-wait` shows the state, `/rate-wait now` ends the wait and retries at once,
  * `/rate-wait cancel` ends the wait and lets the run stop.
  */
-import { type LimitState, readState, stateFromHeaders, writeState } from "./state.ts";
+import { type LimitState, pct, readState, stateFromHeaders, windowEnded, writeState } from "./state.ts";
 
 const STATUS_KEY = "rate-limit-wait";
 const RATE_LIMIT_ERROR = /rate_limit_error|exceed your account's rate limit/i;
@@ -35,7 +35,7 @@ export function decide(state: LimitState | undefined, nowS: number): Decision {
 	if (!state?.fiveReset) {
 		return { action: "wait", untilS: nowS + UNKNOWN_RETRY_S, reason: "5h reset time unknown; retry in 5 min" };
 	}
-	if (state.fiveReset <= nowS) {
+	if (windowEnded(state.fiveReset, nowS)) {
 		return { action: "wait", untilS: nowS + PASSED_RETRY_S, reason: "5h reset time has passed; retry in 1 min" };
 	}
 	const nearFull = state.fiveStatus === "rejected" || (state.fiveUtil ?? 0) >= NEAR_FULL;
@@ -151,7 +151,6 @@ export default function (pi: any) {
 				return;
 			}
 			const fmt = (t?: number) => (t ? new Date(t * 1000).toLocaleString() : "?");
-			const pct = (u?: number) => (u === undefined ? "?" : `${Math.round(u * 100)}%`);
 			ctx.ui.notify(
 				`5h: ${pct(s.fiveUtil)} (${s.fiveStatus}), resets ${fmt(s.fiveReset)}\n` +
 					`7d: ${pct(s.sevenUtil)} (${s.sevenStatus}), resets ${fmt(s.sevenReset)}\n` +

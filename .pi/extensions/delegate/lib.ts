@@ -2,7 +2,7 @@
 // result text and the pane split. index.ts holds the Pi and herdr wiring.
 // Tests: node --test .pi/extensions/delegate/lib.test.ts
 
-import { FIVE_HOUR_S, type LimitState, SEVEN_DAY_S } from "../rate-limit-wait/state.ts";
+import { FIVE_HOUR_S, type LimitState, pct, SEVEN_DAY_S, windowEnded } from "../rate-limit-wait/state.ts";
 
 export interface Role {
 	name: string;
@@ -82,8 +82,6 @@ export interface ModelPick {
 	reason: string;
 }
 
-const pct = (fraction: number) => `${Math.round(fraction * 100)}%`;
-
 // Unused 5h capacity is lost at the reset. The spare model takes it when both
 // windows are under pace: utilization below the part of the window that has passed
 // (minus SPARE_MARGIN for the 5h window), so the 7d budget is not spent early.
@@ -92,20 +90,18 @@ export function pickModel(role: Role, state: LimitState | undefined, nowS: numbe
 	if (!role.spareModel) return base("no spare model");
 	if (!state) return base("no rate-limit data");
 
-	const fiveEnded = !state.fiveReset || state.fiveReset <= nowS;
-	if (!fiveEnded && nowS - state.capturedAt > SPARE_MAX_AGE_S) return base("rate-limit data is stale");
-
 	let five = "5h window not started";
-	if (!fiveEnded) {
+	if (!windowEnded(state.fiveReset, nowS)) {
+		if (state.fiveReset === undefined) return base("5h reset unknown");
+		if (nowS - state.capturedAt > SPARE_MAX_AGE_S) return base("rate-limit data is stale");
 		const used = state.fiveUtil ?? 1;
-		const passed = 1 - (state.fiveReset! - nowS) / FIVE_HOUR_S;
+		const passed = 1 - (state.fiveReset - nowS) / FIVE_HOUR_S;
 		five = `5h ${pct(used)} used, ${pct(passed)} passed`;
 		if (state.fiveStatus === "rejected" || used >= passed - SPARE_MARGIN) return base(`${five}: no spare`);
 	}
 
-	const sevenEnded = state.sevenReset !== undefined && state.sevenReset <= nowS;
 	let seven = "7d window not started";
-	if (!sevenEnded) {
+	if (!windowEnded(state.sevenReset, nowS)) {
 		if (state.sevenReset === undefined) return base("7d reset unknown");
 		const used = state.sevenUtil ?? 1;
 		const passed = 1 - (state.sevenReset - nowS) / SEVEN_DAY_S;

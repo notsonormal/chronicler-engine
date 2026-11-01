@@ -214,3 +214,9 @@ test("pickModel keeps the base model without data or without a spare model", () 
 	assert.equal(pickModel(spareRole, undefined, NOW).model, "go/x");
 	assert.equal(pickModel({ name: "scout", model: "go/x" }, limits(0, 0), NOW).spare, false);
 });
+
+test("pickModel keeps the base model when the 5h reset time is unknown", () => {
+	// A state with no 5h reset says nothing about the 5h window, so the spare
+	// model has no proven room.
+	assert.equal(pickModel(spareRole, limits(0.5, 0.6, { fiveReset: undefined }), NOW).model, "go/x");
+});
