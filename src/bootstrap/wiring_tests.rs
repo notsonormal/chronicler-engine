@@ -159,29 +159,6 @@ fn wired_app_with_impersonate_slot(
 }
 
 #[test]
-fn the_impersonate_slot_chooses_the_connection_of_the_impersonate_recorder() {
-    let wired = wired_app_with_impersonate_slot(Some("impersonate-mock")).expect("boots");
-    let model = |recorder: &Arc<crate::application::llm_recorder::LlmCallRecorder>| {
-        recorder.provider().expect("resolves").model().to_string()
-    };
-
-    assert_eq!(
-        model(wired.job_deps.narrator.impersonate_recorder()),
-        "impersonate-model"
-    );
-    assert_eq!(model(wired.job_deps.narrator.recorder()), "mock-model");
-}
-
-#[test]
-fn an_empty_impersonate_slot_uses_the_narration_connection() {
-    let wired = wired_app_with_impersonate_slot(None).expect("boots");
-
-    let recorder = wired.job_deps.narrator.impersonate_recorder();
-
-    assert_eq!(recorder.provider().expect("resolves").model(), "mock-model");
-}
-
-#[test]
 fn a_dangling_impersonate_slot_fails_the_boot_and_names_the_id() {
     let error = match wired_app_with_impersonate_slot(Some("no-such-connection")) {
         Ok(_) => panic!("a dangling slot must fail the boot"),

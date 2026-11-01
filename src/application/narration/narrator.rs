@@ -77,9 +77,11 @@ impl Narrator {
         &self.recorder
     }
 
-    /// For the wiring tests' check of the Impersonate Connection slot.
-    pub fn impersonate_recorder(&self) -> &Arc<LlmCallRecorder> {
-        &self.impersonate_recorder
+    fn recorder_for(&self, preset_type: PresetType) -> &Arc<LlmCallRecorder> {
+        match preset_type {
+            PresetType::Impersonate => &self.impersonate_recorder,
+            _ => &self.recorder,
+        }
     }
 
     /// The provider and model the next narration would use.
@@ -133,11 +135,8 @@ impl Narrator {
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
 
         tracing::info!("Narration LLM call (agent={})", role.agent_name());
-        let recorder = match generation.preset_type() {
-            PresetType::Impersonate => &self.impersonate_recorder,
-            _ => &self.recorder,
-        };
-        let narration_result = recorder
+        let narration_result = self
+            .recorder_for(generation.preset_type())
             .complete(
                 role.agent_name(),
                 &assembled.system_prompt,

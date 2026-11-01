@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::agent::AgentConfig;
+use crate::domain::model::agent::{AgentConfig, Role};
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::utils::settings_defaults;
@@ -463,6 +463,62 @@ pub struct AppSettings {
     pub active_options_prompt_preset_id: String,
 }
 
+/// Why `AppSettings::remove_connection` refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoveConnectionError {
+    /// No stored Connection has the id.
+    NotFound,
+    /// The settings keep at least one Connection.
+    LastConnection,
+    /// The Roles whose required slot names the Connection.
+    InUse(Vec<Role>),
+}
+
+enum SlotKind {
+    /// The Role that a refused removal names.
+    Required(Role),
+    /// An empty slot uses the Narration Connection. A removal clears it.
+    Optional(fn(&mut AppSettings) -> &mut Option<String>),
+}
+
+struct ConnectionSlot {
+    preset_type: PresetType,
+    field: &'static str,
+    /// `None` for an empty optional slot.
+    id: fn(&AppSettings) -> Option<&str>,
+    kind: SlotKind,
+}
+
+/// The one table of the Connection slots. `PresetType` is the slot key
+/// (`AppSettings::connection_for`); the Python scripts read the same four fields
+/// (`scripts/validate_data.py`, `scripts/trial.py`).
+const CONNECTION_SLOTS: [ConnectionSlot; 4] = [
+    ConnectionSlot {
+        preset_type: PresetType::System,
+        field: "narration_connection_id",
+        id: |settings| Some(settings.narration_connection_id.as_str()),
+        kind: SlotKind::Required(Role::Narrator),
+    },
+    ConnectionSlot {
+        preset_type: PresetType::Impersonate,
+        field: "impersonate_connection_id",
+        id: |settings| settings.impersonate_connection_id.as_deref(),
+        kind: SlotKind::Optional(|settings| &mut settings.impersonate_connection_id),
+    },
+    ConnectionSlot {
+        preset_type: PresetType::Quantifier,
+        field: "quantifier_connection_id",
+        id: |settings| Some(settings.quantifier_connection_id.as_str()),
+        kind: SlotKind::Required(Role::Quantifier),
+    },
+    ConnectionSlot {
+        preset_type: PresetType::Options,
+        field: "options_connection_id",
+        id: |settings| settings.options_connection_id.as_deref(),
+        kind: SlotKind::Optional(|settings| &mut settings.options_connection_id),
+    },
+];
+
 impl Default for AppSettings {
     fn default() -> Self {
         let gpt4o = LlmConnection::new(
@@ -537,60 +593,61 @@ impl AppSettings {
         self.connections.iter_mut().find(|c| c.id == id)
     }
 
-    pub fn get_narration_connection(&self) -> Option<&LlmConnection> {
-        self.find_connection(&self.narration_connection_id)
-    }
-
-    pub fn get_quantifier_connection(&self) -> Option<&LlmConnection> {
-        self.find_connection(&self.quantifier_connection_id)
-    }
-
     pub fn connection_for(&self, preset_type: PresetType) -> crate::error::Result<LlmConnection> {
-        let (slot, id) = match preset_type {
-            PresetType::System => ("narration_connection_id", &self.narration_connection_id),
-            PresetType::Quantifier => ("quantifier_connection_id", &self.quantifier_connection_id),
-            PresetType::Impersonate => match &self.impersonate_connection_id {
-                Some(id) => ("impersonate_connection_id", id),
-                None => ("narration_connection_id", &self.narration_connection_id),
-            },
-            PresetType::Options => match &self.options_connection_id {
-                Some(id) => ("options_connection_id", id),
-                None => ("narration_connection_id", &self.narration_connection_id),
-            },
-        };
+        let (field, id) = self.slot_reference(preset_type);
         self.find_connection(id).cloned().ok_or_else(|| {
-            EngineError::Config(format!("{slot} '{id}' is not in the connections list"))
+            EngineError::Config(format!("{field} '{id}' is not in the connections list"))
         })
     }
 
-    pub fn narration_connection(&self) -> crate::error::Result<LlmConnection> {
-        self.connection_for(PresetType::System)
-    }
-
-    pub fn quantifier_connection(&self) -> crate::error::Result<LlmConnection> {
-        self.connection_for(PresetType::Quantifier)
+    /// The slot that serves `preset_type`: its own field and id, or the Narration
+    /// slot while an optional slot is empty.
+    fn slot_reference(&self, preset_type: PresetType) -> (&'static str, &str) {
+        CONNECTION_SLOTS
+            .iter()
+            .find(|slot| slot.preset_type == preset_type)
+            .and_then(|slot| (slot.id)(self).map(|id| (slot.field, id)))
+            .unwrap_or(("narration_connection_id", &self.narration_connection_id))
     }
 
     /// An empty optional slot is no reference.
     pub fn check_connection_slots(&self) -> crate::error::Result<()> {
-        for preset_type in [
-            PresetType::System,
-            PresetType::Impersonate,
-            PresetType::Quantifier,
-            PresetType::Options,
-        ] {
-            self.connection_for(preset_type)?;
+        for slot in &CONNECTION_SLOTS {
+            self.connection_for(slot.preset_type)?;
         }
         Ok(())
     }
 
-    pub fn clear_optional_slots_naming(&mut self, connection_id: &str) {
-        for slot in [
-            &mut self.impersonate_connection_id,
-            &mut self.options_connection_id,
-        ] {
-            if slot.as_deref() == Some(connection_id) {
-                *slot = None;
+    /// Removes the Connection `id`. Every refusal comes before the first change,
+    /// so a refused removal leaves the settings as they were.
+    pub fn remove_connection(&mut self, id: &str) -> Result<(), RemoveConnectionError> {
+        let Some(index) = self.connections.iter().position(|c| c.id == id) else {
+            return Err(RemoveConnectionError::NotFound);
+        };
+        if self.connections.len() <= 1 {
+            return Err(RemoveConnectionError::LastConnection);
+        }
+        let roles: Vec<Role> = CONNECTION_SLOTS
+            .iter()
+            .filter_map(|slot| match slot.kind {
+                SlotKind::Required(role) if (slot.id)(self) == Some(id) => Some(role),
+                _ => None,
+            })
+            .collect();
+        if !roles.is_empty() {
+            return Err(RemoveConnectionError::InUse(roles));
+        }
+        self.clear_optional_slots_naming(id);
+        self.connections.remove(index);
+        Ok(())
+    }
+
+    fn clear_optional_slots_naming(&mut self, connection_id: &str) {
+        for slot in &CONNECTION_SLOTS {
+            if let SlotKind::Optional(slot_mut) = slot.kind
+                && (slot.id)(self) == Some(connection_id)
+            {
+                *slot_mut(self) = None;
             }
         }
     }

@@ -3,6 +3,7 @@
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 
+use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::AppSettings;
 use crate::adapters::driving::http::ServerConfig;
 
@@ -83,7 +84,7 @@ fn test_app_state_struct_fields() {
 fn test_app_settings_default() {
     let settings = AppSettings::default();
     let narrator = settings
-        .get_narration_connection()
+        .connection_for(PresetType::System)
         .expect("narrator exists");
     assert!(narrator.model.contains("gpt-4o-mini") || narrator.model.is_empty());
 }

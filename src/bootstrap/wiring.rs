@@ -29,7 +29,7 @@ use crate::domain::model::game::GameId;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PresetType;
-use crate::domain::model::settings::{AppSettings, LlmConnection};
+use crate::domain::model::settings::LlmConnection;
 use crate::error::Result;
 
 fn provider_from_config(config: &LlmConnection) -> Arc<dyn LlmProvider> {
@@ -43,18 +43,15 @@ fn provider_from_config(config: &LlmConnection) -> Arc<dyn LlmProvider> {
 
 /// Resolves the provider per call, so a dashboard change takes effect without a
 /// restart.
-fn recorder_with_storage(
-    storage: Arc<Storage>,
-    role: &'static str,
-    pick: fn(&AppSettings) -> Result<LlmConnection>,
-) -> Arc<LlmCallRecorder> {
+fn recorder_with_storage(storage: Arc<Storage>, preset_type: PresetType) -> Arc<LlmCallRecorder> {
     let resolver_storage = Arc::clone(&storage);
     let resolve: ProviderResolver = Arc::new(move || {
         let settings = resolver_storage.get_settings()?;
-        let config = pick(&settings)?;
+        let config = settings.connection_for(preset_type)?;
         config.check_api_key_available()?;
         tracing::info!(
-            "Resolved LLM provider for {role}: provider={}, model={}, api_key={}",
+            "Resolved LLM provider for {}: provider={}, model={}, api_key={}",
+            preset_type.as_str(),
             config.provider.display_label(),
             config.model,
             if config.resolve_api_key().is_some() {
@@ -70,18 +67,6 @@ fn recorder_with_storage(
         Arc::new(move |message: &LlmMessage| storage.save_llm_message(message));
 
     Arc::new(LlmCallRecorder::with_resolver(resolve, save_fn))
-}
-
-fn options_recorder(storage: Arc<Storage>) -> Arc<LlmCallRecorder> {
-    recorder_with_storage(storage, "options", |s| {
-        s.connection_for(PresetType::Options)
-    })
-}
-
-fn impersonate_recorder(storage: Arc<Storage>) -> Arc<LlmCallRecorder> {
-    recorder_with_storage(storage, "impersonate", |s| {
-        s.connection_for(PresetType::Impersonate)
-    })
 }
 
 pub struct WiredApp {
@@ -155,18 +140,10 @@ pub fn build_app_graph(storage: Arc<Storage>, initial_game: Option<GameId>) -> R
     // defer the error to the first generation.
     settings.check_connection_slots()?;
 
-    let narration_recorder = recorder_with_storage(
-        Arc::clone(&storage),
-        "narrator",
-        AppSettings::narration_connection,
-    );
-    let quantifier_recorder = recorder_with_storage(
-        Arc::clone(&storage),
-        "quantifier",
-        AppSettings::quantifier_connection,
-    );
-    let impersonate_recorder = impersonate_recorder(Arc::clone(&storage));
-    let options_recorder = options_recorder(Arc::clone(&storage));
+    let narration_recorder = recorder_with_storage(Arc::clone(&storage), PresetType::System);
+    let quantifier_recorder = recorder_with_storage(Arc::clone(&storage), PresetType::Quantifier);
+    let impersonate_recorder = recorder_with_storage(Arc::clone(&storage), PresetType::Impersonate);
+    let options_recorder = recorder_with_storage(Arc::clone(&storage), PresetType::Options);
     let agent_runner = AgentRunner::from_configs(
         &settings.agents,
         Arc::clone(&quantifier_recorder),
@@ -205,7 +182,7 @@ pub fn build_app_graph_for_tests(
     let agent_runner = if job_deps_override.is_some() {
         AgentRunner::default()
     } else {
-        let options_recorder = options_recorder(Arc::clone(&storage));
+        let options_recorder = recorder_with_storage(Arc::clone(&storage), PresetType::Options);
         AgentRunner::from_configs(&settings.agents, Arc::clone(&recorder), options_recorder)
             .unwrap_or_default()
     };

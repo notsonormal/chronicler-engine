@@ -2,12 +2,14 @@
 
 use std::str::FromStr;
 
+use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::test_support::test_connection;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::{
     DEFAULT_MAX_TOKENS, AppSettings, LlmConnection, ModePresetRegistry, NarrativePerspective,
-    NarrativeTense, NarratorMode, ReasoningEffort, TextCheckMode, TextCheckSettings,
+    NarrativeTense, NarratorMode, ReasoningEffort, RemoveConnectionError, TextCheckMode,
+    TextCheckSettings,
 };
 
 #[test]
@@ -228,7 +230,7 @@ fn app_settings_deserializes_old_json_without_registry() {
 fn narration_connection_resolves_a_listed_id() {
     let settings = AppSettings::default();
     let conn = settings
-        .narration_connection()
+        .connection_for(PresetType::System)
         .expect("default settings list their own narrator id");
     assert_eq!(conn.id, settings.narration_connection_id);
 }
@@ -241,7 +243,7 @@ fn narration_connection_errors_on_a_dangling_id() {
     };
 
     let err = settings
-        .narration_connection()
+        .connection_for(PresetType::System)
         .expect_err("a dangling id is a configuration fault");
     let msg = err.to_string();
     assert!(
@@ -254,7 +256,7 @@ fn narration_connection_errors_on_a_dangling_id() {
 fn quantifier_connection_resolves_a_listed_id() {
     let settings = AppSettings::default();
     let conn = settings
-        .quantifier_connection()
+        .connection_for(PresetType::Quantifier)
         .expect("default settings list their own quantifier id");
     assert_eq!(conn.id, settings.quantifier_connection_id);
 }
@@ -343,17 +345,77 @@ fn clearing_a_deleted_connection_empties_only_the_slots_that_name_it() {
         ..settings_with_four_connections()
     };
 
-    settings.clear_optional_slots_naming("impersonate-conn");
+    settings
+        .remove_connection("impersonate-conn")
+        .expect("no required slot names it");
     assert_eq!(settings.impersonate_connection_id, None);
     assert_eq!(settings.options_connection_id, None);
 
     let mut settings = settings_with_four_connections();
-    settings.clear_optional_slots_naming("options-conn");
+    settings
+        .remove_connection("options-conn")
+        .expect("no required slot names it");
     assert_eq!(
         settings.impersonate_connection_id.as_deref(),
         Some("impersonate-conn")
     );
     assert_eq!(settings.options_connection_id, None);
+}
+
+#[test]
+fn a_refused_removal_leaves_the_whole_settings_unchanged() {
+    let mut settings = AppSettings {
+        impersonate_connection_id: Some("narration-conn".into()),
+        options_connection_id: Some("narration-conn".into()),
+        ..settings_with_four_connections()
+    };
+    let before = settings.clone();
+
+    let refusal = settings
+        .remove_connection("narration-conn")
+        .expect_err("the Narration slot requires this Connection");
+
+    assert_eq!(refusal, RemoveConnectionError::InUse(vec![Role::Narrator]));
+    assert_eq!(settings, before);
+}
+
+#[test]
+fn a_refused_removal_names_every_role_that_requires_the_connection() {
+    let mut settings = AppSettings {
+        quantifier_connection_id: "narration-conn".into(),
+        ..settings_with_four_connections()
+    };
+
+    let refusal = settings
+        .remove_connection("narration-conn")
+        .expect_err("two required slots name this Connection");
+
+    assert_eq!(
+        refusal,
+        RemoveConnectionError::InUse(vec![Role::Narrator, Role::Quantifier])
+    );
+}
+
+#[test]
+fn a_removal_refuses_an_unknown_id_and_the_last_connection() {
+    let mut settings = settings_with_four_connections();
+    assert_eq!(
+        settings.remove_connection("missing"),
+        Err(RemoveConnectionError::NotFound)
+    );
+
+    let mut single = AppSettings {
+        connections: vec![test_connection("only", LlmBackendType::Ollama)],
+        narration_connection_id: "only".into(),
+        quantifier_connection_id: "only".into(),
+        impersonate_connection_id: None,
+        options_connection_id: None,
+        ..AppSettings::default()
+    };
+    assert_eq!(
+        single.remove_connection("only"),
+        Err(RemoveConnectionError::LastConnection)
+    );
 }
 
 #[test]
@@ -379,7 +441,7 @@ fn quantifier_connection_errors_on_a_dangling_id() {
     };
 
     let err = settings
-        .quantifier_connection()
+        .connection_for(PresetType::Quantifier)
         .expect_err("a dangling id is a configuration fault");
     assert!(err.to_string().contains("also-missing"));
 }

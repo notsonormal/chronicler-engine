@@ -21,9 +21,10 @@ use crate::adapters::driving::http::utils::fragment::render_or_error_fragment;
 use crate::adapters::driving::http::utils::handler_helpers::{generate_storage_id, opt_string};
 use crate::application::connection_test_service::ConnectionTestResult;
 use crate::application::errors::ApplicationError;
-use crate::domain::model::agent::Role;
 use crate::domain::model::llm_backend::LlmBackendType;
-use crate::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort, TextCheckMode};
+use crate::domain::model::settings::{
+    AppSettings, LlmConnection, ReasoningEffort, RemoveConnectionError, TextCheckMode,
+};
 use crate::error::EngineError;
 
 pub fn render_settings_panel(app_state: &AppState) -> Result<String, EngineError> {
@@ -37,19 +38,15 @@ pub fn render_settings_panel(app_state: &AppState) -> Result<String, EngineError
         .map_err(|e| EngineError::Template(e.to_string()))
 }
 
-fn roles_using(settings: &AppSettings, connection_id: &str) -> Vec<&'static str> {
-    let mut roles = Vec::new();
-    if settings.narration_connection_id == connection_id {
-        roles.push(role_label(Role::Narrator));
-    }
-    if settings.quantifier_connection_id == connection_id {
-        roles.push(role_label(Role::Quantifier));
-    }
-    roles
-}
-
-fn role_in_use_message(roles: &[&str]) -> String {
-    match roles {
+fn remove_refusal_message(refusal: &RemoveConnectionError) -> String {
+    let roles: Vec<&str> = match refusal {
+        RemoveConnectionError::NotFound => return "Connection not found".to_string(),
+        RemoveConnectionError::LastConnection => {
+            return "Cannot delete the last connection".to_string();
+        }
+        RemoveConnectionError::InUse(roles) => roles.iter().map(|&role| role_label(role)).collect(),
+    };
+    match roles.as_slice() {
         [one] => {
             format!("{one} uses this connection. Change the {one} role above before deleting it.")
         }
@@ -369,25 +366,9 @@ pub async fn delete_connection_handler(
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Response<Body> {
     let outcome = app_state.settings_service.update_settings(|settings| {
-        let Some(idx) = settings.connections.iter().position(|c| c.id == id) else {
-            return Err(EngineError::Validation("Connection not found".to_string()));
-        };
-
-        if settings.connections.len() <= 1 {
-            return Err(EngineError::Validation(
-                "Cannot delete the last connection".to_string(),
-            ));
-        }
-
-        settings.clear_optional_slots_naming(&id);
-
-        let roles = roles_using(settings, &id);
-        if !roles.is_empty() {
-            return Err(EngineError::Validation(role_in_use_message(&roles)));
-        }
-
-        settings.connections.remove(idx);
-        Ok(())
+        settings
+            .remove_connection(&id)
+            .map_err(|refusal| EngineError::Validation(remove_refusal_message(&refusal)))
     });
 
     match outcome {

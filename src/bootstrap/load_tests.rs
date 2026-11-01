@@ -1,5 +1,6 @@
 use crate::adapters::driven::storage::Storage;
 use crate::bootstrap::load::seed_game_data;
+use crate::domain::model::prompt_preset::PresetType;
 
 #[test]
 fn test_seed_game_data_empty_worlds_dir() {
@@ -276,10 +277,10 @@ fn test_shipped_settings_file_seeds_the_settings_row() {
         "a fresh database must serve the quantifier the shipped file names"
     );
     stored
-        .narration_connection()
+        .connection_for(PresetType::System)
         .expect("the seeded narrator connection id must resolve");
     stored
-        .quantifier_connection()
+        .connection_for(PresetType::Quantifier)
         .expect("the seeded quantifier connection id must resolve");
     assert!(
         stored.agents.iter().any(|a| a.name == "options"),
