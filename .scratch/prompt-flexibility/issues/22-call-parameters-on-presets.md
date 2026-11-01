@@ -1,7 +1,7 @@
 # Put the call parameters on the presets
 
 Type: task (AFK)
-Status: open
+Status: claimed
 Blocked by: 21
 
 ## Question

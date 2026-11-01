@@ -1,7 +1,7 @@
 # Keep the state when a state writer fails
 
 Type: task (AFK)
-Status: open
+Status: claimed
 Blocked by: —
 
 ## Question
