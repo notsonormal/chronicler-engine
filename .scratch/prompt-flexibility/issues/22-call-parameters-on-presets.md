@@ -179,6 +179,7 @@ Domain cases, with no CASE tag: `generation_parameters_tests.rs` (7), `prompt_pr
 - **One `/options`.** The call (636) succeeded with `temperature` 0.5 and the same `session_id`. Its system prompt says "2 brief distinct single-sentence suggestions". The model answered with 3 suggestions and the dock rendered 2.
 - **Elsewhere.** The calls 632 and 633 (OpenCode Go, from before the setup) hold no `session_id` and no sampler.
 - **The key.** The OpenRouter key was not in the shell. I started the built binary from a scratch folder under `tmp/` of the main checkout, so that the server loaded the `.env` above it (as ticket 21 did). The data folder was a copy of `data/` of this branch. I removed the scratch folder. No secret was read or printed.
+  Superseded 2026-11-01 (retro ticket 97): `build.py run` in a worktree now links the main checkout's `.env`. Start the probe from the worktree. A probe started from the main checkout reads the main `data/` when its target dir has no data copy.
 
 **What changed, beyond the Steps.**
 

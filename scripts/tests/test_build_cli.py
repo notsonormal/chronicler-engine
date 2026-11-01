@@ -321,7 +321,9 @@ class RunServerTests(unittest.TestCase):
         """Run run_server with the toolchain, the port check and the plan run stubbed."""
         with mock.patch.object(build, "_prelude"), mock.patch.object(
             build, "_require_free_port", side_effect=port_check
-        ), mock.patch.object(build, "_run_plan") as plan:
+        ), mock.patch.object(build, "_run_plan") as plan, mock.patch.object(
+            build, "_link_main_env"
+        ):
             argv = build.run_server(args, [])
         return argv, plan
 
@@ -343,6 +345,67 @@ class RunServerTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 build.run_server(self._args(["--", "--port", "3099"]), [])
         plan.assert_not_called()
+
+
+class LinkMainEnvTests(unittest.TestCase):
+    """A linked worktree with no .env gets a link to the main checkout's .env."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.main = Path(tmp.name) / "main"
+        self.tree = Path(tmp.name) / "tree"
+        self.main.mkdir()
+        self.tree.mkdir()
+
+    def _link(self, repo_root):
+        with mock.patch.object(
+            build.target_seed, "worktree_roots", return_value=[self.main, self.tree]
+        ), mock.patch.object(build, "log_status"):
+            build._link_main_env(repo_root)
+
+    def test_worktree_without_env_links_the_main_env(self):
+        (self.main / ".env").write_text("KEY=main\n")
+        self._link(self.tree)
+        self.assertEqual((self.tree / ".env").resolve(), (self.main / ".env").resolve())
+
+    def test_worktree_with_own_env_keeps_it(self):
+        (self.main / ".env").write_text("KEY=main\n")
+        (self.tree / ".env").write_text("KEY=tree\n")
+        self._link(self.tree)
+        self.assertFalse((self.tree / ".env").is_symlink())
+        self.assertEqual((self.tree / ".env").read_text(), "KEY=tree\n")
+
+    def test_main_checkout_without_env_gets_no_link(self):
+        self._link(self.main)
+        self.assertFalse(os.path.lexists(self.main / ".env"))
+
+    def test_missing_main_env_makes_no_link(self):
+        self._link(self.tree)
+        self.assertFalse(os.path.lexists(self.tree / ".env"))
+
+    def test_broken_link_is_made_again(self):
+        (self.main / ".env").write_text("KEY=main\n")
+        (self.tree / ".env").symlink_to(self.main / "gone.env")
+        self._link(self.tree)
+        self.assertEqual((self.tree / ".env").resolve(), (self.main / ".env").resolve())
+
+    def test_failed_link_does_not_stop_the_run(self):
+        (self.main / ".env").write_text("KEY=main\n")
+        with mock.patch.object(Path, "symlink_to", side_effect=OSError("no right")):
+            self._link(self.tree)
+        self.assertFalse(os.path.lexists(self.tree / ".env"))
+
+    def test_run_server_links_from_the_cwd(self):
+        with mock.patch.object(build, "_prelude"), mock.patch.object(
+            build, "_require_free_port"
+        ), mock.patch.object(build, "_run_plan"), mock.patch.object(
+            build, "_link_main_env"
+        ) as link, mock.patch.dict(os.environ, {"CHRONICLER_NO_LLD": "1"}):
+            build.run_server(
+                SimpleNamespace(command="run", server_flags=[], target_dir=None, release=False), []
+            )
+        link.assert_called_once_with(Path.cwd())
 
 
 class ExecPendingTests(unittest.TestCase):

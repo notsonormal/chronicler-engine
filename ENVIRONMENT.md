@@ -90,4 +90,6 @@ The `guardrails` column is the architecture and guardrails binaries together. Th
 
 Start the dev server with `python build.py run [-- <server flags>]`. The step builds the binary in this same environment and links it with lld. It then replaces the `build.py` process with the binary. Switching between a build step and the server recompiles nothing. Ctrl-C and stdio behave as with `cargo run`, because the server is the same process.
 
+The server reads the API keys that a Connection does not store from `.env`, in its working directory or a parent folder. In a linked worktree with no `.env`, `build.py run` links the main checkout's `.env` into the worktree. Start the server from the worktree itself. A server started from the main checkout reads the main `data/` and writes to the main `logs/`.
+
 The dev server stores its SQLite DB next to its binary (`<target-dir>/debug/chronicler_<port>.db`). It reads `<target-dir>/debug/data` if a full gate copied it there, and otherwise reads the repo's `data/`. A world JSON edit in `data/` therefore does not reach a target dir with a gate copy until the next full gate. The server writes only the DB and `logs/`. It never writes to a data dir.

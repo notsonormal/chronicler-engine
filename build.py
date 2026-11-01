@@ -1489,16 +1489,47 @@ def _require_free_port(bind_target: tuple[int, str] | None) -> None:
 
 
 
+def _link_main_env(repo_root: Path) -> None:
+    """Link the main checkout's ``.env`` into a linked worktree that has none.
+
+    The server loads ``.env`` from its cwd or a parent dir, and a worktree
+    outside the main checkout finds none. The link gives the server the API
+    keys that a Connection does not store; the agent never reads the file.
+    A broken link is made again.
+    """
+    local = repo_root / ".env"
+    if local.is_symlink() and not local.exists():
+        local.unlink()
+    elif os.path.lexists(local):
+        return
+    # git lists the main worktree first.
+    main_root = target_seed.worktree_roots(repo_root)[0]
+    if main_root.resolve() == repo_root.resolve():
+        return
+    source = main_root / ".env"
+    if not source.is_file():
+        log_status(f"No .env in the main checkout {main_root}: a Connection with no stored key fails.")
+        return
+    try:
+        local.symlink_to(source)
+    except OSError as exc:
+        log_status(f"Could not link .env from the main checkout {main_root}: {exc}")
+        return
+    log_status(f"Linked .env from the main checkout {main_root}.")
+
+
 def run_server(args, results):
     """Build the dev server and return the argv to exec once main() finishes.
 
     No exec happens here: main() must first run its epilogue (summary, banner,
     log close, history line). The port is checked before the build so a busy
-    port fails fast without invoking cargo.
+    port fails fast without invoking cargo. In a linked worktree, the main
+    checkout's ``.env`` is linked in first (``_link_main_env``).
     """
     server_flags = _strip_passthrough(getattr(args, "server_flags", []))
     ctx = _prelude(args, results, nextest=False)
     _require_free_port(_parse_bind_target(server_flags))
+    _link_main_env(Path.cwd())
     spec = REGISTRY["run"]
     _run_plan([Step(spec.label, spec.cmd)], ctx)
     _, profile_dir = _target_paths(args)

@@ -53,6 +53,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **79 — `ScriptedModel` fails on an unused reply.** `Drop` also fails when a scripted reply was never used, and names each one. `.optional()` marks one reply as allowed to stay unused; only the stop-row script in `tests/http/races.rs` uses it. 23 tests lost a dead script line; no assertion changed.
 
 - **91 — a live test says whether it ran.** The `llm` nextest profile shows the output of passing tests (`success-output = "immediate"`), and each test in `tests/llm/` prints `Running against <provider>` or `Skipping: <KEY> not set`, so the `--llm-only` log names what reached a provider.
+- **97 — a worktree probe gets the API keys.** `build.py run` links the main checkout's `.env` into a linked worktree that has none, so the server reads the keys and the agent does not. The cwd route is rejected: it reads the main `data/`. [Ticket](./issues/97-worktree-probe-server-has-no-api-keys.md).
 
 ## Won't do
 
@@ -136,5 +137,4 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 - [94 — The full gate regenerates the two generated docs instead of failing on them](./issues/94-gate-regenerates-the-two-generated-docs.md) (implementation of 89; not grilling)
 - [95 — A ticket's doc step dictates sentences that break the doc rules](./issues/95-ticket-doc-steps-break-the-doc-rules.md)
 - [96 — The comment finder's branch mode lists every comment of a changed file](./issues/96-comment-finder-branch-mode-scope.md)
-- [97 — A probe server in a worktree has no API keys](./issues/97-worktree-probe-server-has-no-api-keys.md)
 - [98 — New tests land in legacy-list files, and no check stops them](./issues/98-new-tests-in-legacy-files.md)

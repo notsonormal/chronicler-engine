@@ -183,6 +183,7 @@ Resolved on 2026-11-01, on the branch `pf20-history-cut`. The block size of one 
 - **The design doc does not name a later memory.** The ticket's third reason says the cut is the natural point for a later memory. `docs/AGENTS.md` says a Diátaxis doc states no plan. The doc gives the first two reasons only. The code review removed a substitute reason ("the record is the one place that states what left the prompt"), because no code reads the record yet. The Reference doc says that the cut knows the blocks it dropped.
 - **Cases beyond the ticket:** the guard case above, and the extra domain cases.
 - **How the probe server ran.** The key of OpenCode Go lives in the `.env` of the main checkout. The server of the worktree reads `.env` from its working directory. So the probe binary of this worktree ran with the main checkout as its working directory, and the "Go check" Connection was copied into the new probe DB. Both the key and the Connection stayed out of every output.
+  Superseded 2026-11-01 (retro ticket 97): `build.py run` in a worktree now links the main checkout's `.env`. Start the probe from the worktree. A probe started from the main checkout reads the main `data/` when its target dir has no data copy.
 
 **Not done, or left open.**
 

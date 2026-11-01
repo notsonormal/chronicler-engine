@@ -164,6 +164,7 @@ Resolved on 2026-11-01, on the branch `pf21-connection-slots` (merged into `prom
 **Deviations and notes.**
 
 - **The API key.** The Go check Connection holds no key. `build.py run` from the worktree found no `.env`, and the agent may not read `.env` files. I started the built binary from a scratch folder under `tmp/` of the main checkout, so that the server itself loaded the `.env` above it. Its data folder was a copy of `data/` of this branch (`target/ui-investigator-pf21/debug/data`). I removed the scratch folder. No secret was read or printed.
+  Superseded 2026-11-01 (retro ticket 97): `build.py run` in a worktree now links the main checkout's `.env`. Start the probe from the worktree. A probe started from the main checkout reads the main `data/` when its target dir has no data copy.
 - **`Job::budget` has no test of its own.** It reads the Connection of the generation. The four arms of `connection_for` have tests, and the wiring test shows the Impersonate recorder resolves its own Connection.
 - **`Narrator::impersonate_recorder()`** is a new accessor for the wiring tests, as `recorder()` is. The doc comment names that use.
 - **`AppSettings::check_connection_slots()` and `clear_optional_slots_naming()`** are two small domain methods that the ticket did not name. The boot, the seed and the delete handler call them, so each rule has one home.
