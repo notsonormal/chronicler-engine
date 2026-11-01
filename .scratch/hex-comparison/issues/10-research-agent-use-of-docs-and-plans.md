@@ -1,7 +1,7 @@
 # Research how agents use the current docs and plans
 
 Type: research (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -34,3 +34,32 @@ When an agent works on code, does it read the current docs and plans? What makes
 
   The coordinator uses those questions to turn the map entry **Docs organized as feature maps** into tickets.
 - **When done.** Add `## Answer` and set `Status: resolved`.
+
+## Answer
+
+Asset: [research-10-agent-use-of-docs.md](../assets/research-10-agent-use-of-docs.md). Data: 1355 main-folder sessions with tool calls (2026-08-11 to 2026-11-01) and 399 commits. Labels, limits and the scripts are in the asset.
+
+**Gist (known unless the asset says inferred).**
+
+- Agents read docs. 92% of 407 code-work sessions read some doc, plan or instruction file. 56% read a Diátaxis or spec file (50% of non-delegates, 75% of delegates), and 175 of those 227 did so before the first code edit.
+- Many reads follow a brief. 58% of the doc reads of implementer delegates name the doc in their brief. Specs (40% of code-work sessions) are read as often as Reference (41%). Explanation docs are read 3.4 times less (12%).
+- Agents follow the `[DOC: …]` anchor in `src/` in 14% of the cases (20% in October).
+- Docs change with the code. 126 of 178 commits that touch `docs/diataxis/` or `docs/specs/` also change `src/`. 12 are docs only, 16 only regenerate an index. A Reference doc is edited in 28% of the commits that touch its anchored files, so no doc copies the code.
+- Plans are read as an input (26% of code-work sessions, 25% of reviews, mostly because a brief names them). Maps and tickets are the most read planning files (39% and 46%). No session read a `docs/adr/` file.
+
+**Recommendation.**
+
+- **C-42** (one ranked work list): drop. Agents search inside one effort folder; a search across efforts is in 2% to 8% of sessions.
+- **C-43** (plan conventions): keep for ticket 16, narrow. Ask only whether to add a limits section and a Status rule to the plan template.
+- **C-44** (decision record folder): drop. Agents meet decisions in tickets and maps. `_closed/` is read in 31 sessions. The Hex reversal argument cannot be tested with this data.
+
+**Questions for the doc practices** (the coordinator turns these into tickets; details in part 7 of the asset):
+
+1. How should an agent find the doc for the code it touches: a route it finds alone (anchor, module map, capability page), or a route that briefs and skills carry? (C-09, C-11, C-01)
+2. Are the Explanation docs meant for agents, for the owner or for both? (C-01, C-03)
+3. Do the docs mislead an agent when it reads them? A follow-on AFK ticket can sample the 230 session and doc pairs where a doc was read and then edited. (C-03, C-11)
+4. Is a spec the right unit for a capability page? (C-09, C-10)
+
+C-02, C-10 and C-32 have no data here. They stay owner questions.
+
+**Questions for ticket 16** (at most 2): (a) C-43: add a limits section and a Status rule to the plan template, or leave plans as they are? (b) C-42 and C-44: confirm the drops.

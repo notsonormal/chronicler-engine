@@ -20,7 +20,7 @@ May any change land without the owner's approval? If yes, which kinds of change,
   - `.hivemind.toml` verifies, builds and installs in batches of up to 4.
   - 8 of 59 pipeline commits are `fix(ci)` repairs, and none was reverted (K-07).
   - The criteria of the strict reviewer are not public, so Chronicler would write its own.
-- **Input.** The work report decision from [Draft the work report](./13-task-draft-the-work-report.md), as confirmed in [Confirm the recommendations of tickets 10 to 15](./16-grilling-confirm-the-recommendations.md). Landing without the owner needs a durable record of each change.
+- **Input.** The work report decision from [Draft the work report](./13-task-draft-the-work-report.md), as confirmed in [Confirm the recommendations of tickets 10 to 15 and 20](./16-grilling-confirm-the-recommendations.md). Landing without the owner needs a durable record of each change.
 - **Why it waits for ticket 16** (owner, 2026-11-01). Ticket 17 needs only the work report from ticket 13. It waits for ticket 16 on purpose, so that the HITL sessions come late and together.
 - **Likely end.** A yes is larger than one session, so it leaves the map as a question for a new map. A no ends in "the rule stays".
 - **Skills.** `/grilling` and `/domain-modeling`.

@@ -1,7 +1,7 @@
 # Measure an env and clock ban, and the two hook traits
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -27,5 +27,29 @@ What does a ban on direct env reads and clock reads cost in Chronicler? What doe
 - **Failure modes.**
   - Clippy may fail to resolve a re-exported path such as `chrono::Utc::now`. It then warns that the path does not resolve, and the count is too low. Look for that warning, and use the defining path (`chrono::offset::Utc::now`) if you need to.
   - The full gate runs `scripts/remove_worktrees.py`. That script refuses to remove a dirty tree, a tree younger than 24 h, or a tree with a live process inside. So the worktree survives a gate run in parallel while it holds the edit.
-- **Output.** Write `assets/task-11-env-clock-ban.md`. The `## Answer` gives the gist, the recommendation and at most 2 questions for [Confirm the recommendations of tickets 10 to 15](./16-grilling-confirm-the-recommendations.md).
+- **Output.** Write `assets/task-11-env-clock-ban.md`. The `## Answer` gives the gist, the recommendation and at most 2 questions for [Confirm the recommendations of tickets 10 to 15 and 20](./16-grilling-confirm-the-recommendations.md).
 - **When done.** Add `## Answer` and set `Status: resolved`.
+
+## Answer
+
+Asset: [task-11-env-clock-ban.md](../assets/task-11-env-clock-ban.md).
+
+**Gist (known, measured in a scratch worktree, now removed).**
+
+- The four-path ban gives **79 clippy errors**: 20 in production code (17 files), 3 in `src/test_support/fixtures.rs`, 43 in unit tests, 13 in `tests/`. Clippy resolved all four paths, so no path-resolution workaround was needed.
+- With test code exempt, the ban shows exactly the 20 production sites. 19 `#[expect(clippy::disallowed_methods, reason = …)]` marks on the enclosing `fn`s (17 files) cleared them on Rust 1.88.
+- The ban does not catch the 3 defective tests, because they read the clock in test code. Their cause is `generate_game_name` reading the date inside.
+- A clock injected everywhere is large: `Message::new` has 14 callers in 9 files, and `Storage::new_*` has 183 calls in 35 files.
+- The two hook traits each have one impl, no test impl and a closed hook set (a string match in `runner.rs`). Tests substitute at `LlmProvider`, not at the hook.
+
+**Recommendation (inferred).**
+
+- **Ban:** option B, ban both and mark each site, in two steps.
+  - T1 (follow-on task, one session or less): pass `today: NaiveDate` to `generate_game_name` and a `Clock` port to `GameCatalogue`. This fixes the 3 tests (6 existing files, 3 new files).
+  - T2 (follow-on task, one session or less): add the 4 paths to `clippy.toml` and 18 `#[expect]` marks. Test code is exempt.
+- **Hook traits:** replace them with concrete types (11 files: 7 source, 3 docs, 1 comment). Follow-on task T3, one session or less. It also answers Q52 of `code-concepts`.
+
+**Questions for ticket 16.**
+
+1. Does the owner want the ban (T2) at all? With test code exempt, it would not have caught the 3 tests. Its value is that a new production clock read needs a visible mark. T1 stands alone and fixes a real defect.
+2. Are the two hook traits meant to stay open for a third Agent? If no, replace them (T3). If yes, keep them and write the reason in `agent_system_design.md`.

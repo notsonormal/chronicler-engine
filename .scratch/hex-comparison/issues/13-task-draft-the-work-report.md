@@ -1,7 +1,7 @@
 # Draft the work report
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -24,3 +24,17 @@ What does the work report hold, and where does it live?
 - **Not in scope.** Do not edit `AGENTS.md`, skills or `build.py`.
 - **Output.** Write `assets/task-13-work-report.md`. The `## Answer` gives the gist, the recommendation and at most 2 questions for ticket 16. [Decide whether anything lands without the owner](./17-grilling-decide-whether-anything-lands-without-the-owner.md) builds on this answer.
 - **When done.** Add `## Answer` and set `Status: resolved`.
+
+## Answer
+
+**Gist.** Parts of a work report exist today, but none is durable and whole. The checks are in `logs/build_history.txt`, which is git-ignored and keeps about 5 days (known). The review verdict stays in the chat (known). "What did not run" is nowhere (known). Hex's PR body holds all three.
+
+**New finding (known).** The `tree` column of the history can be rebuilt for a commit after the commit. I matched 3 of 3 commits to their rows. So a report can say on which tree each check ran. This shows a gap in 2 of 3 recent changes: `integration` and `clippy` did not run on the committed tree of `b4684aea` and `1a0c9162`, and `py-tests` did not run on the tree of `1a0c9162`, which changes a file that `py-tests` covers. The gate was green, but the set of green steps was not whole on one tree.
+
+**Recommendation.** Put the work report in the commit body, as a block of 4 to 5 lines: `Checks` (with the tree id), `Not run` (with a reason), `Review`, `Limit`, `Record`. Reject `logs/` (not in git) and a new `.scratch/` file for each change. A ticket Answer and a plan `Status:` line keep their own results and do not copy the block. A session with no commit gives the block in its final message, and the session that commits copies it. The template and one rule line are one session or less (inferred). An optional helper script that lists the history rows of a commit is a second task of one session (inferred). No change to `build.py` is needed.
+
+**Questions for ticket 16.**
+1. Does the owner accept the commit body as the one place, with a block of about 5 lines in each commit that changes tracked files?
+2. Is a report that only states the facts enough, or must a commit stop when a relevant step has no green row on its own tree? The second answer is the base of ticket 17.
+
+Asset: [task-13-work-report.md](../assets/task-13-work-report.md)

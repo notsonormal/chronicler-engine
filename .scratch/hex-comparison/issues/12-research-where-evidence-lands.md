@@ -1,7 +1,7 @@
 # Find where evidence of a working feature lands today
 
 Type: research (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -23,3 +23,28 @@ When someone sees a Chronicler feature work, where does the evidence end today? 
 - **Not in scope.** Do not edit `docs/specs/`. The doc layout waits for [Research how agents use the current docs and plans](./10-research-agent-use-of-docs-and-plans.md), so the draft must fit today's specs.
 - **Output.** Write `assets/research-12-evidence.md`. The `## Answer` gives the gist, a keep or drop recommendation for each of C-12, C-13 and C-14, and at most 2 questions for ticket 16.
 - **When done.** Add `## Answer` and set `Status: resolved`.
+
+## Answer
+
+Asset: [research-12-evidence.md](../assets/research-12-evidence.md).
+
+**Gist (all known unless the asset says inferred).**
+
+- Evidence that someone saw a feature work lands in ticket answers (60 ticket files mention a shot), in untracked `tmp/` (754 PNG files, a lower bound) and in 6 trial reading packs. `docs/` has 0 files with "observed", "manually verified", "verified by hand" or "saw it".
+- The link rots. Tracked notes cite 207 concrete `tmp/` paths, and 73 (35%) do not exist now. A trial pack names no engine commit.
+- Autoplay has 3 open gaps in `.scratch/autoplay-follow-ups/` and 2 more only in a plan that commit `3e42a26f` deleted. `docs/specs/autoplay.md` shows none. All 32 tags of its 25 scenarios run on `ScriptedModel`. No real-provider run is cited from the spec.
+- An agent can observe a feature (`chronicler-ui-investigator`, `scripts/trial.py`). The reader that matters is a later agent, which reads the spec first.
+- Draft of a proof limit, an observed record and a gaps list: 21 lines, in two forms (inside the spec, and a file next to it). Both pass `validate_feature_spec.py` (561 declared, 561 covered), `validate_docs.py` (specs are EXCLUDED, routes checked) and Vale. One trap: a heading "Scenario N.M" in a separate file in `docs/specs/` counts as a scenario with no test. No check keeps a record true.
+
+**Recommendation.**
+
+| Practice | Recommendation | Why |
+|---|---|---|
+| C-14 known gaps beside the behavior | Keep | Cheapest of the three. One sentence and a ticket link per gap. Autoplay shows the gap: the spec lists none. |
+| C-13 proof limit beside each check | Keep, narrow | One list for each spec, one line for each stand-in that hides something (`ScriptedModel`, the stop moments, the browser tier). No line per scenario. |
+| C-12 three states and a dated observed record | Keep, narrow | Only for what the gate cannot show: a trial on a real provider, or a look at a shot. One paragraph for each spec, with date, commit and what was not exercised. A newer record replaces it. Side task of about one session: write the commit into `run.json` of `scripts/trial.py`. |
+
+**Questions for ticket 16.**
+
+1. Where does the record sit: inside the spec, or in a file next to it? Recommendation: inside, because agents read the spec first. It needs one added row in `docs/AGENTS.md` "Where a fact lives".
+2. Does the owner accept an "Observed" paragraph that an agent writes from a trial or a shot, with no gate check that it stays true? If no, drop C-12 and keep C-13 and C-14.

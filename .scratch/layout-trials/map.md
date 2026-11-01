@@ -35,11 +35,15 @@ Each layout candidate is tried in a trial and kept or dropped, or it is set asid
 
 <!-- the index — one line per closed ticket: enough to judge relevance, then zoom the link for the detail the ticket holds -->
 
+- [Run the baseline trial](issues/01-baseline-trial.md) — ran 100 Cycles on `1a0c9162` with no failed call, 47.6 % cached (Quantifier 3.8 %). The pack is the reference in `tmp/lt01/redmist_julian/trial-1`. The Impersonate output is about 31 % longer than in pf20.
+- [Find why the Quantifier calls read so little from the cache](issues/02-quantifier-cache.md) — the stable front is already 6 to 7 cache units of 128 tokens, and an identical front hits on only 15 % of calls. No layout change helps ([asset](assets/quantifier-cache.md)). The research did not test the shared OpenCode session value, so [Try a separate OpenCode session for each call kind](issues/10-separate-session-per-call-kind.md) tests it.
+- [Try the changing blocks after the history](issues/03-changing-blocks-after-history.md) — keep. The cached share went from 47.6 % to 68.9 % (Narrator-role calls 55.2 % to 78.8 %), and `prefix_measure.py` predicted the gain well. [Move the changing blocks after the history](issues/09-move-changing-blocks-after-history.md) builds it.
+
 ## Not yet specified
 
 - **The LLM judge.** The owner's notes from the output readings decide whether a judge is necessary, and what it checks. Every tool that [Find the tools that evaluate characters and prompts](../prompt-flexibility/issues/05-evaluation-tools.md) found judges one reply, so a check across a whole story (repetition, voice drift over the Cycles) may be new work.
+- **The length of the Impersonate output.** [Add the connection slots and remove the global response length](../prompt-flexibility/issues/21-connection-slots-and-response-length.md) removed the "Response Length" text from the Impersonate prompt on purpose. In [Run the baseline trial](issues/01-baseline-trial.md), the median Impersonate output went from 650 to 853 tokens. But [Try the changing blocks after the history](issues/03-changing-blocks-after-history.md) also had no length text, and its median Input was 131 words (baseline 160, pf20 126). So the length change is probably story noise (inferred). Does the default Impersonate preset need its own length text? This is an output question about the Inputs, so it waits for [Decide how to read an output trial](issues/05-read-an-output-trial.md).
 - **A new baseline after a kept candidate lands.** When a kept candidate is in the engine, does the next comparison need a new baseline trial, or does the first baseline stay the reference?
-- **A candidate from the Quantifier cache.** If [Find why the Quantifier calls read so little from the cache](issues/02-quantifier-cache.md) finds a cause with a cheap fix, that fix becomes a cache candidate.
 
 ## Out of scope
 

@@ -1,7 +1,7 @@
 # Build one golden-image test and run it five times
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -32,3 +32,18 @@ Is one golden-image test of one dashboard part stable enough and cheap enough? W
   - A Chromium update changes fonts or antialiasing: record the Chromium version beside the baseline.
 - **Output.** Write `assets/task-15-golden-image.md`. Copy at most 2 small PNGs into `assets/`: the baseline and one failing diff. `.scratch/` already tracks 17 PNGs. Keep the other images in `tmp/hex-compare/golden/`. The `## Answer` says whether the test is stable, what it costs, and whether to keep or drop the practice. It adds at most 2 questions for ticket 16.
 - **When done.** Add `## Answer` and set `Status: resolved`.
+
+
+## Answer
+
+**Gist (known).** One golden-image test of the idle action area ran as the 14th check of `run_layout` in a scratch worktree. The worktree is removed. At zero tolerance it was not stable: 2 of 5 runs passed, and 3 failed with the same 17 pixels that differ by 1 level in one channel. With a per-pixel threshold of 0.05 it passed 5 of 5 runs, with 0 allowed pixels and with Hex's `width*height/500` allowance. Two deliberate CSS edits (status column width, "Ready" colour) failed the image, and all 12 older layout checks passed both times. Hex's pixel allowance (163 px here) hid the colour edit (153 px). The test costs one 7 KB PNG and about 1 s per run.
+
+**Two problems found (known).** The convergence check failed after the screenshot call, because Playwright leaves `style=""` on inputs. Fix: skip an empty `style` attribute in `tests/test_utils/convergence.js` (2 lines, in the patch). A missing baseline passes and is written as the new baseline, so a deleted PNG hides a regression. The host font also decides the image (`font-family` falls back to `sans-serif`; the host's font was not pinned).
+
+**Recommendation: keep, in a small form.** Use `to_have_screenshot` with threshold about 0.05 and no pixel allowance. Start with 2 to 4 states. Land three guards first: a gate step that fails on a missing baseline, one named update command that also writes a side-by-side review sheet, and a review rule (a `reviewer` agent with vision first; the owner for "unintended" or "cannot tell"). If the owner will not look at images or accept a reviewer verdict, drop the practice.
+
+**Questions for ticket 16.**
+1. Who must look at a changed image: the owner for every change, or a `reviewer` agent with vision first and the owner only for doubtful cases?
+2. Is one more AFK ticket wanted to measure the font risk (second host or pinned font) before more than one image is added?
+
+Asset: [task-15-golden-image.md](../assets/task-15-golden-image.md). Images: [baseline](../assets/task-15-golden-baseline.png), [failing diff](../assets/task-15-golden-failing-diff.png).
