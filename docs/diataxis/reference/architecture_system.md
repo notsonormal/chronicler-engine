@@ -24,7 +24,7 @@ The record writes of a Game's story exist only on `Tx`, and only `GameWriter` op
 
 ## Settings
 
-The settings row is the read source for the whole engine. Every consumer resolves settings from storage at the point of use. So a connection or preset change takes effect on the next request without a restart. A connection reference that names no stored connection fails the operation that needs it instead of falling back to another backend. An empty Impersonate or Options slot is no reference, and uses the narration Connection.
+The settings row is the read source for the whole engine. Every consumer resolves settings from storage at the point of use. So a connection or preset change takes effect on the next request without a restart. A connection reference that names no stored connection fails the operation that needs it instead of falling back to another backend. An empty Impersonate or Options slot names no Connection and uses the Narration Connection.
 
 ## Who Owns What
 

@@ -18,6 +18,12 @@ Source: the wayfinder session of 2026-10-31 that resolved "Fix the prompt text" 
 - The doc review found 2 errors and 8 warnings in three changed docs. The coordinator made 14 fixes by hand. The Standards and Spec reviews found none of the doc faults.
 - The doc review of `/simple-after-plan` caught every fault, so no fault reached the gate. The cost is one review pass and one fix pass for each ticket that changes docs.
 
+New evidence, 2026-11-01 (tickets 20 and 21, doc-review session `adb40d4d`):
+
+- The doc review found 3 errors and 5 warnings in the new doc text. Two errors came from ticket text: the ticket 20 Decision "the space changes only when a part before the history changes" became "the parts before the history" and "it holds still between two calls of one kind". Both are false: the space also subtracts the post-history splice, and a room change moves it. The ticket 21 rewrite of **Connection** in `CONTEXT.md` was false too.
+- The ticket 20 doc step asked for a reason about a later memory. The implementer saw that the doc rules forbid it and wrote a substitute reason, which the review then removed.
+- The Standards and Spec reviews again found none of these faults.
+
 ## Options to decide
 
 - **A.** The build-plan ticket names the facts that become true or false, not the sentences. The implementer writes the sentences under `docs/AGENTS.md`.

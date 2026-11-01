@@ -132,10 +132,10 @@ fn test_an_empty_history_drops_nothing() {
 }
 
 #[test]
-fn test_drop_front_records_one_block_with_no_arrival() {
+fn test_drop_to_free_records_one_block_with_no_arrival() {
     let mut cut = HistoryCut::of(&[20; 6], 100);
 
-    cut.drop_front(2);
+    cut.drop_to_free(&[20; 6], 40);
 
     assert_eq!(cut.kept_from(), 5);
     assert_eq!(
@@ -149,30 +149,40 @@ fn test_drop_front_records_one_block_with_no_arrival() {
 }
 
 #[test]
-fn test_drop_front_without_a_cut_before_it_starts_at_the_first_message() {
+fn test_drop_to_free_without_a_cut_before_it_starts_at_the_first_message() {
     let mut cut = HistoryCut::of(&[10, 10, 10], 100);
 
-    cut.drop_front(1);
+    cut.drop_to_free(&[10, 10, 10], 5);
 
     assert_eq!(cut.kept_from(), 1);
     assert_blocks_cover_the_dropped_front(&cut);
 }
 
 #[test]
-fn test_drop_front_past_the_kept_messages_drops_all_and_no_more() {
+fn test_drop_to_free_drops_the_fewest_messages_that_reach_the_excess() {
     let mut cut = HistoryCut::of(&[10, 10, 10], 100);
 
-    cut.drop_front(50);
+    cut.drop_to_free(&[10, 10, 10], 11);
+
+    assert_eq!(cut.kept_from(), 2);
+    assert_blocks_cover_the_dropped_front(&cut);
+}
+
+#[test]
+fn test_drop_to_free_past_the_kept_messages_drops_all_and_no_more() {
+    let mut cut = HistoryCut::of(&[10, 10, 10], 100);
+
+    cut.drop_to_free(&[10, 10, 10], 500);
 
     assert_eq!(cut.kept_from(), 3);
     assert_blocks_cover_the_dropped_front(&cut);
 }
 
 #[test]
-fn test_drop_front_of_nothing_records_no_block() {
+fn test_drop_to_free_of_nothing_records_no_block() {
     let mut cut = HistoryCut::of(&[10, 10, 10], 100);
 
-    cut.drop_front(0);
+    cut.drop_to_free(&[10, 10, 10], 0);
 
     assert!(cut.blocks().is_empty());
 }

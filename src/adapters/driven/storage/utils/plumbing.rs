@@ -758,8 +758,6 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
     }
 
     if due(33) {
-        // The Impersonate and Options Connection slots. An empty slot uses the
-        // narration Connection.
         if !column_exists(conn, "settings", "impersonate_connection_id") {
             exec("ALTER TABLE settings ADD COLUMN impersonate_connection_id TEXT")?;
         }
@@ -767,10 +765,8 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
             exec("ALTER TABLE settings ADD COLUMN options_connection_id TEXT")?;
         }
 
-        // The response length words move into the output format of every system
-        // preset that has one. Today's render appends the same string, so the
-        // prompt stays the same. A fresh database has no settings row yet, and an
-        // empty text renders no header.
+        // The old render appended this same string, so a stored prompt stays byte for
+        // byte the same. A fresh database has no settings row yet: the seed writes the words.
         if column_exists(conn, "settings", "response_length") {
             exec(
                 "UPDATE prompt_presets \

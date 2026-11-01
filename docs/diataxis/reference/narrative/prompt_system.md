@@ -32,11 +32,11 @@ The narrator makes Layer 6 from the kind of the generation (see Narration System
 
 ## History
 
-The history cut drops whole Messages from the front of the history, in blocks. It starts at the first Message and drops the oldest Messages when the kept Messages pass the history space. Between two cuts the history start stays where it is.
+The history cut drops whole Messages from the front of the history, in blocks. The cut walks the history from its first Message. It drops the oldest Messages when the kept Messages pass the history space, the tokens the history may fill. Between two cuts the history start stays where it is, while the history space stays the same.
 
-The history space depends on the window, the response length and the parts before the history. It does not depend on the Player Input or the Guide, so it holds still between two calls of one kind. A Player Input or Guide that still passes the input limit makes the assembler drop more whole Messages, as one block.
+The history space is the input limit, less every part of the prompt except the `<PlayerInput>` layer and the Guide, less a reserve for those two. A cap limits it. The input limit depends on the window and the response cap of the Connection (`max_tokens`). A change in the size of another part, such as the room or the Characters present, changes the space and can move the history start. An Input or Guide that still passes the input limit makes the assembler drop more whole Messages, as one block.
 
-The cut records the blocks it dropped. The marker `(History truncated to fit context window)` shows when Messages exist and none is kept. The code holds the numbers (`HistoryCut`, `token_budget.rs`).
+The cut knows the blocks it dropped. The marker `(History truncated to fit context window)` shows when Messages exist and none is kept. The sizes stay in `HistoryCut` and the token budget.
 
 ## Section Definitions
 

@@ -17,7 +17,6 @@ pub const HISTORY_RESERVE_TOKENS: u32 = 1024;
 /// The reserve is at most this part of the window, so a small window keeps its history.
 const HISTORY_RESERVE_WINDOW_PART: u32 = 8;
 
-/// The tokens the history leaves for the Player Input and the Guide.
 pub fn history_reserve_tokens(max_context_tokens: u32) -> usize {
     HISTORY_RESERVE_TOKENS.min(max_context_tokens / HISTORY_RESERVE_WINDOW_PART) as usize
 }
@@ -37,7 +36,6 @@ impl TokenBudget {
     }
 }
 
-/// The characters one token stands for in `estimate_tokens`.
 pub const CHARS_PER_TOKEN: usize = 4;
 
 pub fn estimate_tokens(text: &str) -> usize {

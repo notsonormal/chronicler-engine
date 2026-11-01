@@ -111,7 +111,7 @@ A kind of model call that the engine makes, with its own health: Narrator, Quant
 _Avoid_: Agent (for the Narrator)
 
 **Connection**:
-A named way to reach one model: its provider, its address and its model. One or more Connection slots name each Connection.
+A named way to reach one model: its provider, its address and its model. A Connection slot names one Connection. Two slots can name the same Connection.
 _Avoid_: Backend, provider config
 
 **Connection slot**:

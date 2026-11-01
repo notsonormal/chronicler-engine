@@ -150,7 +150,7 @@ Resolved when the check trial confirms the block size, or the answer names a bet
 
 Resolved on 2026-11-01, on the branch `pf20-history-cut`. The block size of one quarter of the history space holds. No better size is needed.
 
-**The check passed.** `python scripts/trial.py run` on OpenCode Go (`deepseek-v4.1-flash`) played 100 of 100 Cycles on a probe server of this branch (port 3003). It made 400 calls (99 Narration, 1 Event Narration, 100 Impersonate, 200 Quantifier). No call failed and no run restarted. The pack is `tmp/pf20/redmist_julian/trial-1/pack.md`, with `compare.md` beside it. The trial B pack is `tmp/pf08/trial-b` in the main checkout.
+**The check passed.** `python scripts/trial.py run` on OpenCode Go (`deepseek-v4.1-flash`) played 100 of 100 Cycles on a probe server of this branch (port 3003). It made 400 calls (99 Narration, 1 Event Narration, 100 Impersonate, 200 Quantifier). No call failed and no run restarted. The pack is `tmp/pf20/redmist_julian/trial-1/pack.md` in the main checkout, with `compare.md` one folder up. The trial B pack is `tmp/pf08/trial-b` in the main checkout.
 
 | | Trial B | This trial |
 |---|---|---|
@@ -164,13 +164,13 @@ Resolved on 2026-11-01, on the branch `pf20-history-cut`. The block size of one 
 - **The start moves only at a cut.** The first history entry has 8 values: the first one, then 7 cuts at calls 157, 201, 239, 281, 317, 359 and 397. The first cut is in Cycle 40 and the last in Cycle 100. This is the "about 7 values" that the ticket inferred. In trial B the start changed on every call after the cap bound at call 304.
 - **Every history starts at a sender label.** All 200 histories start with `Narrator: `, `Julian: ` or `System: `. In trial B, 101 histories started in the middle of a Message.
 - **The block size.** A cut came every 36 to 44 calls, which is 9 to 11 Cycles. The kept history fell from 15,786–15,942 tokens to 11,766–11,975 tokens (75 % of 16000 is 12000). So each cut drops about 4000 tokens, which is 17 to 19 Messages at about 206 tokens a Message. The ticket inferred 18 Messages and a cut every 9 Cycles.
-- **The cached share.** It is a report, not a gate. It was 33 % in the check of ticket 19, where the history start still moved on every call. The Narrator-role calls (Narration and Impersonate) read 61 % cached between cuts after the first cut. Before the first cut they read 50 %. The 7 calls on a cut read 0 % cached in 6 cases and 2048 tokens in 1. The call after a cut read 0 % in 5 of 7 cases. The Quantifier calls stay near 6 % cached, because their prompt changes at the front. OpenCode Go reports `cached_tokens` in blocks of 1024 or 2048, and the cache rule is still unknown.
+- **The cached share.** It is a report, not a gate. It was 33 % in the check of ticket 19, where the history start still moved on every call. The Narrator-role calls (Narration and Impersonate) read 61 % cached between cuts after the first cut. Before the first cut they read 50 %. The 7 calls on a cut read 0 % cached in 6 cases and 2048 tokens in 1. The call after a cut read 0 % in 5 of 7 cases. The Quantifier calls stay near 6 % cached, probably because their prompt changes at the front (inferred). OpenCode Go reports `cached_tokens` in blocks of 1024 or 2048, and the cache rule is still unknown.
 
-**Gates.** `python build.py test-pattern "context_window" --test-target http` passed 4 tests (specs 20.25 and 20.26). `python build.py --no-browser` passed (`logs/build_20261101_002458.log`): guardrails 309, integration 1555 (3 skipped). The browser tier runs after both tickets merge.
+**Gates.** `python build.py test-pattern "context_window" --test-target http` passed 4 tests (specs 20.25 and 20.26). `python build.py --no-browser` passed (copied to `tmp/pf20/build_20261101_002458.log`): guardrails 309, integration 1555 (3 skipped). The browser tier runs after both tickets merge.
 
 **What changed.**
 
-- `HistoryCut` (`src/domain/model/history_cut.rs`) with 14 domain cases in `history_cut_tests.rs`. The cases are the eight of the ticket plus an empty history, a large Message that drops the ones before it, and four cases of `drop_front`.
+- `HistoryCut` (`src/domain/model/history_cut.rs`) with 15 domain cases in `history_cut_tests.rs`. The cases are the eight of the ticket, the cases of an empty history and of a large Message that drops the ones before it, and the cases of the overflow guard's drop. The code review renamed `drop_front(count)` to `drop_to_free(entry_sizes, excess)`: the cut, not the assembler, now finds how many Messages free the excess.
 - `context.rs`: `input_limit` (one rule for the history space and for the fit), `history_space`, and `fit_messages_to_context` with no trim. `trim_history_to_budget` is deleted.
 - `token_budget.rs`: `history_reserve_tokens` (the smaller of 1024 and one eighth of the window) and `CHARS_PER_TOKEN`. `truncate_to_budget` is deleted.
 - `assembler.rs`: `render_and_fit` costs each entry, calls `HistoryCut::of`, renders from `kept_from`, and runs the overflow guard.
@@ -179,8 +179,8 @@ Resolved on 2026-11-01, on the branch `pf20-history-cut`. The block size of one 
 
 **Deviations.**
 
-- **The overflow guard counts characters, not tokens.** The ticket says to compute the count of Messages to drop. A count from the summed token costs drops too few Messages, because each cost rounds up. Fact: the first version left the prompt 12 tokens over the input limit in the guard case. The guard now counts the characters of the dropped entries against the characters over the limit (`CHARS_PER_TOKEN` is one shared constant). It still calls `drop_front` once.
-- **The design doc does not name a later memory.** The ticket's third reason says the cut is the natural point for a later memory. `docs/AGENTS.md` says a Diátaxis doc states no plan. The doc says that the cut records the blocks it drops, and that the record is the one place that states what left the prompt.
+- **The overflow guard counts characters, not tokens.** The ticket says to compute the count of Messages to drop. A count from the summed token costs drops too few Messages, because each cost rounds up. Fact: the first version left the prompt 12 tokens over the input limit in the guard case. The guard now counts the characters of the dropped entries against the characters over the limit (`CHARS_PER_TOKEN` is one shared constant). It still drops once, as one block.
+- **The design doc does not name a later memory.** The ticket's third reason says the cut is the natural point for a later memory. `docs/AGENTS.md` says a Diátaxis doc states no plan. The doc gives the first two reasons only. The code review removed a substitute reason ("the record is the one place that states what left the prompt"), because no code reads the record yet. The Reference doc says that the cut knows the blocks it dropped.
 - **Cases beyond the ticket:** the guard case above, and the extra domain cases.
 - **How the probe server ran.** The key of OpenCode Go lives in the `.env` of the main checkout. The server of the worktree reads `.env` from its working directory. So the probe binary of this worktree ran with the main checkout as its working directory, and the "Go check" Connection was copied into the new probe DB. Both the key and the Connection stayed out of every output.
 

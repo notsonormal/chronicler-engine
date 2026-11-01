@@ -25,13 +25,11 @@ The card lists and the history write a fallback sentence in place of an empty bo
 
 ## The history cut in blocks
 
-The history is the longest part of the prompt, and it grows with each Cycle. A provider caches the start of a prompt, up to the first change. A history start that moves on every call ends the cache at the history. A cut in blocks holds the start still between two cuts, so the cache lasts until the next cut.
+The history is the longest part of the prompt, and it grows with each Cycle. A provider caches the start of a prompt, up to the first change. A history start that moves on every call ends the cache at the history. A cut in blocks holds the start still between two cuts while the history space stays the same. So the cache lasts until the next cut.
 
 The cut drops whole Messages. A cut of text can start in the middle of a Message and drop its sender label. The model then reads text with no speaker. A whole Message always keeps its label.
 
-The space that the cut fills leaves out the Player Input and the Guide. Both change on every call. A space that depended on them would move the history start on every call. The assembler keeps a reserve for them, and a guard drops more Messages when an Input passes the reserve.
-
-The cut records the blocks it drops. The record is the one place that states what left the prompt, so no second pass over the history is needed to find it.
+The space that the cut fills leaves out the `<PlayerInput>` layer and the Guide. The Input changes on every call, and the Guide shows only on a Guided Generation. A space that depended on them would move the history start on every call. A reserve for them keeps the history start still on an ordinary Input.
 
 ## Prose constraints placed at the end of the user message
 

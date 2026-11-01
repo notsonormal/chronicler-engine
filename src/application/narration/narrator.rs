@@ -9,7 +9,7 @@ use crate::application::prompting::{AssembledPrompt, CharacterContext, PromptAss
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::generation::Generation;
 use crate::domain::model::map::Room;
-use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind};
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
@@ -75,8 +75,7 @@ impl Narrator {
         &self.recorder
     }
 
-    /// Only the wiring tests call it: they check which Connection the Impersonate
-    /// slot resolves to.
+    /// For the wiring tests' check of the Impersonate Connection slot.
     pub fn impersonate_recorder(&self) -> &Arc<LlmCallRecorder> {
         &self.impersonate_recorder
     }
@@ -131,8 +130,8 @@ impl Narrator {
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
 
         tracing::info!("Narration LLM call (agent={})", role.agent_name());
-        let recorder = match generation {
-            Generation::Impersonate { .. } => &self.impersonate_recorder,
+        let recorder = match generation.preset_type() {
+            PresetType::Impersonate => &self.impersonate_recorder,
             _ => &self.recorder,
         };
         let narration_result = recorder

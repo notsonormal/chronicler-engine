@@ -56,7 +56,7 @@ Every part of every story and state LLM call is decided: an author can change it
 
 - **The OpenCode Go input filter.** On OpenCode Go, a few calls fail with `content_filter` and `prompt_tokens: 0` on harmless text (4 of 178 Quantifier calls in trial B, and the Impersonate call that ended each trial). The trigger is unknown. If the restart limit of the trial does not hold, this becomes a ticket: replay a failed call and remove parts until it passes. See [Decide what the state does when a state writer fails](issues/15-failed-state-writer.md).
 
-- **The cache of the agent calls.** In the 100-Cycle trial of [Cut the history in blocks](issues/20-cut-the-history-in-blocks.md), the Narrator-role calls read about 61 % cached between cuts, but the Quantifier calls read about 6 %. The cause is not known. This may become a research ticket, after the shape of [Find how prompt caching works for our providers and our layout](issues/12-prompt-caching.md).
+- **The cache of the agent calls.** In the 100-Cycle trial of [Cut the history in blocks](issues/20-cut-the-history-in-blocks.md), the Narrator-role calls read about 61 % cached between cuts, but the Quantifier calls read about 6 %. The cause is not known. The ticket infers that their prompt changes at the front. This may become a research ticket, after the shape of [Find how prompt caching works for our providers and our layout](issues/12-prompt-caching.md).
 
 ## Out of scope
 

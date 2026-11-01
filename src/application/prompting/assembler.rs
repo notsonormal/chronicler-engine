@@ -193,26 +193,20 @@ impl<'a> LayerRenderer<'a> {
             * CHARS_PER_TOKEN;
         let excess_chars = user.chars().count().saturating_sub(allowed_chars);
         if excess_chars > 0 {
-            let mut freed_chars = 0;
-            let count = entries[cut.kept_from()..]
-                .iter()
-                .take_while(|entry| {
-                    let more = freed_chars < excess_chars;
-                    freed_chars += entry.chars().count();
-                    more
-                })
-                .count();
-            if count > 0 {
-                cut.drop_front(count);
+            let kept_from = cut.kept_from();
+            let entry_chars: Vec<usize> = entries.iter().map(|e| e.chars().count()).collect();
+            cut.drop_to_free(&entry_chars, excess_chars);
+            if cut.kept_from() > kept_from {
                 user = self.join_user_layers(self.render_history_layer(&entries, &cut), true);
             }
         }
 
-        fit_messages_to_context(&system, &user, max_context_tokens, requested_max_tokens)
+        let max_tokens =
+            fit_messages_to_context(&system, &user, max_context_tokens, requested_max_tokens)?;
+        Ok((system, user, max_tokens))
     }
 
-    /// The user half in layer order. Without the tail it is the fixed part that
-    /// the history space subtracts: no Player Input and no Guide.
+    /// Without the tail the result is the fixed part that the history space subtracts.
     fn join_user_layers(&self, history_layer: String, with_tail: bool) -> String {
         let mut layers = vec![
             self.render_game_state_layer(),
@@ -359,7 +353,6 @@ impl<'a> LayerRenderer<'a> {
         format!("<ConversationHistory>\n{body}</ConversationHistory>\n")
     }
 
-    /// The entries the cut keeps. The marker shows when Messages exist and none stays.
     fn render_history_layer(&self, entries: &[String], cut: &HistoryCut) -> String {
         if entries.is_empty() {
             return Self::history_slot(

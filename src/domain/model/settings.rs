@@ -439,10 +439,10 @@ pub struct AppSettings {
     pub connections: Vec<LlmConnection>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
-    /// The Connection slot of Impersonate. Empty means the narration Connection.
+    /// Its own Connection; `None` uses the Narration Connection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub impersonate_connection_id: Option<String>,
-    /// The Connection slot of Options. Empty means the narration Connection.
+    /// Its own Connection; `None` uses the Narration Connection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub options_connection_id: Option<String>,
     #[serde(default)]
@@ -537,8 +537,6 @@ impl AppSettings {
         self.find_connection(&self.quantifier_connection_id)
     }
 
-    /// The Connection of the call kind `preset_type`. An empty Impersonate or
-    /// Options slot uses the narration Connection.
     pub fn connection_for(&self, preset_type: PresetType) -> crate::error::Result<LlmConnection> {
         let (slot, id) = match preset_type {
             PresetType::System => ("narration_connection_id", &self.narration_connection_id),
@@ -565,8 +563,7 @@ impl AppSettings {
         self.connection_for(PresetType::Quantifier)
     }
 
-    /// Fails when a slot names a Connection that the list does not hold. An
-    /// empty optional slot is no reference.
+    /// An empty optional slot is no reference.
     pub fn check_connection_slots(&self) -> crate::error::Result<()> {
         for preset_type in [
             PresetType::System,
@@ -579,7 +576,6 @@ impl AppSettings {
         Ok(())
     }
 
-    /// The optional slots that name `connection_id`, cleared by a delete.
     pub fn clear_optional_slots_naming(&mut self, connection_id: &str) {
         for slot in [
             &mut self.impersonate_connection_id,

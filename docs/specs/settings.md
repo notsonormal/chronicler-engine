@@ -173,7 +173,7 @@ Then the response is a 200 with an empty body
 And the connection list no longer holds it
 ```
 
-#### Scenario 20.53: Deleting the Connection of an optional Connection slot empties the slot
+#### Scenario 20.53: A refused delete keeps the optional Connection slots, and an accepted delete empties the slot that names the Connection
 
 ```gherkin
 Given an app state whose Narrator and Quantifier roles use a first connection

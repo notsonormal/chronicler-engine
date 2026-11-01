@@ -13,7 +13,7 @@ Each Agent gives one kind of result, and each kind of result has one landing. Th
 
 The narration LLM call and the quantifier LLM call have different needs. Narration produces the prose the player reads and runs against a capable, often expensive model. The quantifier extracts structured facts (Characters detected, movement destination) from a fixed schema and runs against a cheaper, more predictable model. Routing both calls through the same connection would either under-spend on narration or overspend on the quantifier.
 
-Each role therefore has its own recorder, and each recorder resolves its own connection.
+Each Connection slot therefore has its own recorder, and each recorder resolves its own Connection.
 
 ## Two hooks
 

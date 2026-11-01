@@ -5,9 +5,7 @@ use crate::error::EngineError;
 use crate::application::prompting::token_budget as budget;
 use crate::application::prompting::token_budget::estimate_tokens;
 
-/// The most tokens a call may send as input: the window, less the safety margin,
-/// less the response length the call asks for. One rule for the history space
-/// and for the fit of the whole prompt.
+/// One limit for the history space and for the fit of the whole prompt.
 pub fn input_limit(max_context_tokens: u32, requested_max_tokens: Option<u32>) -> usize {
     let available =
         (max_context_tokens as usize).saturating_sub(budget::SAFETY_MARGIN_TOKENS as usize);
@@ -18,9 +16,8 @@ pub fn input_limit(max_context_tokens: u32, requested_max_tokens: Option<u32>) -
         .max(budget::MIN_INPUT_BUDGET_TOKENS as usize)
 }
 
-/// The tokens the history entries may use. It depends on the window, the response
-/// length and the parts before the history, and on no Input or Guide, so it holds
-/// still between two calls of one kind.
+/// Leaves out the Player Input and the Guide, so a new Input does not move the
+/// history start.
 pub fn history_space(
     max_context_tokens: u32,
     requested_max_tokens: Option<u32>,
@@ -34,14 +31,14 @@ pub fn history_space(
         .min(budget::MAX_HISTORY_TOKENS as usize)
 }
 
-/// Checks that the system half fits the window, and clamps the response length to
-/// the room the prompt leaves. It never trims: the history cut makes the prompt fit.
+/// Clamps the response length to the room the prompt leaves. The history cut makes
+/// the prompt fit, so this only checks it.
 pub fn fit_messages_to_context(
     system: &str,
     user: &str,
     max_context_tokens: u32,
     requested_max_tokens: Option<u32>,
-) -> Result<(String, String, u32), EngineError> {
+) -> Result<u32, EngineError> {
     let system_tokens = estimate_tokens(system);
     let user_tokens = estimate_tokens(user);
     let max_context = max_context_tokens as usize;
@@ -62,5 +59,5 @@ pub fn fit_messages_to_context(
         .min(max_context.saturating_sub(system_tokens + min_input_budget + safety_margin))
         .max(1) as u32;
 
-    Ok((system.to_string(), user.to_string(), actual_max_tokens))
+    Ok(actual_max_tokens)
 }

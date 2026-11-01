@@ -286,7 +286,6 @@ fn prompt_of(model: &ScriptedModel) -> ModelCall {
         .expect("the narrator makes one call")
 }
 
-/// The text between the history tags.
 fn history_body(prompt: &str) -> &str {
     let layer = layer(prompt, "<ConversationHistory>", "</ConversationHistory>");
     layer
@@ -295,7 +294,6 @@ fn history_body(prompt: &str) -> &str {
         .expect("the history layer holds its tags")
 }
 
-/// The number in the first `Entry N` of the history, or `None` when no entry stays.
 fn first_kept_entry(prompt: &str) -> Option<usize> {
     let body = history_body(prompt);
     let digits: String = body
@@ -314,7 +312,6 @@ fn window(max_context_tokens: u32, max_tokens: Option<u32>) -> TokenBudget {
     }
 }
 
-/// The prompt that one narration of `history` and `input` sends, under `budget`.
 fn sent_under(
     fixture: &Fixture,
     history: &[StoryRow],
@@ -363,7 +360,6 @@ fn test_every_prompt_layer_renders() {
         "<PlayerInput>",
         "<writing_style>",
         "<output_format>",
-        "Response Length:",
     ] {
         assert!(
             call.user_prompt.contains(layer),
@@ -457,14 +453,11 @@ fn test_only_the_presets_present_fields_render() {
     assert!(!call.user_prompt.contains("<writing_style>"));
     let format = layer(&call.user_prompt, "<output_format>", "</output_format>");
     assert!(
-        format.contains("Write one paragraph.")
-            && format.contains("Response Length:")
-            && format.contains("Short"),
-        "the present output format renders with its length words: {format}"
+        format.contains("Write one paragraph."),
+        "the present output format renders: {format}"
     );
 }
 
-/// The text of a layer, with its tags and the indent that `wrap_xml` adds taken off.
 fn layer_text(prompt: &str, tag: &str) -> String {
     let wrapped = layer(prompt, &format!("<{tag}>"), &format!("</{tag}>"));
     let inner = wrapped

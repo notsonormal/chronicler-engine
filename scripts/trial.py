@@ -302,8 +302,6 @@ STORED_SLOTS = ("impersonate", "options")
 
 
 def connection_fields(given):
-    """The Connections of the setup: Narration and Quantifier are required. The
-    Impersonate and Options slots are optional."""
     group = text_fields(given, "connections", ("narration", "quantifier"))
     for slot in STORED_SLOTS:
         if slot in given["connections"]:
@@ -392,8 +390,7 @@ def check_connections(conn, setup):
 
 
 def stored_slot(settings_row, slot):
-    """The Connection id stored in the Impersonate or Options slot, or `None` when the
-    slot is empty, so the call uses the Narration Connection."""
+    """`None` when the slot is empty, so the call uses the Narration Connection."""
     return settings_row[f"{slot}_connection_id"] or None
 
 
