@@ -802,7 +802,7 @@ fn test_the_guide_renders_last_in_its_wrapper() {
 
 // CASE narrator-guide-absent: a plain turn, and a blank guide, render no guide layer.
 #[test]
-fn test_a_plain_turn_and_a_blank_guide_render_no_guide_prompt_block() {
+fn test_a_plain_turn_and_a_blank_guide_render_no_guide_layer() {
     let fixture = Fixture::new();
     let plain = fixture.narration(&fixture.history, "I look around.");
     assert!(
@@ -1569,7 +1569,7 @@ fn test_a_continue_answers_the_input_that_ends_the_window() {
 
 // CASE narrator-user-message-after-narration-empty: a Continue after a Narration renders no player-input layer.
 #[test]
-fn test_a_continue_after_a_narration_renders_no_player_input_prompt_block() {
+fn test_a_continue_after_a_narration_renders_no_player_input_layer() {
     let fixture = Fixture::new();
     let after_narration = fixture.narration(&fixture.history, "");
     let user = sent_prompt(&after_narration, &preset()).user_prompt;
@@ -1586,7 +1586,7 @@ fn test_a_continue_after_a_narration_renders_no_player_input_prompt_block() {
 
 // CASE narrator-guide-after-narration: a Guided Generation with no Input after a Narration renders the guide and no player-input layer.
 #[test]
-fn test_a_guide_after_a_narration_renders_the_guide_and_no_player_input_prompt_block() {
+fn test_a_guide_after_a_narration_renders_the_guide_and_no_player_input_layer() {
     let fixture = Fixture::new();
     let case = fixture
         .narration(&fixture.history, "")

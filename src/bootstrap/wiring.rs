@@ -29,7 +29,7 @@ use crate::domain::model::game::GameId;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::domain::model::prompt_preset::PresetType;
-use crate::domain::model::settings::LlmConnection;
+use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::error::Result;
 
 fn provider_from_config(config: &LlmConnection) -> Arc<dyn LlmProvider> {
@@ -51,7 +51,7 @@ fn recorder_with_storage(storage: Arc<Storage>, preset_type: PresetType) -> Arc<
         config.check_api_key_available()?;
         tracing::info!(
             "Resolved LLM provider for {}: provider={}, model={}, api_key={}",
-            preset_type.as_str(),
+            AppSettings::slot_field(preset_type),
             config.provider.display_label(),
             config.model,
             if config.resolve_api_key().is_some() {

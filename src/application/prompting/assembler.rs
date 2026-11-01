@@ -163,19 +163,20 @@ impl<'a> LayerRenderer<'a> {
             .iter()
             .map(|e| self.render_history_entry(e))
             .collect();
-        let cut = self.cut_history(&entries, budget, estimate_tokens(&system));
-        let user = self.render_user_prompt(&entries, &cut);
+        let user = self.render_cut_user_prompt(&entries, budget, estimate_tokens(&system));
 
         let max_tokens = budget.response_tokens(&system, &user)?;
         Ok((system, user, max_tokens))
     }
 
-    fn cut_history(
+    /// The user prompt with the history cut to the budget: the token cut, then the
+    /// overflow guard. It renders once more only when the guard moved the cut.
+    fn render_cut_user_prompt(
         &self,
         entries: &[String],
         budget: TokenBudget,
         system_tokens: usize,
-    ) -> HistoryCut {
+    ) -> String {
         let entry_tokens: Vec<usize> = entries.iter().map(|e| estimate_tokens(e)).collect();
         let fixed_user = Self::join_layers(self.fixed_user_layers(Self::history_slot("")));
         let space = budget.history_space(system_tokens, estimate_tokens(&fixed_user));
@@ -186,13 +187,17 @@ impl<'a> LayerRenderer<'a> {
         // characters, because a token cost rounds each entry up and the sum of those
         // would drop too few.
         let allowed_chars = budget.input_limit().saturating_sub(system_tokens) * CHARS_PER_TOKEN;
-        let user = self.render_user_prompt(entries, &cut);
+        let mut user = self.render_user_prompt(entries, &cut);
         let excess_chars = user.chars().count().saturating_sub(allowed_chars);
         if excess_chars > 0 {
+            let kept_from = cut.kept_from();
             let entry_chars: Vec<usize> = entries.iter().map(|e| e.chars().count()).collect();
             cut.drop_to_free(&entry_chars, excess_chars);
+            if cut.kept_from() > kept_from {
+                user = self.render_user_prompt(entries, &cut);
+            }
         }
-        cut
+        user
     }
 
     fn render_user_prompt(&self, entries: &[String], cut: &HistoryCut) -> String {

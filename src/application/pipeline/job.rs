@@ -52,6 +52,12 @@ pub enum JobEnd {
     EntryMoved,
 }
 
+/// The settings of one model call, and the context window of the Connection it uses.
+struct CallPlan {
+    settings: CallSettings,
+    context_window: u32,
+}
+
 pub struct Job {
     writer: JobWriter,
     narrator: Arc<Narrator>,
@@ -250,8 +256,7 @@ impl Job {
             },
             STORY_LIMIT,
         )?;
-        let (call, max_context_tokens) =
-            self.call_settings(&settings, order.generation.preset_type(), &preset)?;
+        let plan = self.call_plan(&settings, order.generation.preset_type(), &preset)?;
 
         let all_characters: Vec<CharacterCard> = bundle.characters.values().cloned().collect();
         let values = NarrationValues {
@@ -273,8 +278,8 @@ impl Job {
             &order.generation,
             &values,
             &preset,
-            &call,
-            max_context_tokens,
+            &plan.settings,
+            plan.context_window,
         )?;
         Ok(narrated.text)
     }
@@ -458,22 +463,21 @@ impl Job {
         )
     }
 
-    /// The settings of one call, and the context window of the Connection it uses. The
-    /// Connection comes from the type of the call, not from `preset.preset_type`: a Game
-    /// stores one preset id for each type, and no check ties that id to a preset of the
-    /// same type.
-    fn call_settings(
+    /// The plan of one call. The Connection comes from the type of the call, not from
+    /// `preset.preset_type`: a Game stores one preset id for each type, and no check ties
+    /// that id to a preset of the same type.
+    fn call_plan(
         &self,
         settings: &AppSettings,
         preset_type: PresetType,
         preset: &PromptPreset,
-    ) -> Result<(CallSettings, u32), JobFailure> {
+    ) -> Result<CallPlan, JobFailure> {
         let connection = Self::read(Record::Settings, settings.connection_for(preset_type))?;
         let max_tokens = connection.max_tokens_for(preset.parameters.max_tokens);
-        Ok((
-            CallSettings::of(&preset.parameters, max_tokens, self.writer.game()),
-            connection.resolve_max_context_tokens(),
-        ))
+        Ok(CallPlan {
+            settings: CallSettings::of(&preset.parameters, max_tokens, self.writer.game()),
+            context_window: connection.resolve_max_context_tokens(),
+        })
     }
 
     fn options_enabled(&self) -> Result<bool, JobFailure> {
@@ -487,10 +491,10 @@ impl Job {
             Record::Preset,
             self.presets.chosen_preset(&game, preset_type),
         )?;
-        let (call, _) = self.call_settings(&settings, preset_type, &preset)?;
+        let plan = self.call_plan(&settings, preset_type, &preset)?;
         Ok(AgentSettings {
             preset: Some(preset.assemble_text(&[], None)),
-            call,
+            call: plan.settings,
             option_count: preset.option_count,
         })
     }

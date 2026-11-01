@@ -108,6 +108,10 @@ calls a `Storage` method to observe state.
   state through `Storage` and fixtures. A synchronization wait such as
   `wait_idle` may read state, because it gates the test and observes no
   outcome.
+- **What a model call carried.** A test may read the prompt and the call
+  settings of a model call from the LLM port fake (`ScriptedModel::calls()`).
+  The model is the boundary of tier 1. No read seam carries the call settings,
+  because `ScriptedModel` leaves `raw_request_json` blank.
 - **A persistence fact** that has no read seam (a column of a Swipe row that no view
   shows) is a driven-adapter or unit assertion, not a tier-1 one.
 

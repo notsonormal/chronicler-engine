@@ -310,7 +310,7 @@ fn check_connection_slots_names_the_dangling_slot() {
             .is_ok()
     );
 
-    for (settings, field) in [
+    for (settings, dangling_id) in [
         (
             AppSettings {
                 impersonate_connection_id: Some("impersonate-missing".into()),
@@ -329,8 +329,28 @@ fn check_connection_slots_names_the_dangling_slot() {
         let err = settings
             .check_connection_slots()
             .expect_err("a dangling optional slot fails the check");
-        assert!(err.to_string().contains(field));
+        assert!(err.to_string().contains(dangling_id));
     }
+}
+
+#[test]
+fn slot_field_names_the_field_of_each_slot() {
+    assert_eq!(
+        AppSettings::slot_field(PresetType::System),
+        "narration_connection_id"
+    );
+    assert_eq!(
+        AppSettings::slot_field(PresetType::Impersonate),
+        "impersonate_connection_id"
+    );
+    assert_eq!(
+        AppSettings::slot_field(PresetType::Quantifier),
+        "quantifier_connection_id"
+    );
+    assert_eq!(
+        AppSettings::slot_field(PresetType::Options),
+        "options_connection_id"
+    );
 }
 
 #[test]

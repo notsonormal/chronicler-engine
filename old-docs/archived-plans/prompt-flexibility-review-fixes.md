@@ -166,3 +166,12 @@ Finding: `thermo` P1-4, `antipattern` 13, `code-review` S6 and S8.
 - `python build.py` passes.
 - `node --test` passes for both extension test files.
 - The four findings files have no open finding that this plan does not fix or keep.
+
+## Deviations found after the build
+
+A review of the commits `893e3d94..34e8423f` found four places where the plan text and the result differ. The fixes of that review did not change these facts.
+
+- **B5.** The Verify line says `rg "stored_slot\(" scripts` finds only the call in `slot_connection`. It finds 5 matches. Two are the definition and the call in `slot_connection`. One is the raw read in `check_connections`. Two are the raw reads in `setup_snapshot`. The fallback rule "an empty slot uses Narration" has one home, in `slot_connection`. The other reads need the stored value, not the fallback.
+- **F3.** The Verify line says `rg "\"quantifier\", \"options\"" scripts/trial.py` finds one place. It finds 0 call-kind matches. The one match is a tuple of preset names. The call kinds live in `CALL_KINDS`.
+- **A1.** The test gave the Quantifier its own Connection (ceiling 600) and its own temperature (0.5). The plan used the Narration values for both. With those values, mutation 3 (`hook_settings` reads `PresetType::System`) could not fail the test. The own values make the mutation visible.
+- **G1.** The plan says the line coverage of `generation_parameters.rs` and `settings.rs` does not drop. A coverage run on the tree after the review fixes shows this result. `generation_parameters.rs` has 25 of 25 lines covered. `settings.rs` has 338 lines, and 19 are missed: 168, 177, 242-244, 280-282, 421 and 618-623. No line that a deleted test reached is now uncovered. The deleted tests called `refused_custom_key`, `GenerationParameters::default`, `CallSettings::default`, serde, and `connection_for` on a dangling slot. `PromptPreset::validate` cases cover the first. The `check_connection_slots` case covers the last. The missed lines are other code: the `Options` arm of `ModePresetBundle`, the two invalid-value fallbacks and the Connection label fallback. Lines 618-623 are `AppSettings::slot_field`, which only a log line calls. A unit case added after the run covers it. This reading of the deleted tests is inferred from their code. No coverage run on the old tree exists to compare.

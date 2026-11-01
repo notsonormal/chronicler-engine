@@ -640,12 +640,17 @@ pub fn make_test_recorder_with_storage(
 /// The block that `open` opens and `close` closes, from the opening tag through
 /// the closing one.
 pub fn prompt_block<'a>(prompt: &'a str, open: &str, close: &str) -> &'a str {
-    // arch-lint: allow(no-unwrap-expect) reason="test helper panics when a prompt block is absent"
-    let start = prompt.find(open).expect("the opening tag renders");
-    let rest = &prompt[start..];
-    // arch-lint: allow(no-unwrap-expect) reason="test helper panics when a prompt block is absent"
-    let end = rest.find(close).expect("the closing tag follows it");
-    &rest[..end + close.len()]
+    let start = prompt.find(open);
+    assert!(start.is_some(), "the {open} block renders: {prompt}");
+    // arch-lint: allow(no-unwrap-expect) reason="test helper: the assert above names the failure"
+    let rest = &prompt[start.expect("the assert checked it")..];
+    let end = rest.find(close);
+    assert!(
+        end.is_some(),
+        "the {close} tag closes the {open} block: {prompt}"
+    );
+    // arch-lint: allow(no-unwrap-expect) reason="test helper: the assert above names the failure"
+    &rest[..end.expect("the assert checked it") + close.len()]
 }
 
 /// Seeding a Game always points the app at it, so a missing pointer is a broken

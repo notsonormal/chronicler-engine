@@ -489,13 +489,17 @@ struct ConnectionSlot {
     kind: SlotKind,
 }
 
+/// The field of the Narration slot. The System row of the table and the fallback of an
+/// empty optional slot both name it.
+const NARRATION_SLOT_FIELD: &str = "narration_connection_id";
+
 /// The one table of the Connection slots. `PresetType` is the slot key
 /// (`AppSettings::connection_for`); the Python scripts read the same four fields
 /// (`scripts/validate_data.py`, `scripts/trial.py`).
 const CONNECTION_SLOTS: [ConnectionSlot; 4] = [
     ConnectionSlot {
         preset_type: PresetType::System,
-        field: "narration_connection_id",
+        field: NARRATION_SLOT_FIELD,
         id: |settings| Some(settings.narration_connection_id.as_str()),
         kind: SlotKind::Required(Role::Narrator),
     },
@@ -607,7 +611,15 @@ impl AppSettings {
             .iter()
             .find(|slot| slot.preset_type == preset_type)
             .and_then(|slot| (slot.id)(self).map(|id| (slot.field, id)))
-            .unwrap_or(("narration_connection_id", &self.narration_connection_id))
+            .unwrap_or((NARRATION_SLOT_FIELD, &self.narration_connection_id))
+    }
+
+    /// The field of the slot that `preset_type` names, even while that slot is empty.
+    pub(crate) fn slot_field(preset_type: PresetType) -> &'static str {
+        CONNECTION_SLOTS
+            .iter()
+            .find(|slot| slot.preset_type == preset_type)
+            .map_or(NARRATION_SLOT_FIELD, |slot| slot.field)
     }
 
     /// An empty optional slot is no reference.

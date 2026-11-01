@@ -791,9 +791,8 @@ def call_kind(call, story):
             return "impersonate" if entry["impersonated"] else "narration"
     # The agent name cannot name the kind here: an Impersonate call records `narrator` too,
     # because `GameViewQuery::role_health` counts the rows of a Role by agent name, and a
-    # name of its own would move the Impersonate failures out of the Narrator health. Until
-    # the map's watch item "A Role for Impersonate" changes that, an answer that reached no
-    # entry is named by the words of its prompt.
+    # name of its own would move the Impersonate failures out of the Narrator health. So an
+    # answer that reached no entry is named by the words of its prompt.
     if "player character" in call["system_prompt"]:
         return "impersonate"
     return "narration"
