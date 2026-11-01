@@ -29,11 +29,13 @@ import {
 	type JobStatus,
 	mergeRoles,
 	modelLabel,
+	pickModel,
 	pickSplit,
 	resultStatus,
 	summarizeEntries,
 	taskText,
 } from "./lib.ts";
+import { readState } from "../rate-limit-wait/state.ts";
 
 const execFileAsync = promisify(execFile);
 const JOBS_ROOT = path.join(os.homedir(), ".pi", "agent", "delegate");
@@ -262,7 +264,10 @@ function parentMode(pi) {
 	});
 
 	const roleList = [...roles.values()]
-		.map((r) => `- ${r.name}: ${modelLabel(r)}${r.tools ? ` (tools: ${r.tools.join(", ")})` : ""}`)
+		.map(
+			(r) =>
+				`- ${r.name}: ${modelLabel(r)}${r.spareModel ? ` (${r.spareModel} while the Anthropic sub has spare capacity)` : ""}${r.tools ? ` (tools: ${r.tools.join(", ")})` : ""}`,
+		)
 		.join("\n");
 
 	pi.registerTool({
@@ -287,8 +292,10 @@ function parentMode(pi) {
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			ctxRef = ctx;
-			const role = roles.get(params.role);
-			if (!role) throw new Error(`Unknown role ${params.role}`);
+			const roleDef = roles.get(params.role);
+			if (!roleDef) throw new Error(`Unknown role ${params.role}`);
+			const pick = pickModel(roleDef, readState(), Date.now() / 1000);
+			const role = pick.spare ? { ...roleDef, model: pick.model } : roleDef;
 			const running = params.resume && [...jobs.values()].find((j) => j.sessionId === params.resume);
 			if (running) throw new Error(`Session ${params.resume} is still running as ${running.label} (${running.id}).`);
 			const id = randomUUID().slice(0, 8);
@@ -330,7 +337,7 @@ function parentMode(pi) {
 				content: [
 					{
 						type: "text",
-						text: `Started ${label} (${id}) as ${role.name} on ${role.model} in pane ${paneId}. The result arrives as a message.`,
+						text: `Started ${label} (${id}) as ${role.name} on ${role.model}${roleDef.spareModel ? ` (spare capacity ${pick.spare ? "used" : "not used"}: ${pick.reason})` : ""} in pane ${paneId}. The result arrives as a message.`,
 					},
 				],
 				details: { id, paneId, role: role.name, sessionId },

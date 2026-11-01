@@ -9,6 +9,7 @@ import {
 	formatResult,
 	mergeRoles,
 	parseRole,
+	pickModel,
 	pickSplit,
 	resultStatus,
 	summarizeEntries,
@@ -158,4 +159,58 @@ test("pickSplit splits the largest pane along its long side", () => {
 	);
 	assert.deepEqual(pickSplit([{ pane_id: "a", rect: { width: 80, height: 43 } }]), { paneId: "a", direction: "down" });
 	assert.equal(pickSplit([]), null);
+});
+
+test("parseRole reads spare_model", () => {
+	const role = parseRole("---\nname: implementer\nmodel: go/x\nspare_model: anthropic/s\n---\n");
+	assert.equal(role?.spareModel, "anthropic/s");
+});
+
+const spareRole = { name: "implementer", model: "go/x", spareModel: "anthropic/s" };
+const NOW = 1_000_000;
+// 5h window 80% passed, 7d window 90% passed.
+const limits = (fiveUtil: number, sevenUtil: number, extra = {}) => ({
+	capturedAt: NOW - 60,
+	fiveReset: NOW + 3600,
+	fiveUtil,
+	fiveStatus: "allowed",
+	sevenReset: NOW + 0.1 * 7 * 86400,
+	sevenUtil,
+	sevenStatus: "allowed",
+	...extra,
+});
+
+test("pickModel uses the spare model when both windows are under pace", () => {
+	const pick = pickModel(spareRole, limits(0.5, 0.6), NOW);
+	assert.equal(pick.model, "anthropic/s");
+	assert.equal(pick.spare, true);
+});
+
+test("pickModel keeps the base model inside the 5h margin", () => {
+	// 80% passed - 20% margin = 60%.
+	assert.equal(pickModel(spareRole, limits(0.61, 0.6), NOW).model, "go/x");
+	assert.equal(pickModel(spareRole, limits(0.59, 0.6), NOW).model, "anthropic/s");
+});
+
+test("pickModel keeps the base model when the 7d window is over pace", () => {
+	assert.equal(pickModel(spareRole, limits(0.1, 0.95), NOW).model, "go/x");
+});
+
+test("pickModel keeps the base model on rejected status", () => {
+	assert.equal(pickModel(spareRole, limits(0.1, 0.5, { fiveStatus: "rejected" }), NOW).model, "go/x");
+	assert.equal(pickModel(spareRole, limits(0.1, 0.5, { sevenStatus: "rejected" }), NOW).model, "go/x");
+});
+
+test("pickModel keeps the base model on stale data of a running 5h window", () => {
+	assert.equal(pickModel(spareRole, limits(0.1, 0.5, { capturedAt: NOW - 3600 }), NOW).model, "go/x");
+});
+
+test("pickModel treats an ended 5h window as empty, even with old data", () => {
+	const state = limits(0.99, 0.5, { capturedAt: NOW - 20000, fiveReset: NOW - 10 });
+	assert.equal(pickModel(spareRole, state, NOW).model, "anthropic/s");
+});
+
+test("pickModel keeps the base model without data or without a spare model", () => {
+	assert.equal(pickModel(spareRole, undefined, NOW).model, "go/x");
+	assert.equal(pickModel({ name: "scout", model: "go/x" }, limits(0, 0), NOW).spare, false);
 });

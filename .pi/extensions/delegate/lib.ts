@@ -2,11 +2,15 @@
 // result text and the pane split. index.ts holds the Pi and herdr wiring.
 // Tests: node --test .pi/extensions/delegate/lib.test.ts
 
+import { FIVE_HOUR_S, type LimitState, SEVEN_DAY_S } from "../rate-limit-wait/state.ts";
+
 export interface Role {
 	name: string;
 	model: string;
 	thinking?: string;
 	tools?: string[];
+	// The model to use instead of `model` while the Anthropic sub has spare capacity.
+	spareModel?: string;
 }
 
 export type JobStatus = "running" | "done" | "failed" | "cancelled";
@@ -43,7 +47,7 @@ function parseTools(lines: string[]): string[] | undefined | null {
 }
 
 // A role file is Markdown with YAML-like frontmatter. Only `name`, `model`,
-// `thinking` and `tools` are read; other keys and the body are ignored, so the
+// `thinking`, `tools` and `spare_model` are read; other keys and the body are ignored, so the
 // pi-herdsman definition files in the same folders stay valid.
 export function parseRole(text: string): Role | null {
 	const frontmatter = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -61,7 +65,55 @@ export function parseRole(text: string): Role | null {
 	const thinking = scalar("thinking");
 	if (thinking) role.thinking = thinking;
 	if (tools) role.tools = tools;
+	const spareModel = scalar("spare_model");
+	if (spareModel) role.spareModel = spareModel;
 	return role;
+}
+
+// Room the 5h window keeps for the main session: the spare model is used only
+// while 5h utilization is this far below the part of the window that has passed.
+export const SPARE_MARGIN = 0.2;
+// Older data says nothing about a 5h window that is still running.
+export const SPARE_MAX_AGE_S = 30 * 60;
+
+export interface ModelPick {
+	model: string;
+	spare: boolean;
+	reason: string;
+}
+
+const pct = (fraction: number) => `${Math.round(fraction * 100)}%`;
+
+// Unused 5h capacity is lost at the reset. The spare model takes it when both
+// windows are under pace: utilization below the part of the window that has passed
+// (minus SPARE_MARGIN for the 5h window), so the 7d budget is not spent early.
+export function pickModel(role: Role, state: LimitState | undefined, nowS: number): ModelPick {
+	const base = (reason: string): ModelPick => ({ model: role.model, spare: false, reason });
+	if (!role.spareModel) return base("no spare model");
+	if (!state) return base("no rate-limit data");
+
+	const fiveEnded = !state.fiveReset || state.fiveReset <= nowS;
+	if (!fiveEnded && nowS - state.capturedAt > SPARE_MAX_AGE_S) return base("rate-limit data is stale");
+
+	let five = "5h window not started";
+	if (!fiveEnded) {
+		const used = state.fiveUtil ?? 1;
+		const passed = 1 - (state.fiveReset! - nowS) / FIVE_HOUR_S;
+		five = `5h ${pct(used)} used, ${pct(passed)} passed`;
+		if (state.fiveStatus === "rejected" || used >= passed - SPARE_MARGIN) return base(`${five}: no spare`);
+	}
+
+	const sevenEnded = state.sevenReset !== undefined && state.sevenReset <= nowS;
+	let seven = "7d window not started";
+	if (!sevenEnded) {
+		if (state.sevenReset === undefined) return base("7d reset unknown");
+		const used = state.sevenUtil ?? 1;
+		const passed = 1 - (state.sevenReset - nowS) / SEVEN_DAY_S;
+		seven = `7d ${pct(used)} used, ${pct(passed)} passed`;
+		if (state.sevenStatus === "rejected" || used >= passed) return base(`${seven}: over pace`);
+	}
+
+	return { model: role.spareModel, spare: true, reason: `${five}; ${seven}` };
 }
 
 // Later sources win, so a project role overrides a global role of the same name.
