@@ -21,7 +21,9 @@ use crate::application::prompting::CharacterContext;
 use crate::domain::model::agent::{AgentSettings, HookInput, Kind, AGENT_HISTORY_WINDOW};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::game::{Game, GameId};
-use crate::domain::model::generation::{GenerationOrder, JobPlan, JobRequest, OptionsRun, Place};
+use crate::domain::model::generation::{
+    Generation, GenerationOrder, JobPlan, JobRequest, OptionsRun, Place,
+};
 use crate::domain::model::message::SwipeAt;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::quantifier::QuantifierResult;
@@ -250,7 +252,7 @@ impl Job {
             },
             STORY_LIMIT,
         )?;
-        let budget = Self::budget(&settings)?;
+        let budget = Self::budget(&settings, &order.generation)?;
 
         let all_characters: Vec<CharacterCard> = bundle.characters.values().cloned().collect();
         let values = NarrationValues {
@@ -268,13 +270,9 @@ impl Job {
             tail: &tail,
         };
 
-        let narrated = self.narrator.narrate(
-            &order.generation,
-            &values,
-            &preset,
-            &settings.response_length,
-            budget,
-        )?;
+        let narrated = self
+            .narrator
+            .narrate(&order.generation, &values, &preset, budget)?;
         Ok(narrated.text)
     }
 
@@ -457,8 +455,11 @@ impl Job {
         )
     }
 
-    fn budget(settings: &AppSettings) -> Result<TokenBudget, JobFailure> {
-        let connection = Self::read(Record::Settings, settings.narration_connection())?;
+    fn budget(settings: &AppSettings, generation: &Generation) -> Result<TokenBudget, JobFailure> {
+        let connection = Self::read(
+            Record::Settings,
+            settings.connection_for(generation.preset_type()),
+        )?;
         Ok(TokenBudget {
             max_context_tokens: connection.resolve_max_context_tokens(),
             max_tokens: connection.max_tokens,

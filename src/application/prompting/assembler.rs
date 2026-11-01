@@ -55,7 +55,6 @@ impl PromptAssembler {
         context: &PromptContext,
         preset: &PromptPreset,
         global_rules: &[String],
-        response_length: Option<&str>,
         budget: TokenBudget,
     ) -> Result<AssembledPrompt, EngineError> {
         let mut template_vars = context.template_vars.clone();
@@ -66,8 +65,7 @@ impl PromptAssembler {
         );
 
         let system_prompt = build_system_prompt(preset, global_rules, &template_vars);
-        let post_history_prompt =
-            build_post_history_prompt(preset, response_length, &template_vars);
+        let post_history_prompt = build_post_history_prompt(preset, &template_vars);
 
         let renderer = LayerRenderer {
             world: context.world,

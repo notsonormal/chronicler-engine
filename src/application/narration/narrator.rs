@@ -44,6 +44,7 @@ pub struct NarrationValues<'a> {
 pub struct Narrator {
     assembler: PromptAssembler,
     recorder: Arc<LlmCallRecorder>,
+    impersonate_recorder: Arc<LlmCallRecorder>,
 }
 
 impl std::fmt::Debug for Narrator {
@@ -55,10 +56,15 @@ impl std::fmt::Debug for Narrator {
 }
 
 impl Narrator {
-    pub fn new(assembler: PromptAssembler, recorder: Arc<LlmCallRecorder>) -> Self {
+    pub fn new(
+        assembler: PromptAssembler,
+        recorder: Arc<LlmCallRecorder>,
+        impersonate_recorder: Arc<LlmCallRecorder>,
+    ) -> Self {
         Self {
             assembler,
             recorder,
+            impersonate_recorder,
         }
     }
 
@@ -67,6 +73,12 @@ impl Narrator {
     /// `backend_info` does not show.
     pub fn recorder(&self) -> &Arc<LlmCallRecorder> {
         &self.recorder
+    }
+
+    /// Only the wiring tests call it: they check which Connection the Impersonate
+    /// slot resolves to.
+    pub fn impersonate_recorder(&self) -> &Arc<LlmCallRecorder> {
+        &self.impersonate_recorder
     }
 
     /// The provider and model the next narration would use.
@@ -81,16 +93,10 @@ impl Narrator {
         &self,
         context: &PromptContext,
         preset: &PromptPreset,
-        response_length: &str,
         budget: TokenBudget,
     ) -> Result<AssembledPrompt, EngineError> {
-        self.assembler.assemble(
-            context,
-            preset,
-            &context.world.global_rules,
-            Some(response_length),
-            budget,
-        )
+        self.assembler
+            .assemble(context, preset, &context.world.global_rules, budget)
     }
 
     /// The prompt rules of each kind live here: the user message, the guide and the
@@ -101,7 +107,6 @@ impl Narrator {
         generation: &Generation,
         values: &NarrationValues,
         preset: &PromptPreset,
-        response_length: &str,
         budget: TokenBudget,
     ) -> Result<Narrated, GenerationFailure> {
         let role = generation.kind().role();
@@ -122,12 +127,15 @@ impl Narrator {
             Generation::InputRetry | Generation::Event(_) => context,
         };
         let assembled = self
-            .assemble(&context, preset, response_length, budget)
+            .assemble(&context, preset, budget)
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
 
         tracing::info!("Narration LLM call (agent={})", role.agent_name());
-        let narration_result = self
-            .recorder
+        let recorder = match generation {
+            Generation::Impersonate { .. } => &self.impersonate_recorder,
+            _ => &self.recorder,
+        };
+        let narration_result = recorder
             .complete(
                 role.agent_name(),
                 &assembled.system_prompt,

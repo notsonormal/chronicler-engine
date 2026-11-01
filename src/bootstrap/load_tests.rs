@@ -156,7 +156,7 @@ fn test_seed_settings_writes_the_file_into_an_empty_row() {
     let storage = Storage::new_in_memory();
     let temp_data = tempfile::TempDir::new().unwrap();
     let settings = AppSettings {
-        response_length: "seeded from file".into(),
+        active_options_prompt_preset_id: "seeded from file".into(),
         ..AppSettings::default()
     };
     std::fs::write(
@@ -168,7 +168,7 @@ fn test_seed_settings_writes_the_file_into_an_empty_row() {
     seed_settings(&storage, temp_data.path()).expect("seed should succeed");
 
     let loaded = storage.get_settings().expect("get settings");
-    assert_eq!(loaded.response_length, "seeded from file");
+    assert_eq!(loaded.active_options_prompt_preset_id, "seeded from file");
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn test_seed_settings_does_not_overwrite_an_edited_row() {
     let temp_data = tempfile::TempDir::new().unwrap();
 
     let edited = AppSettings {
-        response_length: "edited in the dashboard".into(),
+        active_options_prompt_preset_id: "edited in the dashboard".into(),
         ..Default::default()
     };
     storage
@@ -239,7 +239,7 @@ fn test_seed_settings_does_not_overwrite_an_edited_row() {
         .expect("save edited settings");
 
     let from_file = AppSettings {
-        response_length: "from data/settings.json".into(),
+        active_options_prompt_preset_id: "from data/settings.json".into(),
         ..Default::default()
     };
     std::fs::write(
@@ -252,7 +252,7 @@ fn test_seed_settings_does_not_overwrite_an_edited_row() {
 
     let loaded = storage.get_settings().expect("get settings");
     assert_eq!(
-        loaded.response_length, "edited in the dashboard",
+        loaded.active_options_prompt_preset_id, "edited in the dashboard",
         "the seed must not clobber an edited row"
     );
 }
@@ -284,5 +284,30 @@ fn test_shipped_settings_file_seeds_the_settings_row() {
     assert!(
         stored.agents.iter().any(|a| a.name == "options"),
         "the shipped settings must register the options agent, or the feature is silently off"
+    );
+}
+
+#[test]
+fn test_seed_settings_dangling_optional_slot_fails() {
+    use crate::bootstrap::load::seed_settings;
+    use crate::domain::model::settings::AppSettings;
+
+    let storage = Storage::new_in_memory();
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let settings = AppSettings {
+        options_connection_id: Some("not-a-connection".into()),
+        ..AppSettings::default()
+    };
+    std::fs::write(
+        temp_data.path().join("settings.json"),
+        serde_json::to_string(&settings).unwrap(),
+    )
+    .unwrap();
+
+    let err = seed_settings(&storage, temp_data.path())
+        .expect_err("a dangling optional slot must be rejected before the write");
+    assert!(
+        err.to_string().contains("not-a-connection"),
+        "error should name the missing id, got: {err}"
     );
 }

@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::test_support::test_connection;
+use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::{
     AppSettings, LlmConnection, ModePresetRegistry, NarrativePerspective, NarrativeTense,
     NarratorMode, ReasoningEffort, TextCheckMode, TextCheckSettings,
@@ -209,7 +210,6 @@ fn app_settings_deserializes_old_json_without_registry() {
         "connections": [],
         "narration_connection_id": "",
         "quantifier_connection_id": "",
-        "response_length": "",
         "text_check": {"mode": "Disabled", "enable_auto_check": true, "ignored_words": []},
         "agents": []
     }"#;
@@ -257,6 +257,118 @@ fn quantifier_connection_resolves_a_listed_id() {
         .quantifier_connection()
         .expect("default settings list their own quantifier id");
     assert_eq!(conn.id, settings.quantifier_connection_id);
+}
+
+fn settings_with_four_connections() -> AppSettings {
+    AppSettings {
+        connections: vec![
+            test_connection("narration-conn", LlmBackendType::Ollama),
+            test_connection("impersonate-conn", LlmBackendType::Ollama),
+            test_connection("quantifier-conn", LlmBackendType::Ollama),
+            test_connection("options-conn", LlmBackendType::Ollama),
+        ],
+        narration_connection_id: "narration-conn".into(),
+        quantifier_connection_id: "quantifier-conn".into(),
+        impersonate_connection_id: Some("impersonate-conn".into()),
+        options_connection_id: Some("options-conn".into()),
+        ..AppSettings::default()
+    }
+}
+
+#[test]
+fn connection_for_gives_each_call_kind_its_own_slot() {
+    let settings = settings_with_four_connections();
+    let id_for = |preset_type| settings.connection_for(preset_type).expect("slot").id;
+
+    assert_eq!(id_for(PresetType::System), "narration-conn");
+    assert_eq!(id_for(PresetType::Impersonate), "impersonate-conn");
+    assert_eq!(id_for(PresetType::Quantifier), "quantifier-conn");
+    assert_eq!(id_for(PresetType::Options), "options-conn");
+}
+
+#[test]
+fn connection_for_falls_back_to_narration_for_an_empty_optional_slot() {
+    let settings = AppSettings {
+        impersonate_connection_id: None,
+        options_connection_id: None,
+        ..settings_with_four_connections()
+    };
+    let id_for = |preset_type| settings.connection_for(preset_type).expect("slot").id;
+
+    assert_eq!(id_for(PresetType::Impersonate), "narration-conn");
+    assert_eq!(id_for(PresetType::Options), "narration-conn");
+    assert_eq!(id_for(PresetType::Quantifier), "quantifier-conn");
+}
+
+#[test]
+fn connection_for_errors_on_a_dangling_optional_slot() {
+    let settings = AppSettings {
+        impersonate_connection_id: Some("impersonate-missing".into()),
+        options_connection_id: Some("options-missing".into()),
+        ..settings_with_four_connections()
+    };
+
+    let impersonate = settings
+        .connection_for(PresetType::Impersonate)
+        .expect_err("a dangling slot is a configuration fault");
+    let options = settings
+        .connection_for(PresetType::Options)
+        .expect_err("a dangling slot is a configuration fault");
+    assert!(impersonate.to_string().contains("impersonate-missing"));
+    assert!(options.to_string().contains("options-missing"));
+}
+
+#[test]
+fn check_connection_slots_names_the_dangling_slot() {
+    assert!(
+        settings_with_four_connections()
+            .check_connection_slots()
+            .is_ok()
+    );
+
+    let settings = AppSettings {
+        options_connection_id: Some("options-missing".into()),
+        ..settings_with_four_connections()
+    };
+    let err = settings
+        .check_connection_slots()
+        .expect_err("a dangling optional slot fails the check");
+    assert!(err.to_string().contains("options-missing"));
+}
+
+#[test]
+fn clearing_a_deleted_connection_empties_only_the_slots_that_name_it() {
+    let mut settings = AppSettings {
+        options_connection_id: Some("impersonate-conn".into()),
+        ..settings_with_four_connections()
+    };
+
+    settings.clear_optional_slots_naming("impersonate-conn");
+    assert_eq!(settings.impersonate_connection_id, None);
+    assert_eq!(settings.options_connection_id, None);
+
+    let mut settings = settings_with_four_connections();
+    settings.clear_optional_slots_naming("options-conn");
+    assert_eq!(
+        settings.impersonate_connection_id.as_deref(),
+        Some("impersonate-conn")
+    );
+    assert_eq!(settings.options_connection_id, None);
+}
+
+#[test]
+fn an_empty_optional_slot_is_not_stored() {
+    let settings = AppSettings {
+        impersonate_connection_id: None,
+        options_connection_id: None,
+        ..settings_with_four_connections()
+    };
+
+    let json = serde_json::to_value(&settings).expect("serialize");
+    assert!(json.get("impersonate_connection_id").is_none());
+    assert!(json.get("options_connection_id").is_none());
+    let restored: AppSettings = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(restored.impersonate_connection_id, None);
 }
 
 #[test]

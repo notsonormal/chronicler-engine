@@ -12,13 +12,14 @@ pub struct DbSettings {
     pub connections: String, // JSON: Vec<LlmConnection>
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
-    pub response_length: String,
     pub text_check: String,           // JSON: TextCheckSettings
     pub agents: String,               // JSON: Vec<AgentConfig>
     pub mode_preset_registry: String, // JSON: ModePresetRegistry
     pub created_at: String,
     pub updated_at: String,
     pub active_options_prompt_preset_id: String,
+    pub impersonate_connection_id: Option<String>,
+    pub options_connection_id: Option<String>,
 }
 
 impl DbSettings {
@@ -28,13 +29,14 @@ impl DbSettings {
             connections: row.get(1)?,
             narration_connection_id: row.get(2)?,
             quantifier_connection_id: row.get(3)?,
-            response_length: row.get(4)?,
-            text_check: row.get(5)?,
-            agents: row.get(6)?,
-            mode_preset_registry: row.get(7)?,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
-            active_options_prompt_preset_id: row.get(10)?,
+            text_check: row.get(4)?,
+            agents: row.get(5)?,
+            mode_preset_registry: row.get(6)?,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            active_options_prompt_preset_id: row.get(9)?,
+            impersonate_connection_id: row.get(10)?,
+            options_connection_id: row.get(11)?,
         })
     }
 
@@ -54,7 +56,8 @@ impl DbSettings {
             connections,
             narration_connection_id: self.narration_connection_id.clone(),
             quantifier_connection_id: self.quantifier_connection_id.clone(),
-            response_length: self.response_length.clone(),
+            impersonate_connection_id: self.impersonate_connection_id.clone(),
+            options_connection_id: self.options_connection_id.clone(),
             text_check,
             agents,
             mode_preset_registry,

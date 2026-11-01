@@ -136,7 +136,11 @@ pub fn make_test_job_deps(
 ) -> JobDeps {
     seed_default_preset(&storage);
     JobDeps {
-        narrator: Arc::new(Narrator::new(PromptAssembler, recorder)),
+        narrator: Arc::new(Narrator::new(
+            PromptAssembler,
+            Arc::clone(&recorder),
+            recorder,
+        )),
         agent_runner: Arc::new(agent_runner),
         storage,
         tasks: Arc::new(JobTasks::default()),

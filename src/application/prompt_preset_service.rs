@@ -74,9 +74,7 @@ impl PromptPresetService {
     /// The assembled text of the preset a Game picks for a hook. A missing preset
     /// is an error.
     pub fn hook_text(&self, game: &Game, preset_type: PresetType) -> Result<String> {
-        Ok(self
-            .chosen(game, preset_type)?
-            .assemble_text(&[], None, None))
+        Ok(self.chosen(game, preset_type)?.assemble_text(&[], None))
     }
 
     /// The stored preset an edit may change: one that exists and is not a default.

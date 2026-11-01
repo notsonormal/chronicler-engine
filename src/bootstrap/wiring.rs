@@ -28,6 +28,7 @@ use crate::application::world_catalogue::WorldCatalogue;
 use crate::domain::model::game::GameId;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::llm_message::LlmMessage;
+use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::error::Result;
 
@@ -71,12 +72,15 @@ fn recorder_with_storage(
     Arc::new(LlmCallRecorder::with_resolver(resolve, save_fn))
 }
 
-/// The connection whose id is `options` serves options generation; without one,
-/// the narration connection serves.
 fn options_recorder(storage: Arc<Storage>) -> Arc<LlmCallRecorder> {
-    recorder_with_storage(storage, "options", |s| match s.find_connection("options") {
-        Some(c) => Ok(c.clone()),
-        None => s.narration_connection(),
+    recorder_with_storage(storage, "options", |s| {
+        s.connection_for(PresetType::Options)
+    })
+}
+
+fn impersonate_recorder(storage: Arc<Storage>) -> Arc<LlmCallRecorder> {
+    recorder_with_storage(storage, "impersonate", |s| {
+        s.connection_for(PresetType::Impersonate)
     })
 }
 
@@ -97,6 +101,7 @@ pub struct WiredApp {
 fn build_wired_app(
     storage: Arc<Storage>,
     recorder: Arc<LlmCallRecorder>,
+    impersonate_recorder: Arc<LlmCallRecorder>,
     agent_runner: AgentRunner,
     text_check_service: Arc<TextCheckService>,
     initial_game: Option<GameId>,
@@ -119,7 +124,11 @@ fn build_wired_app(
     let game_view_query = GameViewQuery::new(Arc::clone(&storage), game_writer.clone());
     tracing::info!("Narrator: provider={}", recorder.provider_label());
     let job_deps = JobDeps {
-        narrator: Arc::new(Narrator::new(PromptAssembler, recorder)),
+        narrator: Arc::new(Narrator::new(
+            PromptAssembler,
+            recorder,
+            impersonate_recorder,
+        )),
         agent_runner: Arc::new(agent_runner),
         storage: Arc::clone(&storage),
         tasks: Arc::new(JobTasks::default()),
@@ -144,8 +153,7 @@ pub fn build_app_graph(storage: Arc<Storage>, initial_game: Option<GameId>) -> R
     let settings = storage.get_settings()?;
     // Fail fast on a dangling reference at boot: the resolvers would otherwise
     // defer the error to the first generation.
-    settings.narration_connection()?;
-    settings.quantifier_connection()?;
+    settings.check_connection_slots()?;
 
     let narration_recorder = recorder_with_storage(
         Arc::clone(&storage),
@@ -157,6 +165,7 @@ pub fn build_app_graph(storage: Arc<Storage>, initial_game: Option<GameId>) -> R
         "quantifier",
         AppSettings::quantifier_connection,
     );
+    let impersonate_recorder = impersonate_recorder(Arc::clone(&storage));
     let options_recorder = options_recorder(Arc::clone(&storage));
     let agent_runner = AgentRunner::from_configs(
         &settings.agents,
@@ -170,6 +179,7 @@ pub fn build_app_graph(storage: Arc<Storage>, initial_game: Option<GameId>) -> R
     build_wired_app(
         storage,
         narration_recorder,
+        impersonate_recorder,
         agent_runner,
         text_check_service,
         initial_game,
@@ -202,6 +212,7 @@ pub fn build_app_graph_for_tests(
 
     let mut wired = build_wired_app(
         storage,
+        Arc::clone(&recorder),
         recorder,
         agent_runner,
         text_check_service,

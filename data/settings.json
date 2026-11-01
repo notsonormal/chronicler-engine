@@ -65,7 +65,6 @@
   ],
   "narration_connection_id": "opencode-go-deepseek-v4.1-flash",
   "quantifier_connection_id": "opencode-go-deepseek-v4.1-flash",
-  "response_length": "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.",
   "text_check": {
     "mode": "Disabled",
     "enable_auto_check": true,
@@ -75,20 +74,12 @@
     {
       "name": "quantifier",
       "agent_type": "quantifier",
-      "enabled": true,
-      "backend": {
-        "type": "use_named",
-        "value": "quantifier"
-      }
+      "enabled": true
     },
     {
       "name": "options",
       "agent_type": "options",
-      "enabled": true,
-      "backend": {
-        "type": "use_named",
-        "value": "options"
-      }
+      "enabled": true
     }
   ],
   "mode_preset_registry": [

@@ -102,22 +102,11 @@ pub struct AgentSettings {
     pub max_tokens: Option<u32>,
 }
 
-/// [TRIVIAL_ENUM]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case", tag = "type", content = "value")]
-pub enum BackendSelector {
-    #[default]
-    UseMain,
-    UseNamed(String),
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentConfig {
     pub name: String,
     pub agent_type: String,
     pub enabled: bool,
-    #[serde(default)]
-    pub backend: BackendSelector,
 }
 
 impl AgentConfig {
@@ -127,13 +116,11 @@ impl AgentConfig {
                 name: "quantifier".to_string(),
                 agent_type: "quantifier".to_string(),
                 enabled: true,
-                backend: BackendSelector::UseNamed("quantifier".to_string()),
             },
             Self {
                 name: "options".to_string(),
                 agent_type: "options".to_string(),
                 enabled: true,
-                backend: BackendSelector::UseNamed("options".to_string()),
             },
         ]
     }

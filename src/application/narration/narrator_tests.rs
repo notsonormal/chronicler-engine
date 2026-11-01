@@ -26,6 +26,7 @@ use crate::domain::model::state::generation_status::GenerationFailure;
 
 const WRITING_STYLE: &str = "{{narrative_perspective}}-person limited perspective, {{narrative_tense}} tense narrative prose.";
 const NO_FIELDS_PRESET: &str = "no fields";
+const OUTPUT_FORMAT: &str = "Write one paragraph.\n\nResponse Length:\nShort";
 
 fn preset() -> PromptPreset {
     PromptPreset {
@@ -34,7 +35,7 @@ fn preset() -> PromptPreset {
         role: Some("You are a test narrator.".to_string()),
         instructions: Some("Follow the world's rules.".to_string()),
         writing_style: Some(WRITING_STYLE.to_string()),
-        output_format: Some("Write one paragraph.".to_string()),
+        output_format: Some(OUTPUT_FORMAT.to_string()),
         allowed_modes: vec![],
         is_default: true,
         preset_type: PresetType::System,
@@ -228,7 +229,8 @@ impl NarrationCase<'_> {
 }
 
 fn narrator(model: Arc<ScriptedModel>) -> Narrator {
-    Narrator::new(PromptAssembler, make_test_recorder(model))
+    let recorder = make_test_recorder(model);
+    Narrator::new(PromptAssembler, Arc::clone(&recorder), recorder)
 }
 
 fn narrate_with(
@@ -237,7 +239,7 @@ fn narrate_with(
     preset: &PromptPreset,
     budget: TokenBudget,
 ) -> Result<Narrated, GenerationFailure> {
-    narrator(Arc::clone(model)).narrate(&case.generation, &case.values, preset, "Short", budget)
+    narrator(Arc::clone(model)).narrate(&case.generation, &case.values, preset, budget)
 }
 
 fn sent_prompt(case: &NarrationCase, preset: &PromptPreset) -> ModelCall {
@@ -373,7 +375,7 @@ fn test_a_preset_with_no_fields_renders_no_sections() {
     }
 }
 
-// CASE narrator-preset-fields-present: only the preset's present fields render, and the response length lands in the output format.
+// CASE narrator-preset-fields-present: only the preset's present fields render, and the output format holds the preset's own words.
 #[test]
 fn test_only_the_presets_present_fields_render() {
     let fixture = Fixture::new();
@@ -398,13 +400,57 @@ fn test_only_the_presets_present_fields_render() {
     assert!(!call.user_prompt.contains("<writing_style>"));
     let format = layer(&call.user_prompt, "<output_format>", "</output_format>");
     assert!(
-        format.contains("Write one paragraph."),
-        "the present output format renders: {format}"
+        format.contains("Write one paragraph.")
+            && format.contains("Response Length:")
+            && format.contains("Short"),
+        "the present output format renders with its length words: {format}"
     );
-    assert!(
-        format.contains("Response Length:") && format.contains("Short"),
-        "the response length lands in the output format: {format}"
-    );
+}
+
+/// The text of a layer, with its tags and the indent that `wrap_xml` adds taken off.
+fn layer_text(prompt: &str, tag: &str) -> String {
+    let wrapped = layer(prompt, &format!("<{tag}>"), &format!("</{tag}>"));
+    let inner = wrapped
+        .strip_prefix(&format!("<{tag}>\n"))
+        .and_then(|rest| rest.strip_suffix(&format!("\n</{tag}>")))
+        .expect("a wrapped layer holds its text between its tags");
+    inner
+        .lines()
+        .map(|line| line.strip_prefix("    ").unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+// CASE narrator-output-format-is-the-preset-text: the output format layer holds exactly the preset's text, for a Narration and for an Impersonate.
+#[test]
+fn test_the_output_format_layer_is_the_preset_text() {
+    let fixture = Fixture::new();
+    let marker = "MARKER-ONE\n\nSecond block of the marker.";
+    for generation_preset in [
+        PromptPreset {
+            output_format: Some(marker.to_string()),
+            ..preset()
+        },
+        PromptPreset {
+            output_format: Some(marker.to_string()),
+            ..impersonate_preset()
+        },
+    ] {
+        let case = fixture.narration(&fixture.history, "I look around.");
+        let case = match generation_preset.preset_type {
+            PresetType::Impersonate => case.impersonating(None),
+            _ => case,
+        };
+
+        let call = sent_prompt(&case, &generation_preset);
+
+        assert_eq!(
+            layer_text(&call.user_prompt, "output_format"),
+            marker,
+            "{:?}: the engine adds nothing to the preset's output format",
+            case.generation.kind()
+        );
+    }
 }
 
 // CASE narrator-history-small-budget: a small context budget drops the oldest history entries.
@@ -1125,7 +1171,7 @@ fn recording_narrator(
 ) -> Narrator {
     let recorder: Arc<LlmCallRecorder> =
         make_test_recorder_with_storage(model, Arc::clone(storage));
-    Narrator::new(PromptAssembler, recorder)
+    Narrator::new(PromptAssembler, Arc::clone(&recorder), recorder)
 }
 
 // CASE narrator-call-record: a good call is recorded with its agent name and prompts.
@@ -1142,7 +1188,6 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
             &case.generation,
             &case.values,
             &preset(),
-            "Short",
             TokenBudget::fallback(),
         )
         .expect("a narration is a result");
@@ -1155,6 +1200,52 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     assert!(call.error_message.is_none());
     assert!(!call.system_prompt.is_empty());
     assert!(!call.user_prompt.is_empty());
+}
+
+// CASE narrator-impersonate-uses-its-own-recorder: an Impersonate calls the recorder of its own slot, and every other kind calls the narration recorder.
+#[test]
+fn test_an_impersonate_calls_its_own_recorder() {
+    let narration_model = Arc::new(ScriptedModel::new().narration("You look around."));
+    let impersonate_model = Arc::new(ScriptedModel::new().narration("I look around."));
+    let narrator = Narrator::new(
+        PromptAssembler,
+        make_test_recorder(narration_model.clone()),
+        make_test_recorder(impersonate_model.clone()),
+    );
+    let fixture = Fixture::new();
+    let case = fixture.narration(&fixture.history, TYPED_INPUT);
+    let impersonation = fixture
+        .narration(&fixture.history, TYPED_INPUT)
+        .impersonating(None);
+
+    narrator
+        .narrate(
+            &impersonation.generation,
+            &impersonation.values,
+            &impersonate_preset(),
+            TokenBudget::fallback(),
+        )
+        .expect("an impersonation is a result");
+    assert_eq!(impersonate_model.calls().len(), 1);
+    assert!(
+        narration_model.calls().is_empty(),
+        "an Impersonate never calls the narration recorder"
+    );
+
+    narrator
+        .narrate(
+            &case.generation,
+            &case.values,
+            &preset(),
+            TokenBudget::fallback(),
+        )
+        .expect("a narration is a result");
+    assert_eq!(narration_model.calls().len(), 1);
+    assert_eq!(
+        impersonate_model.calls().len(),
+        1,
+        "a Narration never calls the Impersonate recorder"
+    );
 }
 
 fn event_record() -> EventRecord {
@@ -1202,7 +1293,6 @@ fn test_a_call_carries_the_role_of_its_generation() {
                 &case.generation,
                 &case.values,
                 &preset(),
-                "Short",
                 TokenBudget::fallback(),
             )
             .expect("the narration is a result");
@@ -1362,7 +1452,6 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
         &case.generation,
         &case.values,
         &preset(),
-        "Short",
         TokenBudget::fallback(),
     );
 

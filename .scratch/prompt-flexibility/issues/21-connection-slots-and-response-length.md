@@ -1,7 +1,7 @@
 # Add the connection slots and remove the global response length
 
 Type: task (AFK)
-Status: claimed
+Status: resolved
 Blocked by: 18
 
 ## Question
@@ -145,3 +145,31 @@ Docs:
 ## Output
 
 Resolved when the check passes and `python build.py` passes. The answer records the migration step, the scenario id, and the check results.
+
+## Answer
+
+Resolved on 2026-11-01, on the branch `pf21-connection-slots` (merged into `prompt-flexibility`). The full gate with the browser tier runs after tickets 20 and 21 merge. `python build.py --no-browser` passed here: guardrails 309, integration 1551 (3 skipped), and 516 Python tests.
+
+**The migration** is step 33 (`LATEST_VERSION` 33). It adds the columns `impersonate_connection_id` and `options_connection_id`. It appends `"\n\nResponse Length:\n" + text` to the `output_format` of every stored system preset that has one. Then it drops `response_length`. A fresh database (no settings row) and an empty text append nothing. Its tests are `test_v33_moves_the_response_length_into_the_system_presets_and_adds_the_slots` and `test_v33_without_a_settings_row_or_with_an_empty_length_appends_nothing` in `plumbing_tests.rs`.
+
+**The scenario** is 20.53 in `docs/specs/settings.md`: deleting the Connection of an optional Connection slot empties the slot. Its test is `test_delete_connection_of_an_optional_slot_empties_the_slot` in `tests/http/settings.rs`. It also shows that a refused delete writes nothing.
+
+**The check passed.** I copied the probe DB of the main checkout (`chronicler_3001.db`, version 32) with the SQLite backup call into `target/ui-investigator-pf21/debug/chronicler_3002.db`. Before the start I added two copies of default presets (`system_copy_pf21`, `impersonate_copy_pf21`), because the boot seed can rewrite a default preset and would hide the migration. The server of this branch ran on port 3002, and I stopped it afterwards.
+
+- `user_version` went from 32 to 33. The `settings` table has no `response_length` column. Both new slot columns are `NULL`. The stored `agents` column still holds the `backend` keys, and the server started and played.
+- `system_default` grew from 1141 to 1396 characters, and `system_if_default` from 1184 to 1439. The copy of the default system preset grew to 1396 and ends with the length words. The copy of the Impersonate preset stayed at 149.
+- One Impersonate (`/impersonate` through `POST /action`, Game header 7): the call has no `Response Length:` and no `<PlayerInput>`. The user message ends at `</output_format>`, and that layer holds the preset text only. The answer was a normal Input.
+- One Narration on the same Game: `Response Length:` appears once. Its `<output_format>` layer (1469 characters) is byte for byte the same as the layer of the last Narration before the migration (call 632).
+
+**Deviations and notes.**
+
+- **The API key.** The Go check Connection holds no key. `build.py run` from the worktree found no `.env`, and the agent may not read `.env` files. I started the built binary from a scratch folder under `tmp/` of the main checkout, so that the server itself loaded the `.env` above it. Its data folder was a copy of `data/` of this branch (`target/ui-investigator-pf21/debug/data`). I removed the scratch folder. No secret was read or printed.
+- **`Job::budget` has no test of its own.** It reads the Connection of the generation. The four arms of `connection_for` have tests, and the wiring test shows the Impersonate recorder resolves its own Connection.
+- **`Narrator::impersonate_recorder()`** is a new accessor for the wiring tests, as `recorder()` is. The doc comment names that use.
+- **`AppSettings::check_connection_slots()` and `clear_optional_slots_naming()`** are two small domain methods that the ticket did not name. The boot, the seed and the delete handler call them, so each rule has one home.
+- **Load tests.** Their marker value moved to `active_options_prompt_preset_id`, because the seed now refuses a dangling Connection id. The storage tests use `narration_connection_id` as the marker value.
+- **The trial script.** The setup file takes optional `connections.impersonate` and `connections.options`. The script refuses a value that differs from the stored slot, with the text "the database holds the <slot> slot `<id>`, and the setup asks for `<id>`: no route sets it". With no value, the pack shows the stored slot, or the Narration Connection.
+
+**Accepted limits (from the ticket).** An Impersonate on its own Connection reports its health under the Narrator role, and `/debug/backend` shows only the narration recorder. The two new slots reach an existing database only through the database (no route). The default text moved as it is.
+
+**Changed files, beyond the Steps:** `CONTEXT.md` (**Connection slot**, **Connection**), `narration_system.md`, `agent_system.md`, `architecture_system.md`, `prompt_system.md`, `settings.schema.json` (and `additionalProperties: false` on an `agents` entry), `validate_data.py`, `scripts/trial.py` and its tests.

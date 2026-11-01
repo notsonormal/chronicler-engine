@@ -173,6 +173,20 @@ Then the response is a 200 with an empty body
 And the connection list no longer holds it
 ```
 
+#### Scenario 20.53: Deleting the Connection of an optional Connection slot empties the slot
+
+```gherkin
+Given an app state whose Narrator and Quantifier roles use a first connection
+And the Options slot names the first connection
+And the Impersonate slot names a second connection
+When the client deletes the first connection
+Then the response is a 400
+And the Options slot still names the first connection
+When the client deletes the second connection
+Then the response is a 200 with an empty body
+And the Impersonate slot is empty, so Impersonate uses the Narration Connection
+```
+
 ### POST /connections/add — create
 
 #### Scenario 20.9: Adding a Connection whose name already exists answers 400

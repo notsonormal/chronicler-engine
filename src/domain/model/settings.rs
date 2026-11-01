@@ -439,8 +439,12 @@ pub struct AppSettings {
     pub connections: Vec<LlmConnection>,
     pub narration_connection_id: String,
     pub quantifier_connection_id: String,
-    #[serde(default = "settings_defaults::default_response_length")]
-    pub response_length: String,
+    /// The Connection slot of Impersonate. Empty means the narration Connection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impersonate_connection_id: Option<String>,
+    /// The Connection slot of Options. Empty means the narration Connection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub options_connection_id: Option<String>,
     #[serde(default)]
     pub text_check: TextCheckSettings,
     #[serde(default = "AgentConfig::defaults")]
@@ -479,7 +483,8 @@ impl Default for AppSettings {
             connections: vec![gpt4o, euryale, gemma],
             narration_connection_id: "openrouter-gpt-4o-mini".into(),
             quantifier_connection_id: "openrouter-gpt-4o-mini".into(),
-            response_length: settings_defaults::default_response_length(),
+            impersonate_connection_id: None,
+            options_connection_id: None,
             text_check: TextCheckSettings::default(),
             agents: AgentConfig::defaults(),
             mode_preset_registry: ModePresetRegistry::default(),
@@ -532,21 +537,57 @@ impl AppSettings {
         self.find_connection(&self.quantifier_connection_id)
     }
 
-    pub fn narration_connection(&self) -> crate::error::Result<LlmConnection> {
-        self.get_narration_connection().cloned().ok_or_else(|| {
-            EngineError::Config(format!(
-                "narration_connection_id '{}' is not in the connections list",
-                self.narration_connection_id
-            ))
+    /// The Connection of the call kind `preset_type`. An empty Impersonate or
+    /// Options slot uses the narration Connection.
+    pub fn connection_for(&self, preset_type: PresetType) -> crate::error::Result<LlmConnection> {
+        let (slot, id) = match preset_type {
+            PresetType::System => ("narration_connection_id", &self.narration_connection_id),
+            PresetType::Quantifier => ("quantifier_connection_id", &self.quantifier_connection_id),
+            PresetType::Impersonate => match &self.impersonate_connection_id {
+                Some(id) => ("impersonate_connection_id", id),
+                None => ("narration_connection_id", &self.narration_connection_id),
+            },
+            PresetType::Options => match &self.options_connection_id {
+                Some(id) => ("options_connection_id", id),
+                None => ("narration_connection_id", &self.narration_connection_id),
+            },
+        };
+        self.find_connection(id).cloned().ok_or_else(|| {
+            EngineError::Config(format!("{slot} '{id}' is not in the connections list"))
         })
     }
 
+    pub fn narration_connection(&self) -> crate::error::Result<LlmConnection> {
+        self.connection_for(PresetType::System)
+    }
+
     pub fn quantifier_connection(&self) -> crate::error::Result<LlmConnection> {
-        self.get_quantifier_connection().cloned().ok_or_else(|| {
-            EngineError::Config(format!(
-                "quantifier_connection_id '{}' is not in the connections list",
-                self.quantifier_connection_id
-            ))
-        })
+        self.connection_for(PresetType::Quantifier)
+    }
+
+    /// Fails when a slot names a Connection that the list does not hold. An
+    /// empty optional slot is no reference.
+    pub fn check_connection_slots(&self) -> crate::error::Result<()> {
+        for preset_type in [
+            PresetType::System,
+            PresetType::Impersonate,
+            PresetType::Quantifier,
+            PresetType::Options,
+        ] {
+            self.connection_for(preset_type)?;
+        }
+        Ok(())
+    }
+
+    /// The optional slots that name `connection_id`, cleared by a delete.
+    pub fn clear_optional_slots_naming(&mut self, connection_id: &str) {
+        for slot in [
+            &mut self.impersonate_connection_id,
+            &mut self.options_connection_id,
+        ] {
+            if slot.as_deref() == Some(connection_id) {
+                *slot = None;
+            }
+        }
     }
 }

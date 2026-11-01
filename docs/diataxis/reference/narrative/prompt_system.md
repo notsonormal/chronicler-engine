@@ -38,7 +38,7 @@ The narrator makes Layer 6 from the kind of the generation (see Narration System
 | **Instructions** | Preset `instructions` field | `<instructions>` | System |
 | **Writing Style** | Preset `writing_style` field | `<writing_style>` | User (post-history splice) |
 | **Global Rules** | `world.json` `global_rules` array | `<global_rules>` | System |
-| **Output Format** | Preset `output_format` field + response length | `<output_format>` | User (post-history splice) |
+| **Output Format** | Preset `output_format` field | `<output_format>` | User (post-history splice) |
 
 ## Single-User-Message Mode
 

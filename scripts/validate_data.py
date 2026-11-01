@@ -85,22 +85,19 @@ def validate_all():
     if settings_file.exists():
         settings_data = load_json(settings_file)
         valid_connection_ids = {c["id"] for c in settings_data.get("connections", [])}
-        narration_id = settings_data.get("narration_connection_id")
-        quantifier_id = settings_data.get("quantifier_connection_id")
-
-        if narration_id and narration_id not in valid_connection_ids:
-            print(
-                f"FAIL: {settings_file}\n"
-                f"  narration_connection_id '{narration_id}' not found in connections"
-            )
-            errors += 1
-
-        if quantifier_id and quantifier_id not in valid_connection_ids:
-            print(
-                f"FAIL: {settings_file}\n"
-                f"  quantifier_connection_id '{quantifier_id}' not found in connections"
-            )
-            errors += 1
+        for slot in (
+            "narration_connection_id",
+            "quantifier_connection_id",
+            "impersonate_connection_id",
+            "options_connection_id",
+        ):
+            connection_id = settings_data.get(slot)
+            if connection_id and connection_id not in valid_connection_ids:
+                print(
+                    f"FAIL: {settings_file}\n"
+                    f"  {slot} '{connection_id}' not found in connections"
+                )
+                errors += 1
     print("Running relational validation...")
     for world_file in data_dir.glob("worlds/*/world.json"):
         world_data = load_json(world_file)

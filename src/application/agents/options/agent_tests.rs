@@ -6,9 +6,7 @@ use std::sync::Arc;
 use crate::adapters::driven::storage::Storage;
 use crate::application::agents::options::agent::OptionsGeneratorAgent;
 use crate::application::agents::trait_def::EndOfJobAgent;
-use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, BackendSelector, HookInput, Role, WorldView,
-};
+use crate::domain::model::agent::{AgentConfig, AgentSettings, HookInput, Role, WorldView};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
 use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona};
@@ -22,7 +20,6 @@ fn config() -> AgentConfig {
         name: "options".to_string(),
         agent_type: "options".to_string(),
         enabled: true,
-        backend: BackendSelector::UseNamed("options".to_string()),
     }
 }
 

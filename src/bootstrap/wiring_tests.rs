@@ -136,3 +136,56 @@ fn openrouter_connection_without_key_reports_missing_api_key() {
         "the error must name the environment fallback, got: {message}"
     );
 }
+
+fn second_mock_connection() -> LlmConnection {
+    LlmConnection {
+        model: "impersonate-model".to_string(),
+        ..test_connection("impersonate-mock", LlmBackendType::Mock)
+    }
+}
+
+fn wired_app_with_impersonate_slot(
+    slot: Option<&str>,
+) -> Result<WiredApp, crate::error::EngineError> {
+    let storage = Arc::new(Storage::new_in_memory());
+    let mut settings = settings_with(mock_connection());
+    settings.connections.push(second_mock_connection());
+    settings.impersonate_connection_id = slot.map(str::to_string);
+    storage
+        .save_settings(&settings)
+        .expect("save_settings should succeed");
+    build_app_graph(storage, None)
+}
+
+#[test]
+fn the_impersonate_slot_chooses_the_connection_of_the_impersonate_recorder() {
+    let wired = wired_app_with_impersonate_slot(Some("impersonate-mock")).expect("boots");
+    let model = |recorder: &Arc<crate::application::llm_recorder::LlmCallRecorder>| {
+        recorder.provider().expect("resolves").model().to_string()
+    };
+
+    assert_eq!(
+        model(wired.job_deps.narrator.impersonate_recorder()),
+        "impersonate-model"
+    );
+    assert_eq!(model(wired.job_deps.narrator.recorder()), "mock-model");
+}
+
+#[test]
+fn an_empty_impersonate_slot_uses_the_narration_connection() {
+    let wired = wired_app_with_impersonate_slot(None).expect("boots");
+
+    let recorder = wired.job_deps.narrator.impersonate_recorder();
+
+    assert_eq!(recorder.provider().expect("resolves").model(), "mock-model");
+}
+
+#[test]
+fn a_dangling_impersonate_slot_fails_the_boot_and_names_the_id() {
+    let error = match wired_app_with_impersonate_slot(Some("no-such-connection")) {
+        Ok(_) => panic!("a dangling slot must fail the boot"),
+        Err(error) => error,
+    };
+
+    assert!(error.to_string().contains("no-such-connection"));
+}

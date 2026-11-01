@@ -1,7 +1,7 @@
 use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use crate::domain::model::{
-    agent::{AgentConfig, BackendSelector},
+    agent::{AgentConfig},
     settings::{
         AppSettings, LlmConnection, NarratorMode, ReasoningEffort, TextCheckMode, TextCheckSettings,
     },
@@ -33,7 +33,7 @@ fn test_get_settings_defaults_when_empty_sqlite() {
 fn test_seed_settings_idempotent() {
     let storage = Storage::new_in_memory();
     let custom = AppSettings {
-        response_length: "custom".into(),
+        narration_connection_id: "custom".into(),
         ..Default::default()
     };
 
@@ -45,14 +45,14 @@ fn test_seed_settings_idempotent() {
         .expect("second seed should succeed (idempotent)");
 
     let loaded = storage.get_settings().expect("should get settings");
-    assert_eq!(loaded.response_length, "custom");
+    assert_eq!(loaded.narration_connection_id, "custom");
 }
 
 #[test]
 fn test_seed_settings_idempotent_sqlite() {
     let storage = sqlite_storage().unwrap();
     let custom = AppSettings {
-        response_length: "custom".into(),
+        narration_connection_id: "custom".into(),
         ..Default::default()
     };
 
@@ -64,14 +64,14 @@ fn test_seed_settings_idempotent_sqlite() {
         .expect("second seed should succeed (idempotent)");
 
     let loaded = storage.get_settings().expect("should get settings");
-    assert_eq!(loaded.response_length, "custom");
+    assert_eq!(loaded.narration_connection_id, "custom");
 }
 
 #[test]
 fn test_seed_settings_does_not_overwrite_an_existing_row() {
     let storage = Storage::new_in_memory();
     let edited = AppSettings {
-        response_length: "edited in the dashboard".into(),
+        narration_connection_id: "edited in the dashboard".into(),
         ..Default::default()
     };
     storage
@@ -79,7 +79,7 @@ fn test_seed_settings_does_not_overwrite_an_existing_row() {
         .expect("save edited settings");
 
     let from_file = AppSettings {
-        response_length: "from data/settings.json".into(),
+        narration_connection_id: "from data/settings.json".into(),
         ..Default::default()
     };
     storage
@@ -88,7 +88,7 @@ fn test_seed_settings_does_not_overwrite_an_existing_row() {
 
     let loaded = storage.get_settings().expect("should get settings");
     assert_eq!(
-        loaded.response_length, "edited in the dashboard",
+        loaded.narration_connection_id, "edited in the dashboard",
         "seed must not clobber a row the user has already edited"
     );
 }
@@ -97,7 +97,7 @@ fn test_seed_settings_does_not_overwrite_an_existing_row() {
 fn test_seed_settings_does_not_overwrite_an_existing_row_sqlite() {
     let storage = sqlite_storage().unwrap();
     let edited = AppSettings {
-        response_length: "edited in the dashboard".into(),
+        narration_connection_id: "edited in the dashboard".into(),
         ..Default::default()
     };
     storage
@@ -105,7 +105,7 @@ fn test_seed_settings_does_not_overwrite_an_existing_row_sqlite() {
         .expect("save edited settings");
 
     let from_file = AppSettings {
-        response_length: "from data/settings.json".into(),
+        narration_connection_id: "from data/settings.json".into(),
         ..Default::default()
     };
     storage
@@ -114,7 +114,7 @@ fn test_seed_settings_does_not_overwrite_an_existing_row_sqlite() {
 
     let loaded = storage.get_settings().expect("should get settings");
     assert_eq!(
-        loaded.response_length, "edited in the dashboard",
+        loaded.narration_connection_id, "edited in the dashboard",
         "seed must not clobber a row the user has already edited"
     );
 }
@@ -128,7 +128,7 @@ fn test_update_settings_applies_the_closure_and_persists() {
 
     let returned = storage
         .update_settings(|s| {
-            s.response_length = "updated".into();
+            s.narration_connection_id = "updated".into();
             Ok(s.connections.len())
         })
         .expect("update should succeed");
@@ -139,7 +139,7 @@ fn test_update_settings_applies_the_closure_and_persists() {
         "update_settings should return the closure's value"
     );
     let loaded = storage.get_settings().expect("should get settings");
-    assert_eq!(loaded.response_length, "updated");
+    assert_eq!(loaded.narration_connection_id, "updated");
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn test_update_settings_applies_the_closure_and_persists_sqlite() {
 
     let returned = storage
         .update_settings(|s| {
-            s.response_length = "updated".into();
+            s.narration_connection_id = "updated".into();
             Ok(s.connections.len())
         })
         .expect("update should succeed");
@@ -162,27 +162,27 @@ fn test_update_settings_applies_the_closure_and_persists_sqlite() {
         "update_settings should return the closure's value"
     );
     let loaded = storage.get_settings().expect("should get settings");
-    assert_eq!(loaded.response_length, "updated");
+    assert_eq!(loaded.narration_connection_id, "updated");
 }
 
 #[test]
 fn test_update_settings_error_aborts_the_write() {
     let storage = Storage::new_in_memory();
     let original = AppSettings {
-        response_length: "original".into(),
+        narration_connection_id: "original".into(),
         ..Default::default()
     };
     storage.save_settings(&original).expect("seed original");
 
     let result: Result<(), _> = storage.update_settings(|s| {
-        s.response_length = "should not persist".into();
+        s.narration_connection_id = "should not persist".into();
         Err(EngineError::Config("nope".into()))
     });
 
     assert!(result.is_err(), "the closure error should propagate");
     let loaded = storage.get_settings().expect("should get settings");
     assert_eq!(
-        loaded.response_length, "original",
+        loaded.narration_connection_id, "original",
         "a rejected update must leave the row untouched"
     );
 }
@@ -191,20 +191,20 @@ fn test_update_settings_error_aborts_the_write() {
 fn test_update_settings_error_aborts_the_write_sqlite() {
     let storage = sqlite_storage().unwrap();
     let original = AppSettings {
-        response_length: "original".into(),
+        narration_connection_id: "original".into(),
         ..Default::default()
     };
     storage.save_settings(&original).expect("seed original");
 
     let result: Result<(), _> = storage.update_settings(|s| {
-        s.response_length = "should not persist".into();
+        s.narration_connection_id = "should not persist".into();
         Err(EngineError::Config("nope".into()))
     });
 
     assert!(result.is_err(), "the closure error should propagate");
     let loaded = storage.get_settings().expect("should get settings");
     assert_eq!(
-        loaded.response_length, "original",
+        loaded.narration_connection_id, "original",
         "a rejected update must leave the row untouched"
     );
 }
@@ -220,7 +220,8 @@ fn test_save_then_get_settings_roundtrip() {
         )],
         narration_connection_id: "test".into(),
         quantifier_connection_id: "test".into(),
-        response_length: "concise".into(),
+        impersonate_connection_id: Some("impersonate-slot".into()),
+        options_connection_id: Some("options-slot".into()),
         text_check: TextCheckSettings {
             mode: TextCheckMode::Spell,
             enable_auto_check: true,
@@ -230,7 +231,6 @@ fn test_save_then_get_settings_roundtrip() {
             name: "TestAgent".into(),
             agent_type: "PreGeneration".into(),
             enabled: true,
-            backend: BackendSelector::UseMain,
         }],
         ..Default::default()
     };
@@ -247,7 +247,14 @@ fn test_save_then_get_settings_roundtrip() {
     assert_eq!(loaded.connections[0].id, "test");
     assert_eq!(loaded.narration_connection_id, "test");
     assert_eq!(loaded.quantifier_connection_id, "test");
-    assert_eq!(loaded.response_length, "concise");
+    assert_eq!(
+        loaded.impersonate_connection_id.as_deref(),
+        Some("impersonate-slot")
+    );
+    assert_eq!(
+        loaded.options_connection_id.as_deref(),
+        Some("options-slot")
+    );
     assert_eq!(loaded.text_check.mode, TextCheckMode::Spell);
     assert_eq!(loaded.text_check.ignored_words, vec!["foobar"]);
     assert_eq!(loaded.agents.len(), 1);
@@ -286,7 +293,8 @@ fn test_save_then_get_settings_roundtrip_sqlite() {
         )],
         narration_connection_id: "test".into(),
         quantifier_connection_id: "test".into(),
-        response_length: "concise".into(),
+        impersonate_connection_id: Some("impersonate-slot".into()),
+        options_connection_id: Some("options-slot".into()),
         text_check: TextCheckSettings {
             mode: TextCheckMode::Spell,
             enable_auto_check: true,
@@ -296,7 +304,6 @@ fn test_save_then_get_settings_roundtrip_sqlite() {
             name: "TestAgent".into(),
             agent_type: "PreGeneration".into(),
             enabled: true,
-            backend: BackendSelector::UseMain,
         }],
         ..Default::default()
     };
@@ -313,7 +320,14 @@ fn test_save_then_get_settings_roundtrip_sqlite() {
     assert_eq!(loaded.connections[0].id, "test");
     assert_eq!(loaded.narration_connection_id, "test");
     assert_eq!(loaded.quantifier_connection_id, "test");
-    assert_eq!(loaded.response_length, "concise");
+    assert_eq!(
+        loaded.impersonate_connection_id.as_deref(),
+        Some("impersonate-slot")
+    );
+    assert_eq!(
+        loaded.options_connection_id.as_deref(),
+        Some("options-slot")
+    );
     assert_eq!(loaded.text_check.mode, TextCheckMode::Spell);
     assert_eq!(loaded.text_check.ignored_words, vec!["foobar"]);
     assert_eq!(loaded.agents.len(), 1);
@@ -350,7 +364,7 @@ fn test_save_settings_updates_existing() {
         .expect("should save defaults");
 
     let modified = AppSettings {
-        response_length: "updated".into(),
+        narration_connection_id: "updated".into(),
         ..Default::default()
     };
     storage
@@ -358,7 +372,7 @@ fn test_save_settings_updates_existing() {
         .expect("should save modified");
 
     let loaded = storage.get_settings().expect("should get");
-    assert_eq!(loaded.response_length, "updated");
+    assert_eq!(loaded.narration_connection_id, "updated");
 }
 
 #[test]
@@ -370,7 +384,7 @@ fn test_save_settings_updates_existing_sqlite() {
         .expect("should save defaults");
 
     let modified = AppSettings {
-        response_length: "updated".into(),
+        narration_connection_id: "updated".into(),
         ..Default::default()
     };
     storage
@@ -378,7 +392,7 @@ fn test_save_settings_updates_existing_sqlite() {
         .expect("should save modified");
 
     let loaded = storage.get_settings().expect("should get");
-    assert_eq!(loaded.response_length, "updated");
+    assert_eq!(loaded.narration_connection_id, "updated");
 }
 
 #[test]
@@ -518,7 +532,6 @@ fn test_save_then_get_settings_preserves_agents() {
         name: "MyAgent".into(),
         agent_type: "Custom".into(),
         enabled: false,
-        backend: BackendSelector::UseNamed("special-conn".into()),
     };
 
     let settings = AppSettings {
@@ -534,10 +547,6 @@ fn test_save_then_get_settings_preserves_agents() {
     assert_eq!(loaded_agent.name, "MyAgent");
     assert_eq!(loaded_agent.agent_type, "Custom");
     assert!(!loaded_agent.enabled);
-    assert_eq!(
-        loaded_agent.backend,
-        BackendSelector::UseNamed("special-conn".into())
-    );
 }
 
 #[test]
@@ -547,7 +556,6 @@ fn test_save_then_get_settings_preserves_agents_sqlite() {
         name: "MyAgent".into(),
         agent_type: "Custom".into(),
         enabled: false,
-        backend: BackendSelector::UseNamed("special-conn".into()),
     };
 
     let settings = AppSettings {
@@ -563,10 +571,6 @@ fn test_save_then_get_settings_preserves_agents_sqlite() {
     assert_eq!(loaded_agent.name, "MyAgent");
     assert_eq!(loaded_agent.agent_type, "Custom");
     assert!(!loaded_agent.enabled);
-    assert_eq!(
-        loaded_agent.backend,
-        BackendSelector::UseNamed("special-conn".into())
-    );
 }
 
 #[test]
@@ -603,11 +607,11 @@ fn test_settings_table_singleton_constraint() {
     let storage = sqlite_storage().unwrap();
 
     let settings1 = AppSettings {
-        response_length: "first".into(),
+        narration_connection_id: "first".into(),
         ..Default::default()
     };
     let settings2 = AppSettings {
-        response_length: "second".into(),
+        narration_connection_id: "second".into(),
         ..Default::default()
     };
 
@@ -620,12 +624,12 @@ fn test_settings_table_singleton_constraint() {
 
     let loaded = storage.get_settings().expect("should get settings");
     assert_eq!(
-        loaded.response_length, "second",
+        loaded.narration_connection_id, "second",
         "should have the second value (first was replaced)"
     );
 
     let settings3 = AppSettings {
-        response_length: "third".into(),
+        narration_connection_id: "third".into(),
         ..Default::default()
     };
     storage
@@ -633,7 +637,7 @@ fn test_settings_table_singleton_constraint() {
         .expect("third save should succeed");
     let loaded2 = storage.get_settings().expect("should get settings");
     assert_eq!(
-        loaded2.response_length, "third",
+        loaded2.narration_connection_id, "third",
         "singleton constraint maintained across multiple saves"
     );
 }
@@ -686,7 +690,7 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 32);
+    assert_eq!(version, 33);
 }
 
 #[test]

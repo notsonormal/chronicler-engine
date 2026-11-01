@@ -37,7 +37,8 @@ record.
 ## Per-Agent Connections
 
 The wiring binds each agent to its recorder at startup, from the Agent's type.
-That binding decides the agent's connection.
+The Quantifier uses the Quantifier slot. The Options agent uses the Options slot.
+An empty Options slot uses the Narration Connection.
 
 ## Options
 

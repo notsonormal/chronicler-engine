@@ -379,6 +379,8 @@ pub async fn delete_connection_handler(
             ));
         }
 
+        settings.clear_optional_slots_naming(&id);
+
         let roles = roles_using(settings, &id);
         if !roles.is_empty() {
             return Err(EngineError::Validation(role_in_use_message(&roles)));

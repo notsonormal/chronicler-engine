@@ -130,9 +130,9 @@ def make_db():
         conn.execute(f"CREATE TABLE {table} (\n            {definitions}\n        )")
     conn.execute(
         """insert into settings (id, connections, narration_connection_id,
-                                 quantifier_connection_id, response_length, agents,
+                                 quantifier_connection_id, agents,
                                  created_at, updated_at)
-           values (1, ?, 'conn-go', 'conn-go', 'under 150 words', '[]',
+           values (1, ?, 'conn-go', 'conn-go', '[]',
                    '2026-10-31T00:00:00Z', '2026-10-31T00:00:00Z')""",
         (json.dumps(CONNECTIONS),),
     )
@@ -242,8 +242,8 @@ class SetupFileTests(unittest.TestCase):
 
     def test_a_field_the_script_does_not_read_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = write_setup(directory, response_length="under 150 words")
-            with self.assertRaisesRegex(trial.TrialError, "response_length"):
+            path = write_setup(directory, temperature=0.7)
+            with self.assertRaisesRegex(trial.TrialError, "temperature"):
                 trial.load_setup(path)
 
     def test_a_budget_the_route_would_refuse_is_refused_here(self):
@@ -339,6 +339,56 @@ class ConnectionCheckTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(trial.TrialError, "conn-missing"):
                 trial.check_connections(make_db(), setup)
+
+
+    def test_a_slot_the_setup_names_must_match_the_slot_the_db_holds(self):
+        conn = make_db()
+        conn.execute(
+            "update settings set impersonate_connection_id = 'conn-other'"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            matching = trial.load_setup(
+                write_setup(
+                    directory,
+                    connections={
+                        "narration": "conn-go",
+                        "quantifier": "conn-go",
+                        "impersonate": "conn-other",
+                    },
+                )
+            )
+            trial.check_connections(conn, matching)
+            for slot, wanted, stored in (
+                ("impersonate", "conn-go", "conn-other"),
+                ("options", "conn-other", "empty"),
+            ):
+                setup = trial.load_setup(
+                    write_setup(
+                        directory,
+                        connections={
+                            "narration": "conn-go",
+                            "quantifier": "conn-go",
+                            slot: wanted,
+                        },
+                    )
+                )
+                with self.assertRaisesRegex(
+                    trial.TrialError,
+                    rf"{slot} slot `{stored}`.*asks for `{wanted}`.*no route sets it",
+                ):
+                    trial.check_connections(conn, setup)
+
+    def test_a_setup_that_names_no_slot_accepts_the_stored_one(self):
+        conn = make_db()
+        conn.execute("update settings set options_connection_id = 'conn-other'")
+        with tempfile.TemporaryDirectory() as directory:
+            setup = trial.load_setup(write_setup(directory))
+        trial.check_connections(conn, setup)
+        snapshot = trial.setup_snapshot(conn, setup, 1)
+        self.assertEqual(snapshot["options_connection"]["id"], "conn-other")
+        self.assertEqual(snapshot["impersonate_connection"]["id"], "conn-go")
+        self.assertIsNone(snapshot["impersonate_slot"])
+        self.assertNotIn("response_length", snapshot)
 
 
 class RunRefusalTests(unittest.TestCase):

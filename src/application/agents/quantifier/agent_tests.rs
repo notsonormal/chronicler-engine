@@ -5,9 +5,7 @@ use std::sync::Arc;
 
 use crate::application::agents::quantifier::agent::QuantifierAgent;
 use crate::application::agents::trait_def::AfterNarrationAgent;
-use crate::domain::model::agent::{
-    AgentConfig, AgentSettings, BackendSelector, HookInput, Role, WorldView,
-};
+use crate::domain::model::agent::{AgentConfig, AgentSettings, HookInput, Role, WorldView};
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::MapDef;
@@ -22,7 +20,6 @@ fn config() -> AgentConfig {
         name: "quantifier".to_string(),
         agent_type: "quantifier".to_string(),
         enabled: true,
-        backend: BackendSelector::UseNamed("quantifier".to_string()),
     }
 }
 

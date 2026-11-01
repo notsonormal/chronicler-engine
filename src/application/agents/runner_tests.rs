@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::adapters::driven::llm::providers::MockBackend;
 use crate::application::agents::runner::AgentRunner;
-use crate::domain::model::agent::{AgentConfig, BackendSelector};
+use crate::domain::model::agent::AgentConfig;
 use crate::test_support::make_test_recorder;
 
 fn mock_recorder() -> Arc<crate::application::llm_recorder::LlmCallRecorder> {
@@ -14,7 +14,6 @@ fn config(agent_type: &str, enabled: bool) -> AgentConfig {
         name: agent_type.to_string(),
         agent_type: agent_type.to_string(),
         enabled,
-        backend: BackendSelector::UseMain,
     }
 }
 

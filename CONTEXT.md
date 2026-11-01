@@ -111,8 +111,12 @@ A kind of model call that the engine makes, with its own health: Narrator, Quant
 _Avoid_: Agent (for the Narrator)
 
 **Connection**:
-A named way to reach one model: its provider, its address and its model. One or more Roles use each Connection.
+A named way to reach one model: its provider, its address and its model. One or more Connection slots name each Connection.
 _Avoid_: Backend, provider config
+
+**Connection slot**:
+The setting that names the Connection of one kind of call: Narration, Impersonate, Quantifier or Options. A slot is not a Role, because Impersonate has a slot and no Role. An empty Impersonate or Options slot uses the Narration Connection.
+_Avoid_: Role connection, backend selector
 
 **LLM message**:
 The stored record of one model call: what the engine sent, what came back and any failure. It belongs to no story.

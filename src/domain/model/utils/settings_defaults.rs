@@ -5,10 +5,6 @@ pub fn default_enable_auto_check() -> bool {
     true
 }
 
-pub fn default_response_length() -> String {
-    "flexible, based on the current scene. During a conversation, keep it concise (under 150 words) to allow back-and-forth. For scene transitions, travel, or plot developments, build content (above 150 words), but allow the player to react.".to_string()
-}
-
 pub const DEFAULT_SYSTEM_PROMPT_PRESET_ID: &str = "system_default";
 pub const DEFAULT_IF_SYSTEM_PROMPT_PRESET_ID: &str = "system_if_default";
 pub const DEFAULT_QUANTIFIER_PROMPT_PRESET_ID: &str = "quantifier_default";

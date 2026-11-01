@@ -78,9 +78,13 @@
       "type": "string",
       "description": "Connection ID to use for the quantifier/parser. Must reference an entry in connections."
     },
-    "response_length": {
+    "impersonate_connection_id": {
       "type": "string",
-      "description": "Guideline for the narrator on response length and pacing."
+      "description": "Connection ID to use for Impersonate. Must reference an entry in connections. When absent, Impersonate uses the narration connection."
+    },
+    "options_connection_id": {
+      "type": "string",
+      "description": "Connection ID to use for Options. Must reference an entry in connections. When absent, Options uses the narration connection."
     },
     "text_check": {
       "type": "object",
@@ -122,25 +126,10 @@
           "enabled": {
             "type": "boolean",
             "description": "Whether the agent is dispatched."
-          },
-          "backend": {
-            "type": "object",
-            "description": "Which LLM connection serves this agent.",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["use_main", "use_named"],
-                "description": "use_main reuses the narration recorder; use_named looks up a named recorder."
-              },
-              "value": {
-                "type": "string",
-                "description": "Recorder name, required when type is use_named."
-              }
-            },
-            "required": ["type"]
           }
         },
-        "required": ["name", "agent_type", "enabled"]
+        "required": ["name", "agent_type", "enabled"],
+        "additionalProperties": false
       }
     },
     "mode_preset_registry": {

@@ -11,6 +11,7 @@ use chronicler_engine::adapters::driven::llm::providers::MockBackend;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
+use chronicler_engine::domain::model::prompt_preset::PresetType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection};
 use chronicler_engine::test_support::{assert_answers_nothing, body_text};
 use chronicler_engine::test_support::fixtures::llm_message;
@@ -489,6 +490,51 @@ async fn test_delete_connection_used_by_a_role_is_refused() {
     assert!(
         !panel.contains(r#"hx-get="/fragment/connections/mock-c/edit"#),
         "an unused connection must still be deletable: {panel}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.53
+#[tokio::test]
+async fn test_delete_connection_of_an_optional_slot_empties_the_slot() {
+    let _guard = SettingsTestGuard::new();
+
+    let settings = AppSettings {
+        connections: vec![
+            mock_connection("mock-a", "mock-model-a"),
+            mock_connection("mock-b", "mock-model-b"),
+        ],
+        narration_connection_id: "mock-a".into(),
+        quantifier_connection_id: "mock-a".into(),
+        options_connection_id: Some("mock-a".into()),
+        impersonate_connection_id: Some("mock-b".into()),
+        ..AppSettings::default()
+    };
+    let (app, state, _storage) = app_with_production_graph(settings);
+    let stored = || {
+        state
+            .settings_service
+            .get_settings()
+            .expect("settings read should succeed")
+    };
+
+    let response = post_form(&app, "/connections/mock-a/delete", "").await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        stored().options_connection_id.as_deref(),
+        Some("mock-a"),
+        "a refused delete writes nothing"
+    );
+
+    let response = post_form(&app, "/connections/mock-b/delete", "").await;
+    assert_answers_nothing(response).await;
+    let after = stored();
+    assert_eq!(after.impersonate_connection_id, None);
+    assert_eq!(
+        after
+            .connection_for(PresetType::Impersonate)
+            .expect("an empty slot falls back")
+            .id,
+        "mock-a"
     );
 }
 

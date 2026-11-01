@@ -66,8 +66,7 @@ pub(crate) fn seed_settings(
     // Reject a dangling connection reference before writing anything: a file
     // that names a narrator the connections list does not contain would
     // otherwise seed successfully and fail later, mid-generation.
-    settings.narration_connection()?;
-    settings.quantifier_connection()?;
+    settings.check_connection_slots()?;
 
     storage.seed_settings(&settings)?;
     tracing::info!("Settings seeded from {}", settings_file.display());

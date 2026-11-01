@@ -45,7 +45,7 @@ pub(crate) fn build_system_prompt(
     vars: &TemplateVars,
 ) -> String {
     preset
-        .render_field_parts(global_rules, None, Some(vars))
+        .render_field_parts(global_rules, Some(vars))
         .into_iter()
         .filter(|(field, _)| {
             matches!(
@@ -58,13 +58,9 @@ pub(crate) fn build_system_prompt(
         .join("\n\n")
 }
 
-pub(crate) fn build_post_history_prompt(
-    preset: &PromptPreset,
-    response_length: Option<&str>,
-    vars: &TemplateVars,
-) -> String {
+pub(crate) fn build_post_history_prompt(preset: &PromptPreset, vars: &TemplateVars) -> String {
     preset
-        .render_field_parts(&[], response_length, Some(vars))
+        .render_field_parts(&[], Some(vars))
         .into_iter()
         .filter(|(field, _)| matches!(field, PresetField::WritingStyle | PresetField::OutputFormat))
         .map(|(_, rendered)| rendered)

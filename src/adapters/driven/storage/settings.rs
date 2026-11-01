@@ -25,7 +25,7 @@ impl Storage {
             Backend::Sqlite { pool } => {
                 let conn = pool.conn();
                 let mut stmt = conn.prepare(
-                "SELECT id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at, active_options_prompt_preset_id FROM settings WHERE id = 1",
+                "SELECT id, connections, narration_connection_id, quantifier_connection_id, text_check, agents, mode_preset_registry, created_at, updated_at, active_options_prompt_preset_id, impersonate_connection_id, options_connection_id FROM settings WHERE id = 1",
             ).db_context("Failed to prepare the settings read")?;
                 let result = stmt.query_row([], DbSettings::from_row);
                 match result {
@@ -66,20 +66,21 @@ impl Storage {
                 };
                 conn.execute(
                     &format!(
-                        "INSERT OR {verb} INTO settings (id, connections, narration_connection_id, quantifier_connection_id, response_length, text_check, agents, mode_preset_registry, created_at, updated_at, active_options_prompt_preset_id)
-                         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                        "INSERT OR {verb} INTO settings (id, connections, narration_connection_id, quantifier_connection_id, text_check, agents, mode_preset_registry, created_at, updated_at, active_options_prompt_preset_id, impersonate_connection_id, options_connection_id)
+                         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                     ),
                     rusqlite::params![
                         &connections_json,
                         &settings.narration_connection_id,
                         &settings.quantifier_connection_id,
-                        &settings.response_length,
                         &text_check_json,
                         &agents_json,
                         &mode_preset_registry_json,
                         &now,
                         &now,
                         &settings.active_options_prompt_preset_id,
+                        &settings.impersonate_connection_id,
+                        &settings.options_connection_id,
                     ],
                 )
                 .db_context("Failed to write the settings")?;

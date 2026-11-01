@@ -71,7 +71,7 @@ fn test_fresh_database_has_game_posture_columns() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 32);
+    assert_eq!(version, 33);
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn test_v22_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 32);
+    assert_eq!(version, 33);
 }
 
 #[test]
@@ -465,7 +465,7 @@ fn test_v28_deletes_saved_games_and_drops_the_snapshot_tables() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 32);
+    assert_eq!(version, 33);
 }
 
 #[test]
@@ -683,5 +683,95 @@ fn test_v32_renames_the_latest_narration_tag_in_stored_presets() {
             None
         ),
         "a preset without the tag is unchanged"
+    );
+}
+
+fn insert_settings_with_length(conn: &Connection, response_length: &str) {
+    conn.execute(
+        "INSERT INTO settings (id, connections, response_length, created_at, updated_at) \
+         VALUES (1, '[]', ?1, 't', 't')",
+        [response_length],
+    )
+    .unwrap();
+}
+
+fn insert_preset(conn: &Connection, id: &str, preset_type: &str, output_format: Option<&str>) {
+    conn.execute(
+        "INSERT INTO prompt_presets (id, name, preset_type, output_format, created_at, updated_at) \
+         VALUES (?1, 'n', ?2, ?3, 't', 't')",
+        rusqlite::params![id, preset_type, output_format],
+    )
+    .unwrap();
+}
+
+fn output_format_of(conn: &Connection, id: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT output_format FROM prompt_presets WHERE id = ?1",
+        [id],
+        |r| r.get(0),
+    )
+    .unwrap()
+}
+
+#[test]
+fn test_v33_moves_the_response_length_into_the_system_presets_and_adds_the_slots() {
+    let conn = Connection::open_in_memory().unwrap();
+    migrate_up_to(&conn, 32).unwrap();
+    insert_settings_with_length(&conn, "three words");
+    insert_preset(&conn, "system_a", "system", Some("Write one paragraph."));
+    insert_preset(&conn, "system_none", "system", None);
+    insert_preset(
+        &conn,
+        "impersonate_a",
+        "impersonate",
+        Some("Reply as the Persona."),
+    );
+    insert_preset(&conn, "quantifier_a", "quantifier", Some("Answer in JSON."));
+
+    run_migrations(&conn).unwrap();
+
+    assert_eq!(
+        output_format_of(&conn, "system_a").as_deref(),
+        Some("Write one paragraph.\n\nResponse Length:\nthree words"),
+        "a system preset with an output format gets the words in the shape of the old render"
+    );
+    assert_eq!(output_format_of(&conn, "system_none"), None);
+    assert_eq!(
+        output_format_of(&conn, "impersonate_a").as_deref(),
+        Some("Reply as the Persona."),
+        "an Impersonate preset never had the words"
+    );
+    assert_eq!(
+        output_format_of(&conn, "quantifier_a").as_deref(),
+        Some("Answer in JSON.")
+    );
+    let columns = columns_of(&conn, "settings");
+    assert!(!columns.contains(&"response_length".to_string()));
+    assert!(columns.contains(&"impersonate_connection_id".to_string()));
+    assert!(columns.contains(&"options_connection_id".to_string()));
+}
+
+#[test]
+fn test_v33_without_a_settings_row_or_with_an_empty_length_appends_nothing() {
+    let no_row = Connection::open_in_memory().unwrap();
+    migrate_up_to(&no_row, 32).unwrap();
+    insert_preset(&no_row, "system_a", "system", Some("Write one paragraph."));
+    run_migrations(&no_row).unwrap();
+    assert_eq!(
+        output_format_of(&no_row, "system_a").as_deref(),
+        Some("Write one paragraph."),
+        "a fresh database has no settings row yet"
+    );
+    assert!(!columns_of(&no_row, "settings").contains(&"response_length".to_string()));
+
+    let empty = Connection::open_in_memory().unwrap();
+    migrate_up_to(&empty, 32).unwrap();
+    insert_settings_with_length(&empty, "");
+    insert_preset(&empty, "system_a", "system", Some("Write one paragraph."));
+    run_migrations(&empty).unwrap();
+    assert_eq!(
+        output_format_of(&empty, "system_a").as_deref(),
+        Some("Write one paragraph."),
+        "an empty text renders no header"
     );
 }

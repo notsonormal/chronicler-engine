@@ -118,10 +118,9 @@ impl PromptPreset {
     pub fn assemble_text(
         &self,
         global_rules: &[String],
-        response_length: Option<&str>,
         template_vars: Option<&TemplateVars>,
     ) -> String {
-        self.render_field_parts(global_rules, response_length, template_vars)
+        self.render_field_parts(global_rules, template_vars)
             .into_iter()
             .map(|(_, rendered)| rendered)
             .collect::<Vec<_>>()
@@ -131,7 +130,6 @@ impl PromptPreset {
     pub(crate) fn render_field_parts(
         &self,
         global_rules: &[String],
-        response_length: Option<&str>,
         template_vars: Option<&TemplateVars>,
     ) -> Vec<(PresetField, String)> {
         let render_text = |source: &str| -> String {
@@ -168,14 +166,9 @@ impl PromptPreset {
             ));
         }
         if let Some(output_format) = &self.output_format {
-            let mut output_text = render_text(output_format);
-            if let Some(response_length) = response_length {
-                output_text.push_str("\n\nResponse Length:\n");
-                output_text.push_str(response_length);
-            }
             parts.push((
                 PresetField::OutputFormat,
-                wrap_xml(&output_text, "output_format"),
+                wrap_xml(&render_text(output_format), "output_format"),
             ));
         }
         parts

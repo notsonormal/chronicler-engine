@@ -104,7 +104,7 @@ fn test_assemble_prompt_text_with_all_sections() {
         ..Default::default()
     };
 
-    let result = preset.assemble_text(&["Rule 1".into()], Some("Keep it short."), None);
+    let result = preset.assemble_text(&["Rule 1".into()], None);
 
     assert!(result.contains("<role>"));
     assert!(result.contains("You are a narrator."));
@@ -116,8 +116,6 @@ fn test_assemble_prompt_text_with_all_sections() {
     assert!(result.contains("- Rule 1"));
     assert!(result.contains("<output_format>"));
     assert!(result.contains("No GPTisms."));
-    assert!(result.contains("Response Length:"));
-    assert!(result.contains("Keep it short."));
 }
 
 #[test]
@@ -130,13 +128,12 @@ fn test_assemble_prompt_text_skips_empty_sections() {
         ..Default::default()
     };
 
-    let result = preset.assemble_text(&[], None, None);
+    let result = preset.assemble_text(&[], None);
 
     assert!(result.contains("<role>"));
     assert!(!result.contains("<instructions>"));
     assert!(!result.contains("<writing_style>"));
     assert!(result.contains("<output_format>"));
-    assert!(!result.contains("Response Length:"));
 }
 
 #[test]
@@ -151,7 +148,7 @@ fn test_assemble_prompt_text_order() {
         ..Default::default()
     };
 
-    let result = preset.assemble_text(&["RULE".into()], None, None);
+    let result = preset.assemble_text(&["RULE".into()], None);
 
     let role_pos = result.find("ROLE").unwrap();
     let inst_pos = result.find("INSTRUCTIONS").unwrap();

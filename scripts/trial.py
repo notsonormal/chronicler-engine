@@ -296,6 +296,21 @@ def text_fields(given, name, keys):
     return {key: text_field(group, key, f"{name}.{key}") for key in keys}
 
 
+# The Connection slots that no route sets. The DB holds them, and a setup file may
+# name one only to state the value it expects.
+STORED_SLOTS = ("impersonate", "options")
+
+
+def connection_fields(given):
+    """The Connections of the setup: Narration and Quantifier are required. The
+    Impersonate and Options slots are optional."""
+    group = text_fields(given, "connections", ("narration", "quantifier"))
+    for slot in STORED_SLOTS:
+        if slot in given["connections"]:
+            group[slot] = text_field(given["connections"], slot, f"connections.{slot}")
+    return group
+
+
 def whole_number(given, name, default):
     """A count of zero or more, with its default."""
     value = given.get(name, default)
@@ -327,7 +342,7 @@ def load_setup(path, cycles_override=None):
         "presets": text_fields(
             given, "presets", ("system", "impersonate", "quantifier", "options")
         ),
-        "connections": text_fields(given, "connections", ("narration", "quantifier")),
+        "connections": connection_fields(given),
         "cycles": (
             cycles_override
             if cycles_override is not None
@@ -351,7 +366,7 @@ def load_setup(path, cycles_override=None):
 def check_connections(conn, setup):
     """The Connection rows of the probe DB; refuses an id that the DB does not hold,
     because the setup file names a Connection and never creates one."""
-    found = rows(conn, "select connections from settings")
+    found = rows(conn, "select * from settings")
     if not found:
         raise TrialError("the database holds no settings row")
     known = {
@@ -365,7 +380,21 @@ def check_connections(conn, setup):
     ]
     if missing:
         raise TrialError(f"the database holds no Connection {', '.join(missing)}")
+    for slot in STORED_SLOTS:
+        wanted = setup["connections"].get(slot)
+        stored = stored_slot(found[0], slot)
+        if wanted is not None and wanted != stored:
+            raise TrialError(
+                f"the database holds the {slot} slot `{stored or 'empty'}`, and the "
+                f"setup asks for `{wanted}`: no route sets it"
+            )
     return known
+
+
+def stored_slot(settings_row, slot):
+    """The Connection id stored in the Impersonate or Options slot, or `None` when the
+    slot is empty, so the call uses the Narration Connection."""
+    return settings_row[f"{slot}_connection_id"] or None
 
 
 def connection_requests(setup):
@@ -463,9 +492,16 @@ def setup_snapshot(conn, setup, game_id):
         "cycles": setup["cycles"],
         "token_limit": setup["token_limit"],
         "restart_limit": setup["restart_limit"],
-        "response_length": settings["response_length"],
         "narration_connection": connections.get(setup["connections"]["narration"]),
         "quantifier_connection": connections.get(setup["connections"]["quantifier"]),
+        "impersonate_slot": stored_slot(settings, "impersonate"),
+        "impersonate_connection": connections.get(
+            stored_slot(settings, "impersonate") or setup["connections"]["narration"]
+        ),
+        "options_slot": stored_slot(settings, "options"),
+        "options_connection": connections.get(
+            stored_slot(settings, "options") or setup["connections"]["narration"]
+        ),
         "agents": json.loads(settings["agents"]),
         "presets": presets,
     }
@@ -925,7 +961,13 @@ def setup_lines(pack):
     )
     for role, preset in setup["presets"].items():
         lines.append(f'| {role} preset | `{preset.get("id")}` ({preset.get("name", "?")}) |')
-    lines.append(f'| response_length | {setup["response_length"][:90]}… |')
+    for slot in STORED_SLOTS:
+        slot_connection = setup[f"{slot}_connection"] or {}
+        where = "own slot" if setup[f"{slot}_slot"] else "the Narration Connection"
+        lines.append(
+            f'| {slot.capitalize()} connection | {slot_connection.get("provider")} '
+            f'`{slot_connection.get("model")}` ({where}) |'
+        )
     lines.append(
         f'| Budget | {setup["cycles"]} cycles, token limit {setup["token_limit"]:,}, '
         f'restart limit {setup["restart_limit"]} |'

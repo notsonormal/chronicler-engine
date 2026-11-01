@@ -26,7 +26,6 @@ fn two_connection_settings() -> AppSettings {
         ],
         narration_connection_id: "conn-1".into(),
         quantifier_connection_id: "conn-2".into(),
-        response_length: "flexible".into(),
         ..Default::default()
     }
 }

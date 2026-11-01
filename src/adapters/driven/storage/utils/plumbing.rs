@@ -14,7 +14,7 @@ pub(crate) fn parse_datetime(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
-const LATEST_VERSION: i32 = 32;
+const LATEST_VERSION: i32 = 33;
 
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
     migrate_up_to(conn, LATEST_VERSION)
@@ -754,6 +754,36 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 32)
+            .db_context("Failed to set user_version")?;
+    }
+
+    if due(33) {
+        // The Impersonate and Options Connection slots. An empty slot uses the
+        // narration Connection.
+        if !column_exists(conn, "settings", "impersonate_connection_id") {
+            exec("ALTER TABLE settings ADD COLUMN impersonate_connection_id TEXT")?;
+        }
+        if !column_exists(conn, "settings", "options_connection_id") {
+            exec("ALTER TABLE settings ADD COLUMN options_connection_id TEXT")?;
+        }
+
+        // The response length words move into the output format of every system
+        // preset that has one. Today's render appends the same string, so the
+        // prompt stays the same. A fresh database has no settings row yet, and an
+        // empty text renders no header.
+        if column_exists(conn, "settings", "response_length") {
+            exec(
+                "UPDATE prompt_presets \
+                 SET output_format = output_format || char(10) || char(10) \
+                     || 'Response Length:' || char(10) \
+                     || (SELECT response_length FROM settings WHERE id = 1) \
+                 WHERE preset_type = 'system' AND output_format IS NOT NULL \
+                   AND EXISTS (SELECT 1 FROM settings WHERE id = 1 AND response_length <> '')",
+            )?;
+            exec("ALTER TABLE settings DROP COLUMN response_length")?;
+        }
+
+        conn.pragma_update(None, "user_version", 33)
             .db_context("Failed to set user_version")?;
     }
 
