@@ -72,8 +72,7 @@ A preset carries its generation parameters: the response length (`max_tokens`), 
 
 A Connection can set a ceiling on the response length (`max_tokens_ceiling`). A call asks for the preset value or the default (`DEFAULT_MAX_TOKENS`), and never more than the ceiling. A call of the narrator can ask for less, because the response length cannot pass the free space in the context window.
 
-An Options preset can set `option_count`, the number of Options. No other preset type can set it. The count fills the `{{option_count}}` placeholder and caps the Options that the parser keeps. An Options preset with no count uses `DEFAULT_OPTION_COUNT`.
-
+An Options preset can set `option_count`, the number of Options. The count must be at least 1, and no other preset type can set it. The count fills the `{{option_count}}` placeholder and caps the Options that the parser keeps. An Options preset with no count uses `DEFAULT_OPTION_COUNT`.
 
 ## Document References
 

@@ -35,8 +35,9 @@ result has one landing:
 
 An Agent reads values, never storage: a `HookInput` and an `AgentSettings`. The
 step that calls the hook owns every read and write, so an Agent writes no game
-record. The calling step fills the `AgentSettings` from the preset of the Game and
-the Connection of the hook's slot.
+record. The `AgentSettings` give the preset text, the call settings and the Options
+count. The calling step fills them from the preset of the Game and the Connection of
+the hook's slot.
 
 ## Per-Agent Connections
 

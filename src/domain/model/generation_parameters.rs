@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 
 use crate::domain::model::game::GameId;
 
-const ENGINE_KEYS: [&str; 4] = ["model", "messages", "stream", "max_tokens"];
+const REFUSED_CUSTOM_KEYS: [&str; 4] = ["model", "messages", "stream", "max_tokens"];
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -20,7 +20,7 @@ pub struct GenerationParameters {
 
 impl GenerationParameters {
     pub fn refused_custom_key(&self) -> Option<&'static str> {
-        ENGINE_KEYS
+        REFUSED_CUSTOM_KEYS
             .into_iter()
             .find(|key| self.custom.contains_key(*key))
     }

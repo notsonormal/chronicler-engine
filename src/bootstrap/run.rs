@@ -174,6 +174,26 @@ pub(crate) fn ensure_presets(
     Ok(())
 }
 
+/// The value of `key` in a preset seed: its default when absent or null, or `None`
+/// after a warning when it does not parse, so the caller skips the file.
+fn seed_field<T: serde::de::DeserializeOwned + Default>(
+    seed: &serde_json::Value,
+    key: &str,
+    path: &std::path::Path,
+) -> Option<T> {
+    match seed.get(key) {
+        None | Some(serde_json::Value::Null) => Some(T::default()),
+        Some(value) => serde_json::from_value(value.clone())
+            .inspect_err(|e| {
+                tracing::warn!(
+                    "Skipping prompt preset seed {}: invalid {key}: {e}",
+                    path.display()
+                );
+            })
+            .ok(),
+    }
+}
+
 fn process_preset_file(
     storage: &Storage,
     path: &std::path::Path,
@@ -207,31 +227,11 @@ fn process_preset_file(
         }
     };
 
-    let parameters = match seed.get("parameters") {
-        None | Some(serde_json::Value::Null) => Default::default(),
-        Some(value) => match serde_json::from_value(value.clone()) {
-            Ok(parameters) => parameters,
-            Err(e) => {
-                tracing::warn!(
-                    "Skipping prompt preset seed {}: invalid parameters: {e}",
-                    path.display()
-                );
-                return Ok(());
-            }
-        },
+    let Some(parameters) = seed_field(&seed, "parameters", path) else {
+        return Ok(());
     };
-    let option_count = match seed.get("option_count") {
-        None | Some(serde_json::Value::Null) => None,
-        Some(value) => match value.as_u64().and_then(|count| u32::try_from(count).ok()) {
-            Some(count) => Some(count),
-            None => {
-                tracing::warn!(
-                    "Skipping prompt preset seed {}: option_count must be a whole number",
-                    path.display()
-                );
-                return Ok(());
-            }
-        },
+    let Some(option_count) = seed_field(&seed, "option_count", path) else {
+        return Ok(());
     };
 
     let id = seed["id"].as_str().unwrap_or("default").to_string();

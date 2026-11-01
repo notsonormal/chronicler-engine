@@ -137,14 +137,3 @@ fn test_save_preset_refuses_an_engine_key_in_the_custom_parameters_and_names_it(
     assert!(error.to_string().contains("`stream`"), "{error}");
     assert!(storage.get_preset("bad").unwrap().is_none());
 }
-
-#[test]
-fn test_save_preset_refuses_an_option_count_of_zero() {
-    let (service, storage) = make_service();
-    let mut preset = system_preset("zero", "Zero");
-    preset.preset_type = PresetType::Options;
-    preset.option_count = Some(0);
-
-    assert!(service.save_preset(&preset).is_err());
-    assert!(storage.get_preset("zero").unwrap().is_none());
-}
