@@ -498,6 +498,11 @@ fn chat_completions_openrouter_sends_one_session_id_for_each_game() {
     );
     assert_ne!(Some(first), other, "another Game, another session");
     assert!(other.is_some());
+    assert_eq!(
+        session_id_sent(LlmBackendType::OpenRouter, &settings_of_game(Some(7))),
+        Some("7d30fc87-b5d6-50d4-a2a9-4e5d581dfeaf".to_string()),
+        "a Game keeps its session id across restarts"
+    );
 }
 
 // CASE chat-completions-no-game-session-elsewhere: an Ollama call and an OpenCode Go call send no session id in the body

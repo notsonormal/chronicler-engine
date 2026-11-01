@@ -751,3 +751,28 @@ fn test_save_preset_overwrites_the_parameters_of_a_stored_preset() {
     let loaded = storage.get_preset("tuned").unwrap().unwrap();
     assert_eq!(loaded.parameters.temperature, None);
 }
+
+#[test]
+fn test_a_negative_option_count_is_a_parse_error() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone());
+    {
+        let conn = pool.conn();
+        conn.execute(
+            "INSERT INTO prompt_presets
+             (id, name, preset_type, role, instructions, writing_style, output_format, is_default, created_at, updated_at, allowed_modes, option_count)
+             VALUES ('negative_count', 'Negative', 'options', NULL, NULL, NULL, NULL, 0, ?1, ?1, '[]', -1)",
+            rusqlite::params![Utc::now().to_rfc3339()],
+        )
+        .expect("test setup: raw insert must succeed");
+    }
+
+    let error = storage
+        .get_preset("negative_count")
+        .expect_err("a negative option count is refused");
+
+    assert!(
+        matches!(&error, EngineError::Parse(message) if message.contains("option_count")),
+        "the parse error names the count: {error:?}"
+    );
+}

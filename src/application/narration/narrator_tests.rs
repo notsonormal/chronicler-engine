@@ -610,6 +610,30 @@ fn test_a_cut_history_keeps_whole_entries() {
     );
 }
 
+// CASE narrator-history-system-sender: a System Message in the history renders as `System: <text>`.
+#[test]
+fn test_a_system_message_renders_its_sender_label() {
+    let fixture = Fixture::new();
+    let history = vec![
+        StoryRow {
+            text: "The narrator speaks.".to_string(),
+            ..default_story_row(MessageType::Narration)
+        },
+        StoryRow {
+            text: "A hidden instruction.".to_string(),
+            ..default_story_row(MessageType::System)
+        },
+    ];
+
+    let call = sent_prompt(&fixture.narration(&history, "I look around."), &preset());
+
+    let body = history_body(&call.user_prompt);
+    assert!(
+        body.contains("System: A hidden instruction.\n"),
+        "the System entry carries its sender label: {body}"
+    );
+}
+
 // CASE narrator-history-cut-holds-between-blocks: one more Message past the space leaves the history start where it was.
 #[test]
 fn test_the_history_start_holds_between_cuts() {

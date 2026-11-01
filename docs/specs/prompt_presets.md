@@ -499,3 +499,25 @@ Then the response is a 200 with an empty body
 And a following GET /screen?parts=prompt-presets renders the Options card with the "Active" badge and hides its "Set Active" button
 And the stored settings-level Options default is that preset's id
 ```
+
+### The preset parameters at a model call
+
+A preset's response length and temperature reach the model call that the Job
+makes. A Connection's ceiling lowers the response length when the preset asks
+for more. Each slot reads the preset of its own kind and the Connection of its
+own kind.
+
+#### Scenario 21.44: The preset parameters and the Connection ceilings set the calls
+
+```gherkin
+Given a Game whose System preset asks for a response length of 900 tokens and a temperature of 0.3
+And whose Quantifier preset asks for a response length of 900 tokens and a temperature of 0.5
+And a Narration Connection whose ceiling is 700 tokens
+And a Quantifier Connection whose ceiling is 600 tokens
+And an Options Connection whose ceiling is 500 tokens
+When the client POST /action with command="look"
+And the client POST /action with command="/options"
+Then the Narrator call carries a response length of 700 tokens, a temperature of 0.3 and the Game's id
+And the Quantifier call carries a response length of 600 tokens, a temperature of 0.5 and the Game's id
+And the Options call carries a response length of 500 tokens
+```

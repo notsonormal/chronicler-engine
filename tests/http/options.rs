@@ -958,3 +958,34 @@ async fn test_options_dock_icons_are_defined_by_the_shell() {
         );
     }
 }
+
+// [docs/specs/options.md] SCENARIO: 24.26
+#[tokio::test]
+async fn test_a_dangling_options_slot_ends_the_job_with_the_settings_failure_http() {
+    let (app, state, storage) = app_with_script(ScriptedModel::new().turn("You look around."));
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the setup turn should settle"
+    );
+
+    let mut settings = storage.get_settings().expect("the settings read back");
+    settings.options_connection_id = Some("gone-connection".into());
+    storage.save_settings(&settings).expect("the settings save");
+
+    assert!(post_action(&app, "/options").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "/options should end its Job"
+    );
+
+    let status = fetch_busy_status(&app).await;
+    assert!(
+        status.contains("The data for this request is missing: the settings."),
+        "the Job ends with the Settings read failure: {status}"
+    );
+    assert!(
+        status_error_message(&status).contains("gone-connection"),
+        "the disclosure names the missing Connection: {status}"
+    );
+}

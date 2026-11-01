@@ -6,19 +6,28 @@ use axum::body::Body;
 use axum::http::{self, Request, StatusCode};
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
+use chronicler_engine::adapters::driven::storage::{Storage, StorageCall, TestOverride};
+use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::prompt_preset_service::PromptPresetService;
-use chronicler_engine::test_support::{assert_answers_nothing, body_text};
+use chronicler_engine::domain::model::agent::Role;
+use chronicler_engine::domain::model::generation_parameters::GenerationParameters;
+use chronicler_engine::domain::model::prompt_preset::{PresetType, PromptPreset};
+use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection};
 use chronicler_engine::test_support::TestPromptPreset;
-use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::empty_sqlite_storage;
+use chronicler_engine::test_support::{assert_answers_nothing, body_text};
+use chronicler_engine::test_support::{
+    ScriptedModel, active_game_of, configured_runner, set_game_config_row,
+};
+use chronicler_engine::TestAppBuilder;
 
 use crate::test_utils::preset_card_html_slice;
 use crate::test_utils::panel_section_html_slice;
 
-use crate::support::app_wiring::two_game_app;
-use crate::support::http_requests::{fetch_body, fetch_part, post_form};
+use crate::support::app_wiring::{app_with_script_and_agents, two_game_app};
+use crate::support::http_fixtures::mock_connection;
+use crate::support::http_requests::{fetch_body, fetch_part, post_action, post_form, wait_settled};
 use crate::SettingsTestGuard;
 
 fn assert_one_error_message_holding(body: &str, failure_text: &str) {
@@ -1507,5 +1516,134 @@ async fn test_update_preset_storage_failure_answers_non_2xx_and_keeps_the_preset
     assert!(
         panel_body.contains("Original"),
         "the stored preset must keep its original name: {panel_body}"
+    );
+}
+
+/// A preset of `preset_type` that asks for more tokens than every ceiling, so the
+/// ceiling decides the response length of the call.
+fn preset_with_parameters(
+    id: &str,
+    name: &str,
+    preset_type: PresetType,
+    temperature: f64,
+) -> PromptPreset {
+    PromptPreset {
+        id: id.to_string(),
+        name: name.to_string(),
+        role: Some(format!("You are a test {name}.")),
+        preset_type,
+        parameters: GenerationParameters {
+            max_tokens: Some(900),
+            temperature: Some(temperature),
+            ..Default::default()
+        },
+        ..PromptPreset::default()
+    }
+}
+
+fn connection_with_ceiling(id: &str, model: &str, ceiling: u32) -> LlmConnection {
+    LlmConnection {
+        max_tokens_ceiling: Some(ceiling),
+        ..mock_connection(id, model)
+    }
+}
+
+/// Points the Game at both seeded presets, so the Job reads them.
+fn choose_presets(storage: &Storage, state: &AppState) {
+    let mut game = storage
+        .get_game(active_game_of(state).0)
+        .expect("the Game row reads back")
+        .expect("the seeded Game exists");
+    game.set_active_preset_id(PresetType::System, "system_ceiling".to_string());
+    game.set_active_preset_id(PresetType::Quantifier, "quantifier_ceiling".to_string());
+    set_game_config_row(storage, &game);
+}
+
+// [docs/specs/prompt_presets.md] SCENARIO: 21.44
+#[tokio::test]
+async fn test_preset_parameters_and_connection_ceilings_set_the_calls_http() {
+    let settings = AppSettings {
+        connections: vec![
+            connection_with_ceiling("narration-conn", "narration-model", 700),
+            connection_with_ceiling("quantifier-conn", "quantifier-model", 600),
+            connection_with_ceiling("options-conn", "options-model", 500),
+        ],
+        narration_connection_id: "narration-conn".into(),
+        quantifier_connection_id: "quantifier-conn".into(),
+        options_connection_id: Some("options-conn".into()),
+        ..AppSettings::default()
+    };
+    let model = Arc::new(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options("<suggestion>Search the desk</suggestion>"),
+    );
+    let (app, state, storage) =
+        app_with_script_and_agents(Arc::clone(&model), settings, configured_runner);
+    state
+        .prompt_preset_service
+        .save_preset(&preset_with_parameters(
+            "system_ceiling",
+            "System Ceiling",
+            PresetType::System,
+            0.3,
+        ))
+        .expect("save the System preset");
+    state
+        .prompt_preset_service
+        .save_preset(&preset_with_parameters(
+            "quantifier_ceiling",
+            "Quantifier Ceiling",
+            PresetType::Quantifier,
+            0.5,
+        ))
+        .expect("save the Quantifier preset");
+    choose_presets(&storage, &state);
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Action should settle");
+    assert!(post_action(&app, "/options").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "/options should settle");
+
+    let game = active_game_of(&state);
+    let calls = model.calls();
+    let call_of = |role: Role| {
+        calls
+            .iter()
+            .find(|call| call.role == role)
+            .unwrap_or_else(|| panic!("the Job makes one {role:?} call"))
+    };
+
+    let narrator = call_of(Role::Narrator);
+    assert_eq!(
+        narrator.settings.max_tokens,
+        Some(700),
+        "the Narration ceiling lowers the preset's 900 tokens"
+    );
+    assert_eq!(narrator.settings.temperature, Some(0.3));
+    assert_eq!(
+        narrator.settings.game,
+        Some(game),
+        "the call carries the Game the provider reads as its session"
+    );
+
+    let quantifier = call_of(Role::Quantifier);
+    assert_eq!(
+        quantifier.settings.max_tokens,
+        Some(600),
+        "the Quantifier call reads the Quantifier slot"
+    );
+    assert_eq!(
+        quantifier.settings.temperature,
+        Some(0.5),
+        "the Quantifier call reads the Quantifier preset"
+    );
+    assert_eq!(quantifier.settings.game, Some(game));
+
+    let options = call_of(Role::Options);
+    assert_eq!(
+        options.settings.max_tokens,
+        Some(500),
+        "the Options call reads the Options slot"
     );
 }

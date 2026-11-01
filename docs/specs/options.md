@@ -232,6 +232,17 @@ And the offered set is unchanged
 And GET /screen?parts=options-dock renders no options strip
 ```
 
+#### Scenario 24.26: A dangling Options slot ends the /options Job with the Settings failure
+
+```gherkin
+Given a game with scene history and an options agent
+And stored settings whose Options slot names a Connection that is not in the connections list
+When the client POST /action with command="/options"
+And the Game is no longer busy
+Then the status carries the line "The data for this request is missing: the settings."
+And the raw error text inside the status disclosure names the missing Connection
+```
+
 ### Dock controls
 
 #### Scenario 24.14: The populated dock's controls reference icons the shell defines

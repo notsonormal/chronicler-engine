@@ -77,16 +77,24 @@ pub fn app_with_model_and_storage(
 
 /// The production graph, whose provider comes from the settings.
 pub fn app_with_production_graph(settings: AppSettings) -> (axum::Router, AppState, Arc<Storage>) {
+    app_with_production_graph_over(Arc::new(empty_sqlite_storage()), settings)
+}
+
+/// The production graph over `storage`: the World, the Persona and the presets
+/// come from it too, so a test can create a Game through the route.
+pub fn app_with_production_graph_over(
+    storage: Arc<Storage>,
+    settings: AppSettings,
+) -> (axum::Router, AppState, Arc<Storage>) {
     assert!(
         settings
             .connections
             .iter()
             .all(|c| c.provider == LlmBackendType::Mock),
-        "app_with_production_graph requires Mock connections: the production graph \
+        "app_with_production_graph_over requires Mock connections: the production graph \
          builds the provider the settings name"
     );
 
-    let storage = Arc::new(empty_sqlite_storage());
     storage.save_settings(&settings).expect("seed settings");
     let wired = build_app_graph(Arc::clone(&storage), None).expect("production graph should build");
     let state = AppState::from_wired(wired);

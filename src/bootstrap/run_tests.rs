@@ -406,6 +406,10 @@ fn test_ensure_presets_skips_a_refused_seed_file_and_seeds_the_others() {
             "c_bad_shape.json",
             r#"{"id": "bad_shape", "name": "Bad shape", "parameters": {"temperature": "hot"}}"#,
         ),
+        (
+            "e_bad_count_type.json",
+            r#"{"id": "bad_count_type", "name": "Bad", "option_count": "two"}"#,
+        ),
         ("d_good.json", r#"{"id": "good", "name": "Good"}"#),
     ] {
         std::fs::write(system_dir.join(file), body).unwrap();
@@ -416,6 +420,7 @@ fn test_ensure_presets_skips_a_refused_seed_file_and_seeds_the_others() {
     assert!(storage.get_preset("bad_model").unwrap().is_none());
     assert!(storage.get_preset("bad_count").unwrap().is_none());
     assert!(storage.get_preset("bad_shape").unwrap().is_none());
+    assert!(storage.get_preset("bad_count_type").unwrap().is_none());
     assert!(storage.get_preset("good").unwrap().is_some());
 }
 #[test]

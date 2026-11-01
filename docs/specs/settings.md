@@ -187,6 +187,32 @@ Then the response is a 200 with an empty body
 And the Impersonate slot is empty, so Impersonate uses the Narration Connection
 ```
 
+#### Scenario 20.54: The Options slot decides the model of the Options call
+
+```gherkin
+Given an app state whose Narrator and Quantifier slots name a first mock Connection with model mock-model-a
+And a second mock Connection with model slot-model
+And the Options slot names the second Connection
+When the client POST /games creates a game
+And the client POST /action with command="look"
+And the Game is no longer busy
+And the client POST /action with command="/options"
+And the Game is no longer busy
+Then the LLM message of the Options call names the model slot-model
+```
+
+#### Scenario 20.55: The Impersonate slot decides the model of the Impersonate call
+
+```gherkin
+Given an app state whose Narrator and Quantifier slots name a first mock Connection with model mock-model-a
+And a second mock Connection with model slot-model
+And the Impersonate slot names the second Connection
+When the client POST /games creates a game
+And the client POST /action with command="/impersonate hello"
+And the Game is no longer busy
+Then the LLM message of the Narrator call names the model slot-model
+```
+
 ### POST /connections/add — create
 
 #### Scenario 20.9: Adding a Connection whose name already exists answers 400

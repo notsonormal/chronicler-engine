@@ -6,8 +6,9 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::util::ServiceExt;
 
-use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
+use chronicler_engine::adapters::driven::storage::{Storage, StorageCall, TestOverride};
 use chronicler_engine::adapters::driven::llm::providers::MockBackend;
+use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::adapters::driving::http::builders::router::build_router;
 use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
@@ -15,13 +16,14 @@ use chronicler_engine::domain::model::prompt_preset::PresetType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection};
 use chronicler_engine::test_support::{assert_answers_nothing, body_text};
 use chronicler_engine::test_support::fixtures::llm_message;
-use chronicler_engine::TestAppBuilder;
 use chronicler_engine::test_support::empty_sqlite_storage;
+use chronicler_engine::test_support::{TestMap, TestPersona, TestWorld, seed_default_preset};
+use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
-use crate::support::app_wiring::app_with_production_graph;
+use crate::support::app_wiring::{app_with_production_graph, app_with_production_graph_over};
 use crate::support::http_fixtures::mock_connection;
-use crate::support::http_requests::{fetch_part, post_form};
+use crate::support::http_requests::{fetch_part, post_action, post_form, wait_settled};
 use crate::test_utils::card_html_slice;
 
 async fn get_body(app: &axum::Router, uri: &str) -> String {
@@ -1066,4 +1068,101 @@ async fn test_form_connection_test_uses_the_typed_values_before_save() {
         "a form test must not save the typed connection"
     );
     assert_eq!(stored.connections[0].id, "saved-conn");
+}
+
+/// A storage with one World and one Persona and the default presets, so a Game
+/// can be created through the route and its Job can resolve every preset.
+fn storage_with_a_world_a_persona_and_presets() -> Arc<Storage> {
+    let storage = Arc::new(empty_sqlite_storage());
+    storage
+        .seed_world(&TestWorld::minimal(), &TestMap::single_room("start"))
+        .expect("the World seeds");
+    let persona = TestPersona::standard();
+    storage
+        .seed_persona(&persona.key, &persona)
+        .expect("the Persona seeds");
+    seed_default_preset(&storage);
+    storage
+}
+
+/// Two Mock Connections: the roles use `mock-a`, and the slot under test names
+/// `slot-conn`, so the recorded model names the Connection that served the call.
+fn slot_settings(options: Option<&str>, impersonate: Option<&str>) -> AppSettings {
+    AppSettings {
+        connections: vec![
+            mock_connection("mock-a", "mock-model-a"),
+            mock_connection("slot-conn", "slot-model"),
+        ],
+        narration_connection_id: "mock-a".into(),
+        quantifier_connection_id: "mock-a".into(),
+        options_connection_id: options.map(str::to_string),
+        impersonate_connection_id: impersonate.map(str::to_string),
+        ..AppSettings::default()
+    }
+}
+
+async fn create_the_game(app: &axum::Router, state: &AppState) {
+    let created = post_form(app, "/games", "world_key=test&persona_key=hero").await;
+    assert!(created.status().is_success(), "the Game should be created");
+    assert!(wait_settled(state, 2000).await, "the create should settle");
+}
+
+/// The model of the newest recorded call whose agent name is `agent_name`.
+fn recorded_model_of(state: &AppState, agent_name: &str) -> String {
+    state
+        .game_view_query
+        .list_latest_llm_messages(20)
+        .expect("the LLM messages read back")
+        .into_iter()
+        .find(|message| message.agent_name == agent_name)
+        .unwrap_or_else(|| panic!("the {agent_name} call is recorded"))
+        .model_name
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.54
+#[tokio::test]
+async fn test_options_connection_slot_decides_the_options_call_model() {
+    let _guard = SettingsTestGuard::new();
+    let storage = storage_with_a_world_a_persona_and_presets();
+    let (app, state, _storage) =
+        app_with_production_graph_over(storage, slot_settings(Some("slot-conn"), None));
+    create_the_game(&app, &state).await;
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "the Action should settle");
+    assert!(post_action(&app, "/options").await.status().is_success());
+    assert!(wait_settled(&state, 2000).await, "/options should settle");
+
+    assert_eq!(
+        recorded_model_of(&state, "options"),
+        "slot-model",
+        "the Options call uses the Connection that the Options slot names"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.55
+#[tokio::test]
+async fn test_impersonate_connection_slot_decides_the_impersonate_call_model() {
+    let _guard = SettingsTestGuard::new();
+    let storage = storage_with_a_world_a_persona_and_presets();
+    let (app, state, _storage) =
+        app_with_production_graph_over(storage, slot_settings(None, Some("slot-conn")));
+    create_the_game(&app, &state).await;
+
+    assert!(
+        post_action(&app, "/impersonate hello")
+            .await
+            .status()
+            .is_success()
+    );
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Impersonate Job should settle"
+    );
+
+    assert_eq!(
+        recorded_model_of(&state, "narrator"),
+        "slot-model",
+        "the Impersonate call uses the Connection that the Impersonate slot names"
+    );
 }
