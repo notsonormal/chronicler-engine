@@ -1,6 +1,7 @@
 //! Tests for the Character transitions the Game rules derive from a Quantifier result.
 
-use super::quantifier::{CharacterTransitions, CharacterTransitionType};
+use super::quantifier::{CharacterTransitions, CharacterTransitionType, QuantifierResult};
+use crate::test_support::fixtures::TestCharacter;
 
 #[test]
 fn character_transitions_from_diff_empty_previous() {
@@ -104,5 +105,29 @@ fn character_transitions_from_diff_all_left() {
             .events
             .iter()
             .all(|e| e.event_type == CharacterTransitionType::Left)
+    );
+}
+
+#[test]
+fn keeping_present_gives_the_ids_in_order_and_no_destination() {
+    let present = vec![
+        TestCharacter::named("carla", "Carla"),
+        TestCharacter::named("anna", "Anna"),
+    ];
+
+    let result = QuantifierResult::keeping_present(&present);
+
+    assert_eq!(
+        result.present,
+        vec!["carla".to_string(), "anna".to_string()]
+    );
+    assert_eq!(result.destination, None);
+}
+
+#[test]
+fn keeping_present_with_no_one_present_gives_the_empty_result() {
+    assert_eq!(
+        QuantifierResult::keeping_present(&[]),
+        QuantifierResult::default()
     );
 }

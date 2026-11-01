@@ -27,7 +27,7 @@ pub fn role_label(role: Role) -> &'static str {
 pub fn role_failure_effect(role: Role) -> &'static str {
     match role {
         Role::Narrator => "no narration was written",
-        Role::Quantifier => "keeping the Characters present",
+        Role::Quantifier => "keeping the Room and the Characters present",
         Role::Options => "showing no options",
         Role::Trigger => "skipping the trigger",
     }

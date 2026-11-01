@@ -1,7 +1,7 @@
 # Keep the state when a state writer fails
 
 Type: task (AFK)
-Status: claimed
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -78,3 +78,19 @@ Known on 2026-10-31 (inferred where marked).
 ## Output
 
 Resolved when `python build.py` passes.
+
+## Answer
+
+Resolved on 2026-11-01, on the branch `pf23-keep-state` (merged into `prompt-flexibility`). The full gate with the browser tier runs after tickets 22 and 23 merge. `python build.py --no-browser` passed here: guardrails 309, integration 1576 (3 skipped), and the Python tests.
+
+**The keep rule** is `QuantifierResult::keeping_present(present: &[CharacterCard])` in `src/domain/model/quantifier.rs`. It gives the ids of the Characters present, in order, and no destination. Its tests are `keeping_present_gives_the_ids_in_order_and_no_destination` and `keeping_present_with_no_one_present_gives_the_empty_result` in `quantifier_tests.rs`.
+
+**The runner.** `AgentRunner::after_narration` returns `keeping_present(input.world.present)` in both cases: the Agent returns `Err` (the `tracing::warn!` stays), and no after-narration Agent is registered (O2). Its doc comment says so in two sentences. The two tests carry no `CASE` tag. They are `test_after_narration_keeps_the_state_when_the_agent_fails` and `test_after_narration_keeps_the_state_when_no_agent_is_registered` in `runner_tests.rs`. The first uses a real `QuantifierAgent` with `mock_recorder()` and an input with no text. A comment says why: only that input reaches the `Err` arm, and a Job never builds it. Both tests failed before the change and passed after it.
+
+**The banner text** is "keeping the Room and the Characters present" in `role_failure_effect` and in the log line of the model-failure path in `quantifier/utils/orchestration.rs`. `test_degraded_role_raises_header_banner_and_clears_on_recovery` expects it. It failed first, and passed after the change. The `Err` path raises no banner (O1).
+
+**The docs.** `agent_system.md`, "Hooks": a failed after-narration Agent keeps the Room and the Characters present, a runner with no such Agent does the same, and every state writer follows the rule. No other doc stated the old rule.
+
+**Deviations.** None. No spec scenario was added, as the ticket says. No migration and no probe server were needed.
+
+**Accepted limits (from the ticket).** A Game whose `agents` setting disables the Quantifier keeps its Characters present for ever, and no test covers a full Job with a disabled Quantifier. A repeatable Trigger can fire again on a kept state.

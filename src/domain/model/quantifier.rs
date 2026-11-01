@@ -1,12 +1,28 @@
 //! [DOC: docs/diataxis/reference/game_flow.md]
 //! The Quantifier result and the Character transitions the Game rules derive from it
 
+use crate::domain::model::character::CharacterCard;
+
 /// What the Quantifier found in a generation's new text. The Game rules apply it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct QuantifierResult {
     pub present: Vec<String>,
     /// The room the player walks to, by id or name.
     pub destination: Option<String>,
+}
+
+impl QuantifierResult {
+    /// The result of a state writer that gave no reading: the Characters present stay as they
+    /// are, in order, and the player stays in the Room. The Game rules apply it as no change.
+    pub fn keeping_present(present: &[CharacterCard]) -> Self {
+        Self {
+            present: present
+                .iter()
+                .map(|character| character.id.clone())
+                .collect(),
+            destination: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

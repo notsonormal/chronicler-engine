@@ -140,7 +140,7 @@ pub(crate) fn quantify_room_with_llm_call(
     }
 
     tracing::warn!(
-        "[Quantifier] All attempts failed, keeping the Characters present. Last error: {}",
+        "[Quantifier] All attempts failed, keeping the Room and the Characters present. Last error: {}",
         last_error.as_deref().unwrap_or("unknown")
     );
     QuantifierReading {

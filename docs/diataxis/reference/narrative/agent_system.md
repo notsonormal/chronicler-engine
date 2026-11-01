@@ -23,7 +23,9 @@ result has one landing:
 - **After narration**: runs after the text save and before the state update.
   `AgentRunner::after_narration` runs the Agent and returns its `QuantifierResult`:
   the Characters present and the destination. The game rules apply it.
-  `QuantifierAgent` runs here.
+  `QuantifierAgent` runs here. A failed Agent is logged, and the Job continues with
+  the Room and the Characters present of the previous state. A runner with no
+  after-narration Agent does the same. Every state writer follows this rule.
 - **End of the Job**: runs once per Job, at the two gated Options sites (after a
   Narration and on demand). `AgentRunner::end_of_job` runs the Agent. The hook holds
   at most one Agent. The Options agent runs here and answers with an `OfferedSet`.

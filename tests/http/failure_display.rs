@@ -53,7 +53,8 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
         "a degraded Quantifier must raise the banner: {body}"
     );
     assert!(
-        body.contains("Quantifier failed") && body.contains("keeping the Characters present"),
+        body.contains("Quantifier failed")
+            && body.contains("keeping the Room and the Characters present"),
         "the banner must name the role and what the engine did instead: {body}"
     );
     assert!(
