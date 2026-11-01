@@ -185,7 +185,7 @@ Domain cases, with no CASE tag: `generation_parameters_tests.rs` (7), `prompt_pr
 - `CallSettings::of(parameters, max_tokens, game)` builds the settings of a call from a preset's samplers, the resolved `max_tokens` and the Game. The Job and the Narrator use it.
 - `PromptPresetService::for_narration` became `chosen_preset` (public), and `hook_text` is deleted. The Job reads the whole preset for a hook and assembles the text itself.
 - `data/settings.json`, its schema and `scripts/trial.py` (the pack row, now `max_tokens_ceiling=`) use the new Connection key.
-- Docs: `prompt_system.md` (a section on the parameters, the ceiling, the count and the session; the History paragraph no longer names the Connection `max_tokens`), `agent_system.md`, `narration_system.md` (one sentence on the ceiling) and `architecture_system.md`.
+- Docs: `prompt_system.md` (paragraphs in "Prompt Presets" on the parameters, the ceiling, the count and the session; the History paragraph no longer names the Connection `max_tokens`), `agent_system.md`, `narration_system.md` (one sentence on the ceiling) and `architecture_system.md`.
 
 **Deviations and notes.**
 

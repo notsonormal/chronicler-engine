@@ -43,7 +43,7 @@ Then the dock renders set A
 #### Scenario 24.25: The Options preset sets how many Options the dock offers
 
 ```gherkin
-Given a game with scene history whose Options preset offers 2 Options
+Given a game with scene history and an Options preset that offers 2 Options
 And an options agent whose response holds 4 suggestions
 When the client POST /action with command="/options"
 And the Game is no longer busy

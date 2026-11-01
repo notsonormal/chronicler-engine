@@ -140,6 +140,7 @@ async fn test_the_options_preset_sets_how_many_options_the_dock_offers_http() {
         "the Options preset keeps the first 2 of the 4 suggestions"
     );
     let dock = fetch_part(&app, "options-dock").await;
+    assert!(dock.contains("Search the desk"), "{dock}");
     assert!(dock.contains("Question the guard"), "{dock}");
     assert!(!dock.contains("Leave the hall"), "{dock}");
     assert!(!dock.contains("Climb the tower"), "{dock}");

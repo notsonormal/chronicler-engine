@@ -486,8 +486,7 @@ impl Job {
             Record::Preset,
             self.presets.chosen_preset(&game, preset_type),
         )?;
-        // A slot that names no stored Connection has no ceiling here. The call then fails
-        // in the recorder, which names the Connection, as it did before the ceiling.
+        // The recorder reports a missing Connection, so this fallback needs no ceiling.
         let max_tokens = match settings.connection_for(preset_type) {
             Ok(connection) => connection.max_tokens_for(preset.parameters.max_tokens),
             Err(_) => preset.parameters.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),

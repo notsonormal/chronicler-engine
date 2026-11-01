@@ -101,7 +101,6 @@ pub struct HookInput<'a> {
 pub struct AgentSettings {
     pub preset: Option<String>,
     pub call: CallSettings,
-    /// How many Options the Options Agent asks for. `None` uses the default.
     pub option_count: Option<u32>,
 }
 

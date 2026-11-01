@@ -50,11 +50,9 @@ fn test_runner_from_configs_keeps_one_agent_per_hook() {
     assert!(!runner.is_empty());
 }
 
-/// Runs `after_narration` of `runner` on a state with two Characters present.
-///
-/// The input has no text. A Job never builds such an input, because it always passes the saved
-/// text. Only an input with no text reaches the `Err` arm of `after_narration`: the Quantifier
-/// fails on it before any model call.
+/// A Job never builds an input with no text, because it always passes the saved text. So only
+/// this call reaches the `Err` arm of `after_narration`: the Quantifier fails on it before
+/// any model call.
 fn after_narration_with_no_text(runner: &AgentRunner) -> QuantifierResult {
     let map = TestMap::single_room("start");
     let persona = TestPersona::standard();

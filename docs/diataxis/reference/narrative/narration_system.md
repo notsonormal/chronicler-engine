@@ -9,9 +9,9 @@ LLM connections are stored as a list on the `settings` singleton row.
 
 Four Connection slots name the Connection of each kind of call. The Narration slot (`narration_connection_id`) serves a Narration, an event Narration and the Retry of a typed Input. The Impersonate slot (`impersonate_connection_id`) serves an Impersonate and the Retry of an Impersonate Input. The Quantifier slot (`quantifier_connection_id`) serves the Quantifier. The Options slot (`options_connection_id`) serves the Options agent.
 
-A Connection can set `max_tokens_ceiling`, the most that a call to it may ask for (see Prompt Presets in the Prompt System).
-
 The Impersonate and Options slots are optional. An empty slot uses the Narration Connection. Two slots may name the same Connection.
+
+A Connection can set `max_tokens_ceiling`, the most that a call to it may ask for (see Prompt Presets in the Prompt System). A call to OpenRouter sends a `session_id`. All calls of one Game send the same value.
 
 The wiring builds one `LlmCallRecorder` for each slot. The recorder resolves its Connection from the settings row at call time. So a connection switch takes effect on the next LLM call without a restart. The health of an Impersonate shows under the Narrator Role, because Impersonate has no Role.
 

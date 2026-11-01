@@ -89,7 +89,7 @@ Resolved on 2026-11-01, on the branch `pf23-keep-state` (merged into `prompt-fle
 
 **The banner text** is "keeping the Room and the Characters present" in `role_failure_effect` and in the log line of the model-failure path in `quantifier/utils/orchestration.rs`. `test_degraded_role_raises_header_banner_and_clears_on_recovery` expects it. It failed first, and passed after the change. The `Err` path raises no banner (O1).
 
-**The docs.** `agent_system.md`, "Hooks": a failed after-narration Agent keeps the Room and the Characters present, a runner with no such Agent does the same, and every state writer follows the rule. No other doc stated the old rule.
+**The docs.** `agent_system.md`, "Hooks": a failed after-narration Agent keeps the Room and the Characters present, a runner with no such Agent does the same, and the Quantifier does the same when all its model calls fail (the doc review replaced "every state writer follows the rule": "state writer" is not a glossary term). No other doc stated the old rule.
 
 **Deviations.** None. No spec scenario was added, as the ticket says. No migration and no probe server were needed.
 

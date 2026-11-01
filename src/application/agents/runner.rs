@@ -66,8 +66,7 @@ impl AgentRunner {
         Ok(runner)
     }
 
-    /// A failed Agent is logged, and the Job continues with the Room and the Characters present
-    /// of the previous state. A runner with no after-narration Agent keeps them the same way.
+    /// A failed or missing Agent keeps the Room and the Characters present, and the Job continues.
     pub fn after_narration(&self, input: &HookInput, settings: &AgentSettings) -> QuantifierResult {
         let Some(agent) = self.after_narration.as_ref() else {
             return QuantifierResult::keeping_present(input.world.present);

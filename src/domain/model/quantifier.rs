@@ -12,8 +12,7 @@ pub struct QuantifierResult {
 }
 
 impl QuantifierResult {
-    /// The result of a state writer that gave no reading: the Characters present stay as they
-    /// are, in order, and the player stays in the Room. The Game rules apply it as no change.
+    /// The result of a state writer that gave no reading. The Game rules apply it as no change.
     pub fn keeping_present(present: &[CharacterCard]) -> Self {
         Self {
             present: present

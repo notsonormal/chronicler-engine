@@ -50,7 +50,6 @@ impl TemplateVars {
         }
     }
 
-    /// The count `{{option_count}}` renders.
     pub fn with_option_count(mut self, count: u32) -> Self {
         self.option_count = count.to_string();
         self

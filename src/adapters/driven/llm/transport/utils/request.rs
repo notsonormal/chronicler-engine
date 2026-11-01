@@ -43,13 +43,10 @@ pub struct ChatCompletionRequest<'a> {
     pub user_text: &'a str,
     /// `None` sends `DEFAULT_MAX_TOKENS`.
     pub max_tokens: Option<u32>,
-    /// `None` sends no `temperature`.
     pub temperature: Option<f64>,
-    /// `None` sends no `top_p`.
     pub top_p: Option<f64>,
-    /// Other samplers, sent as they are. The keys the engine writes win over them.
+    /// Sent as they are, unless the engine writes the same key itself.
     pub custom: &'a Map<String, Value>,
-    /// Sent as the `session_id` field. `None` sends none.
     pub session_id: Option<&'a str>,
     /// Sent as the flat `reasoning_effort` field: OpenCode Go ignores the
     /// nested `reasoning: {effort}` form. `None` sends no field, so the model

@@ -15,8 +15,7 @@ use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{LlmConnection, ReasoningEffort};
 use crate::error::EngineError;
 
-/// The namespace of the UUID v5 session ids. It is fixed, so a Game keeps its session
-/// across restarts.
+/// Fixed, so a Game keeps the same session id across restarts.
 const GAME_SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x6368_726f_6e69_636c_6572_2d67_616d_6531);
 
 #[derive(Clone)]
@@ -103,8 +102,6 @@ impl ChatCompletionsBackend {
         )
     }
 
-    /// The `session_id` of a call: the same value for every call of one Game. Only a
-    /// host that reads it gets one, and a call with no Game has none.
     fn game_session(&self, game: Option<GameId>) -> Option<String> {
         let game = game.filter(|_| self.provider.sends_game_session())?;
         Some(Uuid::new_v5(&GAME_SESSION_NAMESPACE, &game.0.to_be_bytes()).to_string())

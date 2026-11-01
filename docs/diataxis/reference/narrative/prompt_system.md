@@ -66,15 +66,14 @@ The quantifier and options agents build their own prompts, separate from the lay
 
 ## Prompt Presets
 
-The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type. `PromptPresetService` gives the preset of a Game to the Narrator and to each hook, and every call reads the referenced preset fresh from storage. The preset service refuses a preset that breaks the rules below, in a save and in a seed file.
+The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type. `PromptPresetService` gives the preset of a Game to the Narrator and to each hook, and every call reads the referenced preset fresh from storage. `PromptPreset::validate` refuses a preset that breaks the rules below. A save and the seed at startup both call it.
 
-A preset carries its generation parameters: `max_tokens`, `temperature`, `top_p` and a free object `custom` for other samplers. A value that is not set is not sent. The free object cannot set `model`, `messages`, `stream` or `max_tokens`, and the refusal names the key. The engine keys always win over the free object in the request.
+A preset carries its generation parameters: the response length (`max_tokens`), the samplers `temperature` and `top_p`, and a free object `custom` for other samplers. The engine owns `model`, `messages`, `stream` and `max_tokens`, so `custom` cannot set them, and the refusal names the key. A key that the engine writes in the request replaces the same key of `custom`.
 
-The Connection keeps a ceiling on `max_tokens` (`max_tokens_ceiling`). A call sends the lower of the preset value and the ceiling. A preset that sets no `max_tokens` asks for the default of 2048 tokens, and a Connection with no ceiling has no upper limit. A Narrator-role call can send less, because the response length cannot pass the free space in the context window. The Quantifier and Options calls have no such clamp.
+A Connection can set a ceiling on the response length (`max_tokens_ceiling`). A call asks for the preset value or the default (`DEFAULT_MAX_TOKENS`), and never more than the ceiling. A call of the narrator can ask for less, because the response length cannot pass the free space in the context window.
 
-An Options preset can set `option_count`, the number of Options. It must be at least 1, and no other preset type can set it. The count fills the `{{option_count}}` placeholder and caps the Options that the parser keeps. An Options preset with no count offers 3.
+An Options preset can set `option_count`, the number of Options. No other preset type can set it. The count fills the `{{option_count}}` placeholder and caps the Options that the parser keeps. An Options preset with no count uses `DEFAULT_OPTION_COUNT`.
 
-An OpenRouter call also sends a `session_id`, the same value for every call of one Game. Other providers do not read it, and a call with no Game sends none.
 
 ## Document References
 

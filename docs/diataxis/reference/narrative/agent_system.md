@@ -23,9 +23,10 @@ result has one landing:
 - **After narration**: runs after the text save and before the state update.
   `AgentRunner::after_narration` runs the Agent and returns its `QuantifierResult`:
   the Characters present and the destination. The game rules apply it.
-  `QuantifierAgent` runs here. A failed Agent is logged, and the Job continues with
-  the Room and the Characters present of the previous state. A runner with no
-  after-narration Agent does the same. Every state writer follows this rule.
+  `QuantifierAgent` runs here. The runner logs a failed Agent, and the Job continues
+  with the Room and the Characters present of the previous state. A runner with no
+  after-narration Agent does the same. The Quantifier does the same when all its
+  model calls fail.
 - **End of the Job**: runs once per Job, at the two gated Options sites (after a
   Narration and on demand). `AgentRunner::end_of_job` runs the Agent. The hook holds
   at most one Agent. The Options agent runs here and answers with an `OfferedSet`.
@@ -34,9 +35,8 @@ result has one landing:
 
 An Agent reads values, never storage: a `HookInput` and an `AgentSettings`. The
 step that calls the hook owns every read and write, so an Agent writes no game
-record. An `AgentSettings` holds the preset text, the call settings (the response
-length, the samplers and the Game) and the Options count. The calling step fills
-them from the preset of the Game and the Connection of the Agent.
+record. The calling step fills the `AgentSettings` from the preset of the Game and
+the Connection of the hook's slot.
 
 ## Per-Agent Connections
 

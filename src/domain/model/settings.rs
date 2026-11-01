@@ -346,8 +346,6 @@ pub struct LlmConnection {
     #[serde(default)]
     pub single_user_message: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    /// The most a call to this Connection may ask for. A preset's value above it
-    /// is lowered to it.
     pub max_tokens_ceiling: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_context_tokens: Option<u32>,
@@ -362,12 +360,9 @@ pub struct LlmConnection {
     pub pin_provider_order: bool,
 }
 
-/// The `max_tokens` of a call whose preset sets none.
 pub const DEFAULT_MAX_TOKENS: u32 = 2048;
 
 impl LlmConnection {
-    /// The `max_tokens` of a call: the preset value, or the default, and never
-    /// above the ceiling of this Connection.
     pub fn max_tokens_for(&self, preset_value: Option<u32>) -> u32 {
         let requested = preset_value.unwrap_or(DEFAULT_MAX_TOKENS);
         self.max_tokens_ceiling

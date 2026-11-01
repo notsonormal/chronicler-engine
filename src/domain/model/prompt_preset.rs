@@ -100,8 +100,6 @@ impl Default for PromptPreset {
 }
 
 impl PromptPreset {
-    /// The rules a stored preset keeps: the free object does not hold a key the
-    /// engine owns, and the Options count is at least 1 and only on an Options preset.
     pub fn validate(&self) -> Result<(), EngineError> {
         if let Some(key) = self.parameters.refused_custom_key() {
             return Err(EngineError::Validation(format!(
