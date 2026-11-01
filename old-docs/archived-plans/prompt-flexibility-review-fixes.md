@@ -1,7 +1,7 @@
 # Plan: Fix the review findings of the `prompt-flexibility` branch
 
 **Date:** 2026-11-01
-**Status:** Open. Plan review done, and the owner answered its two questions (2026-11-01).
+**Status:** Done (2026-11-01). Commits 5c8fc6f3 (A), d6daa238 (B), 1fceb065 (H), ddd73e96 (B5, F), 4c0811b4 (C, D, E), 1e7e489c (G). The full gate passed (`logs/build_20261101_192133.log`).
 **Goal:** Each finding of the after-plan review of `prompt-flexibility` is fixed, or kept with a written reason. A check proves each fix.
 
 ## Origin
