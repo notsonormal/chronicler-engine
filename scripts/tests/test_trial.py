@@ -67,14 +67,16 @@ CONNECTIONS = [
 ]
 
 
-def engine_tables():
+def engine_tables(source=None):
     """The column definitions of the engine's tables, replayed from its migrations.
 
     The replay keeps the last ``CREATE TABLE`` of a table, then each ``ADD COLUMN``,
     ``DROP COLUMN`` and ``RENAME COLUMN`` after it, so the fixture is the schema the
-    engine migrates a DB to rather than a hand copy of it.
+    engine migrates a DB to rather than a hand copy of it. A statement the replay cannot
+    read raises, so a migration it would skip shows as a failure.
     """
-    source = PLUMBING.read_text(encoding="utf-8")
+    if source is None:
+        source = PLUMBING.read_text(encoding="utf-8")
     literals = re.finditer(
         r'"((?:[^"\\]|\\.)*)"', re.sub(r"\\\n\s*", " ", source)
     )
@@ -118,6 +120,9 @@ def engine_tables():
                 (new + column[len(old) :]) if column.split()[0] == old else column
                 for column in tables[renamed.group(1)]
             ]
+            continue
+        if statement.startswith("ALTER TABLE"):
+            raise ValueError(f"the replay cannot read the statement: {statement}")
     return tables
 
 
@@ -212,6 +217,18 @@ def write_setup(directory, data=None, **changes):
 def without(*names):
     """The example setup without the named fields."""
     return {name: value for name, value in EXAMPLE_SETUP.items() if name not in names}
+
+
+class SchemaReplayTests(unittest.TestCase):
+    """The fixture replays the migrations, so a statement the replay cannot read raises."""
+
+    def test_a_migration_statement_the_replay_cannot_read_raises(self):
+        source = (
+            'exec("CREATE TABLE games (id INTEGER)")?;'
+            'exec("ALTER TABLE games ALTER COLUMN id SET NOT NULL")?;'
+        )
+        with self.assertRaisesRegex(ValueError, "ALTER TABLE games ALTER COLUMN"):
+            engine_tables(source)
 
 
 class SetupFileTests(unittest.TestCase):

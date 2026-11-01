@@ -233,9 +233,6 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
       - **builders/**
         - `mod.rs` — Narrative prompt builder modules.
         - `sections.rs` — Multi-stage prompt builder.
-      - **utils/**
-        - `context.rs` — Prompt context fitting — message budget enforcement.
-        - `mod.rs` — Narrative prompt utility modules.
   - **bootstrap/**
     - `init_game.rs` — Game state initialization and game resolution
     - `load.rs` — Game data seeding and initialization routines

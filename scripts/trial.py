@@ -1,6 +1,6 @@
 """Run a test setup through Autoplay on a probe server and write its reading pack.
 
-A trial fixes a World, a Persona, a mode, a posture, four prompts presets and
+A trial fixes a World, a Persona, a mode, a posture, four prompt presets and
 two Connections in one JSON file under ``scripts/trial_setups/``. This script
 applies that setup through the HTTP routes, plays Autoplay until the Budget or
 the token limit, restarts a run that a filtered answer ended, and writes one
@@ -18,6 +18,7 @@ each new row out while the trial plays.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import sqlite3
@@ -63,8 +64,29 @@ SETUP_FIELDS = {
     "out",
 }
 
-# The call kinds of the agents that write no story entry. Any other call is a story call.
-NON_STORY_AGENTS = ("quantifier", "options")
+
+class CallKind(NamedTuple):
+    """One kind of model call: the agent name it records, and whether its answer becomes
+    a story entry."""
+
+    agent: str
+    story: bool
+
+
+# The kinds of model call, one row for each. The Narrator records the agent name
+# `narrator` for both of its kinds, so `call_kind` reads the answer to tell them apart.
+CALL_KINDS = {
+    "narration": CallKind("narrator", True),
+    "impersonate": CallKind("narrator", True),
+    "event-narration": CallKind("trigger", True),
+    "quantifier": CallKind("quantifier", False),
+    "options": CallKind("options", False),
+}
+STORY_KINDS = frozenset(name for name, kind in CALL_KINDS.items() if kind.story)
+NON_STORY_KINDS = frozenset(name for name, kind in CALL_KINDS.items() if not kind.story)
+NON_STORY_AGENTS = frozenset(
+    kind.agent for kind in CALL_KINDS.values() if not kind.story
+)
 
 
 class Stop(Enum):
@@ -302,6 +324,8 @@ STORED_SLOTS = ("impersonate", "options")
 
 
 def connection_fields(given):
+    """The Connections a setup names: the two slots that a route sets, and each stored slot
+    whose value the setup states."""
     group = text_fields(given, "connections", ("narration", "quantifier"))
     for slot in STORED_SLOTS:
         if slot in given["connections"]:
@@ -392,6 +416,18 @@ def check_connections(conn, setup):
 def stored_slot(settings_row, slot):
     """`None` when the slot is empty, so the call uses the Narration Connection."""
     return settings_row[f"{slot}_connection_id"] or None
+
+
+def slot_connection(settings, setup, slot):
+    """The Connection row of a stored slot. An empty slot uses the Narration Connection,
+    as `AppSettings::connection_for` does."""
+    connections = {
+        connection["id"]: connection
+        for connection in json.loads(settings["connections"] or "[]")
+    }
+    return connections.get(
+        stored_slot(settings, slot) or setup["connections"]["narration"]
+    )
 
 
 def connection_requests(setup):
@@ -492,13 +528,9 @@ def setup_snapshot(conn, setup, game_id):
         "narration_connection": connections.get(setup["connections"]["narration"]),
         "quantifier_connection": connections.get(setup["connections"]["quantifier"]),
         "impersonate_slot": stored_slot(settings, "impersonate"),
-        "impersonate_connection": connections.get(
-            stored_slot(settings, "impersonate") or setup["connections"]["narration"]
-        ),
+        "impersonate_connection": slot_connection(settings, setup, "impersonate"),
         "options_slot": stored_slot(settings, "options"),
-        "options_connection": connections.get(
-            stored_slot(settings, "options") or setup["connections"]["narration"]
-        ),
+        "options_connection": slot_connection(settings, setup, "options"),
         "agents": json.loads(settings["agents"]),
         "presets": presets,
     }
@@ -582,8 +614,9 @@ def poll_run(client, conn, state, deadline, clock):
 
 
 def is_story_call(call):
-    """A call of the Narrator role writes a story entry: Narration or Impersonate. The
-    Quantifier and the Options agent write none."""
+    """A call whose answer becomes a story entry: the Narrator (Narration or Impersonate)
+    and the `trigger` agent (Event Narration) write one. The Quantifier and the Options
+    agent write none."""
     return call["agent_name"] not in NON_STORY_AGENTS
 
 
@@ -698,7 +731,7 @@ def play_trial(client, conn, setup, pack, timeout, clock):
     }
     (pack / "story.json").write_text(json.dumps(story, indent=2), encoding="utf-8")
     (pack / "run.json").write_text(json.dumps(run, indent=2), encoding="utf-8")
-    cmd_export(argparse.Namespace(pack=str(pack)))
+    export_pack(pack)
     return run
 
 
@@ -715,27 +748,23 @@ def cmd_run(
         raise TrialError(
             f"the database {db_path} does not exist; --db names the probe server's DB"
         )
-    conn = connect(str(db_path))
-    check_connections(conn, setup)
-    out = Path(setup["out"])
-    out.mkdir(parents=True, exist_ok=True)
-    client = ProbeClient(args.base, transport)
-    packs = []
-    trials = []
-    for repeat in range(1, setup["repeats"] + 1):
-        pack = out / f"trial-{repeat}"
-        print(f"Trial {repeat} of {setup['repeats']}: {pack}")
-        trials.append(play_trial(client, conn, setup, pack, args.timeout, clock))
-        packs.append(pack)
-    cmd_compare(
-        argparse.Namespace(
-            packs=[str(pack) for pack in packs], out=str(out / "compare.md")
-        )
-    )
-    for number, trial in enumerate(trials, start=1):
-        print(f'trial-{number}: {trial["tokens_total"]:,} tokens')
-    print(f'total: {sum(trial["tokens_total"] for trial in trials):,} tokens')
-    return trials
+    with contextlib.closing(connect(str(db_path))) as conn:
+        check_connections(conn, setup)
+        out = Path(setup["out"])
+        out.mkdir(parents=True, exist_ok=True)
+        client = ProbeClient(args.base, transport)
+        packs = []
+        trials = []
+        for repeat in range(1, setup["repeats"] + 1):
+            pack = out / f"trial-{repeat}"
+            print(f"Trial {repeat} of {setup['repeats']}: {pack}")
+            trials.append(play_trial(client, conn, setup, pack, args.timeout, clock))
+            packs.append(pack)
+        compare_packs(packs, out / "compare.md")
+        for number, trial in enumerate(trials, start=1):
+            print(f'trial-{number}: {trial["tokens_total"]:,} tokens')
+        print(f'total: {sum(trial["tokens_total"] for trial in trials):,} tokens')
+        return trials
 
 
 def words(text):
@@ -744,13 +773,27 @@ def words(text):
 
 
 def call_kind(call, story):
-    """Name a call by the story entry its answer became; fall back to the agent name."""
-    if call["agent_name"] != "narrator":
-        return {"trigger": "event-narration"}.get(call["agent_name"], call["agent_name"])
+    """Name a call by the story entry its answer became.
+
+    Only the Narrator records two kinds under one agent name, so the kind of every other
+    agent comes straight from the table.
+    """
+    names = [
+        name for name, kind in CALL_KINDS.items() if kind.agent == call["agent_name"]
+    ]
+    if len(names) == 1:
+        return names[0]
+    if not names:
+        return call["agent_name"]
     answer = (call["parsed_response"] or "").strip()[:120]
     for entry in story:
         if answer and answer in entry["text"]:
             return "impersonate" if entry["impersonated"] else "narration"
+    # The agent name cannot name the kind here: an Impersonate call records `narrator` too,
+    # because `GameViewQuery::role_health` counts the rows of a Role by agent name, and a
+    # name of its own would move the Impersonate failures out of the Narrator health. Until
+    # the map's watch item "A Role for Impersonate" changes that, an answer that reached no
+    # entry is named by the words of its prompt.
     if "player character" in call["system_prompt"]:
         return "impersonate"
     return "narration"
@@ -898,9 +941,7 @@ def load_pack(folder):
         call["usage"] = usage_of(call)
         before = [entry for entry in story if entry["timestamp"] <= call["created_at"]]
         call["cover"] = (
-            history_cover(call, before)
-            if call["kind"] in ("narration", "impersonate", "event-narration")
-            else None
+            history_cover(call, before) if call["kind"] in STORY_KINDS else None
         )
         owner = owner_entry(call, story)
         (by_entry[owner] if owner is not None else trailing).append(call)
@@ -959,11 +1000,11 @@ def setup_lines(pack):
     for role, preset in setup["presets"].items():
         lines.append(f'| {role} preset | `{preset.get("id")}` ({preset.get("name", "?")}) |')
     for slot in STORED_SLOTS:
-        slot_connection = setup[f"{slot}_connection"] or {}
+        slot_row = setup[f"{slot}_connection"] or {}
         where = "own slot" if setup[f"{slot}_slot"] else "the Narration Connection"
         lines.append(
-            f'| {slot.capitalize()} connection | {slot_connection.get("provider")} '
-            f'`{slot_connection.get("model")}` ({where}) |'
+            f'| {slot.capitalize()} connection | {slot_row.get("provider")} '
+            f'`{slot_row.get("model")}` ({where}) |'
         )
     lines.append(
         f'| Budget | {setup["cycles"]} cycles, token limit {setup["token_limit"]:,}, '
@@ -1045,7 +1086,7 @@ def summary_lines(pack):
     return lines
 
 
-def history_cut_lines(pack):
+def failure_and_cut_lines(pack):
     """The failed calls, and whether any story entry fell out of `<ConversationHistory>`."""
     lines = []
     if pack.failed_calls:
@@ -1090,7 +1131,7 @@ def call_line(call):
     if call["error_message"]:
         return f"> - {failed_call_line(call, tokens)}"
     answer = ""
-    if call["kind"] in ("quantifier", "options"):
+    if call["kind"] in NON_STORY_KINDS:
         answer = f' → `{(call["parsed_response"] or "").strip()[:160]}`'
     return f'> - [{call["kind"]} {call["id"]}]({call["file"]}): {tokens}{answer}'
 
@@ -1139,7 +1180,7 @@ def write_pack_markdown(pack):
     lines = [f"# Reading pack — {pack.folder.name}\n"]
     lines += setup_lines(pack)
     lines += summary_lines(pack)
-    lines += history_cut_lines(pack)
+    lines += failure_and_cut_lines(pack)
     lines += story_lines(pack)
     (pack.folder / "pack.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -1173,24 +1214,34 @@ def write_summary(pack):
     )
 
 
-def cmd_export(args):
-    """Write `pack.md`, `summary.json` and one file for each call."""
-    pack = load_pack(Path(args.pack))
+def export_pack(folder):
+    """Write `pack.md`, `summary.json` and one file for each call; answer the pack."""
+    pack = load_pack(Path(folder))
     write_call_files(pack)
     write_pack_markdown(pack)
     write_summary(pack)
+    return pack
+
+
+def cmd_export(args):
+    """Write the pack of one trial folder."""
+    pack = export_pack(args.pack)
     print(f"Wrote {pack.folder / 'pack.md'}")
 
 
-def cmd_compare(args):
-    """Write the summary of two or more trial packs side by side, then their stories."""
-    packs = [Path(pack) for pack in args.packs]
-    sums = [json.loads((pack / "summary.json").read_text(encoding="utf-8")) for pack in packs]
-    stories = [read_story(pack) for pack in packs]
+def compare_packs(packs, out):
+    """Write the summary of two or more trial packs side by side, then their stories;
+    answer the path of the file it wrote."""
+    paths = [Path(pack) for pack in packs]
+    sums = [
+        json.loads((path / "summary.json").read_text(encoding="utf-8"))
+        for path in paths
+    ]
+    stories = [read_story(path) for path in paths]
     lines = [
         "# Trials side by side\n",
-        "| | " + " | ".join(pack.name for pack in packs) + " |",
-        "|---|" + "---|" * len(packs),
+        "| | " + " | ".join(path.name for path in paths) + " |",
+        "|---|" + "---|" * len(paths),
     ]
 
     def row(label, read):
@@ -1212,7 +1263,7 @@ def cmd_compare(args):
     longest = max(len(story) for story in stories)
     for index in range(longest):
         lines.append(f"### Entry {index + 1}\n")
-        for pack, story in zip(packs, stories):
+        for pack, story in zip(paths, stories):
             if index < len(story):
                 entry = story[index]
                 lines.append(
@@ -1220,9 +1271,14 @@ def cmd_compare(args):
                     f"({words(entry['text'])} words)\n"
                 )
                 lines.append("> " + entry["text"].strip().replace("\n", "\n> ") + "\n")
-    out = Path(args.out) if args.out else packs[0].parent / "compare.md"
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"Wrote {out}")
+    path = Path(out) if out else paths[0].parent / "compare.md"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def cmd_compare(args):
+    """Write the summary of two or more packs side by side."""
+    print(f"Wrote {compare_packs(args.packs, args.out)}")
 
 
 def main():

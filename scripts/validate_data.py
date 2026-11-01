@@ -7,6 +7,15 @@ from pathlib import Path
 import jsonschema
 from jsonschema import ValidationError
 
+# The Connection slots of the settings row. `AppSettings::connection_for` is the engine's
+# one rule that maps a slot to the Connection a call uses.
+CONNECTION_SLOTS = (
+    "narration_connection_id",
+    "quantifier_connection_id",
+    "impersonate_connection_id",
+    "options_connection_id",
+)
+
 
 def load_json(path):
     with open(path, encoding="utf-8") as f:
@@ -85,12 +94,7 @@ def validate_all():
     if settings_file.exists():
         settings_data = load_json(settings_file)
         valid_connection_ids = {c["id"] for c in settings_data.get("connections", [])}
-        for slot in (
-            "narration_connection_id",
-            "quantifier_connection_id",
-            "impersonate_connection_id",
-            "options_connection_id",
-        ):
+        for slot in CONNECTION_SLOTS:
             connection_id = settings_data.get(slot)
             if connection_id and connection_id not in valid_connection_ids:
                 print(
