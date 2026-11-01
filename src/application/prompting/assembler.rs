@@ -16,9 +16,6 @@ use crate::application::prompting::builders::sections::{
     render_present_relationships, sanitize_for_prompt,
 };
 use crate::application::prompting::types::CharacterContext;
-use crate::application::prompting::utils::context::{
-    fit_messages_to_context, history_space, input_limit,
-};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledPrompt {
@@ -83,8 +80,7 @@ impl PromptAssembler {
             impersonate: context.impersonate,
         };
 
-        let (system, user, actual_max_tokens) =
-            renderer.render_and_fit(budget.max_context_tokens, budget.max_tokens)?;
+        let (system, user, actual_max_tokens) = renderer.render_and_fit(budget)?;
 
         Ok(AssembledPrompt {
             system_prompt: system,
@@ -160,66 +156,72 @@ struct LayerRenderer<'a> {
 }
 
 impl<'a> LayerRenderer<'a> {
-    fn render_and_fit(
-        &self,
-        max_context_tokens: u32,
-        requested_max_tokens: Option<u32>,
-    ) -> Result<(String, String, u32), EngineError> {
+    fn render_and_fit(&self, budget: TokenBudget) -> Result<(String, String, u32), EngineError> {
         let system = self.render_system_layer();
-        let system_tokens = estimate_tokens(&system);
         let entries: Vec<String> = self
             .history
             .iter()
             .map(|e| self.render_history_entry(e))
             .collect();
-        let entry_tokens: Vec<usize> = entries.iter().map(|e| estimate_tokens(e)).collect();
+        let cut = self.cut_history(&entries, budget, estimate_tokens(&system));
+        let user = self.render_user_prompt(&entries, &cut);
 
-        let fixed_user = self.join_user_layers(Self::history_slot(""), false);
-        let space = history_space(
-            max_context_tokens,
-            requested_max_tokens,
-            system_tokens,
-            estimate_tokens(&fixed_user),
-        );
+        let max_tokens = budget.response_tokens(&system, &user)?;
+        Ok((system, user, max_tokens))
+    }
+
+    fn cut_history(
+        &self,
+        entries: &[String],
+        budget: TokenBudget,
+        system_tokens: usize,
+    ) -> HistoryCut {
+        let entry_tokens: Vec<usize> = entries.iter().map(|e| estimate_tokens(e)).collect();
+        let fixed_user = Self::join_layers(self.fixed_user_layers(Self::history_slot("")));
+        let space = budget.history_space(system_tokens, estimate_tokens(&fixed_user));
         let mut cut = HistoryCut::of(&entry_tokens, space);
-        let mut user = self.join_user_layers(self.render_history_layer(&entries, &cut), true);
 
         // The overflow guard: a part outside the space (a long Player Input) can
         // still pass the input limit. It drops more whole Messages, once. It counts
         // characters, because a token cost rounds each entry up and the sum of those
         // would drop too few.
-        let allowed_chars = input_limit(max_context_tokens, requested_max_tokens)
-            .saturating_sub(system_tokens)
-            * CHARS_PER_TOKEN;
+        let allowed_chars = budget.input_limit().saturating_sub(system_tokens) * CHARS_PER_TOKEN;
+        let user = self.render_user_prompt(entries, &cut);
         let excess_chars = user.chars().count().saturating_sub(allowed_chars);
         if excess_chars > 0 {
-            let kept_from = cut.kept_from();
             let entry_chars: Vec<usize> = entries.iter().map(|e| e.chars().count()).collect();
             cut.drop_to_free(&entry_chars, excess_chars);
-            if cut.kept_from() > kept_from {
-                user = self.join_user_layers(self.render_history_layer(&entries, &cut), true);
-            }
         }
-
-        let max_tokens =
-            fit_messages_to_context(&system, &user, max_context_tokens, requested_max_tokens)?;
-        Ok((system, user, max_tokens))
+        cut
     }
 
-    /// Without the tail the result is the fixed part that the history space subtracts.
-    fn join_user_layers(&self, history_layer: String, with_tail: bool) -> String {
-        let mut layers = vec![
+    fn render_user_prompt(&self, entries: &[String], cut: &HistoryCut) -> String {
+        let layers = self
+            .fixed_user_layers(self.render_history_layer(entries, cut))
+            .into_iter()
+            .chain(self.tail_layers());
+        Self::join_layers(layers)
+    }
+
+    /// The layers that do not follow the Player Input. With an empty history slot, they
+    /// are the fixed part that the history space subtracts.
+    fn fixed_user_layers(&self, history_layer: String) -> Vec<String> {
+        vec![
             self.render_game_state_layer(),
             self.render_character_cards_layer(),
             self.render_persona_layer(),
             self.render_world_info_layer(),
             history_layer,
             self.post_history_prompt.clone(),
-        ];
-        if with_tail {
-            layers.push(self.render_user_layer());
-            layers.push(self.render_guide_layer());
-        }
+        ]
+    }
+
+    /// The layers a new Input changes: they stay out of the history space.
+    fn tail_layers(&self) -> Vec<String> {
+        vec![self.render_user_layer(), self.render_guide_layer()]
+    }
+
+    fn join_layers(layers: impl IntoIterator<Item = String>) -> String {
         let user = layers
             .into_iter()
             .filter(|s| !s.is_empty())
@@ -367,30 +369,24 @@ impl<'a> LayerRenderer<'a> {
 
     fn render_user_layer(&self) -> String {
         let sanitized = sanitize_for_prompt(self.user_message);
-        Self::render_non_blank_layer("<PlayerInput>", &sanitized, "</PlayerInput>")
+        Self::render_non_blank_layer("<PlayerInput>", "", &sanitized, "</PlayerInput>")
     }
 
     /// A blank body renders no tags: an empty tagged block reads as an empty
-    /// instruction.
-    fn render_non_blank_layer(open: &str, body: &str, close: &str) -> String {
+    /// instruction. The lead stands in front of the body, and a blank body drops it.
+    fn render_non_blank_layer(open: &str, lead: &str, body: &str, close: &str) -> String {
         if body.trim().is_empty() {
             return String::new();
         }
-        format!("{open}\n{body}\n{close}\n")
+        format!("{open}\n{lead}{body}\n{close}\n")
     }
 
     fn render_guide_layer(&self) -> String {
-        let Some(guide) = self.guide else {
-            return String::new();
-        };
-        let guide = guide.trim();
-        if guide.is_empty() {
-            return String::new();
-        }
-        let mut output = String::from("<Guide>\n");
-        output.push_str("Take the following into special consideration for your next message: ");
-        output.push_str(guide);
-        output.push_str("\n</Guide>\n");
-        output
+        Self::render_non_blank_layer(
+            "<Guide>",
+            "Take the following into special consideration for your next message: ",
+            self.guide.unwrap_or_default().trim(),
+            "</Guide>",
+        )
     }
 }

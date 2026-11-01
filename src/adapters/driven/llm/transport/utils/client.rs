@@ -19,7 +19,7 @@ pub fn call_chat_completions(
         ..
     } = *request;
     let base_url = endpoint.base_url;
-    let max_tokens = request.resolved_max_tokens();
+    let max_tokens = request.call.max_tokens;
     let req_id = next_request_id();
     let start_time = std::time::Instant::now();
 

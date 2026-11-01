@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use crate::domain::model::generation_parameters::{CallSettings, GenerationParameters};
+use crate::domain::model::settings::DEFAULT_MAX_TOKENS;
 
 #[test]
 fn parameters_default_to_nothing_set() {
@@ -62,7 +63,7 @@ fn refused_custom_key_is_none_for_other_keys() {
 fn call_settings_default_sends_nothing() {
     let settings = CallSettings::default();
 
-    assert_eq!(settings.max_tokens, None);
+    assert_eq!(settings.max_tokens, DEFAULT_MAX_TOKENS);
     assert_eq!(settings.temperature, None);
     assert_eq!(settings.top_p, None);
     assert!(settings.custom.is_empty());
@@ -82,7 +83,7 @@ fn call_settings_carry_the_parameters_with_the_resolved_ceiling_and_game() {
 
     let settings = CallSettings::of(&parameters, 512, GameId(7));
 
-    assert_eq!(settings.max_tokens, Some(512));
+    assert_eq!(settings.max_tokens, 512);
     assert_eq!(settings.temperature, Some(0.5));
     assert_eq!(settings.top_p, Some(0.8));
     assert_eq!(settings.custom["top_k"], json!(20));

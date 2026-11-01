@@ -505,7 +505,7 @@ fn test_the_call_settings_reach_the_model_call() {
     let turn = Turn::new();
     let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
     let call = CallSettings {
-        max_tokens: Some(300),
+        max_tokens: 300,
         temperature: Some(0.2),
         top_p: Some(0.8),
         custom: serde_json::json!({"top_k": 20})

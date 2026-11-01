@@ -16,11 +16,14 @@ impl<'a> QuantifierPromptBuilder<'a> {
     }
 
     pub fn build(&self) -> (String, String) {
-        (self.build_system_prompt(), self.build_user_prompt())
+        let vars = TemplateVars::from_persona(self.context.persona);
+        (
+            self.build_system_prompt(&vars),
+            self.build_user_prompt(&vars),
+        )
     }
 
-    fn build_system_prompt(&self) -> String {
-        let vars = TemplateVars::from_persona(self.context.persona);
+    fn build_system_prompt(&self, vars: &TemplateVars) -> String {
         let mut prompt = vars.render(
             self.context
                 .quantifier_prompt_override
@@ -52,8 +55,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
         prompt
     }
 
-    fn build_user_prompt(&self) -> String {
-        let vars = TemplateVars::from_persona(self.context.persona);
+    fn build_user_prompt(&self, vars: &TemplateVars) -> String {
         let mut prompt = String::new();
 
         prompt.push_str("<CurrentRoom>\n");

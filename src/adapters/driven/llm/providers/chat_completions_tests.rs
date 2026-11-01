@@ -441,7 +441,7 @@ fn chat_completions_complete_sends_the_call_settings() {
         "llama3",
     ));
     let settings = CallSettings {
-        max_tokens: Some(321),
+        max_tokens: 321,
         temperature: Some(0.6),
         top_p: Some(0.8),
         custom: serde_json::json!({"top_k": 40})

@@ -7,7 +7,6 @@ pub mod prompt_merge;
 pub mod sanitize;
 pub mod token_budget;
 pub mod types;
-pub mod utils;
 
 pub use assembler::{AssembledPrompt, PromptAssembler, PromptContext};
 pub use types::CharacterContext;

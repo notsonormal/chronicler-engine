@@ -88,10 +88,7 @@ impl ChatCompletionsBackend {
                 model: &self.model,
                 system_prompt: system,
                 user_text: &user,
-                max_tokens: settings.max_tokens,
-                temperature: settings.temperature,
-                top_p: settings.top_p,
-                custom: &settings.custom,
+                call: settings,
                 session_id: session_id.as_deref(),
                 reasoning_effort: self.reasoning_effort,
                 provider_routing: (!self.provider_order.is_empty()).then(|| ProviderRouting {

@@ -16,15 +16,12 @@ use crate::application::generation::gate::{
 use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
-use crate::application::prompting::token_budget::TokenBudget;
 use crate::application::prompting::CharacterContext;
 use crate::domain::model::agent::{AgentSettings, HookInput, Kind, AGENT_HISTORY_WINDOW};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::game::{Game, GameId};
 use crate::domain::model::generation_parameters::CallSettings;
-use crate::domain::model::generation::{
-    Generation, GenerationOrder, JobPlan, JobRequest, OptionsRun, Place,
-};
+use crate::domain::model::generation::{GenerationOrder, JobPlan, JobRequest, OptionsRun, Place};
 use crate::domain::model::message::SwipeAt;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::quantifier::QuantifierResult;
@@ -253,7 +250,8 @@ impl Job {
             },
             STORY_LIMIT,
         )?;
-        let budget = Self::budget(&settings, &order.generation, &preset)?;
+        let (call, max_context_tokens) =
+            self.call_settings(&settings, order.generation.preset_type(), &preset)?;
 
         let all_characters: Vec<CharacterCard> = bundle.characters.values().cloned().collect();
         let values = NarrationValues {
@@ -275,8 +273,8 @@ impl Job {
             &order.generation,
             &values,
             &preset,
-            budget,
-            self.writer.game(),
+            &call,
+            max_context_tokens,
         )?;
         Ok(narrated.text)
     }
@@ -460,19 +458,22 @@ impl Job {
         )
     }
 
-    fn budget(
+    /// The settings of one call, and the context window of the Connection it uses. The
+    /// Connection comes from the type of the call, not from `preset.preset_type`: a Game
+    /// stores one preset id for each type, and no check ties that id to a preset of the
+    /// same type.
+    fn call_settings(
+        &self,
         settings: &AppSettings,
-        generation: &Generation,
+        preset_type: PresetType,
         preset: &PromptPreset,
-    ) -> Result<TokenBudget, JobFailure> {
-        let connection = Self::read(
-            Record::Settings,
-            settings.connection_for(generation.preset_type()),
-        )?;
-        Ok(TokenBudget {
-            max_context_tokens: connection.resolve_max_context_tokens(),
-            max_tokens: Some(connection.max_tokens_for(preset.parameters.max_tokens)),
-        })
+    ) -> Result<(CallSettings, u32), JobFailure> {
+        let connection = Self::read(Record::Settings, settings.connection_for(preset_type))?;
+        let max_tokens = connection.max_tokens_for(preset.parameters.max_tokens);
+        Ok((
+            CallSettings::of(&preset.parameters, max_tokens, self.writer.game()),
+            connection.resolve_max_context_tokens(),
+        ))
     }
 
     fn options_enabled(&self) -> Result<bool, JobFailure> {
@@ -486,11 +487,10 @@ impl Job {
             Record::Preset,
             self.presets.chosen_preset(&game, preset_type),
         )?;
-        let connection = Self::read(Record::Settings, settings.connection_for(preset_type))?;
-        let max_tokens = connection.max_tokens_for(preset.parameters.max_tokens);
+        let (call, _) = self.call_settings(&settings, preset_type, &preset)?;
         Ok(AgentSettings {
             preset: Some(preset.assemble_text(&[], None)),
-            call: CallSettings::of(&preset.parameters, max_tokens, self.writer.game()),
+            call,
             option_count: preset.option_count,
         })
     }

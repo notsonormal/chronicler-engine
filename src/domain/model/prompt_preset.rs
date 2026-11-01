@@ -103,7 +103,7 @@ impl PromptPreset {
     pub fn validate(&self) -> Result<(), EngineError> {
         if let Some(key) = self.parameters.refused_custom_key() {
             return Err(EngineError::Validation(format!(
-                "Preset '{}' cannot set `{key}` in its custom parameters: the engine sets it",
+                "Preset '{}' cannot set `{key}` in its custom parameters: the engine or a field of the preset sets it",
                 self.id
             )));
         }

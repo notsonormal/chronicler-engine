@@ -1,6 +1,9 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! Token budget management
 
+use crate::domain::model::settings::DEFAULT_MAX_TOKENS;
+use crate::error::EngineError;
+
 pub const MAX_CONTEXT_TOKENS: u32 = 32768;
 
 pub const MAX_HISTORY_TOKENS: u32 = 16000;
@@ -22,15 +25,61 @@ pub fn history_reserve_tokens(max_context_tokens: u32) -> usize {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TokenBudget {
     pub max_context_tokens: u32,
-    pub max_tokens: Option<u32>,
+    /// The response length the call asks for.
+    pub max_tokens: u32,
 }
 
 impl TokenBudget {
     pub const fn fallback() -> Self {
         Self {
             max_context_tokens: MAX_CONTEXT_TOKENS,
-            max_tokens: None,
+            max_tokens: DEFAULT_MAX_TOKENS,
         }
+    }
+
+    /// One limit for the history space and for the fit of the whole prompt.
+    pub fn input_limit(&self) -> usize {
+        let available =
+            (self.max_context_tokens as usize).saturating_sub(SAFETY_MARGIN_TOKENS as usize);
+        let requested = self.max_tokens as usize;
+
+        available
+            .saturating_sub(requested.min(available))
+            .max(MIN_INPUT_BUDGET_TOKENS as usize)
+    }
+
+    /// Leaves out the Player Input and the Guide, so a new Input does not move the
+    /// history start.
+    pub fn history_space(&self, system_tokens: usize, fixed_user_tokens: usize) -> usize {
+        self.input_limit()
+            .saturating_sub(system_tokens)
+            .saturating_sub(fixed_user_tokens)
+            .saturating_sub(history_reserve_tokens(self.max_context_tokens))
+            .min(MAX_HISTORY_TOKENS as usize)
+    }
+
+    /// Clamps the response length to the room the prompt leaves. The history cut
+    /// makes the prompt fit, so this only checks it.
+    pub fn response_tokens(&self, system: &str, user: &str) -> Result<u32, EngineError> {
+        let system_tokens = estimate_tokens(system);
+        let user_tokens = estimate_tokens(user);
+        let max_context = self.max_context_tokens as usize;
+        let safety_margin = SAFETY_MARGIN_TOKENS as usize;
+        let min_input_budget = MIN_INPUT_BUDGET_TOKENS as usize;
+
+        if system_tokens + safety_margin + min_input_budget > max_context {
+            return Err(EngineError::ContextOverflow {
+                requested: system_tokens,
+                max: max_context.saturating_sub(safety_margin + min_input_budget),
+            });
+        }
+
+        let actual_max_tokens = (self.max_tokens as usize)
+            .min(max_context.saturating_sub(system_tokens + user_tokens + safety_margin))
+            .min(max_context.saturating_sub(system_tokens + min_input_budget + safety_margin))
+            .max(1) as u32;
+
+        Ok(actual_max_tokens)
     }
 }
 

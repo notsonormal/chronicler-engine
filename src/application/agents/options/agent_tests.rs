@@ -334,6 +334,35 @@ fn test_a_cards_text_renders_its_placeholders() {
     );
 }
 
+// CASE options-card-count-from-the-preset: a card's `{{option_count}}` renders the count of the preset.
+#[test]
+fn test_a_cards_option_count_renders_the_preset_count() {
+    let mut card = TestCharacter::named("character_1", "Test Character");
+    card.sheet.description = "One of {{option_count}} faces.".to_string();
+    let scene = Scene::new().with_present(vec![card]);
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let settings = AgentSettings {
+        preset: Some("Offer {{option_count}} moves.".to_string()),
+        option_count: Some(5),
+        ..Default::default()
+    };
+    let world = scene.world();
+    options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &settings)
+        .expect("a parsed answer is an offered set");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    let present_block = between(
+        &call.user_prompt,
+        "<CharactersPresent>",
+        "</CharactersPresent>",
+    );
+    assert!(
+        present_block.contains("One of 5 faces."),
+        "the card text renders the count of the preset: {present_block}"
+    );
+}
+
 // CASE options-closing-line-names-no-count: the closing line asks for options and names no count.
 #[test]
 fn test_the_closing_line_names_no_count() {
@@ -364,7 +393,7 @@ fn test_the_call_settings_reach_the_model_call() {
     let scene = Scene::new();
     let model = Arc::new(ScriptedModel::new().options(SET_A));
     let call = CallSettings {
-        max_tokens: Some(300),
+        max_tokens: 300,
         temperature: Some(1.2),
         top_p: Some(0.95),
         custom: serde_json::json!({"min_p": 0.05})

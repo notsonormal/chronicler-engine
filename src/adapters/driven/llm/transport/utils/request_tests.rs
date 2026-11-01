@@ -2,19 +2,21 @@
 //! `call_chat_completions` call sends one chat-completions request. The stub
 //! endpoint shows what the transport puts on the wire.
 
-use std::sync::OnceLock;
-
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
 use crate::adapters::driven::llm::transport::{
     call_chat_completions, ChatCompletionRequest, ChatCompletionsEndpoint,
 };
+use crate::domain::model::generation_parameters::{CallSettings, ENGINE_KEYS};
 use crate::domain::model::settings::ReasoningEffort;
 use crate::test_support::chat_completions_mock::ChatCompletionsMock;
 
-fn no_custom_parameters() -> &'static Map<String, Value> {
-    static EMPTY: OnceLock<Map<String, Value>> = OnceLock::new();
-    EMPTY.get_or_init(Map::new)
+/// A call that sets no sampler and no custom parameter.
+fn plain_call() -> CallSettings {
+    CallSettings {
+        max_tokens: 1024,
+        ..CallSettings::default()
+    }
 }
 
 /// The mock's address, with no key, no title and no session.
@@ -28,6 +30,7 @@ fn plain(mock: &ChatCompletionsMock) -> ChatCompletionsEndpoint<'_> {
 }
 
 fn request<'a>(
+    call: &'a CallSettings,
     system_prompt: &'a str,
     user_text: &'a str,
     reasoning_effort: Option<ReasoningEffort>,
@@ -36,10 +39,7 @@ fn request<'a>(
         model: "test-model",
         system_prompt,
         user_text,
-        max_tokens: Some(1024),
-        temperature: None,
-        top_p: None,
-        custom: no_custom_parameters(),
+        call,
         session_id: None,
         reasoning_effort,
         provider_routing: None,
@@ -49,9 +49,14 @@ fn request<'a>(
 // CASE transport-empty-system-prompt-omits-system-message: an empty system prompt sends the user message alone
 #[test]
 fn transport_empty_system_prompt_omits_the_system_message() {
+    let call = plain_call();
     let endpoint = ChatCompletionsMock::start();
 
-    call_chat_completions(&plain(&endpoint), &request("", "user question", None)).unwrap();
+    call_chat_completions(
+        &plain(&endpoint),
+        &request(&call, "", "user question", None),
+    )
+    .unwrap();
 
     let body = endpoint.received_body();
     let messages = body["messages"].as_array().unwrap();
@@ -65,11 +70,12 @@ fn transport_empty_system_prompt_omits_the_system_message() {
 // CASE transport-system-prompt-sent-before-user: a non-empty system prompt sends the system message, then the user message
 #[test]
 fn transport_system_prompt_goes_before_the_user_message() {
+    let call = plain_call();
     let endpoint = ChatCompletionsMock::start();
 
     call_chat_completions(
         &plain(&endpoint),
-        &request("system instruction", "user question", None),
+        &request(&call, "system instruction", "user question", None),
     )
     .unwrap();
 
@@ -85,14 +91,15 @@ fn transport_system_prompt_goes_before_the_user_message() {
 // CASE transport-max-tokens-integer: the token limit goes on the wire and into the recorded request as a JSON integer
 #[test]
 fn transport_sends_max_tokens_as_an_integer() {
+    let call = CallSettings {
+        max_tokens: 512,
+        ..plain_call()
+    };
     let endpoint = ChatCompletionsMock::start();
 
     let result = call_chat_completions(
         &plain(&endpoint),
-        &ChatCompletionRequest {
-            max_tokens: Some(512),
-            ..request("be helpful", "what is 2+2?", None)
-        },
+        &request(&call, "be helpful", "what is 2+2?", None),
     )
     .unwrap();
 
@@ -105,11 +112,12 @@ fn transport_sends_max_tokens_as_an_integer() {
 // CASE transport-reasoning-effort-sent: a reasoning effort goes on the wire and into the recorded request as the flat `reasoning_effort` field
 #[test]
 fn transport_sends_the_reasoning_effort() {
+    let call = plain_call();
     let endpoint = ChatCompletionsMock::start();
 
     let result = call_chat_completions(
         &plain(&endpoint),
-        &request("be helpful", "question", Some(ReasoningEffort::High)),
+        &request(&call, "be helpful", "question", Some(ReasoningEffort::High)),
     )
     .unwrap();
 
@@ -131,10 +139,14 @@ fn transport_sends_the_reasoning_effort() {
 // CASE transport-no-reasoning-effort-omits-field: no reasoning effort sends neither a `reasoning_effort` nor a `reasoning` field
 #[test]
 fn transport_without_a_reasoning_effort_sends_no_reasoning_field() {
+    let call = plain_call();
     let endpoint = ChatCompletionsMock::start();
 
-    let result =
-        call_chat_completions(&plain(&endpoint), &request("be helpful", "question", None)).unwrap();
+    let result = call_chat_completions(
+        &plain(&endpoint),
+        &request(&call, "be helpful", "question", None),
+    )
+    .unwrap();
 
     let body = endpoint.received_body();
     assert!(body.get("reasoning_effort").is_none());
@@ -149,9 +161,14 @@ fn transport_without_a_reasoning_effort_sends_no_reasoning_field() {
 // CASE transport-user-agent-names-the-engine: every request names the engine and its version in the `User-Agent` header
 #[test]
 fn transport_user_agent_names_the_engine_and_its_version() {
+    let call = plain_call();
     let endpoint = ChatCompletionsMock::start();
 
-    call_chat_completions(&plain(&endpoint), &request("be helpful", "question", None)).unwrap();
+    call_chat_completions(
+        &plain(&endpoint),
+        &request(&call, "be helpful", "question", None),
+    )
+    .unwrap();
 
     assert_eq!(
         endpoint
@@ -165,15 +182,16 @@ fn transport_user_agent_names_the_engine_and_its_version() {
 // CASE transport-samplers-sent: a temperature and a top_p go on the wire and into the recorded request
 #[test]
 fn transport_sends_the_temperature_and_the_top_p() {
+    let call = CallSettings {
+        temperature: Some(0.7),
+        top_p: Some(0.9),
+        ..plain_call()
+    };
     let endpoint = ChatCompletionsMock::start();
 
     let result = call_chat_completions(
         &plain(&endpoint),
-        &ChatCompletionRequest {
-            temperature: Some(0.7),
-            top_p: Some(0.9),
-            ..request("be helpful", "question", None)
-        },
+        &request(&call, "be helpful", "question", None),
     )
     .unwrap();
 
@@ -188,29 +206,43 @@ fn transport_sends_the_temperature_and_the_top_p() {
 // CASE transport-unset-samplers-omitted: a request with no sampler and no custom parameter sends no `temperature`, no `top_p` and no other key than the engine keys
 #[test]
 fn transport_without_samplers_sends_only_the_engine_keys() {
+    let call = plain_call();
     let endpoint = ChatCompletionsMock::start();
 
-    call_chat_completions(&plain(&endpoint), &request("be helpful", "question", None)).unwrap();
+    call_chat_completions(
+        &plain(&endpoint),
+        &request(&call, "be helpful", "question", None),
+    )
+    .unwrap();
 
     let body = endpoint.received_body();
-    let mut keys: Vec<&String> = body.as_object().unwrap().keys().collect();
-    keys.sort();
-    assert_eq!(keys, ["max_tokens", "messages", "model", "stream"]);
+    let mut keys: Vec<&str> = body
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    let mut engine_keys = ENGINE_KEYS;
+    engine_keys.sort_unstable();
+    assert_eq!(keys, engine_keys);
 }
 
 // CASE transport-custom-parameters-sent: the keys of the custom object go on the wire as they are
 #[test]
 fn transport_sends_the_custom_parameters() {
+    let call = CallSettings {
+        custom: json!({"top_k": 40, "min_p": 0.05, "stop": ["END"]})
+            .as_object()
+            .unwrap()
+            .clone(),
+        ..plain_call()
+    };
     let endpoint = ChatCompletionsMock::start();
-    let custom = json!({"top_k": 40, "min_p": 0.05, "stop": ["END"]});
-    let custom = custom.as_object().unwrap();
 
     call_chat_completions(
         &plain(&endpoint),
-        &ChatCompletionRequest {
-            custom,
-            ..request("be helpful", "question", None)
-        },
+        &request(&call, "be helpful", "question", None),
     )
     .unwrap();
 
@@ -223,24 +255,26 @@ fn transport_sends_the_custom_parameters() {
 // CASE transport-engine-keys-win-over-custom: a custom key that the engine also writes does not change the engine value
 #[test]
 fn transport_engine_keys_win_over_the_custom_parameters() {
+    let call = CallSettings {
+        temperature: Some(0.3),
+        custom: json!({
+            "model": "other-model",
+            "messages": [],
+            "stream": true,
+            "max_tokens": 1,
+            "temperature": 2.0,
+            "reasoning_effort": "low",
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
+        ..plain_call()
+    };
     let endpoint = ChatCompletionsMock::start();
-    let custom = json!({
-        "model": "other-model",
-        "messages": [],
-        "stream": true,
-        "max_tokens": 1,
-        "temperature": 2.0,
-        "reasoning_effort": "low",
-    });
-    let custom = custom.as_object().unwrap();
 
     call_chat_completions(
         &plain(&endpoint),
-        &ChatCompletionRequest {
-            temperature: Some(0.3),
-            custom,
-            ..request("be helpful", "question", Some(ReasoningEffort::High))
-        },
+        &request(&call, "be helpful", "question", Some(ReasoningEffort::High)),
     )
     .unwrap();
 
@@ -256,12 +290,13 @@ fn transport_engine_keys_win_over_the_custom_parameters() {
 // CASE transport-session-id-sent: a session id goes on the wire and into the recorded request, and no session id sends no field
 #[test]
 fn transport_sends_the_session_id_only_when_it_has_one() {
+    let call = plain_call();
     let endpoint = ChatCompletionsMock::start();
     let result = call_chat_completions(
         &plain(&endpoint),
         &ChatCompletionRequest {
             session_id: Some("a-session"),
-            ..request("be helpful", "question", None)
+            ..request(&call, "be helpful", "question", None)
         },
     )
     .unwrap();
@@ -273,6 +308,10 @@ fn transport_sends_the_session_id_only_when_it_has_one() {
     );
 
     let without = ChatCompletionsMock::start();
-    call_chat_completions(&plain(&without), &request("be helpful", "question", None)).unwrap();
+    call_chat_completions(
+        &plain(&without),
+        &request(&call, "be helpful", "question", None),
+    )
+    .unwrap();
     assert!(without.received_body().get("session_id").is_none());
 }

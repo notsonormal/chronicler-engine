@@ -1616,8 +1616,7 @@ async fn test_preset_parameters_and_connection_ceilings_set_the_calls_http() {
 
     let narrator = call_of(Role::Narrator);
     assert_eq!(
-        narrator.settings.max_tokens,
-        Some(700),
+        narrator.settings.max_tokens, 700,
         "the Narration ceiling lowers the preset's 900 tokens"
     );
     assert_eq!(narrator.settings.temperature, Some(0.3));
@@ -1629,8 +1628,7 @@ async fn test_preset_parameters_and_connection_ceilings_set_the_calls_http() {
 
     let quantifier = call_of(Role::Quantifier);
     assert_eq!(
-        quantifier.settings.max_tokens,
-        Some(600),
+        quantifier.settings.max_tokens, 600,
         "the Quantifier call reads the Quantifier slot"
     );
     assert_eq!(
@@ -1642,8 +1640,7 @@ async fn test_preset_parameters_and_connection_ceilings_set_the_calls_http() {
 
     let options = call_of(Role::Options);
     assert_eq!(
-        options.settings.max_tokens,
-        Some(500),
+        options.settings.max_tokens, 500,
         "the Options call reads the Options slot"
     );
 }

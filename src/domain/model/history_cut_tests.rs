@@ -51,13 +51,7 @@ fn test_the_first_pass_of_the_space_drops_to_three_quarters() {
         "six messages of 20 pass 100, and 60 fit in 75"
     );
     assert_eq!(kept_tokens(&tokens, &cut), 60);
-    assert_eq!(
-        cut.blocks(),
-        &[HistoryBlock {
-            dropped: 0..3,
-            arrival: Some(5),
-        }]
-    );
+    assert_eq!(cut.blocks(), &[HistoryBlock { dropped: 0..3 }]);
 }
 
 #[test]
@@ -83,7 +77,6 @@ fn test_the_start_moves_again_when_the_space_is_passed_again() {
         2,
         "120 passes the space, then 60 grows to 120 again"
     );
-    assert_eq!(cut.blocks()[1].arrival, Some(8));
     assert_eq!(kept_tokens(&tokens, &cut), 60);
     assert_blocks_cover_the_dropped_front(&cut);
 }
@@ -132,19 +125,13 @@ fn test_an_empty_history_drops_nothing() {
 }
 
 #[test]
-fn test_drop_to_free_records_one_block_with_no_arrival() {
+fn test_drop_to_free_records_one_block() {
     let mut cut = HistoryCut::of(&[20; 6], 100);
 
     cut.drop_to_free(&[20; 6], 40);
 
     assert_eq!(cut.kept_from(), 5);
-    assert_eq!(
-        cut.blocks().last(),
-        Some(&HistoryBlock {
-            dropped: 3..5,
-            arrival: None,
-        })
-    );
+    assert_eq!(cut.blocks().last(), Some(&HistoryBlock { dropped: 3..5 }));
     assert_blocks_cover_the_dropped_front(&cut);
 }
 

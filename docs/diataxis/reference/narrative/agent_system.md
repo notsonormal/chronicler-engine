@@ -56,7 +56,7 @@ World at creation. One agent and one offered set serve both narrator modes.
 
 A preset asks the model for one of the shapes below. The parser of each agent reads only the shapes of that agent.
 
-- **Quantifier.** One JSON object. It carries `characters_present`, the list of Character ids, and `movement`, with the fields `type` and `destination`. A `type` of `entering` or `leaving` moves the player. Any other value, or `null`, means no movement.
+- **Quantifier.** One JSON object. It carries `characters_present`, the list of Character ids, and `movement`, with the fields `type` and `destination`. The `destination` names the Room the player moves to. The parser keeps `type`, and the game rules read `destination` alone.
 - **Options.** One of three shapes: a `<suggestion>` tag for each option, a numbered list, or a `Suggestion N:` line for each option.
 
 ## Document References

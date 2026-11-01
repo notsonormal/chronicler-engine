@@ -70,7 +70,7 @@ impl ConnectionTestService {
             TEST_SYSTEM_PROMPT,
             TEST_USER_PROMPT,
             &CallSettings {
-                max_tokens: Some(TEST_MAX_TOKENS),
+                max_tokens: TEST_MAX_TOKENS,
                 ..CallSettings::default()
             },
         ) {

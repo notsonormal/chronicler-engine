@@ -252,6 +252,24 @@ fn validate_refuses_each_engine_key_in_the_free_object_and_names_it() {
 }
 
 #[test]
+fn validate_refuses_a_sampler_with_its_own_field_in_the_free_object_and_names_it() {
+    for key in ["temperature", "top_p"] {
+        let mut preset = PromptPreset {
+            id: "bad".into(),
+            ..Default::default()
+        };
+        preset
+            .parameters
+            .custom
+            .insert(key.into(), serde_json::json!(0.5));
+
+        let error = preset.validate().unwrap_err().to_string();
+
+        assert!(error.contains(&format!("`{key}`")), "{error}");
+    }
+}
+
+#[test]
 fn validate_accepts_an_option_count_on_an_options_preset() {
     let mut preset = options_preset();
     preset.option_count = Some(5);

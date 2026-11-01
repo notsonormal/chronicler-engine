@@ -7,7 +7,6 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::prompting::token_budget::TokenBudget;
 use crate::application::prompting::{AssembledPrompt, CharacterContext, PromptAssembler, PromptContext};
 use crate::domain::model::character::PersonaCard;
-use crate::domain::model::game::GameId;
 use crate::domain::model::generation::Generation;
 use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::map::Room;
@@ -110,8 +109,8 @@ impl Narrator {
         generation: &Generation,
         values: &NarrationValues,
         preset: &PromptPreset,
-        budget: TokenBudget,
-        game: GameId,
+        call: &CallSettings,
+        max_context_tokens: u32,
     ) -> Result<Narrated, GenerationFailure> {
         let role = generation.kind().role();
         let user_message = Self::user_message(generation, values);
@@ -130,6 +129,10 @@ impl Narrator {
             Generation::Narration { guide } => context.with_guide(guide.clone()),
             Generation::InputRetry | Generation::Event(_) => context,
         };
+        let budget = TokenBudget {
+            max_context_tokens,
+            max_tokens: call.max_tokens,
+        };
         let assembled = self
             .assemble(&context, preset, budget)
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
@@ -141,7 +144,10 @@ impl Narrator {
                 role.agent_name(),
                 &assembled.system_prompt,
                 &assembled.user_prompt,
-                &CallSettings::of(&preset.parameters, assembled.max_tokens, game),
+                &CallSettings {
+                    max_tokens: assembled.max_tokens,
+                    ..call.clone()
+                },
             )
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
         tracing::info!("Narration complete");

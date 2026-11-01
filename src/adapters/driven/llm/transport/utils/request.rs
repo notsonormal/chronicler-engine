@@ -3,9 +3,10 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
-use crate::domain::model::settings::{ReasoningEffort, DEFAULT_MAX_TOKENS};
+use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::settings::ReasoningEffort;
 
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -41,12 +42,9 @@ pub struct ChatCompletionRequest<'a> {
     pub model: &'a str,
     pub system_prompt: &'a str,
     pub user_text: &'a str,
-    /// `None` sends `DEFAULT_MAX_TOKENS`.
-    pub max_tokens: Option<u32>,
-    pub temperature: Option<f64>,
-    pub top_p: Option<f64>,
-    /// Sent as they are, unless the engine writes the same key itself.
-    pub custom: &'a Map<String, Value>,
+    /// The `custom` samplers are sent as they are, unless the engine writes the same key
+    /// itself. Its `game` does not reach the wire: `session_id` carries it.
+    pub call: &'a CallSettings,
     pub session_id: Option<&'a str>,
     /// Sent as the flat `reasoning_effort` field: OpenCode Go ignores the
     /// nested `reasoning: {effort}` form. `None` sends no field, so the model
@@ -62,12 +60,6 @@ pub struct ProviderRouting<'a> {
     pub allow_fallbacks: bool,
 }
 
-impl ChatCompletionRequest<'_> {
-    pub fn resolved_max_tokens(&self) -> u32 {
-        self.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)
-    }
-}
-
 pub fn build_request_payload(request: &ChatCompletionRequest<'_>) -> (serde_json::Value, String) {
     let mut messages = vec![];
     if !request.system_prompt.is_empty() {
@@ -80,15 +72,15 @@ pub fn build_request_payload(request: &ChatCompletionRequest<'_>) -> (serde_json
         "role": "user",
         "content": request.user_text
     }));
-    let mut payload = Value::Object(request.custom.clone());
+    let mut payload = Value::Object(request.call.custom.clone());
     payload["model"] = json!(request.model);
     payload["messages"] = json!(messages);
     payload["stream"] = json!(false);
-    payload["max_tokens"] = json!(request.resolved_max_tokens());
-    if let Some(temperature) = request.temperature {
+    payload["max_tokens"] = json!(request.call.max_tokens);
+    if let Some(temperature) = request.call.temperature {
         payload["temperature"] = json!(temperature);
     }
-    if let Some(top_p) = request.top_p {
+    if let Some(top_p) = request.call.top_p {
         payload["top_p"] = json!(top_p);
     }
     if let Some(session_id) = request.session_id {

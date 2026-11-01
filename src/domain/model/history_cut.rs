@@ -10,9 +10,6 @@ const KEPT_AFTER_CUT_PERCENT: usize = 75;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryBlock {
     pub dropped: Range<usize>,
-    /// The index of the Message whose arrival made the cut drop. `None` for a drop
-    /// that no arrival caused (the overflow guard).
-    pub arrival: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,19 +29,18 @@ impl HistoryCut {
         };
         let mut kept_tokens = 0;
 
-        for (arrival, tokens) in entry_tokens.iter().enumerate() {
+        for (index, tokens) in entry_tokens.iter().enumerate() {
             kept_tokens += tokens;
             if kept_tokens <= history_space {
                 continue;
             }
             let block_start = cut.kept_from;
-            while kept_tokens > keep_after_cut && cut.kept_from <= arrival {
+            while kept_tokens > keep_after_cut && cut.kept_from <= index {
                 kept_tokens -= entry_tokens[cut.kept_from];
                 cut.kept_from += 1;
             }
             cut.blocks.push(HistoryBlock {
                 dropped: block_start..cut.kept_from,
-                arrival: Some(arrival),
             });
         }
         cut
@@ -62,7 +58,6 @@ impl HistoryCut {
         if self.kept_from > block_start {
             self.blocks.push(HistoryBlock {
                 dropped: block_start..self.kept_from,
-                arrival: None,
             });
         }
     }

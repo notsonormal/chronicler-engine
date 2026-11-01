@@ -165,7 +165,7 @@ mod tests {
                 "Answer with one short word.",
                 "Reply OK.",
                 &CallSettings {
-                    max_tokens: Some(256),
+                    max_tokens: 256,
                     ..CallSettings::default()
                 },
             )

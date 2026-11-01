@@ -12,11 +12,11 @@ use crate::domain::model::agent::Role;
 use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard, Relationship};
 use crate::domain::model::game::GameId;
 use crate::domain::model::generation::Generation;
-use crate::domain::model::generation_parameters::GenerationParameters;
+use crate::domain::model::generation_parameters::{CallSettings, GenerationParameters};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Maker, Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
+use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, DEFAULT_MAX_TOKENS};
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::event_record::{EventRecord, TriggerRef};
@@ -263,7 +263,23 @@ fn narrate_with(
     preset: &PromptPreset,
     budget: TokenBudget,
 ) -> Result<Narrated, GenerationFailure> {
-    narrator(Arc::clone(model)).narrate(&case.generation, &case.values, preset, budget, GameId(7))
+    narrate_on(&narrator(Arc::clone(model)), case, preset, budget)
+}
+
+fn narrate_on(
+    narrator: &Narrator,
+    case: &NarrationCase,
+    preset: &PromptPreset,
+    budget: TokenBudget,
+) -> Result<Narrated, GenerationFailure> {
+    let call = CallSettings::of(&preset.parameters, budget.max_tokens, GameId(7));
+    narrator.narrate(
+        &case.generation,
+        &case.values,
+        preset,
+        &call,
+        budget.max_context_tokens,
+    )
 }
 
 fn sent_prompt(case: &NarrationCase, preset: &PromptPreset) -> ModelCall {
@@ -313,7 +329,7 @@ fn first_kept_entry(prompt: &str) -> Option<usize> {
     digits.parse().ok()
 }
 
-fn window(max_context_tokens: u32, max_tokens: Option<u32>) -> TokenBudget {
+fn window(max_context_tokens: u32, max_tokens: u32) -> TokenBudget {
     TokenBudget {
         max_context_tokens,
         max_tokens,
@@ -519,7 +535,7 @@ fn test_a_small_budget_drops_the_oldest_history() {
     let case = fixture.narration(&history, "I look around.");
     let model = Arc::new(ScriptedModel::new().narration("Narration."));
 
-    let narrated = narrate_with(&model, &case, &preset(), window(6144, None))
+    let narrated = narrate_with(&model, &case, &preset(), window(6144, DEFAULT_MAX_TOKENS))
         .expect("a narration is a result");
     let fitted = prompt_of(&model);
 
@@ -681,15 +697,10 @@ fn test_a_cut_history_keeps_the_requested_response_length() {
     let fixture = Fixture::new();
     let history = fixture.history_of(2000);
 
-    let call = sent_under(
-        &fixture,
-        &history,
-        "I look around.",
-        window(8192, Some(500)),
-    );
+    let call = sent_under(&fixture, &history, "I look around.", window(8192, 500));
 
     assert!(first_kept_entry(&call.user_prompt).is_some_and(|start| 0 < start));
-    assert_eq!(call.settings.max_tokens, Some(500));
+    assert_eq!(call.settings.max_tokens, 500);
 }
 
 // CASE narrator-history-cut-marker-when-nothing-kept: Messages exist and the space keeps none, so the history holds the marker.
@@ -719,7 +730,7 @@ fn test_a_long_player_input_drops_more_messages_to_fit() {
     let history = fixture.history_of(2000);
     let long_input = "I look around the room slowly. ".repeat(600);
 
-    let call = sent_under(&fixture, &history, &long_input, window(8192, Some(500)));
+    let call = sent_under(&fixture, &history, &long_input, window(8192, 500));
 
     let input_limit = 8192 - SAFETY_MARGIN_TOKENS as usize - 500;
     let sent = estimate_tokens(&call.system_prompt) + estimate_tokens(&call.user_prompt);
@@ -740,7 +751,7 @@ fn test_the_call_asks_for_the_budgets_response_length() {
     let case = fixture.narration(&fixture.history, "I look around.");
     let requested = TokenBudget {
         max_context_tokens: MAX_CONTEXT_TOKENS,
-        max_tokens: Some(500),
+        max_tokens: 500,
     };
     let model = Arc::new(ScriptedModel::new().narration("Narration."));
 
@@ -748,7 +759,7 @@ fn test_the_call_asks_for_the_budgets_response_length() {
 
     assert_eq!(
         prompt_of(&model).settings.max_tokens,
-        Some(500),
+        500,
         "the call asks for the budget's response length"
     );
 }
@@ -1069,7 +1080,7 @@ fn test_a_prompt_that_cannot_fit_the_window_fails() {
     let model = Arc::new(ScriptedModel::new());
     let tight = TokenBudget {
         max_context_tokens: 512,
-        max_tokens: Some(256),
+        max_tokens: 256,
     };
 
     let mut long_role = preset();
@@ -1384,14 +1395,7 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     let fixture = Fixture::new();
     let case = fixture.narration(&fixture.history, "I look around.");
 
-    narrator
-        .narrate(
-            &case.generation,
-            &case.values,
-            &preset(),
-            TokenBudget::fallback(),
-            GameId(7),
-        )
+    narrate_on(&narrator, &case, &preset(), TokenBudget::fallback())
         .expect("a narration is a result");
 
     let recorded = storage
@@ -1420,29 +1424,20 @@ fn test_an_impersonate_calls_its_own_recorder() {
         .narration(&fixture.history, TYPED_INPUT)
         .impersonating(None);
 
-    narrator
-        .narrate(
-            &impersonation.generation,
-            &impersonation.values,
-            &impersonate_preset(),
-            TokenBudget::fallback(),
-            GameId(7),
-        )
-        .expect("an impersonation is a result");
+    narrate_on(
+        &narrator,
+        &impersonation,
+        &impersonate_preset(),
+        TokenBudget::fallback(),
+    )
+    .expect("an impersonation is a result");
     assert_eq!(impersonate_model.calls().len(), 1);
     assert!(
         narration_model.calls().is_empty(),
         "an Impersonate never calls the narration recorder"
     );
 
-    narrator
-        .narrate(
-            &case.generation,
-            &case.values,
-            &preset(),
-            TokenBudget::fallback(),
-            GameId(7),
-        )
+    narrate_on(&narrator, &case, &preset(), TokenBudget::fallback())
         .expect("a narration is a result");
     assert_eq!(narration_model.calls().len(), 1);
     assert_eq!(
@@ -1492,14 +1487,7 @@ fn test_a_call_carries_the_role_of_its_generation() {
         let mut case = fixture.narration(&fixture.history, TYPED_INPUT);
         case.generation = generation;
 
-        narrator
-            .narrate(
-                &case.generation,
-                &case.values,
-                &preset(),
-                TokenBudget::fallback(),
-                GameId(7),
-            )
+        narrate_on(&narrator, &case, &preset(), TokenBudget::fallback())
             .expect("the narration is a result");
 
         let recorded = storage
@@ -1653,13 +1641,7 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let fixture = Fixture::new();
     let case = fixture.narration(&fixture.history, "I look around.");
 
-    let _ = narrator.narrate(
-        &case.generation,
-        &case.values,
-        &preset(),
-        TokenBudget::fallback(),
-        GameId(7),
-    );
+    let _ = narrate_on(&narrator, &case, &preset(), TokenBudget::fallback());
 
     let recorded = storage
         .list_latest_llm_messages(10)
@@ -1693,7 +1675,7 @@ fn test_the_preset_samplers_and_the_game_reach_the_model_call() {
     let fixture = Fixture::new();
     let budget = TokenBudget {
         max_context_tokens: MAX_CONTEXT_TOKENS,
-        max_tokens: Some(700),
+        max_tokens: 700,
     };
     for case in [
         fixture.narration(&fixture.history, TYPED_INPUT),
@@ -1703,8 +1685,7 @@ fn test_the_preset_samplers_and_the_game_reach_the_model_call() {
     ] {
         let model = Arc::new(ScriptedModel::new().narration("Narration."));
 
-        narrator(Arc::clone(&model))
-            .narrate(&case.generation, &case.values, &tuned, budget, GameId(7))
+        narrate_on(&narrator(Arc::clone(&model)), &case, &tuned, budget)
             .expect("a narration is a result");
 
         let sent = prompt_of(&model).settings;
@@ -1713,8 +1694,7 @@ fn test_the_preset_samplers_and_the_game_reach_the_model_call() {
         assert_eq!(sent.custom["top_k"], serde_json::json!(30));
         assert_eq!(sent.game, Some(GameId(7)));
         assert_eq!(
-            sent.max_tokens,
-            Some(700),
+            sent.max_tokens, 700,
             "the response length is the budget's: the Job resolved the preset value and the ceiling"
         );
     }

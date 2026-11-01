@@ -77,7 +77,8 @@ pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Res
             }
 
             // `"length"` is its own failure, because only a larger output budget fixes
-            // it. Every other reason is an empty answer that the model chose to give.
+            // it. Every other reason is an empty answer, and the reason goes into the
+            // failure text.
             let finish_reason = choice.get("finish_reason").and_then(|f| f.as_str());
             if finish_reason == Some("length") {
                 let (completion_tokens, reasoning_tokens) = token_counts(&json_response);

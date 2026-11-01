@@ -5,6 +5,7 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::domain::model::agent::{AgentSettings, HookInput};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::quantifier::QuantifierResult;
 use crate::error::EngineError;
 
 use crate::application::agents::quantifier::parser::parse_with_movement;
@@ -192,11 +193,11 @@ pub(crate) fn static_character_result(
     world: &crate::domain::model::agent::WorldView<'_>,
     movement: MovementParseResult,
 ) -> QuantifierReading {
-    let character_ids = world.present.iter().map(|n| n.id.clone()).collect();
+    let kept = QuantifierResult::keeping_present(world.present);
 
     QuantifierReading {
         characters: QuantifierParseResult {
-            character_ids,
+            character_ids: kept.present,
             confidence: QuantifierConfidence::Low,
         },
         movement,
