@@ -727,9 +727,7 @@ def owner_entry(call, story):
     """The story entry a call made or judged, found by its text; else the last entry before it."""
     if call["agent_name"] == "quantifier":
         match = re.search(
-            r"<LatestNarration>\s*[^:\n]*:\s*(.*?)</LatestNarration>",
-            call["user_prompt"],
-            re.S,
+            r"<LatestMessage>\s*(.*?)</LatestMessage>", call["user_prompt"], re.S
         )
         probe = match.group(1).strip()[:100] if match else ""
     else:

@@ -46,6 +46,13 @@ The offered set of the Options agent lives in the Game's dock record, apart from
 the story. The always-on toggle is a setting of the Game, inherited from its
 World at creation. One agent and one offered set serve both narrator modes.
 
+## Answer shapes
+
+A preset asks the model for one of the shapes below. The parser of each agent reads only the shapes of that agent.
+
+- **Quantifier.** One JSON object. It carries `characters_present`, the list of Character ids, and `movement`, with the fields `type` and `destination`. A `type` of `entering` or `leaving` moves the player. Any other value, or `null`, means no movement.
+- **Options.** One of three shapes: a `<suggestion>` tag for each option, a numbered list, or a `Suggestion N:` line for each option.
+
 ## Document References
 
 - [`../../explanation/agent_system_design.md`](../../explanation/agent_system_design.md) — why the agent abstraction is shaped this way.

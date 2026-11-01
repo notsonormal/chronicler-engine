@@ -9,15 +9,19 @@ The engine assembles a structured prompt for every Game Master call from the act
 
 ## Layered Prompt Architecture
 
-The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3 and 7 are conditional. Layer 3 (`<Persona>`) is dropped on an Impersonate generation. Persona data then reaches the prompt through the impersonate preset's template macros. Layer 7 (`<Guide>`) renders only on a Guided Generation.
+The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3, 6 and 7 can be absent. Layer 3 (`<Persona>`) is dropped on an Impersonate generation. Persona data then reaches the prompt through the impersonate preset's template macros. Layer 7 (`<Guide>`) renders only on a Guided Generation.
 
-The remaining six layers are always present. A post-history splice of `<writing_style>` and `<output_format>` sits between Layer 5 and Layer 6.
+A layer with a blank body renders nothing, not even its tags. A body is blank when it is empty or holds only whitespace.
+
+A post-history splice of `<writing_style>` and `<output_format>` sits between Layer 5 and Layer 6.
+
+Every card list renders in Character id order. Layer 2 sorts both of its lists, and the Quantifier and Options calls sort their own.
 
 | Layer | Name | SillyTavern Equivalent | Role | Content |
 |-------|------|----------------------|------|---------|
 | 0 | System | Main Prompt | System | XML-wrapped `<role>` and `<instructions>` from the active preset, plus `<global_rules>` injected from `world.json` |
 | 1 | Game State | Context | User (data) | Current room name and description |
-| 2 | Character Cards | Character Description | User (data) | `<KnownCharacters>` condensed entry for every World Character. `<CharactersPresent>` full cards, only for Characters in the current room |
+| 2 | Character Cards | Character Description | User (data) | `<KnownCharacters>` condensed entry for every World Character, and `<CharactersPresent>` full cards for the Characters in the current room |
 | 3 | Player | Persona Description | User (data) | `<Persona>` persona sheet |
 | 4 | World Info | World Info / Lorebook | User (data) | `<WorldLore>` world name + description |
 | 5 | History | Chat History | User (data) | `<ConversationHistory>` conversation history |
@@ -46,7 +50,7 @@ User input enters the engine as `<PlayerInput>` content. The assembler passes it
 
 ## Context Templates
 
-The template engine substitutes template variables — the player persona's fields, the game's posture and the option count — into author-controlled preset fields at render time.
+The template engine substitutes template variables — the player persona's fields, the game's posture and the option count — into author-controlled text at render time. In the Narrator call, the text is the preset fields and the World, Room, Persona, Character and rule text. In the Quantifier and Options calls, it is the preset text and the card descriptions.
 
 ## Agent Prompts (Separate)
 

@@ -754,6 +754,66 @@ fn test_the_relationships_block_renders_the_present_characters_name() {
     );
 }
 
+// CASE narrator-cards-in-id-order: both card lists render in Character id order, whatever order the context holds them in.
+#[test]
+fn test_both_card_lists_render_in_character_id_order() {
+    let ada = character_card("a", "Ada", None, "first", vec![]);
+    let bea = character_card("b", "Bea", None, "second", vec![]);
+    let cid = character_card("c", "Cid", None, "third", vec![]);
+    let out_of_order = vec![cid.clone(), ada.clone(), bea.clone()];
+    let fixture = Fixture::new().with_characters(out_of_order.clone(), out_of_order);
+
+    let call = sent_prompt(
+        &fixture.narration(&fixture.history, "I look around."),
+        &preset(),
+    );
+
+    for (open, close) in [
+        ("<KnownCharacters>", "</KnownCharacters>"),
+        ("<CharactersPresent>", "</CharactersPresent>"),
+    ] {
+        let rendered = layer(&call.user_prompt, open, close);
+        let positions: Vec<usize> = ["Ada", "Bea", "Cid"]
+            .iter()
+            .map(|name| {
+                rendered
+                    .find(name)
+                    .unwrap_or_else(|| panic!("{name} renders in {open}: {rendered}"))
+            })
+            .collect();
+        assert!(
+            positions.windows(2).all(|pair| pair[0] < pair[1]),
+            "{open} renders its cards in id order: {rendered}"
+        );
+    }
+}
+
+// CASE narrator-card-scenario-label: a present card labels its scenario field `Scenario:`.
+#[test]
+fn test_a_present_card_labels_its_scenario_field() {
+    let card = character_card("a", "Ada", None, "first", vec![]);
+    let fixture = Fixture::new().with_characters(vec![card.clone()], vec![card]);
+
+    let call = sent_prompt(
+        &fixture.narration(&fixture.history, "I look around."),
+        &preset(),
+    );
+    let present = layer(
+        &call.user_prompt,
+        "<CharactersPresent>",
+        "</CharactersPresent>",
+    );
+
+    assert!(
+        present.contains("Scenario: At the inn."),
+        "the card's scenario field renders under its own label: {present}"
+    );
+    assert!(
+        !present.contains("Context:"),
+        "no other label names the scenario field: {present}"
+    );
+}
+
 // CASE narrator-context-overflow: a prompt that cannot fit the window fails instead of truncating the system layer.
 #[test]
 fn test_a_prompt_that_cannot_fit_the_window_fails() {
@@ -1236,15 +1296,56 @@ fn test_a_continue_answers_the_input_that_ends_the_window() {
     );
 }
 
-// CASE narrator-user-message-after-narration-empty: a Continue after a Narration makes an empty user message.
+// CASE narrator-user-message-after-narration-empty: a Continue after a Narration renders no player-input layer.
 #[test]
-fn test_a_continue_after_a_narration_makes_an_empty_message() {
+fn test_a_continue_after_a_narration_renders_no_player_input_layer() {
     let fixture = Fixture::new();
     let after_narration = fixture.narration(&fixture.history, "");
     let user = sent_prompt(&after_narration, &preset()).user_prompt;
+
     assert!(
-        !layer(&user, "<PlayerInput>", "</PlayerInput>").contains("You enter the inn."),
-        "the Narration the window ends with is not the message: {user}"
+        !user.contains("<PlayerInput>"),
+        "a blank player input renders no layer at all: {user}"
+    );
+    assert!(
+        user.trim_end().ends_with("</output_format>"),
+        "the user message ends with the post-history splice: {user}"
+    );
+}
+
+// CASE narrator-guide-after-narration: a Guided Generation with no Input after a Narration renders the guide and no player-input layer.
+#[test]
+fn test_a_guide_after_a_narration_renders_the_guide_and_no_player_input_layer() {
+    let fixture = Fixture::new();
+    let case = fixture
+        .narration(&fixture.history, "")
+        .with_guide(Some("Add tension.".to_string()));
+    let user = sent_prompt(&case, &preset()).user_prompt;
+
+    assert!(
+        !user.contains("<PlayerInput>"),
+        "a blank player input renders no layer at all: {user}"
+    );
+    assert!(
+        user.trim_end().ends_with("</Guide>"),
+        "the guide ends the user message: {user}"
+    );
+}
+
+// CASE narrator-blank-player-input-renders-nothing: an Impersonate with no direction ends the user message at the post-history splice.
+#[test]
+fn test_an_impersonate_with_no_direction_ends_at_the_post_history_splice() {
+    let fixture = Fixture::new();
+    let case = fixture.narration(&fixture.history, "").impersonating(None);
+    let user = sent_prompt(&case, &preset()).user_prompt;
+
+    assert!(
+        !user.contains("<PlayerInput>"),
+        "a blank direction renders no player-input layer: {user}"
+    );
+    assert!(
+        user.trim_end().ends_with("</output_format>"),
+        "the user message ends with the post-history splice: {user}"
     );
 }
 

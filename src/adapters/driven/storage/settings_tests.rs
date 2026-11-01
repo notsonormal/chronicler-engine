@@ -686,7 +686,7 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 31);
+    assert_eq!(version, 32);
 }
 
 #[test]

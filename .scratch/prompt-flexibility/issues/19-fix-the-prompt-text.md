@@ -1,7 +1,7 @@
 # Fix the prompt text
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 18
 
 ## Question
@@ -148,3 +148,47 @@ The Quantifier and Options prompts:
 ## Output
 
 Resolved when the check pack shows the new text and `python build.py` passes. The answer records the CASE ids, the migration step, and the check results with the pack path.
+
+## Answer
+
+Resolved on 2026-10-31, on the branch `prompt-flexibility` (not committed). A comment pass, a doc review and a two-axis code review (Standards and Spec) followed the first pass. Every finding that was accepted is fixed. The rejected findings are listed below.
+
+**The check passed.** `python scripts/trial.py run scripts/trial_setups/redmist_julian.json --cycles 20` on the probe server (port 3001, built from this branch) played 20 of 20 Cycles: 80 calls (39 Narrator role, 1 Event Narration, 40 Quantifier), no failed call, no restart. The pack is `tmp/pf19/redmist_julian/trial-1/pack.md`.
+
+- Every card list is in id order in every call, also after the Characters present changed.
+- None of the 20 Impersonate calls has `<PlayerInput>`. Each user message ends at `</output_format>`.
+- All 40 Quantifier calls have `<LatestMessage>` with no name prefix. No call has `LatestNarration`, `Context:` or a raw `{{…}}`. No card of this World holds a placeholder, so the seam cases pin the placeholder rule.
+- The cached input share is 33 % (107,648 of 324,120 input tokens). Trial B was 0.9 %. This is a report, not a gate.
+
+The trial ran before the review fixes. Those fixes do not change a blank layer or the text the trial checks.
+
+The full gate `logs/build_20261031_235524.log` passed: guardrails 309, integration 1535 (3 skipped), browser 44.
+
+**CASE ids.**
+
+- `narrator_tests.rs`: `narrator-cards-in-id-order`, `narrator-card-scenario-label`, `narrator-blank-player-input-renders-nothing`, `narrator-guide-after-narration` (from the Spec review), and `narrator-user-message-after-narration-empty` rewritten.
+- `quantifier/agent_tests.rs`: `quantifier-cards-in-id-order`, `quantifier-card-text-renders-placeholders`, `quantifier-latest-message-block`.
+- `options/agent_tests.rs`: `options-cards-in-id-order`, `options-card-text-renders-placeholders`, `options-closing-line-names-no-count`.
+- `character_tests.rs` (a pure domain function): the sort and its stable order.
+
+**The migration** is step 32 (`LATEST_VERSION` 32), with the test `test_v32_renames_the_latest_narration_tag_in_stored_presets`.
+
+**Changes beyond the Steps.**
+
+- `LayerRenderer::render_non_blank_layer` uses the trim only to find a blank body. A non-blank body keeps its bytes, as the Decisions say for the other layers. The first pass also wrote the trimmed body (Spec review).
+- `QuantifierPromptContext::player_action` is now `latest_message`, because the text can be a Narration (Standards review).
+- `scripts/trial.py` reads `<LatestMessage>` to find the owner entry of a Quantifier call.
+- The reason for the `Scenario:` label is a code comment in `render_character_cards_layer`, not a paragraph in `prompt_system_design.md`. `docs/AGENTS.md` puts a reason tied to one value beside the value.
+
+**A Fact that was wrong.** Four legacy Quantifier tests had an empty history, not one. `test_quantifier_prompt_builder_empty_characters` now finds the Persona name through the `<LatestMessage>` block.
+
+**Accepted limit.** `TemplateVars::from_persona` fixes `{{narrative_perspective}}` and `{{narrative_tense}}` to `third` and `past`. The Quantifier and Options calls use it, and the Narrator call uses the posture of the Game. So the Decision "one card reads the same in all three calls" holds for every placeholder except these two. The preset text of the agent calls had the same limit before. No card in `data/` uses a placeholder. A fix gives both agent contexts the posture of the Game. The owner put it under Not yet specified on the map (2026-10-31).
+
+**Rejected review findings.**
+
+- A shared test helper for the three seam files: each helper is local and short.
+- The `<Guide>` layer through `render_non_blank_layer`: its fixed sentence would change its bytes.
+- The doc rule "a blank body renders nothing" limited to Layers 6 and 7: the Decisions state it for every layer, so a new layer follows it.
+- An empty preset field still renders its tags: not a numbered layer, and a code change beyond this ticket.
+- The seed Quantifier preset offers `"in"`, which the parser ignores: preset wording, the authoring effort.
+

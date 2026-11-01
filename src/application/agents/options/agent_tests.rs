@@ -61,6 +61,11 @@ impl Scene {
         }
     }
 
+    fn with_present(mut self, present: Vec<CharacterCard>) -> Self {
+        self.present = present;
+        self
+    }
+
     fn world(&self) -> WorldView<'_> {
         WorldView {
             room: self.map.get_room_by_id("start"),
@@ -252,5 +257,104 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
     assert_eq!(
         failure.error_message.as_deref(),
         Some("LLM Error: Narration generation failed at stage 'scripted': configured_failure")
+    );
+}
+
+fn between<'a>(prompt: &'a str, open: &str, close: &str) -> &'a str {
+    let start = prompt
+        .find(open)
+        .unwrap_or_else(|| panic!("the {open} block renders: {prompt}"));
+    let rest = &prompt[start..];
+    let end = rest
+        .find(close)
+        .unwrap_or_else(|| panic!("the {close} tag closes the {open} block: {prompt}"));
+    &rest[..end]
+}
+
+// CASE options-cards-in-id-order: the card list renders in Character id order, whatever order the scene holds it in.
+#[test]
+fn test_the_card_list_renders_in_character_id_order() {
+    let cards = vec![
+        TestCharacter::named("c", "Cid"),
+        TestCharacter::named("a", "Ada"),
+        TestCharacter::named("b", "Bea"),
+    ];
+    let present = vec![cards[2].clone(), cards[0].clone(), cards[1].clone()];
+    let scene = Scene::new().with_present(present);
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let world = scene.world();
+    options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &AgentSettings::default())
+        .expect("a parsed answer is an offered set");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    let present_block = between(
+        &call.user_prompt,
+        "<CharactersPresent>",
+        "</CharactersPresent>",
+    );
+    let positions: Vec<usize> = ["Ada", "Bea", "Cid"]
+        .iter()
+        .map(|name| {
+            present_block
+                .find(name)
+                .unwrap_or_else(|| panic!("{name} renders: {present_block}"))
+        })
+        .collect();
+    assert!(
+        positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "the cards render in id order: {present_block}"
+    );
+}
+
+// CASE options-card-text-renders-placeholders: a card's text reaches the prompt with its placeholders rendered.
+#[test]
+fn test_a_cards_text_renders_its_placeholders() {
+    let mut card = TestCharacter::named("character_1", "Test Character");
+    card.sheet.description = "A friend of {{user}}.".to_string();
+    let scene = Scene::new().with_present(vec![card]);
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let world = scene.world();
+    options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &AgentSettings::default())
+        .expect("a parsed answer is an offered set");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    let present_block = between(
+        &call.user_prompt,
+        "<CharactersPresent>",
+        "</CharactersPresent>",
+    );
+    assert!(
+        present_block.contains(&format!("A friend of {}.", scene.persona.sheet.name)),
+        "the card text renders its placeholders: {present_block}"
+    );
+    assert!(
+        !present_block.contains("{{user}}"),
+        "no raw placeholder reaches the model: {present_block}"
+    );
+}
+
+// CASE options-closing-line-names-no-count: the closing line asks for options and names no count.
+#[test]
+fn test_the_closing_line_names_no_count() {
+    let scene = Scene::new();
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let world = scene.world();
+    options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &AgentSettings::default())
+        .expect("a parsed answer is an offered set");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    let expected = format!(
+        "Based on the scene above, respond with options in the format the system instructions \
+         specify. Each option is a possible player action — something {} could do next — not a \
+         story outcome.",
+        scene.persona.sheet.name
+    );
+    assert!(
+        call.user_prompt.contains(&expected),
+        "the closing line is the whole sentence: {}",
+        call.user_prompt
     );
 }

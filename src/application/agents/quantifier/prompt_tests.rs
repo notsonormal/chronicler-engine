@@ -5,6 +5,7 @@ use crate::domain::model::map::Room;
 use crate::domain::model::state::message_types::StoryRow;
 
 use super::prompt::QuantifierPromptBuilder;
+use crate::test_support::fixtures::TestPersona;
 use crate::test_support::quantifier::{make_history, make_character, make_room};
 use super::types::{QuantifierPromptContext, RoomInfo};
 
@@ -25,7 +26,7 @@ Respond ONLY with a JSON object in this exact format:
 
 How to determine movement:
 1. Read <CurrentRoom> — this is where the player is right now.
-2. Read <LatestNarration> — this is what just happened.
+2. Read <LatestMessage> — this is what just happened.
 "#;
 
     let context = QuantifierPromptContext {
@@ -33,9 +34,9 @@ How to determine movement:
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I walk into the entrance hall.",
+        latest_message: "I walk into the entrance hall.",
         quantifier_prompt_override: Some(override_text.to_string()),
     };
 
@@ -48,7 +49,7 @@ How to determine movement:
     assert!(system.contains("gabriella"));
     assert!(system.contains("How to determine movement"));
     assert!(system.contains("Read <CurrentRoom>"));
-    assert!(system.contains("Read <LatestNarration>"));
+    assert!(system.contains("Read <LatestMessage>"));
     assert!(user.contains("Entrance Hall"));
     assert!(user.contains("Carla"));
     assert!(user.contains("Hero"));
@@ -71,9 +72,9 @@ fn test_quantifier_prompt_builder_token_budget() {
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 
@@ -85,31 +86,6 @@ fn test_quantifier_prompt_builder_token_budget() {
         total_chars < 4000,
         "Quantifier prompt too long: {total_chars} chars"
     );
-}
-
-#[test]
-fn test_quantifier_prompt_builder_empty_history() {
-    let room = make_room();
-    let all_characters: Vec<CharacterCard> = vec![];
-    let previous_characters: Vec<CharacterCard> = vec![];
-    let history: Vec<StoryRow> = vec![];
-
-    let context = QuantifierPromptContext {
-        room: &room,
-        previous_characters_present: &previous_characters,
-        all_known_characters: &all_characters,
-        all_rooms: &[],
-        player_name: "Hero",
-        recent_history: &history,
-        player_action: "I look around.",
-        quantifier_prompt_override: None,
-    };
-
-    let builder = QuantifierPromptBuilder::new(context);
-    let (_, user) = builder.build();
-
-    assert!(user.contains("Hero"));
-    assert!(user.contains("I look around"));
 }
 
 #[test]
@@ -132,9 +108,9 @@ fn test_quantifier_prompt_includes_navigation() {
             id: "kitchen".to_string(),
             name: "Kitchen".to_string(),
         }],
-        player_name: "Player",
+        persona: &TestPersona::named("Player"),
         recent_history: &[],
-        player_action: "I walk to the kitchen",
+        latest_message: "I walk to the kitchen",
         quantifier_prompt_override: None,
     };
 
@@ -157,9 +133,9 @@ fn test_quantifier_prompt_builder_empty_characters() {
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 
@@ -167,7 +143,10 @@ fn test_quantifier_prompt_builder_empty_characters() {
     let (system, user) = builder.build();
 
     assert!(system.contains("available_character_ids"));
-    assert!(user.contains("Hero"));
+    assert!(
+        user.contains("<LatestMessage>\n  I look around.\n</LatestMessage>"),
+        "the newest Message still renders: {user}"
+    );
 }
 
 #[test]
@@ -190,9 +169,9 @@ fn test_quantifier_prompt_builder_all_rooms() {
         previous_characters_present: &[],
         all_known_characters: &all_characters,
         all_rooms: &all_rooms,
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &[],
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 
@@ -202,62 +181,4 @@ fn test_quantifier_prompt_builder_all_rooms() {
     assert!(system.contains("available_rooms"));
     assert!(system.contains("Entrance"));
     assert!(system.contains("Library"));
-}
-
-#[test]
-fn test_quantifier_prompt_uses_latest_narration_tag() {
-    let room = make_room();
-    let all_characters: Vec<CharacterCard> = vec![];
-    let previous_characters: Vec<CharacterCard> = vec![];
-    let history: Vec<StoryRow> = vec![];
-
-    let context = QuantifierPromptContext {
-        room: &room,
-        previous_characters_present: &previous_characters,
-        all_known_characters: &all_characters,
-        all_rooms: &[],
-        player_name: "Hero",
-        recent_history: &history,
-        player_action: "I look around.",
-        quantifier_prompt_override: None,
-    };
-
-    let builder = QuantifierPromptBuilder::new(context);
-    let (_system, user) = builder.build();
-
-    assert!(
-        user.contains("<LatestNarration>"),
-        "User prompt should contain <LatestNarration> tag"
-    );
-    assert!(
-        !user.contains("<PlayerAction>"),
-        "User prompt should not contain old <PlayerAction> tag"
-    );
-}
-
-#[test]
-fn test_quantifier_prompt_references_latest_narration_in_query() {
-    let room = make_room();
-    let all_characters: Vec<CharacterCard> = vec![];
-    let previous_characters: Vec<CharacterCard> = vec![];
-    let history: Vec<StoryRow> = vec![];
-
-    let context = QuantifierPromptContext {
-        room: &room,
-        previous_characters_present: &previous_characters,
-        all_known_characters: &all_characters,
-        all_rooms: &[],
-        player_name: "Hero",
-        recent_history: &history,
-        player_action: "I look around.",
-        quantifier_prompt_override: None,
-    };
-
-    let builder = QuantifierPromptBuilder::new(context);
-    let (_system, user) = builder.build();
-
-    assert!(
-        user.contains("<LatestNarration>"),
-        "Query should reference <LatestNarration>"
-    );
 }

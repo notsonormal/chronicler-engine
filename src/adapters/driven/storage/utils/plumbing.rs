@@ -14,7 +14,7 @@ pub(crate) fn parse_datetime(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
-const LATEST_VERSION: i32 = 31;
+const LATEST_VERSION: i32 = 32;
 
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
     migrate_up_to(conn, LATEST_VERSION)
@@ -738,6 +738,22 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 31)
+            .db_context("Failed to set user_version")?;
+    }
+
+    if due(32) {
+        // The Quantifier prompt holds the newest Message in `<LatestMessage>`. A
+        // stored preset copy that names `<LatestNarration>` points the model at a
+        // block that the prompt does not hold.
+        for column in ["role", "instructions", "writing_style", "output_format"] {
+            exec(&format!(
+                "UPDATE prompt_presets \
+                 SET {column} = replace({column}, 'LatestNarration', 'LatestMessage') \
+                 WHERE {column} LIKE '%LatestNarration%'"
+            ))?;
+        }
+
+        conn.pragma_update(None, "user_version", 32)
             .db_context("Failed to set user_version")?;
     }
 

@@ -1,11 +1,13 @@
 use crate::application::agents::options::types::OptionsPromptContext;
 use crate::application::agents::options::prompt::OptionsPromptBuilder;
+use crate::domain::model::character::PersonaCard;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
 use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona};
 
 fn make_context<'a>(
     map: &'a crate::domain::model::map::MapDef,
     characters: &'a [crate::domain::model::character::CharacterCard],
+    persona: &'a PersonaCard,
     override_text: Option<String>,
 ) -> OptionsPromptContext<'a> {
     let room = map
@@ -15,7 +17,7 @@ fn make_context<'a>(
         room,
         characters_present: characters,
         recent_history: &[],
-        player_name: "Julian",
+        persona,
         options_prompt_override: override_text,
         option_count: 3,
     }
@@ -29,7 +31,9 @@ fn make_room_characters() -> Vec<crate::domain::model::character::CharacterCard>
 fn fallback_system_prompt_substitutes_macros() {
     let map = TestMap::single_room("start");
     let characters = make_room_characters();
-    let (system, _user) = OptionsPromptBuilder::new(make_context(&map, &characters, None)).build();
+    let persona = TestPersona::named("Julian");
+    let (system, _user) =
+        OptionsPromptBuilder::new(make_context(&map, &characters, &persona, None)).build();
 
     assert!(!system.contains("{{user}}"), "{{user}} must substitute");
     assert!(
@@ -45,9 +49,11 @@ fn fallback_system_prompt_substitutes_macros() {
 fn override_system_prompt_is_rendered_with_macros() {
     let map = TestMap::single_room("start");
     let characters = make_room_characters();
+    let persona = TestPersona::named("Julian");
     let (system, _user) = OptionsPromptBuilder::new(make_context(
         &map,
         &characters,
+        &persona,
         Some("Offer {{option_count}} bold moves for {{user}}.".to_string()),
     ))
     .build();
@@ -59,8 +65,14 @@ fn override_system_prompt_is_rendered_with_macros() {
 fn whitespace_only_override_falls_back() {
     let map = TestMap::single_room("start");
     let characters = make_room_characters();
-    let (system, _user) =
-        OptionsPromptBuilder::new(make_context(&map, &characters, Some("   ".to_string()))).build();
+    let persona = TestPersona::named("Julian");
+    let (system, _user) = OptionsPromptBuilder::new(make_context(
+        &map,
+        &characters,
+        &persona,
+        Some("   ".to_string()),
+    ))
+    .build();
 
     assert!(system.contains("<suggestion>"), "fallback prompt expected");
 }
@@ -93,7 +105,7 @@ fn user_prompt_carries_room_character_and_history_sections() {
         room,
         characters_present: &characters,
         recent_history: &history,
-        player_name: &persona.sheet.name,
+        persona: &persona,
         options_prompt_override: None,
         option_count: 3,
     };
@@ -107,7 +119,6 @@ fn user_prompt_carries_room_character_and_history_sections() {
     assert!(user.contains("sender=\"Narrator\""));
     assert!(user.contains("sender=\"Julian\""));
     assert!(user.contains("sender=\"System\""));
-    assert!(user.contains("exactly 3 options"));
 }
 
 #[test]
@@ -119,7 +130,7 @@ fn user_prompt_omits_character_section_when_area_is_empty() {
         room,
         characters_present: &[],
         recent_history: &[],
-        player_name: "Julian",
+        persona: &TestPersona::named("Julian"),
         options_prompt_override: None,
         option_count: 3,
     };

@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Options prompt construction
 
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::state::message_types::MessageType;
 use crate::application::agents::options::types::OptionsPromptContext;
@@ -27,7 +28,7 @@ impl<'a> OptionsPromptBuilder<'a> {
     }
 
     fn build_system_prompt(&self) -> String {
-        let vars = TemplateVars::new(self.context.player_name);
+        let vars = TemplateVars::from_persona(self.context.persona);
         let base = self
             .context
             .options_prompt_override
@@ -38,6 +39,7 @@ impl<'a> OptionsPromptBuilder<'a> {
     }
 
     fn build_user_prompt(&self) -> String {
+        let vars = TemplateVars::from_persona(self.context.persona);
         let mut prompt = String::new();
 
         prompt.push_str("<CurrentRoom>\n");
@@ -55,10 +57,12 @@ impl<'a> OptionsPromptBuilder<'a> {
 
         if !self.context.characters_present.is_empty() {
             prompt.push_str("<CharactersPresent>\n");
-            for character in self.context.characters_present {
+            for character in CharacterCard::in_id_order(self.context.characters_present) {
                 prompt.push_str(&format!(
                     "  <Character id=\"{}\" name=\"{}\">{}</Character>\n",
-                    character.id, character.sheet.name, character.sheet.description
+                    character.id,
+                    character.sheet.name,
+                    vars.render(&character.sheet.description)
                 ));
             }
             prompt.push_str("</CharactersPresent>\n\n");
@@ -69,7 +73,7 @@ impl<'a> OptionsPromptBuilder<'a> {
             for entry in self.context.recent_history {
                 let sender_label = match entry.message_type {
                     MessageType::Narration => "Narrator",
-                    MessageType::Input => self.context.player_name,
+                    MessageType::Input => &self.context.persona.sheet.name,
                     MessageType::System => "System",
                 };
                 if sender_label.is_empty() {
@@ -85,10 +89,10 @@ impl<'a> OptionsPromptBuilder<'a> {
         }
 
         prompt.push_str(&format!(
-            "Based on the scene above, respond with exactly {} options in the format the \
-system instructions specify. Each option is a possible player action — something {} could \
-do next — not a story outcome.\n",
-            self.context.option_count, self.context.player_name
+            "Based on the scene above, respond with options in the format the system \
+instructions specify. Each option is a possible player action — something {} could do next — \
+not a story outcome.\n",
+            self.context.persona.sheet.name
         ));
 
         prompt

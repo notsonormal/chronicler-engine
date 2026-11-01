@@ -47,9 +47,9 @@ pub(crate) fn determine_characters_present(
         previous_characters_present: &previous_characters_present,
         all_known_characters: &all_characters,
         all_rooms: &all_rooms,
-        player_name: &world.persona.sheet.name,
+        persona: world.persona,
         recent_history: input.story,
-        player_action: text,
+        latest_message: text,
         quantifier_prompt_override: settings.preset.clone(),
     };
 
@@ -67,9 +67,9 @@ pub(crate) fn quantify_room_with_llm_call(
         previous_characters_present: context.previous_characters_present,
         all_known_characters: context.all_known_characters,
         all_rooms: context.all_rooms,
-        player_name: context.player_name,
+        persona: context.persona,
         recent_history: context.recent_history,
-        player_action: context.player_action,
+        latest_message: context.latest_message,
         quantifier_prompt_override: context.quantifier_prompt_override.clone(),
     });
 
@@ -94,7 +94,7 @@ pub(crate) fn quantify_room_with_llm_call(
         match recorder.complete("quantifier", &system_prompt, &user_prompt, max_tokens) {
             Ok(llm_result) => {
                 let response = &llm_result.text;
-                tracing::info!("[Quantifier] Player action: {}", context.player_action);
+                tracing::info!("[Quantifier] Latest message: {}", context.latest_message);
                 tracing::info!(
                     "[Quantifier] Received response ({} chars) [attempt {}/{}]",
                     response.len(),

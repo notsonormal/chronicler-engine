@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Quantifier prompt construction
 
+use crate::domain::model::character::CharacterCard;
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::state::message_types::MessageType;
 use crate::application::agents::quantifier::types::QuantifierPromptContext;
@@ -19,7 +20,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
     }
 
     fn build_system_prompt(&self) -> String {
-        let vars = TemplateVars::new(self.context.player_name);
+        let vars = TemplateVars::from_persona(self.context.persona);
         let mut prompt = vars.render(
             self.context
                 .quantifier_prompt_override
@@ -31,7 +32,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
             prompt.push_str("\n\n");
         }
         prompt.push_str("<available_character_ids>\n");
-        for character in self.context.all_known_characters {
+        for character in CharacterCard::in_id_order(self.context.all_known_characters) {
             prompt.push_str(&format!(
                 "  <Character id=\"{}\" name=\"{}\"/>\n",
                 character.id, character.sheet.name
@@ -52,6 +53,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
     }
 
     fn build_user_prompt(&self) -> String {
+        let vars = TemplateVars::from_persona(self.context.persona);
         let mut prompt = String::new();
 
         prompt.push_str("<CurrentRoom>\n");
@@ -69,10 +71,12 @@ impl<'a> QuantifierPromptBuilder<'a> {
 
         if !self.context.previous_characters_present.is_empty() {
             prompt.push_str("<PreviousCharactersPresent>\n");
-            for character in self.context.previous_characters_present {
+            for character in CharacterCard::in_id_order(self.context.previous_characters_present) {
                 prompt.push_str(&format!(
                     "  <Character id=\"{}\" name=\"{}\">{}</Character>\n",
-                    character.id, character.sheet.name, character.sheet.description
+                    character.id,
+                    character.sheet.name,
+                    vars.render(&character.sheet.description)
                 ));
             }
             prompt.push_str("</PreviousCharactersPresent>\n\n");
@@ -83,7 +87,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
             for entry in self.context.recent_history {
                 let sender_label = match entry.message_type {
                     MessageType::Narration => "Narrator",
-                    MessageType::Input => self.context.player_name,
+                    MessageType::Input => &self.context.persona.sheet.name,
                     MessageType::System => "System",
                 };
                 if sender_label.is_empty() {
@@ -99,8 +103,8 @@ impl<'a> QuantifierPromptBuilder<'a> {
         }
 
         prompt.push_str(&format!(
-            "<LatestNarration>\n  {}: {}\n</LatestNarration>\n\n",
-            self.context.player_name, self.context.player_action
+            "<LatestMessage>\n  {}\n</LatestMessage>\n\n",
+            self.context.latest_message
         ));
 
         prompt.push_str(
@@ -108,7 +112,7 @@ impl<'a> QuantifierPromptBuilder<'a> {
 - Which Characters are present in the current room
 - Whether the player actually entered, left, or remained in place
 
-IMPORTANT: Base your decision ONLY on what happens in <LatestNarration>, not on what the player attempted in <RecentHistory>.
+IMPORTANT: Base your decision ONLY on what happens in <LatestMessage>, not on what the player attempted in <RecentHistory>.
 
 Respond ONLY with the JSON format specified in the system instructions.
 "#,

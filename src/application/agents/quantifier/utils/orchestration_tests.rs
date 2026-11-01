@@ -38,9 +38,9 @@ fn test_quantifier_retry_on_low_confidence() {
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 
@@ -71,9 +71,9 @@ fn test_quantifier_no_retry_when_high_confidence() {
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 
@@ -221,7 +221,7 @@ fn determine_characters_with_room(
     current_room: &Room,
     character_pool_ids: &[String],
     scene_characters: &[CharacterCard],
-    player_action: &str,
+    latest_message: &str,
     recorder: &LlmCallRecorder,
 ) -> QuantifierReading {
     use crate::domain::model::agent::{HookInput, WorldView};
@@ -239,7 +239,7 @@ fn determine_characters_with_room(
         present: scene_characters,
     };
     let input = HookInput {
-        text: Some(player_action),
+        text: Some(latest_message),
         story: &story,
         world: &world,
     };
@@ -374,9 +374,9 @@ fn test_quantifier_retry_on_llm_error() {
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 
@@ -431,9 +431,9 @@ fn test_quantifier_all_attempts_fail_fallback() {
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 
@@ -459,9 +459,9 @@ fn test_quantifier_low_confidence_then_error_fallback() {
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 
@@ -539,9 +539,9 @@ fn test_quantifier_routes_through_recorder_for_forensics() {
         previous_characters_present: &previous_characters,
         all_known_characters: &all_characters,
         all_rooms: &[],
-        player_name: "Hero",
+        persona: &TestPersona::standard(),
         recent_history: &history,
-        player_action: "I look around.",
+        latest_message: "I look around.",
         quantifier_prompt_override: None,
     };
 

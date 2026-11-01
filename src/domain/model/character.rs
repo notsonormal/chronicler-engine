@@ -68,3 +68,13 @@ pub struct CharacterCard {
     #[serde(default)]
     pub relationships: Vec<Relationship>,
 }
+
+impl CharacterCard {
+    /// Every prompt renders its card lists through this, so the order a scene
+    /// holds its cards in cannot change the prompt text.
+    pub fn in_id_order(cards: &[CharacterCard]) -> Vec<&CharacterCard> {
+        let mut ordered: Vec<&CharacterCard> = cards.iter().collect();
+        ordered.sort_by(|left, right| left.id.cmp(&right.id));
+        ordered
+    }
+}

@@ -29,7 +29,7 @@ pub fn generate_options(
         room: current_room,
         characters_present: world.present,
         recent_history: input.story,
-        player_name: &world.persona.sheet.name,
+        persona: world.persona,
         options_prompt_override: settings.preset.clone(),
         option_count: DEFAULT_OPTION_COUNT,
     };

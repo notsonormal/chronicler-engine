@@ -2,7 +2,7 @@
 //! Multi-stage prompt assembler: orchestrates layer rendering + context fitting.
 
 use crate::error::EngineError;
-use crate::domain::model::character::PersonaCard;
+use crate::domain::model::character::{CharacterCard, PersonaCard};
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
@@ -217,7 +217,7 @@ impl<'a> LayerRenderer<'a> {
         if self.characters.all_characters.is_empty() {
             output.push_str("No characters in this world.\n");
         } else {
-            for character in self.characters.all_characters {
+            for character in CharacterCard::in_id_order(self.characters.all_characters) {
                 output.push_str(&render_known_character_entry(
                     character,
                     &in_area_ids,
@@ -231,7 +231,7 @@ impl<'a> LayerRenderer<'a> {
         if self.characters.characters_present.is_empty() {
             output.push_str("No Characters are present in this Room.\n");
         } else {
-            for character in self.characters.characters_present {
+            for character in CharacterCard::in_id_order(self.characters.characters_present) {
                 output.push_str("--- ");
                 output.push_str(&character.sheet.name);
                 output.push_str(" ---\n");
@@ -242,7 +242,9 @@ impl<'a> LayerRenderer<'a> {
                 output.push_str(&self.template_vars.render(&character.sheet.personality));
                 output.push('\n');
                 if !character.sheet.scenario.is_empty() {
-                    output.push_str("Context: ");
+                    // The card field's own name, not the glossary's Scenario
+                    // (the start of a Game): the label is text for the model.
+                    output.push_str("Scenario: ");
                     output.push_str(&self.template_vars.render(&character.sheet.scenario));
                     output.push('\n');
                 }
@@ -332,12 +334,17 @@ impl<'a> LayerRenderer<'a> {
     }
 
     fn render_user_layer(&self) -> String {
-        let mut output = String::from("<PlayerInput>\n");
         let sanitized = sanitize_for_prompt(self.user_message);
-        output.push_str(&sanitized);
-        output.push_str("\n</PlayerInput>\n");
+        Self::render_non_blank_layer("<PlayerInput>", &sanitized, "</PlayerInput>")
+    }
 
-        output
+    /// A blank body renders no tags: an empty tagged block reads as an empty
+    /// instruction.
+    fn render_non_blank_layer(open: &str, body: &str, close: &str) -> String {
+        if body.trim().is_empty() {
+            return String::new();
+        }
+        format!("{open}\n{body}\n{close}\n")
     }
 
     fn render_guide_layer(&self) -> String {

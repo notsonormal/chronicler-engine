@@ -63,6 +63,20 @@ impl Turn {
         }
     }
 
+    fn with_no_history(mut self) -> Self {
+        self.story.clear();
+        self
+    }
+
+    fn with_cards(mut self, cards: Vec<CharacterCard>, present: Vec<CharacterCard>) -> Self {
+        self.characters = cards
+            .into_iter()
+            .map(|character| (character.id.clone(), character))
+            .collect();
+        self.present = present;
+        self
+    }
+
     fn world(&self) -> WorldView<'_> {
         WorldView {
             room: self.map.get_room_by_id("start"),
@@ -367,5 +381,121 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
     assert_eq!(
         failure.error_message.as_deref(),
         Some("LLM Error: Narration generation failed at stage 'scripted': configured_failure")
+    );
+}
+
+fn between<'a>(prompt: &'a str, open: &str, close: &str) -> &'a str {
+    let start = prompt
+        .find(open)
+        .unwrap_or_else(|| panic!("the {open} block renders: {prompt}"));
+    let rest = &prompt[start..];
+    let end = rest
+        .find(close)
+        .unwrap_or_else(|| panic!("the {close} tag closes the {open} block: {prompt}"));
+    &rest[..end]
+}
+
+fn order_of(block: &str, names: &[&str]) -> Vec<usize> {
+    names
+        .iter()
+        .map(|name| {
+            block
+                .find(name)
+                .unwrap_or_else(|| panic!("{name} renders: {block}"))
+        })
+        .collect()
+}
+
+// CASE quantifier-cards-in-id-order: both card lists render in Character id order, whatever order the World map and the scene hold them in.
+#[test]
+fn test_both_card_lists_render_in_character_id_order() {
+    let cards = vec![
+        TestCharacter::named("c", "Cid"),
+        TestCharacter::named("a", "Ada"),
+        TestCharacter::named("b", "Bea"),
+    ];
+    let present = vec![cards[2].clone(), cards[0].clone(), cards[1].clone()];
+    let turn = Turn::new().with_cards(cards, present);
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
+    let world = turn.world();
+    quantifier(Arc::clone(&model))
+        .run(&turn.input(&world), &settings())
+        .expect("a parsed report is an output");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    for (prompt, open, close) in [
+        (
+            &call.system_prompt,
+            "<available_character_ids>",
+            "</available_character_ids>",
+        ),
+        (
+            &call.user_prompt,
+            "<PreviousCharactersPresent>",
+            "</PreviousCharactersPresent>",
+        ),
+    ] {
+        let positions = order_of(between(prompt, open, close), &["Ada", "Bea", "Cid"]);
+        assert!(
+            positions.windows(2).all(|pair| pair[0] < pair[1]),
+            "{open} renders its cards in id order: {prompt}"
+        );
+    }
+}
+
+// CASE quantifier-card-text-renders-placeholders: a card's text reaches the prompt with its placeholders rendered.
+#[test]
+fn test_a_cards_text_renders_its_placeholders() {
+    let mut card = TestCharacter::named(CHARACTER_ID, "Test Character");
+    card.sheet.description = "A friend of {{user}}.".to_string();
+    let turn = Turn::new().with_cards(vec![card.clone()], vec![card]);
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
+    let world = turn.world();
+    quantifier(Arc::clone(&model))
+        .run(&turn.input(&world), &settings())
+        .expect("a parsed report is an output");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    let present = between(
+        &call.user_prompt,
+        "<PreviousCharactersPresent>",
+        "</PreviousCharactersPresent>",
+    );
+    assert!(
+        present.contains(&format!("A friend of {}.", turn.persona.sheet.name)),
+        "the card text renders its placeholders: {present}"
+    );
+    assert!(
+        !present.contains("{{user}}"),
+        "no raw placeholder reaches the model: {present}"
+    );
+}
+
+// CASE quantifier-latest-message-block: the newest Message renders in `<LatestMessage>` with no name prefix, and the closing sentence names that block.
+#[test]
+fn test_the_newest_message_renders_in_the_latest_message_block() {
+    let turn = Turn::new().with_no_history();
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
+    let world = turn.world();
+    quantifier(Arc::clone(&model))
+        .run(&turn.input(&world), &settings())
+        .expect("a parsed report is an output");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    assert!(
+        call.user_prompt
+            .contains("<LatestMessage>\n  You look around the inn.\n</LatestMessage>\n\n"),
+        "the block holds the saved text and no name prefix: {}",
+        call.user_prompt
+    );
+    assert!(
+        call.user_prompt.contains("happens in <LatestMessage>"),
+        "the closing sentence names the block: {}",
+        call.user_prompt
+    );
+    assert!(
+        !call.user_prompt.contains("LatestNarration"),
+        "no older tag name reaches the model: {}",
+        call.user_prompt
     );
 }

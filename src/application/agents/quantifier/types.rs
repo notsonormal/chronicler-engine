@@ -1,7 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Quantifier type definitions
 
-use crate::domain::model::character::CharacterCard;
+use crate::domain::model::character::{CharacterCard, PersonaCard};
 use crate::domain::model::map::Room;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::state::message_types::StoryRow;
@@ -71,8 +71,8 @@ pub struct QuantifierPromptContext<'a> {
     pub previous_characters_present: &'a [CharacterCard],
     pub all_known_characters: &'a [CharacterCard],
     pub all_rooms: &'a [RoomInfo],
-    pub player_name: &'a str,
+    pub persona: &'a PersonaCard,
     pub recent_history: &'a [StoryRow],
-    pub player_action: &'a str,
+    pub latest_message: &'a str,
     pub quantifier_prompt_override: Option<String>,
 }

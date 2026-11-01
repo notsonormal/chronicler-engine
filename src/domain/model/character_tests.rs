@@ -1,4 +1,34 @@
 use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard};
+use crate::test_support::fixtures::TestCharacter;
+
+fn card_with_id(id: &str) -> CharacterCard {
+    TestCharacter::named(id, id)
+}
+
+#[test]
+fn test_in_id_order_sorts_the_cards_by_id() {
+    let cards = vec![card_with_id("c"), card_with_id("a"), card_with_id("b")];
+
+    let ids: Vec<&str> = CharacterCard::in_id_order(&cards)
+        .iter()
+        .map(|card| card.id.as_str())
+        .collect();
+
+    assert_eq!(ids, vec!["a", "b", "c"]);
+}
+
+#[test]
+fn test_in_id_order_keeps_the_input_order_of_equal_ids() {
+    let cards = vec![card_with_id("a"), card_with_id("b"), card_with_id("a")];
+
+    let sorted = CharacterCard::in_id_order(&cards);
+
+    assert_eq!(sorted.len(), 3);
+    assert!(
+        std::ptr::eq(sorted[0], &cards[0]) && std::ptr::eq(sorted[1], &cards[2]),
+        "the sort is stable, so two cards with one id keep their order"
+    );
+}
 
 #[test]
 fn test_character_card_serde() {
