@@ -235,8 +235,7 @@ impl TestPromptPreset {
             allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type: PresetType::System,
-            parameters: Default::default(),
-            option_count: None,
+            ..PromptPreset::default()
         }
     }
 
@@ -251,8 +250,7 @@ impl TestPromptPreset {
             allowed_modes: vec![NarratorMode::Novel],
             is_default: true,
             preset_type: PresetType::System,
-            parameters: Default::default(),
-            option_count: None,
+            ..PromptPreset::default()
         }
     }
 
@@ -277,8 +275,7 @@ impl TestPromptPreset {
             allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type: PresetType::Options,
-            parameters: Default::default(),
-            option_count: None,
+            ..PromptPreset::default()
         }
     }
 }
@@ -638,6 +635,17 @@ pub fn make_test_recorder_with_storage(
     let save_fn: SaveLlmMessageFn =
         Arc::new(move |message: &LlmMessage| storage.save_llm_message(message));
     Arc::new(LlmCallRecorder::new(provider, save_fn))
+}
+
+/// The block that `open` opens and `close` closes, from the opening tag through
+/// the closing one.
+pub fn prompt_block<'a>(prompt: &'a str, open: &str, close: &str) -> &'a str {
+    // arch-lint: allow(no-unwrap-expect) reason="test helper panics when a prompt block is absent"
+    let start = prompt.find(open).expect("the opening tag renders");
+    let rest = &prompt[start..];
+    // arch-lint: allow(no-unwrap-expect) reason="test helper panics when a prompt block is absent"
+    let end = rest.find(close).expect("the closing tag follows it");
+    &rest[..end + close.len()]
 }
 
 /// Seeding a Game always points the app at it, so a missing pointer is a broken

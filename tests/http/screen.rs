@@ -17,7 +17,7 @@ use crate::support::app_wiring::{app_with_model, two_game_app};
 use crate::support::http_assertions::assert_still_thinking;
 use crate::support::http_fixtures::story_of;
 use crate::support::http_requests::{
-    post_action, post_form, post_form_with_headers, response_body, wait_settled,
+    get_with_headers, post_action, post_form, post_form_with_headers, response_body, wait_settled,
 };
 
 pub(crate) const GAME_HEADER: &str = "x-chronicler-game";
@@ -371,16 +371,6 @@ async fn test_a_busy_refusal_answers_409_with_the_wait_line_and_writes_nothing()
 /// The Game-bound `GET` routes: a read of the active Game that the Game layer also checks.
 pub(crate) const GAME_BOUND_READS: [&str; 1] = ["/debug/is_busy"];
 
-/// A `GET` that carries the Game header of a page.
-async fn get_with_game_header(app: &axum::Router, uri: &str, game: &str) -> StatusCode {
-    let request = Request::builder()
-        .uri(uri)
-        .header(GAME_HEADER, game)
-        .body(Body::empty())
-        .unwrap();
-    app.clone().oneshot(request).await.unwrap().status()
-}
-
 /// The Game-bound routes: every `POST` route whose handler acts on the active Game.
 pub(crate) fn game_bound_rows(message: u64) -> Vec<(&'static str, String, String)> {
     let named = format!("message={message}");
@@ -456,7 +446,9 @@ async fn test_a_stale_game_header_is_refused_on_each_game_bound_route() {
     }
     for route in GAME_BOUND_READS {
         assert_eq!(
-            get_with_game_header(&app, route, &stale).await,
+            get_with_headers(&app, route, &[(GAME_HEADER, stale.as_str())])
+                .await
+                .status(),
             StatusCode::CONFLICT,
             "GET {route} with a stale Game header is refused"
         );

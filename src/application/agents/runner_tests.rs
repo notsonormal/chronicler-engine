@@ -94,15 +94,3 @@ fn test_after_narration_keeps_the_state_when_the_agent_fails() {
 
     assert_eq!(after_narration_with_no_text(&runner), kept_result());
 }
-
-#[test]
-fn test_after_narration_keeps_the_state_when_no_agent_is_registered() {
-    let runner = AgentRunner::from_configs(
-        &[config("quantifier", false)],
-        mock_recorder(),
-        mock_recorder(),
-    )
-    .expect("a disabled Agent still builds a runner");
-
-    assert_eq!(after_narration_with_no_text(&runner), kept_result());
-}

@@ -303,24 +303,6 @@ fn connection_for_falls_back_to_narration_for_an_empty_optional_slot() {
 }
 
 #[test]
-fn connection_for_errors_on_a_dangling_optional_slot() {
-    let settings = AppSettings {
-        impersonate_connection_id: Some("impersonate-missing".into()),
-        options_connection_id: Some("options-missing".into()),
-        ..settings_with_four_connections()
-    };
-
-    let impersonate = settings
-        .connection_for(PresetType::Impersonate)
-        .expect_err("a dangling slot is a configuration fault");
-    let options = settings
-        .connection_for(PresetType::Options)
-        .expect_err("a dangling slot is a configuration fault");
-    assert!(impersonate.to_string().contains("impersonate-missing"));
-    assert!(options.to_string().contains("options-missing"));
-}
-
-#[test]
 fn check_connection_slots_names_the_dangling_slot() {
     assert!(
         settings_with_four_connections()
@@ -328,14 +310,27 @@ fn check_connection_slots_names_the_dangling_slot() {
             .is_ok()
     );
 
-    let settings = AppSettings {
-        options_connection_id: Some("options-missing".into()),
-        ..settings_with_four_connections()
-    };
-    let err = settings
-        .check_connection_slots()
-        .expect_err("a dangling optional slot fails the check");
-    assert!(err.to_string().contains("options-missing"));
+    for (settings, field) in [
+        (
+            AppSettings {
+                impersonate_connection_id: Some("impersonate-missing".into()),
+                ..settings_with_four_connections()
+            },
+            "impersonate-missing",
+        ),
+        (
+            AppSettings {
+                options_connection_id: Some("options-missing".into()),
+                ..settings_with_four_connections()
+            },
+            "options-missing",
+        ),
+    ] {
+        let err = settings
+            .check_connection_slots()
+            .expect_err("a dangling optional slot fails the check");
+        assert!(err.to_string().contains(field));
+    }
 }
 
 #[test]

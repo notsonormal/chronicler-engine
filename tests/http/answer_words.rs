@@ -21,8 +21,8 @@ use crate::screen::{game_bound_rows, GAME_BOUND_READS, GAME_HEADER, STALE_GAME_L
 use crate::support::app_wiring::{app_with_model, two_game_app};
 use crate::support::http_fixtures::{story_of, world_form_body};
 use crate::support::http_requests::{
-    fetch_answer, post_action, post_form, post_form_with_headers, response_body, wait_for_jobs,
-    wait_settled,
+    fetch_answer, get_with_headers, post_action, post_form, post_form_with_headers, response_body,
+    wait_for_jobs, wait_settled,
 };
 
 async fn send(
@@ -166,12 +166,7 @@ async fn test_a_stale_game_refusal_names_what_was_not_done_on_each_game_bound_ro
         );
     }
     for route in GAME_BOUND_READS {
-        let request = Request::builder()
-            .uri(route)
-            .header(GAME_HEADER, stale.as_str())
-            .body(Body::empty())
-            .unwrap();
-        let response = app.clone().oneshot(request).await.unwrap();
+        let response = get_with_headers(&app, route, &[(GAME_HEADER, stale.as_str())]).await;
         assert_eq!(response.status(), StatusCode::CONFLICT, "stale GET {route}");
         assert_eq!(
             error_lines_of(route, &response_body(response).await),

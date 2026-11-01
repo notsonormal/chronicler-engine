@@ -10,7 +10,9 @@ use crate::domain::model::quantifier::QuantifierResult;
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
-use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona};
+use crate::test_support::fixtures::{
+    default_story_row, prompt_block, TestMap, TestCharacter, TestPersona,
+};
 use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
 use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::game::GameId;
@@ -383,17 +385,6 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
     );
 }
 
-fn between<'a>(prompt: &'a str, open: &str, close: &str) -> &'a str {
-    let start = prompt
-        .find(open)
-        .unwrap_or_else(|| panic!("the {open} block renders: {prompt}"));
-    let rest = &prompt[start..];
-    let end = rest
-        .find(close)
-        .unwrap_or_else(|| panic!("the {close} tag closes the {open} block: {prompt}"));
-    &rest[..end]
-}
-
 fn order_of(block: &str, names: &[&str]) -> Vec<usize> {
     names
         .iter()
@@ -434,7 +425,7 @@ fn test_both_card_lists_render_in_character_id_order() {
             "</PreviousCharactersPresent>",
         ),
     ] {
-        let positions = order_of(between(prompt, open, close), &["Ada", "Bea", "Cid"]);
+        let positions = order_of(prompt_block(prompt, open, close), &["Ada", "Bea", "Cid"]);
         assert!(
             positions.windows(2).all(|pair| pair[0] < pair[1]),
             "{open} renders its cards in id order: {prompt}"
@@ -455,7 +446,7 @@ fn test_a_cards_text_renders_its_placeholders() {
         .expect("a parsed report is an output");
 
     let call = model.calls().into_iter().next().expect("one call");
-    let present = between(
+    let present = prompt_block(
         &call.user_prompt,
         "<PreviousCharactersPresent>",
         "</PreviousCharactersPresent>",

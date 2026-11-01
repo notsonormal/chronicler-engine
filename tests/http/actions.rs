@@ -12,11 +12,13 @@ use chronicler_engine::domain::model::settings::{AppSettings, TextCheckMode, Tex
 use chronicler_engine::domain::model::map::Room;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
-    empty_sqlite_storage,
+    active_game_of, analysis_report, configured_runner_without, empty_sqlite_storage,
+    ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
 };
 
-use crate::support::app_wiring::{app_with_model, app_with_model_and_settings};
+use crate::support::app_wiring::{
+    app_with_model, app_with_model_and_settings, app_with_script_and_agents,
+};
 use crate::support::http_assertions::{
     assert_story_log_ends_with_message, llm_call_count, status_error_message,
 };
@@ -563,6 +565,53 @@ async fn assert_quantifier_failure_keeps_characters(model: Arc<ScriptedModel>) {
         llm_call_count(&state, "quantifier"),
         2,
         "the analysis retries once before it falls back"
+    );
+}
+
+// [docs/specs/actions.md] SCENARIO: 2.7
+#[tokio::test]
+async fn test_action_without_a_quantifier_agent_keeps_characters_http() {
+    let (app, state, _storage) = app_with_script_and_agents(
+        Arc::new(ScriptedModel::new().narration("The innkeeper glances your way.")),
+        AppSettings::default(),
+        |recorder| configured_runner_without(recorder, "quantifier"),
+    );
+
+    let characters_before = state
+        .game_view_query
+        .get_debug_state(active_game_of(&state))
+        .expect("get_debug_state should succeed")
+        .characters_present;
+    assert!(
+        !characters_before.is_empty(),
+        "the setup must start from a non-empty Character set: {characters_before:?}"
+    );
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the action must complete with no Quantifier Agent"
+    );
+
+    assert_eq!(
+        fetch_status_label(&app).await,
+        "Ready",
+        "the action must finish in the Idle state"
+    );
+    let characters_after = state
+        .game_view_query
+        .get_debug_state(active_game_of(&state))
+        .expect("get_debug_state should succeed")
+        .characters_present;
+    assert_eq!(
+        characters_after, characters_before,
+        "the scene must keep its prior Character set with no Quantifier Agent"
+    );
+    assert_eq!(
+        llm_call_count(&state, "quantifier"),
+        0,
+        "no Quantifier Agent makes no quantifier call"
     );
 }
 

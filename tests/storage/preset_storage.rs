@@ -27,8 +27,7 @@ fn make_system_preset(id: &str, name: &str) -> PromptPreset {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     }
 }
 
@@ -44,8 +43,7 @@ fn make_quantifier_preset(id: &str, name: &str) -> PromptPreset {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::Quantifier,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     }
 }
 
@@ -223,8 +221,7 @@ fn test_get_preset_returns_all_fields() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     };
     storage.save_preset(&preset).unwrap();
 
@@ -425,8 +422,7 @@ fn test_preset_with_empty_optional_fields() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     };
 
     storage.save_preset(&preset).unwrap();
@@ -452,8 +448,7 @@ fn test_preset_with_unicode_content() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::Quantifier,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     };
 
     storage.save_preset(&preset).unwrap();
@@ -477,8 +472,7 @@ fn test_preset_with_special_characters() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     };
 
     storage.save_preset(&preset).unwrap();
@@ -503,8 +497,7 @@ fn test_preset_with_long_content() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     };
 
     storage.save_preset(&preset).unwrap();

@@ -9,8 +9,9 @@ use axum::response::Response;
 use chronicler_engine::adapters::driving::http::utils::answer_words::RefusalKind;
 use chronicler_engine::adapters::driving::http::utils::response::refused;
 
-/// The routes of the engine whose handler acts on the active Game, as the router
-/// writes them. A test compares this list with `game_bound_routes` in `router.rs`.
+/// The `POST` routes of `game_bound_routes` in `router.rs`, as that function
+/// writes them. A test compares this list with those routes. The stub server
+/// serves no `/debug/is_busy`, so the check here stays on `POST`.
 pub const GAME_BOUND_ROUTES: [&str; 10] = [
     "/action",
     "/action/check",

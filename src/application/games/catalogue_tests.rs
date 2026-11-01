@@ -481,8 +481,7 @@ fn seed_library(storage: &Storage) {
                 allowed_modes,
                 is_default: true,
                 preset_type,
-                parameters: Default::default(),
-                option_count: None,
+                ..PromptPreset::default()
             })
             .expect("test setup: save_preset must succeed");
     }
@@ -708,8 +707,7 @@ fn test_set_preset_selection_ignores_an_options_presets_allowed_modes() {
             allowed_modes: vec![NarratorMode::Novel],
             is_default: false,
             preset_type: PresetType::Options,
-            parameters: Default::default(),
-            option_count: None,
+            ..PromptPreset::default()
         })
         .expect("test setup: save_preset must succeed");
 

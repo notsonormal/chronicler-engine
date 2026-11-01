@@ -99,6 +99,23 @@ pub async fn post_form(
     post_form_with_headers(app, uri, body, &[]).await
 }
 
+/// A GET that also carries the given request headers, such as the Game header
+/// of a page.
+pub async fn get_with_headers(
+    app: &axum::Router,
+    uri: &str,
+    headers: &[(&str, &str)],
+) -> axum::response::Response<Body> {
+    let mut request = Request::builder().uri(uri);
+    for (name, value) in headers {
+        request = request.header(*name, *value);
+    }
+    app.clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
 /// A form POST that also carries the given request headers, such as the Game
 /// header of a page.
 pub async fn post_form_with_headers(

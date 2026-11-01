@@ -22,7 +22,9 @@ use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::event_record::{EventRecord, TriggerRef};
 use crate::domain::model::tail::Tail;
 use crate::domain::model::world::WorldCard;
-use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona, TestWorld};
+use crate::test_support::fixtures::{
+    default_story_row, prompt_block, TestMap, TestCharacter, TestPersona, TestWorld,
+};
 use crate::test_support::{
     make_test_recorder, make_test_recorder_with_storage, ModelCall, ScriptedModel,
 };
@@ -43,8 +45,7 @@ fn preset() -> PromptPreset {
         allowed_modes: vec![],
         is_default: true,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     }
 }
 
@@ -59,8 +60,7 @@ fn empty_preset() -> PromptPreset {
         allowed_modes: vec![],
         is_default: false,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     }
 }
 
@@ -75,8 +75,7 @@ fn impersonate_preset() -> PromptPreset {
         allowed_modes: vec![],
         is_default: true,
         preset_type: PresetType::Impersonate,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     }
 }
 
@@ -291,17 +290,6 @@ fn sent_prompt(case: &NarrationCase, preset: &PromptPreset) -> ModelCall {
     prompt_of(&model)
 }
 
-fn layer<'a>(prompt: &'a str, open: &str, close: &str) -> &'a str {
-    let start = prompt
-        .find(open)
-        .unwrap_or_else(|| panic!("the {open} layer renders"));
-    let rest = &prompt[start..];
-    let end = rest
-        .find(close)
-        .unwrap_or_else(|| panic!("the {close} tag closes the {open} layer"));
-    &rest[..end + close.len()]
-}
-
 fn prompt_of(model: &ScriptedModel) -> ModelCall {
     model
         .calls()
@@ -311,7 +299,7 @@ fn prompt_of(model: &ScriptedModel) -> ModelCall {
 }
 
 fn history_body(prompt: &str) -> &str {
-    let layer = layer(prompt, "<ConversationHistory>", "</ConversationHistory>");
+    let layer = prompt_block(prompt, "<ConversationHistory>", "</ConversationHistory>");
     layer
         .strip_prefix("<ConversationHistory>\n")
         .and_then(|rest| rest.strip_suffix("</ConversationHistory>"))
@@ -475,7 +463,7 @@ fn test_only_the_presets_present_fields_render() {
         call.system_prompt
     );
     assert!(!call.user_prompt.contains("<writing_style>"));
-    let format = layer(&call.user_prompt, "<output_format>", "</output_format>");
+    let format = prompt_block(&call.user_prompt, "<output_format>", "</output_format>");
     assert!(
         format.contains("Write one paragraph."),
         "the present output format renders: {format}"
@@ -483,7 +471,7 @@ fn test_only_the_presets_present_fields_render() {
 }
 
 fn layer_text(prompt: &str, tag: &str) -> String {
-    let wrapped = layer(prompt, &format!("<{tag}>"), &format!("</{tag}>"));
+    let wrapped = prompt_block(prompt, &format!("<{tag}>"), &format!("</{tag}>"));
     let inner = wrapped
         .strip_prefix(&format!("<{tag}>\n"))
         .and_then(|rest| rest.strip_suffix(&format!("\n</{tag}>")))
@@ -814,7 +802,7 @@ fn test_the_guide_renders_last_in_its_wrapper() {
 
 // CASE narrator-guide-absent: a plain turn, and a blank guide, render no guide layer.
 #[test]
-fn test_a_plain_turn_and_a_blank_guide_render_no_guide_layer() {
+fn test_a_plain_turn_and_a_blank_guide_render_no_guide_prompt_block() {
     let fixture = Fixture::new();
     let plain = fixture.narration(&fixture.history, "I look around.");
     assert!(
@@ -903,7 +891,7 @@ fn test_a_character_with_a_summary_renders_that_summary() {
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     );
-    let known = layer(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
+    let known = prompt_block(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
 
     assert!(
         known.contains("Alice (in room)"),
@@ -931,7 +919,7 @@ fn test_a_character_without_a_summary_renders_three_description_lines() {
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     );
-    let known = layer(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
+    let known = prompt_block(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
 
     assert!(
         known.contains("Bob (elsewhere)"),
@@ -1030,7 +1018,7 @@ fn test_both_card_lists_render_in_character_id_order() {
         ("<KnownCharacters>", "</KnownCharacters>"),
         ("<CharactersPresent>", "</CharactersPresent>"),
     ] {
-        let rendered = layer(&call.user_prompt, open, close);
+        let rendered = prompt_block(&call.user_prompt, open, close);
         let positions: Vec<usize> = ["Ada", "Bea", "Cid"]
             .iter()
             .map(|name| {
@@ -1056,7 +1044,7 @@ fn test_a_present_card_labels_its_scenario_field() {
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     );
-    let present = layer(
+    let present = prompt_block(
         &call.user_prompt,
         "<CharactersPresent>",
         "</CharactersPresent>",
@@ -1542,7 +1530,7 @@ fn test_each_generation_makes_its_user_message_and_flags() {
 
         let user = sent_prompt(&case, &preset()).user_prompt;
 
-        let rendered = layer(&user, "<PlayerInput>", "</PlayerInput>");
+        let rendered = prompt_block(&user, "<PlayerInput>", "</PlayerInput>");
         assert!(
             rendered.contains(message),
             "{label}: the user message: {rendered}"
@@ -1574,14 +1562,14 @@ fn test_a_continue_answers_the_input_that_ends_the_window() {
     let after_input = fixture.narration(&ends_in_input, "");
     let user = sent_prompt(&after_input, &preset()).user_prompt;
     assert!(
-        layer(&user, "<PlayerInput>", "</PlayerInput>").contains("I wait."),
+        prompt_block(&user, "<PlayerInput>", "</PlayerInput>").contains("I wait."),
         "a Continue repeats the last Input: {user}"
     );
 }
 
 // CASE narrator-user-message-after-narration-empty: a Continue after a Narration renders no player-input layer.
 #[test]
-fn test_a_continue_after_a_narration_renders_no_player_input_layer() {
+fn test_a_continue_after_a_narration_renders_no_player_input_prompt_block() {
     let fixture = Fixture::new();
     let after_narration = fixture.narration(&fixture.history, "");
     let user = sent_prompt(&after_narration, &preset()).user_prompt;
@@ -1598,7 +1586,7 @@ fn test_a_continue_after_a_narration_renders_no_player_input_layer() {
 
 // CASE narrator-guide-after-narration: a Guided Generation with no Input after a Narration renders the guide and no player-input layer.
 #[test]
-fn test_a_guide_after_a_narration_renders_the_guide_and_no_player_input_layer() {
+fn test_a_guide_after_a_narration_renders_the_guide_and_no_player_input_prompt_block() {
     let fixture = Fixture::new();
     let case = fixture
         .narration(&fixture.history, "")

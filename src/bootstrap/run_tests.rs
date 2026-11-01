@@ -225,8 +225,7 @@ fn test_ensure_presets_skips_existing_preset_with_content() {
         allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..crate::domain::model::prompt_preset::PromptPreset::default()
     };
     storage.save_preset(&existing).unwrap();
     ensure_presets(&storage, temp_data.path()).unwrap();
@@ -262,8 +261,7 @@ fn test_ensure_presets_updates_empty_preset() {
         allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..crate::domain::model::prompt_preset::PromptPreset::default()
     };
     storage.save_preset(&empty).unwrap();
     ensure_presets(&storage, temp_data.path()).unwrap();
@@ -368,6 +366,7 @@ fn test_ensure_presets_all_fields_mapped() {
     assert_eq!(found.parameters.custom["top_k"], serde_json::json!(40));
     assert_eq!(found.option_count, None);
 }
+
 #[test]
 fn test_ensure_presets_reads_the_option_count_of_an_options_preset() {
     let temp_data = tempfile::TempDir::new().unwrap();
@@ -386,6 +385,7 @@ fn test_ensure_presets_reads_the_option_count_of_an_options_preset() {
     let found = storage.get_preset("two_options").unwrap().unwrap();
     assert_eq!(found.option_count, Some(2));
 }
+
 #[test]
 fn test_ensure_presets_skips_a_refused_seed_file_and_seeds_the_others() {
     let temp_data = tempfile::TempDir::new().unwrap();
@@ -598,8 +598,7 @@ fn test_ensure_presets_refresh_preserves_existing_flags() {
         allowed_modes: vec![NarratorMode::Novel],
         is_default: true,
         preset_type: PresetType::System,
-        parameters: Default::default(),
-        option_count: None,
+        ..PromptPreset::default()
     };
     storage.save_preset(&existing).unwrap();
 

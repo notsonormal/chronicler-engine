@@ -221,6 +221,18 @@ Then the status response carries the same line
 And the raw error text is reachable only inside that response's disclosure
 ```
 
+#### Scenario 2.7: An Action with no Quantifier Agent completes with the prior Character set
+
+```gherkin
+Given a game state with a Character "character_1" in the current room
+And a narrator backend that returns a non-empty narration for any prompt
+And no Quantifier Agent is configured
+When the client POST /action with command="look"
+And the Game is no longer busy
+Then the generation status is Idle
+And the Characters present still include "character_1"
+```
+
 ### Concurrency
 
 #### Scenario 3.3: A delayed LLM response does not leave the Game busy
