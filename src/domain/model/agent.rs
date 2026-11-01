@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::character::{CharacterCard, PersonaCard};
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::state::generation_status::Step;
 use crate::domain::model::state::message_types::StoryRow;
@@ -99,7 +100,9 @@ pub struct HookInput<'a> {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AgentSettings {
     pub preset: Option<String>,
-    pub max_tokens: Option<u32>,
+    pub call: CallSettings,
+    /// How many Options the Options Agent asks for. `None` uses the default.
+    pub option_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -325,6 +325,8 @@ fn test_preset_view_form_html_renders() {
         allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     };
     let html = preset_view_form_html(&preset);
     assert!(html.contains("view-form"));
@@ -368,6 +370,8 @@ fn test_preset_view_form_html_with_json_content() {
         allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::Quantifier,
+        parameters: Default::default(),
+        option_count: None,
     };
     let html = preset_view_form_html(&preset);
     assert!(html.contains("scene quantifier"), "role should be present");

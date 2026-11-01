@@ -7,7 +7,9 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::prompting::token_budget::TokenBudget;
 use crate::application::prompting::{AssembledPrompt, CharacterContext, PromptAssembler, PromptContext};
 use crate::domain::model::character::PersonaCard;
+use crate::domain::model::game::GameId;
 use crate::domain::model::generation::Generation;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
@@ -107,6 +109,7 @@ impl Narrator {
         values: &NarrationValues,
         preset: &PromptPreset,
         budget: TokenBudget,
+        game: GameId,
     ) -> Result<Narrated, GenerationFailure> {
         let role = generation.kind().role();
         let user_message = Self::user_message(generation, values);
@@ -139,7 +142,7 @@ impl Narrator {
                 role.agent_name(),
                 &assembled.system_prompt,
                 &assembled.user_prompt,
-                Some(assembled.max_tokens),
+                &CallSettings::of(&preset.parameters, assembled.max_tokens, game),
             )
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
         tracing::info!("Narration complete");

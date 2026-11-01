@@ -8,6 +8,7 @@ use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::test_support::env_guard::ApiKeyEnvGuard;
 use crate::test_support::test_connection;
+use crate::domain::model::generation_parameters::CallSettings;
 
 fn settings_with(connection: LlmConnection) -> AppSettings {
     let mut settings = AppSettings::default();
@@ -56,7 +57,7 @@ fn mock_backend_recorder_persists_forensics_to_storage() {
     let recorder = wired.job_deps.narrator.recorder();
 
     recorder
-        .complete("wiring-test-agent", "sys", "usr", None)
+        .complete("wiring-test-agent", "sys", "usr", &CallSettings::default())
         .expect("recorder.complete should succeed against MockBackend");
 
     let messages = storage

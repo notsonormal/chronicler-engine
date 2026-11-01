@@ -1,6 +1,7 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! Prompt context fitting — message budget enforcement.
 
+use crate::domain::model::settings::DEFAULT_MAX_TOKENS;
 use crate::error::EngineError;
 use crate::application::prompting::token_budget as budget;
 use crate::application::prompting::token_budget::estimate_tokens;
@@ -9,7 +10,7 @@ use crate::application::prompting::token_budget::estimate_tokens;
 pub fn input_limit(max_context_tokens: u32, requested_max_tokens: Option<u32>) -> usize {
     let available =
         (max_context_tokens as usize).saturating_sub(budget::SAFETY_MARGIN_TOKENS as usize);
-    let requested = requested_max_tokens.unwrap_or(budget::MAX_RESPONSE_TOKENS) as usize;
+    let requested = requested_max_tokens.unwrap_or(DEFAULT_MAX_TOKENS) as usize;
 
     available
         .saturating_sub(requested.min(available))
@@ -52,7 +53,7 @@ pub fn fit_messages_to_context(
         });
     }
 
-    let requested = requested_max_tokens.unwrap_or(budget::MAX_RESPONSE_TOKENS) as usize;
+    let requested = requested_max_tokens.unwrap_or(DEFAULT_MAX_TOKENS) as usize;
 
     let actual_max_tokens = requested
         .min(max_context.saturating_sub(system_tokens + user_tokens + safety_margin))

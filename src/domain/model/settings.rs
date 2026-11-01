@@ -346,7 +346,9 @@ pub struct LlmConnection {
     #[serde(default)]
     pub single_user_message: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<u32>,
+    /// The most a call to this Connection may ask for. A preset's value above it
+    /// is lowered to it.
+    pub max_tokens_ceiling: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_context_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -360,7 +362,18 @@ pub struct LlmConnection {
     pub pin_provider_order: bool,
 }
 
+/// The `max_tokens` of a call whose preset sets none.
+pub const DEFAULT_MAX_TOKENS: u32 = 2048;
+
 impl LlmConnection {
+    /// The `max_tokens` of a call: the preset value, or the default, and never
+    /// above the ceiling of this Connection.
+    pub fn max_tokens_for(&self, preset_value: Option<u32>) -> u32 {
+        let requested = preset_value.unwrap_or(DEFAULT_MAX_TOKENS);
+        self.max_tokens_ceiling
+            .map_or(requested, |ceiling| requested.min(ceiling))
+    }
+
     pub fn new(id: impl Into<String>, name: impl Into<String>, provider: LlmBackendType) -> Self {
         Self {
             id: id.into(),
@@ -370,7 +383,7 @@ impl LlmConnection {
             api_key: None,
             base_url: None,
             single_user_message: false,
-            max_tokens: None,
+            max_tokens_ceiling: None,
             max_context_tokens: None,
             reasoning_effort: None,
             provider_order: Vec::new(),

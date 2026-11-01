@@ -204,6 +204,7 @@ Then the response is a 200 with an empty body
 And a following GET /screen?parts=prompt-presets lists the card of that preset with the new name "After"
 And it does not contain the old name "Before"
 And it preserves the stored allowed modes (the form omitted them)
+And it preserves the stored generation parameters (the form omitted them)
 ```
 
 #### Scenario 21.15: Update a nonexistent preset returns an error fragment

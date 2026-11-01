@@ -7,6 +7,7 @@ use crate::adapters::driven::utils::mock::extract_player_input;
 use crate::error::{EngineError, NarrationFailure};
 
 use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
+use crate::domain::model::generation_parameters::CallSettings;
 
 #[derive(Default)]
 pub struct MockBackend {
@@ -113,7 +114,7 @@ impl LlmProvider for MockBackend {
         agent_name: &str,
         _system_prompt: &str,
         user_prompt: &str,
-        _max_tokens: Option<u32>,
+        _settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         let is_narration = agent_name == crate::application::ports::llm_provider::AGENT_NARRATOR
             || agent_name == crate::application::ports::llm_provider::AGENT_DIALOGUE;

@@ -10,7 +10,9 @@ use crate::application::prompting::token_budget::{
 use crate::application::prompting::{CharacterContext, PromptAssembler};
 use crate::domain::model::agent::Role;
 use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard, Relationship};
+use crate::domain::model::game::GameId;
 use crate::domain::model::generation::Generation;
+use crate::domain::model::generation_parameters::GenerationParameters;
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Maker, Message, Swipe};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
@@ -41,6 +43,8 @@ fn preset() -> PromptPreset {
         allowed_modes: vec![],
         is_default: true,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     }
 }
 
@@ -55,6 +59,8 @@ fn empty_preset() -> PromptPreset {
         allowed_modes: vec![],
         is_default: false,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     }
 }
 
@@ -69,6 +75,8 @@ fn impersonate_preset() -> PromptPreset {
         allowed_modes: vec![],
         is_default: true,
         preset_type: PresetType::Impersonate,
+        parameters: Default::default(),
+        option_count: None,
     }
 }
 
@@ -255,7 +263,7 @@ fn narrate_with(
     preset: &PromptPreset,
     budget: TokenBudget,
 ) -> Result<Narrated, GenerationFailure> {
-    narrator(Arc::clone(model)).narrate(&case.generation, &case.values, preset, budget)
+    narrator(Arc::clone(model)).narrate(&case.generation, &case.values, preset, budget, GameId(7))
 }
 
 fn sent_prompt(case: &NarrationCase, preset: &PromptPreset) -> ModelCall {
@@ -657,7 +665,7 @@ fn test_a_cut_history_keeps_the_requested_response_length() {
     );
 
     assert!(first_kept_entry(&call.user_prompt).is_some_and(|start| 0 < start));
-    assert_eq!(call.max_tokens, Some(500));
+    assert_eq!(call.settings.max_tokens, Some(500));
 }
 
 // CASE narrator-history-cut-marker-when-nothing-kept: Messages exist and the space keeps none, so the history holds the marker.
@@ -715,7 +723,7 @@ fn test_the_call_asks_for_the_budgets_response_length() {
     narrate_with(&model, &case, &preset(), requested).expect("a narration is a result");
 
     assert_eq!(
-        prompt_of(&model).max_tokens,
+        prompt_of(&model).settings.max_tokens,
         Some(500),
         "the call asks for the budget's response length"
     );
@@ -1358,6 +1366,7 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
             &case.values,
             &preset(),
             TokenBudget::fallback(),
+            GameId(7),
         )
         .expect("a narration is a result");
 
@@ -1393,6 +1402,7 @@ fn test_an_impersonate_calls_its_own_recorder() {
             &impersonation.values,
             &impersonate_preset(),
             TokenBudget::fallback(),
+            GameId(7),
         )
         .expect("an impersonation is a result");
     assert_eq!(impersonate_model.calls().len(), 1);
@@ -1407,6 +1417,7 @@ fn test_an_impersonate_calls_its_own_recorder() {
             &case.values,
             &preset(),
             TokenBudget::fallback(),
+            GameId(7),
         )
         .expect("a narration is a result");
     assert_eq!(narration_model.calls().len(), 1);
@@ -1463,6 +1474,7 @@ fn test_a_call_carries_the_role_of_its_generation() {
                 &case.values,
                 &preset(),
                 TokenBudget::fallback(),
+                GameId(7),
             )
             .expect("the narration is a result");
 
@@ -1622,6 +1634,7 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
         &case.values,
         &preset(),
         TokenBudget::fallback(),
+        GameId(7),
     );
 
     let recorded = storage
@@ -1636,4 +1649,65 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
         failure.error_message.as_deref(),
         Some("LLM Error: Narration generation failed at stage 'scripted': configured_failure")
     );
+}
+
+// CASE narrator-sends-the-preset-parameters: the samplers of the preset and the Game reach the model call, for a Narration and for an Impersonate, and the response length comes from the budget.
+#[test]
+fn test_the_preset_samplers_and_the_game_reach_the_model_call() {
+    let tuned = PromptPreset {
+        parameters: GenerationParameters {
+            max_tokens: Some(9999),
+            temperature: Some(0.45),
+            top_p: Some(0.85),
+            custom: serde_json::json!({"top_k": 30})
+                .as_object()
+                .unwrap()
+                .clone(),
+        },
+        ..preset()
+    };
+    let fixture = Fixture::new();
+    let budget = TokenBudget {
+        max_context_tokens: MAX_CONTEXT_TOKENS,
+        max_tokens: Some(700),
+    };
+    for case in [
+        fixture.narration(&fixture.history, TYPED_INPUT),
+        fixture
+            .narration(&fixture.history, TYPED_INPUT)
+            .impersonating(None),
+    ] {
+        let model = Arc::new(ScriptedModel::new().narration("Narration."));
+
+        narrator(Arc::clone(&model))
+            .narrate(&case.generation, &case.values, &tuned, budget, GameId(7))
+            .expect("a narration is a result");
+
+        let sent = prompt_of(&model).settings;
+        assert_eq!(sent.temperature, Some(0.45));
+        assert_eq!(sent.top_p, Some(0.85));
+        assert_eq!(sent.custom["top_k"], serde_json::json!(30));
+        assert_eq!(sent.game, Some(GameId(7)));
+        assert_eq!(
+            sent.max_tokens,
+            Some(700),
+            "the response length is the budget's: the Job resolved the preset value and the ceiling"
+        );
+    }
+}
+
+// CASE narrator-sends-no-sampler-when-the-preset-sets-none: a preset with no parameters sends no sampler and no custom key.
+#[test]
+fn test_a_preset_without_parameters_sends_no_sampler() {
+    let fixture = Fixture::new();
+    let case = fixture.narration(&fixture.history, TYPED_INPUT);
+    let model = Arc::new(ScriptedModel::new().narration("Narration."));
+
+    narrate_with(&model, &case, &preset(), TokenBudget::fallback())
+        .expect("a narration is a result");
+
+    let sent = prompt_of(&model).settings;
+    assert_eq!(sent.temperature, None);
+    assert_eq!(sent.top_p, None);
+    assert!(sent.custom.is_empty());
 }

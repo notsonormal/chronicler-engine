@@ -18,6 +18,7 @@ use crate::application::ports::llm_provider::{
     AGENT_TRIGGER,
 };
 use crate::domain::model::agent::Role;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::error::{EngineError, NarrationFailure};
 
 /// The words a stray call's failure carries, so an endpoint that cannot reach
@@ -41,7 +42,7 @@ pub struct ModelCall {
     pub role: Role,
     pub system_prompt: String,
     pub user_prompt: String,
-    pub max_tokens: Option<u32>,
+    pub settings: CallSettings,
 }
 
 #[derive(Clone, Debug)]
@@ -296,7 +297,7 @@ impl LlmProvider for ScriptedModel {
         agent_name: &str,
         system_prompt: &str,
         user_prompt: &str,
-        max_tokens: Option<u32>,
+        settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         let role = role_of_agent_name(agent_name)
             // arch-lint: allow(no-unwrap-expect) reason="test fake: an unknown agent name is a wiring bug"
@@ -305,7 +306,7 @@ impl LlmProvider for ScriptedModel {
             role,
             system_prompt: system_prompt.to_string(),
             user_prompt: user_prompt.to_string(),
-            max_tokens,
+            settings: settings.clone(),
         };
         let fired = self.block_if_held(role);
         let reply = self.next_reply(&call);

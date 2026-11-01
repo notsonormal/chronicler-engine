@@ -286,6 +286,8 @@ fn custom_preset(id: &str, name: &str) -> PromptPreset {
         allowed_modes: vec![NarratorMode::Novel],
         is_default: false,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     }
 }
 
@@ -305,6 +307,8 @@ fn default_preset(
         allowed_modes: vec![mode],
         is_default: true,
         preset_type,
+        parameters: Default::default(),
+        option_count: None,
     }
 }
 

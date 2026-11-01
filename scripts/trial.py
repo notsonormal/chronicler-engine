@@ -949,7 +949,7 @@ def setup_lines(pack):
         f'| Narration connection | {narration_connection.get("provider")} '
         f'`{narration_connection.get("model")}` '
         f'reasoning={narration_connection.get("reasoning_effort")} '
-        f'max_tokens={narration_connection.get("max_tokens")} |'
+        f'max_tokens_ceiling={narration_connection.get("max_tokens_ceiling")} |'
     )
     lines.append(
         f'| Quantifier connection | {quantifier_connection.get("provider")} '

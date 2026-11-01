@@ -4,6 +4,7 @@
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::domain::model::agent::{AgentSettings, HookInput};
 use crate::domain::model::character::CharacterCard;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::error::EngineError;
 
 use crate::application::agents::quantifier::parser::parse_with_movement;
@@ -53,14 +54,14 @@ pub(crate) fn determine_characters_present(
         quantifier_prompt_override: settings.preset.clone(),
     };
 
-    let result = quantify_room_with_llm_call(&context, recorder, settings.max_tokens);
+    let result = quantify_room_with_llm_call(&context, recorder, &settings.call);
     Ok(process_quantifier_result(result, world))
 }
 
 pub(crate) fn quantify_room_with_llm_call(
     context: &QuantifierPromptContext,
     recorder: &LlmCallRecorder,
-    max_tokens: Option<u32>,
+    call: &CallSettings,
 ) -> QuantifierReading {
     let builder = QuantifierPromptBuilder::new(QuantifierPromptContext {
         room: context.room,
@@ -91,7 +92,7 @@ pub(crate) fn quantify_room_with_llm_call(
     let mut last_error = None;
 
     for attempt in 1..=max_attempts {
-        match recorder.complete("quantifier", &system_prompt, &user_prompt, max_tokens) {
+        match recorder.complete("quantifier", &system_prompt, &user_prompt, call) {
             Ok(llm_result) => {
                 let response = &llm_result.text;
                 tracing::info!("[Quantifier] Latest message: {}", context.latest_message);

@@ -14,7 +14,7 @@ pub(crate) fn parse_datetime(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
-const LATEST_VERSION: i32 = 33;
+const LATEST_VERSION: i32 = 34;
 
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
     migrate_up_to(conn, LATEST_VERSION)
@@ -780,6 +780,18 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 33)
+            .db_context("Failed to set user_version")?;
+    }
+
+    if due(34) {
+        if !column_exists(conn, "prompt_presets", "parameters") {
+            exec("ALTER TABLE prompt_presets ADD COLUMN parameters TEXT NOT NULL DEFAULT '{}'")?;
+        }
+        if !column_exists(conn, "prompt_presets", "option_count") {
+            exec("ALTER TABLE prompt_presets ADD COLUMN option_count INTEGER")?;
+        }
+
+        conn.pragma_update(None, "user_version", 34)
             .db_context("Failed to set user_version")?;
     }
 

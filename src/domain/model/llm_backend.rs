@@ -88,6 +88,12 @@ impl LlmBackendType {
         self == Self::OpenRouter
     }
 
+    /// Whether the host reads a `session_id` in the request body. OpenRouter uses
+    /// it to keep the calls of one session on one upstream host.
+    pub fn sends_game_session(self) -> bool {
+        self == Self::OpenRouter
+    }
+
     /// OpenCode Go refuses a call without its session header.
     pub fn session_header(self) -> Option<&'static str> {
         match self {

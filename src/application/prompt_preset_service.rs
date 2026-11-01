@@ -54,27 +54,20 @@ impl PromptPresetService {
     }
 
     pub fn save_preset(&self, preset: &PromptPreset) -> std::result::Result<(), ApplicationError> {
+        preset
+            .validate()
+            .map_err(ApplicationError::from_engine_error)?;
         self.storage
             .save_preset(preset)
             .map_err(ApplicationError::from_engine_error)
     }
 
-    /// The preset a Game picks for the Narrator. A missing preset is an error.
-    pub fn for_narration(&self, game: &Game, preset_type: PresetType) -> Result<PromptPreset> {
-        self.chosen(game, preset_type)
-    }
-
-    fn chosen(&self, game: &Game, preset_type: PresetType) -> Result<PromptPreset> {
+    /// The preset a Game picks for a call of `preset_type`. A missing preset is an error.
+    pub fn chosen_preset(&self, game: &Game, preset_type: PresetType) -> Result<PromptPreset> {
         let id = game.active_preset_id(preset_type);
         self.storage
             .get_preset(id)?
             .ok_or_else(|| EngineError::PresetNotFound(id.to_string()))
-    }
-
-    /// The assembled text of the preset a Game picks for a hook. A missing preset
-    /// is an error.
-    pub fn hook_text(&self, game: &Game, preset_type: PresetType) -> Result<String> {
-        Ok(self.chosen(game, preset_type)?.assemble_text(&[], None))
     }
 
     /// The stored preset an edit may change: one that exists and is not a default.

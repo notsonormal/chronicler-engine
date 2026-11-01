@@ -460,7 +460,8 @@ async fn test_create_preset_reports_save_failure() {
 #[tokio::test]
 async fn test_update_preset_renders_card_with_new_name() {
     let _guard = SettingsTestGuard::new();
-    let app = TestAppBuilder::default_app();
+    let app_state = TestAppBuilder::default_test().build_service();
+    let app = build_router(app_state.clone());
 
     let create_response = post_form(
         &app,
@@ -470,6 +471,20 @@ async fn test_update_preset_renders_card_with_new_name() {
     .await;
     let panel = panel_after(&app, create_response).await;
     let preset_id = extract_first_preset_id(&panel);
+    let mut stored = app_state
+        .prompt_preset_service
+        .get_preset(&preset_id)
+        .unwrap()
+        .unwrap();
+    stored.parameters.temperature = Some(0.4);
+    stored
+        .parameters
+        .custom
+        .insert("top_k".into(), serde_json::json!(25));
+    app_state
+        .prompt_preset_service
+        .save_preset(&stored)
+        .unwrap();
 
     let response = post_form(
         &app,
@@ -482,6 +497,12 @@ async fn test_update_preset_renders_card_with_new_name() {
     assert!(body.contains(r#"<div class="preset-card""#));
     assert!(body.contains("After"));
     assert!(!body.contains("Before"));
+    let after = app_state
+        .prompt_preset_service
+        .get_preset(&preset_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.parameters, stored.parameters);
 }
 
 // [docs/specs/prompt_presets.md] SCENARIO: 21.15

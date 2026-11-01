@@ -2,6 +2,7 @@
 
 #[path = "../test_utils/mod.rs"]
 mod test_utils;
+use chronicler_engine::domain::model::generation_parameters::CallSettings;
 use test_utils::*;
 
 #[cfg(test)]
@@ -163,7 +164,10 @@ mod tests {
                 "llm-test",
                 "Answer with one short word.",
                 "Reply OK.",
-                Some(256),
+                &CallSettings {
+                    max_tokens: Some(256),
+                    ..CallSettings::default()
+                },
             )
             .expect("OpenCode Go answers");
 

@@ -3,17 +3,15 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde_json::json;
+use serde_json::{json, Map, Value};
 
-use crate::domain::model::settings::ReasoningEffort;
+use crate::domain::model::settings::{ReasoningEffort, DEFAULT_MAX_TOKENS};
 
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn next_request_id() -> u64 {
     REQUEST_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
-
-pub const DEFAULT_MAX_TOKENS: u32 = 2048;
 
 /// OpenCode Go asks each client to name itself.
 const USER_AGENT: &str = concat!("chronicler-engine/", env!("CARGO_PKG_VERSION"));
@@ -45,6 +43,14 @@ pub struct ChatCompletionRequest<'a> {
     pub user_text: &'a str,
     /// `None` sends `DEFAULT_MAX_TOKENS`.
     pub max_tokens: Option<u32>,
+    /// `None` sends no `temperature`.
+    pub temperature: Option<f64>,
+    /// `None` sends no `top_p`.
+    pub top_p: Option<f64>,
+    /// Other samplers, sent as they are. The keys the engine writes win over them.
+    pub custom: &'a Map<String, Value>,
+    /// Sent as the `session_id` field. `None` sends none.
+    pub session_id: Option<&'a str>,
     /// Sent as the flat `reasoning_effort` field: OpenCode Go ignores the
     /// nested `reasoning: {effort}` form. `None` sends no field, so the model
     /// default applies.
@@ -77,12 +83,20 @@ pub fn build_request_payload(request: &ChatCompletionRequest<'_>) -> (serde_json
         "role": "user",
         "content": request.user_text
     }));
-    let mut payload = json!({
-        "model": request.model,
-        "messages": messages,
-        "stream": false,
-        "max_tokens": request.resolved_max_tokens()
-    });
+    let mut payload = Value::Object(request.custom.clone());
+    payload["model"] = json!(request.model);
+    payload["messages"] = json!(messages);
+    payload["stream"] = json!(false);
+    payload["max_tokens"] = json!(request.resolved_max_tokens());
+    if let Some(temperature) = request.temperature {
+        payload["temperature"] = json!(temperature);
+    }
+    if let Some(top_p) = request.top_p {
+        payload["top_p"] = json!(top_p);
+    }
+    if let Some(session_id) = request.session_id {
+        payload["session_id"] = json!(session_id);
+    }
     if let Some(effort) = request.reasoning_effort {
         payload["reasoning_effort"] = json!(effort);
     }

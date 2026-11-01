@@ -1,15 +1,23 @@
 //! [DOC: docs/diataxis/reference/narrative/narration_system.md]
 //! The chat-completions provider: one backend for every OpenAI-compatible host.
 
+use uuid::Uuid;
+
 use crate::adapters::driven::llm::transport::{
     call_chat_completions, ChatCompletionRequest, ChatCompletionResult, ChatCompletionsEndpoint,
     ProviderRouting,
 };
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::application::prompting::prompt_merge::merge_single_user_message;
+use crate::domain::model::game::GameId;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{LlmConnection, ReasoningEffort};
 use crate::error::EngineError;
+
+/// The namespace of the UUID v5 session ids. It is fixed, so a Game keeps its session
+/// across restarts.
+const GAME_SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x6368_726f_6e69_636c_6572_2d67_616d_6531);
 
 #[derive(Clone)]
 pub struct ChatCompletionsBackend {
@@ -58,7 +66,7 @@ impl ChatCompletionsBackend {
         &self,
         system_prompt: &str,
         user_text: &str,
-        max_tokens: Option<u32>,
+        settings: &CallSettings,
     ) -> Result<ChatCompletionResult, EngineError> {
         let (system, user) = if self.single_user_message {
             ("", merge_single_user_message(system_prompt, user_text))
@@ -66,6 +74,7 @@ impl ChatCompletionsBackend {
             (system_prompt, user_text.to_string())
         };
         let user = self.close_gemma4_thinking_channel(user);
+        let session_id = self.game_session(settings.game);
         call_chat_completions(
             &ChatCompletionsEndpoint {
                 base_url: &self.base_url,
@@ -80,7 +89,11 @@ impl ChatCompletionsBackend {
                 model: &self.model,
                 system_prompt: system,
                 user_text: &user,
-                max_tokens,
+                max_tokens: settings.max_tokens,
+                temperature: settings.temperature,
+                top_p: settings.top_p,
+                custom: &settings.custom,
+                session_id: session_id.as_deref(),
                 reasoning_effort: self.reasoning_effort,
                 provider_routing: (!self.provider_order.is_empty()).then(|| ProviderRouting {
                     order: &self.provider_order,
@@ -88,6 +101,13 @@ impl ChatCompletionsBackend {
                 }),
             },
         )
+    }
+
+    /// The `session_id` of a call: the same value for every call of one Game. Only a
+    /// host that reads it gets one, and a call with no Game has none.
+    fn game_session(&self, game: Option<GameId>) -> Option<String> {
+        let game = game.filter(|_| self.provider.sends_game_session())?;
+        Some(Uuid::new_v5(&GAME_SESSION_NAMESPACE, &game.0.to_be_bytes()).to_string())
     }
 
     /// Ollama runs a `{{ .Prompt }}` passthrough template, so on Ollama this
@@ -115,10 +135,10 @@ impl LlmProvider for ChatCompletionsBackend {
         agent_name: &str,
         system_prompt: &str,
         user_prompt: &str,
-        max_tokens: Option<u32>,
+        settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         tracing::info!("[LLM] Generating action from prompt");
-        let chat = self.call(system_prompt, user_prompt, max_tokens)?;
+        let chat = self.call(system_prompt, user_prompt, settings)?;
         Ok(LlmCallResult {
             text: chat.text,
             raw_request_json: chat.raw_request_json,

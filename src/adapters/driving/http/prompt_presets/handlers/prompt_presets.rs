@@ -153,6 +153,8 @@ impl PresetForm {
             allowed_modes,
             is_default: false,
             preset_type,
+            parameters: Default::default(),
+            option_count: None,
         }
     }
 }

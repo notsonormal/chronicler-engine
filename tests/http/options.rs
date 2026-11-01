@@ -6,12 +6,14 @@ use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::adapters::driven::storage::{TestOverride, TxWrite};
+use chronicler_engine::domain::model::prompt_preset::PresetType;
 use chronicler_engine::domain::model::settings::{AppSettings, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::world::WorldCard;
 use chronicler_engine::test_support::{
     analysis_report, configured_runner, configured_runner_without, empty_sqlite_storage,
-    ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap, TestWorld,
+    set_game_config_row, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap, TestPromptPreset,
+    TestWorld,
 };
 
 use crate::support::app_wiring::{
@@ -100,6 +102,47 @@ async fn test_on_demand_options_render_in_dock_http() {
     assert!(dock.contains("Question the guard"), "{dock}");
     assert!(dock.contains("Leave the hall"), "{dock}");
     assert_eq!(current_options(&state).len(), 3);
+}
+
+// [docs/specs/options.md] SCENARIO: 24.25
+#[tokio::test]
+async fn test_the_options_preset_sets_how_many_options_the_dock_offers_http() {
+    let (app, state, storage) =
+        app_with_script(ScriptedModel::new().turn("You look around.").options(
+            "<suggestion>Search the desk</suggestion><suggestion>Question the guard</suggestion>\
+             <suggestion>Leave the hall</suggestion><suggestion>Climb the tower</suggestion>",
+        ));
+    let mut two_options = TestPromptPreset::options("options_two", "Two Options");
+    two_options.option_count = Some(2);
+    state
+        .prompt_preset_service
+        .save_preset(&two_options)
+        .expect("save the Options preset");
+    let mut game = storage
+        .get_game(active_game_of(&state).0)
+        .expect("the Game row reads back")
+        .expect("the Game exists");
+    game.set_active_preset_id(PresetType::Options, "options_two".to_string());
+    set_game_config_row(&storage, &game);
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
+
+    let resp = post_action(&app, "/options").await;
+    assert!(resp.status().is_success());
+    assert!(wait_settled(&state, 1000).await, "/options should complete");
+
+    assert_eq!(
+        current_options(&state),
+        ["Search the desk", "Question the guard"],
+        "the Options preset keeps the first 2 of the 4 suggestions"
+    );
+    let dock = fetch_part(&app, "options-dock").await;
+    assert!(dock.contains("Question the guard"), "{dock}");
+    assert!(!dock.contains("Leave the hall"), "{dock}");
+    assert!(!dock.contains("Climb the tower"), "{dock}");
 }
 
 // [docs/specs/options.md] SCENARIO: 24.2

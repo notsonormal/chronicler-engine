@@ -34,7 +34,7 @@ The narrator makes Layer 6 from the kind of the generation (see Narration System
 
 The history cut drops whole Messages from the front of the history, in blocks. The cut walks the history from its first Message. It drops the oldest Messages when the kept Messages pass the history space, the tokens the history may fill. Between two cuts the history start stays where it is, while the history space stays the same.
 
-The history space is the input limit, less every part of the prompt except the `<PlayerInput>` layer and the Guide, less a reserve for those two. A cap limits it. The input limit depends on the window and the response cap of the Connection (`max_tokens`). A change in the size of another part, such as the room or the Characters present, changes the space and can move the history start. An Input or Guide that still passes the input limit makes the assembler drop more whole Messages, as one block.
+The history space is the input limit, less every part of the prompt except the `<PlayerInput>` layer and the Guide, less a reserve for those two. A cap limits it. The input limit depends on the window of the Connection and on the response length of the call (see Prompt Presets). A change in the size of another part, such as the room or the Characters present, changes the space and can move the history start. An Input or Guide that still passes the input limit makes the assembler drop more whole Messages, as one block.
 
 The cut knows the blocks it dropped. The marker `(History truncated to fit context window)` shows when Messages exist and none is kept. The sizes stay in `HistoryCut` and the token budget.
 
@@ -66,7 +66,15 @@ The quantifier and options agents build their own prompts, separate from the lay
 
 ## Prompt Presets
 
-The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type. `PromptPresetService` gives the preset of a Game to the Narrator and to each hook, and every call reads the referenced preset fresh from storage.
+The prompt system stores editable presets of four types: system (the narrator voice), quantifier, impersonate and options. Each Game references one active preset per type. `PromptPresetService` gives the preset of a Game to the Narrator and to each hook, and every call reads the referenced preset fresh from storage. The preset service refuses a preset that breaks the rules below, in a save and in a seed file.
+
+A preset carries its generation parameters: `max_tokens`, `temperature`, `top_p` and a free object `custom` for other samplers. A value that is not set is not sent. The free object cannot set `model`, `messages`, `stream` or `max_tokens`, and the refusal names the key. The engine keys always win over the free object in the request.
+
+The Connection keeps a ceiling on `max_tokens` (`max_tokens_ceiling`). A call sends the lower of the preset value and the ceiling. A preset that sets no `max_tokens` asks for the default of 2048 tokens, and a Connection with no ceiling has no upper limit. A Narrator-role call can send less, because the response length cannot pass the free space in the context window. The Quantifier and Options calls have no such clamp.
+
+An Options preset can set `option_count`, the number of Options. It must be at least 1, and no other preset type can set it. The count fills the `{{option_count}}` placeholder and caps the Options that the parser keeps. An Options preset with no count offers 3.
+
+An OpenRouter call also sends a `session_id`, the same value for every call of one Game. Other providers do not read it, and a call with no Game sends none.
 
 ## Document References
 

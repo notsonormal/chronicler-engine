@@ -40,10 +40,10 @@
             "default": false,
             "description": "Whether to combine system + user into a single user message."
           },
-          "max_tokens": {
+          "max_tokens_ceiling": {
             "type": "integer",
             "minimum": 1,
-            "description": "Optional maximum tokens per response."
+            "description": "Optional ceiling on the tokens a call to this connection may ask for. A preset value above it is lowered to it."
           },
           "max_context_tokens": {
             "type": "integer",

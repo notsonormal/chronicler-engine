@@ -32,6 +32,8 @@ pub fn seed_default_preset(storage: &Storage) {
             allowed_modes: vec![NarratorMode::Novel],
             is_default: true,
             preset_type: PresetType::System,
+            parameters: Default::default(),
+            option_count: None,
         })
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
         .expect("test setup: save_preset must succeed for default preset");
@@ -49,6 +51,8 @@ pub fn seed_default_preset(storage: &Storage) {
             allowed_modes: vec![NarratorMode::InteractiveFiction],
             is_default: true,
             preset_type: PresetType::System,
+            parameters: Default::default(),
+            option_count: None,
         })
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
         .expect("test setup: save_preset must succeed for IF default preset");
@@ -85,6 +89,8 @@ fn seed_default_hook_presets(storage: &Storage) {
                 allowed_modes: settings_defaults::default_allowed_modes(),
                 is_default: true,
                 preset_type,
+                parameters: Default::default(),
+                option_count: None,
             })
             // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
             .expect("test setup: save_preset must succeed for a default hook preset");
@@ -103,6 +109,8 @@ pub fn seed_default_impersonate_preset(storage: &Storage) {
             allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: true,
             preset_type: PresetType::Impersonate,
+            parameters: Default::default(),
+            option_count: None,
         })
         // arch-lint: allow(no-unwrap-expect) reason="test setup fixture panics on storage failure"
         .expect("test setup: save_preset must succeed for default impersonate preset");

@@ -5,8 +5,6 @@ pub const MAX_CONTEXT_TOKENS: u32 = 32768;
 
 pub const MAX_HISTORY_TOKENS: u32 = 16000;
 
-pub const MAX_RESPONSE_TOKENS: u32 = 2048;
-
 pub const SAFETY_MARGIN_TOKENS: u32 = 256;
 
 pub const MIN_INPUT_BUDGET_TOKENS: u32 = 512;

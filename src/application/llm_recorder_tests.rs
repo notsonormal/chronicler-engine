@@ -12,6 +12,7 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::error::{EngineError, LlmFailure};
 use crate::test_support::{make_noop_save_fn, make_test_recorder_with_storage};
+use crate::domain::model::generation_parameters::CallSettings;
 
 struct BodyFailureProvider {
     failure: fn() -> LlmFailure,
@@ -31,7 +32,7 @@ impl LlmProvider for BodyFailureProvider {
         _agent_name: &str,
         _system_prompt: &str,
         _user_prompt: &str,
-        _max_tokens: Option<u32>,
+        _settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm((self.failure)()))
     }
@@ -52,7 +53,12 @@ fn complete_happy_path_calls_provider_and_persists_forensics() {
     let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     let result = recorder
-        .complete("narrator", "system prompt", "user prompt", None)
+        .complete(
+            "narrator",
+            "system prompt",
+            "user prompt",
+            &CallSettings::default(),
+        )
         .expect("complete should succeed");
 
     assert!(!result.text.is_empty());
@@ -80,7 +86,7 @@ fn complete_strips_thought_tags_from_parsed_response() {
     let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     let result = recorder
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .expect("complete should succeed");
 
     assert!(!result.text.contains("<thought>"));
@@ -112,7 +118,7 @@ fn complete_records_the_raw_body_of_an_empty_response() {
     let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     let err = recorder
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .expect_err("an empty content is a failure, never an answer");
     assert!(matches!(
         err,
@@ -158,7 +164,7 @@ fn complete_records_a_spent_token_budget_for_role_health() {
     let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     recorder
-        .complete("quantifier", "system", "user", None)
+        .complete("quantifier", "system", "user", &CallSettings::default())
         .expect_err("a spent budget with no content is a failure");
 
     let saved = storage
@@ -184,7 +190,7 @@ fn complete_propagates_provider_error_and_records_failure_row() {
     let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     let err = recorder
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap_err();
 
     assert!(matches!(err, EngineError::Narration(_)));
@@ -217,10 +223,10 @@ fn complete_failed_then_succeeded_leaves_both_rows() {
     let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     recorder
-        .complete("narrator", "s", "u", None)
+        .complete("narrator", "s", "u", &CallSettings::default())
         .expect_err("the first attempt fails");
     recorder
-        .complete("narrator", "s", "u", None)
+        .complete("narrator", "s", "u", &CallSettings::default())
         .expect("the second attempt succeeds");
 
     let saved = storage
@@ -248,7 +254,7 @@ fn complete_success_row_has_no_failure_marker() {
     let recorder = make_test_recorder_with_storage(provider, Arc::clone(&storage));
 
     recorder
-        .complete("options", "s", "u", None)
+        .complete("options", "s", "u", &CallSettings::default())
         .expect("the transport succeeded");
 
     let saved = storage
@@ -269,7 +275,9 @@ fn complete_returns_provider_error_even_when_failure_save_fails() {
     let save_fn: SaveLlmMessageFn = Arc::new(|_| Err(EngineError::Io("disk full".into())));
     let recorder = LlmCallRecorder::new(provider, save_fn);
 
-    let err = recorder.complete("narrator", "s", "u", None).unwrap_err();
+    let err = recorder
+        .complete("narrator", "s", "u", &CallSettings::default())
+        .unwrap_err();
     assert!(
         matches!(err, EngineError::Narration(_)),
         "the provider error must survive a failed forensics write"
@@ -283,7 +291,7 @@ fn complete_propagates_closure_save_error() {
     let recorder = LlmCallRecorder::new(provider, save_fn);
 
     let err = recorder
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap_err();
 
     assert!(matches!(err, EngineError::Io(_)));
@@ -307,7 +315,9 @@ fn recorder_with_configurable_mock_backend() {
     let storage = Arc::new(Storage::new_in_memory());
     let recorder = make_test_recorder_with_storage(mocking_empty, Arc::clone(&storage));
 
-    let result = recorder.complete("narrator", "sys", "user", None).unwrap();
+    let result = recorder
+        .complete("narrator", "sys", "user", &CallSettings::default())
+        .unwrap();
     assert_eq!(result.text, "");
     assert_eq!(
         storage
@@ -332,8 +342,12 @@ fn resolver_is_consulted_on_every_call() {
     });
     let recorder = LlmCallRecorder::with_resolver(resolve, make_noop_save_fn());
 
-    recorder.complete("narrator", "s", "u", None).unwrap();
-    recorder.complete("narrator", "s", "u", None).unwrap();
+    recorder
+        .complete("narrator", "s", "u", &CallSettings::default())
+        .unwrap();
+    recorder
+        .complete("narrator", "s", "u", &CallSettings::default())
+        .unwrap();
 
     assert_eq!(
         calls.load(Ordering::SeqCst),
@@ -352,7 +366,7 @@ fn resolver_error_fails_the_call_instead_of_falling_back() {
     let recorder = LlmCallRecorder::with_resolver(resolve, make_noop_save_fn());
 
     let err = recorder
-        .complete("narrator", "s", "u", None)
+        .complete("narrator", "s", "u", &CallSettings::default())
         .expect_err("an unresolvable provider must error, never serve a fallback");
     assert!(err.to_string().contains("gone"));
 }

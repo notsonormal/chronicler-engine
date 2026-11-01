@@ -1,4 +1,5 @@
 use crate::application::ports::llm_provider::LlmProvider;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::adapters::driven::llm::providers::mock::MockBackend;
 
 #[test]
@@ -22,7 +23,12 @@ fn test_mock_backend_reports_the_model_it_was_given() {
 #[test]
 fn test_mock_complete() {
     let backend = MockBackend::default();
-    let result = backend.complete("test", "system prompt", "user action", None);
+    let result = backend.complete(
+        "test",
+        "system prompt",
+        "user action",
+        &CallSettings::default(),
+    );
     assert!(result.is_ok());
     let response = result.unwrap().text;
     assert!(response.contains("action") || response.contains("Continuation"));
@@ -35,7 +41,7 @@ fn test_mock_complete_multiline() {
         "test",
         "system prompt\nwith multiple lines",
         "user prompt\nalso multiline",
-        None,
+        &CallSettings::default(),
     );
     assert!(result.is_ok());
     assert!(result.unwrap().text.contains("user prompt"));
@@ -44,7 +50,7 @@ fn test_mock_complete_multiline() {
 #[test]
 fn test_mock_complete_empty() {
     let backend = MockBackend::default();
-    let result = backend.complete("test", "", "", None);
+    let result = backend.complete("test", "", "", &CallSettings::default());
     assert!(result.is_ok());
     assert!(result.unwrap().text.contains("..."));
 }
@@ -56,15 +62,15 @@ fn test_mock_complete_per_call_responses() {
         r#"{"characters_present": [], "movement": {"type": "entering", "destination": "kitchen"}}"#
             .to_string(),
     ]);
-    let result1 = backend.complete("quantifier", "sys", "user", None);
+    let result1 = backend.complete("quantifier", "sys", "user", &CallSettings::default());
     assert!(result1.is_ok());
     assert!(result1.unwrap().text.contains("carla"));
 
-    let result2 = backend.complete("quantifier", "sys", "user", None);
+    let result2 = backend.complete("quantifier", "sys", "user", &CallSettings::default());
     assert!(result2.is_ok());
     assert!(result2.unwrap().text.contains("kitchen"));
 
-    let result3 = backend.complete("quantifier", "sys", "user", None);
+    let result3 = backend.complete("quantifier", "sys", "user", &CallSettings::default());
     assert!(result3.is_ok());
     assert!(result3.unwrap().text.contains("carla"));
 }
@@ -74,7 +80,7 @@ fn test_mock_complete_very_long_input() {
     let backend = MockBackend::default();
     let long_system = "You are a game master. ".repeat(50);
     let long_user = "The player performs an action. ".repeat(50);
-    let result = backend.complete("test", &long_system, &long_user, None);
+    let result = backend.complete("test", &long_system, &long_user, &CallSettings::default());
     assert!(result.is_ok());
     assert!(result.unwrap().text.contains("The player performs"));
 }
@@ -86,13 +92,13 @@ fn test_mock_with_failing_trigger_narration() {
         crate::application::ports::llm_provider::AGENT_NARRATOR,
         "sys",
         "user",
-        None,
+        &CallSettings::default(),
     );
     assert!(
         narrate_result.is_ok(),
         "narrator complete should succeed even with trigger_narration_should_fail set"
     );
-    let trigger_result = backend.complete("trigger", "sys", "user", None);
+    let trigger_result = backend.complete("trigger", "sys", "user", &CallSettings::default());
     assert!(
         trigger_result.is_err(),
         "trigger complete should fail when trigger_narration_should_fail is set"
@@ -116,7 +122,7 @@ fn test_mock_backend_logs_to_storage() {
     let backend: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
     let recorder = make_test_recorder_with_storage(backend, Arc::clone(&storage));
 
-    let result = recorder.complete("narrator", "sys", "user action", None);
+    let result = recorder.complete("narrator", "sys", "user action", &CallSettings::default());
     assert!(result.is_ok());
 
     let messages = storage.list_latest_llm_messages(50).unwrap();
@@ -136,9 +142,9 @@ fn test_mock_backend_logs_multiple_calls() {
     let backend: Arc<dyn LlmProvider> = Arc::new(MockBackend::new());
     let recorder = make_test_recorder_with_storage(backend, Arc::clone(&storage));
 
-    let _ = recorder.complete("narrator", "sys", "first", None);
-    let _ = recorder.complete("trigger", "sys", "second", None);
-    let _ = recorder.complete("narrator", "sys", "third", None);
+    let _ = recorder.complete("narrator", "sys", "first", &CallSettings::default());
+    let _ = recorder.complete("trigger", "sys", "second", &CallSettings::default());
+    let _ = recorder.complete("narrator", "sys", "third", &CallSettings::default());
 
     let messages = storage.list_latest_llm_messages(50).unwrap();
     assert_eq!(messages.len(), 3);
@@ -151,9 +157,9 @@ fn test_mock_backend_logs_multiple_calls() {
 fn mock_backend_fail_first_n_then_succeeds() {
     use crate::application::ports::llm_provider::{LlmProvider, AGENT_NARRATOR};
     let backend = MockBackend::default().with_fail_first_n(1);
-    let r0 = backend.complete(AGENT_NARRATOR, "", "x", None);
+    let r0 = backend.complete(AGENT_NARRATOR, "", "x", &CallSettings::default());
     assert!(r0.is_err(), "first narration call should fail");
-    let r1 = backend.complete(AGENT_NARRATOR, "", "x", None);
+    let r1 = backend.complete(AGENT_NARRATOR, "", "x", &CallSettings::default());
     assert!(
         r1.is_ok(),
         "second narration call should succeed after fail-first-N decremented"
@@ -170,7 +176,7 @@ fn test_mock_backend_builders_compose() {
         crate::application::ports::llm_provider::AGENT_NARRATOR,
         "sys",
         "user",
-        None,
+        &CallSettings::default(),
     );
     assert!(narrate.is_ok());
     assert!(
@@ -178,7 +184,7 @@ fn test_mock_backend_builders_compose() {
         "with_empty_response should win on narrator path"
     );
 
-    let trigger = backend.complete("trigger", "sys", "user", None);
+    let trigger = backend.complete("trigger", "sys", "user", &CallSettings::default());
     assert!(trigger.is_ok());
     assert_eq!(
         trigger.unwrap().text,
@@ -192,7 +198,7 @@ fn test_mock_options_canned_response_when_unseeded() {
     // The unseeded options branch is what browser/E2E runs exercise: the
     // default mock must hand the options agent parseable Options.
     let backend = MockBackend::default();
-    let result = backend.complete("options", "sys", "scene context", None);
+    let result = backend.complete("options", "sys", "scene context", &CallSettings::default());
     assert!(result.is_ok());
     let text = result.unwrap().text;
     assert!(
@@ -209,7 +215,7 @@ fn test_mock_options_seeded_response_wins_over_canned() {
     // canned options response — pipeline tests seed exact options text.
     let seeded = "<suggestion>Search the desk</suggestion>".to_string();
     let backend = MockBackend::default().with_prompt_responses(vec![seeded.clone()]);
-    let result = backend.complete("options", "sys", "scene context", None);
+    let result = backend.complete("options", "sys", "scene context", &CallSettings::default());
     assert!(result.is_ok());
     assert_eq!(
         result.unwrap().text,
@@ -223,6 +229,6 @@ fn test_mock_options_with_fail_fails() {
     // Branch priority: the failure guard precedes the canned options
     // response — always-on failure tests rely on options calls erroring.
     let backend = MockBackend::default().with_fail();
-    let result = backend.complete("options", "sys", "scene context", None);
+    let result = backend.complete("options", "sys", "scene context", &CallSettings::default());
     assert!(result.is_err(), "with_fail must fail options calls too");
 }

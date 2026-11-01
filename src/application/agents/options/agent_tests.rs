@@ -11,6 +11,8 @@ use crate::domain::model::character::CharacterCard;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
 use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona};
 use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
+use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::game::GameId;
 
 const SET_A: &str = "<suggestion>Search the desk</suggestion>\
 <suggestion>Question the guard</suggestion><suggestion>Leave the hall</suggestion>";
@@ -160,7 +162,7 @@ fn test_the_settings_preset_reaches_the_prompt() {
     let model = Arc::new(ScriptedModel::new().options(SET_A));
     let settings = AgentSettings {
         preset: Some("Offer {{option_count}} bold moves for {{user}}.".to_string()),
-        max_tokens: None,
+        ..Default::default()
     };
     let world = scene.world();
     options_agent(Arc::clone(&model))
@@ -354,4 +356,87 @@ fn test_the_closing_line_names_no_count() {
         "the closing line is the whole sentence: {}",
         call.user_prompt
     );
+}
+
+// CASE options-sends-the-preset-parameters: the call settings of the Agent reach the model call as they are.
+#[test]
+fn test_the_call_settings_reach_the_model_call() {
+    let scene = Scene::new();
+    let model = Arc::new(ScriptedModel::new().options(SET_A));
+    let call = CallSettings {
+        max_tokens: Some(300),
+        temperature: Some(1.2),
+        top_p: Some(0.95),
+        custom: serde_json::json!({"min_p": 0.05})
+            .as_object()
+            .unwrap()
+            .clone(),
+        game: Some(GameId(7)),
+    };
+    let settings = AgentSettings {
+        call: call.clone(),
+        ..Default::default()
+    };
+    let world = scene.world();
+    options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &settings)
+        .expect("a parsed answer is an offered set");
+
+    let sent = model.calls().into_iter().next().expect("one call");
+    assert_eq!(sent.settings, call);
+}
+
+// CASE options-count-from-the-preset: the preset's count renders into `{{option_count}}`, and the parser keeps at most that many Options.
+#[test]
+fn test_the_option_count_of_the_settings_sets_the_text_and_the_cap() {
+    let scene = Scene::new();
+    let model = Arc::new(ScriptedModel::new().options(
+        "<suggestion>One</suggestion><suggestion>Two</suggestion>\
+         <suggestion>Three</suggestion><suggestion>Four</suggestion>",
+    ));
+    let settings = AgentSettings {
+        preset: Some("Offer {{option_count}} moves.".to_string()),
+        option_count: Some(2),
+        ..Default::default()
+    };
+    let world = scene.world();
+
+    let offered = options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &settings)
+        .expect("a parsed answer is an offered set");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    assert!(
+        call.system_prompt.contains("Offer 2 moves."),
+        "{}",
+        call.system_prompt
+    );
+    assert_eq!(offered.0, ["One", "Two"]);
+}
+
+// CASE options-count-default: with no count in the settings the text and the cap use the default of 3.
+#[test]
+fn test_without_an_option_count_the_default_of_three_applies() {
+    let scene = Scene::new();
+    let model = Arc::new(ScriptedModel::new().options(
+        "<suggestion>One</suggestion><suggestion>Two</suggestion>\
+         <suggestion>Three</suggestion><suggestion>Four</suggestion>",
+    ));
+    let settings = AgentSettings {
+        preset: Some("Offer {{option_count}} moves.".to_string()),
+        ..Default::default()
+    };
+    let world = scene.world();
+
+    let offered = options_agent(Arc::clone(&model))
+        .run(&scene.input(&world), &settings)
+        .expect("a parsed answer is an offered set");
+
+    let call = model.calls().into_iter().next().expect("one call");
+    assert!(
+        call.system_prompt.contains("Offer 3 moves."),
+        "{}",
+        call.system_prompt
+    );
+    assert_eq!(offered.0.len(), 3);
 }

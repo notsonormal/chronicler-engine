@@ -2,6 +2,7 @@
 //! Prompt preset model
 
 use crate::error::EngineError;
+use crate::domain::model::generation_parameters::GenerationParameters;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::NarratorMode;
 
@@ -17,6 +18,8 @@ pub struct DbPromptPreset {
     pub created_at: String,
     pub updated_at: String,
     pub allowed_modes: String, // JSON: Vec<NarratorMode>
+    pub parameters: String,    // JSON: GenerationParameters
+    pub option_count: Option<i64>,
 }
 
 impl DbPromptPreset {
@@ -33,6 +36,8 @@ impl DbPromptPreset {
             created_at: row.get(8)?,
             updated_at: row.get(9)?,
             allowed_modes: row.get(10)?,
+            parameters: row.get(11)?,
+            option_count: row.get(12)?,
         })
     }
 
@@ -41,6 +46,16 @@ impl DbPromptPreset {
             PresetType::try_from(self.preset_type.as_str()).map_err(EngineError::Parse)?;
         let allowed_modes: Vec<NarratorMode> = serde_json::from_str(&self.allowed_modes)
             .map_err(|e| EngineError::Parse(format!("Failed to deserialize allowed_modes: {e}")))?;
+        let parameters: GenerationParameters = serde_json::from_str(&self.parameters)
+            .map_err(|e| EngineError::Parse(format!("Failed to deserialize parameters: {e}")))?;
+        let option_count = self
+            .option_count
+            .map(|count| {
+                u32::try_from(count).map_err(|_| {
+                    EngineError::Parse(format!("Invalid option_count in the database: {count}"))
+                })
+            })
+            .transpose()?;
         Ok(PromptPreset {
             id: self.id,
             name: self.name,
@@ -51,6 +66,8 @@ impl DbPromptPreset {
             allowed_modes,
             is_default: self.is_default != 0,
             preset_type,
+            parameters,
+            option_count,
         })
     }
 }

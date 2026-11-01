@@ -71,7 +71,7 @@ fn test_fresh_database_has_game_posture_columns() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 33);
+    assert_eq!(version, 34);
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn test_v22_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 33);
+    assert_eq!(version, 34);
 }
 
 #[test]
@@ -465,7 +465,7 @@ fn test_v28_deletes_saved_games_and_drops_the_snapshot_tables() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 33);
+    assert_eq!(version, 34);
 }
 
 #[test]
@@ -774,4 +774,49 @@ fn test_v33_without_a_settings_row_or_with_an_empty_length_appends_nothing() {
         Some("Write one paragraph."),
         "an empty text renders no header"
     );
+}
+
+#[test]
+fn test_v34_adds_the_preset_parameters_and_option_count_and_keeps_the_rows() {
+    let conn = Connection::open_in_memory().unwrap();
+    migrate_up_to(&conn, 33).unwrap();
+    insert_preset(&conn, "options_a", "options", Some("Suggest actions."));
+
+    run_migrations(&conn).unwrap();
+
+    let columns = columns_of(&conn, "prompt_presets");
+    assert!(columns.contains(&"parameters".to_string()));
+    assert!(columns.contains(&"option_count".to_string()));
+    let (parameters, option_count, output_format): (String, Option<i64>, Option<String>) = conn
+        .query_row(
+            "SELECT parameters, option_count, output_format FROM prompt_presets WHERE id = 'options_a'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(parameters, "{}", "an old preset has no parameters set");
+    assert_eq!(option_count, None);
+    assert_eq!(output_format.as_deref(), Some("Suggest actions."));
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 34);
+}
+
+#[test]
+fn test_v34_runs_over_a_database_that_already_has_the_columns() {
+    let conn = Connection::open_in_memory().unwrap();
+    migrate_up_to(&conn, 33).unwrap();
+    conn.execute_batch(
+        "ALTER TABLE prompt_presets ADD COLUMN parameters TEXT NOT NULL DEFAULT '{}'; \
+         ALTER TABLE prompt_presets ADD COLUMN option_count INTEGER;",
+    )
+    .unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 34);
 }

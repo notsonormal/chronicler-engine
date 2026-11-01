@@ -121,3 +121,30 @@ fn test_next_copy_name_skips_taken_names() {
         .unwrap();
     assert_eq!(service.next_copy_name(&source).unwrap(), "Alpha (Copy 3)");
 }
+
+#[test]
+fn test_save_preset_refuses_an_engine_key_in_the_custom_parameters_and_names_it() {
+    let (service, storage) = make_service();
+    let mut preset = system_preset("bad", "Bad");
+    preset
+        .parameters
+        .custom
+        .insert("stream".to_string(), serde_json::json!(true));
+
+    let error = service.save_preset(&preset).unwrap_err();
+
+    assert!(matches!(error, ApplicationError::Validation(_)));
+    assert!(error.to_string().contains("`stream`"), "{error}");
+    assert!(storage.get_preset("bad").unwrap().is_none());
+}
+
+#[test]
+fn test_save_preset_refuses_an_option_count_of_zero() {
+    let (service, storage) = make_service();
+    let mut preset = system_preset("zero", "Zero");
+    preset.preset_type = PresetType::Options;
+    preset.option_count = Some(0);
+
+    assert!(service.save_preset(&preset).is_err());
+    assert!(storage.get_preset("zero").unwrap().is_none());
+}

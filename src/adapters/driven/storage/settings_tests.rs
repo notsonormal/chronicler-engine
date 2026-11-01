@@ -404,7 +404,7 @@ fn test_save_then_get_settings_preserves_connection_fields() {
         api_key: Some("secret-key".into()),
         base_url: Some("http://custom:11434".into()),
         single_user_message: true,
-        max_tokens: Some(2048),
+        max_tokens_ceiling: Some(2048),
         max_context_tokens: Some(8192),
         reasoning_effort: Some(ReasoningEffort::High),
         ..test_connection(
@@ -433,7 +433,7 @@ fn test_save_then_get_settings_preserves_connection_fields() {
     assert_eq!(loaded_conn.api_key, Some("secret-key".into()));
     assert_eq!(loaded_conn.base_url, Some("http://custom:11434".into()));
     assert!(loaded_conn.single_user_message);
-    assert_eq!(loaded_conn.max_tokens, Some(2048));
+    assert_eq!(loaded_conn.max_tokens_ceiling, Some(2048));
     assert_eq!(loaded_conn.max_context_tokens, Some(8192));
     assert_eq!(loaded_conn.reasoning_effort, Some(ReasoningEffort::High));
 }
@@ -447,7 +447,7 @@ fn test_save_then_get_settings_preserves_connection_fields_sqlite() {
         api_key: Some("secret-key".into()),
         base_url: Some("http://custom:11434".into()),
         single_user_message: true,
-        max_tokens: Some(2048),
+        max_tokens_ceiling: Some(2048),
         max_context_tokens: Some(8192),
         reasoning_effort: Some(ReasoningEffort::High),
         ..test_connection(
@@ -476,7 +476,7 @@ fn test_save_then_get_settings_preserves_connection_fields_sqlite() {
     assert_eq!(loaded_conn.api_key, Some("secret-key".into()));
     assert_eq!(loaded_conn.base_url, Some("http://custom:11434".into()));
     assert!(loaded_conn.single_user_message);
-    assert_eq!(loaded_conn.max_tokens, Some(2048));
+    assert_eq!(loaded_conn.max_tokens_ceiling, Some(2048));
     assert_eq!(loaded_conn.max_context_tokens, Some(8192));
     assert_eq!(loaded_conn.reasoning_effort, Some(ReasoningEffort::High));
 }
@@ -690,7 +690,7 @@ fn test_migration_v20_v21_reshapes_registry_and_backfills_flags() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 33);
+    assert_eq!(version, 34);
 }
 
 #[test]

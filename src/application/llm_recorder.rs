@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
 use crate::application::prompting::sanitize::sanitize_llm_output;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::error::EngineError;
 
@@ -52,10 +53,10 @@ impl LlmCallRecorder {
         agent_name: &str,
         system_prompt: &str,
         user_prompt: &str,
-        max_tokens: Option<u32>,
+        settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         let provider = self.provider()?;
-        let result = match provider.complete(agent_name, system_prompt, user_prompt, max_tokens) {
+        let result = match provider.complete(agent_name, system_prompt, user_prompt, settings) {
             Ok(result) => result,
             Err(error) => {
                 let failure = Self::failed_message(

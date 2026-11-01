@@ -12,6 +12,8 @@ fn dummy_preset(id: &str, preset_type: PresetType) -> PromptPreset {
         output_format: None,
         allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
+        parameters: Default::default(),
+        option_count: None,
     }
 }
 

@@ -12,6 +12,8 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
 use crate::test_support::fixtures::{default_story_row, TestMap, TestCharacter, TestPersona};
 use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
+use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::game::GameId;
 
 const CHARACTER_ID: &str = "character_1";
 
@@ -305,7 +307,7 @@ fn test_the_settings_preset_reaches_the_prompt() {
     let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
     let settings = AgentSettings {
         preset: Some("Report the Characters for {{user}}.".to_string()),
-        max_tokens: None,
+        ..Default::default()
     };
     let world = turn.world();
     quantifier(Arc::clone(&model))
@@ -495,4 +497,32 @@ fn test_the_newest_message_renders_in_the_latest_message_block() {
         "no older tag name reaches the model: {}",
         call.user_prompt
     );
+}
+
+// CASE quantifier-sends-the-preset-parameters: the call settings of the Agent reach the model call as they are.
+#[test]
+fn test_the_call_settings_reach_the_model_call() {
+    let turn = Turn::new();
+    let model = Arc::new(ScriptedModel::new().after_narration(r#"{"characters_present": []}"#));
+    let call = CallSettings {
+        max_tokens: Some(300),
+        temperature: Some(0.2),
+        top_p: Some(0.8),
+        custom: serde_json::json!({"top_k": 20})
+            .as_object()
+            .unwrap()
+            .clone(),
+        game: Some(GameId(7)),
+    };
+    let settings = AgentSettings {
+        call: call.clone(),
+        ..Default::default()
+    };
+    let world = turn.world();
+    quantifier(Arc::clone(&model))
+        .run(&turn.input(&world), &settings)
+        .expect("a parsed report is an output");
+
+    let sent = model.calls().into_iter().next().expect("one call");
+    assert_eq!(sent.settings, call);
 }

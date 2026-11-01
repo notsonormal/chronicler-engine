@@ -2,11 +2,20 @@
 //! `call_chat_completions` call sends one chat-completions request. The stub
 //! endpoint shows what the transport puts on the wire.
 
+use std::sync::OnceLock;
+
+use serde_json::{json, Map, Value};
+
 use crate::adapters::driven::llm::transport::{
     call_chat_completions, ChatCompletionRequest, ChatCompletionsEndpoint,
 };
 use crate::domain::model::settings::ReasoningEffort;
 use crate::test_support::chat_completions_mock::ChatCompletionsMock;
+
+fn no_custom_parameters() -> &'static Map<String, Value> {
+    static EMPTY: OnceLock<Map<String, Value>> = OnceLock::new();
+    EMPTY.get_or_init(Map::new)
+}
 
 /// The mock's address, with no key, no title and no session.
 fn plain(mock: &ChatCompletionsMock) -> ChatCompletionsEndpoint<'_> {
@@ -28,6 +37,10 @@ fn request<'a>(
         system_prompt,
         user_text,
         max_tokens: Some(1024),
+        temperature: None,
+        top_p: None,
+        custom: no_custom_parameters(),
+        session_id: None,
         reasoning_effort,
         provider_routing: None,
     }
@@ -147,4 +160,119 @@ fn transport_user_agent_names_the_engine_and_its_version() {
             .map(String::as_str),
         Some(concat!("chronicler-engine/", env!("CARGO_PKG_VERSION")))
     );
+}
+
+// CASE transport-samplers-sent: a temperature and a top_p go on the wire and into the recorded request
+#[test]
+fn transport_sends_the_temperature_and_the_top_p() {
+    let endpoint = ChatCompletionsMock::start();
+
+    let result = call_chat_completions(
+        &plain(&endpoint),
+        &ChatCompletionRequest {
+            temperature: Some(0.7),
+            top_p: Some(0.9),
+            ..request("be helpful", "question", None)
+        },
+    )
+    .unwrap();
+
+    let body = endpoint.received_body();
+    assert_eq!(body["temperature"], 0.7);
+    assert_eq!(body["top_p"], 0.9);
+    let recorded: Value = serde_json::from_str(&result.raw_request_json).unwrap();
+    assert_eq!(recorded["temperature"], 0.7);
+    assert_eq!(recorded["top_p"], 0.9);
+}
+
+// CASE transport-unset-samplers-omitted: a request with no sampler and no custom parameter sends no `temperature`, no `top_p` and no other key than the engine keys
+#[test]
+fn transport_without_samplers_sends_only_the_engine_keys() {
+    let endpoint = ChatCompletionsMock::start();
+
+    call_chat_completions(&plain(&endpoint), &request("be helpful", "question", None)).unwrap();
+
+    let body = endpoint.received_body();
+    let mut keys: Vec<&String> = body.as_object().unwrap().keys().collect();
+    keys.sort();
+    assert_eq!(keys, ["max_tokens", "messages", "model", "stream"]);
+}
+
+// CASE transport-custom-parameters-sent: the keys of the custom object go on the wire as they are
+#[test]
+fn transport_sends_the_custom_parameters() {
+    let endpoint = ChatCompletionsMock::start();
+    let custom = json!({"top_k": 40, "min_p": 0.05, "stop": ["END"]});
+    let custom = custom.as_object().unwrap();
+
+    call_chat_completions(
+        &plain(&endpoint),
+        &ChatCompletionRequest {
+            custom,
+            ..request("be helpful", "question", None)
+        },
+    )
+    .unwrap();
+
+    let body = endpoint.received_body();
+    assert_eq!(body["top_k"], 40);
+    assert_eq!(body["min_p"], 0.05);
+    assert_eq!(body["stop"], json!(["END"]));
+}
+
+// CASE transport-engine-keys-win-over-custom: a custom key that the engine also writes does not change the engine value
+#[test]
+fn transport_engine_keys_win_over_the_custom_parameters() {
+    let endpoint = ChatCompletionsMock::start();
+    let custom = json!({
+        "model": "other-model",
+        "messages": [],
+        "stream": true,
+        "max_tokens": 1,
+        "temperature": 2.0,
+        "reasoning_effort": "low",
+    });
+    let custom = custom.as_object().unwrap();
+
+    call_chat_completions(
+        &plain(&endpoint),
+        &ChatCompletionRequest {
+            temperature: Some(0.3),
+            custom,
+            ..request("be helpful", "question", Some(ReasoningEffort::High))
+        },
+    )
+    .unwrap();
+
+    let body = endpoint.received_body();
+    assert_eq!(body["model"], "test-model");
+    assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(body["stream"], false);
+    assert_eq!(body["max_tokens"], 1024);
+    assert_eq!(body["temperature"], 0.3);
+    assert_eq!(body["reasoning_effort"], "high");
+}
+
+// CASE transport-session-id-sent: a session id goes on the wire and into the recorded request, and no session id sends no field
+#[test]
+fn transport_sends_the_session_id_only_when_it_has_one() {
+    let endpoint = ChatCompletionsMock::start();
+    let result = call_chat_completions(
+        &plain(&endpoint),
+        &ChatCompletionRequest {
+            session_id: Some("a-session"),
+            ..request("be helpful", "question", None)
+        },
+    )
+    .unwrap();
+    assert_eq!(endpoint.received_body()["session_id"], "a-session");
+    assert!(
+        result
+            .raw_request_json
+            .contains(r#""session_id":"a-session""#)
+    );
+
+    let without = ChatCompletionsMock::start();
+    call_chat_completions(&plain(&without), &request("be helpful", "question", None)).unwrap();
+    assert!(without.received_body().get("session_id").is_none());
 }

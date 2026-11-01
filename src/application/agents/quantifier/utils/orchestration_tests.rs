@@ -20,6 +20,7 @@ use crate::application::agents::quantifier::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierPromptContext,
     QuantifierReading,
 };
+use crate::domain::model::generation_parameters::CallSettings;
 
 fn recorder_with(backend: impl LlmProvider + 'static) -> Arc<LlmCallRecorder> {
     make_test_recorder(Arc::new(backend))
@@ -51,7 +52,7 @@ fn test_quantifier_retry_on_low_confidence() {
         ]);
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), &CallSettings::default());
 
     assert_eq!(result.characters.character_ids, vec!["carla".to_string()]);
     assert_eq!(result.characters.confidence, QuantifierConfidence::High);
@@ -83,7 +84,7 @@ fn test_quantifier_no_retry_when_high_confidence() {
         ]);
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), &CallSettings::default());
 
     assert_eq!(result.characters.confidence, QuantifierConfidence::High);
 }
@@ -121,7 +122,7 @@ impl LlmProvider for HighConfidenceBackend {
         _agent_name: &str,
         _system_prompt: &str,
         _user_prompt: &str,
-        _max_tokens: Option<u32>,
+        _settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         let characters_json = serde_json::to_string(&self.character_ids).unwrap_or_default();
         Ok(make_test_llm_result(&format!(
@@ -142,7 +143,7 @@ impl LlmProvider for MediumConfidenceBackend {
         _agent_name: &str,
         _system_prompt: &str,
         _user_prompt: &str,
-        _max_tokens: Option<u32>,
+        _settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         Ok(make_test_llm_result("Carla is standing in the room."))
     }
@@ -160,7 +161,7 @@ impl LlmProvider for LowConfidenceBackend {
         _agent_name: &str,
         _system_prompt: &str,
         _user_prompt: &str,
-        _max_tokens: Option<u32>,
+        _settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         Ok(make_test_llm_result(""))
     }
@@ -178,7 +179,7 @@ impl LlmProvider for ErrBackend {
         _agent_name: &str,
         _system_prompt: &str,
         _user_prompt: &str,
-        _max_tokens: Option<u32>,
+        _settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(crate::error::LlmFailure::Network {
             url: "mock".to_string(),
@@ -395,7 +396,7 @@ fn test_quantifier_retry_on_llm_error() {
             _agent_name: &str,
             _system_prompt: &str,
             _user_prompt: &str,
-            _max_tokens: Option<u32>,
+            _settings: &CallSettings,
         ) -> Result<LlmCallResult, EngineError> {
             let mut responses = self.responses.lock().unwrap();
             let text = responses.remove(0)?;
@@ -414,7 +415,7 @@ fn test_quantifier_retry_on_llm_error() {
     };
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), &CallSettings::default());
 
     assert_eq!(result.characters.character_ids, vec!["carla"]);
 }
@@ -441,7 +442,7 @@ fn test_quantifier_all_attempts_fail_fallback() {
         .with_trigger_narration_fail();
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), &CallSettings::default());
 
     assert_eq!(result.characters.confidence, QuantifierConfidence::Low);
     assert_eq!(result.movement.movement_type, None);
@@ -470,7 +471,7 @@ fn test_quantifier_low_confidence_then_error_fallback() {
         .with_trigger_narration_fail();
 
     let recorder = recorder_with(backend);
-    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), &CallSettings::default());
 
     assert_eq!(result.characters.confidence, QuantifierConfidence::Low);
 }
@@ -552,7 +553,7 @@ fn test_quantifier_routes_through_recorder_for_forensics() {
 
     let storage = Arc::new(Storage::new_in_memory());
     let recorder = make_test_recorder_with_storage(Arc::new(backend), Arc::clone(&storage));
-    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), None);
+    let result = quantify_room_with_llm_call(&context, recorder.as_ref(), &CallSettings::default());
 
     assert_eq!(result.characters.confidence, QuantifierConfidence::High);
     assert_eq!(

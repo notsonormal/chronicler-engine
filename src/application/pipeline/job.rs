@@ -21,13 +21,14 @@ use crate::application::prompting::CharacterContext;
 use crate::domain::model::agent::{AgentSettings, HookInput, Kind, AGENT_HISTORY_WINDOW};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::game::{Game, GameId};
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::generation::{
     Generation, GenerationOrder, JobPlan, JobRequest, OptionsRun, Place,
 };
 use crate::domain::model::message::SwipeAt;
-use crate::domain::model::prompt_preset::PresetType;
+use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::quantifier::QuantifierResult;
-use crate::domain::model::settings::AppSettings;
+use crate::domain::model::settings::{AppSettings, DEFAULT_MAX_TOKENS};
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
@@ -237,7 +238,7 @@ impl Job {
         let preset = Self::read(
             Record::Preset,
             self.presets
-                .for_narration(&game, order.generation.preset_type()),
+                .chosen_preset(&game, order.generation.preset_type()),
         )?;
         let bundle = self.world_bundle()?;
         let start = self.start_state(order)?;
@@ -252,7 +253,7 @@ impl Job {
             },
             STORY_LIMIT,
         )?;
-        let budget = Self::budget(&settings, &order.generation)?;
+        let budget = Self::budget(&settings, &order.generation, &preset)?;
 
         let all_characters: Vec<CharacterCard> = bundle.characters.values().cloned().collect();
         let values = NarrationValues {
@@ -270,9 +271,13 @@ impl Job {
             tail: &tail,
         };
 
-        let narrated = self
-            .narrator
-            .narrate(&order.generation, &values, &preset, budget)?;
+        let narrated = self.narrator.narrate(
+            &order.generation,
+            &values,
+            &preset,
+            budget,
+            self.writer.game(),
+        )?;
         Ok(narrated.text)
     }
 
@@ -455,14 +460,18 @@ impl Job {
         )
     }
 
-    fn budget(settings: &AppSettings, generation: &Generation) -> Result<TokenBudget, JobFailure> {
+    fn budget(
+        settings: &AppSettings,
+        generation: &Generation,
+        preset: &PromptPreset,
+    ) -> Result<TokenBudget, JobFailure> {
         let connection = Self::read(
             Record::Settings,
             settings.connection_for(generation.preset_type()),
         )?;
         Ok(TokenBudget {
             max_context_tokens: connection.resolve_max_context_tokens(),
-            max_tokens: connection.max_tokens,
+            max_tokens: Some(connection.max_tokens_for(preset.parameters.max_tokens)),
         })
     }
 
@@ -472,12 +481,21 @@ impl Job {
 
     fn hook_settings(&self, preset_type: PresetType) -> Result<AgentSettings, JobFailure> {
         let game = self.game_row()?;
+        let settings = Self::read(Record::Settings, self.storage.get_settings())?;
+        let preset = Self::read(
+            Record::Preset,
+            self.presets.chosen_preset(&game, preset_type),
+        )?;
+        // A slot that names no stored Connection has no ceiling here. The call then fails
+        // in the recorder, which names the Connection, as it did before the ceiling.
+        let max_tokens = match settings.connection_for(preset_type) {
+            Ok(connection) => connection.max_tokens_for(preset.parameters.max_tokens),
+            Err(_) => preset.parameters.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
+        };
         Ok(AgentSettings {
-            preset: Some(Self::read(
-                Record::Preset,
-                self.presets.hook_text(&game, preset_type),
-            )?),
-            max_tokens: None,
+            preset: Some(preset.assemble_text(&[], None)),
+            call: CallSettings::of(&preset.parameters, max_tokens, self.writer.game()),
+            option_count: preset.option_count,
         })
     }
 }

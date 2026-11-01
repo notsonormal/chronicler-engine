@@ -51,7 +51,7 @@
       "model": "mradermacher/gemma-4-26b-a4b-it-abliterated:iq2xs",
       "base_url": "http://localhost:11434/v1",
       "single_user_message": false,
-      "max_tokens": 8192
+      "max_tokens_ceiling": 8192
     },
     {
       "id": "ollama-gemma-4-e2b",
@@ -60,7 +60,7 @@
       "model": "huihui_ai/gemma-4-abliterated:e2b-v2",
       "base_url": "http://localhost:11434/v1",
       "single_user_message": false,
-      "max_tokens": 2048
+      "max_tokens_ceiling": 2048
     }
   ],
   "narration_connection_id": "opencode-go-deepseek-v4.1-flash",

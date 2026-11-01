@@ -28,7 +28,8 @@ impl<'a> OptionsPromptBuilder<'a> {
     }
 
     fn build_system_prompt(&self) -> String {
-        let vars = TemplateVars::from_persona(self.context.persona);
+        let vars = TemplateVars::from_persona(self.context.persona)
+            .with_option_count(self.context.option_count);
         let base = self
             .context
             .options_prompt_override

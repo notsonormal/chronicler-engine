@@ -1,7 +1,7 @@
 # Put the call parameters on the presets
 
 Type: task (AFK)
-Status: claimed
+Status: resolved
 Blocked by: 21
 
 ## Question
@@ -150,3 +150,56 @@ Connections and calls:
 ## Output
 
 Resolved when the check by hand passes (or the answer hands it to the owner) and `python build.py` passes. The answer records the CASE ids, the scenario ids and the migration step.
+
+## Answer
+
+Resolved on 2026-11-01, on the branch `pf22-call-parameters`. All 12 steps are done: the preset fields are stored, validated and sent. `python build.py --no-browser` passed here: guardrails 309, integration 1616 (3 skipped), and the Python tests. The full gate with the browser tier runs after tickets 22 and 23 merge.
+
+**The migration** is step 34 (`LATEST_VERSION` 34). It adds `parameters TEXT NOT NULL DEFAULT '{}'` and `option_count INTEGER` to `prompt_presets`, each behind `column_exists`. Its tests are `test_v34_adds_the_preset_parameters_and_option_count_and_keeps_the_rows` and `test_v34_runs_over_a_database_that_already_has_the_columns` in `plumbing_tests.rs`. Three older tests that pinned version 33 now pin 34.
+
+**The scenarios.** Scenario 24.25 is new in `docs/specs/options.md`: the Options preset sets how many Options the dock offers. Its test is `test_the_options_preset_sets_how_many_options_the_dock_offers_http` in `tests/http/options.rs`. Scenario 21.14 in `docs/specs/prompt_presets.md` has the new line "And it preserves the stored generation parameters", with one more assertion in its test.
+
+**The CASE ids** (the ticket's, and the three marked "extra"):
+
+| File | Cases |
+|---|---|
+| `request_tests.rs` | `transport-samplers-sent`, `transport-unset-samplers-omitted`, `transport-custom-parameters-sent`, `transport-engine-keys-win-over-custom`, `transport-session-id-sent` (extra) |
+| `chat_completions_tests.rs` | `chat-completions-call-settings-passed`, `chat-completions-openrouter-game-session`, `chat-completions-no-game-session-elsewhere`, `chat-completions-no-game-no-session` |
+| `narrator_tests.rs` | `narrator-sends-the-preset-parameters`, `narrator-sends-no-sampler-when-the-preset-sets-none` (extra) |
+| Quantifier `agent_tests.rs` | `quantifier-sends-the-preset-parameters` |
+| Options `agent_tests.rs` | `options-sends-the-preset-parameters`, `options-count-from-the-preset`, `options-count-default` (extra) |
+
+Domain cases, with no CASE tag: `generation_parameters_tests.rs` (7), `prompt_preset_tests.rs` (7 for `validate` and the serde defaults), `settings_tests.rs` (5 for `max_tokens_for`), `llm_backend_tests.rs` (`sends_game_session`). Other tests: three seed cases in `run_tests.rs`, two `save_preset` refusals in `prompt_preset_service_tests.rs`, and two round-trip tests in `tests/storage/preset_storage.rs` (no CASE tag, as the ticket says).
+
+**The check by hand passed.** I copied the probe DB of the main checkout (`chronicler_3001.db`, version 32) with the SQLite backup call into `target/ui-investigator-pf22/debug/chronicler_3002.db`. The server of this branch ran on port 3002, and I stopped it afterwards.
+
+- **The migration on real rows.** `user_version` went from 32 to 34. All 6 stored presets got `parameters` `{}` and `option_count` `NULL`. The `settings` table lost `response_length` and gained the two slot columns (step 33 ran in the same start).
+- **Setup.** In the copy, I put the narration and quantifier slots on the OpenRouter Connection `openrouter-gpt-4o-mini`, set its `max_tokens_ceiling` to 700, and set `system_default` to `max_tokens` 900, `temperature` 0.33, `top_p` 0.9 and `custom` `{"top_k": 17}`. I set `options_default` to `option_count` 2 and `temperature` 0.5.
+- **One Action** (`POST /action` with the Game header, Game 7, "I look around the room."). The narrator call (LLM message 634) succeeded. Its `raw_request_json` holds `max_tokens` 700 (the preset value 900, lowered to the ceiling), `temperature` 0.33, `top_p` 0.9, `top_k` 17 and `session_id` `7d30fc87-b5d6-50d4-a2a9-4e5d581dfeaf`. The Quantifier call (635) holds the same `session_id` and `max_tokens` 700 (the default 2048, lowered to the ceiling), and no sampler.
+- **One `/options`.** The call (636) succeeded with `temperature` 0.5 and the same `session_id`. Its system prompt says "2 brief distinct single-sentence suggestions". The model answered with 3 suggestions and the dock rendered 2.
+- **Elsewhere.** The calls 632 and 633 (OpenCode Go, from before the setup) hold no `session_id` and no sampler.
+- **The key.** The OpenRouter key was not in the shell. I started the built binary from a scratch folder under `tmp/` of the main checkout, so that the server loaded the `.env` above it (as ticket 21 did). The data folder was a copy of `data/` of this branch. I removed the scratch folder. No secret was read or printed.
+
+**What changed, beyond the Steps.**
+
+- `CallSettings::of(parameters, max_tokens, game)` builds the settings of a call from a preset's samplers, the resolved `max_tokens` and the Game. The Job and the Narrator use it.
+- `PromptPresetService::for_narration` became `chosen_preset` (public), and `hook_text` is deleted. The Job reads the whole preset for a hook and assembles the text itself.
+- `data/settings.json`, its schema and `scripts/trial.py` (the pack row, now `max_tokens_ceiling=`) use the new Connection key.
+- Docs: `prompt_system.md` (a section on the parameters, the ceiling, the count and the session; the History paragraph no longer names the Connection `max_tokens`), `agent_system.md`, `narration_system.md` (one sentence on the ceiling) and `architecture_system.md`.
+
+**Deviations and notes.**
+
+- **`temperature` and `top_p` are `f64`, not `f32`.** An `f32` of 0.7 writes as `0.699999988…` in JSON. Fact: `f64` writes the value the author typed.
+- **A dangling slot has no ceiling in `Job::hook_settings`.** The ticket does not say what the Job does when the Quantifier or Options slot names no stored Connection. A strict read would turn that into a settings failure of the Job. Before this ticket the failure came from the recorder, which names the Connection, and the Options run kept its own failure line. So the Job sends the preset value or the default, and the recorder still fails the call. No test covers it, because tier 1 resolves no Connection.
+- **A refused seed file also covers a bad shape.** A `parameters` value that does not parse (for example `"temperature": "hot"`), and an `option_count` that is not a whole number, are refused in the same way as a refused key: a warning that names the file, and that preset is not seeded. Each file is judged alone, so the other files still seed. Test: `test_ensure_presets_skips_a_refused_seed_file_and_seeds_the_others`.
+- **The `{{option_count}}` default case** and the "no sampler" Narrator case are not in the ticket. They pin the default of 3 and the "not set is not sent" rule at the seam.
+- **The count of `PromptPreset` literals** was 34, not 24 (`catalogue_tests.rs` and others hold some). All use `parameters: Default::default(), option_count: None`.
+- **The namespace of the session UUID** is the 16 bytes of the text `chronicler-game1`. A fixed value keeps a Game's session across restarts.
+
+**Accepted limits (from the ticket).** A changed seed file with a known preset id does not reach the stored preset (O3). A stored Connection with `max_tokens` loses it at the rename. The new preset fields and the two optional slots have no UI.
+
+**Not done, or left open.**
+
+- No UI for the parameters and the count (the map's fog item).
+- The behaviour of OpenRouter with a `top_k` that the model does not support was not studied: the check sent `top_k` 17 to `openai/gpt-4o-mini` and the call succeeded.
+

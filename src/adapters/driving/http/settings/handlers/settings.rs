@@ -131,7 +131,7 @@ impl ConnectionForm {
 
     /// The one mapping from the form to a connection, shared by add, edit and the
     /// form test. `id` is the stored connection id, or empty for testing unsaved
-    /// form values. The form does not own `max_tokens`, so it comes back `None`.
+    /// form values. The form does not own `max_tokens_ceiling`, so it comes back `None`.
     fn into_config(self, id: String) -> Result<LlmConnection, String> {
         let provider = self.resolved_provider()?;
         let max_context_tokens = self.resolved_max_context_tokens()?;
@@ -145,7 +145,7 @@ impl ConnectionForm {
             api_key: opt_string(&self.conn_api_key),
             base_url: opt_string(&self.conn_base_url),
             single_user_message: self.single_user_message,
-            max_tokens: None,
+            max_tokens_ceiling: None,
             max_context_tokens,
             reasoning_effort,
             provider_order,
@@ -255,9 +255,9 @@ pub async fn edit_connection_handler(
     let outcome = app_state
         .settings_service
         .update_connection(&id, move |connection| {
-            let max_tokens = connection.max_tokens;
+            let max_tokens_ceiling = connection.max_tokens_ceiling;
             *connection = LlmConnection {
-                max_tokens,
+                max_tokens_ceiling,
                 ..replacement
             };
         });

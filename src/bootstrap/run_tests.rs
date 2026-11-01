@@ -225,6 +225,8 @@ fn test_ensure_presets_skips_existing_preset_with_content() {
         allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     };
     storage.save_preset(&existing).unwrap();
     ensure_presets(&storage, temp_data.path()).unwrap();
@@ -260,6 +262,8 @@ fn test_ensure_presets_updates_empty_preset() {
         allowed_modes: crate::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     };
     storage.save_preset(&empty).unwrap();
     ensure_presets(&storage, temp_data.path()).unwrap();
@@ -336,7 +340,13 @@ fn test_ensure_presets_all_fields_mapped() {
         "instructions": "Test instructions",
         "writing_style": "Test style",
         "output_format": "Test format",
-        "is_default": true
+        "is_default": true,
+        "parameters": {
+            "max_tokens": 700,
+            "temperature": 0.8,
+            "top_p": 0.9,
+            "custom": {"top_k": 40}
+        }
     });
     std::fs::write(
         system_dir.join("full_preset.json"),
@@ -352,6 +362,61 @@ fn test_ensure_presets_all_fields_mapped() {
     assert_eq!(found.output_format, Some("Test format".to_string()));
     assert!(found.is_default);
     assert_eq!(found.preset_type, PresetType::System);
+    assert_eq!(found.parameters.max_tokens, Some(700));
+    assert_eq!(found.parameters.temperature, Some(0.8));
+    assert_eq!(found.parameters.top_p, Some(0.9));
+    assert_eq!(found.parameters.custom["top_k"], serde_json::json!(40));
+    assert_eq!(found.option_count, None);
+}
+#[test]
+fn test_ensure_presets_reads_the_option_count_of_an_options_preset() {
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let storage =
+        Storage::new_sqlite(crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap());
+    let options_dir = temp_data.path().join("prompt_presets").join("options");
+    std::fs::create_dir_all(&options_dir).unwrap();
+    std::fs::write(
+        options_dir.join("two.json"),
+        r#"{"id": "two_options", "name": "Two", "role": "Suggest.", "option_count": 2}"#,
+    )
+    .unwrap();
+
+    ensure_presets(&storage, temp_data.path()).unwrap();
+
+    let found = storage.get_preset("two_options").unwrap().unwrap();
+    assert_eq!(found.option_count, Some(2));
+}
+#[test]
+fn test_ensure_presets_skips_a_refused_seed_file_and_seeds_the_others() {
+    let temp_data = tempfile::TempDir::new().unwrap();
+    let storage =
+        Storage::new_sqlite(crate::adapters::driven::storage::db::DbPool::new(":memory:").unwrap());
+    let system_dir = temp_data.path().join("prompt_presets").join("system");
+    std::fs::create_dir_all(&system_dir).unwrap();
+    for (file, body) in [
+        (
+            "a_bad_model.json",
+            r#"{"id": "bad_model", "name": "Bad", "parameters": {"custom": {"model": "x"}}}"#,
+        ),
+        (
+            "b_bad_count.json",
+            r#"{"id": "bad_count", "name": "Bad count", "option_count": 3}"#,
+        ),
+        (
+            "c_bad_shape.json",
+            r#"{"id": "bad_shape", "name": "Bad shape", "parameters": {"temperature": "hot"}}"#,
+        ),
+        ("d_good.json", r#"{"id": "good", "name": "Good"}"#),
+    ] {
+        std::fs::write(system_dir.join(file), body).unwrap();
+    }
+
+    ensure_presets(&storage, temp_data.path()).unwrap();
+
+    assert!(storage.get_preset("bad_model").unwrap().is_none());
+    assert!(storage.get_preset("bad_count").unwrap().is_none());
+    assert!(storage.get_preset("bad_shape").unwrap().is_none());
+    assert!(storage.get_preset("good").unwrap().is_some());
 }
 #[test]
 fn test_ensure_presets_both_types() {
@@ -528,6 +593,8 @@ fn test_ensure_presets_refresh_preserves_existing_flags() {
         allowed_modes: vec![NarratorMode::Novel],
         is_default: true,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     };
     storage.save_preset(&existing).unwrap();
 

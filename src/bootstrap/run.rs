@@ -207,6 +207,33 @@ fn process_preset_file(
         }
     };
 
+    let parameters = match seed.get("parameters") {
+        None | Some(serde_json::Value::Null) => Default::default(),
+        Some(value) => match serde_json::from_value(value.clone()) {
+            Ok(parameters) => parameters,
+            Err(e) => {
+                tracing::warn!(
+                    "Skipping prompt preset seed {}: invalid parameters: {e}",
+                    path.display()
+                );
+                return Ok(());
+            }
+        },
+    };
+    let option_count = match seed.get("option_count") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(value) => match value.as_u64().and_then(|count| u32::try_from(count).ok()) {
+            Some(count) => Some(count),
+            None => {
+                tracing::warn!(
+                    "Skipping prompt preset seed {}: option_count must be a whole number",
+                    path.display()
+                );
+                return Ok(());
+            }
+        },
+    };
+
     let id = seed["id"].as_str().unwrap_or("default").to_string();
     let preset = PromptPreset {
         id: id.clone(),
@@ -221,7 +248,13 @@ fn process_preset_file(
             .and_then(|v| v.as_bool())
             .unwrap_or(true),
         preset_type,
+        parameters,
+        option_count,
     };
+    if let Err(refusal) = preset.validate() {
+        tracing::warn!("Skipping prompt preset seed {}: {refusal}", path.display());
+        return Ok(());
+    }
 
     if existing_ids.contains(&id) {
         if let Ok(Some(existing)) = storage.get_preset(&id) {

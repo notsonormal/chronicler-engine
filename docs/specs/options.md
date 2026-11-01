@@ -40,6 +40,17 @@ When the client POST /status/reset-busy
 Then the dock renders set A
 ```
 
+#### Scenario 24.25: The Options preset sets how many Options the dock offers
+
+```gherkin
+Given a game with scene history whose Options preset offers 2 Options
+And an options agent whose response holds 4 suggestions
+When the client POST /action with command="/options"
+And the Game is no longer busy
+Then the offered set holds the first 2 suggestions
+And the dock renders those 2 options
+```
+
 ### Using the offered set
 
 #### Scenario 24.4: New Options replace the set and add no history entries

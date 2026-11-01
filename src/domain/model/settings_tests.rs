@@ -6,8 +6,8 @@ use crate::domain::model::llm_backend::LlmBackendType;
 use crate::test_support::test_connection;
 use crate::domain::model::prompt_preset::PresetType;
 use crate::domain::model::settings::{
-    AppSettings, LlmConnection, ModePresetRegistry, NarrativePerspective, NarrativeTense,
-    NarratorMode, ReasoningEffort, TextCheckMode, TextCheckSettings,
+    DEFAULT_MAX_TOKENS, AppSettings, LlmConnection, ModePresetRegistry, NarrativePerspective,
+    NarrativeTense, NarratorMode, ReasoningEffort, TextCheckMode, TextCheckSettings,
 };
 
 #[test]
@@ -812,7 +812,7 @@ fn settings_stored_with_every_connection_key_still_load() {
             "api_key": "a-key",
             "base_url": "http://localhost:11434/v1",
             "single_user_message": true,
-            "max_tokens": 512,
+            "max_tokens_ceiling": 512,
             "max_context_tokens": 8192,
             "reasoning_effort": "low"
         }],
@@ -833,7 +833,7 @@ fn settings_stored_with_every_connection_key_still_load() {
         Some("http://localhost:11434/v1")
     );
     assert!(connection.single_user_message);
-    assert_eq!(connection.max_tokens, Some(512));
+    assert_eq!(connection.max_tokens_ceiling, Some(512));
     assert_eq!(connection.max_context_tokens, Some(8192));
     assert_eq!(connection.reasoning_effort, Some(ReasoningEffort::Low));
     let rewritten = serde_json::to_value(&settings).expect("serialize");
@@ -842,4 +842,48 @@ fn settings_stored_with_every_connection_key_still_load() {
         "http://localhost:11434/v1"
     );
     assert_eq!(rewritten["connections"][0]["api_key"], "a-key");
+}
+
+fn connection_with_ceiling(ceiling: Option<u32>) -> LlmConnection {
+    LlmConnection {
+        max_tokens_ceiling: ceiling,
+        ..LlmConnection::new("c", "C", LlmBackendType::Ollama)
+    }
+}
+
+#[test]
+fn max_tokens_for_uses_the_preset_value_below_the_ceiling() {
+    assert_eq!(
+        connection_with_ceiling(Some(4096)).max_tokens_for(Some(900)),
+        900
+    );
+}
+
+#[test]
+fn max_tokens_for_lowers_a_preset_value_above_the_ceiling() {
+    assert_eq!(
+        connection_with_ceiling(Some(512)).max_tokens_for(Some(900)),
+        512
+    );
+}
+
+#[test]
+fn max_tokens_for_uses_the_default_when_the_preset_sets_none() {
+    assert_eq!(
+        connection_with_ceiling(Some(4096)).max_tokens_for(None),
+        DEFAULT_MAX_TOKENS
+    );
+}
+
+#[test]
+fn max_tokens_for_lowers_the_default_to_a_small_ceiling() {
+    assert_eq!(connection_with_ceiling(Some(100)).max_tokens_for(None), 100);
+}
+
+#[test]
+fn max_tokens_for_without_a_ceiling_sends_the_preset_value_or_the_default() {
+    let connection = connection_with_ceiling(None);
+
+    assert_eq!(connection.max_tokens_for(Some(9000)), 9000);
+    assert_eq!(connection.max_tokens_for(None), DEFAULT_MAX_TOKENS);
 }

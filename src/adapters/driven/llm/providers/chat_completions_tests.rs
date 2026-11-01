@@ -4,6 +4,8 @@
 
 use crate::adapters::driven::llm::providers::chat_completions::ChatCompletionsBackend;
 use crate::application::ports::llm_provider::LlmProvider;
+use crate::domain::model::game::GameId;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{LlmConnection, ReasoningEffort};
 use crate::error::{EngineError, LlmFailure};
@@ -44,7 +46,7 @@ fn chat_completions_complete_answers_with_the_completion_and_its_names() {
     ));
 
     let result = backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     assert_eq!(result.text, STUB_ANSWER);
@@ -65,7 +67,7 @@ fn chat_completions_complete_names_ollama_for_an_ollama_connection() {
     ));
 
     let result = backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     assert_eq!(result.backend_name, "Ollama");
@@ -82,7 +84,7 @@ fn chat_completions_openrouter_sends_the_key_and_the_app_title() {
     ));
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     let headers = endpoint.received_headers();
@@ -107,7 +109,7 @@ fn chat_completions_ollama_sends_no_key_and_no_app_title() {
     ));
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     let headers = endpoint.received_headers();
@@ -125,7 +127,7 @@ fn chat_completions_complete_sends_the_reasoning_effort_of_the_connection() {
     });
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     assert_eq!(endpoint.received_body()["reasoning_effort"], "low");
@@ -142,7 +144,12 @@ fn chat_completions_single_user_message_sends_no_system_message() {
         });
 
         backend
-            .complete("narrator", "system rules", "user text", None)
+            .complete(
+                "narrator",
+                "system rules",
+                "user text",
+                &CallSettings::default(),
+            )
             .unwrap();
 
         let body = endpoint.received_body();
@@ -167,7 +174,12 @@ fn chat_completions_ollama_closes_the_thinking_channel_of_a_gemma4_model() {
     ));
 
     backend
-        .complete("narrator", "system", "User prompt", None)
+        .complete(
+            "narrator",
+            "system",
+            "User prompt",
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(
@@ -187,7 +199,12 @@ fn chat_completions_ollama_sends_the_user_text_of_another_model_unchanged() {
     ));
 
     backend
-        .complete("narrator", "system", "User prompt", None)
+        .complete(
+            "narrator",
+            "system",
+            "User prompt",
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(sent_user_content(&endpoint), "User prompt");
@@ -204,7 +221,12 @@ fn chat_completions_gemma4_marker_is_for_ollama_only() {
     ));
 
     backend
-        .complete("narrator", "system", "User prompt", None)
+        .complete(
+            "narrator",
+            "system",
+            "User prompt",
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(sent_user_content(&endpoint), "User prompt");
@@ -220,7 +242,7 @@ fn chat_completions_opencode_go_sends_the_connection_id_as_the_session() {
     });
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     let headers = endpoint.received_headers();
@@ -245,7 +267,7 @@ fn chat_completions_openrouter_sends_no_session_header() {
     ));
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     assert!(
@@ -265,7 +287,7 @@ fn chat_completions_opencode_go_names_the_session_of_an_unsaved_connection() {
     });
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     assert_eq!(
@@ -290,7 +312,7 @@ fn chat_completions_empty_answer_names_its_finish_reason() {
     ));
 
     let failure = backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .expect_err("an empty content is a failure, never an answer");
 
     assert!(
@@ -338,7 +360,7 @@ fn chat_completions_openrouter_sends_the_provider_order() {
     ));
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     assert_eq!(
@@ -359,7 +381,7 @@ fn chat_completions_pinned_provider_order_allows_no_fallbacks() {
     ));
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     assert_eq!(
@@ -380,7 +402,7 @@ fn chat_completions_without_a_provider_order_sends_no_provider_field() {
     ));
 
     backend
-        .complete("narrator", "system", "user", None)
+        .complete("narrator", "system", "user", &CallSettings::default())
         .unwrap();
 
     assert!(endpoint.received_body().get("provider").is_none());
@@ -399,7 +421,7 @@ fn chat_completions_provider_order_is_for_openrouter_only() {
         ));
 
         backend
-            .complete("narrator", "system", "user", None)
+            .complete("narrator", "system", "user", &CallSettings::default())
             .unwrap();
 
         assert!(
@@ -407,4 +429,94 @@ fn chat_completions_provider_order_is_for_openrouter_only() {
             "{provider:?}"
         );
     }
+}
+
+// CASE chat-completions-call-settings-passed: the call settings go on the wire: the response length, the samplers and the custom keys.
+#[test]
+fn chat_completions_complete_sends_the_call_settings() {
+    let endpoint = ChatCompletionsMock::start();
+    let backend = ChatCompletionsBackend::from_config(&connection_to(
+        &endpoint,
+        LlmBackendType::Ollama,
+        "llama3",
+    ));
+    let settings = CallSettings {
+        max_tokens: Some(321),
+        temperature: Some(0.6),
+        top_p: Some(0.8),
+        custom: serde_json::json!({"top_k": 40})
+            .as_object()
+            .unwrap()
+            .clone(),
+        game: None,
+    };
+
+    backend
+        .complete("narrator", "system", "user", &settings)
+        .unwrap();
+
+    let body = endpoint.received_body();
+    assert_eq!(body["max_tokens"], 321);
+    assert_eq!(body["temperature"], 0.6);
+    assert_eq!(body["top_p"], 0.8);
+    assert_eq!(body["top_k"], 40);
+}
+
+fn settings_of_game(game: Option<u64>) -> CallSettings {
+    CallSettings {
+        game: game.map(GameId),
+        ..CallSettings::default()
+    }
+}
+
+fn session_id_sent(provider: LlmBackendType, settings: &CallSettings) -> Option<String> {
+    let endpoint = ChatCompletionsMock::start();
+    let backend =
+        ChatCompletionsBackend::from_config(&connection_to(&endpoint, provider, "a-model"));
+
+    backend
+        .complete("narrator", "system", "user", settings)
+        .unwrap();
+
+    endpoint.received_body()["session_id"]
+        .as_str()
+        .map(str::to_string)
+}
+
+// CASE chat-completions-openrouter-game-session: an OpenRouter call sends a session id that is the same for every call of one Game and differs between Games
+#[test]
+fn chat_completions_openrouter_sends_one_session_id_for_each_game() {
+    let first = session_id_sent(LlmBackendType::OpenRouter, &settings_of_game(Some(1)));
+    let again = session_id_sent(LlmBackendType::OpenRouter, &settings_of_game(Some(1)));
+    let other = session_id_sent(LlmBackendType::OpenRouter, &settings_of_game(Some(2)));
+
+    let first = first.expect("an OpenRouter call with a Game sends a session id");
+    assert_eq!(
+        Some(first.clone()),
+        again,
+        "the same Game, the same session"
+    );
+    assert_ne!(Some(first), other, "another Game, another session");
+    assert!(other.is_some());
+}
+
+// CASE chat-completions-no-game-session-elsewhere: an Ollama call and an OpenCode Go call send no session id in the body
+#[test]
+fn chat_completions_other_providers_send_no_session_id() {
+    for provider in [LlmBackendType::Ollama, LlmBackendType::OpenCodeGo] {
+        assert_eq!(
+            session_id_sent(provider, &settings_of_game(Some(1))),
+            None,
+            "{provider:?}"
+        );
+    }
+}
+
+// CASE chat-completions-no-game-no-session: an OpenRouter call with no Game sends no session id
+#[test]
+fn chat_completions_openrouter_call_without_a_game_sends_no_session_id() {
+    assert_eq!(
+        session_id_sent(LlmBackendType::OpenRouter, &settings_of_game(None)),
+        None
+    );
 }

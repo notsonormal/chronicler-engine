@@ -205,3 +205,90 @@ fn preset_type_marks_options_as_mode_agnostic() {
     assert!(PresetType::Impersonate.is_mode_tagged());
     assert!(!PresetType::Options.is_mode_tagged());
 }
+
+fn options_preset() -> PromptPreset {
+    PromptPreset {
+        id: "options-preset".into(),
+        preset_type: PresetType::Options,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn validate_accepts_a_preset_with_no_parameters() {
+    assert!(PromptPreset::default().validate().is_ok());
+}
+
+#[test]
+fn validate_accepts_samplers_and_a_free_object_with_other_keys() {
+    let mut preset = PromptPreset::default();
+    preset.parameters.temperature = Some(0.9);
+    preset.parameters.top_p = Some(0.95);
+    preset.parameters.max_tokens = Some(600);
+    preset
+        .parameters
+        .custom
+        .insert("top_k".into(), serde_json::json!(40));
+
+    assert!(preset.validate().is_ok());
+}
+
+#[test]
+fn validate_refuses_each_engine_key_in_the_free_object_and_names_it() {
+    for key in ["model", "messages", "stream", "max_tokens"] {
+        let mut preset = PromptPreset {
+            id: "bad".into(),
+            ..Default::default()
+        };
+        preset
+            .parameters
+            .custom
+            .insert(key.into(), serde_json::json!(1));
+
+        let error = preset.validate().unwrap_err().to_string();
+
+        assert!(error.contains(&format!("`{key}`")), "{error}");
+    }
+}
+
+#[test]
+fn validate_accepts_an_option_count_on_an_options_preset() {
+    let mut preset = options_preset();
+    preset.option_count = Some(5);
+
+    assert!(preset.validate().is_ok());
+}
+
+#[test]
+fn validate_refuses_an_option_count_of_zero() {
+    let mut preset = options_preset();
+    preset.option_count = Some(0);
+
+    assert!(preset.validate().is_err());
+}
+
+#[test]
+fn validate_refuses_an_option_count_on_a_preset_that_is_not_an_options_preset() {
+    for preset_type in [
+        PresetType::System,
+        PresetType::Quantifier,
+        PresetType::Impersonate,
+    ] {
+        let preset = PromptPreset {
+            preset_type,
+            option_count: Some(2),
+            ..Default::default()
+        };
+
+        assert!(preset.validate().is_err(), "{preset_type:?}");
+    }
+}
+
+#[test]
+fn serde_missing_parameters_and_option_count_default_to_unset() {
+    let json = r#"{"id":"p","name":"P","is_default":false,"preset_type":"Options"}"#;
+    let preset: PromptPreset = serde_json::from_str(json).unwrap();
+
+    assert_eq!(preset.parameters, Default::default());
+    assert_eq!(preset.option_count, None);
+}

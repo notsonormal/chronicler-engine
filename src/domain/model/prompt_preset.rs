@@ -3,10 +3,12 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::model::generation_parameters::GenerationParameters;
 use crate::domain::model::settings::NarratorMode;
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::utils::settings_defaults;
 use crate::domain::model::utils::xml::wrap_xml;
+use crate::error::EngineError;
 
 /// [TRIVIAL_ENUM]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +74,11 @@ pub struct PromptPreset {
     pub allowed_modes: Vec<NarratorMode>,
     pub is_default: bool,
     pub preset_type: PresetType,
+    #[serde(default)]
+    pub parameters: GenerationParameters,
+    /// How many Options the dock offers. Only an Options preset sets it.
+    #[serde(default)]
+    pub option_count: Option<u32>,
 }
 
 impl Default for PromptPreset {
@@ -86,11 +93,37 @@ impl Default for PromptPreset {
             allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type: PresetType::default(),
+            parameters: GenerationParameters::default(),
+            option_count: None,
         }
     }
 }
 
 impl PromptPreset {
+    /// The rules a stored preset keeps: the free object does not hold a key the
+    /// engine owns, and the Options count is at least 1 and only on an Options preset.
+    pub fn validate(&self) -> Result<(), EngineError> {
+        if let Some(key) = self.parameters.refused_custom_key() {
+            return Err(EngineError::Validation(format!(
+                "Preset '{}' cannot set `{key}` in its custom parameters: the engine sets it",
+                self.id
+            )));
+        }
+        match self.option_count {
+            Some(0) => Err(EngineError::Validation(format!(
+                "Preset '{}' cannot offer 0 Options",
+                self.id
+            ))),
+            Some(_) if self.preset_type != PresetType::Options => {
+                Err(EngineError::Validation(format!(
+                    "Preset '{}' is not an Options preset and cannot set an Options count",
+                    self.id
+                )))
+            }
+            _ => Ok(()),
+        }
+    }
+
     /// Whether this preset may be selected for `mode`.
     pub fn allows(&self, mode: NarratorMode) -> bool {
         self.allowed_modes.contains(&mode)

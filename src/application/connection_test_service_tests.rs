@@ -14,6 +14,7 @@ use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::error::{EngineError, LlmFailure};
 use crate::test_support::test_connection;
+use crate::domain::model::generation_parameters::CallSettings;
 
 fn mock_connection(id: &str, model: &str) -> LlmConnection {
     LlmConnection {
@@ -48,7 +49,7 @@ impl LlmProvider for SpentBudgetProvider {
         _agent_name: &str,
         _system_prompt: &str,
         _user_prompt: &str,
-        _max_tokens: Option<u32>,
+        _settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         Err(EngineError::Llm(LlmFailure::TokenBudgetSpent {
             raw_response: "{}".to_string(),

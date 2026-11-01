@@ -2,6 +2,7 @@
 //! LLM provider port (transport-only)
 
 use crate::domain::model::agent::Role;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::llm_message::LlmMessage;
 use crate::error::EngineError;
 
@@ -49,6 +50,6 @@ pub trait LlmProvider: Send + Sync {
         agent_name: &str,
         system_prompt: &str,
         user_prompt: &str,
-        max_tokens: Option<u32>,
+        settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError>;
 }

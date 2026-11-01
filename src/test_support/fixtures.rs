@@ -235,6 +235,8 @@ impl TestPromptPreset {
             allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type: PresetType::System,
+            parameters: Default::default(),
+            option_count: None,
         }
     }
 
@@ -249,6 +251,8 @@ impl TestPromptPreset {
             allowed_modes: vec![NarratorMode::Novel],
             is_default: true,
             preset_type: PresetType::System,
+            parameters: Default::default(),
+            option_count: None,
         }
     }
 
@@ -273,6 +277,8 @@ impl TestPromptPreset {
             allowed_modes: settings_defaults::default_allowed_modes(),
             is_default: false,
             preset_type: PresetType::Options,
+            parameters: Default::default(),
+            option_count: None,
         }
     }
 }

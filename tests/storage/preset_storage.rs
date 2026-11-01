@@ -27,6 +27,8 @@ fn make_system_preset(id: &str, name: &str) -> PromptPreset {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     }
 }
 
@@ -42,6 +44,8 @@ fn make_quantifier_preset(id: &str, name: &str) -> PromptPreset {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::Quantifier,
+        parameters: Default::default(),
+        option_count: None,
     }
 }
 
@@ -219,6 +223,8 @@ fn test_get_preset_returns_all_fields() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: true,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     };
     storage.save_preset(&preset).unwrap();
 
@@ -419,6 +425,8 @@ fn test_preset_with_empty_optional_fields() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     };
 
     storage.save_preset(&preset).unwrap();
@@ -444,6 +452,8 @@ fn test_preset_with_unicode_content() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::Quantifier,
+        parameters: Default::default(),
+        option_count: None,
     };
 
     storage.save_preset(&preset).unwrap();
@@ -467,6 +477,8 @@ fn test_preset_with_special_characters() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     };
 
     storage.save_preset(&preset).unwrap();
@@ -491,6 +503,8 @@ fn test_preset_with_long_content() {
             chronicler_engine::domain::model::utils::settings_defaults::default_allowed_modes(),
         is_default: false,
         preset_type: PresetType::System,
+        parameters: Default::default(),
+        option_count: None,
     };
 
     storage.save_preset(&preset).unwrap();
@@ -698,4 +712,42 @@ fn test_count_games_using_preset_counts_each_game_once() {
         storage.count_games_using_preset("nobody_uses_it").unwrap(),
         0
     );
+}
+
+#[test]
+fn test_save_preset_roundtrips_the_generation_parameters_and_the_option_count() {
+    let storage = create_storage();
+    let mut preset = make_system_preset("tuned", "Tuned");
+    preset.preset_type = PresetType::Options;
+    preset.option_count = Some(5);
+    preset.parameters.max_tokens = Some(700);
+    preset.parameters.temperature = Some(0.85);
+    preset.parameters.top_p = Some(0.9);
+    preset
+        .parameters
+        .custom
+        .insert("top_k".to_string(), serde_json::json!(40));
+
+    storage.save_preset(&preset).unwrap();
+
+    let loaded = storage.get_preset("tuned").unwrap().unwrap();
+    assert_eq!(loaded.parameters, preset.parameters);
+    assert_eq!(loaded.option_count, Some(5));
+    let listed = storage.list_presets(PresetType::Options).unwrap();
+    assert_eq!(listed[0].parameters, preset.parameters);
+    assert_eq!(listed[0].option_count, Some(5));
+}
+
+#[test]
+fn test_save_preset_overwrites_the_parameters_of_a_stored_preset() {
+    let storage = create_storage();
+    let mut preset = make_system_preset("tuned", "Tuned");
+    preset.parameters.temperature = Some(0.2);
+    storage.save_preset(&preset).unwrap();
+
+    preset.parameters.temperature = None;
+    storage.save_preset(&preset).unwrap();
+
+    let loaded = storage.get_preset("tuned").unwrap().unwrap();
+    assert_eq!(loaded.parameters.temperature, None);
 }

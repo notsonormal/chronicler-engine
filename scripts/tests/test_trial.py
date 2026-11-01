@@ -61,7 +61,7 @@ CONNECTIONS = [
         "provider": "OpenCodeGo",
         "model": "deepseek-v4.1-flash",
         "reasoning_effort": "none",
-        "max_tokens": 4096,
+        "max_tokens_ceiling": 4096,
     },
     {"id": "conn-other", "provider": "OpenRouter", "model": "deepseek/deepseek-v4-flash"},
 ]

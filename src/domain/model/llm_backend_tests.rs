@@ -142,3 +142,11 @@ fn test_only_openrouter_supports_routing() {
     assert!(!LlmBackendType::OpenCodeGo.supports_routing());
     assert!(!LlmBackendType::Mock.supports_routing());
 }
+
+#[test]
+fn test_only_openrouter_sends_the_game_session() {
+    assert!(LlmBackendType::OpenRouter.sends_game_session());
+    assert!(!LlmBackendType::Ollama.sends_game_session());
+    assert!(!LlmBackendType::OpenCodeGo.sends_game_session());
+    assert!(!LlmBackendType::Mock.sends_game_session());
+}

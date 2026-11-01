@@ -12,6 +12,7 @@ use std::time::Instant;
 use crate::application::errors::ApplicationError;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::application::settings_service::SettingsService;
+use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::settings::LlmConnection;
 use crate::error::{EngineError, LlmFailure};
 
@@ -68,7 +69,10 @@ impl ConnectionTestService {
             TEST_AGENT_NAME,
             TEST_SYSTEM_PROMPT,
             TEST_USER_PROMPT,
-            Some(TEST_MAX_TOKENS),
+            &CallSettings {
+                max_tokens: Some(TEST_MAX_TOKENS),
+                ..CallSettings::default()
+            },
         ) {
             Ok(result) => (result.backend_name, result.model_name),
             // The probe's budget is tiny, so a reasoning model can spend it all before

@@ -40,7 +40,7 @@ Each part owns one thing and writes only what its row names.
 | `AutoplayRun` (`autoplay/driver.rs`) | One Autoplay run: its budget, its cycles and its cycle rule | Its holder and its progress only, through `GameWriter`. Its Jobs write through their own `JobWriter`. |
 | `GameCatalogue` | The lifecycle of Games, and `ActiveGame` | `ActiveGame`, and the display name of the Game record. The config columns, create, reset and delete go through `GameWriter`. |
 | `GameViewQuery` | The read-side views, the status rule, and the read of the change counters for `GET /changes` | Nothing |
-| `PromptPresetService` | The preset a Game uses for the Narrator and for each hook, and the rules of a preset edit and a preset delete | Preset rows, through `Storage` |
+| `PromptPresetService` | The preset a Game uses for the Narrator and for each hook, and the rules of a preset save, edit and delete. A save refuses a key that the engine owns in the parameters | Preset rows, through `Storage` |
 | `Storage` | The records on disk, the backend mutex, the change counters, and the read handles `stories()` and `docks()` | Its own tables. It writes a Game's story records only inside a `Tx`. It raises a change counter after a successful call or commit. |
 | `LlmCallRecorder` | The LLM message of each LLM call | `llm_messages` rows, through `SaveLlmMessageFn` |
 | HTTP handlers | Request parsing and response rendering | Nothing. They call `Job::start`, `AutoplayRun::start`, `GameWriter`, the catalogues and `PromptPresetService`. |
