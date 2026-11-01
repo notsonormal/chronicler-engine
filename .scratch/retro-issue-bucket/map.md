@@ -17,7 +17,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **Evidence is re-checked, not trusted.** A finding is a hypothesis, and the tree moves. Re-check the cited `file:line` before deciding.
 - **Concurrency.** Other efforts edit this checkout at the same time. The user decides the scope of each commit.
 - **Skills.** `/grilling` and `/domain-modeling` for every ticket. `/writing-for-agents` for any skill or `AGENTS.md` edit. `/code-review` for an implementation ticket.
-- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 97.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
+- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 98.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
 - **Audit.** [`audit.md`](./audit.md) (2026-10-25) sorts the open tickets by whether the fix changes what the next agent does.
 
 ## Decisions so far
@@ -134,3 +134,7 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 - [88 — Grilling questions use review IDs and rest on facts nobody checked](./issues/88-grilling-questions-unreadable-and-unchecked.md)
 - [90 — `pkill -f` kills the shell that runs it](./issues/90-pkill-f-kills-its-own-shell.md)
 - [94 — The full gate regenerates the two generated docs instead of failing on them](./issues/94-gate-regenerates-the-two-generated-docs.md) (implementation of 89; not grilling)
+- [95 — A ticket's doc step dictates sentences that break the doc rules](./issues/95-ticket-doc-steps-break-the-doc-rules.md)
+- [96 — The comment finder's branch mode lists every comment of a changed file](./issues/96-comment-finder-branch-mode-scope.md)
+- [97 — A probe server in a worktree has no API keys](./issues/97-worktree-probe-server-has-no-api-keys.md)
+- [98 — New tests land in legacy-list files, and no check stops them](./issues/98-new-tests-in-legacy-files.md)

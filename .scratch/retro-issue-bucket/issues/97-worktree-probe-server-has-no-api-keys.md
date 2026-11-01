@@ -17,6 +17,12 @@ Source: the coordinator session of 2026-11-01 for prompt-flexibility tickets 20 
 - The coordinator brief caused part of this: it said "the main checkout's .env may hold them".
 - `ENVIRONMENT.md` and `.agents/skills/chronicler-ui-investigator/SKILL.md` say how to start a probe server, but not where its keys come from in a worktree.
 
+
+New evidence, 2026-11-01 (ticket 22, implementer session `bc5215d2`):
+
+- The implementer hit the same deny rule and used the same route: it started the worktree binary from a folder under the main checkout, so the server loaded the main `.env`.
+- The coordinator brief pointed it there: "Where API keys come from: see the Answers of tickets 18 to 21". Those Answers describe the cwd route. So the route now spreads through ticket Answers.
+
 ## Options to decide
 
 - **A.** `build.py run` takes the main checkout's `.env` when the worktree has none (the server reads it, the agent does not).

@@ -18,6 +18,13 @@ Source: the coordinator session of 2026-11-01 that ran `/simple-after-plan` on p
 - The coordinator kept only the hunks on lines that the tickets added (45 lines in 9 files). The full patch is `tmp/pf2021/comment-pass-full.patch`. The split took a blame script and one manual review.
 - One rewrite repeated a false claim ("it holds still between two calls of one kind") that the doc review had just removed from the docs.
 
+
+New evidence, 2026-11-01 (tickets 22 and 23, comment-fixer session `97d1ef00`, implementer, deepseek-v4.1-flash):
+
+- The brief told the fixer to change only comments on lines that the range wrote, and it did. So the scope fault did not appear.
+- It still deleted 4 doc comments that carried a rule the code at that place does not show. One was the doc comment that ticket 23 Step 3 asked for ("a failed Agent is logged, and the Job continues with the Room and the Characters present"). Its reason: "both arms of the body show it". The others were the meaning of `keeping_present`, "Only an Options preset sets it" on `option_count`, and the difference between the two `max_tokens` fields. The coordinator restored all 4.
+- So limiting the scope is not enough. The test "fails part 2: the body carries it" removes a doc comment that states a rule to callers, who do not read the body.
+
 ## Options to decide
 
 - **A.** A `--changed-lines` filter: the finder reads `git diff -U0` and keeps only comments inside the added hunks. `/simple-after-plan` step 1 names this mode.

@@ -24,6 +24,13 @@ New evidence, 2026-11-01 (tickets 20 and 21, doc-review session `adb40d4d`):
 - The ticket 20 doc step asked for a reason about a later memory. The implementer saw that the doc rules forbid it and wrote a substitute reason, which the review then removed.
 - The Standards and Spec reviews again found none of these faults.
 
+
+New evidence, 2026-11-01 (tickets 22 and 23, doc-review session `7d165829`):
+
+- The doc review found 3 errors and 6 warnings. Two faults came from ticket text again. The ticket 22 Decision "A value that is not set is not sent" became a doc sentence, and it is false for `max_tokens`: an unset value sends `DEFAULT_MAX_TOKENS`. The ticket 23 doc step "Every state writer follows this rule" was copied as given, and "state writer" is not a glossary term.
+- The implementer of ticket 22 also wrote that the preset service checks a seed file. The seed calls `PromptPreset::validate` directly.
+- The Standards and Spec reviews ran after the doc fixes, so they did not show whether they would catch these faults.
+
 ## Options to decide
 
 - **A.** The build-plan ticket names the facts that become true or false, not the sentences. The implementer writes the sentences under `docs/AGENTS.md`.
