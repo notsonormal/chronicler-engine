@@ -1,7 +1,7 @@
 # Remove the data conflicts that distort a trial
 
 Type: task (HITL)
-Status: open
+Status: claimed
 Blocked by: 13
 
 ## Question
@@ -21,5 +21,20 @@ Which contradictions and missing facts in the data of the test setup make the st
 - Not in this ticket: the faults that come from the history cut, the story clock and who knows what (Long-term memory and state), the attention of the model, and the role breaches ([Try the history as chat messages](07-history-as-chat-messages.md)).
 - Open, for the answer: does the wrong Room for places off the estate (the map has 10 Rooms, all on the estate) count as a data conflict to fix here, or is it an engine question? See the asset.
 - [Sort the inconsistencies by their cause](13-sort-inconsistencies-by-cause.md) runs first and adds each data cause it finds to this ticket. [Stop the role breaches with stop sequences](14-stop-role-breaches.md) waits for this ticket, so its trial plays the fixed data.
+
+- Scan done (2026-11-02): [the data conflicts of the test setup](../assets/data-conflict-scan.md). The short entry is the `summary` field. The probe DB keeps its own copy of the World, the map and the cards, so each change must also update those rows. The owner's decisions on the findings are pending.
+
+## Progress (2026-11-02)
+
+The owner decided the rows of the scan. The changes are in the JSON files and in the probe DB rows (checked equal to the JSON after the update). `validate-data` passes.
+
+- Row 1, the era: `world.json` `description` now says "The story takes place in the present day." The owner put it in the description, not in a global rule. No currency is named.
+- Rows 2 and 3: the summaries of Louise and Lisette start with "Louise Petit" and "Lisette Franklin".
+- Row 4: Jezebel's summary adds "Born into a wealthy family of financiers."
+- Row 6: Jezebel's example dialogue no longer says "immediate family" ("he didn't trust anyone else with his wealth").
+- Row 7: `julian.json` `scenario` says "in a city far from Islaport".
+- Row 9: `master_quarters` says "The master's luxurious bedroom."
+- Row 5 (Louise naive or worldly): left for now by the owner. Row 8 (Bernard's trade): left as it is. Row 10 (places off the estate): waits for ticket 13.
+- Still open: row 5, row 10, and the data causes that ticket 13 adds. Restart the probe server before the next trial, in case it holds the old World in memory (guessed).
 
 Done when each known fault and each conflict from the scan is fixed or ruled out by the owner, the probe DB holds the fixed data, `scripts/validate_data.py` passes, and the answer lists each change.

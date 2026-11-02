@@ -1,7 +1,7 @@
 {
     "id": "redmist_estate",
     "name": "Redmist Estate",
-    "description": "The Redmist Estate stands in Islaport, a large coastal city on the eastern seaboard. Built in the colonial era, the estate encompasses a grand mansion, formal gardens, and several outbuildings. For generations the Redmist family wielded influence as surgeons and physicians. Bernard Redmist, the recently deceased patriarch, was renowned for his charitable work — and for the shocking will that left his fortune to an unknown grandson.",
+    "description": "The Redmist Estate stands in Islaport, a large coastal city on the eastern seaboard. The story takes place in the present day. Built in the colonial era, the estate encompasses a grand mansion, formal gardens, and several outbuildings. For generations the Redmist family wielded influence as surgeons and physicians. Bernard Redmist, the recently deceased patriarch, was renowned for his charitable work — and for the shocking will that left his fortune to an unknown grandson.",
     "global_rules": [
         "Bernard Redmist died two weeks ago. His will left nearly his entire fortune to Julian Redmist, a grandson he never knew, bypassing his widow Gabriella.",
         "Gabriella Redmist, Bernard's 31-year-old widow, still resides in the estate's guest wing. Staff consider her arrogant, demanding, and manipulative.",

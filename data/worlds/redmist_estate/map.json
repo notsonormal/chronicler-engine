@@ -55,7 +55,7 @@
                     {
                         "id": "master_quarters",
                         "name": "Master Quarters",
-                        "description": "Your luxurious bedroom. A massive bed sits in the center overlooking the estate gardens through tall windows.",
+                        "description": "The master's luxurious bedroom. A massive bed sits in the center overlooking the estate gardens through tall windows.",
                         "exits": { "south": "library" },
                         "navigation_description": "You can go south to return to the library.",
                         "items": [],
