@@ -232,9 +232,9 @@ fn chat_completions_gemma4_marker_is_for_ollama_only() {
     assert_eq!(sent_user_content(&endpoint), "User prompt");
 }
 
-// CASE chat-completions-opencode-go-session-header: an OpenCode Go connection sends its key, and its connection id as the session header
+// CASE chat-completions-opencode-go-session-header: an OpenCode Go call with no Game sends its key, and its connection id with the agent name as the session header
 #[test]
-fn chat_completions_opencode_go_sends_the_connection_id_as_the_session() {
+fn chat_completions_opencode_go_sends_the_connection_id_and_agent_as_the_session() {
     let endpoint = ChatCompletionsMock::start();
     let backend = ChatCompletionsBackend::from_config(&LlmConnection {
         id: "conn-1793000000000-a1b2c3d4".into(),
@@ -248,7 +248,7 @@ fn chat_completions_opencode_go_sends_the_connection_id_as_the_session() {
     let headers = endpoint.received_headers();
     assert_eq!(
         headers.get("x-opencode-session").map(String::as_str),
-        Some("conn-1793000000000-a1b2c3d4")
+        Some("conn-1793000000000-a1b2c3d4:narrator")
     );
     assert_eq!(
         headers.get("authorization").map(String::as_str),
@@ -295,8 +295,57 @@ fn chat_completions_opencode_go_names_the_session_of_an_unsaved_connection() {
             .received_headers()
             .get("x-opencode-session")
             .map(String::as_str),
-        Some("unsaved-connection")
+        Some("unsaved-connection:narrator")
     );
+}
+
+fn opencode_session_sent(agent_name: &str, game: Option<u64>) -> Option<String> {
+    let endpoint = ChatCompletionsMock::start();
+    let backend = ChatCompletionsBackend::from_config(&LlmConnection {
+        id: "conn-1793000000000-a1b2c3d4".into(),
+        ..connection_to(&endpoint, LlmBackendType::OpenCodeGo, "deepseek-v4.1-flash")
+    });
+
+    backend
+        .complete(agent_name, "system", "user", &settings_of_game(game))
+        .unwrap();
+
+    endpoint
+        .received_headers()
+        .get("x-opencode-session")
+        .cloned()
+}
+
+// CASE chat-completions-opencode-go-session-per-agent: each agent of one Game sends its own session value, and a Quantifier call with no Game names the connection and the agent
+#[test]
+fn chat_completions_opencode_go_sends_one_session_for_each_agent() {
+    assert_eq!(
+        opencode_session_sent("quantifier", None).as_deref(),
+        Some("conn-1793000000000-a1b2c3d4:quantifier")
+    );
+    let narrator = opencode_session_sent("narrator", Some(1));
+    let quantifier = opencode_session_sent("quantifier", Some(1));
+    let options = opencode_session_sent("options", Some(1));
+    assert_ne!(narrator, quantifier);
+    assert_ne!(narrator, options);
+    assert_ne!(quantifier, options);
+}
+
+// CASE chat-completions-opencode-go-game-session: an OpenCode Go call with a Game sends the Game session with the agent name, the same across restarts
+#[test]
+fn chat_completions_opencode_go_sends_the_game_session_with_the_agent_name() {
+    assert_eq!(
+        opencode_session_sent("quantifier", Some(7)).as_deref(),
+        Some("7d30fc87-b5d6-50d4-a2a9-4e5d581dfeaf:quantifier")
+    );
+}
+
+// CASE chat-completions-opencode-go-session-per-game: two Games on one connection send different session values for the same agent
+#[test]
+fn chat_completions_opencode_go_sends_another_session_for_another_game() {
+    let first = opencode_session_sent("narrator", Some(1));
+    assert_eq!(first, opencode_session_sent("narrator", Some(1)));
+    assert_ne!(first, opencode_session_sent("narrator", Some(2)));
 }
 
 // CASE chat-completions-empty-answer-names-its-finish-reason [failure]: an empty answer names its finish_reason in both failure texts

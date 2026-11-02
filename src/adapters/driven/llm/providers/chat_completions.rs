@@ -21,7 +21,6 @@ const GAME_SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x6368_726f_6e69_636c_6572_
 #[derive(Clone)]
 pub struct ChatCompletionsBackend {
     provider: LlmBackendType,
-    /// The session header value: one session per connection.
     connection_id: String,
     base_url: String,
     api_key: Option<String>,
@@ -63,6 +62,7 @@ impl ChatCompletionsBackend {
 
     fn call(
         &self,
+        agent_name: &str,
         system_prompt: &str,
         user_text: &str,
         settings: &CallSettings,
@@ -73,16 +73,22 @@ impl ChatCompletionsBackend {
             (system_prompt, user_text.to_string())
         };
         let user = self.close_gemma4_thinking_channel(user);
-        let session_id = self.game_session(settings.game);
+        let session_id = settings
+            .game
+            .filter(|_| self.provider.sends_game_session())
+            .map(Self::game_session);
+        let session_header = self
+            .provider
+            .session_header()
+            .map(|name| (name, self.session_header_value(agent_name, settings.game)));
         call_chat_completions(
             &ChatCompletionsEndpoint {
                 base_url: &self.base_url,
                 api_key: self.api_key.as_deref(),
                 title: self.provider.attribution_title(),
-                session: self
-                    .provider
-                    .session_header()
-                    .map(|name| (name, self.connection_id.as_str())),
+                session: session_header
+                    .as_ref()
+                    .map(|(name, value)| (*name, value.as_str())),
             },
             &ChatCompletionRequest {
                 model: &self.model,
@@ -99,9 +105,16 @@ impl ChatCompletionsBackend {
         )
     }
 
-    fn game_session(&self, game: Option<GameId>) -> Option<String> {
-        let game = game.filter(|_| self.provider.sends_game_session())?;
-        Some(Uuid::new_v5(&GAME_SESSION_NAMESPACE, &game.0.to_be_bytes()).to_string())
+    /// One session for each Game and Role, so that the large prompts of one
+    /// Role or Game do not push the cached prompts of another out of the
+    /// provider cache.
+    fn session_header_value(&self, agent_name: &str, game: Option<GameId>) -> String {
+        let owner = game.map_or_else(|| self.connection_id.clone(), Self::game_session);
+        format!("{owner}:{agent_name}")
+    }
+
+    fn game_session(game: GameId) -> String {
+        Uuid::new_v5(&GAME_SESSION_NAMESPACE, &game.0.to_be_bytes()).to_string()
     }
 
     /// Ollama runs a `{{ .Prompt }}` passthrough template, so on Ollama this
@@ -132,7 +145,7 @@ impl LlmProvider for ChatCompletionsBackend {
         settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         tracing::info!("[LLM] Generating action from prompt");
-        let chat = self.call(system_prompt, user_prompt, settings)?;
+        let chat = self.call(agent_name, system_prompt, user_prompt, settings)?;
         Ok(LlmCallResult {
             text: chat.text,
             raw_request_json: chat.raw_request_json,

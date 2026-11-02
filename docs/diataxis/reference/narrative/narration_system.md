@@ -11,7 +11,9 @@ Four Connection slots name the Connection of each kind of call. The Narration sl
 
 The Impersonate and Options slots are optional. An empty slot uses the Narration Connection. Two slots may name the same Connection.
 
-A Connection can set `max_tokens_ceiling`, the most that a call to it may ask for (see Prompt Presets in the Prompt System). A call to OpenRouter sends a `session_id`. All calls of one Game send the same value.
+A Connection can set `max_tokens_ceiling`, the most that a call to it may ask for (see Prompt Presets in the Prompt System).
+
+A call to OpenRouter sends a `session_id`. All OpenRouter calls of one Game send the same `session_id`. A call to OpenCode Go sends the header `x-opencode-session`. Each Game sends one value for each Role. An Impersonate sends the value of the Narrator Role.
 
 The wiring builds one `LlmCallRecorder` for each slot. The recorder resolves its Connection from the settings row at call time. So a connection switch takes effect on the next LLM call without a restart. The health of an Impersonate shows under the Narrator Role, because Impersonate has no Role.
 
