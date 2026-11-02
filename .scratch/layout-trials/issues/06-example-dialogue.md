@@ -1,8 +1,8 @@
 # Try `example_dialogue` in the prompt
 
 Type: task (HITL)
-Status: open
-Blocked by: 05
+Status: closed
+Blocked by: 05, 12
 
 ## Question
 
@@ -19,3 +19,7 @@ Does the Narration get better when the prompt sends the `example_dialogue` of ea
 - How: a linked worktree from `layout-trials` with a detached HEAD, as in [Try the changing blocks after the history](03-changing-blocks-after-history.md). Run the number of trials and Cycles that [Decide how to read an output trial](05-read-an-output-trial.md) sets. Then read the comparison with the owner, with that method.
 
 Done when the owner keeps or drops the candidate, the reading notes extend the criteria asset, and the worktree is removed. A kept candidate gets a new task ticket (map Notes).
+
+## Out of scope (owner, 2026-11-02)
+
+No measured fault is behind this candidate. The judge pilot of [Decide how to read an output trial](05-read-an-output-trial.md) found that the Characters drift from their cards, but its likely cause is the model's own style or the short entries, and the greeting risks a copy of the opening. Reopen when a measured fault points at the voice of the Characters.

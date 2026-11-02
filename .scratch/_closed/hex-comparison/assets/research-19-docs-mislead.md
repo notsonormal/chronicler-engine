@@ -108,7 +108,7 @@ Facts that hold across the 8 (known unless marked):
 - **Who.** 7 of 8 are non-delegate sessions. 1 is an implementer delegate (P2 #3).
 - **How found.** 7 of 8 were found because the task was an audit, a review item or a doc ticket. 1 of 8 was found in passing.
 - **Type.** 2 are born wrong, within 4 days of the edit. 6 are drift, from 22 hours to at most 82 days.
-- **A related fact outside the sample (known).** Ticket 33's answer says that its first rewrite of the test standards introduced five false claims, and that a code review found and fixed them ([the ticket](../../_closed/dashboard-ui-review/issues/33-fix-test-standards-drift.md)). So agent-written doc text is itself a source of wrong statements.
+- **A related fact outside the sample (known).** Ticket 33's answer says that its first rewrite of the test standards introduced five false claims, and that a code review found and fixed them ([the ticket](../../dashboard-ui-review/issues/33-fix-test-standards-drift.md)). So agent-written doc text is itself a source of wrong statements.
 
 ## 5. Did the wrong statement change what the agent did (known)
 

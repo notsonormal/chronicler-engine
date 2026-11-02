@@ -1,7 +1,7 @@
 # Confirm the recommendations of tickets 10 to 15 and 20
 
 Type: grilling (HITL)
-Status: open
+Status: resolved
 Blocked by: 10, 11, 12, 13, 14, 15, 20
 
 ## Question
@@ -24,7 +24,15 @@ Does the owner accept the recommendation of each of tickets 10 to 15 and 20?
   - **C-13 (proof limits): keep.** The limit lines tell an agent where the tests do not reach, so it knows when a manual check is worth its cost. Confirm only the form (inside the spec or in a file next to it, ticket 12 question 1).
   - **C-14 (known gaps): keep.** A gap stays in the spec until a test covers it.
   - Ticket 12 question 2 is answered by the C-12 drop.
-  - **Evidence for the reason (known).** The prompt-flexibility trials found two faults, a `HashMap` card order and a failure text that hid `content_filter` ([Shape the test setup and the trial](../../prompt-flexibility/issues/08-test-setup-and-trial.md)). [Fix the prompt text](../../prompt-flexibility/issues/19-fix-the-prompt-text.md) then pinned the order with CASE ids such as `narrator-cards-in-id-order`.
+  - **Evidence for the reason (known).** The prompt-flexibility trials found two faults, a `HashMap` card order and a failure text that hid `content_filter` ([Shape the test setup and the trial](../../../prompt-flexibility/issues/08-test-setup-and-trial.md)). [Fix the prompt text](../../../prompt-flexibility/issues/19-fix-the-prompt-text.md) then pinned the order with CASE ids such as `narrator-cards-in-id-order`.
 - **For each accepted recommendation.** If the change takes one session or less, create a follow-on task ticket that builds it (map Notes, "Planning, with one exception"). If it is larger, write a brief, or a question for a new map or an existing one. A rejected practice is a drop with a reason.
 - **Skills.** `/grilling` and `/domain-modeling`.
 - **When done.** Add `## Answer` with the result for each practice, and set `Status: resolved`.
+
+## Answer
+
+Closed by the owner on 2026-11-01, with no grilling session. No recommendation of tickets 10 to 15 and 20 is adopted.
+
+- C-12 is dropped, for the owner's reason in the Context above.
+- The other recommendations are not adopted. For each one, no problem that someone has seen supports it. The owner judged the findings to be already covered, trivial or not worth doing.
+- The end state of each practice, with its reason, is in part 4 of [the conclusion](../assets/conclusion.md). The small facts found on the way, such as the three date tests, are in part 5. Each one can be fixed at any time.

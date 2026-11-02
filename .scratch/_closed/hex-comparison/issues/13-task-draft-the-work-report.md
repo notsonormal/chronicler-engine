@@ -22,7 +22,7 @@ What does the work report hold, and where does it live?
 - **What already exists.** Each delegate leaves `~/.pi/agent/delegate/<id>/result.json`, which holds its final message, and `job.json`, which holds its label and role. That is already part of a work report, but it is outside the repo. The `code-review` skill shows its two reports in the chat only. `scripts/build_history.py` names the columns of `logs/build_history.txt`.
 - **Failure modes.** A session that ends with no commit and no ticket has no place for a report. Say where its report goes, or say that it needs none.
 - **Not in scope.** Do not edit `AGENTS.md`, skills or `build.py`.
-- **Output.** Write `assets/task-13-work-report.md`. The `## Answer` gives the gist, the recommendation and at most 2 questions for ticket 16. [Decide whether anything lands without the owner](./17-grilling-decide-whether-anything-lands-without-the-owner.md) builds on this answer.
+- **Output.** Write `assets/task-13-work-report.md`. The `## Answer` gives the gist, the recommendation and at most 2 questions for ticket 16. [Decide whether Chronicler works in small changes](./17-grilling-decide-whether-anything-lands-without-the-owner.md) builds on this answer.
 - **When done.** Add `## Answer` and set `Status: resolved`.
 
 ## Answer

@@ -25,6 +25,7 @@ From [Decide whether this map designs memory and state, or only keeps room for t
 
 ## Research to start from
 
+- [The inconsistencies of two trial stories](../layout-trials/assets/story-inconsistencies.md): the faults of two 100-Cycle Autoplay stories. They come from the history cut, from the missing story clock, and from no record of who knows what
 - [Find how ST, ME and other tools keep long-term memory](../prompt-flexibility/issues/13-long-term-memory.md) ([asset](../prompt-flexibility/assets/long-term-memory.md))
 - [Find how ST, ME and other tools keep long-term state](../prompt-flexibility/issues/14-long-term-state.md) ([asset](../prompt-flexibility/assets/long-term-state.md))
 - [Find how prompt caching works for our providers and our layout](../prompt-flexibility/issues/12-prompt-caching.md) ([asset](../prompt-flexibility/assets/prompt-caching.md))

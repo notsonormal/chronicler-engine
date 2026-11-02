@@ -1,8 +1,8 @@
 # Try the role of the Impersonate prompt
 
 Type: task (HITL)
-Status: open
-Blocked by: 05
+Status: closed
+Blocked by: 05, 12
 
 ## Question
 
@@ -21,3 +21,7 @@ Do the Impersonate Inputs get better when the impersonation instruction comes la
 - How: a linked worktree from `layout-trials` with a detached HEAD, as in [Try the changing blocks after the history](03-changing-blocks-after-history.md). Run the trials that ticket 05 sets, then read the comparison with the owner, with its method.
 
 Done when the owner keeps or drops each side, the reading notes extend the criteria asset, and the worktree is removed. A kept side gets a new task ticket (map Notes).
+
+## Out of scope (owner, 2026-11-02)
+
+No measured fault is behind this candidate. The long Inputs and the scripting of other Characters that the judge pilot found are mainly drift and role breaches (guessed); [Sort the inconsistencies by their cause](13-sort-inconsistencies-by-cause.md) and [Stop the role breaches with stop sequences](14-stop-role-breaches.md) look at them. Reopen when a measured fault points at the place of the Impersonate instruction.

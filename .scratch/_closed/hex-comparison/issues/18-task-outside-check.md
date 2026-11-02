@@ -1,8 +1,8 @@
 # Outside check of the map
 
 Type: task (AFK)
-Status: open
-Blocked by: 10, 11, 12, 13, 14, 15, 16, 17, 19, 20
+Status: resolved
+Blocked by: 10, 11, 12, 13, 14, 15, 16, 17, 19, 20, 21
 
 ## Question
 
@@ -19,3 +19,7 @@ Does each Hex practice of this map have a decision with evidence?
   3. The map's **Not yet specified** is empty. If it is not empty, each remaining entry is out of scope, with a reason.
 - **Output.** A `## Answer` that lists each gap with its practice id. If the reviewer finds no gap, the map is done.
 - **When done.** Add `## Answer` and set `Status: resolved`.
+
+## Answer
+
+Not run. The owner closed the map on 2026-11-01. Part 4 of [the conclusion](../assets/conclusion.md) gives each of the 52 practices an end state with its reason and its ticket. No fresh reviewer checked the evidence.
