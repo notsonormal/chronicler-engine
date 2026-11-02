@@ -12,6 +12,9 @@ pub const SAFETY_MARGIN_TOKENS: u32 = 256;
 
 pub const MIN_INPUT_BUDGET_TOKENS: u32 = 512;
 
+/// An estimate: each provider has its own chat template.
+pub const MESSAGE_OVERHEAD_TOKENS: usize = 4;
+
 /// The room the history leaves for the Player Input and the Guide, at most.
 pub const HISTORY_RESERVE_TOKENS: u32 = 1024;
 
@@ -60,9 +63,11 @@ impl TokenBudget {
 
     /// Clamps the response length to the room the prompt leaves. The history cut
     /// makes the prompt fit, so this only checks it.
-    pub fn response_tokens(&self, system: &str, user: &str) -> Result<u32, EngineError> {
-        let system_tokens = estimate_tokens(system);
-        let user_tokens = estimate_tokens(user);
+    pub fn response_tokens(
+        &self,
+        system_tokens: usize,
+        tokens_after_system: usize,
+    ) -> Result<u32, EngineError> {
         let max_context = self.max_context_tokens as usize;
         let safety_margin = SAFETY_MARGIN_TOKENS as usize;
         let min_input_budget = MIN_INPUT_BUDGET_TOKENS as usize;
@@ -75,7 +80,7 @@ impl TokenBudget {
         }
 
         let actual_max_tokens = (self.max_tokens as usize)
-            .min(max_context.saturating_sub(system_tokens + user_tokens + safety_margin))
+            .min(max_context.saturating_sub(system_tokens + tokens_after_system + safety_margin))
             .min(max_context.saturating_sub(system_tokens + min_input_budget + safety_margin))
             .max(1) as u32;
 

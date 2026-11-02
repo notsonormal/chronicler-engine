@@ -5,7 +5,8 @@ use std::sync::Arc;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narration::{NarrationValues, Narrated, Narrator};
 use crate::application::prompting::token_budget::{
-    estimate_tokens, TokenBudget, MAX_CONTEXT_TOKENS, MAX_HISTORY_TOKENS, SAFETY_MARGIN_TOKENS,
+    estimate_tokens, TokenBudget, MAX_CONTEXT_TOKENS, MAX_HISTORY_TOKENS, MESSAGE_OVERHEAD_TOKENS,
+    SAFETY_MARGIN_TOKENS,
 };
 use crate::application::prompting::{CharacterContext, PromptAssembler};
 use crate::domain::model::agent::Role;
@@ -15,6 +16,7 @@ use crate::domain::model::generation::Generation;
 use crate::domain::model::generation_parameters::{CallSettings, GenerationParameters};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Maker, Message, Swipe};
+use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, DEFAULT_MAX_TOKENS};
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
@@ -26,7 +28,8 @@ use crate::test_support::fixtures::{
     default_story_row, prompt_block, TestMap, TestCharacter, TestPersona, TestWorld,
 };
 use crate::test_support::{
-    make_test_recorder, make_test_recorder_with_storage, ModelCall, ScriptedModel,
+    make_test_recorder, make_test_recorder_with_storage, sent_system_text, sent_user_text,
+    ModelCall, ScriptedModel,
 };
 use crate::domain::model::state::generation_status::GenerationFailure;
 
@@ -298,23 +301,47 @@ fn prompt_of(model: &ScriptedModel) -> ModelCall {
         .expect("the narrator makes one call")
 }
 
-fn history_body(prompt: &str) -> &str {
-    let layer = prompt_block(prompt, "<ConversationHistory>", "</ConversationHistory>");
-    layer
-        .strip_prefix("<ConversationHistory>\n")
-        .and_then(|rest| rest.strip_suffix("</ConversationHistory>"))
-        .expect("the history layer holds its tags")
+fn entry_text(part: &PromptPart) -> String {
+    let text = part.text.as_str();
+    let text = text.strip_prefix("<ConversationHistory>\n").unwrap_or(text);
+    let text = text.strip_prefix("<LastMessage>\n").unwrap_or(text);
+    let end = ["\n</ConversationHistory>", "\n</LastMessage>"]
+        .iter()
+        .filter_map(|close| text.find(close))
+        .min()
+        .unwrap_or(text.len());
+    text[..end].to_string()
 }
 
-fn first_kept_entry(prompt: &str) -> Option<usize> {
-    let body = history_body(prompt);
-    let digits: String = body
-        .split("Entry ")
-        .nth(1)?
+/// Skips the system part, the part with the blocks before the history, and the
+/// closing part that holds only the blocks after the history.
+fn history_parts(call: &ModelCall) -> Vec<&PromptPart> {
+    call.parts
+        .iter()
+        .skip(2)
+        .filter(|part| part.text.contains("<LastMessage>") || !part.text.contains("<GameState>"))
+        .collect()
+}
+
+fn history_entries(call: &ModelCall) -> Vec<String> {
+    history_parts(call).into_iter().map(entry_text).collect()
+}
+
+fn first_kept_entry(call: &ModelCall) -> Option<usize> {
+    let first = history_entries(call).into_iter().next()?;
+    let digits: String = first
+        .strip_prefix("Entry ")?
         .chars()
         .take_while(char::is_ascii_digit)
         .collect();
     digits.parse().ok()
+}
+
+fn sent_tokens(call: &ModelCall) -> usize {
+    call.parts
+        .iter()
+        .map(|part| estimate_tokens(&part.text) + MESSAGE_OVERHEAD_TOKENS)
+        .sum()
 }
 
 fn window(max_context_tokens: u32, max_tokens: u32) -> TokenBudget {
@@ -346,21 +373,21 @@ fn test_every_prompt_layer_renders() {
     );
 
     assert!(
-        call.system_prompt.contains("<role>")
-            && call.system_prompt.contains("You are a test narrator."),
+        call.system_prompt().contains("<role>")
+            && call.system_prompt().contains("You are a test narrator."),
         "the preset's role must open the system prompt: {}",
-        call.system_prompt
+        call.system_prompt()
     );
     assert!(
-        call.system_prompt.contains("<instructions>")
-            && call.system_prompt.contains("Follow the world's rules."),
+        call.system_prompt().contains("<instructions>")
+            && call.system_prompt().contains("Follow the world's rules."),
         "the preset's instructions must render: {}",
-        call.system_prompt
+        call.system_prompt()
     );
     assert!(
-        call.system_prompt.contains("<global_rules>"),
+        call.system_prompt().contains("<global_rules>"),
         "the World's rules belong to the system prompt: {}",
-        call.system_prompt
+        call.system_prompt()
     );
     for layer in [
         "<GameState>",
@@ -368,21 +395,21 @@ fn test_every_prompt_layer_renders() {
         "<CharactersPresent>",
         "<Persona>",
         "<WorldLore>",
-        "<ConversationHistory>",
+        "<LastMessage>",
         "<PlayerInput>",
         "<writing_style>",
         "<output_format>",
     ] {
         assert!(
-            call.user_prompt.contains(layer),
+            call.user_prompt().contains(layer),
             "the {layer} layer must render: {}",
-            call.user_prompt
+            call.user_prompt()
         );
     }
     assert!(
-        call.user_prompt.contains(&fixture.persona.sheet.name),
+        call.user_prompt().contains(&fixture.persona.sheet.name),
         "the Persona renders: {}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -395,13 +422,13 @@ fn test_the_changing_blocks_follow_the_history() {
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     )
-    .user_prompt;
+    .user_prompt();
 
     let order = [
         "<KnownCharacters>",
         "<Persona>",
         "<WorldLore>",
-        "<ConversationHistory>",
+        "<LastMessage>",
         "<GameState>",
         "<CharactersPresent>",
         "<writing_style>",
@@ -431,14 +458,14 @@ fn test_a_turn_that_fits_passes_through_untrimmed() {
     );
 
     assert!(
-        call.user_prompt.contains("You enter the inn."),
+        call.user_prompt().contains("You enter the inn."),
         "the history renders verbatim when the turn fits: {}",
-        call.user_prompt
+        call.user_prompt()
     );
     assert!(
-        call.user_prompt.contains("I look around."),
+        call.user_prompt().contains("I look around."),
         "the player's own text renders: {}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -453,15 +480,15 @@ fn test_a_preset_with_no_fields_renders_no_sections() {
     );
 
     assert!(
-        call.system_prompt.is_empty(),
+        call.system_prompt().is_empty(),
         "no field means no system prompt: {}",
-        call.system_prompt
+        call.system_prompt()
     );
     assert!(
-        call.user_prompt.contains("<GameState>"),
+        call.user_prompt().contains("<GameState>"),
         "the data layers stay"
     );
-    assert!(call.user_prompt.contains("<PlayerInput>"));
+    assert!(call.user_prompt().contains("<PlayerInput>"));
     for absent in [
         "<role>",
         "<instructions>",
@@ -469,7 +496,7 @@ fn test_a_preset_with_no_fields_renders_no_sections() {
         "<writing_style>",
     ] {
         assert!(
-            !call.user_prompt.contains(absent),
+            !call.user_prompt().contains(absent),
             "{absent} must not render"
         );
     }
@@ -488,17 +515,17 @@ fn test_only_the_presets_present_fields_render() {
     );
 
     assert!(
-        call.system_prompt.contains("<role>"),
+        call.system_prompt().contains("<role>"),
         "a present field renders"
     );
-    assert!(call.system_prompt.contains("<global_rules>"));
+    assert!(call.system_prompt().contains("<global_rules>"));
     assert!(
-        !call.system_prompt.contains("<instructions>"),
+        !call.system_prompt().contains("<instructions>"),
         "an absent field renders nothing: {}",
-        call.system_prompt
+        call.system_prompt()
     );
-    assert!(!call.user_prompt.contains("<writing_style>"));
-    let format = prompt_block(&call.user_prompt, "<output_format>", "</output_format>");
+    assert!(!call.user_prompt().contains("<writing_style>"));
+    let format = prompt_block(&call.user_prompt(), "<output_format>", "</output_format>");
     assert!(
         format.contains("Write one paragraph."),
         "the present output format renders: {format}"
@@ -542,7 +569,7 @@ fn test_the_output_format_layer_is_the_preset_text() {
         let call = sent_prompt(&case, &generation_preset);
 
         assert_eq!(
-            layer_text(&call.user_prompt, "output_format"),
+            layer_text(&call.user_prompt(), "output_format"),
             marker,
             "{:?}: the engine adds nothing to the preset's output format",
             case.generation.kind()
@@ -562,18 +589,18 @@ fn test_a_small_budget_drops_the_oldest_history() {
         .expect("a narration is a result");
     let fitted = prompt_of(&model);
 
-    let kept = fitted.user_prompt.matches("Entry ").count();
+    let kept = fitted.user_prompt().matches("Entry ").count();
     assert!(
         0 < kept && kept < history.len(),
         "a 6144-token window keeps some of 200 entries: {kept} kept"
     );
     assert!(
-        fitted.user_prompt.contains("Entry 199 "),
+        fitted.user_prompt().contains("Entry 199 "),
         "the newest entry must stay: {}",
-        fitted.user_prompt
+        fitted.user_prompt()
     );
     assert!(
-        !fitted.user_prompt.contains("Entry 0 "),
+        !fitted.user_prompt().contains("Entry 0 "),
         "the oldest entry goes first"
     );
     assert!(!narrated.text.is_empty(), "a trimmed turn still narrates");
@@ -587,14 +614,14 @@ fn test_the_default_window_carries_the_whole_history() {
     let call = sent_prompt(&fixture.narration(&history, "I look around."), &preset());
 
     assert!(
-        call.user_prompt.contains("Entry 0 "),
+        call.user_prompt().contains("Entry 0 "),
         "the default window keeps the oldest entry: {}",
-        call.user_prompt
+        call.user_prompt()
     );
     assert!(
-        call.user_prompt.contains("Entry 199 "),
+        call.user_prompt().contains("Entry 199 "),
         "and the newest: {}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -605,17 +632,21 @@ fn test_a_history_past_the_cap_keeps_its_newest_entries() {
     let history = fixture.history_of(2000);
     let call = sent_prompt(&fixture.narration(&history, "I look around."), &preset());
 
-    let kept = history_body(&call.user_prompt);
+    let kept = history_entries(&call);
+    let kept_tokens: usize = kept.iter().map(|entry| estimate_tokens(entry)).sum();
     assert!(
-        estimate_tokens(kept) <= MAX_HISTORY_TOKENS as usize,
-        "the history stays within the cap: {} tokens",
-        estimate_tokens(kept)
+        kept_tokens <= MAX_HISTORY_TOKENS as usize,
+        "the history stays within the cap: {kept_tokens} tokens"
     );
-    assert!(kept.contains("Entry 1999 "), "the newest entry must stay");
-    assert!(!kept.contains("Entry 0 "), "the oldest entry goes first");
+    assert!(
+        kept.last()
+            .is_some_and(|entry| entry.starts_with("Entry 1999 ")),
+        "the newest entry must stay"
+    );
+    assert_eq!(first_kept_entry(&call).map(|start| 0 < start), Some(true));
 }
 
-// CASE narrator-history-cut-drops-whole-messages: a cut history starts at an entry and every kept entry keeps its sender label.
+// CASE narrator-history-cut-drops-whole-messages: a cut history starts at an entry, and every kept entry is one whole message with no sender label.
 #[test]
 fn test_a_cut_history_keeps_whole_entries() {
     let fixture = Fixture::new();
@@ -627,31 +658,29 @@ fn test_a_cut_history_keeps_whole_entries() {
         TokenBudget::fallback(),
     );
 
-    let body = history_body(&call.user_prompt);
-    let kept = body.matches("first line.").count();
+    let kept = history_entries(&call);
     assert!(
-        0 < kept && kept < history.len(),
-        "the cut drops some: {kept} kept"
+        !kept.is_empty() && kept.len() < history.len(),
+        "the cut drops some: {} kept",
+        kept.len()
     );
-    assert_eq!(
-        body.matches("second line.").count(),
-        kept,
-        "no entry loses its second line"
-    );
-    assert_eq!(
-        body.matches("Narrator: Entry ").count(),
-        kept,
-        "every kept entry has its sender label"
-    );
+    for entry in &kept {
+        assert!(
+            entry.starts_with("Entry ")
+                && entry.contains("first line.\n")
+                && entry.ends_with("second line."),
+            "every kept entry is whole and carries no sender label: {entry}"
+        );
+    }
     assert!(
-        body.starts_with("Narrator: Entry "),
-        "the history starts at an entry"
+        !call.user_prompt().contains("Narrator:"),
+        "no entry carries a sender label"
     );
 }
 
-// CASE narrator-history-system-sender: a System Message in the history renders as `System: <text>`.
+// CASE narrator-history-roles: each history entry is one message whose role follows its type, with no sender label: a Narration is assistant, an Input is user, and a System entry is system.
 #[test]
-fn test_a_system_message_renders_its_sender_label() {
+fn test_each_history_entry_is_one_message_with_its_role() {
     let fixture = Fixture::new();
     let history = vec![
         StoryRow {
@@ -659,17 +688,300 @@ fn test_a_system_message_renders_its_sender_label() {
             ..default_story_row(MessageType::Narration)
         },
         StoryRow {
+            text: "I answer.".to_string(),
+            ..default_story_row(MessageType::Input)
+        },
+        StoryRow {
             text: "A hidden instruction.".to_string(),
             ..default_story_row(MessageType::System)
+        },
+        StoryRow {
+            text: "The narrator speaks again.".to_string(),
+            ..default_story_row(MessageType::Narration)
         },
     ];
 
     let call = sent_prompt(&fixture.narration(&history, "I look around."), &preset());
 
-    let body = history_body(&call.user_prompt);
+    let parts = history_parts(&call);
+    let seen: Vec<(PromptRole, String)> = parts
+        .iter()
+        .map(|part| (part.role, entry_text(part)))
+        .collect();
+    assert_eq!(
+        seen,
+        vec![
+            (PromptRole::Assistant, "The narrator speaks.".to_string()),
+            (PromptRole::User, "I answer.".to_string()),
+            (PromptRole::System, "A hidden instruction.".to_string()),
+            (
+                PromptRole::Assistant,
+                "The narrator speaks again.".to_string()
+            ),
+        ],
+        "one message for each entry, in order: {:?}",
+        call.parts
+    );
+}
+
+// CASE narrator-history-wrap: the history tag opens the first entry and closes the second-to-last, and the last entry has its own tag. A history of one entry has the last-message tag only.
+#[test]
+fn test_the_history_tags_wrap_the_entries_as_marinara_engine_does() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(3);
+
+    let call = sent_prompt(&fixture.narration(&history, "I look around."), &preset());
+
+    let parts = history_parts(&call);
+    assert_eq!(parts.len(), 3);
     assert!(
-        body.contains("System: A hidden instruction.\n"),
-        "the System entry carries its sender label: {body}"
+        parts[0].text.starts_with("<ConversationHistory>\nEntry 0 "),
+        "the history tag opens the first entry: {}",
+        parts[0].text
+    );
+    assert!(
+        parts[1].text.ends_with("\n</ConversationHistory>"),
+        "the history tag closes the second-to-last entry: {}",
+        parts[1].text
+    );
+    assert!(
+        parts[2].text.starts_with("<LastMessage>\nEntry 2 ")
+            && parts[2].text.contains("\n</LastMessage>"),
+        "the last entry has its own tag: {}",
+        parts[2].text
+    );
+    let flat = call.user_prompt();
+    assert_eq!(flat.matches("<ConversationHistory>").count(), 1);
+    assert_eq!(flat.matches("</ConversationHistory>").count(), 1);
+
+    let one = sent_prompt(
+        &fixture.narration(&history[..1], "I look around."),
+        &preset(),
+    );
+    let flat = one.user_prompt();
+    assert!(flat.contains("<LastMessage>\nEntry 0 "), "{flat}");
+    assert!(
+        !flat.contains("ConversationHistory>\nEntry"),
+        "one entry has no history tag: {flat}"
+    );
+}
+
+// CASE narrator-before-blocks-in-first-user-message: the blocks before the history make the first user message, and the system message holds the preset text only.
+#[test]
+fn test_the_blocks_before_the_history_make_the_first_user_message() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(3);
+
+    let call = sent_prompt(&fixture.narration(&history, "I look around."), &preset());
+
+    assert_eq!(call.parts[0].role, PromptRole::System);
+    assert_eq!(call.parts[1].role, PromptRole::User);
+    for block in ["<KnownCharacters>", "<Persona>", "<WorldLore>"] {
+        assert!(
+            call.parts[1].text.contains(block),
+            "the first user message holds {block}: {}",
+            call.parts[1].text
+        );
+        assert!(
+            !call.parts[0].text.contains(block),
+            "the system message holds no {block}"
+        );
+    }
+    assert_eq!(
+        call.parts[2].role,
+        PromptRole::Assistant,
+        "the first history entry follows, so the roles alternate"
+    );
+}
+
+// CASE narrator-after-blocks-join-the-last-user-message: the blocks after the history join the last history message when it is a user message, so no two user messages follow each other.
+#[test]
+fn test_the_blocks_after_the_history_join_a_last_user_message() {
+    let fixture = Fixture::new();
+    let mut history = fixture.history_of(2);
+    history.push(StoryRow {
+        text: "I try the door.".to_string(),
+        ..default_story_row(MessageType::Input)
+    });
+
+    let call = sent_prompt(&fixture.narration(&history, "I try the door."), &preset());
+
+    let last = call.parts.last().expect("a call has parts");
+    assert_eq!(last.role, PromptRole::User);
+    assert!(
+        last.text
+            .starts_with("<LastMessage>\nI try the door.\n</LastMessage>\n\n<GameState>"),
+        "the blocks follow the last entry in one message: {}",
+        last.text
+    );
+    assert!(
+        call.parts
+            .windows(2)
+            .all(|pair| !(pair[0].role == PromptRole::User && pair[1].role == PromptRole::User)),
+        "no two user messages follow each other: {:?}",
+        call.parts.iter().map(|part| part.role).collect::<Vec<_>>()
+    );
+}
+
+// CASE narrator-after-blocks-join-the-first-user-message: with no history entry, the blocks after the history join the first user message.
+#[test]
+fn test_the_blocks_after_the_history_join_the_first_user_message_with_no_entry() {
+    let fixture = Fixture::new();
+
+    let call = sent_prompt(&fixture.narration(&[], "I look around."), &preset());
+
+    let roles: Vec<PromptRole> = call.parts.iter().map(|part| part.role).collect();
+    assert_eq!(roles, vec![PromptRole::System, PromptRole::User]);
+    assert!(
+        call.parts[1]
+            .text
+            .contains("</ConversationHistory>\n\n<GameState>")
+            && call.parts[1]
+                .text
+                .contains("<PlayerInput>\nI look around.\n</PlayerInput>"),
+        "the blocks after the history follow the placeholder in one message: {}",
+        call.parts[1].text
+    );
+}
+
+// CASE narrator-after-blocks-new-user-message: the blocks after the history form a new final user message when the last history message is not a user message.
+#[test]
+fn test_the_blocks_after_the_history_make_a_new_message_after_a_narration() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2);
+
+    let call = sent_prompt(
+        &fixture.narration(&history, "").impersonating(None),
+        &preset(),
+    );
+
+    let roles: Vec<PromptRole> = call.parts.iter().map(|part| part.role).collect();
+    assert_eq!(
+        roles,
+        vec![
+            PromptRole::System,
+            PromptRole::User,
+            PromptRole::Assistant,
+            PromptRole::Assistant,
+            PromptRole::User,
+        ]
+    );
+    let last = call.parts.last().expect("a call has parts");
+    assert!(
+        last.text.starts_with("<GameState>"),
+        "the final message opens with the blocks after the history: {}",
+        last.text
+    );
+}
+
+const DOOR_INPUT: &str = "I try the door.";
+
+fn history_ending_with_the_door_input(fixture: &Fixture) -> Vec<StoryRow> {
+    let mut history = fixture.history_of(2);
+    history.push(StoryRow {
+        text: DOOR_INPUT.to_string(),
+        ..default_story_row(MessageType::Input)
+    });
+    history
+}
+
+// CASE narrator-player-input-dropped-when-in-history: the Player Input block is left out when its text is the last history entry, so the Input appears once.
+#[test]
+fn test_the_player_input_block_is_dropped_when_the_history_ends_with_it() {
+    let fixture = Fixture::new();
+    let history = history_ending_with_the_door_input(&fixture);
+
+    let answered = sent_prompt(&fixture.narration(&history, DOOR_INPUT), &preset());
+
+    assert!(
+        !answered.user_prompt().contains("<PlayerInput>"),
+        "the last entry already carries the Input: {}",
+        answered.user_prompt()
+    );
+    assert_eq!(
+        answered.user_prompt().matches(DOOR_INPUT).count(),
+        1,
+        "the Input appears once"
+    );
+}
+
+// CASE narrator-player-input-kept-when-not-in-history: an Input that is not the last history entry keeps its Player Input block.
+#[test]
+fn test_an_input_that_is_not_the_last_entry_keeps_its_block() {
+    let fixture = Fixture::new();
+    let history = history_ending_with_the_door_input(&fixture);
+
+    let other = sent_prompt(&fixture.narration(&history, "I knock."), &preset());
+
+    assert!(
+        other
+            .user_prompt()
+            .contains("<PlayerInput>\nI knock.\n</PlayerInput>"),
+        "an Input that is not the last entry keeps its block: {}",
+        other.user_prompt()
+    );
+}
+
+// CASE narrator-player-input-kept-for-impersonate-direction: an Impersonate direction is not a history entry, so it keeps its Player Input block.
+#[test]
+fn test_an_impersonate_direction_keeps_its_block() {
+    let fixture = Fixture::new();
+    let history = history_ending_with_the_door_input(&fixture);
+
+    let direction = sent_prompt(
+        &fixture
+            .narration(&history, "")
+            .impersonating(Some("Ask about the gate.".to_string())),
+        &preset(),
+    );
+
+    assert!(
+        direction
+            .user_prompt()
+            .contains("<PlayerInput>\nAsk about the gate.\n</PlayerInput>"),
+        "an Impersonate direction keeps its block: {}",
+        direction.user_prompt()
+    );
+}
+
+// CASE narrator-player-input-kept-for-event-continuation: an event continuation is not a history entry, so it keeps its Player Input block.
+#[test]
+fn test_an_event_continuation_keeps_its_block() {
+    let fixture = Fixture::new();
+    let history = history_ending_with_the_door_input(&fixture);
+
+    let event = sent_prompt(
+        &fixture.case_for(Generation::Event(event_record()), &history, None),
+        &preset(),
+    );
+
+    assert!(
+        event
+            .user_prompt()
+            .contains("<PlayerInput>\nPrevious narration:"),
+        "an event continuation keeps its block: {}",
+        event.user_prompt()
+    );
+}
+
+// CASE narrator-empty-history-placeholder: an empty history keeps its placeholder text in the first user message.
+#[test]
+fn test_an_empty_history_keeps_its_placeholder_in_the_first_user_message() {
+    let fixture = Fixture::new();
+
+    let call = sent_prompt(&fixture.narration(&[], "I look around."), &preset());
+
+    assert!(
+        history_parts(&call).is_empty(),
+        "no entry becomes a message: {:?}",
+        call.parts
+    );
+    assert!(
+        call.parts[1].text.contains(
+            "<ConversationHistory>\n(No history yet - this is the start of the conversation)\n</ConversationHistory>"
+        ),
+        "the first user message holds the placeholder: {}",
+        call.parts[1].text
     );
 }
 
@@ -692,9 +1004,9 @@ fn test_the_history_start_holds_between_cuts() {
         TokenBudget::fallback(),
     );
 
-    let start = first_kept_entry(&first.user_prompt).expect("the first call keeps entries");
+    let start = first_kept_entry(&first).expect("the first call keeps entries");
     assert!(0 < start, "the first call is past the space");
-    assert_eq!(first_kept_entry(&second.user_prompt), Some(start));
+    assert_eq!(first_kept_entry(&second), Some(start));
 }
 
 // CASE narrator-history-cut-ignores-the-player-input: a Player Input under the reserve does not move the history start.
@@ -707,11 +1019,8 @@ fn test_the_player_input_does_not_move_the_history_start() {
     let short = sent_under(&fixture, &history, "Go.", TokenBudget::fallback());
     let long = sent_under(&fixture, &history, &long_input, TokenBudget::fallback());
 
-    assert!(first_kept_entry(&short.user_prompt).is_some_and(|start| 0 < start));
-    assert_eq!(
-        first_kept_entry(&short.user_prompt),
-        first_kept_entry(&long.user_prompt)
-    );
+    assert!(first_kept_entry(&short).is_some_and(|start| 0 < start));
+    assert_eq!(first_kept_entry(&short), first_kept_entry(&long));
 }
 
 // CASE narrator-history-cut-keeps-max-tokens: a cut history leaves the requested response length unchanged.
@@ -722,7 +1031,7 @@ fn test_a_cut_history_keeps_the_requested_response_length() {
 
     let call = sent_under(&fixture, &history, "I look around.", window(8192, 500));
 
-    assert!(first_kept_entry(&call.user_prompt).is_some_and(|start| 0 < start));
+    assert!(first_kept_entry(&call).is_some_and(|start| 0 < start));
     assert_eq!(call.settings.max_tokens, 500);
 }
 
@@ -740,9 +1049,16 @@ fn test_a_history_with_no_kept_message_holds_the_marker() {
         TokenBudget::fallback(),
     );
 
-    assert_eq!(
-        history_body(&call.user_prompt),
-        "(History truncated to fit context window)\n"
+    assert!(
+        history_parts(&call).is_empty(),
+        "no entry fits, so none is sent"
+    );
+    assert!(
+        call.parts[1].text.contains(
+            "<ConversationHistory>\n(History truncated to fit context window)\n</ConversationHistory>"
+        ),
+        "the first user message holds the marker: {}",
+        call.parts[1].text
     );
 }
 
@@ -756,15 +1072,42 @@ fn test_a_long_player_input_drops_more_messages_to_fit() {
     let call = sent_under(&fixture, &history, &long_input, window(8192, 500));
 
     let input_limit = 8192 - SAFETY_MARGIN_TOKENS as usize - 500;
-    let sent = estimate_tokens(&call.system_prompt) + estimate_tokens(&call.user_prompt);
+    let sent = sent_tokens(&call);
     assert!(
         sent <= input_limit,
         "the prompt fits the input limit: {sent} of {input_limit}"
     );
     assert!(
-        call.user_prompt.contains("Entry 1999 "),
+        call.user_prompt().contains("Entry 1999 "),
         "the newest entry stays"
     );
+}
+
+// CASE narrator-history-budget-counts-message-overhead: a long history of short entries counts the chat-template cost of each message, so the prompt with that cost fits the input limit.
+#[test]
+fn test_a_long_history_of_short_entries_fits_with_the_cost_of_each_message() {
+    let fixture = Fixture::new();
+    let history: Vec<StoryRow> = (0..4000)
+        .map(|index| StoryRow {
+            id: index,
+            text: "Yes.".to_string(),
+            ..default_story_row(if index % 2 == 0 {
+                MessageType::Narration
+            } else {
+                MessageType::Input
+            })
+        })
+        .collect();
+
+    let call = sent_under(&fixture, &history, "Go on.", window(8192, 500));
+
+    let input_limit = 8192 - SAFETY_MARGIN_TOKENS as usize - 500;
+    let sent = sent_tokens(&call);
+    assert!(
+        sent <= input_limit,
+        "the prompt with the cost of each message fits the input limit: {sent} of {input_limit}"
+    );
+    assert!(history_parts(&call).len() < history.len());
 }
 
 // CASE narrator-response-cap: the call asks for the budget's response length.
@@ -796,21 +1139,21 @@ fn test_the_narrator_stamps_the_resolved_posture() {
     let call = sent_prompt(&case, &preset());
 
     assert!(
-        call.user_prompt
+        call.user_prompt()
             .contains("second-person limited perspective"),
         "the resolved perspective must win: {}",
-        call.user_prompt
+        call.user_prompt()
     );
     assert!(
-        call.user_prompt.contains("present tense narrative prose"),
+        call.user_prompt().contains("present tense narrative prose"),
         "the resolved tense must win: {}",
-        call.user_prompt
+        call.user_prompt()
     );
     assert!(
-        !call.user_prompt.contains("{{narrative_perspective}}")
-            && !call.user_prompt.contains("{{narrative_tense}}"),
+        !call.user_prompt().contains("{{narrative_perspective}}")
+            && !call.user_prompt().contains("{{narrative_tense}}"),
         "no posture macro stays unrendered: {}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -822,7 +1165,7 @@ fn test_the_guide_renders_last_in_its_wrapper() {
         .narration(&fixture.history, "I look around.")
         .with_guide(Some("Add tension.".to_string()));
 
-    let user = sent_prompt(&case, &preset()).user_prompt;
+    let user = sent_prompt(&case, &preset()).user_prompt();
 
     let guide = user.find("<Guide>").expect("the guide layer renders");
     let input = user.find("<PlayerInput>").expect("the input layer renders");
@@ -842,7 +1185,7 @@ fn test_a_plain_turn_and_a_blank_guide_render_no_guide_layer() {
     let plain = fixture.narration(&fixture.history, "I look around.");
     assert!(
         !sent_prompt(&plain, &preset())
-            .user_prompt
+            .user_prompt()
             .contains("<Guide>"),
         "a plain turn carries no guide layer"
     );
@@ -850,7 +1193,7 @@ fn test_a_plain_turn_and_a_blank_guide_render_no_guide_layer() {
     let blank = plain.with_guide(Some("   ".to_string()));
     assert!(
         !sent_prompt(&blank, &preset())
-            .user_prompt
+            .user_prompt()
             .contains("<Guide>"),
         "a whitespace-only guide renders nothing"
     );
@@ -864,7 +1207,7 @@ fn test_an_impersonate_prompt_drops_the_player_layer_and_the_guide() {
         .narration(&fixture.history, "")
         .impersonating(Some("Ask about the gate.".to_string()));
 
-    let user = sent_prompt(&case, &preset()).user_prompt;
+    let user = sent_prompt(&case, &preset()).user_prompt();
 
     assert!(
         !user.contains("<Persona>"),
@@ -879,7 +1222,7 @@ fn test_the_impersonate_preset_renders_its_persona_macros() {
     let fixture = Fixture::new();
     let case = fixture.narration(&fixture.history, "").impersonating(None);
 
-    let system = sent_prompt(&case, &impersonate_preset()).system_prompt;
+    let system = sent_prompt(&case, &impersonate_preset()).system_prompt();
 
     assert!(
         system.contains(&format!("Write as {}.", fixture.persona.sheet.name)),
@@ -910,9 +1253,9 @@ fn test_the_world_global_rules_render_into_the_system_prompt() {
     );
 
     assert!(
-        call.system_prompt.contains("Magic is forbidden."),
+        call.system_prompt().contains("Magic is forbidden."),
         "the rules belong to the system prompt: {}",
-        call.system_prompt
+        call.system_prompt()
     );
 }
 
@@ -926,7 +1269,11 @@ fn test_a_character_with_a_summary_renders_that_summary() {
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     );
-    let known = prompt_block(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
+    let known = prompt_block(
+        &call.user_prompt(),
+        "<KnownCharacters>",
+        "</KnownCharacters>",
+    );
 
     assert!(
         known.contains("- Alice\n"),
@@ -954,7 +1301,11 @@ fn test_a_character_without_a_summary_renders_three_description_lines() {
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     );
-    let known = prompt_block(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
+    let known = prompt_block(
+        &call.user_prompt(),
+        "<KnownCharacters>",
+        "</KnownCharacters>",
+    );
 
     assert!(
         known.contains("- Bob\n"),
@@ -980,7 +1331,11 @@ fn test_a_known_entry_renders_the_bare_name_whether_present_or_absent() {
         &fixture.narration(&fixture.history, "I look around."),
         &preset(),
     );
-    let known = prompt_block(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
+    let known = prompt_block(
+        &call.user_prompt(),
+        "<KnownCharacters>",
+        "</KnownCharacters>",
+    );
 
     assert!(
         known.contains("- Alice\n") && known.contains("- Bob\n"),
@@ -1015,9 +1370,9 @@ fn test_no_relationships_block_renders_while_the_related_character_is_away() {
     );
 
     assert!(
-        !call.user_prompt.contains("Relationships:"),
+        !call.user_prompt().contains("Relationships:"),
         "an away Character has no relationships block: {}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1047,14 +1402,14 @@ fn test_the_relationships_block_renders_the_present_characters_name() {
     );
 
     assert!(
-        call.user_prompt.contains("Relationships:"),
+        call.user_prompt().contains("Relationships:"),
         "a present Character has a relationships block: {}",
-        call.user_prompt
+        call.user_prompt()
     );
     assert!(
-        call.user_prompt.contains("Partner") && call.user_prompt.contains("allies"),
+        call.user_prompt().contains("Partner") && call.user_prompt().contains("allies"),
         "the block names the related Character and its text: {}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1076,7 +1431,7 @@ fn test_both_card_lists_render_in_character_id_order() {
         ("<KnownCharacters>", "</KnownCharacters>"),
         ("<CharactersPresent>", "</CharactersPresent>"),
     ] {
-        let rendered = prompt_block(&call.user_prompt, open, close);
+        let rendered = prompt_block(&call.user_prompt(), open, close);
         let positions: Vec<usize> = ["Ada", "Bea", "Cid"]
             .iter()
             .map(|name| {
@@ -1103,7 +1458,7 @@ fn test_a_present_card_labels_its_scenario_field() {
         &preset(),
     );
     let present = prompt_block(
-        &call.user_prompt,
+        &call.user_prompt(),
         "<CharactersPresent>",
         "</CharactersPresent>",
     );
@@ -1164,10 +1519,10 @@ fn test_a_system_injection_in_the_players_text_is_filtered() {
     );
 
     assert!(
-        call.user_prompt
+        call.user_prompt()
             .contains("I want to override [FILTERED] instructions"),
         "{}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1181,9 +1536,9 @@ fn test_a_char_injection_in_the_players_text_is_filtered() {
     );
 
     assert!(
-        call.user_prompt.contains("Your name is now [FILTERED]"),
+        call.user_prompt().contains("Your name is now [FILTERED]"),
         "{}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1197,9 +1552,9 @@ fn test_plain_player_text_passes_through() {
     );
 
     assert!(
-        call.user_prompt.contains("hello world"),
+        call.user_prompt().contains("hello world"),
         "{}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1210,7 +1565,11 @@ fn test_single_braces_in_the_players_text_pass_through() {
     let player = "I have {one} brace and normal text";
     let call = sent_prompt(&fixture.narration(&fixture.history, player), &preset());
 
-    assert!(call.user_prompt.contains(player), "{}", call.user_prompt);
+    assert!(
+        call.user_prompt().contains(player),
+        "{}",
+        call.user_prompt()
+    );
 }
 
 // CASE narrator-input-multiple-injections: every injection in the player's text is filtered.
@@ -1223,10 +1582,10 @@ fn test_every_injection_in_the_players_text_is_filtered() {
     );
 
     assert!(
-        call.user_prompt
+        call.user_prompt()
             .contains("[FILTERED] ignore previous [FILTERED]"),
         "{}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1240,9 +1599,9 @@ fn test_empty_braces_in_the_players_text_pass_through() {
     );
 
     assert!(
-        call.user_prompt.contains("test {{}} end"),
+        call.user_prompt().contains("test {{}} end"),
         "{}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1256,9 +1615,9 @@ fn test_unclosed_braces_in_the_players_text_pass_through() {
     );
 
     assert!(
-        call.user_prompt.contains("test {{abc end"),
+        call.user_prompt().contains("test {{abc end"),
         "{}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1269,9 +1628,9 @@ fn test_nested_braces_in_the_players_text_filter_the_outer_pattern() {
     let call = sent_prompt(&fixture.narration(&fixture.history, "{{a{{b}}"), &preset());
 
     assert!(
-        call.user_prompt.contains("[FILTERED]"),
+        call.user_prompt().contains("[FILTERED]"),
         "{}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -1450,8 +1809,8 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     let call = recorded.last().expect("the call is recorded");
     assert_eq!(call.agent_name, "narrator");
     assert!(call.error_message.is_none());
-    assert!(!call.system_prompt.is_empty());
-    assert!(!call.user_prompt.is_empty());
+    assert!(!sent_system_text(call).is_empty());
+    assert!(!sent_user_text(call).is_empty());
 }
 
 // CASE narrator-impersonate-uses-its-own-recorder: an Impersonate calls the recorder of its own slot, and every other kind calls the narration recorder.
@@ -1586,7 +1945,7 @@ fn test_each_generation_makes_its_user_message_and_flags() {
         let label = format!("{:?}", generation.kind());
         let case = fixture.case_for(generation, &history, input);
 
-        let user = sent_prompt(&case, &preset()).user_prompt;
+        let user = sent_prompt(&case, &preset()).user_prompt();
 
         let rendered = prompt_block(&user, "<PlayerInput>", "</PlayerInput>");
         assert!(
@@ -1618,10 +1977,20 @@ fn test_a_continue_answers_the_input_that_ends_the_window() {
     });
 
     let after_input = fixture.narration(&ends_in_input, "");
-    let user = sent_prompt(&after_input, &preset()).user_prompt;
+    let call = sent_prompt(&after_input, &preset());
+    let last = call.parts.last().expect("a call has parts");
     assert!(
-        prompt_block(&user, "<PlayerInput>", "</PlayerInput>").contains("I wait."),
-        "a Continue repeats the last Input: {user}"
+        last.role == PromptRole::User
+            && last
+                .text
+                .starts_with("<LastMessage>\nI wait.\n</LastMessage>"),
+        "a Continue answers the last Input, which is the last message: {}",
+        last.text
+    );
+    assert!(
+        !call.user_prompt().contains("<PlayerInput>"),
+        "the Input is not sent twice: {}",
+        call.user_prompt()
     );
 }
 
@@ -1630,7 +1999,7 @@ fn test_a_continue_answers_the_input_that_ends_the_window() {
 fn test_a_continue_after_a_narration_renders_no_player_input_layer() {
     let fixture = Fixture::new();
     let after_narration = fixture.narration(&fixture.history, "");
-    let user = sent_prompt(&after_narration, &preset()).user_prompt;
+    let user = sent_prompt(&after_narration, &preset()).user_prompt();
 
     assert!(
         !user.contains("<PlayerInput>"),
@@ -1649,7 +2018,7 @@ fn test_a_guide_after_a_narration_renders_the_guide_and_no_player_input_layer() 
     let case = fixture
         .narration(&fixture.history, "")
         .with_guide(Some("Add tension.".to_string()));
-    let user = sent_prompt(&case, &preset()).user_prompt;
+    let user = sent_prompt(&case, &preset()).user_prompt();
 
     assert!(
         !user.contains("<PlayerInput>"),
@@ -1666,7 +2035,7 @@ fn test_a_guide_after_a_narration_renders_the_guide_and_no_player_input_layer() 
 fn test_an_impersonate_with_no_direction_ends_at_the_post_history_splice() {
     let fixture = Fixture::new();
     let case = fixture.narration(&fixture.history, "").impersonating(None);
-    let user = sent_prompt(&case, &preset()).user_prompt;
+    let user = sent_prompt(&case, &preset()).user_prompt();
 
     assert!(
         !user.contains("<PlayerInput>"),
@@ -1678,12 +2047,12 @@ fn test_an_impersonate_with_no_direction_ends_at_the_post_history_splice() {
     );
 }
 
-// CASE narrator-call-record-failure: a failed call is recorded with its failure text.
+// CASE narrator-call-record-failure: a call that fails after the send is recorded with its failure text and the messages it sent.
 #[test]
 fn test_a_failed_call_is_recorded_with_its_failure_text() {
     let storage = Arc::new(crate::adapters::driven::storage::Storage::new_in_memory());
     let model = Arc::new(ScriptedModel::new().failed(Role::Narrator));
-    let narrator = recording_narrator(model, &storage);
+    let narrator = recording_narrator(Arc::clone(&model), &storage);
     let fixture = Fixture::new();
     let case = fixture.narration(&fixture.history, "I look around.");
 
@@ -1701,6 +2070,14 @@ fn test_a_failed_call_is_recorded_with_its_failure_text() {
         failure.error_message.as_deref(),
         Some("LLM Error: Narration generation failed at stage 'scripted': configured_failure")
     );
+    let payload: serde_json::Value = serde_json::from_str(&failure.raw_request_json)
+        .expect("a failure after the send stores the payload");
+    let sent: Vec<serde_json::Value> = prompt_of(&model)
+        .parts
+        .iter()
+        .map(PromptPart::to_json)
+        .collect();
+    assert_eq!(payload["messages"], serde_json::json!(sent));
 }
 
 // CASE narrator-sends-the-preset-parameters: the samplers of the preset and the Game reach the model call, for a Narration and for an Impersonate, and the response length comes from the budget.

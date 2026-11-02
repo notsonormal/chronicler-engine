@@ -11,7 +11,7 @@ use chronicler_engine::application::connection_test_service::ProviderFactory;
 use chronicler_engine::application::ports::llm_provider::LlmProvider;
 use chronicler_engine::domain::model::llm_backend::LlmBackendType;
 use chronicler_engine::domain::model::settings::{AppSettings, LlmConnection, ReasoningEffort};
-use chronicler_engine::test_support::body_text;
+use chronicler_engine::test_support::{body_text, sent_user_text};
 use chronicler_engine::TestAppBuilder;
 
 use crate::SettingsTestGuard;
@@ -69,7 +69,7 @@ async fn test_connection_context_window_applies_from_the_next_narration() {
         .expect("the recorded calls read back")
         .into_iter()
         .filter(|message| message.agent_name == "narrator")
-        .map(|message| message.user_prompt)
+        .map(|message| sent_user_text(&message))
         .collect();
     assert_eq!(prompts.len(), 2, "each Action records one narrator call");
     let tight = prompts[0].matches("Story entry ").count();
@@ -121,7 +121,7 @@ async fn test_empty_context_window_field_uses_the_provider_default() {
         .expect("the recorded calls read back")
         .into_iter()
         .filter(|message| message.agent_name == "narrator")
-        .map(|message| message.user_prompt)
+        .map(|message| sent_user_text(&message))
         .collect();
     assert_eq!(prompts.len(), 2, "each Action records one narrator call");
     let wide = prompts[0].matches("Story entry ").count();

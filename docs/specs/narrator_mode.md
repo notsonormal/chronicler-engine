@@ -44,7 +44,7 @@ When the client POST /games/{game_id}/mode with narrator_mode="interactive_ficti
 Then the response status is "200 OK" and its body is empty
 And a GET /screen?parts=games renders the posture controls with narrative_perspective "second" selected (the nudge)
 And the system_preset_id select shows the Interactive Fiction bundle's system preset selected
-And the next narration's recorded user prompt resolves the perspective macro to "second" (posture macros render into the post-history splice of the user prompt, not the system prompt)
+And the user messages of the next narration call resolve the perspective macro to "second" (posture macros render into the post-history splice of the last user message, not the system message)
 ```
 
 #### Scenario 23.4: A deliberately-set perspective survives a mode switch
@@ -53,7 +53,7 @@ And the next narration's recorded user prompt resolves the perspective macro to 
 Given an active game in Novel mode whose perspective was set to "second" through the posture auto-save
 When the client POST /games/{game_id}/mode with narrator_mode="interactive_fiction"
 Then a GET /screen?parts=games renders the posture controls with narrative_perspective "second" selected
-And the next narration's recorded user prompt still resolves the perspective macro to "second"
+And the user messages of the next narration call still resolve the perspective macro to "second"
 ```
 
 ### Steering availability

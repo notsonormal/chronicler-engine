@@ -6,6 +6,7 @@ use std::fmt;
 use crate::domain::model::dock::OptionsFailure;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::llm_message::LlmMessage;
+use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{NarratorMode, ReasoningEffort};
 use crate::domain::model::state::message_types::MessageType;
@@ -228,12 +229,30 @@ pub struct LlmMessageRecordView {
     pub backend_name: String,
     pub model_name: String,
     pub timestamp: String,
-    pub system_prompt: String,
-    pub user_prompt: String,
+    pub sent_parts: Vec<SentPartView>,
     pub parsed_response: String,
     pub error_message: Option<String>,
     pub raw_request_json: String,
     pub raw_response_json: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SentPartView {
+    pub role_label: &'static str,
+    pub text: String,
+}
+
+impl From<&PromptPart> for SentPartView {
+    fn from(part: &PromptPart) -> Self {
+        Self {
+            role_label: match part.role {
+                PromptRole::System => "System",
+                PromptRole::User => "User",
+                PromptRole::Assistant => "Assistant",
+            },
+            text: part.text.clone(),
+        }
+    }
 }
 
 impl From<&LlmMessage> for LlmMessageRecordView {
@@ -253,8 +272,7 @@ impl From<&LlmMessage> for LlmMessageRecordView {
             backend_name: msg.backend_name.clone(),
             model_name: msg.model_name.clone(),
             timestamp: msg.created_at.format("%H:%M:%S").to_string(),
-            system_prompt: msg.system_prompt.clone(),
-            user_prompt: msg.user_prompt.clone(),
+            sent_parts: msg.sent_parts().iter().map(SentPartView::from).collect(),
             parsed_response: msg.parsed_response.clone(),
             error_message: msg.error_message.clone(),
             raw_request_json: pretty_json(&msg.raw_request_json),

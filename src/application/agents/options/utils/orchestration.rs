@@ -4,6 +4,7 @@
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::domain::model::agent::{AgentSettings, HookInput};
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::prompt_part::PromptPart;
 use crate::domain::model::template::DEFAULT_OPTION_COUNT;
 use crate::error::EngineError;
 
@@ -44,12 +45,13 @@ fn options_with_llm_call(
     call: &CallSettings,
 ) -> Result<Vec<String>, EngineError> {
     let (system_prompt, user_prompt) = OptionsPromptBuilder::new(context.clone()).build();
+    let prompt = PromptPart::system_and_user(system_prompt, user_prompt);
 
     tracing::info!("[Options] Calling provider: {}", recorder.provider_label());
 
     let mut last_error = None;
     for attempt in 1..=MAX_OPTIONS_ATTEMPTS {
-        match options_call_attempt(context, recorder, &system_prompt, &user_prompt, call) {
+        match options_call_attempt(context, recorder, &prompt, call) {
             Ok(Some(options)) => return Ok(options),
             Ok(None) => {
                 last_error = Some(EngineError::Parse(
@@ -71,11 +73,10 @@ fn options_with_llm_call(
 fn options_call_attempt(
     context: &OptionsPromptContext<'_>,
     recorder: &LlmCallRecorder,
-    system_prompt: &str,
-    user_prompt: &str,
+    prompt: &[PromptPart],
     call: &CallSettings,
 ) -> Result<Option<Vec<String>>, EngineError> {
-    match recorder.complete(AGENT_OPTIONS, system_prompt, user_prompt, call) {
+    match recorder.complete(AGENT_OPTIONS, prompt, call) {
         Ok(llm_result) => {
             let options = parse_options(&llm_result.text, context.option_count);
             tracing::info!("[Options] Parsed {} options", options.len());

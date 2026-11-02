@@ -119,9 +119,7 @@ pub fn handle_response(
     req_id: u64,
     start_time: std::time::Instant,
     url: &str,
-    system_prompt: &str,
-    user_text: &str,
-    raw_request_json: String,
+    raw_request_json: &str,
 ) -> crate::error::Result<super::request::ChatCompletionResult> {
     let status = response.status();
     let header_time = start_time.elapsed();
@@ -189,9 +187,7 @@ pub fn handle_response(
     let text = result?;
     Ok(super::request::ChatCompletionResult {
         text,
-        system_prompt: system_prompt.to_string(),
-        user_prompt: user_text.to_string(),
-        raw_request_json,
+        raw_request_json: raw_request_json.to_string(),
         raw_response_json: raw_response,
     })
 }

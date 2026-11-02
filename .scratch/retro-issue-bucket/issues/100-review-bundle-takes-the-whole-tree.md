@@ -22,3 +22,11 @@ Source: `/retro` 2026-11-02, the session of layout-trials ticket 11 (`.scratch/l
 - **A.** `prepare_review_bundle.py` takes a pathspec (`-- <paths>`), passed to every `git diff` and to the untracked list.
 - **B.** A line in `.agents/skills/code-review/SKILL.md`: with a shared tree, build the bundle by hand with `git diff HEAD -- <paths>`.
 - **C.** Nothing: commit first, then review with `--ref`.
+
+## Recurrence (2026-11-02, layout-trials ticket 15)
+
+Source: `/retro` of the coordinator session of [Try the history in the ME format](../../layout-trials/issues/15-history-in-me-format.md).
+
+- **known** The tree held 5 changed and 14 untracked files of `.scratch/character-art-from-code/` from another session. `prepare_review_bundle.py --uncommitted` put them in `tooling.patch` (1174 lines, of which 400 were this ticket's).
+- **known** The coordinator wrote `tooling-lt15.patch` with `awk` and told both reviewers to ignore the other files. The comment pass used `comment_finder.py --files` with a hand-built list (`tmp/lt15/code-files.txt`).
+- **Won't do check.** D2 lists "a review bundle holds other efforts' files (32)", with the reason "many efforts share one checkout". Option A does not fight the shared checkout. It lets a session review its own files in it. Two hand-built bundles in one day are the new evidence.

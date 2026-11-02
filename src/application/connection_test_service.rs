@@ -10,9 +10,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::application::errors::ApplicationError;
-use crate::application::ports::llm_provider::LlmProvider;
+use crate::application::ports::llm_provider::{LlmCallFailure, LlmProvider};
 use crate::application::settings_service::SettingsService;
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::prompt_part::PromptPart;
 use crate::domain::model::settings::LlmConnection;
 use crate::error::{EngineError, LlmFailure};
 
@@ -67,8 +68,7 @@ impl ConnectionTestService {
         let started = Instant::now();
         let (backend_name, model_name) = match provider.complete(
             TEST_AGENT_NAME,
-            TEST_SYSTEM_PROMPT,
-            TEST_USER_PROMPT,
+            &PromptPart::system_and_user(TEST_SYSTEM_PROMPT, TEST_USER_PROMPT),
             &CallSettings {
                 max_tokens: TEST_MAX_TOKENS,
                 ..CallSettings::default()
@@ -77,10 +77,11 @@ impl ConnectionTestService {
             Ok(result) => (result.backend_name, result.model_name),
             // The probe's budget is tiny, so a reasoning model can spend it all before
             // answering. The provider still answered, which is all the test checks.
-            Err(EngineError::Llm(LlmFailure::TokenBudgetSpent { .. })) => {
-                (provider.name().to_string(), provider.model().to_string())
-            }
-            Err(error) => return Err(error.into()),
+            Err(LlmCallFailure {
+                error: EngineError::Llm(LlmFailure::TokenBudgetSpent { .. }),
+                ..
+            }) => (provider.name().to_string(), provider.model().to_string()),
+            Err(failure) => return Err(failure.error.into()),
         };
         Ok(ConnectionTestResult {
             elapsed_ms: started.elapsed().as_millis(),

@@ -12,7 +12,9 @@ use crate::domain::model::state::message_types::{MessageType, StoryRow};
 use crate::test_support::fixtures::{
     default_story_row, prompt_block, TestMap, TestCharacter, TestPersona,
 };
-use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
+use crate::test_support::{
+    sent_user_text, make_test_recorder, make_test_recorder_with_storage, ScriptedModel,
+};
 use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::game::GameId;
 
@@ -173,12 +175,12 @@ fn test_the_settings_preset_reaches_the_prompt() {
 
     let call = model.calls().into_iter().next().expect("one call");
     assert!(
-        call.system_prompt.contains(&format!(
+        call.system_prompt().contains(&format!(
             "Offer 3 bold moves for {}.",
             scene.persona.sheet.name
         )),
         "the preset's macros must render: {}",
-        call.system_prompt
+        call.system_prompt()
     );
 }
 
@@ -194,15 +196,15 @@ fn test_without_a_preset_the_fallback_prompt_renders_its_macros() {
 
     let call = model.calls().into_iter().next().expect("one call");
     assert!(
-        call.system_prompt
+        call.system_prompt()
             .contains("options generator for a text adventure"),
         "the fallback prompt must name what it is: {}",
-        call.system_prompt
+        call.system_prompt()
     );
     assert!(
-        !call.system_prompt.contains("{{"),
+        !call.system_prompt().contains("{{"),
         "no macro may reach the model: {}",
-        call.system_prompt
+        call.system_prompt()
     );
 }
 
@@ -227,7 +229,7 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
     let call = recorded.last().expect("the call is recorded");
     assert_eq!(call.agent_name, "options");
     assert!(call.error_message.is_none());
-    assert!(call.user_prompt.contains("<CurrentRoom>"));
+    assert!(sent_user_text(call).contains("<CurrentRoom>"));
 }
 
 // CASE options-call-record-failure: a failed call is recorded with its failure text.
@@ -279,7 +281,7 @@ fn test_the_card_list_renders_in_character_id_order() {
 
     let call = model.calls().into_iter().next().expect("one call");
     let present_block = prompt_block(
-        &call.user_prompt,
+        &call.user_prompt(),
         "<CharactersPresent>",
         "</CharactersPresent>",
     );
@@ -311,7 +313,7 @@ fn test_a_cards_text_renders_its_placeholders() {
 
     let call = model.calls().into_iter().next().expect("one call");
     let present_block = prompt_block(
-        &call.user_prompt,
+        &call.user_prompt(),
         "<CharactersPresent>",
         "</CharactersPresent>",
     );
@@ -344,7 +346,7 @@ fn test_a_cards_option_count_renders_the_preset_count() {
 
     let call = model.calls().into_iter().next().expect("one call");
     let present_block = prompt_block(
-        &call.user_prompt,
+        &call.user_prompt(),
         "<CharactersPresent>",
         "</CharactersPresent>",
     );
@@ -372,9 +374,9 @@ fn test_the_closing_line_names_no_count() {
         scene.persona.sheet.name
     );
     assert!(
-        call.user_prompt.contains(&expected),
+        call.user_prompt().contains(&expected),
         "the closing line is the whole sentence: {}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 
@@ -427,9 +429,9 @@ fn test_the_option_count_of_the_settings_sets_the_text_and_the_cap() {
 
     let call = model.calls().into_iter().next().expect("one call");
     assert!(
-        call.system_prompt.contains("Offer 2 moves."),
+        call.system_prompt().contains("Offer 2 moves."),
         "{}",
-        call.system_prompt
+        call.system_prompt()
     );
     assert_eq!(offered.0, ["One", "Two"]);
 }
@@ -454,9 +456,9 @@ fn test_without_an_option_count_the_default_of_three_applies() {
 
     let call = model.calls().into_iter().next().expect("one call");
     assert!(
-        call.system_prompt.contains("Offer 3 moves."),
+        call.system_prompt().contains("Offer 3 moves."),
         "{}",
-        call.system_prompt
+        call.system_prompt()
     );
     assert_eq!(offered.0.len(), 3);
 }

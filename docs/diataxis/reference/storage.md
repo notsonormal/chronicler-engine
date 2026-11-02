@@ -108,7 +108,7 @@ The tables form three logical clusters:
 
 ### Standalone tables
 
-- **`llm_messages`** — the LLM messages: one row for each model call, for debugging and prompt engineering. Pruned automatically to a fixed row cap.
+- **`llm_messages`** — the LLM messages: one row for each model call, for debugging and prompt engineering. Pruned automatically to a fixed row cap. A new row stores the payload that the transport sent in `raw_request_json` and leaves `system_prompt` and `user_prompt` empty. An old row keeps its two columns.
 - **`prompt_presets`** — prompt preset CRUD (system, quantifier, and other preset types). `id` is a text key. Storage reads, writes and deletes the rows and counts the Games that hold a preset in their preset slots. `PromptPresetService` in the application layer chooses the preset of a Game and decides whether an edit or a delete is allowed.
 
 ## Relationships

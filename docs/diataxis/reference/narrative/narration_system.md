@@ -17,6 +17,12 @@ A call to OpenRouter sends a `session_id`. All OpenRouter calls of one Game send
 
 The wiring builds one `LlmCallRecorder` for each slot. The recorder resolves its Connection from the settings row at call time. So a connection switch takes effect on the next LLM call without a restart. The health of an Impersonate shows under the Narrator Role, because Impersonate has no Role.
 
+## The Model Port
+
+`LlmProvider::complete` takes the agent name, a list of prompt parts and the call settings. A prompt part is a role (`system`, `user` or `assistant`) and a text. The Quantifier, the Options agent and the connection test send two parts: a system part and a user part. The narrator sends one part for each message of its prompt (see Prompt System).
+
+A provider answers with the text and the payload that it sent. A failed call answers with its error and the payload that it sent before the failure. The payload is empty when the call failed before any send. `LlmCallRecorder::complete` stores the payload in `raw_request_json` on a good row and on a failed row.
+
 ## Game Master Role
 
 The narrator is an LLM acting as a Game Master for a text adventure.
@@ -29,4 +35,4 @@ Two slash commands steer one generation. `/guide` (a Guided Generation) steers w
 
 ## Prompt Rules of a Generation
 
-The narrator owns the prompt rules of each kind of generation. The Job loads the values of one narration and gives them to the narrator with the generation. The narrator then makes the user message, sets the guide and the Impersonate flag, and names the role whose health the call feeds. That role is the Trigger for an event Narration and the narrator for every other kind. The narrator works from the values that it is given.
+The narrator owns the prompt rules of each kind of generation. The Job loads the values of one narration and gives them to the narrator with the generation. The narrator then makes the Layer 7 text, sets the guide and the Impersonate flag, and names the role whose health the call feeds. That role is the Trigger for an event Narration and the narrator for every other kind. The narrator works from the values that it is given.

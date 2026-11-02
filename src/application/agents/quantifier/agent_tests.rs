@@ -13,7 +13,10 @@ use crate::domain::model::state::message_types::{MessageType, StoryRow};
 use crate::test_support::fixtures::{
     default_story_row, prompt_block, TestMap, TestCharacter, TestPersona,
 };
-use crate::test_support::{make_test_recorder, make_test_recorder_with_storage, ScriptedModel};
+use crate::test_support::{
+    sent_system_text, sent_user_text, make_test_recorder, make_test_recorder_with_storage,
+    ScriptedModel,
+};
 use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::game::GameId;
 
@@ -318,12 +321,12 @@ fn test_the_settings_preset_reaches_the_prompt() {
 
     let call = model.calls().into_iter().next().expect("one call");
     assert!(
-        call.system_prompt.contains(&format!(
+        call.system_prompt().contains(&format!(
             "Report the Characters for {}.",
             turn.persona.sheet.name
         )),
         "the preset's macros must render: {}",
-        call.system_prompt
+        call.system_prompt()
     );
 }
 
@@ -349,8 +352,8 @@ fn test_a_good_call_is_recorded_with_its_prompts() {
         .expect("the call is recorded, so the panel can show it");
     assert_eq!(call.agent_name, "quantifier");
     assert!(call.error_message.is_none());
-    assert!(call.user_prompt.contains("<CurrentRoom>"));
-    assert!(!call.system_prompt.is_empty());
+    assert!(sent_user_text(call).contains("<CurrentRoom>"));
+    assert!(!sent_system_text(call).is_empty());
 }
 
 // CASE quantifier-call-record-failure: a failed call is recorded with its failure text.
@@ -415,17 +418,17 @@ fn test_both_card_lists_render_in_character_id_order() {
     let call = model.calls().into_iter().next().expect("one call");
     for (prompt, open, close) in [
         (
-            &call.system_prompt,
+            &call.system_prompt(),
             "<available_character_ids>",
             "</available_character_ids>",
         ),
         (
-            &call.user_prompt,
+            &call.user_prompt(),
             "<PreviousCharactersPresent>",
             "</PreviousCharactersPresent>",
         ),
     ] {
-        let positions = order_of(prompt_block(prompt, open, close), &["Ada", "Bea", "Cid"]);
+        let positions = order_of(&prompt_block(prompt, open, close), &["Ada", "Bea", "Cid"]);
         assert!(
             positions.windows(2).all(|pair| pair[0] < pair[1]),
             "{open} renders its cards in id order: {prompt}"
@@ -447,7 +450,7 @@ fn test_a_cards_text_renders_its_placeholders() {
 
     let call = model.calls().into_iter().next().expect("one call");
     let present = prompt_block(
-        &call.user_prompt,
+        &call.user_prompt(),
         "<PreviousCharactersPresent>",
         "</PreviousCharactersPresent>",
     );
@@ -473,20 +476,20 @@ fn test_the_newest_message_renders_in_the_latest_message_block() {
 
     let call = model.calls().into_iter().next().expect("one call");
     assert!(
-        call.user_prompt
+        call.user_prompt()
             .contains("<LatestMessage>\n  You look around the inn.\n</LatestMessage>\n\n"),
         "the block holds the saved text and no name prefix: {}",
-        call.user_prompt
+        call.user_prompt()
     );
     assert!(
-        call.user_prompt.contains("happens in <LatestMessage>"),
+        call.user_prompt().contains("happens in <LatestMessage>"),
         "the closing sentence names the block: {}",
-        call.user_prompt
+        call.user_prompt()
     );
     assert!(
-        !call.user_prompt.contains("LatestNarration"),
+        !call.user_prompt().contains("LatestNarration"),
         "no older tag name reaches the model: {}",
-        call.user_prompt
+        call.user_prompt()
     );
 }
 

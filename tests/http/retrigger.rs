@@ -188,7 +188,8 @@ async fn test_retrigger_sends_the_rendered_direction_to_the_model_http() {
     let retrigger_call = event_calls.last().expect("the Retrigger's event call");
     let prompt = format!(
         "{}\n{}",
-        retrigger_call.system_prompt, retrigger_call.user_prompt
+        retrigger_call.system_prompt(),
+        retrigger_call.user_prompt()
     );
     assert!(
         prompt.contains("Test Player notices the lamp."),

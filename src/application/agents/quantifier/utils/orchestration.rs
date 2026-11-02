@@ -5,6 +5,7 @@ use crate::application::llm_recorder::LlmCallRecorder;
 use crate::domain::model::agent::{AgentSettings, HookInput};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::prompt_part::PromptPart;
 use crate::domain::model::quantifier::QuantifierResult;
 use crate::error::EngineError;
 
@@ -76,6 +77,7 @@ pub(crate) fn quantify_room_with_llm_call(
     });
 
     let (system_prompt, user_prompt) = builder.build();
+    let prompt = PromptPart::system_and_user(system_prompt, user_prompt);
 
     tracing::info!(
         "[Quantifier] Calling provider: {} for room: {}",
@@ -93,7 +95,7 @@ pub(crate) fn quantify_room_with_llm_call(
     let mut last_error = None;
 
     for attempt in 1..=max_attempts {
-        match recorder.complete("quantifier", &system_prompt, &user_prompt, call) {
+        match recorder.complete("quantifier", &prompt, call) {
             Ok(llm_result) => {
                 let response = &llm_result.text;
                 tracing::info!("[Quantifier] Latest message: {}", context.latest_message);

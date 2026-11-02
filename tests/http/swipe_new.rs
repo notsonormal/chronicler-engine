@@ -10,8 +10,8 @@ use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, configured_runner, empty_sqlite_storage, ScriptedModel,
-    TestAppBuilder, TestDataBuilder, TestMap,
+    active_game_of, analysis_report, configured_runner, empty_sqlite_storage, sent_system_text,
+    sent_user_text, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
 };
 
 use crate::support::app_wiring::{
@@ -1510,7 +1510,8 @@ async fn test_retry_re_impersonate_uses_current_preset_content_http() {
         .expect("narrator forensics recorded");
     let prompt = format!(
         "{} {}",
-        narrator_call.system_prompt, narrator_call.user_prompt
+        sent_system_text(narrator_call),
+        sent_user_text(narrator_call)
     );
     assert!(
         prompt.contains(marker),

@@ -4,7 +4,7 @@ use chronicler_engine::test_support::active_game_of;
 use chronicler_engine::adapters::driving::http::AppState;
 use chronicler_engine::application::ports::llm_provider::AGENT_NARRATOR;
 use chronicler_engine::domain::model::state::message_types::MessageType;
-use chronicler_engine::test_support::{ScriptedModel, TestMap};
+use chronicler_engine::test_support::{sent_system_text, sent_user_text, ScriptedModel, TestMap};
 
 use crate::support::app_wiring::app_with_script;
 use crate::support::http_fixtures::{if_world, story_of};
@@ -19,7 +19,7 @@ fn narrator_prompts(state: &AppState) -> Vec<(String, String)> {
         .expect("list_latest_llm_messages should succeed")
         .into_iter()
         .filter(|m| m.agent_name == AGENT_NARRATOR)
-        .map(|m| (m.system_prompt, m.user_prompt))
+        .map(|m| (sent_system_text(&m), sent_user_text(&m)))
         .collect()
 }
 

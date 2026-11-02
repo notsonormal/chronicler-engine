@@ -5,12 +5,15 @@ use crate::error::EngineError;
 use crate::domain::model::character::{CharacterCard, PersonaCard};
 use crate::domain::model::history_cut::HistoryCut;
 use crate::domain::model::map::Room;
+use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::domain::model::prompt_preset::PromptPreset;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{StoryRow, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::world::WorldCard;
-use crate::application::prompting::token_budget::{estimate_tokens, TokenBudget, CHARS_PER_TOKEN};
+use crate::application::prompting::token_budget::{
+    estimate_tokens, TokenBudget, CHARS_PER_TOKEN, MESSAGE_OVERHEAD_TOKENS,
+};
 use crate::application::prompting::builders::sections::{
     build_post_history_prompt, build_system_prompt, render_known_character_entry,
     render_present_relationships, sanitize_for_prompt,
@@ -19,8 +22,9 @@ use crate::application::prompting::types::CharacterContext;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledPrompt {
-    pub system_prompt: String,
-    pub user_prompt: String,
+    /// The system part first, then the user part with the blocks before the
+    /// history, then one part for each history entry.
+    pub parts: Vec<PromptPart>,
     pub max_tokens: u32,
 }
 
@@ -80,13 +84,9 @@ impl PromptAssembler {
             impersonate: context.impersonate,
         };
 
-        let (system, user, actual_max_tokens) = renderer.render_and_fit(budget)?;
+        let (parts, max_tokens) = renderer.render_and_fit(budget)?;
 
-        Ok(AssembledPrompt {
-            system_prompt: system,
-            user_prompt: user,
-            max_tokens: actual_max_tokens,
-        })
+        Ok(AssembledPrompt { parts, max_tokens })
     }
 
     /// Sole writer of the narrative-voice template vars.
@@ -155,31 +155,45 @@ struct LayerRenderer<'a> {
     impersonate: bool,
 }
 
+const HISTORY_OPEN: &str = "<ConversationHistory>\n";
+const HISTORY_CLOSE: &str = "\n</ConversationHistory>";
+const LAST_MESSAGE_OPEN: &str = "<LastMessage>\n";
+const LAST_MESSAGE_CLOSE: &str = "\n</LastMessage>";
+/// The user parts that exist whatever the history: the first one with the blocks
+/// before the history, and a closing one with the blocks after it. The closing
+/// part counts as a new part, the worst case, though it can join the last entry.
+const FIXED_USER_PARTS: usize = 2;
+
 impl<'a> LayerRenderer<'a> {
-    fn render_and_fit(&self, budget: TokenBudget) -> Result<(String, String, u32), EngineError> {
+    fn render_and_fit(&self, budget: TokenBudget) -> Result<(Vec<PromptPart>, u32), EngineError> {
         let system = self.render_system_layer();
-        let entries: Vec<String> = self
+        let system_tokens = Self::part_tokens(&system);
+        let entries: Vec<PromptPart> = self
             .history
             .iter()
             .map(|e| self.render_history_entry(e))
             .collect();
-        let user = self.render_cut_user_prompt(&entries, budget, estimate_tokens(&system));
+        let parts = self.render_cut_prompt(&system, &entries, budget, system_tokens);
 
-        let max_tokens = budget.response_tokens(&system, &user)?;
-        Ok((system, user, max_tokens))
+        let tokens_after_system = parts
+            .iter()
+            .skip(1)
+            .map(|part| Self::part_tokens(&part.text))
+            .sum();
+        let max_tokens = budget.response_tokens(system_tokens, tokens_after_system)?;
+        Ok((parts, max_tokens))
     }
 
-    /// The user prompt with the history cut to the budget: the token cut, then the
-    /// overflow guard. It renders once more only when the guard moved the cut.
-    fn render_cut_user_prompt(
+    /// It renders once more only when the overflow guard moves the token cut.
+    fn render_cut_prompt(
         &self,
-        entries: &[String],
+        system: &str,
+        entries: &[PromptPart],
         budget: TokenBudget,
         system_tokens: usize,
-    ) -> String {
-        let entry_tokens: Vec<usize> = entries.iter().map(|e| estimate_tokens(e)).collect();
-        let fixed_user = Self::join_layers(self.fixed_user_layers(Self::history_slot("")));
-        let space = budget.history_space(system_tokens, estimate_tokens(&fixed_user));
+    ) -> Vec<PromptPart> {
+        let entry_tokens: Vec<usize> = entries.iter().map(|e| Self::part_tokens(&e.text)).collect();
+        let space = budget.history_space(system_tokens, self.fixed_tokens());
         let mut cut = HistoryCut::of(&entry_tokens, space);
 
         // The overflow guard: a part outside the space (a long Player Input) can
@@ -187,53 +201,136 @@ impl<'a> LayerRenderer<'a> {
         // characters, because a token cost rounds each entry up and the sum of those
         // would drop too few.
         let allowed_chars = budget.input_limit().saturating_sub(system_tokens) * CHARS_PER_TOKEN;
-        let mut user = self.render_user_prompt(entries, &cut);
-        let excess_chars = user.chars().count().saturating_sub(allowed_chars);
+        let mut parts = self.render_prompt(system, entries, &cut);
+        let excess_chars = Self::chars_after_system(&parts).saturating_sub(allowed_chars);
         if excess_chars > 0 {
             let kept_from = cut.kept_from();
-            let entry_chars: Vec<usize> = entries.iter().map(|e| e.chars().count()).collect();
+            let entry_chars: Vec<usize> =
+                entries.iter().map(|e| Self::part_chars(&e.text)).collect();
             cut.drop_to_free(&entry_chars, excess_chars);
             if cut.kept_from() > kept_from {
-                user = self.render_user_prompt(entries, &cut);
+                parts = self.render_prompt(system, entries, &cut);
             }
         }
-        user
+        parts
     }
 
-    fn render_user_prompt(&self, entries: &[String], cut: &HistoryCut) -> String {
-        let layers = self
-            .fixed_user_layers(self.render_history_layer(entries, cut))
-            .into_iter()
-            .chain(self.tail_layers());
-        Self::join_layers(layers)
+    /// The cost of one prompt part: its text and the chat-template overhead.
+    fn part_tokens(text: &str) -> usize {
+        estimate_tokens(text) + MESSAGE_OVERHEAD_TOKENS
     }
 
-    /// The layers that do not follow the Player Input. With an empty history slot, they
-    /// are the fixed part that the history space subtracts.
-    fn fixed_user_layers(&self, history_layer: String) -> Vec<String> {
+    /// `part_tokens` in characters, for the overflow guard.
+    fn part_chars(text: &str) -> usize {
+        text.chars().count() + MESSAGE_OVERHEAD_TOKENS * CHARS_PER_TOKEN
+    }
+
+    fn chars_after_system(parts: &[PromptPart]) -> usize {
+        parts
+            .iter()
+            .skip(1)
+            .map(|part| Self::part_chars(&part.text))
+            .sum()
+    }
+
+    /// The Player Input and the Guide stay out of it: a new Input changes them.
+    fn fixed_tokens(&self) -> usize {
+        let tags = format!("{HISTORY_OPEN}{HISTORY_CLOSE}{LAST_MESSAGE_OPEN}{LAST_MESSAGE_CLOSE}");
+        estimate_tokens(&Self::join_layers(self.before_layers()))
+            + estimate_tokens(&Self::join_layers(self.fixed_after_layers()))
+            + estimate_tokens(&tags)
+            + FIXED_USER_PARTS * MESSAGE_OVERHEAD_TOKENS
+    }
+
+    /// The blocks after the history join the last history entry when it is a user
+    /// message, so that two user messages never follow each other.
+    fn render_prompt(
+        &self,
+        system: &str,
+        entries: &[PromptPart],
+        cut: &HistoryCut,
+    ) -> Vec<PromptPart> {
+        let kept = entries.get(cut.kept_from()..).unwrap_or_default();
+        let mut before = self.before_layers();
+        if kept.is_empty() {
+            before.push(Self::empty_history_layer(entries.is_empty()));
+        }
+        let mut parts = vec![
+            PromptPart::system(system),
+            PromptPart::user(Self::join_layers(before)),
+        ];
+        parts.extend(Self::wrap_history(kept));
+        let after = Self::join_layers(self.after_layers(kept.last()));
+        if after.is_empty() {
+            return parts;
+        }
+        match parts.last_mut() {
+            Some(last) if last.role == PromptRole::User => {
+                last.text = format!("{}\n\n{after}", last.text);
+            }
+            _ => parts.push(PromptPart::user(after)),
+        }
+        parts
+    }
+
+    fn before_layers(&self) -> Vec<String> {
         vec![
             self.render_known_characters_layer(),
             self.render_persona_layer(),
             self.render_world_info_layer(),
-            history_layer,
+        ]
+    }
+
+    fn fixed_after_layers(&self) -> Vec<String> {
+        vec![
             self.render_game_state_layer(),
             self.render_characters_present_layer(),
             self.post_history_prompt.clone(),
         ]
     }
 
-    /// The layers a new Input changes: they stay out of the history space.
-    fn tail_layers(&self) -> Vec<String> {
-        vec![self.render_user_layer(), self.render_guide_layer()]
+    /// A new Input changes the Player Input and the Guide, so they stay out of the
+    /// history space. The Player Input is left out when the last history entry is
+    /// that Input already.
+    fn after_layers(&self, last_kept: Option<&PromptPart>) -> Vec<String> {
+        let input_in_history = last_kept.is_some_and(|entry| {
+            entry.role == PromptRole::User && entry.text.trim() == self.user_message.trim()
+        });
+        let mut layers = self.fixed_after_layers();
+        if !input_in_history {
+            layers.push(self.render_user_layer());
+        }
+        layers.push(self.render_guide_layer());
+        layers
+    }
+
+    /// The open tag leads the first entry, the close tag ends the second-to-last,
+    /// and the last entry has its own tag.
+    /// A history of one entry has only the last-message tag.
+    fn wrap_history(kept: &[PromptPart]) -> Vec<PromptPart> {
+        let mut messages = kept.to_vec();
+        let Some(last) = messages.len().checked_sub(1) else {
+            return messages;
+        };
+        if last > 0 {
+            messages[0].text = format!("{HISTORY_OPEN}{}", messages[0].text);
+            messages[last - 1].text = format!("{}{HISTORY_CLOSE}", messages[last - 1].text);
+        }
+        messages[last].text = format!(
+            "{LAST_MESSAGE_OPEN}{}{LAST_MESSAGE_CLOSE}",
+            messages[last].text
+        );
+        messages
     }
 
     fn join_layers(layers: impl IntoIterator<Item = String>) -> String {
-        let user = layers
+        layers
             .into_iter()
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
-            .join("\n\n");
-        format!("{user}\n\n")
+            .join("\n\n")
+            .trim_end()
+            .to_string()
     }
 
     fn render_system_layer(&self) -> String {
@@ -349,29 +446,25 @@ impl<'a> LayerRenderer<'a> {
         output
     }
 
-    fn render_history_entry(&self, entry: &StoryRow) -> String {
-        let sender = match entry.message_type {
-            MessageType::Narration => "Narrator",
-            MessageType::Input => self.persona.sheet.name.as_str(),
-            MessageType::System => "System",
+    fn render_history_entry(&self, entry: &StoryRow) -> PromptPart {
+        let role = match entry.message_type {
+            MessageType::Narration => PromptRole::Assistant,
+            MessageType::Input => PromptRole::User,
+            MessageType::System => PromptRole::System,
         };
-        format!("{sender}: {}\n", entry.text)
+        PromptPart {
+            role,
+            text: entry.text.clone(),
+        }
     }
 
-    fn history_slot(body: &str) -> String {
-        format!("<ConversationHistory>\n{body}</ConversationHistory>\n")
-    }
-
-    fn render_history_layer(&self, entries: &[String], cut: &HistoryCut) -> String {
-        if entries.is_empty() {
-            return Self::history_slot(
-                "(No history yet - this is the start of the conversation)\n",
-            );
-        }
-        if cut.kept_from() >= entries.len() {
-            return Self::history_slot("(History truncated to fit context window)\n");
-        }
-        Self::history_slot(&entries[cut.kept_from()..].concat())
+    fn empty_history_layer(no_history_yet: bool) -> String {
+        let body = if no_history_yet {
+            "(No history yet - this is the start of the conversation)"
+        } else {
+            "(History truncated to fit context window)"
+        };
+        format!("{HISTORY_OPEN}{body}{HISTORY_CLOSE}\n")
     }
 
     fn render_user_layer(&self) -> String {

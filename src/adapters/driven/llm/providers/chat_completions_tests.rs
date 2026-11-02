@@ -2,6 +2,7 @@
 //! through `from_config`, one `complete` call goes out to a chat-completions
 //! endpoint. The stub endpoint shows what the provider puts on the wire.
 
+use crate::domain::model::prompt_part::PromptPart;
 use crate::adapters::driven::llm::providers::chat_completions::ChatCompletionsBackend;
 use crate::application::ports::llm_provider::LlmProvider;
 use crate::domain::model::game::GameId;
@@ -46,7 +47,11 @@ fn chat_completions_complete_answers_with_the_completion_and_its_names() {
     ));
 
     let result = backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(result.text, STUB_ANSWER);
@@ -67,7 +72,11 @@ fn chat_completions_complete_names_ollama_for_an_ollama_connection() {
     ));
 
     let result = backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(result.backend_name, "Ollama");
@@ -84,7 +93,11 @@ fn chat_completions_openrouter_sends_the_key_and_the_app_title() {
     ));
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     let headers = endpoint.received_headers();
@@ -109,7 +122,11 @@ fn chat_completions_ollama_sends_no_key_and_no_app_title() {
     ));
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     let headers = endpoint.received_headers();
@@ -127,7 +144,11 @@ fn chat_completions_complete_sends_the_reasoning_effort_of_the_connection() {
     });
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(endpoint.received_body()["reasoning_effort"], "low");
@@ -146,8 +167,7 @@ fn chat_completions_single_user_message_sends_no_system_message() {
         backend
             .complete(
                 "narrator",
-                "system rules",
-                "user text",
+                &PromptPart::system_and_user("system rules", "user text"),
                 &CallSettings::default(),
             )
             .unwrap();
@@ -176,8 +196,7 @@ fn chat_completions_ollama_closes_the_thinking_channel_of_a_gemma4_model() {
     backend
         .complete(
             "narrator",
-            "system",
-            "User prompt",
+            &PromptPart::system_and_user("system", "User prompt"),
             &CallSettings::default(),
         )
         .unwrap();
@@ -201,8 +220,7 @@ fn chat_completions_ollama_sends_the_user_text_of_another_model_unchanged() {
     backend
         .complete(
             "narrator",
-            "system",
-            "User prompt",
+            &PromptPart::system_and_user("system", "User prompt"),
             &CallSettings::default(),
         )
         .unwrap();
@@ -223,8 +241,7 @@ fn chat_completions_gemma4_marker_is_for_ollama_only() {
     backend
         .complete(
             "narrator",
-            "system",
-            "User prompt",
+            &PromptPart::system_and_user("system", "User prompt"),
             &CallSettings::default(),
         )
         .unwrap();
@@ -242,7 +259,11 @@ fn chat_completions_opencode_go_sends_the_connection_id_and_agent_as_the_session
     });
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     let headers = endpoint.received_headers();
@@ -267,7 +288,11 @@ fn chat_completions_openrouter_sends_no_session_header() {
     ));
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert!(
@@ -287,7 +312,11 @@ fn chat_completions_opencode_go_names_the_session_of_an_unsaved_connection() {
     });
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(
@@ -307,7 +336,11 @@ fn opencode_session_sent(agent_name: &str, game: Option<u64>) -> Option<String> 
     });
 
     backend
-        .complete(agent_name, "system", "user", &settings_of_game(game))
+        .complete(
+            agent_name,
+            &PromptPart::system_and_user("system", "user"),
+            &settings_of_game(game),
+        )
         .unwrap();
 
     endpoint
@@ -361,8 +394,13 @@ fn chat_completions_empty_answer_names_its_finish_reason() {
     ));
 
     let failure = backend
-        .complete("narrator", "system", "user", &CallSettings::default())
-        .expect_err("an empty content is a failure, never an answer");
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
+        .expect_err("an empty content is a failure, never an answer")
+        .error;
 
     assert!(
         matches!(
@@ -409,7 +447,11 @@ fn chat_completions_openrouter_sends_the_provider_order() {
     ));
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(
@@ -430,7 +472,11 @@ fn chat_completions_pinned_provider_order_allows_no_fallbacks() {
     ));
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert_eq!(
@@ -451,7 +497,11 @@ fn chat_completions_without_a_provider_order_sends_no_provider_field() {
     ));
 
     backend
-        .complete("narrator", "system", "user", &CallSettings::default())
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
         .unwrap();
 
     assert!(endpoint.received_body().get("provider").is_none());
@@ -470,7 +520,11 @@ fn chat_completions_provider_order_is_for_openrouter_only() {
         ));
 
         backend
-            .complete("narrator", "system", "user", &CallSettings::default())
+            .complete(
+                "narrator",
+                &PromptPart::system_and_user("system", "user"),
+                &CallSettings::default(),
+            )
             .unwrap();
 
         assert!(
@@ -501,7 +555,11 @@ fn chat_completions_complete_sends_the_call_settings() {
     };
 
     backend
-        .complete("narrator", "system", "user", &settings)
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &settings,
+        )
         .unwrap();
 
     let body = endpoint.received_body();
@@ -524,7 +582,11 @@ fn session_id_sent(provider: LlmBackendType, settings: &CallSettings) -> Option<
         ChatCompletionsBackend::from_config(&connection_to(&endpoint, provider, "a-model"));
 
     backend
-        .complete("narrator", "system", "user", settings)
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            settings,
+        )
         .unwrap();
 
     endpoint.received_body()["session_id"]
@@ -572,5 +634,174 @@ fn chat_completions_openrouter_call_without_a_game_sends_no_session_id() {
     assert_eq!(
         session_id_sent(LlmBackendType::OpenRouter, &settings_of_game(None)),
         None
+    );
+}
+
+fn story_prompt() -> Vec<PromptPart> {
+    vec![
+        PromptPart::system("rules"),
+        PromptPart::user("blocks before"),
+        PromptPart::assistant("first narration"),
+        PromptPart::user("an input"),
+    ]
+}
+
+// CASE chat-completions-sends-each-part-as-a-message: each part of the list is one message with its role, in order.
+#[test]
+fn chat_completions_complete_sends_each_part_as_one_message() {
+    let endpoint = ChatCompletionsMock::start();
+    let backend = ChatCompletionsBackend::from_config(&connection_to(
+        &endpoint,
+        LlmBackendType::OpenCodeGo,
+        "deepseek-v4.1-flash",
+    ));
+
+    backend
+        .complete("narrator", &story_prompt(), &CallSettings::default())
+        .unwrap();
+
+    let body = endpoint.received_body();
+    let sent: Vec<(String, String)> = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|message| {
+            (
+                message["role"].as_str().unwrap().to_string(),
+                message["content"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    let expected: Vec<(String, String)> = [
+        ("system", "rules"),
+        ("user", "blocks before"),
+        ("assistant", "first narration"),
+        ("user", "an input"),
+    ]
+    .iter()
+    .map(|(role, text)| (role.to_string(), text.to_string()))
+    .collect();
+    assert_eq!(sent, expected);
+}
+
+// CASE chat-completions-single-user-message-marks-roles: with single user message on, a list with a narration part sends one user message with a `[SYSTEM]` header and an `[ASSISTANT]` header, and the input as plain text.
+#[test]
+fn chat_completions_single_user_message_marks_the_roles_of_a_list() {
+    let endpoint = ChatCompletionsMock::start();
+    let backend = ChatCompletionsBackend::from_config(&LlmConnection {
+        single_user_message: true,
+        ..connection_to(&endpoint, LlmBackendType::OpenRouter, "llama3")
+    });
+
+    backend
+        .complete("narrator", &story_prompt(), &CallSettings::default())
+        .unwrap();
+
+    let body = endpoint.received_body();
+    let messages = body["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["role"], "user");
+    assert_eq!(
+        messages[0]["content"],
+        "[SYSTEM]\nrules\n\nblocks before\n\n[ASSISTANT]\nfirst narration\n\nan input"
+    );
+}
+
+// CASE chat-completions-single-user-message-skips-empty-parts: with single user message on, a part with an empty text adds no header and no blank line to the one user message.
+#[test]
+fn chat_completions_single_user_message_skips_the_empty_parts_of_a_list() {
+    let endpoint = ChatCompletionsMock::start();
+    let backend = ChatCompletionsBackend::from_config(&LlmConnection {
+        single_user_message: true,
+        ..connection_to(&endpoint, LlmBackendType::OpenRouter, "llama3")
+    });
+
+    backend
+        .complete(
+            "narrator",
+            &[
+                PromptPart::system(""),
+                PromptPart::user("an input"),
+                PromptPart::assistant(""),
+                PromptPart::user("a second input"),
+            ],
+            &CallSettings::default(),
+        )
+        .unwrap();
+
+    let body = endpoint.received_body();
+    let messages = body["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["content"], "an input\n\na second input");
+}
+
+// CASE chat-completions-gemma4-closes-on-the-last-message: the thinking-channel close of a Gemma 4 model on Ollama goes on the last message of a list.
+#[test]
+fn chat_completions_gemma4_close_goes_on_the_last_message() {
+    let endpoint = ChatCompletionsMock::start();
+    let backend = ChatCompletionsBackend::from_config(&connection_to(
+        &endpoint,
+        LlmBackendType::Ollama,
+        "gemma4:latest",
+    ));
+
+    backend
+        .complete("narrator", &story_prompt(), &CallSettings::default())
+        .unwrap();
+
+    let body = endpoint.received_body();
+    let messages = body["messages"].as_array().unwrap();
+    assert_eq!(messages[2]["content"], "first narration");
+    assert_eq!(
+        messages[3]["content"],
+        "an input\n<|turn>model\n<|channel>thought\n<channel|>"
+    );
+}
+
+// CASE chat-completions-returns-the-payload-sent: a good call returns the payload it sent, with the merged message of single user message and the Gemma 4 close, as the model got them.
+#[test]
+fn chat_completions_complete_returns_the_payload_it_sent() {
+    let endpoint = ChatCompletionsMock::start();
+    let backend = ChatCompletionsBackend::from_config(&LlmConnection {
+        single_user_message: true,
+        ..connection_to(&endpoint, LlmBackendType::Ollama, "gemma4:latest")
+    });
+
+    let result = backend
+        .complete("narrator", &story_prompt(), &CallSettings::default())
+        .unwrap();
+
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&result.raw_request_json).unwrap(),
+        endpoint.received_body(),
+        "the record is the request the model received"
+    );
+}
+
+// CASE chat-completions-failure-returns-the-payload-sent [failure]: a call that the endpoint refuses returns the failure with the payload it sent.
+#[test]
+fn chat_completions_a_refused_call_returns_the_payload_it_sent() {
+    let endpoint = ChatCompletionsMock::failing("500 Internal Server Error", r#"{"error":"down"}"#);
+    let backend = ChatCompletionsBackend::from_config(&connection_to(
+        &endpoint,
+        LlmBackendType::OpenRouter,
+        "gpt-4o",
+    ));
+
+    let failure = backend
+        .complete("narrator", &story_prompt(), &CallSettings::default())
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            failure.error,
+            EngineError::Llm(LlmFailure::Http { status: 500, .. })
+        ),
+        "{failure:?}"
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&failure.raw_request_json).unwrap(),
+        endpoint.received_body(),
+        "the failed call still records what it sent"
     );
 }

@@ -82,6 +82,7 @@ CALL_KINDS = {
     "quantifier": CallKind("quantifier", False),
     "options": CallKind("options", False),
 }
+STORY_AGENTS = frozenset(kind.agent for kind in CALL_KINDS.values() if kind.story)
 STORY_KINDS = frozenset(name for name, kind in CALL_KINDS.items() if kind.story)
 NON_STORY_KINDS = frozenset(name for name, kind in CALL_KINDS.items() if not kind.story)
 NON_STORY_AGENTS = frozenset(
@@ -772,6 +773,65 @@ def words(text):
     return len(text.split())
 
 
+def sent_messages(call):
+    """An old row holds the two prompt columns and no more: they are the messages.
+
+    A new row leaves the columns empty, and the `messages` of its `raw_request_json`
+    are the record. A call that failed before any send has no message.
+    """
+    system, user = call.get("system_prompt") or "", call.get("user_prompt") or ""
+    if system or user:
+        return [
+            {"role": role, "text": text}
+            for role, text in (("system", system), ("user", user))
+            if text
+        ]
+    try:
+        payload = json.loads(call.get("raw_request_json") or "")
+    except json.JSONDecodeError:
+        return []
+    messages = payload.get("messages") if isinstance(payload, dict) else None
+    return [
+        {"role": message.get("role"), "text": message.get("content") or ""}
+        for message in messages or []
+        if isinstance(message, dict)
+    ]
+
+
+def read_prompts(call):
+    """The other text joins every message after the system messages, so the readers that
+    look for a block (`<LatestMessage>`) find it in an old row and in a new one."""
+    call["old_row"] = bool(call.get("system_prompt") or call.get("user_prompt"))
+    call["messages"] = sent_messages(call)
+    call["system_prompt"] = "\n\n".join(
+        message["text"] for message in call["messages"] if message["role"] == "system"
+    )
+    call["user_prompt"] = "\n\n".join(
+        message["text"] for message in call["messages"] if message["role"] != "system"
+    )
+    refuse_a_merged_message(call)
+
+
+def refuse_a_merged_message(call):
+    """A `single_user_message` Connection sends one user message that holds the whole call.
+
+    The history is then one text with `[SYSTEM]` and `[ASSISTANT]` headers, and the pack
+    cannot tell its entries apart. The text is not split, so the pack would be wrong with
+    no error.
+    """
+    if call["old_row"] or call["agent_name"] not in STORY_AGENTS:
+        return
+    messages = call["messages"]
+    if len(messages) != 1 or messages[0]["role"] == "system":
+        return
+    text = messages[0]["text"]
+    if text.startswith("[SYSTEM]\n") or "\n[ASSISTANT]\n" in "\n" + text:
+        raise TrialError(
+            f"call {call['id']} sent its whole prompt as one merged user message: "
+            "a `single_user_message` pack is not supported"
+        )
+
+
 def call_kind(call, story):
     """Name a call by the story entry its answer became.
 
@@ -815,16 +875,39 @@ def owner_entry(call, story):
     return before[-1]["id"] if before else None
 
 
-def history_block(user_prompt):
-    match = re.search(
-        r"<ConversationHistory>(.*?)</ConversationHistory>", user_prompt, re.S
-    )
-    return match.group(1) if match else None
+def history_block(call):
+    """An old row holds the history in `<ConversationHistory>` of its one user text.
+
+    A new row sends each history entry as its own message. The tags find them, not a
+    position: the system message is skipped when it is empty, so a position moves. The
+    history runs from its first tag to the last closing tag. The closing tag is the end
+    of the last entry, or the end of the placeholder text of an empty history. The blocks
+    after the history hold no entry text and fall outside.
+    """
+    if call["old_row"]:
+        match = re.search(
+            r"<ConversationHistory>(.*?)</ConversationHistory>",
+            call["user_prompt"],
+            re.S,
+        )
+        return match.group(1) if match else None
+    text = call["user_prompt"]
+    opens = [
+        index
+        for index in (text.find("<ConversationHistory>"), text.find("<LastMessage>"))
+        if index >= 0
+    ]
+    if not opens:
+        return None
+    for closing in ("</LastMessage>", "</ConversationHistory>"):
+        end = text.rfind(closing)
+        if end >= 0:
+            return text[min(opens) : end + len(closing)]
+    return None
 
 
 def history_cover(call, story_before):
-    """Which earlier story entries the call's <ConversationHistory> holds."""
-    block = history_block(call["user_prompt"])
+    block = history_block(call)
     if block is None:
         return None
     held = [entry["id"] for entry in story_before if entry["text"].strip()[:100] in block]
@@ -936,6 +1019,7 @@ def load_pack(folder):
     by_entry = {entry["id"]: [] for entry in story}
     trailing = []
     for call in calls:
+        read_prompts(call)
         call["kind"] = call_kind(call, story)
         call["usage"] = usage_of(call)
         before = [entry for entry in story if entry["timestamp"] <= call["created_at"]]
@@ -948,6 +1032,16 @@ def load_pack(folder):
     return PackData(
         folder, setup, story, run, calls, by_entry, trailing, kind_totals(calls)
     )
+
+
+def message_sections(call):
+    numbered = len(call["messages"]) > 2
+    sections = []
+    for number, message in enumerate(call["messages"], start=1):
+        role = (message["role"] or "?").capitalize()
+        heading = f"{number}. {role}" if numbered else role
+        sections.append(f'## {heading}\n\n```text\n{message["text"]}\n```\n\n')
+    return "".join(sections)
 
 
 def write_call_files(pack):
@@ -967,9 +1061,8 @@ def write_call_files(pack):
                 if call["error_message"]
                 else ""
             )
-            + f'## System\n\n```text\n{call["system_prompt"]}\n```\n\n'
-            f'## User\n\n```text\n{call["user_prompt"]}\n```\n\n'
-            f'## Answer\n\n```text\n{call["parsed_response"]}\n```\n',
+            + message_sections(call)
+            + f'## Answer\n\n```text\n{call["parsed_response"]}\n```\n',
             encoding="utf-8",
         )
 
@@ -1086,7 +1179,6 @@ def summary_lines(pack):
 
 
 def failure_and_cut_lines(pack):
-    """The failed calls, and whether any story entry fell out of `<ConversationHistory>`."""
     lines = []
     if pack.failed_calls:
         lines.append("### Failed calls\n")
@@ -1107,7 +1199,7 @@ def failure_and_cut_lines(pack):
             else ""
         )
         lines.append(
-            f"- No story entry fell out of `<ConversationHistory>` in this trial{size}."
+            f"- No story entry fell out of the history in this trial{size}."
         )
     lines.append("")
     return lines

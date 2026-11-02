@@ -844,5 +844,301 @@ class PlayTrialTests(unittest.TestCase):
         )
 
 
+def payload_of(*messages):
+    return json.dumps(
+        {"model": "m", "messages": [{"role": role, "content": text} for role, text in messages]}
+    )
+
+
+def stored_call(call_id, agent, system="", user="", payload="", answer="", created="2026-11-02T10:00:10Z"):
+    """An old row fills the two prompt columns; a new row fills `raw_request_json`."""
+    return {
+        "id": call_id,
+        "agent_name": agent,
+        "backend_name": "OpenCodeGo",
+        "model_name": "model",
+        "system_prompt": system,
+        "user_prompt": user,
+        "raw_request_json": payload,
+        "raw_response_json": "{}",
+        "parsed_response": answer,
+        "error_message": None,
+        "created_at": created,
+    }
+
+
+def story_entry(entry_id, text, message_type, impersonated=False):
+    return {
+        "id": entry_id,
+        "text": text,
+        "message_type": json.dumps(message_type),
+        "impersonated": impersonated,
+        "timestamp": f"2026-11-02T10:00:0{entry_id}Z",
+        "state": "{}",
+    }
+
+
+OPENING = "The gate stands open and the lamps are lit."
+FIRST_INPUT = "Julian asks the porter about the gate."
+REPLY = "The porter shrugs and points at the steps."
+
+STORY = [
+    story_entry(1, OPENING, "Narration"),
+    story_entry(2, FIRST_INPUT, "Input", impersonated=True),
+    story_entry(3, REPLY, "Narration"),
+]
+
+
+def write_pack_folder(directory, calls, story=STORY):
+    folder = Path(directory) / "pack"
+    folder.mkdir()
+    (folder / "setup.json").write_text("{}", encoding="utf-8")
+    (folder / "run.json").write_text("{}", encoding="utf-8")
+    (folder / "story.json").write_text(json.dumps(story), encoding="utf-8")
+    (folder / "calls.jsonl").write_text(
+        "".join(json.dumps(call) + "\n" for call in calls), encoding="utf-8"
+    )
+    return folder
+
+
+class SentMessagesTests(unittest.TestCase):
+    def test_an_old_row_has_its_two_columns_as_messages(self):
+        call = stored_call(1, "narrator", system="rules", user="blocks and history")
+
+        self.assertEqual(
+            trial.sent_messages(call),
+            [
+                {"role": "system", "text": "rules"},
+                {"role": "user", "text": "blocks and history"},
+            ],
+        )
+
+    def test_a_new_row_has_the_messages_of_its_payload_in_order(self):
+        call = stored_call(
+            1,
+            "narrator",
+            payload=payload_of(
+                ("system", "rules"),
+                ("user", "blocks"),
+                ("assistant", OPENING),
+                ("user", FIRST_INPUT),
+            ),
+        )
+
+        self.assertEqual(
+            [(message["role"], message["text"]) for message in trial.sent_messages(call)],
+            [
+                ("system", "rules"),
+                ("user", "blocks"),
+                ("assistant", OPENING),
+                ("user", FIRST_INPUT),
+            ],
+        )
+
+    def test_a_row_of_a_call_that_failed_before_any_send_has_no_message(self):
+        self.assertEqual(trial.sent_messages(stored_call(1, "narrator")), [])
+        self.assertEqual(
+            trial.sent_messages(stored_call(1, "narrator", payload="{}")), []
+        )
+
+
+class PackOfNewRowsTests(unittest.TestCase):
+    def load(self, calls):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        return trial.load_pack(write_pack_folder(directory.name, calls)), directory
+
+    def test_the_kind_of_a_new_impersonate_row_comes_from_its_system_message(self):
+        call = stored_call(
+            5,
+            "narrator",
+            payload=payload_of(
+                ("system", "You write as the player character."),
+                ("user", "blocks"),
+                ("assistant", OPENING),
+            ),
+            answer="An answer that reached no entry.",
+        )
+
+        pack, _ = self.load([call])
+
+        self.assertEqual(pack.calls[0]["kind"], "impersonate")
+
+    def test_a_new_row_names_the_entries_its_history_messages_hold_and_the_ones_it_drops(self):
+        call = stored_call(
+            5,
+            "narrator",
+            payload=payload_of(
+                ("system", "rules"),
+                ("user", "blocks before"),
+                ("assistant", f"<ConversationHistory>\n{OPENING}"),
+                ("user", f"<LastMessage>\n{FIRST_INPUT}\n</LastMessage>\n\n<GameState>"),
+            ),
+            answer=REPLY,
+            created="2026-11-02T10:00:09Z",
+        )
+        story = STORY + [story_entry(4, "A later entry.", "Narration")]
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+
+        pack = trial.load_pack(write_pack_folder(directory.name, [call], story))
+
+        cover = pack.calls[0]["cover"]
+        self.assertEqual(cover["held"], [1, 2])
+        self.assertEqual(cover["dropped"], [3, 4])
+
+    def test_a_new_row_with_an_empty_system_part_keeps_its_first_history_entry(self):
+        call = stored_call(
+            5,
+            "narrator",
+            payload=payload_of(
+                ("user", "blocks before"),
+                ("assistant", f"<ConversationHistory>\n{OPENING}"),
+                ("user", f"<LastMessage>\n{FIRST_INPUT}\n</LastMessage>\n\n<GameState>"),
+            ),
+            answer=REPLY,
+            created="2026-11-02T10:00:09Z",
+        )
+
+        pack, _ = self.load([call])
+
+        self.assertEqual(pack.calls[0]["cover"]["held"], [1, 2])
+
+    def test_a_new_row_with_an_empty_history_holds_no_entry(self):
+        call = stored_call(
+            5,
+            "narrator",
+            payload=payload_of(
+                ("system", "rules"),
+                (
+                    "user",
+                    "<ConversationHistory>\n(No history yet)\n</ConversationHistory>\n\n<GameState>",
+                ),
+            ),
+            answer=REPLY,
+            created="2026-11-02T10:00:09Z",
+        )
+
+        pack, _ = self.load([call])
+
+        self.assertEqual(pack.calls[0]["cover"]["held"], [])
+
+    def test_a_new_narrator_row_of_one_merged_message_stops_the_pack_with_its_call_id(self):
+        merged = f"[SYSTEM]\nrules\n\nblocks\n\n[ASSISTANT]\n{OPENING}\n\n{FIRST_INPUT}"
+        call = stored_call(7, "narrator", payload=payload_of(("user", merged)))
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        folder = write_pack_folder(directory.name, [call])
+
+        for action in (trial.load_pack, trial.export_pack):
+            with self.assertRaises(trial.TrialError) as stopped:
+                action(folder)
+            self.assertIn("7", str(stopped.exception))
+            self.assertIn("single_user_message", str(stopped.exception))
+
+    def test_a_merged_message_with_an_empty_system_part_and_an_assistant_header_stops_too(self):
+        merged = f"blocks\n\n[ASSISTANT]\n{OPENING}\n\n{FIRST_INPUT}"
+        call = stored_call(8, "narrator", payload=payload_of(("user", merged)))
+
+        with self.assertRaises(trial.TrialError):
+            self.load([call])
+
+    def test_a_new_row_with_a_cut_history_names_the_dropped_entry(self):
+        call = stored_call(
+            5,
+            "narrator",
+            payload=payload_of(
+                ("system", "rules"),
+                ("user", "blocks before"),
+                ("assistant", f"<LastMessage>\n{FIRST_INPUT}\n</LastMessage>"),
+            ),
+            answer=REPLY,
+            created="2026-11-02T10:00:02Z",
+        )
+
+        pack, _ = self.load([call])
+
+        self.assertEqual(pack.calls[0]["cover"]["held"], [2])
+        self.assertEqual(pack.calls[0]["cover"]["dropped"], [1])
+        self.assertIs(pack.first_cut_call, pack.calls[0])
+
+    def test_an_old_row_still_finds_its_history_in_the_conversation_history_tag(self):
+        user = f"<ConversationHistory>\nNarrator: {OPENING}\n</ConversationHistory>\n\n"
+        call = stored_call(
+            5,
+            "narrator",
+            system="rules",
+            user=user,
+            answer=REPLY,
+            created="2026-11-02T10:00:02Z",
+        )
+
+        pack, _ = self.load([call])
+
+        cover = pack.calls[0]["cover"]
+        self.assertEqual(cover["held"], [1])
+        self.assertEqual(cover["dropped"], [2])
+
+    def test_the_quantifier_owner_comes_from_the_latest_message_of_a_new_row(self):
+        call = stored_call(
+            6,
+            "quantifier",
+            payload=payload_of(
+                ("system", "You find who is present."),
+                ("user", f"<LatestMessage>\n{REPLY}\n</LatestMessage>"),
+            ),
+            created="2026-11-02T10:00:01Z",
+        )
+
+        pack, _ = self.load([call])
+
+        self.assertEqual([c["id"] for c in pack.by_entry[3]], [6])
+
+    def test_the_quantifier_owner_comes_from_the_latest_message_of_an_old_row(self):
+        call = stored_call(
+            6,
+            "quantifier",
+            system="You find who is present.",
+            user=f"<LatestMessage>\n{REPLY}\n</LatestMessage>",
+            created="2026-11-02T10:00:01Z",
+        )
+
+        pack, _ = self.load([call])
+
+        self.assertEqual([c["id"] for c in pack.by_entry[3]], [6])
+
+    def test_the_call_file_of_a_new_row_shows_each_message_under_its_role(self):
+        call = stored_call(
+            5,
+            "narrator",
+            payload=payload_of(
+                ("system", "rules"),
+                ("user", "blocks"),
+                ("assistant", OPENING),
+                ("user", FIRST_INPUT),
+            ),
+            answer=REPLY,
+        )
+        pack, _ = self.load([call])
+
+        trial.write_call_files(pack)
+
+        text = (pack.folder / pack.calls[0]["file"]).read_text(encoding="utf-8")
+        headings = re.findall(r"^## (.*)$", text, re.M)
+        self.assertEqual(
+            headings, ["1. System", "2. User", "3. Assistant", "4. User", "Answer"]
+        )
+        self.assertIn(OPENING, text)
+
+    def test_the_call_file_of_an_old_row_keeps_its_two_headings(self):
+        call = stored_call(5, "narrator", system="rules", user="blocks", answer=REPLY)
+        pack, _ = self.load([call])
+
+        trial.write_call_files(pack)
+
+        text = (pack.folder / pack.calls[0]["file"]).read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"^## (.*)$", text, re.M), ["System", "User", "Answer"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -13,12 +13,14 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
+use crate::adapters::driven::utils::mock::request_json;
 use crate::application::ports::llm_provider::{
-    LlmCallResult, LlmProvider, AGENT_DIALOGUE, AGENT_NARRATOR, AGENT_OPTIONS, AGENT_QUANTIFIER,
-    AGENT_TRIGGER,
+    LlmCallFailure, LlmCallResult, LlmProvider, AGENT_DIALOGUE, AGENT_NARRATOR, AGENT_OPTIONS,
+    AGENT_QUANTIFIER, AGENT_TRIGGER,
 };
 use crate::domain::model::agent::Role;
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::error::{EngineError, NarrationFailure};
 
 /// The words a stray call's failure carries, so an endpoint that cannot reach
@@ -37,12 +39,33 @@ fn role_of_agent_name(agent_name: &str) -> Option<Role> {
     }
 }
 
+/// The texts of the parts whose role is wanted, joined by a blank line.
+pub fn joined_text_of_parts(parts: &[PromptPart], wanted: impl Fn(PromptRole) -> bool) -> String {
+    parts
+        .iter()
+        .filter(|part| wanted(part.role))
+        .map(|part| part.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 #[derive(Clone, Debug)]
 pub struct ModelCall {
     pub role: Role,
-    pub system_prompt: String,
-    pub user_prompt: String,
+    pub parts: Vec<PromptPart>,
     pub settings: CallSettings,
+}
+
+impl ModelCall {
+    pub fn system_prompt(&self) -> String {
+        joined_text_of_parts(&self.parts, |role| role == PromptRole::System)
+    }
+
+    /// One flat text, for a check on where a layer stands in the order. A check on
+    /// the messages uses `parts`.
+    pub fn user_prompt(&self) -> String {
+        joined_text_of_parts(&self.parts, |role| role != PromptRole::System)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -295,17 +318,15 @@ impl LlmProvider for ScriptedModel {
     fn complete(
         &self,
         agent_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
+        prompt: &[PromptPart],
         settings: &CallSettings,
-    ) -> Result<LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, LlmCallFailure> {
         let role = role_of_agent_name(agent_name)
             // arch-lint: allow(no-unwrap-expect) reason="test fake: an unknown agent name is a wiring bug"
             .expect("ScriptedModel: a call names one of the four model roles");
         let call = ModelCall {
             role,
-            system_prompt: system_prompt.to_string(),
-            user_prompt: user_prompt.to_string(),
+            parts: prompt.to_vec(),
             settings: settings.clone(),
         };
         let fired = self.block_if_held(role);
@@ -313,19 +334,22 @@ impl LlmProvider for ScriptedModel {
         if let Some(state) = fired {
             state.mark_taken();
         }
-        match reply? {
+        match reply.map_err(LlmCallFailure::from)? {
             Reply::Text(text) => Ok(LlmCallResult {
                 text: text.clone(),
-                raw_request_json: String::new(),
+                raw_request_json: request_json(prompt),
                 raw_response_json: format!("{{\"content\":\"{text}\"}}"),
                 backend_name: self.name().to_string(),
                 model_name: self.model().to_string(),
                 agent_name: agent_name.to_string(),
             }),
-            Reply::Failed => Err(EngineError::Narration(NarrationFailure::Generation {
-                stage: "scripted",
-                reason: "configured_failure",
-            })),
+            Reply::Failed => Err(LlmCallFailure {
+                raw_request_json: request_json(prompt),
+                ..LlmCallFailure::from(EngineError::Narration(NarrationFailure::Generation {
+                    stage: "scripted",
+                    reason: "configured_failure",
+                }))
+            }),
         }
     }
 }

@@ -3,10 +3,11 @@
 
 use std::sync::Arc;
 
-use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
+use crate::application::ports::llm_provider::{LlmCallFailure, LlmCallResult, LlmProvider};
 use crate::application::prompting::sanitize::sanitize_llm_output;
 use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::llm_message::LlmMessage;
+use crate::domain::model::prompt_part::PromptPart;
 use crate::error::EngineError;
 
 /// Resolves the provider for one call, so a dashboard change to the narrator or
@@ -51,20 +52,21 @@ impl LlmCallRecorder {
     pub fn complete(
         &self,
         agent_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
+        prompt: &[PromptPart],
         settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
         let provider = self.provider()?;
-        let result = match provider.complete(agent_name, system_prompt, user_prompt, settings) {
+        let result = match provider.complete(agent_name, prompt, settings) {
             Ok(result) => result,
-            Err(error) => {
+            Err(LlmCallFailure {
+                error,
+                raw_request_json,
+            }) => {
                 let failure = Self::failed_message(
                     agent_name,
                     provider.name(),
                     provider.model(),
-                    system_prompt,
-                    user_prompt,
+                    raw_request_json,
                     &error,
                 );
                 if let Err(save_error) = (*self.save_fn)(&failure) {
@@ -78,7 +80,7 @@ impl LlmCallRecorder {
 
         let sanitized_text = sanitize_llm_output(&result.text);
 
-        let mut message = result.to_message(system_prompt, user_prompt);
+        let mut message = result.to_message();
         message.parsed_response = sanitized_text.clone();
         (*self.save_fn)(&message)?;
 
@@ -87,14 +89,11 @@ impl LlmCallRecorder {
         Ok(sanitized_result)
     }
 
-    /// The transport returns the request payload only on success, so a failed row
-    /// blanks `raw_request_json`.
     fn failed_message(
         agent_name: &str,
         backend_name: &str,
         model_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
+        raw_request_json: String,
         error: &EngineError,
     ) -> LlmMessage {
         let raw_response_json = error.raw_response_body().unwrap_or_default().to_string();
@@ -103,9 +102,9 @@ impl LlmCallRecorder {
             agent_name: agent_name.to_string(),
             backend_name: backend_name.to_string(),
             model_name: model_name.to_string(),
-            system_prompt: system_prompt.to_string(),
-            user_prompt: user_prompt.to_string(),
-            raw_request_json: String::new(),
+            system_prompt: String::new(),
+            user_prompt: String::new(),
+            raw_request_json,
             raw_response_json,
             parsed_response: String::new(),
             error_message: Some(error.llm_error_string()),

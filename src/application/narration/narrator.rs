@@ -142,8 +142,7 @@ impl Narrator {
             .recorder_for(generation.preset_type())
             .complete(
                 role.agent_name(),
-                &assembled.system_prompt,
-                &assembled.user_prompt,
+                &assembled.parts,
                 &CallSettings {
                     max_tokens: assembled.max_tokens,
                     ..call.clone()

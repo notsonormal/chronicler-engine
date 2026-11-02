@@ -3,6 +3,7 @@
 #[path = "../test_utils/mod.rs"]
 mod test_utils;
 use chronicler_engine::domain::model::generation_parameters::CallSettings;
+use chronicler_engine::domain::model::prompt_part::PromptPart;
 use test_utils::*;
 
 #[cfg(test)]
@@ -162,8 +163,7 @@ mod tests {
         let result = ChatCompletionsBackend::from_config(&connection)
             .complete(
                 "llm-test",
-                "Answer with one short word.",
-                "Reply OK.",
+                &PromptPart::system_and_user("Answer with one short word.", "Reply OK."),
                 &CallSettings {
                     max_tokens: 256,
                     ..CallSettings::default()

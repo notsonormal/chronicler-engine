@@ -28,6 +28,8 @@ use crate::adapters::driven::storage::db::DbPool;
 use crate::adapters::driven::storage::transaction::Tx;
 use crate::application::llm_recorder::SaveLlmMessageFn;
 use crate::domain::model::llm_message::LlmMessage;
+use crate::test_support::scripted_model::joined_text_of_parts;
+use crate::domain::model::prompt_part::PromptRole;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::ports::llm_provider::LlmProvider;
 
@@ -639,7 +641,7 @@ pub fn make_test_recorder_with_storage(
 
 /// The block that `open` opens and `close` closes, from the opening tag through
 /// the closing one.
-pub fn prompt_block<'a>(prompt: &'a str, open: &str, close: &str) -> &'a str {
+pub fn prompt_block(prompt: &str, open: &str, close: &str) -> String {
     let start = prompt.find(open);
     assert!(start.is_some(), "the {open} block renders: {prompt}");
     // arch-lint: allow(no-unwrap-expect) reason="test helper: the assert above names the failure"
@@ -650,7 +652,7 @@ pub fn prompt_block<'a>(prompt: &'a str, open: &str, close: &str) -> &'a str {
         "the {close} tag closes the {open} block: {prompt}"
     );
     // arch-lint: allow(no-unwrap-expect) reason="test helper: the assert above names the failure"
-    &rest[..end.expect("the assert checked it") + close.len()]
+    rest[..end.expect("the assert checked it") + close.len()].to_string()
 }
 
 /// Seeding a Game always points the app at it, so a missing pointer is a broken
@@ -661,4 +663,12 @@ pub fn active_game_of(state: &crate::adapters::driving::http::AppState) -> GameI
         .active_game_id()
         // arch-lint: allow(no-unwrap-expect) reason="test fixture panics on a broken fixture"
         .expect("test fixture: an active game")
+}
+
+pub fn sent_system_text(message: &LlmMessage) -> String {
+    joined_text_of_parts(&message.sent_parts(), |role| role == PromptRole::System)
+}
+
+pub fn sent_user_text(message: &LlmMessage) -> String {
+    joined_text_of_parts(&message.sent_parts(), |role| role != PromptRole::System)
 }

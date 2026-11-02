@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
+use crate::application::ports::llm_provider::{LlmCallFailure, LlmCallResult, LlmProvider};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::{MapDef, Overworld, Region, Room};
 use crate::domain::model::state::swipe_state::SwipeState;
@@ -21,6 +21,7 @@ use crate::application::agents::quantifier::types::{
     QuantifierReading,
 };
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::prompt_part::PromptPart;
 
 fn recorder_with(backend: impl LlmProvider + 'static) -> Arc<LlmCallRecorder> {
     make_test_recorder(Arc::new(backend))
@@ -120,10 +121,9 @@ impl LlmProvider for HighConfidenceBackend {
     fn complete(
         &self,
         _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
+        _prompt: &[PromptPart],
         _settings: &CallSettings,
-    ) -> Result<LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, LlmCallFailure> {
         let characters_json = serde_json::to_string(&self.character_ids).unwrap_or_default();
         Ok(make_test_llm_result(&format!(
             r#"{{"characters_present": {characters_json}, "movement": {{"type": "entering", "destination": "kitchen"}}}}"#
@@ -141,10 +141,9 @@ impl LlmProvider for MediumConfidenceBackend {
     fn complete(
         &self,
         _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
+        _prompt: &[PromptPart],
         _settings: &CallSettings,
-    ) -> Result<LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, LlmCallFailure> {
         Ok(make_test_llm_result("Carla is standing in the room."))
     }
 }
@@ -159,10 +158,9 @@ impl LlmProvider for LowConfidenceBackend {
     fn complete(
         &self,
         _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
+        _prompt: &[PromptPart],
         _settings: &CallSettings,
-    ) -> Result<LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, LlmCallFailure> {
         Ok(make_test_llm_result(""))
     }
 }
@@ -177,14 +175,14 @@ impl LlmProvider for ErrBackend {
     fn complete(
         &self,
         _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
+        _prompt: &[PromptPart],
         _settings: &CallSettings,
-    ) -> Result<LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, LlmCallFailure> {
         Err(EngineError::Llm(crate::error::LlmFailure::Network {
             url: "mock".to_string(),
             detail: "mock failure".to_string(),
-        }))
+        })
+        .into())
     }
 }
 
@@ -394,12 +392,11 @@ fn test_quantifier_retry_on_llm_error() {
         fn complete(
             &self,
             _agent_name: &str,
-            _system_prompt: &str,
-            _user_prompt: &str,
+            _prompt: &[PromptPart],
             _settings: &CallSettings,
-        ) -> Result<LlmCallResult, EngineError> {
+        ) -> Result<LlmCallResult, LlmCallFailure> {
             let mut responses = self.responses.lock().unwrap();
-            let text = responses.remove(0)?;
+            let text = responses.remove(0).map_err(LlmCallFailure::from)?;
             Ok(make_test_llm_result(&text))
         }
     }

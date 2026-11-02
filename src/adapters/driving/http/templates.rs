@@ -169,20 +169,14 @@ impl LlmMessagesTemplate {
         <pre class="llm-message-failure-text">{{ record.error_message.as_deref().unwrap_or_default() }}</pre>
     </div>
     {% endif %}
-    {% if !record.system_prompt.is_empty() || !record.user_prompt.is_empty() || !record.parsed_response.is_empty() %}
+    {% if !record.sent_parts.is_empty() || !record.parsed_response.is_empty() %}
     <div class="llm-message-prompts">
-        {% if !record.system_prompt.is_empty() %}
+        {% for message in record.sent_parts %}
         <details class="llm-message-prompt-details">
-            <summary>System</summary>
-            <pre class="llm-message-prompt-pre">{{ record.system_prompt }}</pre>
+            <summary>{{ message.role_label }}</summary>
+            <pre class="llm-message-prompt-pre">{{ message.text }}</pre>
         </details>
-        {% endif %}
-        {% if !record.user_prompt.is_empty() %}
-        <details class="llm-message-prompt-details">
-            <summary>User</summary>
-            <pre class="llm-message-prompt-pre">{{ record.user_prompt }}</pre>
-        </details>
-        {% endif %}
+        {% endfor %}
         {% if !record.parsed_response.is_empty() %}
         <details class="llm-message-prompt-details" open>
             <summary>Response</summary>

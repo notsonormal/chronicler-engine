@@ -1,7 +1,7 @@
 # Try the history in the ME format
 
 Type: task (HITL)
-Status: open
+Status: resolved
 Blocked by:
 
 ## Question
@@ -93,3 +93,81 @@ The claims above were checked against the code on `layout-trials`.
 - **The budget sends too much.** If the chat-template cost of many messages passes the context window, the provider rejects the call. The overflow guard counts characters, not messages. The build tests a long history near the limit.
 
 Done when the build passes the full `python build.py`, both trials have run, the owner has read the findings and kept or reverted the build, the answer states each design choice, the counts and the cached shares, and the worktree is removed.
+
+## Answer
+
+Resolved on 2026-11-02. **Owner verdict: keep.** The build is committed on `layout-trials`. The reference commit is `8a015b71`. The owner gave no answer on the filter question, so option (a) stands: the sanitize filter covers only the `<PlayerInput>` layer. The reference worktree `/workspace/chronicler-engine-lt15` is removed.
+
+### The build
+
+- **known** Each history entry of a Narrator-role call is one chat message with no label. A Narration or event Narration is `assistant`, an Input is `user`, and a System entry is `system`. `<ConversationHistory>` opens on the first entry and closes on the second-to-last. `<LastMessage>` wraps the last entry. A one-entry history has `<LastMessage>` only (ME rule).
+- **known** D3 (a): the first `user` message holds KnownCharacters, Persona and WorldLore. D2 (b): GameState, CharactersPresent, the splice, PlayerInput and Guide join the last message when it is `user` (the last entry, or the first `user` message when no entry is kept), or else make a new final `user` message. D1 (b): `<PlayerInput>` is left out when its text is the last kept entry.
+- **known** D6 (a): `LlmProvider::complete` and `LlmCallRecorder::complete` take `&[PromptPart]` (`PromptPart { role: PromptRole, text }`, `src/domain/model/prompt_part.rs`). The docs call it a "prompt part". `single_user_message` writes `[SYSTEM]` and `[ASSISTANT]` headers.
+- **known** D4/D7/D8: the transport returns the payload it sent, on success and on failure, and `raw_request_json` holds it. New rows leave `system_prompt` and `user_prompt` empty. The LLM record dialog shows the parts of the payload, and falls back to the two columns for an old row. Spec 33.1 now shows the Raw Request JSON of a failed call. Spec 33.6 is new.
+- **known** The budget counts `MESSAGE_OVERHEAD_TOKENS = 4` for each part (an estimate).
+- **known** `scripts/trial.py` reads a new row from `raw_request_json` and finds the history by its tags. It stops with an error on a merged `single_user_message` pack. It reads `tmp/lt03`, `tmp/lt15/reference` and `tmp/lt15/probe` with the same results as before.
+- **known** The sanitize filter covers only the `<PlayerInput>` layer. In a Narration call the current Input is a history entry, which the filter never covered (option (a), no code change).
+
+### `/simple-after-plan`
+
+- Comment pass (session `43fd9d06`): 22 comments deleted, 15 rewritten, all accepted. Doc review (`daa16705`): 4 must-fix and 8 nice-to-have, all fixed.
+- `/code-review`, Standards (`2eafa64c`) and Spec (`1f17a179`). Accepted: the "part" names, the legacy tests moved to seam cases, one clause per case, the shared helpers, two names, and `trial.py` read by tags (both axes). Rejected: merge of `ChatCompletionFailure` and `LlmCallFailure` (layer rule), the read order of `trial.py` (it needs the old user text), a test for the dev mock fallback (legacy file), and two `user` messages after a cut (the trial tested it). Found by the coordinator: spec 33.1 went against D4. Fixes in session `4d83cb10`, and one missing case added (`narrator-after-blocks-join-the-first-user-message`).
+- Full gate `python build.py`: guardrails 309, integration 1648, browser 44, all passed.
+- Retro: new [102 — A spec scenario that the ticket's rule changes stays as it was](../../retro-issue-bucket/issues/102-spec-scenario-against-the-ticket-rule.md). Recurrences added to 98 (tests in legacy files) and 100 (the review bundle takes the whole tree).
+
+### The trials
+
+Reference: `8a015b71` in the worktree `/workspace/chronicler-engine-lt15`, port 3015, pack `tmp/lt15/reference/trial-1`. New: the build on port 3001, pack `tmp/lt15/new/trial-1`. Same setup copy, same Connection, both after the data fixes of ticket 12.
+
+| Item | Reference | New |
+|---|---|---|
+| Cycles, failed calls | 100, 0 | 100, 0 |
+| Wall time | 1209 s | 1054 s |
+| Tokens in / out | 3,075,602 / 46,138 | 2,917,705 / 38,527 |
+| Narration cached | 70.4 % | 85.8 % |
+| Impersonate cached | 56.7 % | 86.3 % |
+| Event narration cached (1 call) | 43.2 % | 40.8 % |
+| Quantifier cached | 35.4 % | 43.6 % |
+| Narrator-role calls cached | 63.9 % | **86.0 %** |
+| Total cached | 60.0 % | **80.4 %** |
+| Narrator-role calls with 0 cached | 39, spread over the run | 3, one at each history cut |
+| Entries with a label line | 0 | 0 |
+| Input words, mean (max) | 144 (284) | 126 (230) |
+| Narration words, mean (max) | 183 (335) | 144 (259) |
+| First history cut | call 1184, 24 entries | call 1206, 25 entries |
+
+- **known** After each history cut, the payload starts with two `user` messages. The provider accepted all 94 such calls.
+- **known** The label lines were already 0 in the reference (6 entries in `tmp/lt01`, 2 in `tmp/lt03`). So this pair cannot show that the build removes them. **inferred** The data fixes of ticket 12, or chance, removed them before the build.
+- **I don't know** why the reference missed the cache on 39 Narrator-role calls spread over the run, while `tmp/lt03` missed only at the cuts.
+
+### The judge
+
+Two `reviewer` judges, one per story, with neutral names and one prompt (`tmp/lt15/judge/prompt.md`, key `tmp/lt15/judge/key.txt`: X = reference, Y = new). Verdicts: `tmp/lt15/judge/judge-X.md`, `tmp/lt15/judge/judge-Y.md`.
+
+| Fault type | Reference (X) | New (Y) |
+|---|---|---|
+| 1. A fact that had left the history | 3 | 1 |
+| 2. Contradicted a fact in the history, World or card | 19 | 23 |
+| 3. Short entry of an absent Character | 0 | 1 |
+| 4. No story clock | 2 | 4 |
+| 5. Who knows what | 3 | 6 |
+| 6. Role breaches (speaker labels) | 4 (0) | 3 (0) |
+| 7. Wrong Room or Characters present | 14 spans | 20 runs |
+| 8. Drift from the card | 4 | 4 |
+| 9. Does not answer the entry before it | 4 | 3 |
+| 10. Re-narration and repetition | 11 patterns | 9 patterns and 1 replayed scene |
+| 11. Other | 12 | 6 |
+| Narrations over 150 words | 83 of 102 | 29 of 101 |
+| Scores (5 axes), overall | 3 3 3 3 3, 6/10 | 2 3 3 3 3, 6/10 |
+
+- **known** The coordinator checked three findings of Y against the story: all are real.
+- **known** One new kind of fault: #552 of Y wraps its paragraphs in `<Jezebel>…</Jezebel>` and `<Carla>…</Carla>`. No entry of X has such a tag. **inferred** The model copies the XML wrap of the history, as it copied the labels before. 1 of 101 Narrations.
+- **known** The rewind loop of Y (#569–#576) follows a wrong `<GameState>`: call 1122 had "Front Gates" while #568 was in town. That is the known Room fault of places off the estate, not the format.
+- **inferred** The counts differ in both directions within the noise of one trial for each side. Both judges give 6/10, and both name the era drift as a top fault.
+- **known** The new Narrations keep the "under 150 words" rule of `output_format` far more often (29 against 83 over the limit).
+
+### Expected against found
+
+- Label lines about zero: yes, but already zero in the reference.
+- No new kind of fault: one new kind, the XML speaker tags, once.
+- Cached share does not drop by more than a few points: it rose by 22 points (Narrator-role calls) and 20 points (total).

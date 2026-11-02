@@ -15,7 +15,7 @@ Given the LLM Messages panel shows an LLM attempt
 Then the row holds no prompt text and no response text
 When the client tabs to the attempt's Open control and presses Enter
 Then the edit dialog is open
-And it shows the system prompt, the user prompt and the response of the attempt
+And it shows the sent messages and the response of the attempt
 And its root carries the title that names the dialog
 ```
 

@@ -8,6 +8,7 @@ use crate::adapters::driven::llm::transport::{
     call_chat_completions, ChatCompletionRequest, ChatCompletionsEndpoint,
 };
 use crate::domain::model::generation_parameters::{CallSettings, ENGINE_KEYS};
+use crate::domain::model::prompt_part::PromptPart;
 use crate::domain::model::settings::ReasoningEffort;
 use crate::test_support::chat_completions_mock::ChatCompletionsMock;
 
@@ -31,14 +32,12 @@ fn plain(mock: &ChatCompletionsMock) -> ChatCompletionsEndpoint<'_> {
 
 fn request<'a>(
     call: &'a CallSettings,
-    system_prompt: &'a str,
-    user_text: &'a str,
+    parts: &'a [PromptPart],
     reasoning_effort: Option<ReasoningEffort>,
 ) -> ChatCompletionRequest<'a> {
     ChatCompletionRequest {
         model: "test-model",
-        system_prompt,
-        user_text,
+        parts,
         call,
         session_id: None,
         reasoning_effort,
@@ -54,7 +53,11 @@ fn transport_empty_system_prompt_omits_the_system_message() {
 
     call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "", "user question", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("", "user question"),
+            None,
+        ),
     )
     .unwrap();
 
@@ -75,7 +78,11 @@ fn transport_system_prompt_goes_before_the_user_message() {
 
     call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "system instruction", "user question", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("system instruction", "user question"),
+            None,
+        ),
     )
     .unwrap();
 
@@ -99,7 +106,11 @@ fn transport_sends_max_tokens_as_an_integer() {
 
     let result = call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "be helpful", "what is 2+2?", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "what is 2+2?"),
+            None,
+        ),
     )
     .unwrap();
 
@@ -117,7 +128,11 @@ fn transport_sends_the_reasoning_effort() {
 
     let result = call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "be helpful", "question", Some(ReasoningEffort::High)),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "question"),
+            Some(ReasoningEffort::High),
+        ),
     )
     .unwrap();
 
@@ -144,7 +159,11 @@ fn transport_without_a_reasoning_effort_sends_no_reasoning_field() {
 
     let result = call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "be helpful", "question", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "question"),
+            None,
+        ),
     )
     .unwrap();
 
@@ -166,7 +185,11 @@ fn transport_user_agent_names_the_engine_and_its_version() {
 
     call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "be helpful", "question", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "question"),
+            None,
+        ),
     )
     .unwrap();
 
@@ -191,7 +214,11 @@ fn transport_sends_the_temperature_and_the_top_p() {
 
     let result = call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "be helpful", "question", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "question"),
+            None,
+        ),
     )
     .unwrap();
 
@@ -211,7 +238,11 @@ fn transport_without_samplers_sends_only_the_engine_keys() {
 
     call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "be helpful", "question", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "question"),
+            None,
+        ),
     )
     .unwrap();
 
@@ -242,7 +273,11 @@ fn transport_sends_the_custom_parameters() {
 
     call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "be helpful", "question", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "question"),
+            None,
+        ),
     )
     .unwrap();
 
@@ -274,7 +309,11 @@ fn transport_engine_keys_win_over_the_custom_parameters() {
 
     call_chat_completions(
         &plain(&endpoint),
-        &request(&call, "be helpful", "question", Some(ReasoningEffort::High)),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "question"),
+            Some(ReasoningEffort::High),
+        ),
     )
     .unwrap();
 
@@ -296,7 +335,11 @@ fn transport_sends_the_session_id_only_when_it_has_one() {
         &plain(&endpoint),
         &ChatCompletionRequest {
             session_id: Some("a-session"),
-            ..request(&call, "be helpful", "question", None)
+            ..request(
+                &call,
+                &PromptPart::system_and_user("be helpful", "question"),
+                None,
+            )
         },
     )
     .unwrap();
@@ -310,7 +353,11 @@ fn transport_sends_the_session_id_only_when_it_has_one() {
     let without = ChatCompletionsMock::start();
     call_chat_completions(
         &plain(&without),
-        &request(&call, "be helpful", "question", None),
+        &request(
+            &call,
+            &PromptPart::system_and_user("be helpful", "question"),
+            None,
+        ),
     )
     .unwrap();
     assert!(without.received_body().get("session_id").is_none());

@@ -37,10 +37,20 @@ impl ChatCompletionsMock {
 
     /// An endpoint that answers the request with `body`, a whole JSON body, as given.
     pub fn answering(body: &str) -> Self {
+        Self::responding("200 OK", body)
+    }
+
+    /// An endpoint that answers with a failed status, such as `"500 Internal Server Error"`.
+    pub fn failing(status: &str, body: &str) -> Self {
+        Self::responding(status, body)
+    }
+
+    fn responding(status: &str, body: &str) -> Self {
         let (listener, base_url) = bind_local_port();
         let (sender, receiver) = mpsc::channel();
         let body = body.to_string();
-        std::thread::spawn(move || serve_one_request(&listener, &sender, &body));
+        let status = status.to_string();
+        std::thread::spawn(move || serve_one_request(&listener, &sender, &status, &body));
         Self {
             base_url,
             receiver,
@@ -85,14 +95,19 @@ fn bind_local_port() -> (TcpListener, String) {
 }
 
 #[allow(clippy::expect_used)]
-fn serve_one_request(listener: &TcpListener, sender: &mpsc::Sender<ReceivedRequest>, answer: &str) {
+fn serve_one_request(
+    listener: &TcpListener,
+    sender: &mpsc::Sender<ReceivedRequest>,
+    status: &str,
+    answer: &str,
+) {
     let (mut stream, _) = listener.accept().expect("accept the request");
     stream
         .set_read_timeout(Some(STREAM_TIMEOUT))
         .expect("set the read timeout");
     let request = read_request(&mut stream);
     let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
         answer.len()
     );
     stream

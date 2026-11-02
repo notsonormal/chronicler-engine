@@ -8,13 +8,14 @@ use crate::application::connection_test_service::{
     ConnectionTestService, ConnectionTestResult, ProviderFactory,
 };
 use crate::application::errors::ApplicationError;
-use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
+use crate::application::ports::llm_provider::{LlmCallFailure, LlmCallResult, LlmProvider};
 use crate::application::settings_service::SettingsService;
 use crate::domain::model::llm_backend::LlmBackendType;
 use crate::domain::model::settings::{AppSettings, LlmConnection};
 use crate::error::{EngineError, LlmFailure};
 use crate::test_support::test_connection;
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::prompt_part::PromptPart;
 
 fn mock_connection(id: &str, model: &str) -> LlmConnection {
     LlmConnection {
@@ -47,15 +48,15 @@ impl LlmProvider for SpentBudgetProvider {
     fn complete(
         &self,
         _agent_name: &str,
-        _system_prompt: &str,
-        _user_prompt: &str,
+        _prompt: &[PromptPart],
         _settings: &CallSettings,
-    ) -> Result<LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, LlmCallFailure> {
         Err(EngineError::Llm(LlmFailure::TokenBudgetSpent {
             raw_response: "{}".to_string(),
             completion_tokens: Some(8),
             reasoning_tokens: Some(8),
-        }))
+        })
+        .into())
     }
 }
 

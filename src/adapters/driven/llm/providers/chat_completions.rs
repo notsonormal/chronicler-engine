@@ -4,16 +4,16 @@
 use uuid::Uuid;
 
 use crate::adapters::driven::llm::transport::{
-    call_chat_completions, ChatCompletionRequest, ChatCompletionResult, ChatCompletionsEndpoint,
-    ProviderRouting,
+    call_chat_completions, ChatCompletionFailure, ChatCompletionRequest, ChatCompletionResult,
+    ChatCompletionsEndpoint, ProviderRouting,
 };
-use crate::application::ports::llm_provider::{LlmCallResult, LlmProvider};
+use crate::application::ports::llm_provider::{LlmCallFailure, LlmCallResult, LlmProvider};
 use crate::application::prompting::prompt_merge::merge_single_user_message;
 use crate::domain::model::game::GameId;
 use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::llm_backend::LlmBackendType;
+use crate::domain::model::prompt_part::PromptPart;
 use crate::domain::model::settings::{LlmConnection, ReasoningEffort};
-use crate::error::EngineError;
 
 /// Fixed, so a Game keeps the same session id across restarts.
 const GAME_SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x6368_726f_6e69_636c_6572_2d67_616d_6531);
@@ -63,16 +63,17 @@ impl ChatCompletionsBackend {
     fn call(
         &self,
         agent_name: &str,
-        system_prompt: &str,
-        user_text: &str,
+        prompt: &[PromptPart],
         settings: &CallSettings,
-    ) -> Result<ChatCompletionResult, EngineError> {
-        let (system, user) = if self.single_user_message {
-            ("", merge_single_user_message(system_prompt, user_text))
+    ) -> Result<ChatCompletionResult, ChatCompletionFailure> {
+        let mut parts = if self.single_user_message {
+            vec![merge_single_user_message(prompt)]
         } else {
-            (system_prompt, user_text.to_string())
+            prompt.to_vec()
         };
-        let user = self.close_gemma4_thinking_channel(user);
+        if let Some(last) = parts.last_mut() {
+            last.text = self.close_gemma4_thinking_channel(std::mem::take(&mut last.text));
+        }
         let session_id = settings
             .game
             .filter(|_| self.provider.sends_game_session())
@@ -92,8 +93,7 @@ impl ChatCompletionsBackend {
             },
             &ChatCompletionRequest {
                 model: &self.model,
-                system_prompt: system,
-                user_text: &user,
+                parts: &parts,
                 call: settings,
                 session_id: session_id.as_deref(),
                 reasoning_effort: self.reasoning_effort,
@@ -140,12 +140,16 @@ impl LlmProvider for ChatCompletionsBackend {
     fn complete(
         &self,
         agent_name: &str,
-        system_prompt: &str,
-        user_prompt: &str,
+        prompt: &[PromptPart],
         settings: &CallSettings,
-    ) -> Result<LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, LlmCallFailure> {
         tracing::info!("[LLM] Generating action from prompt");
-        let chat = self.call(agent_name, system_prompt, user_prompt, settings)?;
+        let chat = self
+            .call(agent_name, prompt, settings)
+            .map_err(|failure| LlmCallFailure {
+                error: failure.error,
+                raw_request_json: failure.raw_request_json,
+            })?;
         Ok(LlmCallResult {
             text: chat.text,
             raw_request_json: chat.raw_request_json,

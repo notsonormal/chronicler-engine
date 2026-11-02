@@ -12,7 +12,8 @@ use chronicler_engine::domain::model::game::GameId;
 use chronicler_engine::domain::model::message::Message;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
-    active_game_of, analysis_report, ModelHold, ScriptedModel, TestAppBuilder, TestDataBuilder,
+    active_game_of, analysis_report, sent_system_text, ModelHold, ScriptedModel, TestAppBuilder,
+    TestDataBuilder,
 };
 
 use crate::support::app_wiring::{app_with_model, app_with_script};
@@ -565,18 +566,18 @@ async fn test_the_event_narration_call_uses_the_preset_active_when_it_runs() {
         .find(|call| call.parsed_response.contains(EVENT_NARRATION))
         .unwrap_or_else(|| panic!("the event Narration's call must be recorded: {calls:?}"));
     assert!(
-        event_call.system_prompt.contains(SECOND_PRESET_TEXT),
+        sent_system_text(event_call).contains(SECOND_PRESET_TEXT),
         "the event Narration's call must show the system prompt of the preset the client set, got: {}",
-        event_call.system_prompt
+        sent_system_text(event_call)
     );
     let main_call = calls
         .iter()
         .find(|call| call.parsed_response.contains(MAIN_NARRATION))
         .unwrap_or_else(|| panic!("the Narration's call must be recorded: {calls:?}"));
     assert!(
-        !main_call.system_prompt.contains(SECOND_PRESET_TEXT),
+        !sent_system_text(main_call).contains(SECOND_PRESET_TEXT),
         "the Narration's call must show the preset that was active when the Job started, got: {}",
-        main_call.system_prompt
+        sent_system_text(main_call)
     );
 }
 

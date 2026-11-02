@@ -14,6 +14,7 @@ pub mod llm_backend;
 pub mod llm_message;
 pub mod map;
 pub mod message;
+pub mod prompt_part;
 pub mod prompt_preset;
 pub mod quantifier;
 pub mod saved_games_page;
@@ -43,6 +44,8 @@ mod generation_tests;
 mod history_cut_tests;
 #[cfg(test)]
 mod llm_backend_tests;
+#[cfg(test)]
+mod llm_message_tests;
 #[cfg(test)]
 mod map_tests;
 #[cfg(test)]

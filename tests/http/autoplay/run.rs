@@ -8,6 +8,7 @@ use chronicler_engine::adapters::driven::storage::{StorageCall, TestOverride};
 use chronicler_engine::domain::model::settings::AppSettings;
 use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::message::Message;
+use chronicler_engine::domain::model::prompt_part::PromptRole;
 use chronicler_engine::domain::model::settings::{NarrativePerspective, NarrativeTense, NarratorMode};
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::domain::model::trigger::ComparisonOperator;
@@ -65,10 +66,24 @@ async fn test_a_run_on_a_fresh_game_plays_its_cycles_and_the_game_is_then_idle()
     let calls = narrator_calls(&model);
     assert_eq!(calls.len(), 4, "two cycles make four narrator calls");
     for (index, input) in [(1, FIRST_INPUT), (3, SECOND_INPUT)] {
-        let prompt = format!("{}{}", calls[index].system_prompt, calls[index].user_prompt);
+        let last = calls[index]
+            .parts
+            .last()
+            .expect("a narrator call carries parts");
+        assert_eq!(
+            last.role,
+            PromptRole::User,
+            "the Continue Job ends with a user message"
+        );
         assert!(
-            prompt.contains(&format!("<PlayerInput>\n{input}\n</PlayerInput>")),
-            "the Continue Job answers the Impersonate Input {input:?}, got: {prompt}"
+            last.text
+                .starts_with(&format!("<LastMessage>\n{input}\n</LastMessage>")),
+            "the Continue Job answers the Impersonate Input {input:?} as its last history message, got: {}",
+            last.text
+        );
+        assert!(
+            !calls[index].user_prompt().contains("<PlayerInput>"),
+            "the Input is not sent a second time as a Player Input block"
         );
     }
 }

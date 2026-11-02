@@ -26,7 +26,7 @@ When the client POST /action with command="look"
 And the Game is no longer busy
 Then GET /screen?parts=llm-messages shows one entry for the narrator that names the backend/model the attempt was made against
 And that entry carries the backend's failure text
-And the record of that entry carries the failure text and no Raw JSON section
+And the record of that entry carries the failure text and the Raw Request JSON, and no response
 ```
 
 #### Scenario 33.2: A later successful attempt does not overwrite an earlier failed attempt
@@ -65,7 +65,7 @@ And a recorded LLM attempt that failed
 When the client GET /fragment/llm-messages/{id} of the first attempt
 Then the response status is "200 OK"
 And the body is a dialog fragment: its root carries `data-dialog-form`, and it holds the title with the id "edit-dialog-title"
-And the body carries the system prompt, the user prompt, the response, the Raw Request JSON and the Raw Response JSON
+And the body carries the sent messages, the response, the Raw Request JSON and the Raw Response JSON
 And the body names the backend/model
 And the body holds no form control
 And the body holds a Close control with `data-close-dialog`
@@ -80,4 +80,13 @@ Given an active Game with a recorded LLM attempt
 When the client GET /fragment/llm-messages/{id} with an id that no attempt holds
 Then the response status is "404 Not Found"
 And the body is an error fragment that says "LLM message not found"
+```
+
+#### Scenario 33.6: The record route shows the messages of the request payload, each with its role
+
+```gherkin
+Given an active Game with a recorded LLM attempt whose request payload holds a system message, a user message, an assistant message and a user message, and whose prompt columns are empty
+When the client GET /fragment/llm-messages/{id}
+Then the body shows the four messages in order, each under its role label
+And the body carries the Raw Request JSON
 ```

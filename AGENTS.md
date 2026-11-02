@@ -255,6 +255,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
       - `map.rs` — Map and Room data structures
       - `message.rs` — Message types and conversation history (Message, Swipe)
       - `mod.rs` — Core data models and domain types
+      - `prompt_part.rs` — The prompt part: one text with a role, an item of the list that a model call carries
       - `prompt_preset.rs` — Prompt preset configurations
       - `quantifier.rs` — The Quantifier result and the Character transitions the Game rules derive from it
       - `saved_games_page.rs` — The pages of saved Games: the page size, and the rule that names the page a request gets.

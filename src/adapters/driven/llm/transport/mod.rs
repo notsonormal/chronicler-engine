@@ -6,5 +6,6 @@ mod utils;
 pub use utils::client::call_chat_completions;
 
 pub use utils::request::{
-    ChatCompletionRequest, ChatCompletionResult, ChatCompletionsEndpoint, ProviderRouting,
+    ChatCompletionFailure, ChatCompletionRequest, ChatCompletionResult, ChatCompletionsEndpoint,
+    ProviderRouting,
 };

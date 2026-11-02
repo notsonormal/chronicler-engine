@@ -3,11 +3,12 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
-use crate::adapters::driven::utils::mock::extract_player_input;
+use crate::adapters::driven::utils::mock::{extract_player_input, first_user_line, request_json};
 use crate::error::{EngineError, NarrationFailure};
 
-use crate::application::ports::llm_provider::{LlmProvider, LlmCallResult};
+use crate::application::ports::llm_provider::{LlmCallFailure, LlmCallResult, LlmProvider};
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::prompt_part::PromptPart;
 
 #[derive(Default)]
 pub struct MockBackend {
@@ -66,14 +67,13 @@ impl MockBackend {
     fn make_result(
         &self,
         agent_name: &str,
+        prompt: &[PromptPart],
         text: impl Into<String>,
-        _system_prompt: &str,
-        _user_prompt: &str,
     ) -> LlmCallResult {
         let text = text.into();
         LlmCallResult {
             text: text.clone(),
-            raw_request_json: String::new(),
+            raw_request_json: request_json(prompt),
             raw_response_json: format!("{{\"content\":\"{text}\"}}"),
             backend_name: self.name().to_string(),
             model_name: self.model().to_string(),
@@ -112,40 +112,27 @@ impl LlmProvider for MockBackend {
     fn complete(
         &self,
         agent_name: &str,
-        _system_prompt: &str,
-        user_prompt: &str,
+        prompt: &[PromptPart],
         _settings: &CallSettings,
-    ) -> Result<LlmCallResult, EngineError> {
+    ) -> Result<LlmCallResult, LlmCallFailure> {
         let is_narration = agent_name == crate::application::ports::llm_provider::AGENT_NARRATOR
             || agent_name == crate::application::ports::llm_provider::AGENT_DIALOGUE;
 
         if is_narration {
-            self.guard()?;
+            self.guard().map_err(LlmCallFailure::from)?;
             if self.should_return_empty.load(Ordering::SeqCst) {
-                return Ok(self.make_result(
-                    agent_name,
-                    String::new(),
-                    _system_prompt,
-                    user_prompt,
-                ));
+                return Ok(self.make_result(agent_name, prompt, String::new()));
             }
             if !self.per_call_narrations.is_empty() {
                 let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
                 return Ok(self.make_result(
                     agent_name,
+                    prompt,
                     self.per_call_narrations[idx % self.per_call_narrations.len()].clone(),
-                    _system_prompt,
-                    user_prompt,
                 ));
             }
-            let input = extract_player_input(user_prompt)
-                .unwrap_or_else(|| user_prompt.lines().next().unwrap_or("...").to_string());
-            Ok(self.make_result(
-                agent_name,
-                format!("[MockNarration] {input}"),
-                _system_prompt,
-                user_prompt,
-            ))
+            let input = extract_player_input(prompt).unwrap_or_else(|| first_user_line(prompt));
+            Ok(self.make_result(agent_name, prompt, format!("[MockNarration] {input}")))
         } else {
             if self.should_fail.load(Ordering::SeqCst)
                 || self.trigger_narration_should_fail.load(Ordering::SeqCst)
@@ -153,16 +140,16 @@ impl LlmProvider for MockBackend {
                 return Err(EngineError::Narration(NarrationFailure::Generation {
                     stage: "mock_trigger",
                     reason: "configured_failure",
-                }));
+                })
+                .into());
             }
             if !self.per_call_prompt_responses.is_empty() {
                 let idx = self.call_index.fetch_add(1, Ordering::SeqCst);
                 return Ok(self.make_result(
                     agent_name,
+                    prompt,
                     self.per_call_prompt_responses[idx % self.per_call_prompt_responses.len()]
                         .clone(),
-                    _system_prompt,
-                    user_prompt,
                 ));
             }
             if agent_name == "options" {
@@ -172,21 +159,16 @@ impl LlmProvider for MockBackend {
                 // priority for pipeline-level tests.
                 return Ok(self.make_result(
                     agent_name,
+                    prompt,
                     "<suggestion>Option one from the mock.</suggestion>\n\
                      <suggestion>Option two from the mock.</suggestion>\n\
                      <suggestion>Option three from the mock.</suggestion>",
-                    _system_prompt,
-                    user_prompt,
                 ));
             }
             Ok(self.make_result(
                 agent_name,
-                format!(
-                    "[Continuation: {}]",
-                    user_prompt.lines().next().unwrap_or("...")
-                ),
-                _system_prompt,
-                user_prompt,
+                prompt,
+                format!("[Continuation: {}]", first_user_line(prompt)),
             ))
         }
     }

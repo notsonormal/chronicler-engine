@@ -3,9 +3,9 @@ diataxis: explanation
 title: Prompt System Design
 ---
 
-## The two halves of a prompt
+## The roles of a prompt
 
-OpenAI-compatible APIs expect the system role to carry instructions and the user role to carry context. So the preset's directives go to the system message, and the scene goes to the user message.
+OpenAI-compatible APIs expect the system role to carry instructions and the user role to carry context. So the preset's directives go to the system message, and the scene goes to user messages. The history goes as one message for each entry.
 
 ## Two tiers of Character awareness
 
@@ -21,17 +21,23 @@ The blocks that stay the same during a story come before the history. The blocks
 
 The history cut drops Messages in blocks. A cut that moved on every call would end the cache at the history. A cut in blocks holds the history start still between two cuts while the history space stays the same.
 
+The history tags cost a little of the cache. `</ConversationHistory>` and `<LastMessage>` move to a newer message on each call. So the cache ends at about the last two old messages. The engine accepts this cost to keep the Marinara Engine format.
+
 The history space leaves out the `<PlayerInput>` layer and the Guide. The Input changes on every call, and the Guide shows only on a Guided Generation. A space that depended on them would move the history start on every call. A reserve for them keeps the history start still on an ordinary Input.
 
-## Whole Messages in the history
+## The history as chat messages
 
-The cut drops whole Messages. A cut of text can start in the middle of a Message and drop its sender label. The model then reads text with no speaker. A whole Message always keeps its label.
+The engine follows Marinara Engine here. Each history entry is one chat message with a role. A Narration is the assistant's own turn, and an Input is the user's turn. The model then reads the story as a conversation that it already took part in.
 
-## The end of the user message
+A history in one text needs a label on each entry, such as `Narrator:` or the Persona name, because the entries share one message. The labels teach the model a format, and an output can copy it: an Input can write a whole `Narrator:` transcript. Chat messages need no label, so the engine expects fewer outputs of that kind.
 
-The `<writing_style>` and `<output_format>` sections come after the story data and before `<PlayerInput>`, in the user message. LLMs show a strong recency bias: content closer to the generation point carries more weight. Prose constraints and structural rules get that weight at the end of the prompt. In the system message at the top, the same content carries less weight.
+The blocks that change after the history join the last history entry when that entry is a `user` message. Two `user` messages in a row can break the chat template of some models. So the engine adds no such pair at the end of the list. A cut can still leave an Input as the first kept entry, next to the first `user` message. The engine keeps that pair, so that each entry stays one chat message.
 
-An empty block near the end of the prompt reads as an empty instruction at the point where the model starts to write. So `<PlayerInput>` and the Guide render only when they have content. A data block states a fact in place of an empty body. A card list says that it has no Character. The history says that the story has no history yet.
+## The end of the last user message
+
+The `<writing_style>` and `<output_format>` sections come after the story data and before `<PlayerInput>`, in the last user message. LLMs show a strong recency bias: content closer to the generation point carries more weight. Prose constraints and structural rules get that weight at the end of the prompt. In the system message at the top, the same content carries less weight.
+
+An empty block near the end of the prompt reads as an empty instruction at the point where the model starts to write. So `<PlayerInput>` and the Guide render only when they have content. `<PlayerInput>` also stays out when the last history entry is that Input, so the model does not read the Input twice. A data block states a fact in place of an empty body. A card list says that it has no Character. The history says that the story has no history yet.
 
 ## Content labels
 

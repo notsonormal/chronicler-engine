@@ -48,7 +48,11 @@ async fn test_failed_narration_attempt_records_and_renders_failure_http() {
         "the failure text must be stored verbatim: {:?}",
         failure.error_message
     );
-    assert!(failure.raw_request_json.is_empty());
+    assert!(
+        failure.raw_request_json.contains("\"messages\""),
+        "a failure after the send stores the payload: {:?}",
+        failure.raw_request_json
+    );
     assert!(failure.raw_response_json.is_empty());
     assert!(failure.parsed_response.is_empty());
 
@@ -72,8 +76,12 @@ async fn test_failed_narration_attempt_records_and_renders_failure_http() {
         "the record must carry the failure text: {record}"
     );
     assert!(
-        !record.contains("Raw Request JSON") && !record.contains("Raw Response JSON"),
-        "an entry with no response must hide its empty Raw JSON sections: {record}"
+        record.contains("Raw Request JSON"),
+        "the record must carry the Raw Request JSON of the failed send: {record}"
+    );
+    assert!(
+        !record.contains("Raw Response JSON"),
+        "an entry with no response must hide its empty Raw Response JSON section: {record}"
     );
 }
 
@@ -313,4 +321,55 @@ async fn test_llm_message_record_of_a_missing_id_is_a_404_http() {
         body,
         r#"<div class="error-message">The form was not opened: LLM message not found.</div>"#
     );
+}
+
+// [docs/specs/llm_messages.md] SCENARIO: 33.6
+#[tokio::test]
+async fn test_llm_message_record_shows_the_messages_of_the_payload_http() {
+    let (app, state, storage) = app_with_script(ScriptedModel::new());
+    let attempt = LlmMessage {
+        system_prompt: String::new(),
+        user_prompt: String::new(),
+        raw_request_json: r#"{"messages":[
+            {"role":"system","content":"MSG-ONE"},
+            {"role":"user","content":"MSG-TWO"},
+            {"role":"assistant","content":"MSG-THREE"},
+            {"role":"user","content":"MSG-FOUR"}]}"#
+            .to_string(),
+        ..full_attempt(-10)
+    };
+    seed(&storage, &[attempt]);
+    let ids = recorded_ids(&state);
+
+    let record = fetch_body(&app, &format!("/fragment/llm-messages/{}", ids[0])).await;
+
+    let labelled: Vec<usize> = [
+        "<summary>System</summary>",
+        "<summary>User</summary>",
+        "<summary>Assistant</summary>",
+    ]
+    .iter()
+    .map(|label| {
+        record
+            .find(label)
+            .unwrap_or_else(|| panic!("the record shows {label}: {record}"))
+    })
+    .collect();
+    assert!(
+        labelled[0] < labelled[1] && labelled[1] < labelled[2],
+        "{record}"
+    );
+    let positions: Vec<usize> = ["MSG-ONE", "MSG-TWO", "MSG-THREE", "MSG-FOUR"]
+        .iter()
+        .map(|text| {
+            record
+                .find(text)
+                .unwrap_or_else(|| panic!("the record shows {text}: {record}"))
+        })
+        .collect();
+    assert!(
+        positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "in order: {record}"
+    );
+    assert!(record.contains("Raw Request JSON"), "{record}");
 }

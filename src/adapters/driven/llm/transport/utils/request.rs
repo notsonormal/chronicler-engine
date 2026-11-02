@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::{json, Value};
 
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::domain::model::settings::ReasoningEffort;
 
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -20,10 +21,15 @@ const USER_AGENT: &str = concat!("chronicler-engine/", env!("CARGO_PKG_VERSION")
 #[derive(Debug)]
 pub struct ChatCompletionResult {
     pub text: String,
-    pub system_prompt: String,
-    pub user_prompt: String,
     pub raw_request_json: String,
     pub raw_response_json: String,
+}
+
+/// `raw_request_json` is empty when the call failed before it built a payload.
+#[derive(Debug)]
+pub struct ChatCompletionFailure {
+    pub error: crate::error::EngineError,
+    pub raw_request_json: String,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -40,8 +46,8 @@ pub struct ChatCompletionsEndpoint<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct ChatCompletionRequest<'a> {
     pub model: &'a str,
-    pub system_prompt: &'a str,
-    pub user_text: &'a str,
+    /// An empty `System` part is left out of the payload.
+    pub parts: &'a [PromptPart],
     /// The `custom` samplers are sent as they are, unless the engine writes the same key
     /// itself. Its `game` does not reach the wire: `session_id` carries it.
     pub call: &'a CallSettings,
@@ -61,17 +67,12 @@ pub struct ProviderRouting<'a> {
 }
 
 pub fn build_request_payload(request: &ChatCompletionRequest<'_>) -> (serde_json::Value, String) {
-    let mut messages = vec![];
-    if !request.system_prompt.is_empty() {
-        messages.push(json!({
-            "role": "system",
-            "content": request.system_prompt
-        }));
-    }
-    messages.push(json!({
-        "role": "user",
-        "content": request.user_text
-    }));
+    let messages: Vec<Value> = request
+        .parts
+        .iter()
+        .filter(|part| part.role != PromptRole::System || !part.text.is_empty())
+        .map(PromptPart::to_json)
+        .collect();
     let mut payload = Value::Object(request.call.custom.clone());
     payload["model"] = json!(request.model);
     payload["messages"] = json!(messages);
