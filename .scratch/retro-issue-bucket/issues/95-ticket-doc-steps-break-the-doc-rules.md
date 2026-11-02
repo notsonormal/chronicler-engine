@@ -31,6 +31,12 @@ New evidence, 2026-11-01 (tickets 22 and 23, doc-review session `7d165829`):
 - The implementer of ticket 22 also wrote that the preset service checks a seed file. The seed calls `PromptPreset::validate` directly.
 - The Standards and Spec reviews ran after the doc fixes, so they did not show whether they would catch these faults.
 
+New evidence, 2026-11-01 (layout-trials ticket 09, `.scratch/layout-trials/issues/09-move-changing-blocks-after-history.md`; implementer session `f6c26d0f`, doc-review session `f640621a`, Standards session `b2d72e25`):
+
+- The coordinator's plan review wrote the doc step. It said "Give the measured gain (Narrator-role cached share 55.2 % to 78.8 %, ticket 03)". The implementer copied the figures into `prompt_system_design.md`. `chronicler-docs-hygiene` flags "PR-style validation metrics". The doc review did not flag the figures. It only corrected their method. The Standards review caught them.
+- The implementer also wrote a false claim: a Room change "can move the history start by one block". `HistoryCut::of` makes the whole cut again from the space, so the start can move by any number of Messages. The doc review caught it.
+- The doc review found 14 problems in two docs: 3 errors and 6 warnings. Here the fault came from the plan review, not from a Decision of the ticket. So option A must also reach the agent that writes the plan review (`/improve-ai-plan`).
+
 ## Options to decide
 
 - **A.** The build-plan ticket names the facts that become true or false, not the sentences. The implementer writes the sentences under `docs/AGENTS.md`.

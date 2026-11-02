@@ -212,11 +212,12 @@ impl<'a> LayerRenderer<'a> {
     /// are the fixed part that the history space subtracts.
     fn fixed_user_layers(&self, history_layer: String) -> Vec<String> {
         vec![
-            self.render_game_state_layer(),
-            self.render_character_cards_layer(),
+            self.render_known_characters_layer(),
             self.render_persona_layer(),
             self.render_world_info_layer(),
             history_layer,
+            self.render_game_state_layer(),
+            self.render_characters_present_layer(),
             self.post_history_prompt.clone(),
         ]
     }
@@ -250,28 +251,29 @@ impl<'a> LayerRenderer<'a> {
         output
     }
 
-    fn render_character_cards_layer(&self) -> String {
+    fn render_known_characters_layer(&self) -> String {
         let mut output = String::new();
-        let in_area_ids: std::collections::HashSet<_> = self
-            .characters
-            .characters_present
-            .iter()
-            .map(|n| n.id.as_str())
-            .collect();
 
         output.push_str("<KnownCharacters>");
         if self.characters.all_characters.is_empty() {
             output.push_str("No characters in this world.\n");
         } else {
             for character in CharacterCard::in_id_order(self.characters.all_characters) {
-                output.push_str(&render_known_character_entry(
-                    character,
-                    &in_area_ids,
-                    self.template_vars,
-                ));
+                output.push_str(&render_known_character_entry(character, self.template_vars));
             }
         }
-        output.push_str("</KnownCharacters>\n\n");
+        output.push_str("</KnownCharacters>\n");
+        output
+    }
+
+    fn render_characters_present_layer(&self) -> String {
+        let mut output = String::new();
+        let present_ids: std::collections::HashSet<_> = self
+            .characters
+            .characters_present
+            .iter()
+            .map(|n| n.id.as_str())
+            .collect();
 
         output.push_str("<CharactersPresent>");
         if self.characters.characters_present.is_empty() {
@@ -298,7 +300,7 @@ impl<'a> LayerRenderer<'a> {
                 let relations_block = render_present_relationships(
                     character,
                     self.characters.all_characters,
-                    &in_area_ids,
+                    &present_ids,
                     self.template_vars,
                 );
                 if let Some(relations_block) = relations_block {

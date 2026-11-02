@@ -386,6 +386,41 @@ fn test_every_prompt_layer_renders() {
     );
 }
 
+// CASE narrator-layer-order: the changing blocks follow the history, and the style, the format and the Input stay after them.
+#[test]
+fn test_the_changing_blocks_follow_the_history() {
+    let fixture = Fixture::new();
+
+    let user = sent_prompt(
+        &fixture.narration(&fixture.history, "I look around."),
+        &preset(),
+    )
+    .user_prompt;
+
+    let order = [
+        "<KnownCharacters>",
+        "<Persona>",
+        "<WorldLore>",
+        "<ConversationHistory>",
+        "<GameState>",
+        "<CharactersPresent>",
+        "<writing_style>",
+        "<output_format>",
+        "<PlayerInput>",
+    ];
+    let positions: Vec<usize> = order
+        .iter()
+        .map(|layer| {
+            user.find(layer)
+                .unwrap_or_else(|| panic!("the {layer} layer must render: {user}"))
+        })
+        .collect();
+    assert!(
+        positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "the layers must follow {order:?}, found at {positions:?}: {user}"
+    );
+}
+
 // CASE narrator-turn-untrimmed: a turn that fits the window passes through untrimmed.
 #[test]
 fn test_a_turn_that_fits_passes_through_untrimmed() {
@@ -894,8 +929,8 @@ fn test_a_character_with_a_summary_renders_that_summary() {
     let known = prompt_block(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
 
     assert!(
-        known.contains("Alice (in room)"),
-        "a present Character is marked: {known}"
+        known.contains("- Alice\n"),
+        "the known entry opens with the name line: {known}"
     );
     assert!(
         known.contains("Short summary."),
@@ -922,8 +957,8 @@ fn test_a_character_without_a_summary_renders_three_description_lines() {
     let known = prompt_block(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
 
     assert!(
-        known.contains("Bob (elsewhere)"),
-        "an absent Character is marked: {known}"
+        known.contains("- Bob\n"),
+        "the known entry opens with the name line: {known}"
     );
     for line in ["line one.", "line two.", "line three."] {
         assert!(known.contains(line), "{line} must render: {known}");
@@ -931,6 +966,29 @@ fn test_a_character_without_a_summary_renders_three_description_lines() {
     assert!(
         !known.contains("line four."),
         "only the first three lines render: {known}"
+    );
+}
+
+// CASE narrator-known-entry-has-no-presence-mark: a present and an absent Character both render as a bare name line.
+#[test]
+fn test_a_known_entry_renders_the_bare_name_whether_present_or_absent() {
+    let alice = character_card("n1", "Alice", Some("Here."), "Long desc.", vec![]);
+    let bob = character_card("n2", "Bob", Some("Away."), "Long desc.", vec![]);
+    let fixture = Fixture::new().with_characters(vec![alice.clone(), bob], vec![alice]);
+
+    let call = sent_prompt(
+        &fixture.narration(&fixture.history, "I look around."),
+        &preset(),
+    );
+    let known = prompt_block(&call.user_prompt, "<KnownCharacters>", "</KnownCharacters>");
+
+    assert!(
+        known.contains("- Alice\n") && known.contains("- Bob\n"),
+        "each Character renders as a bare name line: {known}"
+    );
+    assert!(
+        !known.contains("(in room)") && !known.contains("(elsewhere)"),
+        "the known entry carries no presence mark: {known}"
     );
 }
 

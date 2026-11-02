@@ -70,15 +70,9 @@ pub(crate) fn build_post_history_prompt(preset: &PromptPreset, vars: &TemplateVa
 
 pub(crate) fn render_known_character_entry(
     character: &CharacterCard,
-    in_area_ids: &std::collections::HashSet<&str>,
     template_vars: &TemplateVars,
 ) -> String {
-    let presence = if in_area_ids.contains(character.id.as_str()) {
-        "(in room)"
-    } else {
-        "(elsewhere)"
-    };
-    let mut entry = format!("- {} {}\n", character.sheet.name, presence);
+    let mut entry = format!("- {}\n", character.sheet.name);
 
     let summary_text = character
         .sheet

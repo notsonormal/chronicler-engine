@@ -9,26 +9,27 @@ The engine assembles a structured prompt for every Game Master call from an acti
 
 ## Layered Prompt Architecture
 
-The prompt is a sequence of eight layers mapped from SillyTavern's Prompt Manager. Layers 3, 6 and 7 can be absent. Layer 3 (`<Persona>`) is dropped on an Impersonate generation. Persona data then reaches the prompt through the impersonate preset's template macros. Layer 7 (`<Guide>`) renders only on a Guided Generation.
+The prompt is a sequence of nine layers mapped from SillyTavern's Prompt Manager. Layers 2, 7 and 8 can be absent. Layer 2 (`<Persona>`) is dropped on an Impersonate generation. Persona data then reaches the prompt through the impersonate preset's template macros. Layer 8 (`<Guide>`) renders only on a Guided Generation.
 
-A layer with a blank body renders nothing, not even its tags. A body is blank when it is empty or holds only whitespace.
+Layers 7 and 8 render nothing, not even their tags, when their body is blank. A body is blank when it is empty or holds only whitespace.
 
-A post-history splice of `<writing_style>` and `<output_format>` sits between Layer 5 and Layer 6.
+A post-history splice of `<writing_style>` and `<output_format>` sits between Layer 6 and Layer 7.
 
-Every card list renders in Character id order. Layer 2 sorts both of its lists, and the Quantifier and Options calls sort their own.
+Every card list renders in Character id order. Layers 1 and 6 each sort their list, and the Quantifier and Options calls sort their own.
 
 | Layer | Name | SillyTavern Equivalent | Role | Content |
 |-------|------|----------------------|------|---------|
 | 0 | System | Main Prompt | System | XML-wrapped `<role>` and `<instructions>` from the active preset, plus `<global_rules>` injected from `world.json` |
-| 1 | Game State | Context | User (data) | Current room name and description |
-| 2 | Character Cards | Character Description | User (data) | `<KnownCharacters>` condensed entry for every World Character, and `<CharactersPresent>` full cards for the Characters in the current room |
-| 3 | Player | Persona Description | User (data) | `<Persona>` persona sheet |
-| 4 | World Info | World Info / Lorebook | User (data) | `<WorldLore>` world name + description |
-| 5 | History | Chat History | User (data) | `<ConversationHistory>` conversation history, cut as the History section says |
-| 6 | User Input | User Message | User (data) | `<PlayerInput>` sanitized current player input |
-| 7 | Guide | — | User (data) | Transient guide text on a Guided Generation. Omitted otherwise |
+| 1 | Known Characters | Character Description | User (data) | `<KnownCharacters>` condensed entry for every World Character: name and summary |
+| 2 | Player | Persona Description | User (data) | `<Persona>` persona sheet |
+| 3 | World Info | World Info / Lorebook | User (data) | `<WorldLore>` world name + description |
+| 4 | History | Chat History | User (data) | `<ConversationHistory>` conversation history, cut as the History section says |
+| 5 | Game State | Context | User (data) | `<GameState>` current room name and description |
+| 6 | Characters Present | Character Description | User (data) | `<CharactersPresent>` full cards for the Characters in the current room |
+| 7 | User Input | User Message | User (data) | `<PlayerInput>` sanitized current player input |
+| 8 | Guide | — | User (data) | Transient guide text on a Guided Generation. Omitted otherwise |
 
-The narrator makes Layer 6 from the kind of the generation (see Narration System).
+The narrator makes Layer 7 from the kind of the generation (see Narration System).
 
 ## History
 
@@ -76,5 +77,5 @@ An Options preset can set `option_count`, the number of Options. The count must 
 
 ## Document References
 
-- [`../../explanation/prompt_system_design.md`](../../explanation/prompt_system_design.md) — why the prompt system is shaped this way: system/user separation and two-tier Character cards.
+- [`../../explanation/prompt_system_design.md`](../../explanation/prompt_system_design.md) — why the prompt system is shaped this way: system/user separation, two-tier Character cards, the history cut, and the layer order for the provider cache.
 - [`narration_system.md`](narration_system.md) — the prompt rules of each kind of generation.
