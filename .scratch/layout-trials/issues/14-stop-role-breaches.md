@@ -1,8 +1,8 @@
 # Stop the role breaches with stop sequences
 
 Type: task (AFK)
-Status: open
-Blocked by: 12, 13
+Status: closed
+Blocked by: 12
 
 ## Question
 
@@ -23,3 +23,7 @@ Does a `stop` list of the history labels remove the role breaches from the Narra
 - How: `scripts/trial.py run` with a copy of `scripts/trial_setups/redmist_julian.json` under `tmp/lt14/`. Check after the trial that the pack still shows the history and the call kinds (map Notes, "Failure modes").
 
 Done when the owner keeps or drops the result, and the answer gives the counts and the stop strings.
+
+## Out of scope (owner, 2026-11-02)
+
+Closed before it ran. The labelled breaches come from the `Narrator:` / Persona-name labels of the history text. [Try the history in the ME format](15-history-in-me-format.md) removes those labels, so no stop list is needed. A breach with no label, such as a Narration that speaks for Julian, is not a fault: it can be right for the story.

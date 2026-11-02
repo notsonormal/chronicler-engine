@@ -1,7 +1,7 @@
 # Remove the data conflicts that distort a trial
 
 Type: task (HITL)
-Status: claimed
+Status: resolved
 Blocked by: 13
 
 ## Question
@@ -38,3 +38,18 @@ The owner decided the rows of the scan. The changes are in the JSON files and in
 - Still open: row 5, row 10, and the data causes that ticket 13 adds. Restart the probe server before the next trial, in case it holds the old World in memory (guessed).
 
 Done when each known fault and each conflict from the scan is fixed or ruled out by the owner, the probe DB holds the fixed data, `scripts/validate_data.py` passes, and the answer lists each change.
+
+## Answer
+
+Resolved by the owner on 2026-11-02, before [Sort the inconsistencies by their cause](13-sort-inconsistencies-by-cause.md) ran. The owner then closed that ticket as out of scope.
+
+The fixes are in commit `dfc11a70` and in the probe DB `target/ui-investigator/debug/chronicler_3001.db` (rows checked equal to the JSON). `validate-data` passes. Scan: [the data conflicts of the test setup](../assets/data-conflict-scan.md).
+
+- **The era:** `world.json` `description` says "The story takes place in the present day." The owner chose the description, not a global rule. No currency is named.
+- **The short entries:** the short entry is the `summary` field (`render_known_character_entry`). The summaries now say "Louise Petit", "Lisette Franklin", and for Jezebel "Born into a wealthy family of financiers."
+- **Julian's family:** Jezebel's example dialogue no longer says "immediate family". `julian.json` places his childhood "in a city far from Islaport". The father/grandfather fix came earlier.
+- **Third person:** `master_quarters` says "The master's luxurious bedroom."
+- **The probe DB copy:** the World, the map, the cards and the Persona are seeded only when missing (`src/bootstrap/load.rs`). A data change must also update the DB rows.
+- **Left by the owner:** Louise naive or worldly (row 5), and Bernard's trade (row 8).
+- **Not fixed:** the places off the estate (row 10). Ticket 13 was closed as out of scope, so nobody sorts it in this map.
+- Restart the probe server before the next trial, in case it holds the old World in memory (guessed).

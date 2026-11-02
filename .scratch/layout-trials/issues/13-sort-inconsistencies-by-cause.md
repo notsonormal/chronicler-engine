@@ -1,7 +1,7 @@
 # Sort the inconsistencies by their cause
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -22,4 +22,8 @@ For each inconsistency that the judge pilot found, is it inherent to the model, 
   - The growth of the Impersonate Inputs (P: mean 115 words in the first 40 entries and 224 in the last 40; Q: 111 and 124). The "Response Length" text was removed from the Impersonate prompt in Prompt flexibility. Drift, or the missing length text? (Graduated from the map's "Not yet specified".)
 - An agent may count with a script, but it must quote the prompt part that it names as a cause.
 
-Done when the asset gives each case its cause (model, structure or data) with the evidence, each data cause is added to ticket 12, and each structure cause outside Long-term memory and state is a new ticket or a line in the map's "Not yet specified".
+Done when the asset gives each case its cause (model, structure or data) with the evidence, each data cause (with the places off the estate, row 10 of [the data conflict scan](../assets/data-conflict-scan.md)) is fixed with the owner or made a new ticket, because [Remove the data conflicts that distort a trial](12-remove-data-conflicts.md) is resolved, and each structure cause outside Long-term memory and state is a new ticket or a line in the map's "Not yet specified".
+
+## Answer
+
+Closed as out of scope by the owner on 2026-11-02, with no work done: "This stuff isn't something that needs to be or even can be fully resolved right now." The map's Destination no longer includes the sort by cause, and the map's "Out of scope" records it. No data cause from this ticket reaches [Remove the data conflicts that distort a trial](12-remove-data-conflicts.md), and the places off the estate stay unfixed.

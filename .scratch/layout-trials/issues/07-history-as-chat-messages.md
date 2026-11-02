@@ -30,3 +30,5 @@ Done when the owner keeps or drops the candidate, the reading notes extend the c
 ## Out of scope (owner, 2026-11-02)
 
 Replaced. Its one measured target, the role breaches, gets a cheaper test with no change of the model port: [Stop the role breaches with stop sequences](14-stop-role-breaches.md). Reopen if that test fails and the label format of the history is the cause.
+
+Later (owner, 2026-11-02): the topic returns as a new ticket, [Try the history in the ME format](15-history-in-me-format.md). The engine was modelled on ME, and nobody chose the two-message history on purpose. Ticket 14 is closed.
