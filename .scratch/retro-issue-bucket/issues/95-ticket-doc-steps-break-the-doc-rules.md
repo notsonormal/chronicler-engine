@@ -37,6 +37,12 @@ New evidence, 2026-11-01 (layout-trials ticket 09, `.scratch/layout-trials/issue
 - The implementer also wrote a false claim: a Room change "can move the history start by one block". `HistoryCut::of` makes the whole cut again from the space, so the start can move by any number of Messages. The doc review caught it.
 - The doc review found 14 problems in two docs: 3 errors and 6 warnings. Here the fault came from the plan review, not from a Decision of the ticket. So option A must also reach the agent that writes the plan review (`/improve-ai-plan`).
 
+New evidence, 2026-11-03 (long-term-memory ticket 09, `.scratch/long-term-memory-and-state/issues/09-history-size-field.md`; implementer session `876bb59e`, doc-review session `5b0c85b9`, Standards session `dda2215d`, Spec session `4587d0e0`):
+
+- The ticket's glossary step said "the tokens of history that one Narrator-role call may hold". "Narrator-role" is not a glossary term, and the scope is false: an event Narration is a Trigger Role call with the same history space. The implementer copied the term into `CONTEXT.md`, the field doc comment, `settings.schema.json` and the `trial.py` docstrings. The doc review caught the glossary entry, and the Spec review caught the other places.
+- The ticket's doc step named two docs that do not exist: "the Settings reference of the Connection form" and "the setup-file fields of the trial in its docs". The implementer and the doc review each spent a search to confirm it.
+- The ticket's Decisions put the default constant in `src/application/prompting/token_budget.rs`. The domain resolve method needs it, and `arch-lint.toml` forbids that import. The implementer moved it to `src/domain/model/settings.rs`. So the fault reaches code placement too, not only doc sentences: a ticket that the coordinator writes from a grilling names places that no one checked.
+
 ## Options to decide
 
 - **A.** The build-plan ticket names the facts that become true or false, not the sentences. The implementer writes the sentences under `docs/AGENTS.md`.

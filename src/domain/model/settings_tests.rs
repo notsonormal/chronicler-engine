@@ -782,6 +782,15 @@ fn connection_resolve_max_context_tokens_override() {
 }
 
 #[test]
+fn connection_resolve_max_history_tokens_defaults_and_overrides() {
+    let mut conn = LlmConnection::new("t", "T", LlmBackendType::Ollama);
+    assert_eq!(conn.resolve_max_history_tokens(), 65536);
+
+    conn.max_history_tokens = Some(16000);
+    assert_eq!(conn.resolve_max_history_tokens(), 16000);
+}
+
+#[test]
 fn reasoning_effort_serializes_as_the_provider_value() {
     let expected = [
         (ReasoningEffort::Off, "none"),
@@ -891,6 +900,7 @@ fn settings_stored_with_every_connection_key_still_load() {
             "single_user_message": true,
             "max_tokens_ceiling": 512,
             "max_context_tokens": 8192,
+            "max_history_tokens": 16000,
             "reasoning_effort": "low"
         }],
         "narration_connection_id": "stored",
@@ -912,6 +922,7 @@ fn settings_stored_with_every_connection_key_still_load() {
     assert!(connection.single_user_message);
     assert_eq!(connection.max_tokens_ceiling, Some(512));
     assert_eq!(connection.max_context_tokens, Some(8192));
+    assert_eq!(connection.max_history_tokens, Some(16000));
     assert_eq!(connection.reasoning_effort, Some(ReasoningEffort::Low));
     let rewritten = serde_json::to_value(&settings).expect("serialize");
     assert_eq!(

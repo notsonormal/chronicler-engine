@@ -110,7 +110,7 @@ impl Narrator {
         values: &NarrationValues,
         preset: &PromptPreset,
         call: &CallSettings,
-        max_context_tokens: u32,
+        budget: TokenBudget,
     ) -> Result<Narrated, GenerationFailure> {
         let role = generation.kind().role();
         let user_message = Self::user_message(generation, values);
@@ -128,10 +128,6 @@ impl Narrator {
             Generation::Impersonate { .. } => context.with_impersonate(true),
             Generation::Narration { guide } => context.with_guide(guide.clone()),
             Generation::InputRetry | Generation::Event(_) => context,
-        };
-        let budget = TokenBudget {
-            max_context_tokens,
-            max_tokens: call.max_tokens,
         };
         let assembled = self
             .assemble(&context, preset, budget)

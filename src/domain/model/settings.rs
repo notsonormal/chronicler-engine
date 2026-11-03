@@ -349,6 +349,10 @@ pub struct LlmConnection {
     pub max_tokens_ceiling: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_context_tokens: Option<u32>,
+    /// The history size: the most tokens of story history a call may hold. `None` uses
+    /// `DEFAULT_MAX_HISTORY_TOKENS`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_history_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffort>,
     /// The upstream hosts a routing provider tries, in order. Empty lets the
@@ -361,6 +365,8 @@ pub struct LlmConnection {
 }
 
 pub const DEFAULT_MAX_TOKENS: u32 = 2048;
+
+pub const DEFAULT_MAX_HISTORY_TOKENS: u32 = 65536;
 
 impl LlmConnection {
     pub fn max_tokens_for(&self, preset_value: Option<u32>) -> u32 {
@@ -380,6 +386,7 @@ impl LlmConnection {
             single_user_message: false,
             max_tokens_ceiling: None,
             max_context_tokens: None,
+            max_history_tokens: None,
             reasoning_effort: None,
             provider_order: Vec::new(),
             pin_provider_order: false,
@@ -439,6 +446,11 @@ impl LlmConnection {
     pub fn resolve_max_context_tokens(&self) -> u32 {
         self.max_context_tokens
             .unwrap_or(self.provider.default_max_context_tokens())
+    }
+
+    pub fn resolve_max_history_tokens(&self) -> u32 {
+        self.max_history_tokens
+            .unwrap_or(DEFAULT_MAX_HISTORY_TOKENS)
     }
 }
 

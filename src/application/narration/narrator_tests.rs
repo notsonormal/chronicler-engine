@@ -5,8 +5,7 @@ use std::sync::Arc;
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narration::{NarrationValues, Narrated, Narrator};
 use crate::application::prompting::token_budget::{
-    estimate_tokens, TokenBudget, MAX_CONTEXT_TOKENS, MAX_HISTORY_TOKENS, MESSAGE_OVERHEAD_TOKENS,
-    SAFETY_MARGIN_TOKENS,
+    estimate_tokens, TokenBudget, MAX_CONTEXT_TOKENS, MESSAGE_OVERHEAD_TOKENS, SAFETY_MARGIN_TOKENS,
 };
 use crate::application::prompting::{CharacterContext, PromptAssembler};
 use crate::domain::model::agent::Role;
@@ -18,7 +17,9 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Maker, Message, Swipe};
 use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
-use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, DEFAULT_MAX_TOKENS};
+use crate::domain::model::settings::{
+    NarrativePerspective, NarrativeTense, DEFAULT_MAX_HISTORY_TOKENS, DEFAULT_MAX_TOKENS,
+};
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::state::event_record::{EventRecord, TriggerRef};
@@ -275,13 +276,7 @@ fn narrate_on(
     budget: TokenBudget,
 ) -> Result<Narrated, GenerationFailure> {
     let call = CallSettings::of(&preset.parameters, budget.max_tokens, GameId(7));
-    narrator.narrate(
-        &case.generation,
-        &case.values,
-        preset,
-        &call,
-        budget.max_context_tokens,
-    )
+    narrator.narrate(&case.generation, &case.values, preset, &call, budget)
 }
 
 fn sent_prompt(case: &NarrationCase, preset: &PromptPreset) -> ModelCall {
@@ -347,9 +342,19 @@ fn sent_tokens(call: &ModelCall) -> usize {
 fn window(max_context_tokens: u32, max_tokens: u32) -> TokenBudget {
     TokenBudget {
         max_context_tokens,
+        max_history_tokens: DEFAULT_MAX_HISTORY_TOKENS,
         max_tokens,
     }
 }
+
+fn history_size(max_history_tokens: u32) -> TokenBudget {
+    TokenBudget {
+        max_history_tokens,
+        ..TokenBudget::fallback()
+    }
+}
+
+const CUTTING_HISTORY_TOKENS: u32 = 16_000;
 
 fn sent_under(
     fixture: &Fixture,
@@ -625,25 +630,59 @@ fn test_the_default_window_carries_the_whole_history() {
     );
 }
 
-// CASE narrator-history-cap: a history past the history cap keeps its newest entries within the cap.
+// CASE narrator-history-default-size: with no history size set, a history past the default size keeps its newest entries within it.
 #[test]
-fn test_a_history_past_the_cap_keeps_its_newest_entries() {
+fn test_a_history_past_the_default_size_keeps_its_newest_entries() {
     let fixture = Fixture::new();
-    let history = fixture.history_of(2000);
-    let call = sent_prompt(&fixture.narration(&history, "I look around."), &preset());
+    let history = fixture.history_of(5000);
+    let call = sent_under(&fixture, &history, "I look around.", window(1_000_000, 500));
 
     let kept = history_entries(&call);
     let kept_tokens: usize = kept.iter().map(|entry| estimate_tokens(entry)).sum();
     assert!(
-        kept_tokens <= MAX_HISTORY_TOKENS as usize,
-        "the history stays within the cap: {kept_tokens} tokens"
+        kept_tokens <= DEFAULT_MAX_HISTORY_TOKENS as usize,
+        "the history stays within the default size: {kept_tokens} tokens"
+    );
+    assert!(
+        kept.last()
+            .is_some_and(|entry| entry.starts_with("Entry 4999 ")),
+        "the newest entry must stay"
+    );
+    assert_eq!(first_kept_entry(&call).map(|start| 0 < start), Some(true));
+}
+
+// CASE narrator-history-size-field: a Connection history size smaller than the window cuts the history at that size.
+#[test]
+fn test_a_connection_history_size_cuts_the_history_at_that_size() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+
+    let sized = sent_under(
+        &fixture,
+        &history,
+        "I look around.",
+        TokenBudget {
+            max_context_tokens: 1_000_000,
+            max_history_tokens: 4000,
+            max_tokens: 500,
+        },
+    );
+
+    let kept = history_entries(&sized);
+    let kept_tokens: usize = kept.iter().map(|entry| estimate_tokens(entry)).sum();
+    assert!(
+        kept_tokens <= 4000,
+        "the history stays within its size: {kept_tokens} tokens"
+    );
+    assert!(
+        2000 < kept_tokens,
+        "the cut leaves most of the size and not a few entries: {kept_tokens} tokens"
     );
     assert!(
         kept.last()
             .is_some_and(|entry| entry.starts_with("Entry 1999 ")),
         "the newest entry must stay"
     );
-    assert_eq!(first_kept_entry(&call).map(|start| 0 < start), Some(true));
 }
 
 // CASE narrator-history-cut-drops-whole-messages: a cut history starts at an entry, and every kept entry is one whole message with no sender label.
@@ -655,7 +694,7 @@ fn test_a_cut_history_keeps_whole_entries() {
         &fixture,
         &history,
         "I look around.",
-        TokenBudget::fallback(),
+        history_size(CUTTING_HISTORY_TOKENS),
     );
 
     let kept = history_entries(&call);
@@ -995,13 +1034,13 @@ fn test_the_history_start_holds_between_cuts() {
         &fixture,
         &history[..1100],
         "I look around.",
-        TokenBudget::fallback(),
+        history_size(CUTTING_HISTORY_TOKENS),
     );
     let second = sent_under(
         &fixture,
         &history,
         "I look around.",
-        TokenBudget::fallback(),
+        history_size(CUTTING_HISTORY_TOKENS),
     );
 
     let start = first_kept_entry(&first).expect("the first call keeps entries");
@@ -1016,8 +1055,18 @@ fn test_the_player_input_does_not_move_the_history_start() {
     let history = fixture.history_of(1100);
     let long_input = "I look around the room slowly. ".repeat(100);
 
-    let short = sent_under(&fixture, &history, "Go.", TokenBudget::fallback());
-    let long = sent_under(&fixture, &history, &long_input, TokenBudget::fallback());
+    let short = sent_under(
+        &fixture,
+        &history,
+        "Go.",
+        history_size(CUTTING_HISTORY_TOKENS),
+    );
+    let long = sent_under(
+        &fixture,
+        &history,
+        &long_input,
+        history_size(CUTTING_HISTORY_TOKENS),
+    );
 
     assert!(first_kept_entry(&short).is_some_and(|start| 0 < start));
     assert_eq!(first_kept_entry(&short), first_kept_entry(&long));
@@ -1046,7 +1095,7 @@ fn test_a_history_with_no_kept_message_holds_the_marker() {
         &fixture,
         &history,
         "I look around.",
-        TokenBudget::fallback(),
+        history_size(CUTTING_HISTORY_TOKENS),
     );
 
     assert!(
@@ -1117,6 +1166,7 @@ fn test_the_call_asks_for_the_budgets_response_length() {
     let case = fixture.narration(&fixture.history, "I look around.");
     let requested = TokenBudget {
         max_context_tokens: MAX_CONTEXT_TOKENS,
+        max_history_tokens: DEFAULT_MAX_HISTORY_TOKENS,
         max_tokens: 500,
     };
     let model = Arc::new(ScriptedModel::new().narration("Narration."));
@@ -1481,6 +1531,7 @@ fn test_a_prompt_that_cannot_fit_the_window_fails() {
     let model = Arc::new(ScriptedModel::new());
     let tight = TokenBudget {
         max_context_tokens: 512,
+        max_history_tokens: DEFAULT_MAX_HISTORY_TOKENS,
         max_tokens: 256,
     };
 
@@ -2098,6 +2149,7 @@ fn test_the_preset_samplers_and_the_game_reach_the_model_call() {
     let fixture = Fixture::new();
     let budget = TokenBudget {
         max_context_tokens: MAX_CONTEXT_TOKENS,
+        max_history_tokens: DEFAULT_MAX_HISTORY_TOKENS,
         max_tokens: 700,
     };
     for case in [

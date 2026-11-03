@@ -260,6 +260,187 @@ async fn test_context_window_that_is_not_a_positive_whole_number_is_refused() {
     );
 }
 
+// [docs/specs/settings.md] SCENARIO: 20.56
+#[tokio::test]
+async fn test_history_field_sets_the_history_the_next_narration_holds() {
+    let _guard = SettingsTestGuard::new();
+    let (app, state, _storage, _game_id) = long_story_app(Some(1_000_000));
+
+    assert!(post_action(&app, "first look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the first narration should settle"
+    );
+
+    let edited = post_form(
+        &app,
+        "/connections/narration-conn/edit",
+        "conn_name=Short&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_history_tokens=1000",
+    )
+    .await;
+    assert_eq!(
+        edited.status(),
+        StatusCode::OK,
+        "the connection edit should save"
+    );
+    let stored = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    assert_eq!(
+        stored
+            .find_connection("narration-conn")
+            .expect("the edited connection must still be stored")
+            .max_history_tokens,
+        Some(1000)
+    );
+    let form = fetch_body(&app, "/fragment/connections/narration-conn/edit").await;
+    assert!(
+        form.contains(r#"name="conn_max_history_tokens" value="1000""#),
+        "the edit form must show the stored history size: {form}"
+    );
+
+    assert!(post_action(&app, "second look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the second narration should settle"
+    );
+
+    let prompts: Vec<String> = state
+        .game_view_query
+        .list_latest_llm_messages(20)
+        .expect("the recorded calls read back")
+        .into_iter()
+        .filter(|message| message.agent_name == "narrator")
+        .map(|message| sent_user_text(&message))
+        .collect();
+    assert_eq!(prompts.len(), 2, "each Action records one narrator call");
+    let whole = prompts[0].matches("Story entry ").count();
+    let cut = prompts[1].matches("Story entry ").count();
+    assert!(
+        whole >= 150,
+        "the empty history field must hold the whole story log: {whole} entries"
+    );
+    assert!(
+        cut < whole / 2,
+        "the history size the Connection holds at that moment decides how much of the \
+         story log reaches the prompt: {whole} entries before the edit, {cut} after"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.57
+#[tokio::test]
+async fn test_empty_history_field_stores_no_history_size() {
+    let _guard = SettingsTestGuard::new();
+    let mut connection = mock_connection("history-conn", "mock-model");
+    connection.max_history_tokens = Some(16_000);
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "history-conn".into(),
+        quantifier_connection_id: "history-conn".into(),
+        ..AppSettings::default()
+    };
+    let (state, _storage) = TestAppBuilder::default_test()
+        .settings(settings)
+        .build_service_with_storage();
+    let app = build_router(state.clone());
+
+    let response = post_form(
+        &app,
+        "/connections/history-conn/edit",
+        "conn_name=Default&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_history_tokens=",
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let stored = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    assert_eq!(
+        stored
+            .find_connection("history-conn")
+            .expect("the edited connection must still be stored")
+            .max_history_tokens,
+        None,
+        "an empty history field must store nothing"
+    );
+    let form = fetch_body(&app, "/fragment/connections/history-conn/edit").await;
+    assert!(
+        form.contains(r#"name="conn_max_history_tokens" value="""#),
+        "the edit form must show an empty history field: {form}"
+    );
+}
+
+// [docs/specs/settings.md] SCENARIO: 20.58
+#[tokio::test]
+async fn test_history_size_that_is_not_a_positive_whole_number_is_refused() {
+    let _guard = SettingsTestGuard::new();
+    let mut connection = mock_connection("alpha-conn", "mock-model");
+    connection.name = "Alpha".into();
+    let settings = AppSettings {
+        connections: vec![connection],
+        narration_connection_id: "alpha-conn".into(),
+        quantifier_connection_id: "alpha-conn".into(),
+        ..AppSettings::default()
+    };
+    let (state, _storage) = TestAppBuilder::default_test()
+        .settings(settings)
+        .build_service_with_storage();
+    let app = build_router(state.clone());
+
+    for typed in ["long", "0", "-5", "4294967296"] {
+        let response = post_form(
+            &app,
+            "/connections/alpha-conn/edit",
+            &format!(
+                "conn_name=Alpha&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_history_tokens={typed}"
+            ),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "the history size '{typed}' must be refused"
+        );
+        let body = body_text(response).await;
+        assert!(
+            body.contains("History size must be a positive whole number"),
+            "the refusal must name the history size rule for '{typed}': {body}"
+        );
+    }
+
+    let added = post_form(
+        &app,
+        "/connections/add",
+        "conn_name=Refused&conn_provider=mock&conn_model=mock-model&conn_api_key=&conn_base_url=&conn_max_history_tokens=long",
+    )
+    .await;
+    assert_eq!(
+        added.status(),
+        StatusCode::BAD_REQUEST,
+        "a refused history size must refuse the add too"
+    );
+
+    let stored = state
+        .settings_service
+        .get_settings()
+        .expect("settings read should succeed");
+    assert_eq!(
+        stored.connections.len(),
+        1,
+        "a refused history size must save no connection"
+    );
+    assert_eq!(
+        stored
+            .find_connection("alpha-conn")
+            .expect("the edited connection must still be stored")
+            .max_history_tokens,
+        None,
+        "a refused history size must store nothing"
+    );
+}
+
 fn app_with_one_connection_at_effort(
     reasoning_effort: Option<ReasoningEffort>,
 ) -> (axum::Router, AppState) {

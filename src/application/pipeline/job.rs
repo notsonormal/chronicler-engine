@@ -16,6 +16,7 @@ use crate::application::generation::gate::{
 use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
+use crate::application::prompting::token_budget::TokenBudget;
 use crate::application::prompting::CharacterContext;
 use crate::domain::model::agent::{AgentSettings, HookInput, Kind, AGENT_HISTORY_WINDOW};
 use crate::domain::model::character::CharacterCard;
@@ -52,10 +53,10 @@ pub enum JobEnd {
     EntryMoved,
 }
 
-/// The settings of one model call, and the context window of the Connection it uses.
+/// The settings of one model call, and the token budget of the Connection it uses.
 struct CallPlan {
     settings: CallSettings,
-    context_window: u32,
+    budget: TokenBudget,
 }
 
 pub struct Job {
@@ -279,7 +280,7 @@ impl Job {
             &values,
             &preset,
             &plan.settings,
-            plan.context_window,
+            plan.budget,
         )?;
         Ok(narrated.text)
     }
@@ -476,7 +477,11 @@ impl Job {
         let max_tokens = connection.max_tokens_for(preset.parameters.max_tokens);
         Ok(CallPlan {
             settings: CallSettings::of(&preset.parameters, max_tokens, self.writer.game()),
-            context_window: connection.resolve_max_context_tokens(),
+            budget: TokenBudget {
+                max_context_tokens: connection.resolve_max_context_tokens(),
+                max_history_tokens: connection.resolve_max_history_tokens(),
+                max_tokens,
+            },
         })
     }
 

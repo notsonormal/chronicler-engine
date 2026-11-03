@@ -4,7 +4,11 @@ A trial fixes a World, a Persona, a mode, a posture, four prompt presets and
 two Connections in one JSON file under ``scripts/trial_setups/``. This script
 applies that setup through the HTTP routes, plays Autoplay until the Budget or
 the token limit, restarts a run that a filtered answer ended, and writes one
-reading pack for each repeat.
+reading pack for each repeat. The optional field ``history_tokens`` is the only
+place that sets the history size of the Connections of a call that writes a
+Narration, an Impersonate Input or an event Narration. The script writes it in the
+probe DB before the run, or removes the size when the field is absent, so the
+default applies. The pack shows the size.
 
     python scripts/trial.py run scripts/trial_setups/redmist_julian.json
     python scripts/trial.py export tmp/pf18/redmist_julian/trial-1
@@ -44,6 +48,10 @@ BUDGET_MAX = 100
 # Mirrors `Budget::DEFAULT` of the same file: the Budget of a run that names none.
 BUDGET_DEFAULT = 10
 
+# Mirrors `DEFAULT_MAX_HISTORY_TOKENS` of `domain/model/settings.rs`: the history size of
+# a Connection whose field is empty.
+HISTORY_TOKENS_DEFAULT = 65_536
+
 POLL_SECONDS = 2
 IDLE_POLLS = 2
 REQUEST_TIMEOUT = 30
@@ -57,6 +65,7 @@ SETUP_FIELDS = {
     "tense",
     "presets",
     "connections",
+    "history_tokens",
     "cycles",
     "token_limit",
     "restart_limit",
@@ -342,6 +351,17 @@ def whole_number(given, name, default):
     return value
 
 
+def history_tokens_field(given):
+    """The history size to set on the Connections that write the story, or `None` when the
+    setup states none and the default applies."""
+    if "history_tokens" not in given:
+        return None
+    value = given["history_tokens"]
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise TrialError("the setup file needs `history_tokens` as a whole number of 1 or more")
+    return value
+
+
 def load_setup(path, cycles_override=None):
     """The setup file with its defaults and the flags applied; a field that cannot be
     applied is refused before any request goes out."""
@@ -366,6 +386,7 @@ def load_setup(path, cycles_override=None):
             given, "presets", ("system", "impersonate", "quantifier", "options")
         ),
         "connections": connection_fields(given),
+        "history_tokens": history_tokens_field(given),
         "cycles": (
             cycles_override
             if cycles_override is not None
@@ -412,6 +433,31 @@ def check_connections(conn, setup):
                 f"setup asks for `{wanted}`: no route sets it"
             )
     return known
+
+
+def set_history_size(conn, setup):
+    """Make the setup the only source of the history size. The Connections of a call that
+    writes a Narration, an Impersonate Input or an event Narration (the Narration
+    Connection, and the Impersonate slot when it names its own) get the size of the
+    setup, or lose any stored size when the setup states none, so the default applies
+    and no earlier trial leaves a value. It writes the DB rows because no route edits
+    one field of a Connection: the edit form would clear the key and the ceiling that
+    it does not hold. The engine reads the settings for each call, so the next call
+    uses the new size."""
+    settings = rows(conn, "select * from settings")[0]
+    narrator_ids = {
+        setup["connections"]["narration"],
+        stored_slot(settings, "impersonate") or setup["connections"]["narration"],
+    }
+    connections = json.loads(settings["connections"] or "[]")
+    for connection in connections:
+        if connection.get("id") in narrator_ids:
+            if setup["history_tokens"] is None:
+                connection.pop("max_history_tokens", None)
+            else:
+                connection["max_history_tokens"] = setup["history_tokens"]
+    conn.execute("update settings set connections = ?", (json.dumps(connections),))
+    conn.commit()
 
 
 def stored_slot(settings_row, slot):
@@ -751,6 +797,7 @@ def cmd_run(
         )
     with contextlib.closing(connect(str(db_path))) as conn:
         check_connections(conn, setup)
+        set_history_size(conn, setup)
         out = Path(setup["out"])
         out.mkdir(parents=True, exist_ok=True)
         client = ProbeClient(args.base, transport)
@@ -1083,6 +1130,12 @@ def setup_lines(pack):
         f'`{narration_connection.get("model")}` '
         f'reasoning={narration_connection.get("reasoning_effort")} '
         f'max_tokens_ceiling={narration_connection.get("max_tokens_ceiling")} |'
+    )
+    history_tokens = narration_connection.get("max_history_tokens")
+    lines.append(
+        f'| History size | {history_tokens:,} tokens |'
+        if history_tokens
+        else f'| History size | {HISTORY_TOKENS_DEFAULT:,} tokens (the default) |'
     )
     lines.append(
         f'| Quantifier connection | {quantifier_connection.get("provider")} '

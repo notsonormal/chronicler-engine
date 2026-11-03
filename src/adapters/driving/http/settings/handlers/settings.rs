@@ -57,6 +57,18 @@ fn remove_refusal_message(refusal: &RemoveConnectionError) -> String {
     }
 }
 
+/// A blank field is no value. Anything but a positive whole number is refused with `refusal`.
+fn optional_token_count(typed: &str, refusal: &str) -> Result<Option<u32>, String> {
+    let typed = typed.trim();
+    if typed.is_empty() {
+        return Ok(None);
+    }
+    match typed.parse::<u32>() {
+        Ok(tokens) if tokens > 0 => Ok(Some(tokens)),
+        _ => Err(refusal.to_string()),
+    }
+}
+
 #[derive(Debug, serde::Deserialize)]
 pub struct ConnectionForm {
     pub conn_name: String,
@@ -66,6 +78,8 @@ pub struct ConnectionForm {
     pub conn_base_url: String,
     #[serde(default)]
     pub conn_max_context_tokens: String,
+    #[serde(default)]
+    pub conn_max_history_tokens: String,
     #[serde(default)]
     pub conn_reasoning_effort: String,
     #[serde(default)]
@@ -80,20 +94,20 @@ pub struct ConnectionForm {
 
 impl ConnectionForm {
     /// A blank field follows the provider default: `resolve_max_context_tokens`
-    /// decides it. Anything but a positive whole number is invalid.
+    /// decides it.
     fn resolved_max_context_tokens(&self) -> Result<Option<u32>, String> {
-        let typed = self.conn_max_context_tokens.trim();
-        if typed.is_empty() {
-            return Ok(None);
-        }
-        match typed.parse::<u32>() {
-            Ok(tokens) if tokens > 0 => Ok(Some(tokens)),
-            _ => Err(
-                "Context window must be a positive whole number, or empty for the provider \
-                 default"
-                    .to_string(),
-            ),
-        }
+        optional_token_count(
+            &self.conn_max_context_tokens,
+            "Context window must be a positive whole number, or empty for the provider default",
+        )
+    }
+
+    /// A blank field follows the default: `resolve_max_history_tokens` decides it.
+    fn resolved_max_history_tokens(&self) -> Result<Option<u32>, String> {
+        optional_token_count(
+            &self.conn_max_history_tokens,
+            "History size must be a positive whole number, or empty for the default",
+        )
     }
 
     /// A blank field sends no reasoning field, so the model default applies.
@@ -132,6 +146,7 @@ impl ConnectionForm {
     fn into_config(self, id: String) -> Result<LlmConnection, String> {
         let provider = self.resolved_provider()?;
         let max_context_tokens = self.resolved_max_context_tokens()?;
+        let max_history_tokens = self.resolved_max_history_tokens()?;
         let reasoning_effort = self.resolved_reasoning_effort()?;
         let provider_order = self.resolved_provider_order();
         Ok(LlmConnection {
@@ -144,6 +159,7 @@ impl ConnectionForm {
             single_user_message: self.single_user_message,
             max_tokens_ceiling: None,
             max_context_tokens,
+            max_history_tokens,
             reasoning_effort,
             provider_order,
             pin_provider_order: self.pin_provider_order,

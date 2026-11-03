@@ -389,6 +389,42 @@ Then the response is 400
 And the connection list still holds the connections it held before
 ```
 
+#### Scenario 20.56: The history field sets the history the next narration holds
+
+```gherkin
+Given a Game with a long story log, whose Narrator role uses a mock Connection with a wide context window and an empty history field
+And the player submits an Action, and its narration settles
+When the client edits that Connection with the history field set to a small value
+Then the response is 200
+And the stored Connection holds that history size
+And a following GET /fragment/connections/{id}/edit renders it in the history field
+When the player submits a second Action, and its narration settles
+Then the recorded prompt of the first narration holds the whole story log, and the second holds far less of it
+```
+
+#### Scenario 20.57: An empty history field stores no history size
+
+```gherkin
+Given a fresh app state with a Connection whose history field holds a value
+When the client edits that Connection with an empty history field
+Then the response is 200
+And the stored Connection holds no history size
+And a following GET /fragment/connections/{id}/edit renders an empty history field
+```
+
+#### Scenario 20.58: A history size that is not a positive whole number answers 400
+
+```gherkin
+Given a fresh app state with a Connection named "Alpha"
+When the client edits that Connection with a history size of text, of zero or of a negative number
+Then the response is 400
+And the body says the history size must be a positive whole number, or empty for the default
+When the client adds a Connection with a history size of text
+Then the response is 400
+And the connection list still holds the connections it held before
+And the stored Connection "Alpha" still holds no history size
+```
+
 #### Scenario 20.29: The reasoning effort field stores the chosen effort
 
 ```gherkin

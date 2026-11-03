@@ -14,6 +14,7 @@
     "narration": "conn-1793449507061-3a1cb15f",
     "quantifier": "conn-1793449507061-3a1cb15f"
   },
+  "history_tokens": 16000,
   "cycles": 100,
   "token_limit": 6000000,
   "restart_limit": 5,

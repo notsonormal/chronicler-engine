@@ -844,6 +844,136 @@ class PlayTrialTests(unittest.TestCase):
         )
 
 
+def stored_history_sizes(conn):
+    stored = json.loads(conn.execute("select connections from settings").fetchone()[0])
+    return {connection["id"]: connection.get("max_history_tokens") for connection in stored}
+
+
+class HistorySizeTests(unittest.TestCase):
+    def load(self, **changes):
+        with tempfile.TemporaryDirectory() as directory:
+            return trial.load_setup(write_setup(directory, **changes))
+
+    def test_a_setup_without_the_field_removes_the_size_an_earlier_trial_left(self):
+        conn = make_db()
+        self.addCleanup(conn.close)
+        conn.execute("update settings set impersonate_connection_id = 'conn-other'")
+        trial.set_history_size(conn, self.load(history_tokens=16000))
+        self.assertEqual(
+            stored_history_sizes(conn), {"conn-go": 16000, "conn-other": 16000}
+        )
+        setup = self.load()
+
+        trial.set_history_size(conn, setup)
+
+        self.assertIsNone(setup["history_tokens"])
+        self.assertEqual(
+            stored_history_sizes(conn), {"conn-go": None, "conn-other": None}
+        )
+        kept = json.loads(conn.execute("select connections from settings").fetchone()[0])
+        self.assertEqual(kept[0]["max_tokens_ceiling"], 4096)
+
+    def test_the_field_is_read_from_the_file(self):
+        self.assertEqual(self.load(history_tokens=16000)["history_tokens"], 16000)
+
+    def test_a_size_that_is_not_a_whole_number_of_one_or_more_is_refused(self):
+        for size in (0, -1, 1.5, "16000", True):
+            with self.subTest(size=size):
+                with self.assertRaisesRegex(trial.TrialError, "history_tokens"):
+                    self.load(history_tokens=size)
+
+    def test_the_size_goes_on_the_narration_connection_and_no_other(self):
+        conn = make_db()
+        self.addCleanup(conn.close)
+        setup = self.load(
+            history_tokens=16000,
+            connections={"narration": "conn-go", "quantifier": "conn-other"},
+        )
+
+        trial.set_history_size(conn, setup)
+
+        self.assertEqual(
+            stored_history_sizes(conn), {"conn-go": 16000, "conn-other": None}
+        )
+        kept = json.loads(conn.execute("select connections from settings").fetchone()[0])
+        self.assertEqual(kept[0]["max_tokens_ceiling"], 4096)
+
+    def test_the_size_goes_on_the_impersonate_connection_when_it_has_its_own_slot(self):
+        conn = make_db()
+        self.addCleanup(conn.close)
+        conn.execute("update settings set impersonate_connection_id = 'conn-other'")
+        setup = self.load(history_tokens=16000)
+
+        trial.set_history_size(conn, setup)
+
+        self.assertEqual(
+            stored_history_sizes(conn), {"conn-go": 16000, "conn-other": 16000}
+        )
+
+    def test_run_writes_the_size_before_it_sends_any_request(self):
+        conn = make_db()
+        self.addCleanup(conn.close)
+        seen = []
+
+        class Refusing(RecordingServer):
+            def __call__(self, base, method, path, form=None, headers=None):
+                seen.append(stored_history_sizes(conn))
+                return 500, "refused"
+
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "probe.db"
+            db_path.write_bytes(b"")
+            arguments = argparse.Namespace(
+                setup=str(
+                    write_setup(
+                        directory, history_tokens=16000, out=str(Path(directory) / "pack")
+                    )
+                ),
+                db=str(db_path),
+                cycles=None,
+                base="http://probe",
+                timeout=60,
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(trial.RouteRefused):
+                    trial.cmd_run(
+                        arguments, transport=Refusing(conn), connect=lambda path: conn
+                    )
+
+        self.assertEqual(seen[0]["conn-go"], 16000)
+
+    def test_the_pack_shows_the_size_the_connection_held_for_the_run(self):
+        conn = make_db()
+        self.addCleanup(conn.close)
+        setup = self.load(history_tokens=16000, cycles=5)
+        trial.set_history_size(conn, setup)
+        server = ProbeServer(conn, [lambda c: play_cycles(c, 5)])
+        with tempfile.TemporaryDirectory() as directory:
+            pack = Path(directory) / "pack"
+            with contextlib.redirect_stdout(io.StringIO()):
+                trial.play_trial(
+                    probe_client(server), conn, setup, pack, 3600, FakeClock().clock()
+                )
+            text = (pack / "pack.md").read_text(encoding="utf-8")
+
+        self.assertIn("| History size | 16,000 tokens |", text)
+
+    def test_the_pack_of_a_connection_with_no_size_shows_the_default(self):
+        conn = make_db()
+        self.addCleanup(conn.close)
+        setup = self.load(cycles=5)
+        server = ProbeServer(conn, [lambda c: play_cycles(c, 5)])
+        with tempfile.TemporaryDirectory() as directory:
+            pack = Path(directory) / "pack"
+            with contextlib.redirect_stdout(io.StringIO()):
+                trial.play_trial(
+                    probe_client(server), conn, setup, pack, 3600, FakeClock().clock()
+                )
+            text = (pack / "pack.md").read_text(encoding="utf-8")
+
+        self.assertIn("| History size | 65,536 tokens (the default) |", text)
+
+
 def payload_of(*messages):
     return json.dumps(
         {"model": "m", "messages": [{"role": role, "content": text} for role, text in messages]}

@@ -25,6 +25,11 @@ New evidence, 2026-11-01 (tickets 22 and 23, comment-fixer session `97d1ef00`, i
 - It still deleted 4 doc comments that carried a rule the code at that place does not show. One was the doc comment that ticket 23 Step 3 asked for ("a failed Agent is logged, and the Job continues with the Room and the Characters present"). Its reason: "both arms of the body show it". The others were the meaning of `keeping_present`, "Only an Options preset sets it" on `option_count`, and the difference between the two `max_tokens` fields. The coordinator restored all 4.
 - So limiting the scope is not enough. The test "fails part 2: the body carries it" removes a doc comment that states a rule to callers, who do not read the body.
 
+New evidence, 2026-11-03 (long-term-memory ticket 09, comment-fixer session `63d0be75`, implementer, claude-sonnet-5-5):
+
+- The `--uncommitted` mode has the same whole-file scope: the finder listed 400 comments for a change of about 600 lines in 19 files. The brief did not name the changed-lines limit, but the fixer limited itself to the changed hunks (28 comments) by its own choice.
+- It deleted the doc comment of `resolved_max_history_tokens` ("A blank field follows the default … Anything but a positive whole number is invalid") with the reason "the branch and the error message show both rules". The coordinator accepted it, because the function is private and its sibling keeps the same rule. The part-2 test of option B in the earlier evidence still applies to public items.
+
 ## Options to decide
 
 - **A.** A `--changed-lines` filter: the finder reads `git diff -U0` and keeps only comments inside the added hunks. `/simple-after-plan` step 1 names this mode.

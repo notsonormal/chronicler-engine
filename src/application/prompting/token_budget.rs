@@ -1,12 +1,10 @@
 //! [DOC: docs/diataxis/reference/narrative/prompt_system.md]
 //! Token budget management
 
-use crate::domain::model::settings::DEFAULT_MAX_TOKENS;
+use crate::domain::model::settings::{DEFAULT_MAX_HISTORY_TOKENS, DEFAULT_MAX_TOKENS};
 use crate::error::EngineError;
 
 pub const MAX_CONTEXT_TOKENS: u32 = 32768;
-
-pub const MAX_HISTORY_TOKENS: u32 = 16000;
 
 pub const SAFETY_MARGIN_TOKENS: u32 = 256;
 
@@ -28,6 +26,8 @@ pub fn history_reserve_tokens(max_context_tokens: u32) -> usize {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TokenBudget {
     pub max_context_tokens: u32,
+    /// The Connection's size of the history. The room in the window can be smaller.
+    pub max_history_tokens: u32,
     /// The response length the call asks for.
     pub max_tokens: u32,
 }
@@ -36,6 +36,7 @@ impl TokenBudget {
     pub const fn fallback() -> Self {
         Self {
             max_context_tokens: MAX_CONTEXT_TOKENS,
+            max_history_tokens: DEFAULT_MAX_HISTORY_TOKENS,
             max_tokens: DEFAULT_MAX_TOKENS,
         }
     }
@@ -58,7 +59,7 @@ impl TokenBudget {
             .saturating_sub(system_tokens)
             .saturating_sub(fixed_user_tokens)
             .saturating_sub(history_reserve_tokens(self.max_context_tokens))
-            .min(MAX_HISTORY_TOKENS as usize)
+            .min(self.max_history_tokens as usize)
     }
 
     /// Clamps the response length to the room the prompt leaves. The history cut

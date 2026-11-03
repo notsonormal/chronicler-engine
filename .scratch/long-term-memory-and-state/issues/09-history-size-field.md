@@ -1,7 +1,7 @@
 # Make the history size a Connection field
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 08
 
 ## Question
@@ -41,7 +41,7 @@ Done when the full `python build.py` passes and the check trial below passes.
 Run one 100-Cycle trial of `scripts/trial_setups/redmist_julian.json` (`history_tokens: 16000`) on the built change. The setup file is the only place that sets the size. Pass when:
 
 - the pack shows the history size 16,000;
-- the cuts fall as in the `lt15` trial (`tmp/lt15/new/trial-1`): about 7 cuts, the first at about Cycle 40;
+- the cuts fall as in the `lt15` trial (`tmp/lt15/new/trial-1`): about 5 cuts, the first at about Cycle 40 (corrected on resolution: this line said 7, and the reference has 5);
 - the cached share of the Narrator-role calls is near the 86 % of that trial (a report, not a gate).
 
 This trial is also the first reference trial of this map at 16K on the new build.
@@ -51,3 +51,32 @@ This trial is also the first reference trial of this map at 16K on the new build
 - A logical cut point (a scene end), and a change of the 75 % block.
 - A trial at 64K. The default is chosen now, from the evidence of ticket 08.
 - The scroll-back of the story in the dashboard ([the seed](../../story-scroll-back/idea.md)).
+
+## Answer
+
+Resolved on 2026-11-03. The build is done on the branch `long-term-memory` (not committed yet), and the check trial passes.
+
+**What was built (known).**
+- `LlmConnection::max_history_tokens: Option<u32>` and `resolve_max_history_tokens()`. The default is `DEFAULT_MAX_HISTORY_TOKENS` = 65,536 in `src/domain/model/settings.rs`, not `MAX_HISTORY_TOKENS` in `token_budget.rs`: the domain may not import the application layer (`arch-lint.toml`). `MAX_HISTORY_TOKENS` is gone.
+- `TokenBudget` carries `max_history_tokens`. `Job::call_plan` builds the `TokenBudget`, and `Narrator::narrate` takes it. `history_space` is the smaller of the history size and the free space in the window.
+- The Settings Connection form has "History (tokens)" under "Context window (tokens)" (specs 20.56 to 20.58). A blank field stores nothing.
+- `data/settings.json`: `opencode-go-deepseek-v4.1-flash` has `max_context_tokens` 1,000,000. This reaches a fresh DB only. The probe DB Connection keeps no window, so 32,768.
+- `scripts/trial.py`: the setup field `history_tokens` is the only place that sets the size. The script writes `max_history_tokens` in the probe DB on the Narration Connection, and on the Impersonate slot when it names its own. When the field is absent, it removes the key. The pack shows "History size". `redmist_julian.json` has `history_tokens: 16000`.
+- No migration: Connections are one JSON column, and the key uses `serde(default)`.
+- `CONTEXT.md` has **History space**: the tokens of story history that one call may hold when it writes a Narration, an Impersonate Input or an event Narration.
+- Docs: the History section of `prompt_system.md`, and `docs/specs/settings.md`. The ticket named a Settings reference of the form and a trial doc; neither exists, and the `trial.py` docstring holds the setup fields.
+
+**Review (known).** `/simple-after-plan`: the comment pass deleted 8 comments; the doc review gave 4 fixes; `/code-review` gave 9 fixes (the most important: `trial.py` left 16,000 in the probe DB for a later setup with no field). The full `python build.py` passes (`logs/build_20261103_220637.log`). The retro added evidence to retro issues 95 and 96.
+
+**The check trial (known).** Pack `tmp/ltm09/redmist_julian/trial-1`, against `tmp/lt15/new/trial-1`.
+
+| Figure | Reference | New |
+|---|---|---|
+| History size in the pack | — | 16,000 |
+| Cuts (Cycle of each) | 5 (44, 55, 67, 78, 91) | 6 (41, 52, 64, 75, 87, 98) |
+| Cached share, Narration and Impersonate | 86.0 % | 85.6 % |
+| Cycles, restarts, failed calls | 100, 0, 0 | 100, 0, 0 |
+| Input tokens | 2,917,705 | 2,949,300 |
+| Wall time | 1054 s | 968 s |
+
+A cut comes every 11 to 12 Cycles and drops about 21 entries in both packs. The sixth cut is there only because the first cut came 3 Cycles earlier. This pack is the first reference trial of this map at 16K on the new build.

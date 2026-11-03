@@ -50,6 +50,11 @@
             "minimum": 1,
             "description": "Optional maximum context window size in tokens."
           },
+          "max_history_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional history size: the most tokens of story history a call that writes a Narration, an Impersonate Input or an event Narration may hold. When absent, the default of 65,536 applies. The room in the context window can make the history space smaller."
+          },
           "reasoning_effort": {
             "type": "string",
             "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],

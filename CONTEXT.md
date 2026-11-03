@@ -158,6 +158,12 @@ _Avoid_: World rules, engine commit
 The Characters in the same Room as the Persona, in one Swipe state.
 _Avoid_: Scene, NPCs in the area, NPCs in the room
 
+### The prompt
+
+**History space**:
+The tokens of story history that one call may hold when it writes a Narration, an Impersonate Input or an event Narration. It is the smaller of the history size of the call's Connection and the free space in that Connection's context window.
+_Avoid_: History cap, history limit, history budget
+
 ### State
 
 **Swipe state**:
