@@ -1,0 +1,9 @@
+{
+  "name": "one_summary",
+  "about": "The simple candidate of the ticket: at each ask point, one call summarises every entry that left the history. The memory goes at the end of the first user message, before the history.",
+  "schedule": "once",
+  "position": "before_history",
+  "max_tokens": 2048,
+  "writer_system": "You keep the memory of an interactive story. The oldest entries of the story are about to leave the narrator's context. Write the notes that the narrator needs to continue the story without contradicting them.",
+  "writer_user": "These are the story entries #{first} to #{last}. Entries marked Julian are written by the player character; entries marked Narration are written by the narrator.\n\n<Entries>\n{entries}\n</Entries>\n\nWrite a memory of these entries in at most 600 words, as short plain lines. Keep:\n- names, numbers, objects and where they are, places, promises, plans and appointments with their times;\n- the story time: which day of the story it is, the time of day, and how much time passed;\n- who was present at each conversation, and who learned which fact.\nWrite only the memory."
+}

@@ -1,6 +1,6 @@
 # Idea: Long-term memory and long-term state
 
-Status: seed (not charted)
+Status: charted on 2026-11-02. The map is [Long-term memory and state](map.md).
 
 ## Why
 

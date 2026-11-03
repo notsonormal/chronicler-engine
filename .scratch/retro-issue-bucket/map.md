@@ -17,7 +17,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **Evidence is re-checked, not trusted.** A finding is a hypothesis, and the tree moves. Re-check the cited `file:line` before deciding.
 - **Concurrency.** Other efforts edit this checkout at the same time. The user decides the scope of each commit.
 - **Skills.** `/grilling` and `/domain-modeling` for every ticket. `/writing-for-agents` for any skill or `AGENTS.md` edit. `/code-review` for an implementation ticket.
-- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 102.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
+- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 103.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
 - **Audit.** [`audit.md`](./audit.md) (2026-10-25) sorts the open tickets by whether the fix changes what the next agent does.
 
 ## Decisions so far
@@ -142,3 +142,4 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 - [100 — The review bundle takes the whole tree, also the files of another session](./issues/100-review-bundle-takes-the-whole-tree.md)
 - [101 — The free-fn guardrail fails only in the full gate](./issues/101-free-fn-guardrail-only-in-the-full-gate.md)
 - [102 — A spec scenario that the ticket's rule changes stays as it was, and the Spec review passes it](./issues/102-spec-scenario-against-the-ticket-rule.md)
+- [103 — A Narration wraps its paragraphs in XML speaker tags](./issues/103-narration-writes-xml-speaker-tags.md) (a product fault, filed here by the owner to track a second case)

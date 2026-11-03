@@ -1,0 +1,591 @@
+[
+ {
+  "id": "F01",
+  "kind": "fact",
+  "ask_at": 611,
+  "stated_at": [
+   529,
+   530
+  ],
+  "question": "How did Julian travel to Islaport?",
+  "answer": "By train.",
+  "accept": [
+   "\\btrain\\b"
+  ]
+ },
+ {
+  "id": "F02",
+  "kind": "time",
+  "ask_at": 634,
+  "stated_at": [
+   530,
+   531,
+   547,
+   549,
+   557
+  ],
+  "question": "How many days before Julian reached the front gates did the unknown sign-in to his account happen?",
+  "answer": "Three days.",
+  "accept": [
+   "\\bthree days\\b|\\b3 days\\b"
+  ]
+ },
+ {
+  "id": "F03",
+  "kind": "fact",
+  "ask_at": 611,
+  "stated_at": [
+   544,
+   545
+  ],
+  "question": "Where is the vault room in which the master key is handed over, according to Jezebel?",
+  "answer": "Off the old dispensary.",
+  "accept": [
+   "dispensary"
+  ]
+ },
+ {
+  "id": "F04",
+  "kind": "fact",
+  "ask_at": 640,
+  "stated_at": [
+   546,
+   547,
+   549
+  ],
+  "question": "What was the trade of the outsider who once held the sealed slip of the master key?",
+  "answer": "A locksmith (retired, four years ago).",
+  "accept": [
+   "locksmith"
+  ]
+ },
+ {
+  "id": "F05",
+  "kind": "fact",
+  "ask_at": 611,
+  "stated_at": [
+   548
+  ],
+  "question": "For how long did Marguerite sit with Bernard as his nurse before the end, according to Jezebel?",
+  "answer": "His last two years.",
+  "accept": [
+   "\\btwo years\\b|\\b2 years\\b"
+  ]
+ },
+ {
+  "id": "F06",
+  "kind": "fact",
+  "ask_at": 634,
+  "stated_at": [
+   550,
+   551,
+   552,
+   555,
+   556,
+   557,
+   560
+  ],
+  "question": "What did Jezebel find in the bottom drawer of Bernard's desk?",
+  "answer": "Nothing. The drawer was empty (the log was gone).",
+  "accept": [
+   "empty|nothing|\\bgone\\b|missing"
+  ]
+ },
+ {
+  "id": "F07",
+  "kind": "fact",
+  "ask_at": 611,
+  "stated_at": [
+   538,
+   540
+  ],
+  "question": "What colour was Gabriella's gown when she met Julian in the entrance hall?",
+  "answer": "Lavender.",
+  "accept": [
+   "lavender"
+  ]
+ },
+ {
+  "id": "F08",
+  "kind": "fact",
+  "ask_at": 611,
+  "stated_at": [
+   540
+  ],
+  "question": "Where did Gabriella say she would be that afternoon?",
+  "answer": "In the west parlor.",
+  "accept": [
+   "west parlou?r"
+  ]
+ },
+ {
+  "id": "F09",
+  "kind": "fact",
+  "ask_at": 611,
+  "stated_at": [
+   540,
+   541
+  ],
+  "question": "What warning did Gabriella give about the east wing?",
+  "answer": "A draught that nobody has fixed (Carla said there is none).",
+  "accept": [
+   "draught|draft"
+  ]
+ },
+ {
+  "id": "F10",
+  "kind": "time",
+  "ask_at": 634,
+  "stated_at": [
+   548,
+   556
+  ],
+  "question": "How many years ago did Bernard's brother Edmund die?",
+  "answer": "Twelve years.",
+  "accept": [
+   "\\btwelve\\b|\\b12\\b"
+  ]
+ },
+ {
+  "id": "F13",
+  "kind": "fact",
+  "ask_at": 657,
+  "stated_at": [
+   552,
+   554,
+   555,
+   581
+  ],
+  "question": "Where did Jezebel find the brass key with the name tag?",
+  "answer": "Under the cushion of Bernard's reading chair in the library.",
+  "accept": [
+   "cushion"
+  ]
+ },
+ {
+  "id": "F16",
+  "kind": "fact",
+  "ask_at": 657,
+  "stated_at": [
+   558,
+   581
+  ],
+  "question": "What note did Bernard write in the ledger beside the last payment to the Hollis house?",
+  "answer": "\"For the boy's schooling.\"",
+  "accept": [
+   "school"
+  ]
+ },
+ {
+  "id": "F17",
+  "kind": "fact",
+  "ask_at": 680,
+  "stated_at": [
+   560,
+   561,
+   573,
+   583,
+   584,
+   601,
+   602
+  ],
+  "question": "Which bank did Jezebel name as the one that paid the quarterly draughts to Marguerite?",
+  "answer": "Marchand Mutual.",
+  "accept": [
+   "marchand"
+  ]
+ },
+ {
+  "id": "F18",
+  "kind": "fact",
+  "ask_at": 680,
+  "stated_at": [
+   572,
+   573,
+   574,
+   587,
+   607
+  ],
+  "question": "Which member of the staff did Carla say has a cousin on the east side?",
+  "answer": "The gatekeeper.",
+  "accept": [
+   "gate ?keeper|gate ?man|at the gate"
+  ]
+ },
+ {
+  "id": "F19",
+  "kind": "fact",
+  "ask_at": 680,
+  "stated_at": [
+   586
+  ],
+  "question": "Why did Tomas refuse a morning meeting at the Islaport Trust?",
+  "answer": "The clerk's window opens at nine and a queue of shopkeepers fills the morning.",
+  "accept": [
+   "queue|shopkeeper|line of"
+  ]
+ },
+ {
+  "id": "F20",
+  "kind": "fact",
+  "ask_at": 680,
+  "stated_at": [
+   590,
+   592,
+   593
+  ],
+  "question": "Who recommended the lawyer Halvorsen to Julian?",
+  "answer": "Jezebel (in her note).",
+  "accept": [
+   "jezebel"
+  ]
+ },
+ {
+  "id": "F21",
+  "kind": "time",
+  "ask_at": 680,
+  "stated_at": [
+   592,
+   593
+  ],
+  "question": "How long before the day of the story did the last quarterly payment to the Hollis house clear?",
+  "answer": "Three weeks ago.",
+  "accept": [
+   "\\bthree weeks\\b|\\b3 weeks\\b"
+  ]
+ },
+ {
+  "id": "F22",
+  "kind": "fact",
+  "ask_at": 680,
+  "stated_at": [
+   594,
+   595,
+   596
+  ],
+  "question": "Who took the telephone message from the solicitor Campion and gave it to Julian?",
+  "answer": "Lisette.",
+  "accept": [
+   "lisette"
+  ]
+ },
+ {
+  "id": "F24",
+  "kind": "fact",
+  "ask_at": 680,
+  "stated_at": [
+   596
+  ],
+  "question": "Who had the sitting room prepared for Julian with a fire lit?",
+  "answer": "Carla.",
+  "accept": [
+   "carla"
+  ]
+ },
+ {
+  "id": "F25",
+  "kind": "fact",
+  "ask_at": 680,
+  "stated_at": [
+   598,
+   599,
+   600,
+   605
+  ],
+  "question": "How many lines long is Bernard's codicil?",
+  "answer": "Six.",
+  "accept": [
+   "\\bsix\\b|\\b6\\b"
+  ]
+ },
+ {
+  "id": "F26",
+  "kind": "time",
+  "ask_at": 680,
+  "stated_at": [
+   600,
+   604
+  ],
+  "question": "Since what hour had Campion held the codicil when he spoke to Julian?",
+  "answer": "Since three o'clock.",
+  "accept": [
+   "\\bthree\\b|\\b3\\b|15:00"
+  ]
+ },
+ {
+  "id": "F27",
+  "kind": "fact",
+  "ask_at": 690,
+  "stated_at": [
+   598,
+   604
+  ],
+  "question": "Where did Campion say the codicil is kept?",
+  "answer": "On his desk. It has not left it.",
+  "accept": [
+   "desk"
+  ]
+ },
+ {
+  "id": "F29",
+  "kind": "time",
+  "ask_at": 680,
+  "stated_at": [
+   602,
+   603
+  ],
+  "question": "In which year was the winter of the Draught, according to Campion?",
+  "answer": "1905.",
+  "accept": [
+   "1905|nineteen[- ]oh[- ]five"
+  ]
+ },
+ {
+  "id": "F30",
+  "kind": "time",
+  "ask_at": 690,
+  "stated_at": [
+   604
+  ],
+  "question": "At what hour of the morning is the master-key handoff?",
+  "answer": "At ten o'clock.",
+  "accept": [
+   "\\bten\\b|\\b10\\b"
+  ]
+ },
+ {
+  "id": "F31",
+  "kind": "time",
+  "ask_at": 680,
+  "stated_at": [
+   608,
+   609,
+   611
+  ],
+  "question": "By what hour did Carla say Julian must leave the house for Halvorsen's office?",
+  "answer": "By half past seven.",
+  "accept": [
+   "half[- ]past seven|7[:.]30|half seven"
+  ]
+ },
+ {
+  "id": "F32",
+  "kind": "fact",
+  "ask_at": 680,
+  "stated_at": [
+   614
+  ],
+  "question": "What did Lisette say causes the knocking sound in the study on foggy nights?",
+  "answer": "The wind (the study's west window does not shut true).",
+  "accept": [
+   "wind"
+  ]
+ },
+ {
+  "id": "F33",
+  "kind": "time",
+  "ask_at": 705,
+  "stated_at": [
+   614,
+   635
+  ],
+  "question": "By how many minutes does the east corridor clock run fast?",
+  "answer": "Nine minutes.",
+  "accept": [
+   "\\bnine\\b|\\b9\\b"
+  ]
+ },
+ {
+  "id": "F34",
+  "kind": "fact",
+  "ask_at": 705,
+  "stated_at": [
+   616
+  ],
+  "question": "What dish did Louise say she would make \"if nobody were watching\"?",
+  "answer": "A fish stew with mussels and a little cream.",
+  "accept": [
+   "mussel|fish stew"
+  ]
+ },
+ {
+  "id": "F35",
+  "kind": "time",
+  "ask_at": 705,
+  "stated_at": [
+   616,
+   618,
+   619
+  ],
+  "question": "Between which hours does Louise keep a pot going in the kitchen?",
+  "answer": "From six in the morning until ten at night.",
+  "accept": [
+   "(six|6).*(ten|10)"
+  ]
+ },
+ {
+  "id": "F37",
+  "kind": "fact",
+  "ask_at": 705,
+  "stated_at": [
+   626
+  ],
+  "question": "Who came with Bernard to the Hollis house one night in the Draught winter, according to Tomas's father?",
+  "answer": "A young doctor from the hospital.",
+  "accept": [
+   "doctor"
+  ]
+ },
+ {
+  "id": "F39",
+  "kind": "time",
+  "ask_at": 724,
+  "stated_at": [
+   634,
+   635
+  ],
+  "question": "Which day of Julian's stay at the estate is it now: the day he arrived, or a later day? Count the days.",
+  "answer": "The second day (the day after his arrival).",
+  "accept": [
+   "second day|day two|\\bday 2\\b|the (next|following) day|the day after"
+  ]
+ },
+ {
+  "id": "F40",
+  "kind": "time",
+  "ask_at": 724,
+  "stated_at": [
+   604,
+   635
+  ],
+  "question": "How many days remain until the master-key handoff?",
+  "answer": "One day (it is Friday morning, and now is the Thursday evening).",
+  "accept": [
+   "\\bone day\\b|tomorrow|\\b1 day\\b|friday"
+  ]
+ },
+ {
+  "id": "F11",
+  "kind": "who",
+  "ask_at": 634,
+  "stated_at": [
+   534,
+   541,
+   547,
+   549,
+   557
+  ],
+  "question": "Can Gabriella know about the odd sign-in on Julian's phone?",
+  "answer": "No."
+ },
+ {
+  "id": "F12",
+  "kind": "who",
+  "ask_at": 634,
+  "stated_at": [
+   534,
+   547,
+   549
+  ],
+  "question": "Does Jezebel know about the odd sign-in on Julian's phone?",
+  "answer": "Yes."
+ },
+ {
+  "id": "F14",
+  "kind": "who",
+  "ask_at": 680,
+  "stated_at": [
+   552,
+   581
+  ],
+  "question": "Does Marguerite Hollis know that the key with her name was found under a cushion?",
+  "answer": "Yes."
+ },
+ {
+  "id": "F15",
+  "kind": "who",
+  "ask_at": 657,
+  "stated_at": [
+   556,
+   557,
+   560,
+   581
+  ],
+  "question": "Can Marguerite Hollis know that Bernard's private drawer was found empty?",
+  "answer": "No."
+ },
+ {
+  "id": "F23",
+  "kind": "who",
+  "ask_at": 690,
+  "stated_at": [
+   594,
+   595,
+   596
+  ],
+  "question": "Does Lisette know that the solicitor Campion telephoned and wants a call back?",
+  "answer": "Yes."
+ },
+ {
+  "id": "F28",
+  "kind": "who",
+  "ask_at": 680,
+  "stated_at": [
+   600,
+   601,
+   602
+  ],
+  "question": "Can Campion name the beneficiaries of the trust that the codicil mentions?",
+  "answer": "No."
+ },
+ {
+  "id": "F36",
+  "kind": "who",
+  "ask_at": 705,
+  "stated_at": [
+   605,
+   606,
+   607,
+   608,
+   622,
+   624
+  ],
+  "question": "Does Tomas know what Bernard's codicil says?",
+  "answer": "Yes."
+ },
+ {
+  "id": "F38",
+  "kind": "who",
+  "ask_at": 705,
+  "stated_at": [
+   623,
+   630
+  ],
+  "question": "Can Gabriella know what Tomas told Julian in the library about his father's account of the Draught?",
+  "answer": "No."
+ },
+ {
+  "id": "W31",
+  "kind": "who",
+  "ask_at": 588,
+  "stated_at": [
+   582,
+   584,
+   586
+  ],
+  "question": "Was Carla in Marguerite's parlor when Marguerite named the Islaport Trust?",
+  "answer": "No.",
+  "source": "confirmed fault A-3.1"
+ },
+ {
+  "id": "W35",
+  "kind": "who",
+  "ask_at": 700,
+  "stated_at": [
+   676
+  ],
+  "question": "Was Tomas present when Fennick named the clerk Ardo Voss?",
+  "answer": "No.",
+  "source": "confirmed fault A-3.5"
+ }
+]
