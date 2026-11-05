@@ -174,7 +174,9 @@ export function childCommand(launch: ChildLaunch): string {
 	if (!launch.resume) args.push("--name", shellQuote(launch.sessionName));
 	args.push(shellQuote(`@${launch.taskFile}`));
 	const exitFile = shellQuote(`${launch.jobDir}/exit`);
-	return `PI_DELEGATE_JOB=${shellQuote(launch.jobDir)} ${args.join(" ")}; code=$?; echo $code > ${exitFile}; [ $code -eq 0 ] && exit`;
+	// A child reports to the agent that delegated it, never to the person, so it
+	// gets no Plannotator Inbox tool. The env var wins over ~/.plannotator/config.json.
+	return `PI_DELEGATE_JOB=${shellQuote(launch.jobDir)} PLANNOTATOR_INBOX_TOOL=0 ${args.join(" ")}; code=$?; echo $code > ${exitFile}; [ $code -eq 0 ] && exit`;
 }
 
 export function taskText(task: string, files: string[] | undefined): string {

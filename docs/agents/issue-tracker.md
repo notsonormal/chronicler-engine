@@ -7,6 +7,8 @@ Issues and PRDs for this repo live as markdown files in `.scratch/`.
 - One effort per directory: `.scratch/<effort-slug>/`
 - The PRD (or effort map) is `.scratch/<effort-slug>/map.md`
 - Tickets are `.scratch/<effort-slug>/issues/NN-<slug>.md`, numbered from `01`
+- Assets that a map or a ticket links are in `.scratch/<effort-slug>/assets/`
+- A map keeps a file that stays on this machine in `.scratch/<effort-slug>/assets/local-only/`, for example raw data or large trial output. Git ignores that folder, and `rg` skips it, so cite each file in it by its path
 - Triage state is recorded as a `Status:` line near the top of each ticket (see `triage-labels.md` for role strings)
 - Comments / resolution append to the bottom under a `## Comments` (ticket) or `## Decisions so far` (map) heading
 

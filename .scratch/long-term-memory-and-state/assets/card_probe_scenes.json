@@ -1,0 +1,485 @@
+{
+  "about": "The scene set of the card probe (ticket 11). A scene is one stored call of tmp/lt15/new/trial-1 (story A). `input` replaces the <LastMessage> of a Narration call. `direction` adds a <LastMessage> to an Impersonate call, as the engine sends a Player direction. `facts` are the card facts and secrets that no Character outside `known_to` has learned at that point of the story (checked with `card_probe.py check`). `focus` are the Characters whose portrayal the judge checks against the card. `met` are the Characters that Julian has already met, for the repeated first meeting.",
+  "facts": {
+    "lisette_decade": {
+      "owner": "lisette",
+      "secret": false,
+      "text": "Lisette has worked at the estate for almost a decade (about ten years).",
+      "pattern": "\\b(ten|10|nine|9)\\s+years|\\bdecade\\b",
+      "learned_if": "(Lisette|she|you)[^.]{0,60}(decade|ten years)|(decade|ten years)[^.]{0,40}(Lisette|maid)"
+    },
+    "lisette_orphan": {
+      "owner": "lisette",
+      "secret": false,
+      "text": "Lisette is an orphan: her mother died in labour and her father was never found.",
+      "pattern": "orphan",
+      "learned_if": "orphan"
+    },
+    "lisette_surname": {
+      "owner": "lisette",
+      "secret": false,
+      "text": "Lisette's surname is Franklin.",
+      "pattern": "Franklin",
+      "learned_if": "Franklin"
+    },
+    "lisette_lawyer": {
+      "owner": "lisette",
+      "secret": false,
+      "text": "Lisette never meant to be a maid; she wanted to travel the world and become a lawyer.",
+      "learned_if": "travel the world"
+    },
+    "louise_surname": {
+      "owner": "louise",
+      "secret": false,
+      "text": "Louise's surname is Petit.",
+      "pattern": "\\bPetit\\b",
+      "learned_if": "\\bPetit\\b"
+    },
+    "louise_paris": {
+      "owner": "louise",
+      "secret": false,
+      "text": "Louise was born and raised in Paris; her parents' waterfront restaurant went bankrupt.",
+      "pattern": "Paris|France|French|bankrupt",
+      "learned_if": "Paris|France|French|bankrupt"
+    },
+    "louise_travels": {
+      "owner": "louise",
+      "secret": false,
+      "text": "Louise worked in kitchens around the world before she came to Islaport.",
+      "learned_if": "around the world"
+    },
+    "gabriella_plan": {
+      "owner": "gabriella",
+      "secret": true,
+      "text": "Gabriella plans to seduce Julian (a romantic or sexual pursuit of him) so that she can keep her luxurious lifestyle.",
+      "learned_if": "seduc"
+    },
+    "gabriella_past": {
+      "owner": "gabriella",
+      "secret": true,
+      "text": "Gabriella cut contact with her family at 18, moved to the city on loans, and slept with rich celebrities and older men for gifts and houses.",
+      "learned_if": "cut contact|celebrities|older men"
+    },
+    "gabriella_seduced_bernard": {
+      "owner": "gabriella",
+      "secret": true,
+      "known_to": [
+        "jezebel"
+      ],
+      "text": "Gabriella seduced Bernard and married him for his money (Jezebel believes this; her relationship line says so).",
+      "learned_if": "married .{0,20}for (his )?money|gold.?digg"
+    },
+    "gabriella_rural": {
+      "owner": "gabriella",
+      "secret": false,
+      "text": "Gabriella grew up in a rural town; her parents wanted her to take over their fishing equipment store.",
+      "pattern": "fishing|rural",
+      "learned_if": "fishing equipment|rural"
+    },
+    "jezebel_will_talks": {
+      "owner": "jezebel",
+      "secret": true,
+      "text": "Jezebel had many talks with Bernard about his past regrets and his worries about his will.",
+      "learned_if": "regret"
+    },
+    "jezebel_upbringing": {
+      "owner": "jezebel",
+      "secret": false,
+      "text": "Jezebel was born into a wealthy family of financiers, her parents controlled her childhood, and she went to the Silverleaf Girls Academy.",
+      "pattern": "Silverleaf",
+      "learned_if": "Silverleaf|financiers|born into wealth"
+    },
+    "carla_drink": {
+      "owner": "carla",
+      "secret": false,
+      "text": "The war left Carla with scars, and she turned to alcohol and cigarettes to cope.",
+      "pattern": "cigarette|to cope",
+      "learned_if": "cigarette|to cope"
+    },
+    "carla_family": {
+      "owner": "carla",
+      "secret": false,
+      "text": "Carla's parents ran a corner store; she joined the military at 20 against their wishes and left after 4 years.",
+      "pattern": "corner store|four years in|4 years",
+      "learned_if": "corner store|parents' wishes"
+    }
+  },
+  "scenes": [
+    {
+      "id": "I1",
+      "call": 1210,
+      "kind": "impersonate",
+      "note": "the A-3.3 call, as stored",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette"
+      ],
+      "focus": [
+        "lisette"
+      ],
+      "facts": [
+        "lisette_decade",
+        "lisette_orphan",
+        "lisette_surname",
+        "lisette_lawyer",
+        "louise_surname",
+        "louise_paris"
+      ]
+    },
+    {
+      "id": "I2",
+      "call": 1210,
+      "kind": "impersonate",
+      "direction": "Julian thanks Lisette and asks her one personal question before he goes up.",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette"
+      ],
+      "focus": [
+        "lisette"
+      ],
+      "facts": [
+        "lisette_decade",
+        "lisette_orphan",
+        "lisette_surname",
+        "lisette_lawyer"
+      ]
+    },
+    {
+      "id": "I3",
+      "call": 1218,
+      "kind": "impersonate",
+      "note": "the A-3.4 call, as stored",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette",
+        "louise"
+      ],
+      "focus": [
+        "louise"
+      ],
+      "facts": [
+        "louise_surname",
+        "louise_paris",
+        "louise_travels",
+        "lisette_orphan",
+        "lisette_surname"
+      ]
+    },
+    {
+      "id": "I4",
+      "call": 1218,
+      "kind": "impersonate",
+      "direction": "Julian thanks Louise warmly, by name, before she goes back down to the kitchen.",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette",
+        "louise"
+      ],
+      "focus": [
+        "louise"
+      ],
+      "facts": [
+        "louise_surname",
+        "louise_paris",
+        "louise_travels"
+      ]
+    },
+    {
+      "id": "I5",
+      "call": 1062,
+      "kind": "impersonate",
+      "note": "Julian's first answer to Gabriella, as stored",
+      "met": [
+        "carla",
+        "gabriella"
+      ],
+      "focus": [
+        "gabriella"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past",
+        "gabriella_seduced_bernard",
+        "gabriella_rural"
+      ]
+    },
+    {
+      "id": "I6",
+      "call": 1062,
+      "kind": "impersonate",
+      "direction": "Julian tells Gabriella plainly what he thinks she wants from him.",
+      "met": [
+        "carla",
+        "gabriella"
+      ],
+      "focus": [
+        "gabriella"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past",
+        "gabriella_seduced_bernard",
+        "gabriella_rural"
+      ]
+    },
+    {
+      "id": "I7",
+      "call": 1070,
+      "kind": "impersonate",
+      "direction": "Julian asks Jezebel about her friendship with his grandfather.",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel"
+      ],
+      "focus": [
+        "jezebel"
+      ],
+      "facts": [
+        "jezebel_will_talks",
+        "jezebel_upbringing",
+        "gabriella_plan",
+        "gabriella_seduced_bernard"
+      ]
+    },
+    {
+      "id": "I8",
+      "call": 1114,
+      "kind": "impersonate",
+      "direction": "Julian asks Carla how she holds up, after the war and after Bernard.",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel"
+      ],
+      "focus": [
+        "carla"
+      ],
+      "facts": [
+        "carla_drink",
+        "carla_family"
+      ]
+    },
+    {
+      "id": "N1",
+      "call": 1212,
+      "kind": "narration",
+      "input": "Julian lowered his voice before he went up. \"Lisette — what do you make of Gabriella? Will she make trouble for me?\"",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette"
+      ],
+      "focus": [
+        "gabriella",
+        "lisette"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past",
+        "gabriella_seduced_bernard",
+        "gabriella_rural"
+      ]
+    },
+    {
+      "id": "N2",
+      "call": 1212,
+      "kind": "narration",
+      "input": "Julian paused on the stair. \"Before Louise comes up — tell me about her. What should I know about my cook?\"",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette"
+      ],
+      "focus": [
+        "louise",
+        "lisette"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past"
+      ]
+    },
+    {
+      "id": "N3",
+      "call": 1216,
+      "kind": "narration",
+      "input": "\"How are you finding the house, Louise?\" Julian asked. \"And the people in it?\"",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette",
+        "louise"
+      ],
+      "focus": [
+        "louise",
+        "gabriella",
+        "lisette",
+        "carla",
+        "jezebel"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past",
+        "gabriella_seduced_bernard",
+        "jezebel_will_talks",
+        "lisette_lawyer",
+        "carla_drink"
+      ]
+    },
+    {
+      "id": "N4",
+      "call": 1112,
+      "kind": "narration",
+      "input": "Julian watched the harbor for a while. \"Carla, how close were Jezebel and my grandfather?\"",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel"
+      ],
+      "focus": [
+        "jezebel",
+        "carla"
+      ],
+      "facts": [
+        "jezebel_will_talks",
+        "jezebel_upbringing"
+      ]
+    },
+    {
+      "id": "N5",
+      "call": 1112,
+      "kind": "narration",
+      "input": "\"Tell me about Gabriella,\" Julian said. \"Where did she come from, before she married my grandfather?\"",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel"
+      ],
+      "focus": [
+        "gabriella",
+        "carla"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past",
+        "gabriella_seduced_bernard",
+        "gabriella_rural"
+      ]
+    },
+    {
+      "id": "N6",
+      "call": 1064,
+      "kind": "narration",
+      "input": "Julian stopped. \"Tell me plainly, Gabriella. Why did you marry my grandfather?\"",
+      "met": [
+        "carla",
+        "gabriella"
+      ],
+      "focus": [
+        "gabriella",
+        "carla"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past",
+        "gabriella_seduced_bernard",
+        "gabriella_rural"
+      ]
+    },
+    {
+      "id": "N7",
+      "call": 1060,
+      "kind": "event",
+      "note": "the Gabriella Introduction event, as stored: arm 1 has only her short entry",
+      "met": [
+        "carla"
+      ],
+      "focus": [
+        "gabriella",
+        "carla"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past",
+        "gabriella_seduced_bernard",
+        "gabriella_rural"
+      ]
+    },
+    {
+      "id": "N8",
+      "call": 1172,
+      "kind": "narration",
+      "note": "the Narration in which Lisette enters, as stored",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel"
+      ],
+      "focus": [
+        "lisette",
+        "carla"
+      ],
+      "facts": [
+        "lisette_decade",
+        "lisette_orphan",
+        "lisette_lawyer"
+      ]
+    },
+    {
+      "id": "N9",
+      "call": 1220,
+      "kind": "narration",
+      "input": "Julian walked with Louise as far as the kitchen stairs.",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette",
+        "louise"
+      ],
+      "focus": [
+        "louise"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past"
+      ]
+    },
+    {
+      "id": "N10",
+      "call": 1220,
+      "kind": "narration",
+      "input": "\"Louise — does Gabriella ever come down to the kitchen?\"",
+      "met": [
+        "carla",
+        "gabriella",
+        "jezebel",
+        "lisette",
+        "louise"
+      ],
+      "focus": [
+        "louise",
+        "gabriella"
+      ],
+      "facts": [
+        "gabriella_plan",
+        "gabriella_past",
+        "gabriella_seduced_bernard",
+        "gabriella_rural"
+      ]
+    }
+  ]
+}

@@ -75,7 +75,7 @@ test("childCommand starts a new session and closes the pane only on a clean exit
 		sessionName: "delegate · scout · it's",
 		taskFile: "/j/1/task.md",
 	});
-	assert.match(cmd, /^PI_DELEGATE_JOB='\/j\/1' pi --model 'm\/x' --session-id 'abc'/);
+	assert.match(cmd, /^PI_DELEGATE_JOB='\/j\/1' PLANNOTATOR_INBOX_TOOL=0 pi --model 'm\/x' --session-id 'abc'/);
 	assert.match(cmd, /--thinking 'low' --tools 'read,bash' --name 'delegate · scout · it'\\''s' '@\/j\/1\/task.md'/);
 	assert.match(cmd, /; code=\$\?; echo \$code > '\/j\/1\/exit'; \[ \$code -eq 0 \] && exit$/);
 });

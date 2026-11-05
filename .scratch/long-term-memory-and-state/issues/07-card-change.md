@@ -2,7 +2,7 @@
 
 Type: grilling
 Status: open
-Blocked by: 01
+Blocked by: 01, 10
 
 ## Question
 
@@ -21,6 +21,7 @@ Which parts of a Character card can change in one Game? Which call writes a chan
 - **ME (known, [how other tools keep long-term state](../../prompt-flexibility/assets/long-term-state.md), section 3).** The Card Evolution Auditor proposes durable changes every 8 Messages. It names what to ignore: a temporary mood, the place, clothes, and healed injuries. A person approves each change, with a check of the old text, a stale marker and a card version history. [Find how Marinara Engine keeps memory with its agents](01-marinara-memory.md), point 5, reads it in depth.
 - **The link to memory (open).** The coordinator's draft at charting: a card change is a durable change to who a Character is (a relationship, a role or a trait), not an event. The owner did not confirm it. Is a card change the durable part of a Character memory, or a separate thing? If [Choose the memory candidates to try](05-memory-candidates.md) is resolved, read it first.
 - **The Persona.** A Persona belongs to no World and plays many Games. Can its card change inside one Game too?
+- **The card structure (owner, 2026-11-03).** [Decide the structure of a Character card and who knows each part](10-card-structure.md) decided the minimal form: the SillyTavern fields as written, and one new field `secrets` for what she hides. A card change says which field it changes, and it can change `secrets` too. Read the Answer of ticket 10 first.
 
 ## Output
 

@@ -211,6 +211,8 @@ __marimo__/
 docker/*_data/
 logs/
 tmp
+# A tracker map keeps files here that stay on this machine (docs/agents/issue-tracker.md)
+.scratch/**/assets/local-only/
 /.sisyphus
 /node_modules
 
