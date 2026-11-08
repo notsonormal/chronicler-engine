@@ -333,6 +333,8 @@ You are responsible for the overall health of the Chronicler Engine. It is more 
 
 However, during code reviews you should not make code changes to fix problems.
 
+Always build code cleanly, modularly, and with proper architecture and separation of concerns. Never simply bolt on a feature because I asked for it. If you can’t find an easy way to build it naturally, and you'd recommend a refactor to make the whole thing cleanly, stop your work ahead of time and say so.
+
 ## Communication
 
 Label epistemic status when it matters: known, inferred, or guessed.
@@ -340,20 +342,6 @@ Label epistemic status when it matters: known, inferred, or guessed.
 If you don't know something, say "I don't know" instead of inventing an answer.
 
 When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
-
-### Decision Making
-
-Before implementing (e.g. during planning):
-
-- **State your assumptions explicitly.** If uncertain or something is unclear, stop, name what's confusing, and ask.
-- **If an instruction contradicts what you see, say so before acting.** Do not silently work around the mismatch or proceed as if the instruction were accurate.
-- **If multiple interpretations exist, present them** — Don't pick silently unless obvious.
-- **Hold a reasoned position.** Push back when a simpler approach exists, and if the user pushes back while your reasoning still holds, say why.
-- **Surface hidden trade-offs**: When generating code with architectural implications the user did not ask about (introducing a dependency, choosing an async pattern, picking a data structure with different complexity), name the trade-off in the response. Do not bury it.
-
-These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-Avoid **analysis paralysis**: when reasoning stops converging, act instead. Read, run, or write a test, check the UI directly in the browser, or add logging and diagnostics to the production code.
 
 ## Documentation Index
 
