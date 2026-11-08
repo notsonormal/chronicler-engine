@@ -1,0 +1,48 @@
+--- ../../.agents/skills/verify-gate/model/VerifyGate.tla	2026-11-05 21:41:33.456808736 +0000
++++ VerifyGate.tla	2026-11-06 00:19:54.181602063 +0000
+@@ -86,7 +86,7 @@
+   /\ nextRun = 1
+   /\ job = [j \in JobIds |-> NoJobState]
+   /\ run = [r \in RunIds |-> NoRunState]
+-  /\ pending = [delete |-> {}, reset |-> 0]
++  /\ pending = [delete |-> {}, reset |-> 0, switch |-> {}]
+   /\ cut = {}
+   /\ cutRuns = {}
+   /\ late = FALSE
+@@ -233,9 +233,16 @@
+   /\ "switch" \in Env
+   /\ g \in exists
+   /\ active # g
++  /\ g \notin pending.switch
++  /\ pending' = [pending EXCEPT !.switch = @ \cup {g}]
++  /\ UNCHANGED <<exists, fresh, active, holder, failLine, optFail, last, nextJob, nextRun, job, run>>
++  /\ GhostsSame
++
++TheSwitchSetsThePointer(g) ==
++  /\ g \in pending.switch
+   /\ active' = g
+-  /\ UNCHANGED <<exists, fresh, holder, failLine, optFail, last, nextJob, nextRun, job, run,
+-                 pending>>
++  /\ pending' = [pending EXCEPT !.switch = @ \ {g}]
++  /\ UNCHANGED <<exists, fresh, holder, failLine, optFail, last, nextJob, nextRun, job, run>>
+   /\ GhostsSame
+ 
+ \* `GameWriter::edit`: the busy check, then the text write. No failure line change.
+@@ -518,6 +525,7 @@
+   \/ \E g \in AllGames : YouDeleteAGame(g)
+   \/ \E g \in AllGames : TheDeleteRemovesTheGame(g)
+   \/ \E g \in AllGames : YouSwitchTheGame(g)
++  \/ \E g \in AllGames : TheSwitchSetsThePointer(g)
+   \/ \E g \in AllGames : YouEditAMessage(g)
+   \/ \E g \in AllGames : YouSwitchOrDeleteASwipe(g)
+   \/ \E g \in AllGames : YouChangeTheConfig(g)
+@@ -610,6 +618,9 @@
+ \* games.md 19.2: "Deleting the active game returns 400".
+ DeleteNotActive == ~deletedActive
+ 
++\* games.md 18.2 and 19.2: the active Game is a Game that exists (outside the reset window).
++ActiveExists == pending.reset = 0 => active \in exists
++
+ \* dashboard.md 39.4 and autoplay.md 41.6: "Then the stop answers "reset" And the Game is idle".
+ StopLeavesIdle ==
+   [][\A g \in AllGames : YouPressStop(g) => holder'[g].kind = "none"]_vars

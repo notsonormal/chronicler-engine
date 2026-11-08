@@ -1,0 +1,21 @@
+--- /tmp/VerifyGate.tla.orig	2026-11-05 21:49:42.002266016 +0000
++++ .agents/skills/verify-gate/model/VerifyGate.tla	2026-11-05 21:49:46.822239400 +0000
+@@ -483,15 +483,15 @@
+                  job, pending>>
+   /\ GhostsSame
+ 
+-\* `impl Drop for AutoplayRun` and `GameWriter::end_autoplay`: the holder goes only
+-\* while it names this run. The ghost fields note the failure line at the moment the
++\* `impl Drop for AutoplayRun` and `GameWriter::end_autoplay`: the holder goes while it
++\* is any Autoplay holder (the code no longer compares the run id; a plain Job holder stays). The ghost fields note the failure line at the moment the
+ \* run lets go of the Game (for `NotAccepted`, that is the accept itself), and
+ \* whether the run still holds the Game (a request that came after the run let go of
+ \* the Game can hold it again, and that is not a break).
+ TheRunEnds(r) ==
+   /\ run[r].pc = "end"
+   /\ LET g == run[r].g
+-         ours == holder[g].kind = "run" /\ holder[g].run = r
++         ours == holder[g].kind = "run"
+          h2 == IF ours THEN [holder EXCEPT ![g] = Idle] ELSE holder
+      IN /\ holder' = h2
+         /\ run' = IF run[r].end = "notAccepted" /\ run[r].endIdle

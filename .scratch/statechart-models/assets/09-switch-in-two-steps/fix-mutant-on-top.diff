@@ -1,0 +1,17 @@
+--- VerifyGate.tla	2026-11-06 00:19:54.181602063 +0000
++++ fix/VerifyGate.tla	2026-11-06 00:19:54.197601935 +0000
+@@ -220,10 +220,10 @@
+ \* `GameWriter::delete`: one hold removes the holder and the rows of the Game.
+ TheDeleteRemovesTheGame(g) ==
+   /\ g \in pending.delete
+-  /\ exists' = exists \ {g}
+-  /\ holder' = [holder EXCEPT ![g] = Idle]
+-  /\ CutOf(g)
+-  /\ deletedActive' = (deletedActive \/ (active = g /\ g \in exists))
++  /\ exists' = IF active = g THEN exists ELSE exists \ {g}
++  /\ holder' = IF active = g THEN holder ELSE [holder EXCEPT ![g] = Idle]
++  /\ IF active = g THEN UNCHANGED <<cut, cutRuns>> ELSE CutOf(g)
++  /\ deletedActive' = (deletedActive \/ (active = g /\ g \in exists /\ g \notin exists'))
+   /\ pending' = [pending EXCEPT !.delete = @ \ {g}]
+   /\ UNCHANGED <<fresh, active, failLine, optFail, last, nextJob, nextRun, job, run,
+                  late, storyBusy, cfgRun, badAccept>>

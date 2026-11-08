@@ -1,0 +1,63 @@
+---
+title: "The life of one Autoplay run"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Before
+    lg1: Holds the Game
+    lg2: Let go
+    lg3: Ended
+  }
+  class lg0 tan
+  class lg1 blue
+  class lg2 orange
+  class lg3 teal
+  s0: Not started
+  state "Holds the Game" as s1 {
+    s2: At its accept
+    s3: Its Job runs
+    s4: Ends
+  }
+  s5: Lets go: its accept failed
+  s6: Stopped: waits to reach its accept
+  s7: Ended: its accept failed
+  s8: Lets go: stopped
+  s9: Stopped: its Job runs on, cut off
+  s10: Ended: stopped
+  s11: Lets go: its Job failed
+  s12: Ended: its Job failed
+  s13: Lets go: its budget is spent
+  s14: Ended: its budget is spent
+  [*] --> s0
+  s0 --> s2: you start Autoplay
+  s2 --> s5: the story cannot be read
+  s2 --> s6: you press Stop
+  s2 --> s3: the next Job starts or a cycle is counted, the next Job starts
+  s5 --> s7: the run ends
+  s6 --> s8: the accept finds no holder of the run
+  s3 --> s9: you press Stop
+  s8 --> s10: the run ends
+  s9 --> s8: its Job was cut off
+  s3 --> s4: its Job fails
+  s9 --> s11: its Job fails
+  s4 --> s11: you press Stop
+  s4 --> s12: the run ends
+  s11 --> s12: the run ends
+  s3 --> s2: its Job ends
+  s9 --> s6: its Job ends
+  s2 --> s13: the budget is spent
+  s13 --> s14: the run ends
+  class s0 tan
+  class s2 blue
+  class s3 blue
+  class s4 blue
+  class s5 orange
+  class s6 orange
+  class s7 teal
+  class s8 orange
+  class s9 orange
+  class s10 teal
+  class s11 orange
+  class s12 teal
+  class s13 orange
+  class s14 teal

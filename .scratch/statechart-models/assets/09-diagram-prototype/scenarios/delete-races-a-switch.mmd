@@ -1,0 +1,14 @@
+---
+title: "Known bug: a delete races a switch of the active Game"
+---
+sequenceDiagram
+  participant You as You
+  participant P as Active Game pointer
+  participant G as Busy registry
+  You->>P: delete Game 2: is it the active Game?
+  P-->>You: no, Game 1 is active
+  You->>P: switch to Game 2
+  Note over P: the active Game is Game 2
+  You->>G: delete the rows of Game 2
+  Note over G,P: Game 2 is gone, and it is the active Game
+  Note over G,P: rule DeleteNotActive breaks here

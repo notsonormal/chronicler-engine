@@ -1,0 +1,17 @@
+---
+title: "A stop while the narrator call runs"
+---
+sequenceDiagram
+  participant You as You
+  participant G as Busy registry
+  participant J1 as Job 1
+  participant L as LLM
+  You->>G: send an Action
+  Note over G: Job 1 holds the Game
+  J1->>G: save the Input, set the step
+  J1->>L: narrator call
+  You->>G: Stop
+  Note over G: the holder goes, and its work is cut off
+  L-->>J1: the Narration
+  J1-xG: save the text: refused, the holder is not Job 1
+  Note over J1: Job 1 ends and writes nothing more

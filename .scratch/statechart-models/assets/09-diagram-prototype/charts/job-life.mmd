@@ -1,0 +1,55 @@
+---
+title: "The life of one Job"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Before
+    lg1: Holds the Game
+    lg2: Cut off
+    lg3: Ended
+  }
+  class lg0 tan
+  class lg1 blue
+  class lg2 orange
+  class lg3 teal
+  s0: Not accepted
+  state "Holds the Game" as s1 {
+    s2: Narration
+    s3: After the generations
+    s4: Analysis and state update
+    s5: Ending
+    s6: Event Narration
+    s7: Options run
+  }
+  s8: Cut off: runs on, but its next write is refused
+  s9: Ended: a write was refused
+  s10: Ended with a failure line
+  s11: Ended
+  [*] --> s0
+  s0 --> s2: you send an Action
+  s8 --> s9: its next write is refused
+  s2 --> s3: the narrator call fails
+  s3 --> s5: no Options run
+  s2 --> s4: the text is saved
+  s5 --> s10: the Job ends
+  s8 --> s10: the Job ends
+  s4 --> s3: the state is saved
+  s4 --> s6: the state is saved, a Trigger fired
+  s3 --> s7: an Options run follows
+  s6 --> s3: the narrator call fails
+  s5 --> s11: the Job ends
+  s8 --> s11: the Job ends
+  s6 --> s4: the text is saved
+  s7 --> s5: the Options are saved
+  s1 --> s8: you press Stop
+  class s0 tan
+  class s2 blue
+  class s3 blue
+  class s4 blue
+  class s5 blue
+  class s6 blue
+  class s7 blue
+  class s8 orange
+  class s9 teal
+  class s10 teal
+  class s11 teal

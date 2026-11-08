@@ -1,0 +1,78 @@
+# The coverage record of the verify-gate skill.
+#
+# `sync_commit` is the commit at which an agent last confirmed that model/VerifyGate.tla
+# describes every function below. Move it forward only after that check (SKILL.md,
+# "Update the TLA+ model"). A change to a listed file after `sync_commit` means that the
+# TLA+ model needs another look.
+
+sync_commit = "e6715c6028092a0fecfafb8b89b32934de1de911"
+sync_date = "2026-11-05"
+
+[[files]]
+path = "src/application/generation/gate.rs"
+functions = [
+  "BusyRegistry::hold",
+  "GameWriter::require_idle",
+  "GameWriter::accept",
+  "GameWriter::accept_for_autoplay",
+  "GameWriter::accept_in_autoplay_hold",
+  "GameWriter::plan_and_start",
+  "GameWriter::accept_in_tx",
+  "GameWriter::not_accepted_with_failure",
+  "GameWriter::reserve_for_autoplay",
+  "GameWriter::end_autoplay",
+  "GameWriter::save_config",
+  "GameWriter::stop",
+  "GameWriter::switch_swipe",
+  "GameWriter::edit",
+  "GameWriter::delete_last",
+  "GameWriter::clear_failure_and_put_dock",
+  "GameWriter::replace",
+  "GameWriter::delete",
+  "JobWriter::hold",
+  "JobWriter::save_input",
+  "JobWriter::save_text",
+  "JobWriter::save_state_update",
+  "JobWriter::save_failure",
+  "JobWriter::save_options",
+  "JobWriter::step",
+  "JobWriter::write_new_message",
+  "JobWriter::write_new_swipe",
+  "Drop for JobWriter",
+]
+
+[[files]]
+path = "src/application/pipeline/job.rs"
+functions = [
+  "Job::start",
+  "Job::run_accepted",
+  "Job::run",
+  "Job::generate",
+  "Job::run_step",
+  "Job::update_state",
+  "Job::options_step",
+  "Job::end",
+]
+
+[[files]]
+path = "src/application/autoplay/driver.rs"
+functions = [
+  "AutoplayRun::start",
+  "AutoplayRun::run_jobs",
+  "AutoplayRun::decide",
+  "Drop for AutoplayRun",
+]
+
+[[files]]
+path = "src/application/games/catalogue.rs"
+functions = [
+  "GameCatalogue::delete_game",
+  "GameCatalogue::reset",
+  "GameCatalogue::switch_game",
+  "GameCatalogue::save_config",
+]
+
+# The rules that break at `sync_commit`, by config. check.py exits 0 only when each config
+# breaks exactly these. Each one is a finding of the trial log, not a modelling error.
+[known_breaks]
+delete-race = ["DeleteNotActive"]

@@ -1,0 +1,41 @@
+---
+title: "The life of one Job"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: At rest
+    lg1: Writing
+    lg2: Offering
+  }
+  class lg0 teal
+  class lg1 blue
+  class lg2 purple
+  s0: Idle
+  s1: Writing the narration
+  s2: Idle, you stopped it
+  s3: Idle with a failure line
+  s4: Reading the new text
+  s5: Writing the event narration
+  s6: Offering the Options
+  [*] --> s0
+  s0 --> s1: you send an action
+  s1 --> s2: you press Stop
+  s1 --> s3: a part fails
+  s1 --> s4: the narration is saved
+  s2 --> s1: you send an action
+  s3 --> s1: you send an action
+  s4 --> s2: you press Stop
+  s4 --> s5: a Trigger fires
+  s4 --> s6: no Trigger fires or a part fails, and the Options still run
+  s5 --> s2: you press Stop
+  s5 --> s6: the event narration is saved or a part fails, and the Options still run
+  s6 --> s2: you press Stop
+  s6 --> s0: the Options appear
+  s6 --> s3: the Options appear
+  class s0 teal
+  class s1 blue
+  class s2 teal
+  class s3 teal
+  class s4 blue
+  class s5 blue
+  class s6 purple

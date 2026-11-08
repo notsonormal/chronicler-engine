@@ -1,0 +1,47 @@
+---
+title: "One Autoplay run"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: At rest
+    lg1: Playing
+  }
+  class lg0 teal
+  class lg1 blue
+  s0: Idle
+  s1: Between two Jobs (no cycle played)
+  s2: Idle, you stopped the run
+  s3: A Job of the run is writing (cycle 1 of 2)
+  s4: Idle, a Job of the run failed
+  s5: Between two Jobs (1 of 2 cycles played)
+  s6: A Job of the run is writing (cycle 2 of 2)
+  s7: Between two Jobs (all 2 cycles played)
+  s8: Idle, the run played its budget
+  [*] --> s0
+  s0 --> s1: you start Autoplay
+  s1 --> s2: you press Stop
+  s1 --> s3: the run starts the next Job
+  s2 --> s1: you start Autoplay
+  s3 --> s1: the story waits for a narration, so no cycle ends
+  s3 --> s2: you press Stop
+  s3 --> s4: a Job of the run fails
+  s3 --> s5: a Job ends a cycle
+  s4 --> s1: you start Autoplay
+  s5 --> s2: you press Stop
+  s5 --> s6: the run starts the next Job
+  s6 --> s5: the story waits for a narration, so no cycle ends
+  s6 --> s2: you press Stop
+  s6 --> s4: a Job of the run fails
+  s6 --> s7: a Job ends a cycle
+  s7 --> s8: the run played its budget
+  s7 --> s2: you press Stop
+  s8 --> s1: you start Autoplay
+  class s0 teal
+  class s1 blue
+  class s2 teal
+  class s3 blue
+  class s4 teal
+  class s5 blue
+  class s6 blue
+  class s7 blue
+  class s8 teal

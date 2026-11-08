@@ -1,0 +1,29 @@
+---
+title: "The end of a stopped run does not free the run after it"
+---
+sequenceDiagram
+  participant You as You
+  participant G as Busy registry
+  participant R1 as Run 1
+  participant R2 as Run 2
+  participant J1 as Job 1
+  participant J2 as Job 2
+  participant L as LLM
+  You->>G: start Autoplay
+  Note over G: Run 1 holds the Game
+  R1->>G: accept my next Job
+  G-->>R1: accepted: Job 1 starts
+  J1->>G: set the step
+  J1->>L: narrator call
+  You->>G: Stop
+  Note over G: the holder goes, and its work is cut off
+  You->>G: start Autoplay
+  Note over G: Run 2 holds the Game
+  L-->>J1: the Narration
+  J1-xG: save the text: refused, the holder is not Job 1
+  Note over J1: Job 1 ends and writes nothing more
+  Note over R1: its Job ended, so the run ends
+  R1->>G: end the run
+  Note over G: the holder is the next run, so it stays
+  R2->>G: accept my next Job
+  G-->>R2: accepted: Job 2 starts

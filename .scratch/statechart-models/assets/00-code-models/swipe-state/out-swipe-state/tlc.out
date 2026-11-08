@@ -1,0 +1,42 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 0 and seed 1619265598417840250 with 1 worker on 3 cores with 2048MB heap and 64MB offheap memory [pid: 933036] (Linux 6.12.111+deb13-amd64 amd64, Eclipse Adoptium 21.0.13 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /tmp/statechart-work/swipe-state/SwipeState.tla
+Parsing file /tmp/statechart-y5HWue/statechart-O95DPw/tmp-verdict-1/Naturals.tla
+Semantic processing of module Naturals
+Semantic processing of module SwipeState
+Starting... (2026-10-29 21:50:57)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-10-29 21:50:57.
+Error: Invariant ANewTextIsShownWithACheckedState is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ request = "none"
+/\ current = "start"
+/\ writes = 0
+/\ stage = "idle"
+
+State 2: <YouSendAnAction line 30, col 3 to line 34, col 23 of module SwipeState>
+/\ request = "an action"
+/\ current = "start"
+/\ writes = 0
+/\ stage = "writing"
+
+State 3: <TheTextIsSaved line 46, col 3 to line 51, col 22 of module SwipeState>
+/\ request = "an action"
+/\ current = "pre-analysis"
+/\ writes = 1
+/\ stage = "saved"
+
+State 4: <YouPressStop line 76, col 3 to line 78, col 43 of module SwipeState>
+/\ request = "an action"
+/\ current = "pre-analysis"
+/\ writes = 1
+/\ stage = "idle"
+
+11 states generated, 9 distinct states found, 4 states left on queue.
+The depth of the complete state graph search is 4.
+The average outdegree of the complete state graph is 2 (minimum is 2, the maximum 2 and the 95th percentile is 2).
+Finished in 01s at (2026-10-29 21:50:57)
+

@@ -1,0 +1,49 @@
+---
+title: "The state of a new Swipe"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: At rest
+    lg1: Writing
+    lg2: Unread
+    lg3: Breaks ANewTextIsShownWithACheckedState
+    lg4: Path to the ANewTextIsShownWithACheckedState bug
+  }
+  class lg0 teal
+  class lg1 blue
+  class lg2 orange
+  class lg3 breaks
+  class lg4 bugPath
+  s0: Idle, the text keeps its start state
+  s1: The narrator writes the retry
+  s2: The narrator writes
+  s3: The text shows, its state is not read yet
+  s4: The rules read the new text
+  s5: Idle, the text keeps a state the rules never read
+  s6: Idle, the text is read
+  [*] --> s0
+  s0 --> s1: you retry a typed input
+  s0 --> s2: you send an action
+  s1 --> s0: the server restarts or you press Stop or the retry's text is saved and keeps the start state
+  s2 --> s3: the text is saved with the pre-analysis state
+  s2 --> s0: the server restarts or you press Stop
+  s3 --> s4: the rules read the new text
+  s3 --> s5: the server restarts or you press Stop
+  s4 --> s6: the Job ends or the server restarts or you press Stop
+  s5 --> s1: you retry a typed input
+  s5 --> s2: you send an action
+  s6 --> s1: you retry a typed input
+  s6 --> s2: you send an action
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s0 teal
+  class s0 bugPath
+  class s1 blue
+  class s2 blue
+  class s2 bugPath
+  class s3 orange
+  class s3 bugPath
+  class s4 blue
+  class s5 orange
+  class s5 breaks
+  class s5 bugPath
+  class s6 teal
