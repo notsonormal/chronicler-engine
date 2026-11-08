@@ -6,7 +6,7 @@ Blocked by: 01, 02, 03
 
 ## Question
 
-What goes into the wiki of an expedition, and what goes into the `general` wiki? What never goes into a wiki? Which voice does a wiki use: dated history, or the current state? How does a wiki stay true?
+What goes into the wiki of an initiative, and what goes into the `general` wiki? What never goes into a wiki? Which voice does a wiki use: dated history, or the current state? How does a wiki stay true?
 
 ## Context
 

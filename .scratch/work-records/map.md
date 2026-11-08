@@ -19,10 +19,10 @@ The work records of this repo live in one visible folder: the maps, the one-off 
   6. Let a fresh agent find any record from one doc (the tracker doc).
 - **Working views (owner, 2026-11-04).** The research and grilling tickets test these views, and can overturn them:
   - The top folder is visible, with no dot.
-  - The names: an **expedition** is the folder of one long goal. An **errand** is a one-off item with no map. **`general`** is the expedition of everything with no goal, and of what applies to all goals. **Map** and **ticket** keep their wayfinder meanings.
-  - Each expedition has `wiki/`, `maps/` and `errands/`. Every chief reads the `general` wiki first, then its own.
-  - An errand uses the triage statuses of `docs/agents/triage-labels.md`. A ticket keeps `open`, `claimed` and `resolved`.
-  - `docs/plans/` folds into errands. `docs/` then holds only current-state docs.
+  - The names are decided (ticket 04): the top folder is `work/`, an **initiative** is the folder of one long goal, a one-off is an **issue** with no map, and **`general`** has the shape of an initiative but is not one. **Map** and **ticket** keep their wayfinder meanings. A ticket is a child issue of its map.
+  - Each initiative and `general` has `wiki/`, `wayfinder-maps/` and `issues/`. Every chief reads the `general` wiki first, then its own.
+  - A one-off issue uses the triage statuses of `docs/agents/triage-labels.md`. A ticket keeps `open`, `claimed` and `resolved`.
+  - `docs/plans/` folds into one-off issues. `docs/` then holds only current-state docs.
   - The skills point at the tracker doc instead of naming the folder.
   - The names describe the workflow, so they go in `docs/agents/`, not in `CONTEXT.md` (the game glossary).
 - **Scope (owner, charting).** `.scratch/` and `docs/plans/`, in this repo. A layout that also fits other repos is a plus, but it is not required.
@@ -36,7 +36,7 @@ The work records of this repo live in one visible folder: the maps, the one-off 
   - Pocock's skills at `mattpocock/skills@4ae2317`: `skills/in-progress/chief-of-staff/`, `skills/in-progress/software-factory/`, `skills/in-progress/loop-me/`, `skills/engineering/wayfinder/`. Clone with `git clone --depth 1 https://github.com/mattpocock/skills.git`.
   - The owner's research wiki `notsonormal/mrn-wiki` (private; at `37db57b` on 2026-11-04). Clone over SSH: `git clone --depth 1 git@github.com:notsonormal/mrn-wiki.git`. Pages: `concepts/chief-of-staff-pattern.md`, `concepts/wayfinder-decision-map.md`, `concepts/repo-as-memory.md`, `concepts/orchestration-axes.md`, `concepts/orchestration-principles.md`, `concepts/software-factory.md`, `entities/chronicler-engine.md` (the ADR history), `entities/firstmate.md`, `entities/openrig.md`. Its `SCHEMA.md` is an example of a wiki's rules.
   - Clone outside the repo, for example to `/tmp/research/`. `/tmp` can be cleared, so clone again when a clone is gone.
-- **Names.** "Expedition", "errand", "`general`", "work records" and "the needs" are working names until the names ticket decides them.
+- **Names.** [Decide the names of the work records](issues/04-names.md) decided them. The tickets written before it say "expedition" for initiative and "errand" for a one-off issue.
 
 ## Decisions so far
 
@@ -45,6 +45,7 @@ The work records of this repo live in one visible folder: the maps, the one-off 
 - [Find how Claude Projects and similar tools organize work and memory](issues/01-claude-projects.md) — "Project" means three things. Only the Claude Code project (public beta) is close to an expedition: a goal, instructions, memory files, a Library and threads, with a state view (Waiting on you … Resolved). The user writes instructions, the model writes memory. Claude Code memory is current-state: a short index (200 lines or 25KB) and topic files on demand. Work outside a project has no named place. The docs fit a project to "an area you keep feeding", which may make the bucket maps expeditions (inferred).
 - [Find how Pocock's chief of staff and the LLM wiki keep memory](issues/02-chief-of-staff-wiki.md) — Karpathy's "LLM Wiki" gist (2026-04-04) is the origin, and its wiki is "kept current". "Write history, not the present" is Pocock's own rule (`5beb35b`), and no script checks it. The skill defines no goal folders. Pocock's posts show one wiki per person, per deliverable or per domain agent. Nothing is merged upstream after `4ae2317`, but draft PR #1369 says chief-of-staff "may replace wayfinder" and moves a map's destination and fog into a `destination.md` wiki page. Fits need 3, part of 1, 4 and 6, not 2 or 5. The report's "broken procedure paths" was wrong: they resolve after install (PR #1363).
 - [Find how other tools and people lay out agent work in a repo](issues/03-other-layouts.md) — No approach meets all six needs. firstmate and Johnny.Decimal come closest, and need 5 (close a goal) is the weakest everywhere. Backlog.md dropped its dot because the hidden folder broke file references (`back-105`). OpenRig and firstmate layer a general file under the specific one. OpenRig, Spec Kit and Backlog.md keep the folder path out of their instructions. No tool uses expedition, errand or `general`. PARA and Johnny.Decimal say "area" for standing work. Ready rules: "has an end" (PARA) and "prefer the most specific zero" (Johnny.Decimal).
+- [Decide the names of the work records](issues/04-names.md) — Top folder `work/`. A long goal's folder is an **initiative**. `general` has its shape but is not one: no destination, never closes. A one-off is an **issue** with no map, in `issues/` beside `wayfinder-maps/` ("map" is a game word). Memory is `wiki/`. "Expedition" and "errand" are dropped. The rule: a name says what the thing is, means one thing here, is known outside, and is not a game word.
 
 ## Not yet specified
 
