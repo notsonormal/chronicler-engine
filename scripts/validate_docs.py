@@ -28,14 +28,14 @@ Rules (only enforced on STANDARD docs):
                               References` section at the bottom of the file.
   LINE_CITATION            — backticked `path:line` citation (e.g. `foo.rs:42`).
                               Line numbers rot; cite the symbol instead. Fenced
-                              code blocks are exempt, as is the auto-generated
-                              guardrails doc (see GENERATED_DOC_PATHS).
+                              code blocks are exempt, as are the
+                              generated docs (see GENERATED_DOC_PATHS and GENERATED_DOC_DIRS).
   BROKEN_SOURCE_PATH       — backticked `src/`, `tests/`, `scripts/` or
                               `assets/` path whose target does not exist on
                               disk. Renames and moves otherwise leave citations
                               pointing at files that are gone. Fenced code
-                              blocks are exempt, as is the auto-generated
-                              guardrails doc (see GENERATED_DOC_PATHS). `data/`
+                              blocks are exempt, as are the
+                              generated docs (see GENERATED_DOC_PATHS and GENERATED_DOC_DIRS). `data/`
                               is out of scope: its contents are runtime
                               artifacts, absent from a fresh checkout.
                               This one check also runs on the hand-written
@@ -219,6 +219,20 @@ ROOT_DOCS: tuple[str, ...] = (
 GENERATED_DOC_PATHS: set[str] = {
     "reference/coding_standards/guardrails.md",  # generate_guardrails_doc.py
 }
+
+# Folders of generated docs, with the same exemptions as GENERATED_DOC_PATHS. The check.py of a
+# verify skill writes them from its TLA+ model (`.agents/skills/verify-*/diagrams/diagrams.toml`).
+GENERATED_DOC_DIRS: tuple[str, ...] = (
+    "reference/diagrams/",  # .agents/skills/verify-gate/check.py
+)
+
+
+def is_generated_doc(rel: Path | None) -> bool:
+    """True for a doc that a generator writes. `rel` is relative to docs/diataxis/."""
+    if rel is None:
+        return False
+    path = rel.as_posix()
+    return path in GENERATED_DOC_PATHS or path.startswith(GENERATED_DOC_DIRS)
 
 # Standard dir names. docs/diataxis/ uses reference/explanation/how-to/
 # (and tutorials/ once content earns it).
@@ -724,8 +738,7 @@ def check_line_citations(report: FileReport, docs_root: Path) -> None:
     exempt — they may quote real tool output — and so are auto-generated docs
     whose line numbers are refreshed by their generator.
     """
-    rel = relative_to(report.path, docs_root)
-    if rel is not None and rel.as_posix() in GENERATED_DOC_PATHS:
+    if is_generated_doc(relative_to(report.path, docs_root)):
         return
 
     text = read_text(report)
@@ -767,8 +780,7 @@ def check_source_paths(report: FileReport, engine_root: Path) -> None:
     a fresh checkout.
     """
     docs_root = engine_root / "docs" / "diataxis"
-    rel = relative_to(report.path, docs_root)
-    if rel is not None and rel.as_posix() in GENERATED_DOC_PATHS:
+    if is_generated_doc(relative_to(report.path, docs_root)):
         return
 
     text = read_text(report)

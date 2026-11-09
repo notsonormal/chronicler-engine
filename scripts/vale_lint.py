@@ -60,6 +60,10 @@ EXCLUDED_FILE_NAMES: set[str] = {
     "README.md",
 }
 
+# Folders of generated docs, relative to docs/. Their text comes from a generator, so the
+# prose rules do not apply (validate_docs.py GENERATED_DOC_DIRS).
+GENERATED_DIRS: tuple[tuple[str, ...], ...] = (("diataxis", "reference", "diagrams"),)
+
 # Docs outside docs/ that the default run also lints.
 ROOT_DOCS: tuple[Path, ...] = tuple(
     ENGINE_ROOT / name
@@ -96,6 +100,9 @@ def is_in_scope(md_file: Path) -> bool:
         return False
 
     if parts[-1] in EXCLUDED_FILE_NAMES:
+        return False
+
+    if any(parts[: len(d)] == d for d in GENERATED_DIRS):
         return False
 
     return True

@@ -27,6 +27,10 @@ The owner reviews the draft before it lands. The shape of the document is the ow
 - Section 12 of [the ticket 03 asset](../assets/03-gate-spec-only-model.md): the start list of an earlier trim.
 - Skills: `/document-review`, `/diataxis-doc-review`.
 
+## Decided before the work
+
+- **One page per diagram (owner, 2026-11-09).** The generated pages in `docs/diataxis/reference/diagrams/` stay one page per diagram (13 today). Do not merge them into two pages. Link to each page from the section of `game_flow.md` that it shows.
+
 ## Checks
 
 - `python build.py validate-docs` and `python build.py vale` pass.

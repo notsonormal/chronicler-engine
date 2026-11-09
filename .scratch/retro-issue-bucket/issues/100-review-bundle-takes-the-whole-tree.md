@@ -16,6 +16,7 @@ Source: `/retro` 2026-11-02, the session of layout-trials ticket 11 (`.scratch/l
 - **known** `prepare_review_bundle.py --help`: `--uncommitted | --ref REF`, `--worktree`, `--out DIR`. It has no path filter.
 - **known** I built the bundle by hand: `git diff HEAD -- <3 paths> > tmp/review/lt11/change.patch`. The README of the script and its per-area patches were then missing.
 - **known** `comment_finder.py` already has `--files`, so `/simple-after-plan` step 1 can name a file scope there but not for the review.
+- **known** Again on 2026-11-09 (statechart-models ticket 14): the bundle held the untracked `.scratch/invariant-audit/`, `.scratch/state-machines-*/` and a `.scratch/weekly-retro-*` edit of other sessions. `tooling.patch` was 830 KB. Both reviewer briefs had to name the paths to ignore.
 
 ## Options to decide
 

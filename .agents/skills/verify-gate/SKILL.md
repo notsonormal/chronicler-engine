@@ -1,6 +1,6 @@
 ---
 name: verify-gate
-description: "Model-check the generation gate: the busy registry, the Job id check, the Autoplay holder, stop, reset, delete, the active pointer and the config write. Use after a change to src/application/generation/gate.rs, src/application/pipeline/job.rs, src/application/autoplay/driver.rs, src/application/games/catalogue.rs or src/application/games/active.rs, or to a gate sentence of docs/specs/ or docs/diataxis/reference/game_flow.md."
+description: "Model-check the generation gate and generate its diagrams in docs/diataxis/reference/diagrams/. It covers the busy registry, the Job id check, the Autoplay holder, stop, reset, delete, the active pointer and the config write. Use after a change to src/application/generation/gate.rs, src/application/pipeline/job.rs, src/application/autoplay/driver.rs, src/application/games/catalogue.rs or src/application/games/active.rs, or to a gate sentence of docs/specs/ or docs/diataxis/reference/game_flow.md."
 ---
 
 # Verify the gate
@@ -16,6 +16,7 @@ The gate lets one holder at a time write the records of a Game. A holder is a Jo
 - A change touches a function that `coverage.toml` lists, or adds a function that reads or writes the busy state of a Game (`BusyRegistry`, `Holder`, `JobEntry`).
 - A change alters a gate scenario in `docs/specs/` (`dashboard.md` 39.x, `autoplay.md` 41.x, `actions.md` 3.x, `reset.md` 7.3, `games.md` 18.4 and 19.x, `options.md` 24.5, `swipe_switch.md` 36.7).
 - The end of a `build.py` run shows `WARNING verify-gate: the TLA+ model may not match the code`. It names each listed function that differs from its hash in `coverage.toml`, has no hash, or is missing. The warning reads the files on disk, so uncommitted work counts. `python scripts/verify_coverage.py check` prints it alone. The agent that changed a listed function runs this skill, or `/maintain-formal-verification-skill`, before it ends its task.
+- The end of a `build.py` run shows `WARNING verify-gate: N of M diagrams are older than their inputs`, or `the skill has no generated diagram`. Run `check.py`: it checks every config, then writes the diagrams (*The diagrams*). The warning `diagrams.toml cannot be read` names the error in the manifest: fix the manifest first.
 
 ## Run it
 
@@ -24,13 +25,14 @@ The gate lets one holder at a time write the records of a Game. A holder is a Jo
 From the repo root:
 
 ```bash
-python3 .agents/skills/verify-gate/check.py            # every config, about 35 s
-python3 .agents/skills/verify-gate/check.py --mutants  # every mutant, about 25 s
+python3 .agents/skills/verify-gate/check.py             # every config (about 35 s), then the diagrams when an input changed (about 90 s)
+python3 .agents/skills/verify-gate/check.py --mutants   # every mutant, about 25 s
+python3 .agents/skills/verify-gate/check.py --diagrams  # only the diagrams, with no config check (about 90 s)
 ```
 
 `check.py` gets TLC and the JDK through `mise`, with the pins of `mise.toml`. Do not run it while a cargo build runs: one TLC run takes up to 2 GiB of memory. `pgrep -a cargo` shows a running build, and `free -g` shows the free memory. The TLC logs go to `tmp/verify-gate/`.
 
-Each config prints one line. The exit code is 0 when every config gives its expected result:
+Each config prints one line, and a new break adds the line of its path. The exit code is 0 when every config gives its expected result:
 
 | Line | Meaning |
 |---|---|
@@ -39,17 +41,22 @@ Each config prints one line. The exit code is 0 when every config gives its expe
 | `<- not known: RULE` | A new break. Read it as the next section says. |
 | `<- known, but holds now: RULE` | A known finding went away. Find the change that fixed it, and take it out of `known_breaks` in `coverage.toml`. |
 | `error` | TLC did not finish: a parse error, a deadlock or an exception. The log in `tmp/verify-gate/` names it. |
+| `  path to the break: tmp/verify-gate/paths/<config>/sequence-RULE.mmd` | The sequence diagram of the shortest path to a new break. |
+| `  path to the break, as steps: tmp/verify-gate/paths/<config>/report.md` | A PROPERTY broke. `/statechart` draws a sequence diagram for an INVARIANT only, so `report.md` tells the path as steps. |
+| `  no path to the break: see ...` | `/statechart` could not draw the path. The log that the line names gives the cause. Read the break from `tmp/verify-gate/<config>.out`. |
+| `diagrams: current` or `diagrams: wrote N pages` | The last line of a run of every config. See *The diagrams*. |
+| `diagrams: not written ...` | No page changed. After a config that breaks, this is expected. Otherwise, do step 6 of *Update the model after a code change*. |
 
 Each mutant prints `caught`, or `holds` for a fix mutant. Read the mutants only when every config gives its expected result. While a config breaks, a mutant on that config can show `MISSED` because the same break comes first. When the configs pass, `MISSED` means that a rule cannot fail any more. Then the model or the rule is wrong.
 
 ## Read a break
 
-Run the model and the config through the `/statechart` skill (`.agents/skills/statechart/SKILL.md`, section *Run*), with `model/VerifyGate.view.mjs` as the view. Write its output under `tmp/`. It tells the shortest path to the break as plain steps. Then replay each step against the real code:
+For each new break, `check.py` runs the config through the `/statechart` skill with `model/VerifyGate.view.mjs` as the view, into `tmp/verify-gate/paths/<config>/`. `sequence-RULE.mmd` draws the shortest path to the break: each request, each hold of `GameWriter` and each model call, with the note `rule RULE breaks here` at the end. `report.md` tells the same path as plain steps. The path diagram goes with the report: into the trial log or a bug ticket, never into `docs/`. Then replay each step against the real code:
 
 - **A step cannot happen in the code.** The model is wrong. For example, the model splits a step that the code does in one `BusyRegistry::hold`, or it allows a request that a route refuses. Fix the model and say what was wrong.
 - **Every step can happen.** It is a bug in the code. Do not weaken the rule or the model until it passes, and do not change product code unless the person asks. Keep the model edit that shows the bug out of the skill folder: save it as a patch under `tmp/`, restore the model, and give the patch with the report. The model moves to the new code only when the person accepts the code change. Report the steps in the words of the code, the harm in one sentence, and the commit that brought it. A candidate tier-1 test is worth it only where a real route can force that order of steps.
 
-`VerifyGate.view.mjs` merges TLC states into chart states. `/statechart` draws a config when TLC reaches at most 200,000 states and the view gives 500 chart states or fewer.
+`VerifyGate.view.mjs` merges TLC states into chart states. `/statechart` draws a config when TLC reaches at most 200,000 states and the view gives 500 chart states or fewer. Above that, it draws only the path to the break.
 
 ## Update the model after a code change
 
@@ -58,9 +65,10 @@ Write the update from the code, before you run the check. Do not shape it by wha
 1. Read `git diff <sync_commit>.. -- <the paths in coverage.toml>` and each commit message. Look also for covered functions that moved, and for new functions that read or write `Holder`.
 2. For each change, find its action in the table below. One action is one `BusyRegistry::hold` of the code, or one step outside every hold (a model call, a read). Exceptions: where no model call sits between two holds of one Job, one action covers both. The comment of the action names them.
 3. Change a rule only when the spec promise changed on purpose. Quote the new spec sentence in the comment of the rule, and keep the old wording in the trial log.
-4. Run `check.py`. A new break after the update is either a bug in the new code or an error of the update: judge it as *Read a break* says. You cannot tell an intended change from a regression before that judgement.
+4. Run `check.py`. A new break after the update is either a bug in the new code or an error of the update: judge it as *Read a break* says. You cannot tell an intended change from a regression before that judgement. A `diagrams: not written` line belongs to step 6.
 5. Run `check.py --mutants`. A new action or a new check of the code needs a mutant in `model/mutants.toml` that removes it and breaks a rule. When the update changes the text that a mutant replaces, write the mutant again, so that it still removes exactly one check of the new code.
-6. Update `coverage.toml`: add, rename or remove the listed functions. Then run `python scripts/verify_coverage.py record`. It writes the hash of each listed function as it is on disk, so record only after steps 4 and 5 pass and the model describes every listed function. Then `build.py` shows no warning. Move `sync_commit` and `sync_date` only to a commit that holds the change. The warning does not read them: `/maintain-formal-verification-skill` reads `git diff <sync_commit>` to see the old code.
+6. Update the diagrams. A new action needs its words in `diagrams/sequence.view.mjs` (`message()`) and in each chart view whose axis it moves (`step()`, and `state()` when the action adds a value that the view reads). Run `check.py` again: it writes the diagrams when the configs pass. A scenario of `diagrams/scenarios.mjs` that the new model does not allow stops the diagrams. The log that the `diagrams: not written` line names gives the step. Write the scenario again from the new code.
+7. Update `coverage.toml`: add, rename or remove the listed functions. Then run `python scripts/verify_coverage.py record`. It writes the hash of each listed function as it is on disk, so record only after steps 4 and 5 pass and the model describes every listed function. Then `build.py` shows no warning. Move `sync_commit` and `sync_date` only to a commit that holds the change. The warning does not read them: `/maintain-formal-verification-skill` reads `git diff <sync_commit>` to see the old code.
 
 For the upkeep after changes that skipped this skill (merges, many commits), use the `/maintain-formal-verification-skill` skill.
 
@@ -145,6 +153,17 @@ The model leaves out:
 - A restart of the server. The busy registry lives in memory only, so a restart loses every holder.
 
 The model has the branch of `accept_for_autoplay` that answers `NotAccepted::StillThinking`, where the run's own Job is in flight. TLC never reaches it, as the code comment says.
+
+## The diagrams
+
+`check.py` generates the diagrams of `docs/diataxis/reference/diagrams/` from the model, one page each. `diagrams/diagrams.toml` lists them:
+
+- **A state chart for each `[[chart]]`.** Each one is a config and a view of one axis: the busy state of a Game, its failure line and Options failure, the life of one Job, the life of one Autoplay run. Give each chart one axis: a chart of two axes is hard to read. The first line of the config, `\* Scope: ...`, goes on the page.
+- **A sequence diagram for each scenario of `diagrams/scenarios.mjs`.** A scenario is a named order of actions. TLC takes exactly those steps and checks every INVARIANT of `diagrams/scenarios.cfg` in each state, so a diagram cannot show an order that the model does not have. Each scenario names the rule that it shows (`rule`), states that rule in words for the page (`says`), and names its spec scenario (`spec`). A page names no spec scenario number: a Diátaxis doc cites none. TLC checks `rule` along the order only when it is an INVARIANT. The page says so when it is not.
+
+`check.py` writes the pages only when every config gives its expected result, and only when an input changed. The inputs are `model/*.tla`, every file in `diagrams/`, `check.py` and the scripts of `/statechart`. Each page carries the hash of the inputs in its marker line. `scripts/verify_coverage.py` warns at the end of every `build.py` run when a page carries an older hash. `--diagrams` checks no config: use it only when the model did not change. To change a page, change its view, its config or `diagrams/scenarios.mjs`, then run `check.py`. A page edited by hand goes at the next run.
+
+To add a diagram: add a `[[chart]]` with its `page`, `config` and `view`, or a scenario with its `title`, `says`, `steps`, `constants`, `rule` and `spec`. Then run `check.py`. Each config of `diagrams/` is a scope for a diagram, not a check: the checks of the rules are the configs of `model/`.
 
 ## Known findings
 

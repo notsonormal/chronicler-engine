@@ -189,6 +189,65 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(vc._names(names), "n0, n1, n2, n3 and 3 more")
 
 
+class DiagramTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.skill = self.root / ".agents/skills/verify-demo"
+        write(self.root, ".agents/skills/verify-demo/model/Demo.tla", "---- MODULE Demo ----\n")
+        write(self.root, ".agents/skills/verify-demo/model/demo.cfg", "SPECIFICATION Spec\n")
+        write(self.root, ".agents/skills/verify-demo/diagrams/diagrams.toml", 'out = "docs/diagrams"\n')
+        write(self.root, ".agents/skills/verify-demo/diagrams/a.view.mjs", "export const title = 'A';\n")
+
+    def write_page(self, name, skill="verify-demo", inputs=None):
+        marker = vc.diagram_marker(skill, inputs or vc.diagram_inputs_hash(self.skill))
+        write(self.root, f"docs/diagrams/{name}.md", f"---\ntitle: x\n---\n\n{marker}\n")
+
+    def test_current_pages_give_no_warning(self):
+        self.write_page("a")
+        self.assertEqual(vc.warning_lines(self.root), [])
+
+    def test_an_edit_of_a_view_makes_every_page_old(self):
+        self.write_page("a")
+        self.write_page("b")
+        write(self.root, ".agents/skills/verify-demo/diagrams/a.view.mjs", "export const title = 'B';\n")
+        (line,) = vc.warning_lines(self.root)
+        self.assertIn("WARNING verify-demo: 2 of 2 diagrams are older", line)
+        self.assertIn("Run python3 .agents/skills/verify-demo/check.py: it checks every config", line)
+
+    def test_an_edit_of_the_model_makes_a_page_old(self):
+        self.write_page("a")
+        write(self.root, ".agents/skills/verify-demo/model/Demo.tla", "---- MODULE Demo ----\nx\n")
+        self.assertEqual(len(vc.warning_lines(self.root)), 1)
+
+    def test_an_edit_of_check_py_or_of_the_statechart_scripts_makes_a_page_old(self):
+        for rel in (".agents/skills/verify-demo/check.py", ".agents/skills/statechart/scripts/pipeline.ts"):
+            with self.subTest(rel=rel):
+                self.write_page("a")
+                write(self.root, rel, f"changed {rel}\n")
+                self.assertEqual(len(vc.warning_lines(self.root)), 1)
+
+    def test_an_edit_of_a_config_of_the_checks_leaves_the_pages_current(self):
+        self.write_page("a")
+        write(self.root, ".agents/skills/verify-demo/model/demo.cfg", "SPECIFICATION Other\n")
+        self.assertEqual(vc.warning_lines(self.root), [])
+
+    def test_no_page_warns(self):
+        (line,) = vc.warning_lines(self.root)
+        self.assertIn("has no generated diagram", line)
+
+    def test_a_page_of_another_skill_or_by_hand_is_not_read(self):
+        self.write_page("a")
+        self.write_page("other", skill="verify-other", inputs="0" * 16)
+        write(self.root, "docs/diagrams/by_hand.md", "No marker.\n")
+        self.assertEqual(vc.warning_lines(self.root), [])
+
+    def test_a_skill_with_no_diagram_manifest_gives_no_diagram_warning(self):
+        (self.skill / "diagrams/diagrams.toml").unlink()
+        self.assertEqual(vc.warning_lines(self.root), [])
+
+
 class RecordTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

@@ -49,6 +49,8 @@ journal record. The last lines before the banner may carry a
 ``WARNING verify-<skill>: ...`` line for each stale verify skill: a Rust
 function that the skill lists in its ``coverage.toml`` differs from its
 recorded hash, so its TLA+ model may be stale (``scripts/verify_coverage.py``).
+A second line warns when a page that the skill generated into
+``docs/diataxis/reference/diagrams/`` is older than its inputs.
 It never fails the build.
 
 Concurrent builds:

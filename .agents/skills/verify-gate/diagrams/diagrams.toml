@@ -1,0 +1,29 @@
+# The diagrams that `check.py` generates from the TLA+ model into `out`, one page each: a
+# state chart for each [[chart]], and a sequence diagram for each scenario of
+# `[sequences].scenarios`. `SKILL.md`, *The diagrams*, gives the rules.
+out = "docs/diataxis/reference/diagrams"
+
+[[chart]]
+page = "busy_state"
+config = "busy.cfg"
+view = "busy.view.mjs"
+
+[[chart]]
+page = "failure_line_and_options_failure"
+config = "failure.cfg"
+view = "failure.view.mjs"
+
+[[chart]]
+page = "job_life"
+config = "job-life.cfg"
+view = "job-life.view.mjs"
+
+[[chart]]
+page = "run_life"
+config = "run-life.cfg"
+view = "run-life.view.mjs"
+
+[sequences]
+scenarios = "scenarios.mjs"
+config = "scenarios.cfg"
+view = "sequence.view.mjs"

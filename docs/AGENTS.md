@@ -42,7 +42,7 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-11-09 21:24 UTC*
+*Index last generated: 2026-11-09 22:51 UTC*
 
 ### `docs/diataxis/explanation/`
 
@@ -70,8 +70,9 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 
 - [Autoplay Run Of One Cycle](./diataxis/reference/diagrams/autoplay_run_of_one_cycle.md)
 - [Busy State](./diataxis/reference/diagrams/busy_state.md)
+- [Config Write During A Job](./diataxis/reference/diagrams/config_write_during_a_job.md)
 - [Delete During A Job](./diataxis/reference/diagrams/delete_during_a_job.md)
-- [Failure Lines](./diataxis/reference/diagrams/failure_lines.md)
+- [Failure Line And Options Failure](./diataxis/reference/diagrams/failure_line_and_options_failure.md)
 - [Job Life](./diataxis/reference/diagrams/job_life.md)
 - [Late End Of A Stopped Job](./diataxis/reference/diagrams/late_end_of_a_stopped_job.md)
 - [Late End Of A Stopped Run](./diataxis/reference/diagrams/late_end_of_a_stopped_run.md)

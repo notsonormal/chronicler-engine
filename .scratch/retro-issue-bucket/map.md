@@ -150,3 +150,5 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 - [108 — A doc sentence that fails Vale reaches a commit and blocks every gate after it](./issues/108-vale-runs-only-in-the-gate.md)
 - [109 — The `grep * . *` denial costs a turn because its reason starts with the problem](./issues/109-grep-denial-reason-names-no-fix-first.md)
 - [110 — `test-pattern` cannot select the tests of a spec scenario](./issues/110-test-pattern-cannot-select-a-scenario.md)
+- [111 — The *Avoid* terms of `CONTEXT.md` have no check, so only a reviewer finds them](./issues/111-context-avoid-terms-have-no-check.md)
+- [112 — The comment finder does not read `.mjs` or `.ts` files](./issues/112-comment-finder-skips-mjs.md)

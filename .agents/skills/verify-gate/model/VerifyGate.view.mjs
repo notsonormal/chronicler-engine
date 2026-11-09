@@ -67,3 +67,5 @@ const labels = {
 };
 
 export const step = (action) => labels[action] ?? action;
+
+export { lanes, message } from "../diagrams/sequence.view.mjs";

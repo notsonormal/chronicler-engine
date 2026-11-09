@@ -16,6 +16,7 @@ Source: `/retro` 2026-11-08, the coordinator session of statechart-models ticket
 - **known** t08 ran `sleep 240; python build.py vale` and waited 4 minutes for another agent to fix the line. t10 hit the same failure 3 times.
 - **known** t12's first full gate failed on Vale because a new scenario heading had more than 25 words. `build.py vale` costs under 1 s, and the full gate costs minutes.
 - **known** The pre-commit hook regenerates the indexes (`scripts/precommit_regenerate.py`), but it does not run Vale.
+- **known** Again on 2026-11-09: commit `4e3522bb` (an owner edit of `AGENTS.md`, the delegation rule) held a sentence of 39 words. The full gate of statechart-models ticket 14 failed at the Vale step. I split the sentence into a list and ran the gate again (6 more minutes).
 
 ## Options to decide
 

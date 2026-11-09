@@ -205,6 +205,11 @@ class TestLineCitations(unittest.TestCase):
         )
         self.assertEqual(fix.scan(path), [])
 
+    def test_a_doc_of_a_generated_folder_is_exempt(self) -> None:
+        fix = _LineCitationFixture()
+        path = fix.write("reference/diagrams/busy_state.md", "From `src/gate.rs:12`.\n")
+        self.assertEqual(fix.scan(path), [])
+
 
 class _SourcePathFixture:
     """Builds a synthetic engine root for BROKEN_SOURCE_PATH checks."""
@@ -291,6 +296,16 @@ class TestSourcePaths(unittest.TestCase):
             "See `src/gone.rs`.\n",
         )
         self.assertEqual(fix.scan(path), [])
+
+    def test_a_doc_of_a_generated_folder_is_exempt(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.write_doc("reference/diagrams/busy_state.md", "See `src/gone.rs`.\n")
+        self.assertEqual(fix.scan(path), [])
+
+    def test_a_folder_that_only_starts_like_a_generated_one_is_checked(self) -> None:
+        fix = _SourcePathFixture()
+        path = fix.write_doc("reference/diagrams_old.md", "See `src/gone.rs`.\n")
+        self.assertEqual(len(fix.scan(path)), 1)
 
 
 class _AnchorFixture:
