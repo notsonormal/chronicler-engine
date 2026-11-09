@@ -5,12 +5,15 @@ use std::sync::Arc;
 use axum::{body::Body, http::Request, http::StatusCode};
 use tower::util::ServiceExt;
 
-use chronicler_engine::test_support::active_game_of;
+use chronicler_engine::domain::model::agent::Role;
+use chronicler_engine::test_support::{active_game_of, ScriptedModel};
 use chronicler_engine::TestAppBuilder;
 
-use crate::support::app_wiring::two_game_app;
-use crate::support::http_fixtures::seeded_storage_with_initial_game;
-use crate::support::http_requests::{assert_answers_nothing, fetch_part};
+use crate::support::app_wiring::{app_with_script, two_game_app};
+use crate::support::http_fixtures::{create_game_from, seeded_storage_with_initial_game};
+use crate::support::http_requests::{
+    assert_answers_nothing, fetch_part, fetch_status_label, post_action, post_empty, wait_for_jobs,
+};
 
 // [docs/specs/games.md] SCENARIO: 19.1
 #[tokio::test]
@@ -128,5 +131,48 @@ async fn test_delete_game_answers_nothing_and_the_panel_shows_the_empty_state_af
     assert!(
         panel.contains("No other saved games."),
         "the panel must show the empty state once the last saved game is gone: {panel}"
+    );
+}
+
+// [docs/specs/games.md] SCENARIO: 19.5
+#[tokio::test]
+async fn test_a_delete_while_a_job_holds_the_game_answers_success_and_leaves_the_active_game_idle()
+{
+    let model = Arc::new(ScriptedModel::new().narration("The late narration."));
+    let hold = model.hold(Role::Narrator);
+    let (app, state, storage) = app_with_script(Arc::clone(&model));
+    let first = active_game_of(&state);
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the Job should reach its narrator call"
+    );
+    create_game_from(&app, &state, &storage, first, "test").await;
+
+    let deleted = post_empty(&app, &format!("/games/{}/delete", first.0)).await;
+
+    assert_eq!(
+        deleted.status(),
+        StatusCode::OK,
+        "a delete answers while a Job holds the Game"
+    );
+    let panel = fetch_part(&app, "games").await;
+    assert!(
+        !panel.contains(&format!("data-id=\"{}\"", first.0)),
+        "the deleted Game must not render in the games panel: {panel}"
+    );
+    assert_eq!(
+        fetch_status_label(&app).await,
+        "Ready",
+        "the active Game stays idle"
+    );
+
+    hold.release();
+    assert!(hold.wait_taken(1000), "the ended call takes its answer");
+    assert!(wait_for_jobs(&state, 2000).await, "the Job should end");
+    assert_eq!(
+        fetch_status_label(&app).await,
+        "Ready",
+        "the end of the deleted Game's Job leaves the active Game idle"
     );
 }

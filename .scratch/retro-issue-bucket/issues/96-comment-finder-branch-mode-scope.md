@@ -35,3 +35,8 @@ New evidence, 2026-11-03 (long-term-memory ticket 09, comment-fixer session `63d
 - **A.** A `--changed-lines` filter: the finder reads `git diff -U0` and keeps only comments inside the added hunks. `/simple-after-plan` step 1 names this mode.
 - **B.** Keep the whole-file scope, and add a rule to the skill: a comment on a line outside the diff is reported, not edited.
 - **C.** No change. The coordinator filters the result by hand.
+
+## Further evidence (2026-11-08, statechart-models tickets 08–16, coordinator `01a1bd22`)
+
+- **known** The comment fixer (`364f8736`) wrote: "The finder lists 577 comment lines for the full files, and most of them are not part of this work." It classified 41 lines and changed 1.
+- **known** The finder does not read `.ts`. A reviewer checked the comments of the `/statechart` TypeScript by hand and found one to delete.

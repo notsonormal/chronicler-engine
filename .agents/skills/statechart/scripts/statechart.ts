@@ -7,20 +7,31 @@ import { parseArgs } from "node:util";
 import { killGroup, messageOf } from "./run.ts";
 
 const USAGE = `Usage: statechart SPEC.tla [--config FILE] [--view FILE] [--out DIR]
+       statechart SPEC.tla --scenarios FILE --view FILE [--config FILE] [--out DIR]
 
-Checks SPEC.tla with TLC and draws its state graph as Mermaid. Above 500 states, the chart
-draws only the paths to the rules that break, and with no rule broken there is no chart.mmd.
-  --config FILE  TLC config. Default: SPEC.cfg beside the spec.
-  --view FILE    A module that exports state(vars) and, if you want, step(action, from, to),
-                 group(vars), colors, and title. state() returns a string for a flat chart, an
-                 array for parent states, or an object for regions. Default: each state's values.
-                 colors gives each group blue, orange, purple, yellow, teal, tan, or pink.
-  --out DIR      Where to write report.md, chart.mmd, tlc.out, and tlc-RULE.out for each
-                 property that breaks and each rule that breaks off the chart. The folder must
-                 be new or empty. Default: SPEC-chart.
+Checks SPEC.tla with TLC and draws its state graph as Mermaid. The chart has a budget of 500
+chart states. With no --view state(), each TLC state is a chart state. With one, the view merges
+TLC states into chart states, and TLC may reach 200,000 states. Above either limit, the chart draws
+only the paths to the rules that break, and with no rule broken there is no chart.mmd.
+  --config FILE     TLC config. Default: SPEC.cfg beside the spec.
+  --view FILE       A module that exports state(vars) and, if you want, step(action, from, to),
+                    group(vars), colors, and title. state() returns a string for a flat chart, an
+                    array for parent states, or an object for regions. Default: each state's
+                    values. colors gives each group blue, orange, purple, yellow, teal, tan, or
+                    pink. With lanes and message(action, from, to), the command also draws a
+                    sequence diagram of the path of each rule that breaks: sequence-RULE.mmd.
+  --scenarios FILE  A module that exports scenarios: named lists of TLA+ actions. The command
+                    then draws no chart. TLC takes the steps of each scenario and checks each
+                    INVARIANT on the way, and the command writes NAME.mmd, a sequence diagram
+                    from the view's lanes and message(), and tlc-NAME.out.
+  --out DIR         Where to write report.md, chart.mmd, tlc.out, and tlc-RULE.out for each
+                    property that breaks and each rule that breaks off the chart. The folder must
+                    be new or empty. Default: SPEC-chart, or SPEC-scenarios with --scenarios.
 Exit code: TLC's own on the config as written: 0 when every rule holds, 1 when a rule breaks,
-and 2 when TLC stops with an error, a signal kills the check, or the command cannot run. 130 or
-143 when SIGINT or SIGTERM stops the check. Only exits 0 and 1 write output.`;
+and 2 when TLC stops with an error, a signal kills the check, or the command cannot run. With
+--scenarios: 0 when each scenario takes all its steps and every INVARIANT holds, 1 when a rule
+breaks in a scenario, and 2 when the TLA+ model does not allow a step. 130 or 143 when SIGINT or
+SIGTERM stops the check. Only exits 0 and 1 write output.`;
 
 let stop: NodeJS.Signals | undefined;
 const stopped = new Promise<void>((resolve) => {
@@ -36,7 +47,12 @@ let specFile;
 try {
   const args = parseArgs({
     allowPositionals: true,
-    options: { config: { type: "string" }, view: { type: "string" }, out: { type: "string" } },
+    options: {
+      config: { type: "string" },
+      view: { type: "string" },
+      out: { type: "string" },
+      scenarios: { type: "string" },
+    },
   });
   flags = args.values;
   [specFile] = args.positionals;
@@ -53,7 +69,12 @@ try {
   const configFile = flags.config ?? specFile.replace(/\.tla$/, ".cfg");
   if (!fs.existsSync(configFile))
     throw new Error(`Cannot find the TLC config ${configFile}. Pass --config FILE.`);
-  const out = flags.out ?? specFile.replace(/\.tla$/, "-chart");
+  if (flags.scenarios !== undefined && !flags.view)
+    throw new Error("--scenarios needs --view with a view that exports lanes and message().");
+  if (flags.scenarios !== undefined && !fs.existsSync(flags.scenarios))
+    throw new Error(`Cannot find the scenarios file ${flags.scenarios}.`);
+  const out =
+    flags.out ?? specFile.replace(/\.tla$/, flags.scenarios === undefined ? "-chart" : "-scenarios");
   let entries: string[] = [];
   let dest: string;
   try {
@@ -105,7 +126,8 @@ try {
         stage,
         specFile,
         configFile,
-        ...(flags.view ? [flags.view] : []),
+        flags.view ?? "",
+        flags.scenarios ?? "",
       ],
       {
         detached: true,

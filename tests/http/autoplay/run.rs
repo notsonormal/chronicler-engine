@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
+//! HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21, 41.23, 41.24, 41.26-41.28): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
 
 use std::sync::Arc;
 
@@ -131,8 +131,7 @@ async fn test_a_run_whose_last_message_is_an_unanswered_input_starts_with_a_cont
 #[tokio::test]
 async fn test_a_trigger_in_a_continue_job_adds_its_event_narration_to_the_cycle() {
     const EVENT_NARRATION: &str = "The Character greets you warmly.";
-    // The Trigger is scoped to the second room, which only the Continue Job's
-    // analysis moves the player into.
+    // Scoped to the second room, which only the Continue Job's analysis enters.
     let character = TestCharacter::with_room_scoped_trigger(
         "character_1",
         "Test Character",
@@ -749,8 +748,6 @@ async fn test_the_status_load_answers_with_the_progress_while_a_run_holds_the_ga
             .turn(SECOND_INPUT)
             .turn(SECOND_NARRATION),
     );
-    // A hold fires once and then clears, so the next hold goes in while the
-    // previous one still blocks its call.
     let impersonate_narrator = model.hold(Role::Narrator);
     let (app, state, _storage) = app_with_script(Arc::clone(&model));
     let game = active_game_of(&state);
@@ -957,8 +954,8 @@ async fn test_the_end_of_a_stopped_run_does_not_release_the_run_that_started_aft
     );
     stop(&app).await;
 
-    // The call of run A fired its hold, so the hold of run B can go in while run
-    // A's call still blocks.
+    // A hold fires once and then clears, so run B's hold goes in while run A's call
+    // still blocks.
     let hold_b = model.hold(Role::Narrator);
     assert!(
         start_autoplay(&app, "cycles=1").await.status().is_success(),
@@ -971,7 +968,6 @@ async fn test_the_end_of_a_stopped_run_does_not_release_the_run_that_started_aft
 
     hold_a.release();
     assert!(hold_a.wait_taken(1000), "run A's call takes its answer");
-    // Run B's task stays held, so run A's task is the only one that can end.
     assert!(
         wait_for_jobs_running_at_most(&state, 1, 2000).await,
         "run A's driver should end while run B stays held"
@@ -1091,4 +1087,146 @@ async fn test_a_run_whose_start_state_cannot_be_read_ends_with_the_failure_line_
         "the storage error is reachable in the disclosure, got: {status}"
     );
     assert!(model.calls().is_empty(), "no model call is made");
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.26
+#[tokio::test]
+async fn test_the_run_that_a_stop_ended_starts_no_job_on_the_game_of_the_run_that_started_after_it()
+{
+    let model = Arc::new(ScriptedModel::new().turn(FIRST_INPUT).turn(FIRST_NARRATION));
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
+    let game = active_game_of(&state);
+
+    let pause_a = pause_between_two_jobs(&app, &state, game).await;
+    stop(&app).await;
+    let pause_b = state.job_deps.pause.hold(game);
+    assert!(
+        start_autoplay(&app, "cycles=1").await.status().is_success(),
+        "a stopped Game accepts a new run"
+    );
+    assert!(
+        pause_b.wait_paused(5000),
+        "run B should reach its pause before its first Job"
+    );
+
+    // Run B has no Job in flight, so a run A that does not check its id would start one.
+    pause_a.release();
+    assert!(
+        wait_for_jobs_running_at_most(&state, 1, 2000).await,
+        "run A's driver should end while run B stays paused"
+    );
+    assert_eq!(
+        narrator_calls(&model).len(),
+        1,
+        "run A started no Job: the narrator was called once, by its first Job"
+    );
+    assert_eq!(
+        story_after_opening(&state, game),
+        vec![(MessageType::Input, FIRST_INPUT.to_string())],
+        "the story holds the Input of run A's first Job and nothing after it"
+    );
+    assert_status(
+        &app,
+        "Autoplay: cycle 1/1",
+        "run B still holds the Game after run A ended",
+    )
+    .await;
+
+    pause_b.release();
+    wait_for_run(&state, game).await;
+    assert_eq!(
+        story_after_opening(&state, game),
+        vec![
+            (MessageType::Input, FIRST_INPUT.to_string()),
+            (MessageType::Narration, FIRST_NARRATION.to_string()),
+        ],
+        "run B answered the Input within its budget of 1 cycle"
+    );
+    assert_status(&app, "Ready", "the Game is idle after run B").await;
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.27
+#[tokio::test]
+async fn test_an_action_after_a_stop_between_two_jobs_keeps_the_game_when_the_stopped_run_comes_to_its_next_job()
+ {
+    let model = Arc::new(ScriptedModel::new().turn(FIRST_INPUT).turn(FIRST_NARRATION));
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
+    let game = active_game_of(&state);
+
+    let pause = pause_between_two_jobs(&app, &state, game).await;
+    stop(&app).await;
+    let action_hold = model.hold(Role::Narrator);
+    assert!(
+        post_action(&app, "look").await.status().is_success(),
+        "a stopped Game accepts an Action"
+    );
+    assert!(
+        action_hold.wait_started(1000),
+        "the Job of the Action should reach its narrator call"
+    );
+
+    pause.release();
+    assert!(
+        wait_for_jobs_running_at_most(&state, 1, 2000).await,
+        "the stopped run's driver should end while the Job of the Action stays held"
+    );
+    assert_status(
+        &app,
+        "Generating narration...",
+        "the Job of the Action still holds the Game",
+    )
+    .await;
+
+    action_hold.release();
+    assert!(
+        wait_settled(&state, 2000).await,
+        "the Job of the Action settles"
+    );
+    assert_eq!(
+        story_after_opening(&state, game).last(),
+        Some(&(MessageType::Narration, FIRST_NARRATION.to_string())),
+        "the Job of the Action saves its Narration"
+    );
+    assert!(!state.game_view_query.is_busy(game), "the Game is idle");
+}
+
+// [docs/specs/autoplay.md] SCENARIO: 41.28
+#[tokio::test]
+async fn test_a_run_on_a_game_with_an_old_failure_line_plays_its_whole_budget_and_clears_the_line()
+{
+    let model = Arc::new(
+        ScriptedModel::new()
+            .failed(Role::Narrator)
+            .turn(FIRST_NARRATION),
+    );
+    let (app, state, _storage) = app_with_script(Arc::clone(&model));
+    let game = active_game_of(&state);
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(wait_for_jobs(&state, 2000).await, "the failing Job ends");
+    assert!(
+        fetch_busy_status(&app)
+            .await
+            .contains("status-error-popover"),
+        "the failed Job leaves a failure line"
+    );
+
+    let started = start_autoplay(&app, "cycles=1").await;
+    assert!(started.status().is_success(), "the start should accept");
+    wait_for_run(&state, game).await;
+
+    assert_eq!(
+        story_after_opening(&state, game),
+        vec![
+            (MessageType::Input, "look".to_string()),
+            (MessageType::Narration, FIRST_NARRATION.to_string()),
+        ],
+        "the run plays its budget: a Continue Job answers the Input"
+    );
+    let status = fetch_busy_status(&app).await;
+    assert!(
+        !status.contains("status-error-popover"),
+        "the accept of the run cleared the old failure line, got: {status}"
+    );
+    assert_status(&app, "Ready", "the Game is idle after the run").await;
 }

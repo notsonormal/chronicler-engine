@@ -48,6 +48,7 @@ export function report(
     stop,
     drawing,
     states,
+    bound,
   }: {
     spec: Spec;
     graph: Graph;
@@ -57,10 +58,12 @@ export function report(
     stop: Stop | undefined;
     drawing: { status: number | null } | undefined;
     states: { distinct: number; initial: number; complete: boolean; cut: boolean };
+    bound: number;
   },
   found: Bug[],
   chart: Chart | undefined,
   stories: Map<Bug, Story>,
+  over: number | undefined,
 ) {
   let size = 0;
   let arrows = 0;
@@ -78,12 +81,17 @@ export function report(
   for (const t of graph.steps) if (must(graph.states, t.to).past) pastSteps++;
   const includes = (n: number) =>
     chart ? `, and the chart includes ${n === 1 ? "it" : "them"}` : "";
+  const onlyPaths = chart
+    ? `the chart draws only the bug paths: ${size} states and ${arrows} arrows`
+    : "the command wrote no chart.mmd";
   const out = [
     `# ${spec.module}`,
     "",
-    paths
-      ? `TLC reached ${states.complete && !states.cut && states.distinct > CHART_STATES ? `${states.distinct.toLocaleString("en-US")} states, more than` : "more states than"} the chart budget of ${CHART_STATES}, so ${chart ? `the chart draws only the bug paths: ${size} states and ${arrows} arrows` : "the command wrote no chart.mmd"}.`
-      : `TLC reached ${graph.states.size - past - excluded} states and ${graph.steps.length - pastSteps} steps. The chart draws ${size} states and ${arrows} arrows.`,
+    over !== undefined
+      ? `TLC reached ${states.distinct.toLocaleString("en-US")} states. The view merges them into ${over.toLocaleString("en-US")} chart states, more than the chart budget of ${CHART_STATES}, so ${onlyPaths}.`
+      : paths
+        ? `TLC reached ${states.complete && !states.cut && states.distinct > bound ? `${states.distinct.toLocaleString("en-US")} states, more than` : "more states than"} ${bound === CHART_STATES ? `the chart budget of ${CHART_STATES}` : `the bound of ${bound.toLocaleString("en-US")} states for a chart through a view`}, so ${onlyPaths}.`
+        : `TLC reached ${graph.states.size - past - excluded} states and ${graph.steps.length - pastSteps} steps. The chart draws ${size} states and ${arrows} arrows.`,
   ];
   if (drawing)
     out.push(

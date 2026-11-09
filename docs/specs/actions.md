@@ -318,7 +318,8 @@ Then the story log gained exactly 2 player-input messages
 Given a Game whose analysis fires a Trigger, so the Job narrates an event after its Narration
 And the Job's narrator call is held
 When the client sets the Game's system preset to a second preset
-And the Job's model answer arrives
+Then the response status is "200 OK"
+When the Job's model answer arrives
 Then the LLM call record of the event Narration shows the system prompt of the second preset
 And the LLM call record of the Narration shows the system prompt of the preset that was active when the Job started
 ```

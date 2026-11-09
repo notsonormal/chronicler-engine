@@ -5,7 +5,7 @@ Endpoints:
 - `POST /status/reset-busy` (the stop)
 - `GET /screen?parts=status-display` (the status display)
 
-An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one after the other: an `/impersonate` Job, then a Continue Job that answers the Input the first one wrote. The run holds its Game from its start to its end, also between two Jobs.
+An Autoplay **run** plays the Persona by itself. It starts ordinary Jobs one after the other: an `/impersonate` Job, then a Continue Job that answers the Input the first one wrote. The run holds its Game from its start until it ends, also between two Jobs. When the budget or an accept that cannot read a record ends the run, that accept lets go of the Game.
 
 A **cycle** ends when a Job of the run ends without a failure line and leaves the story on a Narration. So a Continue Job answers an Input. Or the event Narration of a Trigger answers it, when the Trigger fires in the Job that wrote the Input. The **budget** is the number of cycles: it counts the answered Inputs of the run.
 
@@ -16,7 +16,7 @@ A run ends for one of these reasons:
 - A stop.
 - A reset or a delete of the Game.
 - The budget.
-- A Job that ends with a failure line.
+- A Job of the run that ends with a failure line.
 - An accept that cannot read a record of the Game.
 
 A failed Options run and a fallback of the Quantifier do not stop it.
@@ -380,4 +380,46 @@ When the client POST /status/reset-busy
 And the client requests GET /screen?parts=send-control,autoplay-controls
 Then #submit-btn and #autoplay-btn do not carry the disabled attribute
 And the autoplay answer holds no #stop-btn
+```
+
+#### Scenario 41.26: The run that a stop ended does not start a Job on the Game of the run that started after it
+
+```gherkin
+Given a run A between its first Job and its second Job
+And the client stopped run A
+And the client started a run B on the same Game, which waits before its first Job
+When run A comes to its next Job
+And run A ends
+Then no Job of run A starts
+And no further model call is made
+And the status display answers with the progress of run B
+When run B goes on
+And run B ends
+Then the story log holds the Input of run A's first Job and the Narration of run B that answers it
+And the Game is idle
+```
+
+#### Scenario 41.27: An Action after a stop between two Jobs keeps its Game from the stopped run
+
+```gherkin
+Given a run between its first Job and its second Job
+And the client stopped the run
+And the client sent an Action whose Job is held at its narrator call
+When the run comes to its next Job
+And the run ends
+Then the status display answers the label of the Job of the Action
+When the model answer of the Job of the Action arrives
+Then the story log holds the Narration of the Job of the Action
+And the Game is idle
+```
+
+#### Scenario 41.28: A run on a Game that holds an old failure line plays its whole budget and clears the line
+
+```gherkin
+Given a Game whose last Job ended with a failure line
+When the client POST /autoplay with cycles=1
+And the run ends
+Then the story log holds a Narration that answers the last Input
+And the status display answers Ready
+And the status display answers with no failure line
 ```

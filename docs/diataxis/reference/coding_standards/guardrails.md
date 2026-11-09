@@ -30,7 +30,7 @@ Clippy lints are denied at the crate root in `src/lib.rs` via `#![deny(...)]`. T
 Declarative architecture rules in `arch-lint.toml`.
 
 <!-- AUTO-GUARDRAILS: arch-lint START -->
-Scan scope: `root = "./src"`, excluding `**/target/**`, `**/tests/**`, `**/*_tests.rs`, `**/.pi/**`, `**/tmp/**`.
+Scan scope: `root = "./src"`, excluding `**/target/**`, `**/tests/**`, `**/*_tests.rs`, `**/.pi/**`, `**/.scratch/**`, `**/tmp/**`.
 
 | From Scope | To Scope(s) | Rationale |
 |------------|-------------|----------|
@@ -64,13 +64,13 @@ A row with no reason or no `rule:` field fails the generator. It fails `build.py
 <!-- AUTO-GUARDRAILS: syn START -->
 | Rule | Kind | Reason | Source |
 |------|------|--------|--------|
-| 1 | banned name | Rule 1: every read and write names its Game. The active-Game pointer lives in `ActiveGame`, so a `static` item or an `Atomic*` type in the storage adapter would be a second hidden Game id. | `tests/infrastructure/guardrails/walker_rows.rs:14` |
-| 6 | banned name | Rule 6: the guard never spans a model call. `gate.rs` holds the guard for one check and its writes. So the narrator or an Agent (an after-narration Agent, an end-of-Job Agent, their runner) named in that file would let a call run under it. | `tests/infrastructure/guardrails/walker_rows.rs:22` |
-| 2 | call site | Rule 2: the active-Game pointer has one reader and one writer. `GameCatalogue` is both. `CurrentGame` reads through it once per request. `ActiveGame::set` is `pub(super)`, so the compiler holds the write side too. | `tests/infrastructure/guardrails/walker_rows.rs:48` |
-| 3 | call site | Rule 3: only `GameWriter` writes game records. The unit of record writes is opened with a capability token. So `gate.rs` is where a unit starts, and no other caller can open one. The storage seam contract gets its token from `test_support`, because its crate cannot call a crate-only constructor. | `tests/infrastructure/guardrails/walker_rows.rs:58` |
-| 13 | call site | Rule 13: one generation path. Only `job.rs` calls the narrator and the hooks of the Agent runner. Its step functions are the one place that does. So no second route to a model call grows beside the Job. The row sees files, not functions, and `job.rs` holds only Job code. A method call is matched through the receiver's name (`narrator`, `agent_runner`), which `JobDeps` keeps. | `tests/infrastructure/guardrails/walker_rows.rs:70` |
-| 7 | type check | Rule 7: between steps, pass ids. A Job holds no record field, so a record a step loads cannot go stale in another step's hands. No function of `job.rs` takes a record parameter, because each step loads the records it uses itself. | `tests/infrastructure/guardrails/walker_rows.rs:94` |
-| 18 | call count | Rule 18: each writer takes the guard once, so a check and its writes are one critical section. Look again when a second lock arrives (for example one guard per Game). Look again when an atomic with weak ordering arrives in the write path. Look again when a background Agent save arrives that checks "this Swipe is still active" outside `hold`. Then the new primitive earns a `loom` seam contract. | `tests/infrastructure/guardrails/walker_rows.rs:109` |
+| 1 | banned name | Rule 1: every read and write names its Game. The active-Game pointer lives in `ActiveGame`, so a `static` item or an `Atomic*` type in the storage adapter would be a second hidden Game id. | `tests/infrastructure/guardrails/walker_rows.rs:13` |
+| 6 | banned name | Rule 6: the guard never spans a model call. `gate.rs` holds the guard for one check and its writes. A narrator or an Agent named in it would call under it. | `tests/infrastructure/guardrails/walker_rows.rs:20` |
+| 2 | call site | Rule 2: `GameCatalogue` is the one reader and writer of the active-Game pointer. `CurrentGame` reads through it. | `tests/infrastructure/guardrails/walker_rows.rs:42` |
+| 3 | call site | Rule 3: only `GameWriter` writes game records, and `gate.rs` is the one place that opens a unit with a `TxToken`. The storage seam contract gets its token from `test_support`, because its crate cannot call a crate-only constructor. | `tests/infrastructure/guardrails/walker_rows.rs:51` |
+| 13 | call site | Rule 13: only `job.rs` calls the narrator and the Agent runner hooks, so no second route to a model call grows beside the Job. The row sees files, and `job.rs` holds only Job code. A method call is matched through the receiver's name (`narrator`, `agent_runner`), which `JobDeps` keeps. | `tests/infrastructure/guardrails/walker_rows.rs:61` |
+| 7 | type check | Rule 7: between steps, pass ids. A record that a step loads can go stale in another step's hands, so `job.rs` holds no record field and takes no record parameter. | `tests/infrastructure/guardrails/walker_rows.rs:82` |
+| 18 | call count | Rule 18: each writer takes the guard once, so a check and its writes are one critical section. A second lock, a weak-ordering atomic in the write path, or a background Agent save that checks "this Swipe is still active" outside `hold` earns a `loom` seam contract. | `tests/infrastructure/guardrails/walker_rows.rs:95` |
 
 | Rule | Description | Source |
 |------|-------------|--------|

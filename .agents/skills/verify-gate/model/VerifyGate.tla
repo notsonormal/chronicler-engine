@@ -1,7 +1,7 @@
 ---- MODULE VerifyGate ----
 \* The gate of the Chronicler Engine, made from the code: the busy registry, the
-\* Job id check, the Autoplay holder, stop, reset, delete, the story writes and the
-\* config write.
+\* Job id check, the Autoplay holder, stop, reset, delete, the active pointer, the
+\* story writes and the config write.
 \*
 \* Each action names the code function it mirrors. One action is one hold of
 \* `BusyRegistry::hold` (src/application/generation/gate.rs), or one step outside
@@ -14,7 +14,7 @@ EXTENDS Integers, FiniteSets
 
 CONSTANTS
   Games0,       \* the Games that exist at the start
-  NewGames,     \* the ids that a reset can give to the Game it creates
+  NewGames,     \* the ids that a reset or a create can give to the Game it makes
   Active0,      \* the active Game at the start
   MaxJobs,      \* the number of Jobs that can be accepted (the job ids 1..MaxJobs)
   MaxRuns,      \* the number of Autoplay runs that can start (the run ids 1..MaxRuns)
@@ -36,8 +36,9 @@ RunEnds == {"none", "stopped", "budget", "jobFailed", "notAccepted"}
 
 VARIABLES
   exists,       \* the Games whose rows exist
-  fresh,        \* the ids of NewGames that no reset has used yet (a Game id is never used twice)
+  fresh,        \* the ids of NewGames that no reset or create has used yet (a Game id is never used twice)
   active,       \* ActiveGame: the active Game
+  pointerBy,    \* the request that holds the mutex of ActiveGame (the outer lock), or "none"
   holder,       \* BusyRegistry: the holder of each Game ("none" = idle)
   failLine,     \* the failure line of each Game: 0 none, -1 an accept's line, j the line of Job j
   optFail,      \* the Options failure of the dock of each Game: 0 none, j the failure of Job j
@@ -46,7 +47,8 @@ VARIABLES
   nextRun,      \* the next run id
   job,          \* the state of each Job
   run,          \* the state of each Autoplay run
-  pending,      \* the two-part requests in flight: a delete past its check, a reset before its pointer move
+  pending,      \* the two-part requests in flight: a delete past its check, a reset or a
+                \* create before its pointer move, a switch past its Game read
   \* Ghost variables: they record what the rules read, and no code reads them.
   cut,          \* the Jobs whose entry a stop, a reset or a delete removed
   cutRuns,      \* the runs whose holder a stop, a reset or a delete removed
@@ -56,7 +58,7 @@ VARIABLES
   badAccept,    \* a cut run accepted a Job
   deletedActive \* a delete removed the active Game
 
-vars == <<exists, fresh, active, holder, failLine, optFail, last, nextJob, nextRun, job, run,
+vars == <<exists, fresh, active, pointerBy, holder, failLine, optFail, last, nextJob, nextRun, job, run,
           pending, cut, cutRuns, late, storyBusy, cfgRun, badAccept, deletedActive>>
 
 Idle == [kind |-> "none", job |-> NoJob, run |-> 0, done |-> 0]
@@ -69,6 +71,7 @@ NoRunState == [g |-> 0, pc |-> "idle", done |-> 0, after |-> FALSE, job |-> NoJo
 TypeOK ==
   /\ exists \subseteq AllGames
   /\ active \in AllGames
+  /\ pointerBy \in {"none", "switch", "delete", "reset", "create"}
   /\ \A g \in AllGames : holder[g].kind \in {"none", "job", "run"}
   /\ \A j \in JobIds : job[j].pc \in JobPcs /\ job[j].kind \in JobKinds
   /\ \A r \in RunIds : run[r].pc \in RunPcs /\ run[r].end \in RunEnds
@@ -78,6 +81,7 @@ Init ==
   /\ exists = Games0
   /\ fresh = NewGames
   /\ active = Active0
+  /\ pointerBy = "none"
   /\ holder = [g \in AllGames |-> Idle]
   /\ failLine = [g \in AllGames |-> 0]
   /\ optFail = [g \in AllGames |-> 0]
@@ -86,7 +90,7 @@ Init ==
   /\ nextRun = 1
   /\ job = [j \in JobIds |-> NoJobState]
   /\ run = [r \in RunIds |-> NoRunState]
-  /\ pending = [delete |-> {}, reset |-> 0]
+  /\ pending = [delete |-> {}, reset |-> 0, create |-> 0, switch |-> {}]
   /\ cut = {}
   /\ cutRuns = {}
   /\ late = FALSE
@@ -119,8 +123,13 @@ Done(rec, fail) == [NoJobState EXCEPT !.g = rec.g, !.run = rec.run, !.pc = "done
 \* `JobWriter` checks its id again, finds another entry, and does nothing.
 Moved(j) == job' = [job EXCEPT ![j] = Done(@, "moved")]
 
+\* `ActiveGame::lock`: the request takes the outer lock, and `PointerHold` drops it.
+\* A switch, a delete, a create and a reset hold it from their check to their last write.
+TakePointer(who) == pointerBy = "none" /\ pointerBy' = who
+DropPointer(who) == pointerBy' = IF pointerBy = who THEN "none" ELSE pointerBy
+
 GhostsSame == UNCHANGED <<cut, cutRuns, late, storyBusy, cfgRun, badAccept, deletedActive>>
-JobSide == UNCHANGED <<exists, fresh, active, pending, nextRun, run>>
+JobSide == UNCHANGED <<exists, fresh, active, pointerBy, pending, nextRun, run>>
 
 -----------------------------------------------------------------------------
 \* Requests (the HTTP driving side)
@@ -141,7 +150,7 @@ YouStartAJob(g, k) ==
                   !.pc = IF k = "options" THEN "optstart" ELSE "start",
                   !.opt = IF k = "options" THEN "ondemand" ELSE "after"]]
   /\ nextJob' = nextJob + 1
-  /\ UNCHANGED <<exists, fresh, active, optFail, last, nextRun, run, pending,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, optFail, last, nextRun, run, pending,
                  cut, cutRuns, late, cfgRun, badAccept, deletedActive>>
 
 \* `GameWriter::accept`, the branch where the story read or a record check fails:
@@ -151,7 +160,7 @@ TheAcceptCannotRead(g) ==
   /\ g \in exists
   /\ holder[g].kind = "none"
   /\ failLine' = [failLine EXCEPT ![g] = -1]
-  /\ UNCHANGED <<exists, fresh, active, holder, optFail, last, nextJob, nextRun, job, run,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, holder, optFail, last, nextJob, nextRun, job, run,
                  pending>>
   /\ GhostsSame
 
@@ -165,7 +174,7 @@ YouStartAutoplay(g) ==
   /\ holder' = [holder EXCEPT ![g] = [Idle EXCEPT !.kind = "run", !.run = nextRun]]
   /\ run' = [run EXCEPT ![nextRun] = [NoRunState EXCEPT !.g = g, !.pc = "accept"]]
   /\ nextRun' = nextRun + 1
-  /\ UNCHANGED <<exists, fresh, active, failLine, optFail, last, nextJob, job, pending,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, failLine, optFail, last, nextJob, job, pending,
                  cut, cutRuns, late, cfgRun, badAccept, deletedActive>>
 
 \* `GameWriter::stop`: the dock read goes first, then the holder goes, and one
@@ -178,16 +187,17 @@ YouPressStop(g) ==
   /\ failLine' = [failLine EXCEPT ![g] = 0]
   /\ optFail' = [optFail EXCEPT ![g] = 0]
   /\ CutOf(g)
-  /\ UNCHANGED <<exists, fresh, active, last, nextJob, nextRun, job, run, pending,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, last, nextJob, nextRun, job, run, pending,
                  late, storyBusy, cfgRun, badAccept, deletedActive>>
 
-\* `GameCatalogue::reset` then `GameWriter::replace`: one hold creates the new Game,
-\* removes the old holder and deletes the old Game. The pointer moves after the hold.
+\* `GameCatalogue::reset`: it takes the outer lock, then `GameWriter::replace` in one
+\* hold creates the new Game, removes the old holder and deletes the old Game.
 YouResetTheGame(n) ==
   /\ "reset" \in Env
   /\ active \in exists
   /\ pending.reset = 0
   /\ n \in fresh
+  /\ TakePointer("reset")
   /\ fresh' = fresh \ {n}
   /\ LET g == active IN
        /\ exists' = (exists \cup {n}) \ {g}
@@ -197,54 +207,94 @@ YouResetTheGame(n) ==
   /\ UNCHANGED <<active, failLine, optFail, last, nextJob, nextRun, job, run,
                  late, storyBusy, cfgRun, badAccept, deletedActive>>
 
-\* `GameCatalogue::reset`, its last line: `ActiveGame::set_new`.
+\* `GameCatalogue::reset`, its last line: `PointerHold::set_new`, then the lock drops.
 TheResetMovesThePointer ==
   /\ pending.reset # 0
   /\ active' = pending.reset
+  /\ DropPointer("reset")
   /\ pending' = [pending EXCEPT !.reset = 0]
   /\ UNCHANGED <<exists, fresh, holder, failLine, optFail, last, nextJob, nextRun, job, run>>
   /\ GhostsSame
 
-\* `GameCatalogue::delete_game`, its first line: the check against the active Game.
-\* It reads `ActiveGame`, outside the hold of the gate.
+\* `GameCatalogue::create_game`: it takes the outer lock, then `GameWriter::create` in
+\* one hold writes the new Game, which no holder holds.
+YouCreateAGame(n) ==
+  /\ "create" \in Env
+  /\ pending.create = 0
+  /\ n \in fresh
+  /\ TakePointer("create")
+  /\ fresh' = fresh \ {n}
+  /\ exists' = exists \cup {n}
+  /\ pending' = [pending EXCEPT !.create = n]
+  /\ UNCHANGED <<active, holder, failLine, optFail, last, nextJob, nextRun, job, run>>
+  /\ GhostsSame
+
+\* `GameCatalogue::create_game`, its last step: `PointerHold::set_new`, then the lock drops.
+TheCreateMovesThePointer ==
+  /\ pending.create # 0
+  /\ active' = pending.create
+  /\ DropPointer("create")
+  /\ pending' = [pending EXCEPT !.create = 0]
+  /\ UNCHANGED <<exists, fresh, holder, failLine, optFail, last, nextJob, nextRun, job, run>>
+  /\ GhostsSame
+
+\* `GameCatalogue::delete_game`, its first lines: it takes the outer lock, then checks
+\* the Game against the active Game. A refused delete changes nothing.
 YouDeleteAGame(g) ==
   /\ "delete" \in Env
   /\ g \in exists
   /\ g \notin pending.delete
+  /\ TakePointer("delete")
   /\ active # g
   /\ pending' = [pending EXCEPT !.delete = @ \cup {g}]
   /\ UNCHANGED <<exists, fresh, active, holder, failLine, optFail, last, nextJob, nextRun,
                  job, run>>
   /\ GhostsSame
 
-\* `GameWriter::delete`: one hold removes the holder and the rows of the Game.
+\* `GameWriter::delete`: one hold removes the holder and the rows of the Game. Then the
+\* outer lock drops.
 TheDeleteRemovesTheGame(g) ==
   /\ g \in pending.delete
   /\ exists' = exists \ {g}
   /\ holder' = [holder EXCEPT ![g] = Idle]
   /\ CutOf(g)
   /\ deletedActive' = (deletedActive \/ (active = g /\ g \in exists))
+  /\ DropPointer("delete")
   /\ pending' = [pending EXCEPT !.delete = @ \ {g}]
   /\ UNCHANGED <<fresh, active, failLine, optFail, last, nextJob, nextRun, job, run,
                  late, storyBusy, cfgRun, badAccept>>
 
-\* `GameCatalogue::switch_game`: the Game read and `ActiveGame::set`.
+\* `GameCatalogue::switch_game`, its first lines: it takes the outer lock, then reads the
+\* Game. A Game that is not found, or that is already active, changes nothing.
 YouSwitchTheGame(g) ==
   /\ "switch" \in Env
   /\ g \in exists
+  /\ g \notin pending.switch
+  /\ TakePointer("switch")
   /\ active # g
-  /\ active' = g
-  /\ UNCHANGED <<exists, fresh, holder, failLine, optFail, last, nextJob, nextRun, job, run,
-                 pending>>
+  /\ pending' = [pending EXCEPT !.switch = @ \cup {g}]
+  /\ UNCHANGED <<exists, fresh, active, holder, failLine, optFail, last, nextJob, nextRun,
+                 job, run>>
   /\ GhostsSame
 
-\* `GameWriter::edit`: the busy check, then the text write. No failure line change.
+\* `PointerHold::set`: the touch of the Game and the pointer move, then the lock drops.
+\* The touch answers `Ok` when no row matches, so the move does not check the Game again.
+TheSwitchSetsThePointer(g) ==
+  /\ g \in pending.switch
+  /\ active' = g
+  /\ DropPointer("switch")
+  /\ pending' = [pending EXCEPT !.switch = @ \ {g}]
+  /\ UNCHANGED <<exists, fresh, holder, failLine, optFail, last, nextJob, nextRun, job, run>>
+  /\ GhostsSame
+
+\* `GameWriter::edit`: the busy check, then the text write. It changes no variable of the
+\* model, because the model leaves out the story content (SKILL.md, Scope).
 YouEditAMessage(g) ==
   /\ "story" \in Env
   /\ g \in exists
   /\ holder[g].kind = "none"                         \* `require_idle`
   /\ storyBusy' = (storyBusy \/ holder[g].kind # "none")
-  /\ UNCHANGED <<exists, fresh, active, holder, failLine, optFail, last, nextJob, nextRun,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, holder, failLine, optFail, last, nextJob, nextRun,
                  job, run, pending, cut, cutRuns, late, cfgRun, badAccept, deletedActive>>
 
 \* `GameWriter::switch_swipe` and `GameWriter::delete_last`: the busy check, the
@@ -256,17 +306,18 @@ YouSwitchOrDeleteASwipe(g) ==
   /\ storyBusy' = (storyBusy \/ holder[g].kind # "none")
   /\ failLine' = [failLine EXCEPT ![g] = 0]
   /\ optFail' = [optFail EXCEPT ![g] = 0]
-  /\ UNCHANGED <<exists, fresh, active, holder, last, nextJob, nextRun, job, run, pending,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, holder, last, nextJob, nextRun, job, run, pending,
                  cut, cutRuns, late, cfgRun, badAccept, deletedActive>>
 
 \* `GameWriter::save_config` (catalogue.rs `set_posture`, `switch_mode`,
-\* `set_preset_selection`): refused while an Autoplay run holds the Game.
+\* `set_preset_selection`): refused while an Autoplay run holds the Game. On an idle
+\* Game it changes no variable, because the model leaves out the config (SKILL.md, Scope).
 YouChangeTheConfig(g) ==
   /\ "config" \in Env
   /\ g \in exists
   /\ holder[g].kind # "run"
   /\ cfgRun' = (cfgRun \/ holder[g].kind = "run")
-  /\ UNCHANGED <<exists, fresh, active, holder, failLine, optFail, last, nextJob, nextRun,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, holder, failLine, optFail, last, nextJob, nextRun,
                  job, run, pending, cut, cutRuns, late, storyBusy, badAccept, deletedActive>>
 
 -----------------------------------------------------------------------------
@@ -465,7 +516,7 @@ TheRunAccepts(r, readOk) ==
             /\ nextJob' = nextJob + 1
             /\ run' = [run EXCEPT ![r].pc = "job", ![r].done = d, ![r].job = j]
             /\ badAccept' = (badAccept \/ r \in cutRuns)
-  /\ UNCHANGED <<exists, fresh, active, optFail, last, nextRun, pending,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, optFail, last, nextRun, pending,
                  cut, cutRuns, late, storyBusy, cfgRun, deletedActive>>
 
 \* `Job::run_accepted` returns its `JobEnd` to the loop.
@@ -479,7 +530,7 @@ TheRunSeesItsJobEnd(r) ==
                  ![r].end = CASE f = "none" -> "none"
                               [] f = "line" -> "jobFailed"
                               [] OTHER -> "stopped"]
-  /\ UNCHANGED <<exists, fresh, active, holder, failLine, optFail, last, nextJob, nextRun,
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, holder, failLine, optFail, last, nextJob, nextRun,
                  job, pending>>
   /\ GhostsSame
 
@@ -498,7 +549,7 @@ TheRunEnds(r) ==
                      THEN [run EXCEPT ![r].pc = "over"]
                      ELSE [run EXCEPT ![r].pc = "over", ![r].endLine = failLine[g],
                                       ![r].endIdle = ~(h2[g].kind = "run" /\ h2[g].run = r)]
-  /\ UNCHANGED <<exists, fresh, active, failLine, optFail, last, nextJob, nextRun, job, pending>>
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, failLine, optFail, last, nextJob, nextRun, job, pending>>
   /\ GhostsSame
 
 \* Every process has ended and no request can start more work. TLC sees no deadlock here.
@@ -506,6 +557,7 @@ Rest ==
   /\ \A j \in JobIds : job[j].pc \in {"idle", "done"}
   /\ \A r \in RunIds : run[r].pc \in {"idle", "over"}
   /\ pending.delete = {} /\ pending.reset = 0
+  /\ pending.create = 0 /\ pending.switch = {}
   /\ UNCHANGED vars
 
 Next ==
@@ -515,9 +567,12 @@ Next ==
   \/ \E g \in AllGames : YouPressStop(g)
   \/ \E n \in NewGames : YouResetTheGame(n)
   \/ TheResetMovesThePointer
+  \/ \E n \in NewGames : YouCreateAGame(n)
+  \/ TheCreateMovesThePointer
   \/ \E g \in AllGames : YouDeleteAGame(g)
   \/ \E g \in AllGames : TheDeleteRemovesTheGame(g)
   \/ \E g \in AllGames : YouSwitchTheGame(g)
+  \/ \E g \in AllGames : TheSwitchSetsThePointer(g)
   \/ \E g \in AllGames : YouEditAMessage(g)
   \/ \E g \in AllGames : YouSwitchOrDeleteASwipe(g)
   \/ \E g \in AllGames : YouChangeTheConfig(g)
@@ -571,14 +626,15 @@ StopClearsOptionsFailure == \A g \in exists : optFail[g] \notin cut
 NextJobKeepsHolder ==
   \A j \in JobIds : Live(j) /\ j \notin cut => holder[job[j].g].job = j
 
-\* autoplay.md intro: "The run holds its Game from its start to its end, also between two Jobs."
+\* autoplay.md intro: "The run holds its Game from its start until it ends, also between two Jobs."
 \* autoplay.md 41.17: "the status display answers with the progress of run B".
+\* autoplay.md 41.27: "Then the status display answers the label of the Job of the Action".
 RunHoldsItsGame ==
   \A r \in RunIds :
     run[r].pc \in {"accept", "job"} /\ r \notin cutRuns =>
       holder[run[r].g].kind = "run" /\ holder[run[r].g].run = r
 
-\* autoplay.md 41.6 and 41.7: "And no further Job of the run starts".
+\* autoplay.md 41.6, 41.7 and 41.26: "And no further Job of the run starts", "Then no Job of run A starts".
 StoppedRunStartsNoJob == ~badAccept
 
 \* autoplay.md 41.12: "the config writes are refused and the config stays".
@@ -610,8 +666,26 @@ RunEndsIdle ==
 \* games.md 19.2: "Deleting the active game returns 400".
 DeleteNotActive == ~deletedActive
 
+\* storage.md: "The active Game always names a Game that exists." games.md 18.2 and 19.2
+\* name its two sides: a switch to a Game that does not exist is refused, and so is a
+\* delete of the active Game. A reset deletes the active Game in its hold and moves the
+\* pointer just after, so the rule waits for that move.
+ActiveExists == pending.reset = 0 => active \in exists
+
 \* dashboard.md 39.4 and autoplay.md 41.6: "Then the stop answers "reset" And the Game is idle".
+\* dashboard.md 39.17: "When the client POST /status/reset-busy ... And the status display
+\* answers Ready" (a stop of an idle Game clears its failure line); options.md 24.5: "Then
+\* the dock renders set A" (it clears the Options failure). The rule also checks the idle
+\* path: `StopNoFailureLine` and `StopClearsOptionsFailure` read only the Jobs that a stop cut.
 StopLeavesIdle ==
-  [][\A g \in AllGames : YouPressStop(g) => holder'[g].kind = "none"]_vars
+  [][\A g \in AllGames : YouPressStop(g) =>
+       /\ holder'[g].kind = "none"
+       /\ failLine'[g] = 0
+       /\ optFail'[g] = 0]_vars
+
+\* swipe_switch.md 36.7: "When the client switches to the other Swipe Then the status
+\* display answers Ready And the dock renders no Options failure".
+SwipeClearsFailures ==
+  [][\A g \in AllGames : YouSwitchOrDeleteASwipe(g) => failLine'[g] = 0 /\ optFail'[g] = 0]_vars
 
 ====

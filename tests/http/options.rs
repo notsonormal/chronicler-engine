@@ -67,7 +67,6 @@ fn message_count(state: &AppState) -> usize {
     story_of(state).len()
 }
 
-/// The dock's Options failure line, or `None` when the dock renders the offered set.
 async fn dock_options_failure(app: &axum::Router) -> Option<String> {
     let dock = fetch_part(app, "options-dock").await;
     dock.split("options-notice-line").nth(1).map(|rest| {
@@ -149,8 +148,7 @@ async fn test_the_options_preset_sets_how_many_options_the_dock_offers_http() {
 // [docs/specs/options.md] SCENARIO: 24.2
 #[tokio::test]
 async fn test_options_without_scene_history_errors_http() {
-    // A World with no starting scenario writes an opening Narration with no text,
-    // so the Game's story holds no text at all.
+    // A World with no starting scenario writes an opening Narration with no text.
     let data = TestDataBuilder::default_test()
         .world(TestWorld::minimal())
         .map(TestMap::single_room("start"))
@@ -452,6 +450,52 @@ async fn test_narration_turn_clears_offered_set_http() {
     );
 }
 
+// [docs/specs/options.md] SCENARIO: 24.27
+#[tokio::test]
+async fn test_narration_turn_clears_the_options_failure_http() {
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .options(SET_A)
+            .options("no parseable options in this response")
+            .options("still nothing parseable here")
+            .narration("You look around again.")
+            .after_narration(analysis_report(&[], None)),
+    );
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "setup turn should complete"
+    );
+    for _ in 0..2 {
+        assert!(post_action(&app, "/options").await.status().is_success());
+        assert!(wait_settled(&state, 1000).await, "/options should complete");
+    }
+    assert_eq!(
+        dock_options_failure(&app).await.as_deref(),
+        Some("Options generation failed"),
+        "the setup must leave the Options failure in the dock"
+    );
+
+    let resp = post_action(&app, "look").await;
+    assert!(resp.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the narration turn should complete"
+    );
+
+    assert_eq!(
+        dock_options_failure(&app).await,
+        None,
+        "the narration save must clear the Options failure"
+    );
+    let dock = fetch_part(&app, "options-dock").await;
+    assert!(
+        !dock.contains("options-strip"),
+        "the toggle is off, so no set takes the strip's place: {dock}"
+    );
+}
+
 // [docs/specs/options.md] SCENARIO: 24.17
 #[tokio::test]
 async fn test_failed_always_on_options_run_clears_set_and_reports_http() {
@@ -539,8 +583,6 @@ async fn test_always_on_without_an_agent_empties_set_and_reports_http() {
     );
 }
 
-/// Seeds the always-on World with a Character whose one-shot Trigger fires on the
-/// first Action that brings the Character.
 fn seed_world_with_a_firing_trigger(
     storage: &chronicler_engine::adapters::driven::storage::Storage,
 ) {
@@ -860,9 +902,7 @@ async fn test_mode_switch_keeps_offered_set_http() {
     );
 }
 
-// `useOption` fills the command input with the option's text and submits
-// `/action/check` — the same request this test makes, so the persisted message
-// store is the observable outcome of the click.
+// `useOption` submits `/action/check`, the request this test makes.
 // [docs/specs/options.md] SCENARIO: 24.13
 #[tokio::test]
 async fn test_using_offered_option_submits_as_input_http() {

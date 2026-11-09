@@ -36,3 +36,8 @@ Where should the check live?
 ## Comments
 
 - 2026-10-25, audit: the user deferred this ticket. Do not implement it yet; it stays open.
+
+## Further evidence (2026-11-08, statechart-models tickets 08–16, coordinator `01a1bd22`)
+
+- **known** The t11 implementer put a second Given block into `docs/specs/options.md` 24.16. The document review split it into 24.27. `validate_feature_spec.py` passed both forms.
+- **known** In `docs/specs/autoplay.md` 41.28 the Then said `the status display answers the status "idle"`, but the test asserts `Ready`. The title said "clears the line", but no Then line stated it. Only the Standards review (`153bc815`) found both. A vocabulary lint can check the values that the status display gives.

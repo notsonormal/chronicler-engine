@@ -122,7 +122,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation. Keep 
     - **autoplay/**
       - `fragments.rs` — HTTP E2E tests for the view-only Game of Autoplay (autoplay.md 41.18-41.20, 41.22). They check the controls that the story log, the dock and the Games panel render while a run holds the Game.
       - `mod.rs` — HTTP E2E tests for Autoplay (autoplay.md 41.*), shared helpers. `run` holds the run of Jobs, its ends, the progress status and the refused writes. `fragments` holds the view-only Game's rendering.
-      - `run.rs` — HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
+      - `run.rs` — HTTP E2E tests for the run of Autoplay (autoplay.md 41.1-41.17, 41.21, 41.23, 41.24, 41.26-41.28): the Jobs of a run, its ends, the budget, the refused writes, and the progress status.
     - **requires_migration/**
       - `connections.rs` — HTTP integration tests for the connections UI: add an OpenRouter connection, switch the narrator, and switch the quantifier.
       - `core.rs` — HTTP integration test for reset-handler error handling.

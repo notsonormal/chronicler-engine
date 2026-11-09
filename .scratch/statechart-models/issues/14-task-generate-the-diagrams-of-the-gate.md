@@ -2,11 +2,11 @@
 
 Type: task
 Status: open
-Blocked by: 10, 11, 12, 13
+Blocked by: 10, 11, 12, 13, 16
 
 ## Question
 
-Make `verify-gate` generate its diagrams with the tool of ticket 13, and write them into `docs/diataxis/reference/diagrams/` (ticket 09, Q9 C and Q10). `game_flow.md` links to them after ticket 15.
+Make `verify-gate` generate its diagrams with the tool of tickets 13 and 16, and write them into `docs/diataxis/reference/diagrams/` (ticket 09, Q9 C and Q10). `game_flow.md` links to them after ticket 15.
 
 ## What to generate
 

@@ -1,9 +1,15 @@
 # The coverage record of the verify-gate skill.
 #
-# `sync_commit` is the commit at which an agent last confirmed that model/VerifyGate.tla
-# describes every function below. Move it forward only after that check (SKILL.md,
-# "Update the TLA+ model"). A change to a listed file after `sync_commit` means that the
-# TLA+ model needs another look.
+# Each listed function carries a `hash` of its text, recorded when an agent last confirmed that
+# model/VerifyGate.tla describes it. `build.py` hashes each function as it is on disk and warns
+# when the hash differs, when it is missing, or when the function is not found (see
+# scripts/verify_coverage.py). A plain string entry has no hash yet, so it warns. Write the
+# hashes with `python scripts/verify_coverage.py record`, only after the TLA+ model follows the
+# code (SKILL.md, "Update the model after a code change"). Do not edit a hash by hand.
+#
+# `sync_commit` is a note for the maintain pass only: the commit at which the TLA+ model was
+# last confirmed. The pass reads `git diff <sync_commit>` to see the old code. The warning never
+# reads it. Move it forward only to a commit that holds the change.
 
 sync_commit = "e6715c6028092a0fecfafb8b89b32934de1de911"
 sync_date = "2026-11-05"
@@ -11,68 +17,79 @@ sync_date = "2026-11-05"
 [[files]]
 path = "src/application/generation/gate.rs"
 functions = [
-  "BusyRegistry::hold",
-  "GameWriter::require_idle",
-  "GameWriter::accept",
-  "GameWriter::accept_for_autoplay",
-  "GameWriter::accept_in_autoplay_hold",
-  "GameWriter::plan_and_start",
-  "GameWriter::accept_in_tx",
-  "GameWriter::not_accepted_with_failure",
-  "GameWriter::reserve_for_autoplay",
-  "GameWriter::end_autoplay",
-  "GameWriter::save_config",
-  "GameWriter::stop",
-  "GameWriter::switch_swipe",
-  "GameWriter::edit",
-  "GameWriter::delete_last",
-  "GameWriter::clear_failure_and_put_dock",
-  "GameWriter::replace",
-  "GameWriter::delete",
-  "JobWriter::hold",
-  "JobWriter::save_input",
-  "JobWriter::save_text",
-  "JobWriter::save_state_update",
-  "JobWriter::save_failure",
-  "JobWriter::save_options",
-  "JobWriter::step",
-  "JobWriter::write_new_message",
-  "JobWriter::write_new_swipe",
-  "Drop for JobWriter",
+  { name = "BusyRegistry::hold", hash = "fae5d4605e15d5b7" },
+  { name = "GameWriter::require_idle", hash = "327dacdbd8a63a68" },
+  { name = "GameWriter::accept", hash = "5ada768a9985f5e0" },
+  { name = "GameWriter::accept_for_autoplay", hash = "8d8d5abcbb80ad19" },
+  { name = "GameWriter::accept_in_autoplay_hold", hash = "fc7df21d4f6c4125" },
+  { name = "GameWriter::plan_and_start", hash = "9fe8d9fe630c5320" },
+  { name = "GameWriter::accept_in_tx", hash = "2a487c90586859f1" },
+  { name = "GameWriter::not_accepted_with_failure", hash = "479cf5b99856574d" },
+  { name = "GameWriter::reserve_for_autoplay", hash = "51cff09f8e2c73e9" },
+  { name = "GameWriter::end_autoplay", hash = "47addcbf93b51fce" },
+  { name = "GameWriter::save_config", hash = "69e54713e0ca629f" },
+  { name = "GameWriter::stop", hash = "84f3d0ede4cb6568" },
+  { name = "GameWriter::switch_swipe", hash = "ebcc076cd051d3ef" },
+  { name = "GameWriter::edit", hash = "b8fc106344f7baa9" },
+  { name = "GameWriter::delete_last", hash = "a0848fee644d823b" },
+  { name = "GameWriter::clear_failure_and_put_dock", hash = "fa3ce380bb84ec9f" },
+  { name = "GameWriter::replace", hash = "fad3ce9022a5305b" },
+  { name = "GameWriter::delete", hash = "2739d26a015587d4" },
+  { name = "JobWriter::hold", hash = "19042e283611ba3c" },
+  { name = "JobWriter::save_input", hash = "0472126e63595b94" },
+  { name = "JobWriter::save_text", hash = "fee42271ceee61a0" },
+  { name = "JobWriter::save_state_update", hash = "de0796be4afef56c" },
+  { name = "JobWriter::save_failure", hash = "081d52236b32c01e" },
+  { name = "JobWriter::save_options", hash = "13d543ccbacb038b" },
+  { name = "JobWriter::step", hash = "f4dae8de877d9aca" },
+  { name = "JobWriter::write_new_message", hash = "4440df60d6c84a1f" },
+  { name = "JobWriter::write_new_swipe", hash = "87148be6b6a574e1" },
+  { name = "Drop for JobWriter", hash = "ef27c6fcc4c317db" },
 ]
 
 [[files]]
 path = "src/application/pipeline/job.rs"
 functions = [
-  "Job::start",
-  "Job::run_accepted",
-  "Job::run",
-  "Job::generate",
-  "Job::run_step",
-  "Job::update_state",
-  "Job::options_step",
-  "Job::end",
+  { name = "Job::start", hash = "823ba4a5efcfba57" },
+  { name = "Job::run_accepted", hash = "1a7afb960127ca4e" },
+  { name = "Job::run", hash = "33d16377c62aa1d3" },
+  { name = "Job::generate", hash = "2ecbfde4edc39309" },
+  { name = "Job::run_step", hash = "822d3aebb4bba412" },
+  { name = "Job::update_state", hash = "83a8b5a7c6cac44f" },
+  { name = "Job::options_step", hash = "9b986b078495fe8d" },
+  { name = "Job::end", hash = "f624fbdfd788acce" },
 ]
 
 [[files]]
 path = "src/application/autoplay/driver.rs"
 functions = [
-  "AutoplayRun::start",
-  "AutoplayRun::run_jobs",
-  "AutoplayRun::decide",
-  "Drop for AutoplayRun",
+  { name = "AutoplayRun::start", hash = "3738d27af71a06e0" },
+  { name = "AutoplayRun::run_jobs", hash = "581299fa51f5cd34" },
+  { name = "AutoplayRun::decide", hash = "9a3b29a731987e3f" },
+  { name = "Drop for AutoplayRun", hash = "1c6572fe52222090" },
 ]
 
 [[files]]
 path = "src/application/games/catalogue.rs"
 functions = [
-  "GameCatalogue::delete_game",
-  "GameCatalogue::reset",
-  "GameCatalogue::switch_game",
-  "GameCatalogue::save_config",
+  { name = "GameCatalogue::new", hash = "e44f0747908c7d0d" },
+  { name = "GameCatalogue::create_game", hash = "ed2cfe8afaae9735" },
+  { name = "GameCatalogue::delete_game", hash = "5dbc4ae5578cb5b4" },
+  { name = "GameCatalogue::reset", hash = "81d41a81cfe4c177" },
+  { name = "GameCatalogue::switch_game", hash = "1399dd015d75ad5a" },
+  { name = "GameCatalogue::save_config", hash = "86d721a95d9e1cbd" },
 ]
 
-# The rules that break at `sync_commit`, by config. check.py exits 0 only when each config
+[[files]]
+path = "src/application/games/active.rs"
+functions = [
+  { name = "ActiveGame::get", hash = "1e331629b0120cd6" },
+  { name = "ActiveGame::lock", hash = "c125dc532f391113" },
+  { name = "PointerHold::get", hash = "a9fdbf33defb20d9" },
+  { name = "PointerHold::set", hash = "285e33c29f60b9a5" },
+  { name = "PointerHold::set_new", hash = "b5fe781fa4632fb8" },
+]
+
+# The rules that break at the code on disk, by config. check.py exits 0 only when each config
 # breaks exactly these. Each one is a finding of the trial log, not a modelling error.
 [known_breaks]
-delete-race = ["DeleteNotActive"]

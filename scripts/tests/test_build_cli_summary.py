@@ -30,8 +30,6 @@ from build_cli_support import (  # noqa: E402
 
 
 class SessionStampTests(unittest.TestCase):
-    """Build logs carry the originating pi session id when known."""
-
     def test_stamp_written_when_session_id_present(self):
         buffer = io.StringIO()
         build._set_log_fh(buffer)
@@ -57,8 +55,6 @@ class SessionStampTests(unittest.TestCase):
 
 
 class JsonOutputTests(unittest.TestCase):
-    """cargo compile and test commands run with JSON messages; the rest run unchanged."""
-
     def test_the_flag_goes_right_after_the_subcommand(self):
         cases = {
             "cargo clippy --all-targets -- -D warnings": (
@@ -90,8 +86,6 @@ class JsonOutputTests(unittest.TestCase):
 
 
 class RunStepReadsOutputTests(unittest.TestCase):
-    """What _run_step keeps from the output of the command it ran."""
-
     def setUp(self):
         self.ctx = make_ctx(self)
         patcher = mock.patch.object(build, "both_print")
@@ -133,7 +127,6 @@ class RunStepReadsOutputTests(unittest.TestCase):
         self.assertFalse(stale.exists())
 
     def test_target_dir_does_not_move_the_report(self):
-        """nextest ignores --target-dir for the report, so build.py reads the same file."""
         ctx = make_ctx(self, target_dir="/elsewhere/target/agent2")
         with fake_subprocess(
             stderr=fixture("nextest_failed.stderr"),
@@ -183,7 +176,7 @@ class RunStepReadsOutputTests(unittest.TestCase):
         self.assertIn("error[E0308]: mismatched types", logged)
         self.assertIn("error: could not compile `probe` (lib)", logged)
         self.assertNotIn('"reason"', logged)
-        self.assertNotIn("Checking probe", logged)  # cargo progress stays out of the log
+        self.assertNotIn("Checking probe", logged)
 
     def test_the_echo_names_the_command_that_runs(self):
         printed = []
@@ -267,8 +260,6 @@ class RunStepReadsOutputTests(unittest.TestCase):
 
 
 class TestTimingReportTests(unittest.TestCase):
-    """--test-timings prints the durations and the stub checks from the JUnit report."""
-
     def test_the_report_lists_the_slowest_tests_binaries_and_stub_checks(self):
         ctx = make_ctx(self)
         printed = []
@@ -307,8 +298,6 @@ def failed_tests_result(label="Running guardrail tests...", **kwargs):
 
 
 class EpilogueTests(unittest.TestCase):
-    """main() prints the verdict lines in order, right before the closing banner."""
-
     def epilogue(self, results, baselines=None, **overrides):
         def gate(_args, out):
             out.extend(results)
@@ -325,6 +314,23 @@ class EpilogueTests(unittest.TestCase):
             "  tests: 6 (no earlier record)"
         )
         self.assertEqual(printed[idx + 1 : idx + 3], ["=" * 60, "=== Build Complete ==="])
+
+    def test_the_staleness_warning_prints_after_the_counts_and_before_the_banner(self):
+        counts = build.build_report.parse_summary(fixture("nextest_cancelled.stderr"))
+        result = build.StepResult("Running integration tests...", counts=counts, tier="integration")
+        warning = ["WARNING verify-gate: stale", "rule line", "record line"]
+        printed, _, code, _ = self.epilogue([result], staleness=warning)
+        self.assertEqual(code, 0)
+        counts_at = next(i for i, line in enumerate(printed) if line.startswith("nextest: 1 passed"))
+        self.assertEqual(printed[counts_at + 1 : counts_at + 4], warning)
+        self.assertEqual(printed[counts_at + 4 : counts_at + 6], ["=" * 60, "=== Build Complete ==="])
+
+    def test_a_failed_staleness_check_prints_one_line_and_keeps_the_banner(self):
+        printed, log, code, _ = self.epilogue([], staleness=ValueError("boom"))
+        self.assertEqual(code, 0)
+        idx = printed.index("verify coverage check failed: ValueError: boom")
+        self.assertEqual(printed[idx + 1 : idx + 3], ["=" * 60, "=== Build Complete ==="])
+        self.assertIn("verify coverage check failed", log)
 
     def test_a_run_that_is_not_a_whole_tier_has_no_count_change(self):
         counts = build.build_report.parse_summary(fixture("nextest_cancelled.stderr"))

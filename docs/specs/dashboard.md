@@ -216,3 +216,13 @@ When the client requests GET /screen?parts=send-control,autoplay-controls
 Then the answer is 200
 And #submit-btn and #autoplay-btn do not carry the disabled attribute
 ```
+
+#### Scenario 39.17: A stop of an idle Game clears its failure line
+
+```gherkin
+Given a Game with no Job whose last Job failed at its narrator call
+And the status display answers with the failure line of that Job
+When the client POST /status/reset-busy
+Then the stop answers "reset"
+And the status display answers Ready
+```

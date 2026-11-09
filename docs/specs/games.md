@@ -126,6 +126,20 @@ And the response body is empty
 And a GET /screen?parts=games renders the Saved Games empty state
 ```
 
+#### Scenario 19.5: Deleting a saved game while a Job holds it answers success, and the end of the Job leaves the active Game idle
+
+```gherkin
+Given two created games, the second one active
+And a Job of the first game held at its narrator call
+When the client POST /games/{first}/delete
+Then the response status is "200 OK"
+And a GET /screen?parts=games does not list the first game
+And the status display answers Ready
+When the Job's model answer arrives
+And the Job ends
+Then the status display answers Ready
+```
+
 ### Rename
 
 #### Scenario 17.4: Renaming a game answers nothing and sets its display name, shown in the header and the Games tab

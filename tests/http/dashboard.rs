@@ -102,7 +102,6 @@ async fn test_busy_status_answers_from_live_registry() {
 // [docs/specs/dashboard.md] SCENARIO: 39.2
 #[tokio::test]
 async fn test_every_referenced_icon_is_defined_once_by_the_shell() {
-    // A real Job gives the shell a story of more than its opening Narration.
     let (app, state) = TestAppBuilder::default_test()
         .model(Arc::new(ScriptedModel::new().turn("You look around.")))
         .build_with_state();
@@ -488,4 +487,36 @@ async fn test_a_status_that_cannot_be_read_does_not_fail_the_action_controls() {
     let controls = fetch_action_controls(&app).await;
 
     assert_action_controls(&controls, false, false, false, "an unreadable Game");
+}
+
+// [docs/specs/dashboard.md] SCENARIO: 39.17
+#[tokio::test]
+async fn test_a_stop_of_an_idle_game_clears_its_failure_line() {
+    let (app, state) = TestAppBuilder::default_test()
+        .model(Arc::new(ScriptedModel::new().failed(Role::Narrator)))
+        .build_with_state();
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failing Job should end"
+    );
+    assert!(
+        fetch_busy_status(&app)
+            .await
+            .contains(r#"data-status="failed""#),
+        "the idle Game shows a failure line before the stop"
+    );
+
+    let stop = post_empty(&app, "/status/reset-busy").await;
+
+    assert_eq!(
+        response_body(stop).await,
+        "reset",
+        "a stop of an idle Game answers reset"
+    );
+    assert_eq!(
+        fetch_status_label(&app).await,
+        "Ready",
+        "the stop cleared the failure line"
+    );
 }

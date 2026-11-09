@@ -131,12 +131,24 @@ export type CheckResult = {
   stop: Stop | undefined;
   drawing: { status: number | null } | undefined;
   states: { distinct: number; initial: number; complete: boolean; cut: boolean };
+  bound: number;
+  fallback: BugPaths | undefined;
   messages: Iterable<Part>;
 };
+
+export type BugPaths = Pick<CheckResult, "graph" | "properties"> & { paths: Bug[] };
 
 export const RERUN_STATES = 100_000;
 
 export const CHART_STATES = 500;
+
+export const DUMP_STATES = 200_000;
+
+export type Lane = { id: string; label: string };
+
+export type Said =
+  | { kind: "call" | "answer" | "refused" | "failed"; text: string; from: string; to: string }
+  | { kind: "note"; text: string; over: string[] };
 
 export type View = {
   state?: (vars: Vars) => unknown;
@@ -144,6 +156,31 @@ export type View = {
   group?: (vars: Vars) => unknown;
   colors?: { [group: string]: string };
   title?: string;
+  lanes?: Lane[];
+  message?: (action: string, from: Vars, to: Vars) => Said[];
+};
+
+export type Scenario = {
+  name: string;
+  title: string;
+  steps: string[];
+  constants: { [name: string]: string };
+  rule?: string;
+  spec?: string;
+};
+
+export type ScenarioRun = {
+  scenario: Scenario;
+  trace: TraceState[];
+  broken: string | undefined;
+  messages: Iterable<Part>;
+};
+
+export type ScenarioResult = {
+  spec: Spec;
+  configFile: string;
+  runs: ScenarioRun[];
+  exit: 0 | 1;
 };
 
 export const checked = Symbol("checked");

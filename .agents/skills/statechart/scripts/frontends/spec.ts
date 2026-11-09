@@ -55,6 +55,7 @@ const textOf = (node: XmlNode | undefined, tag: string) => child(node, tag)?.tex
 export type Sany = {
   variables: string[];
   definitions: Map<string, XmlNode>;
+  symbols: Map<string, XmlNode>;
 };
 
 const VARIABLE_KIND = "3";
@@ -81,7 +82,7 @@ export function readSany(xml: string): Sany {
       variables.push({ uid: Number(uid), name });
   }
   variables.sort((a, b) => a.uid - b.uid);
-  return { variables: variables.map((v) => v.name), definitions };
+  return { variables: variables.map((v) => v.name), definitions, symbols };
 }
 
 export function readSpec({
@@ -97,6 +98,61 @@ export function readSpec({
 }
 
 const STATE_LEVEL = 1;
+
+const operatorOf = ({ symbols }: Sany, node: XmlNode | undefined) => {
+  const ref = child(node, "operator")?.children[0];
+  const symbol = ref && symbols.get(textOf(ref, "UID"));
+  return symbol && { tag: symbol.tag, name: textOf(symbol, "uniquename"), symbol };
+};
+
+const operandsOf = (node: XmlNode | undefined) =>
+  (child(node, "operands")?.children ?? []).filter((c) => c.tag === "OpApplNode");
+
+const plainRef = (sany: Sany, node: XmlNode | undefined) => {
+  const op = operatorOf(sany, node);
+  return node?.tag === "OpApplNode" &&
+    op?.tag === "UserDefinedOpKind" &&
+    !child(node, "operands")?.children.length
+    ? op
+    : undefined;
+};
+
+export function initAndNext(sany: Sany, written: ConfigSection[]) {
+  const named = (key: string) => written.find((s) => s.key === key)?.tokens[0];
+  const init = named("INIT");
+  const next = named("NEXT");
+  if (init && next) return { init, next };
+  const spec = named("SPECIFICATION");
+  const found: { init?: string; next?: string } = {};
+  const seen = new Set<string>();
+  const visit = (node: XmlNode | undefined) => {
+    const op = operatorOf(sany, node);
+    if (op?.tag === "BuiltInKind" && (op.name === "\\land" || op.name === "$ConjList")) {
+      for (const c of operandsOf(node)) visit(c);
+      return;
+    }
+    if (op?.tag === "BuiltInKind" && op.name === "[]") {
+      const box = operandsOf(node)[0];
+      const square = operatorOf(sany, box);
+      const action = square?.name === "$SquareAct" ? plainRef(sany, operandsOf(box)[0]) : undefined;
+      if (action) found.next = found.next === undefined ? action.name : "";
+      return;
+    }
+    const ref = plainRef(sany, node);
+    if (!ref || seen.has(ref.name)) return;
+    seen.add(ref.name);
+    const level = Number(textOf(ref.symbol, "level"));
+    if (level <= STATE_LEVEL) found.init = found.init === undefined ? ref.name : "";
+    else visit(child(ref.symbol, "body")?.children[0]);
+  };
+  const definition = spec ? sany.definitions.get(spec) : undefined;
+  if (definition) visit(child(definition, "body")?.children[0]);
+  if (!found.init || !found.next)
+    throw new Error(
+      `The command cannot find one initial predicate and one next-state action in SPECIFICATION ${spec}, so it cannot run a scenario. Write the spec as Init /\\ [][Next]_vars, or give INIT and NEXT in the config.`,
+    );
+  return { init: found.init, next: found.next };
+}
 
 export function initialOnlyProperties({ definitions }: Sany, { written, properties }: Spec) {
   const replaced = new Map<string, string>();

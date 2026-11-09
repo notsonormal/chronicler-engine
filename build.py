@@ -6,10 +6,9 @@ Two invocation modes:
 
 - Full gate (default): ``python build.py`` runs fmt, validation, clippy,
   guardrails, the full test suite, and packaging.
-- Gate without the browser tier: ``python build.py --no-browser`` runs the same
-  gate minus the browser (Playwright) tier.
+- Gate without the browser tier: ``python build.py --no-browser``.
 - Step mode: ``python build.py <step>`` runs one registry step (e.g.
-  ``clippy``, ``fmt``, ``test-pattern <pattern>``) with a minimal prelude — no
+  ``clippy``, ``fmt``, ``test-pattern <pattern>``) with a minimal prelude: no
   asset copy, no SQLite cleanup. ``--target-dir`` and ``--fail-fast`` are
   accepted on either side of the step; all other top-level flags are gate-only
   and rejected next to a step.
@@ -26,27 +25,31 @@ Test failure mode:
 this process with it, so the dev server links in the ``build.py`` environment
 (lld linker, chosen target dir) and switching between a build step and the
 server costs no recompile. The build runs under the machine-wide slot; the
-server itself runs without any lock. The port is checked before the build and
-again just before the exec. ``run`` is dev-profile only.
+server runs without any lock. The port is checked before the build and again
+just before the exec. ``run`` is dev-profile only.
 
-Structured output: every step is a ``Step`` that returns a ``StepResult``. A step run stops
-at the first failing step. The full gate stops there too, except for the test tiers, which
-record their failure and let the gate go on. ``main`` renders the epilogue from the results.
-cargo runs with ``--message-format json`` (nextest with ``--cargo-message-format json``), and
-nextest writes a JUnit report (``[profile.default.junit]`` in ``.config/nextest.toml``).
-``scripts/build_report.py`` reads both: the compile errors, the failing tests with the first
-line of their message, and the per-test durations of ``--test-timings``. Only nextest's
-``Summary`` line and its ``LEAK``/``FLAKY`` lines are read as text, because the JUnit report
-has no count of ignored tests and does not mark a leaking test.
+Every step is a ``Step`` that returns a ``StepResult``. A step run stops at the
+first failing step. The full gate stops there too, except for the test tiers,
+which record their failure and let the gate go on. cargo runs with
+``--message-format json`` (nextest with ``--cargo-message-format json``), and
+nextest writes a JUnit report (``[profile.default.junit]`` in
+``.config/nextest.toml``). ``scripts/build_report.py`` reads both. Only
+nextest's ``Summary`` line and its ``LEAK``/``FLAKY`` lines are read as text,
+because the JUnit report has no count of ignored tests and does not mark a
+leaking test.
 
-Stdout carries the agent-facing decision signal + tailable progress (banner,
-step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary, closing
-banner with log path). Full output is written to ``logs/build_*.log``; each
-log's first line is a session stamp (see ``_stamp_session_id``). Every
-completed run also appends one pipe-delimited summary line (timestamp,
-duration, exit code, args, tree, per-tier test counts) to the append-only
-journal ``logs/build_history.txt`` — see ``scripts/build_history.py``. Each test tier's
-epilogue line compares its test count with that tier's newest journal record.
+Stdout carries the banner, step labels, ``$ cmd`` echoes, failure signals, the
+Step Timing Summary and the closing banner with the log path. Full output goes
+to ``logs/build_*.log``; each log's first line is a session stamp (see
+``_stamp_session_id``). Every completed run also appends one pipe-delimited
+line (timestamp, duration, exit code, args, tree, per-tier test counts) to the
+append-only journal ``logs/build_history.txt`` (``scripts/build_history.py``).
+Each test tier's epilogue line compares its test count with that tier's newest
+journal record. The last lines before the banner may carry a
+``WARNING verify-<skill>: ...`` line for each stale verify skill: a Rust
+function that the skill lists in its ``coverage.toml`` differs from its
+recorded hash, so its TLA+ model may be stale (``scripts/verify_coverage.py``).
+It never fails the build.
 
 Concurrent builds:
 
@@ -61,8 +64,7 @@ Each script's docstring lists its ``CHRONICLER_*`` switches. Use one target dir 
 
 The full gate also removes linked worktrees that are safe to lose: clean, pushed, and with no
 live process inside (``scripts/remove_worktrees.py``). It also prunes the stale ``target/``
-dirs of the linked worktrees it keeps, so a surviving tree does not hold a multi-GiB one for
-good. It warns and continues if either fails.
+dirs of the linked worktrees it keeps. It warns and continues if either fails.
 
 ``--cleanup`` deletes this checkout's whole cargo target dir (the next build is cold) and the
 machine-wide port-lock dir ``<tmp>/chronicler_test_ports`` that every checkout's tests share.
@@ -105,8 +107,9 @@ import build_history  # noqa: E402
 import build_report  # noqa: E402
 import build_slot  # noqa: E402
 import target_seed  # noqa: E402
+import verify_coverage  # noqa: E402
 
-# Force UTF-8 for stdout/stderr on Windows to handle cargo's Unicode output
+# The Windows console codec cannot print cargo's Unicode output.
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
@@ -121,33 +124,18 @@ def _set_log_fh(fh):
 
 
 def log_status(msg: str = "") -> None:
-    """Write a status line to the build log only (not stdout).
-
-    Use for internal bookkeeping, warnings, and notices the agent doesn't need
-    to see on stdout. The newline is appended automatically. Safe to call before
-    ``_set_log_fh`` is called — the log write is skipped silently in that case.
-    """
     if _LogState.fh is not None:
         _LogState.fh.write(msg + "\n")
         _LogState.fh.flush()
 
 
 def both_print(msg: str = "") -> None:
-    """Write a line to both stdout and the build log.
-
-    Use for the agent-facing decision signal + tailable progress (header
-    banner, step labels, ``$ cmd`` echoes, failure signals, Step Timing Summary,
-    closing banner). Newlines embedded in ``msg`` are preserved.
-    """
     print(msg)
     sys.stdout.flush()  # a build run detached with its output redirected stays pollable
     log_status(msg)
 
 
-# Cargo progress lines are pure noise for an agent caller — every incremental
-# build emits hundreds of "   Compiling foo v1.0.X" / "    Checking foo" lines.
-# Strip them (and cargo-llvm-cov's info lines) before writing to the log, so the log
-# carries only actionable content (warnings, errors, test results, build summary).
+# An incremental build prints hundreds of per-crate progress lines that bury the warnings and errors.
 _LOG_NOISE_RE = re.compile(
     r"^\s*(?:(?:Compiling|Checking|Downloading|Updating|Adding|Building|Running `rustc`)\s+\S+"
     r"|info: cargo-llvm-cov)"
@@ -171,7 +159,6 @@ class StepCounter:
 
 
 def check_rust_version():
-    """Ensure rustc >= 1.85."""
     result = subprocess.run(
         ["rustc", "--version"],
         capture_output=True,
@@ -204,58 +191,36 @@ def require_nextest():
         sys.exit(1)
 
 
-# The browser binary runs the Playwright tier: each test spawns a real engine
-# server plus Chromium. Splitting it from the CPU-light tiers keeps
-# `python build.py integration` to ~20s and gives each tier its own epilogue
-# verdict.
+# Each browser test spawns a real engine server plus Chromium, so the tier runs apart with its own verdict.
 _BROWSER_FILTER = "binary(browser)"
 _NON_BROWSER_FILTER = "not binary(browser)"
-# The gate's guardrails step runs the architecture and guardrails binaries,
-# so this filter drops them. Coverage uses _NON_BROWSER_FILTER to still
-# instrument them.
+# The gate's guardrails step runs the architecture and guardrails binaries; coverage still instruments them.
 _INTEGRATION_FILTER = (
     "not binary(browser) and not binary(architecture) and not binary(guardrails)"
 )
 
-# The nextest command line without a fail mode. `_with_fail_flag` adds the mode where
-# a run knows it, so the gate and a step share one registry string.
+# No fail mode here: `_with_fail_flag` adds it, so the gate and a step share one registry string.
 _NEXTEST_RUN = "cargo nextest run"
 _FAIL_FAST = "--fail-fast"
 _NO_FAIL_FAST = "--no-fail-fast"
-# The suffix of every run on the slow LLM tests. It also names the nextest profile.
 _LLM_ARGS = " --profile llm --run-ignored all"
-# The engine, http, storage, bootstrap and llm tiers are CPU-light; excluding the browser
-# binary keeps this step to ~20s, so it works as a standalone check.
 _INTEGRATION_CMD = f"{_NEXTEST_RUN} -E '{_INTEGRATION_FILTER}'"
 _BROWSER_CMD = f"{_NEXTEST_RUN} -E '{_BROWSER_FILTER}'"
 
 
 def _coverage_cmd(filter_expr: str) -> str:
-    """The coverage command for one half of the gate's tier split.
-
-    The coverage step runs twice, once per half (the non-browser tier and the browser binary),
-    so both profiling runs share the single merged report that ``--no-report`` defers.
-    """
+    """Runs once per tier half; ``--no-report`` defers the merge so both halves share one report."""
     return f"cargo llvm-cov nextest --no-report --no-fail-fast -E '{filter_expr}'"
 
 
-# How a failed command's output is read. cargo compile and test commands have JSON messages
-# and need no entry. rustfmt has none, so its syntax errors are read from the text; the check
-# also lists the files that need formatting.
+# cargo steps read JSON messages and need no entry. rustfmt has none, so its errors are read from the text.
 OUTPUT_PLAIN = "plain"
 OUTPUT_RUSTFMT = "rustfmt"
 OUTPUT_RUSTFMT_CHECK = "rustfmt-check"
 
 
 class StepSpec(NamedTuple):
-    """One runnable build step, shared by the full gate and step subcommands.
-
-    The registry is the single source of truth for step commands: the full
-    gate and the step subcommands consume the same spec, so the two modes
-    cannot drift into different command strings. ``tier`` names the journal
-    column of a step that runs one whole test tier. ``output`` names how a failed
-    run is read, see ``Step``.
-    """
+    """The registry is the one source of step commands, so the gate and the step subcommands cannot drift apart."""
 
     name: str
     label: str
@@ -267,18 +232,11 @@ class StepSpec(NamedTuple):
     output: str = "plain"
 
 
-# The `--test-target` name that selects the package's lib unit-test binary
-# (`cargo nextest run --lib`) instead of one integration test binary.
 LIB_TEST_TARGET = "lib"
 
 
 def _fail_flag(args) -> str:
-    """The fail mode of this run: an explicit flag wins, else the mode default.
-
-    A step run answers whether the code is still red, and the rest of the tier
-    cannot change a failure it already found. The gate runs every test, so one
-    cycle names every failure.
-    """
+    """A step run asks whether the code is still red, so it stops at the first failure; the gate runs every test."""
     explicit = getattr(args, "fail_fast", None)
     if explicit is not None:
         return _FAIL_FAST if explicit else _NO_FAIL_FAST
@@ -286,7 +244,6 @@ def _fail_flag(args) -> str:
 
 
 def _with_fail_flag(cmd: str, args) -> str:
-    """Append this run's fail mode to a nextest command. Others pass through."""
     if not cmd.startswith(_NEXTEST_RUN):
         return cmd
     return f"{cmd} {_fail_flag(args)}"
@@ -470,8 +427,6 @@ REGISTRY: dict[str, StepSpec] = {
     ]
 }
 
-# Top-level flags that only make sense for the full gate. Rejected next to a
-# step subcommand so invalid combinations fail at parse time.
 _GATE_ONLY_FLAGS = (
     "coverage",
     "release",
@@ -485,13 +440,6 @@ _GATE_ONLY_FLAGS = (
 
 
 def _add_fail_mode_flags(parser, default=None):
-    """Add the two fail-mode flags, accepted before or after a step name.
-
-    Both flags write one dest, so the last one on the command line wins.
-    ``default=None`` keeps "not given" distinct from either value. A step
-    subparser passes ``SUPPRESS``, so it does not overwrite a flag typed before
-    the step name.
-    """
     parser.add_argument(
         "--fail-fast",
         dest="fail_fast",
@@ -517,13 +465,6 @@ def _add_fail_mode_flags(parser, default=None):
 
 
 def parse_args(argv=None):
-    """Parse CLI arguments into a namespace. Pure: no filesystem or subprocess
-    side effects.
-
-    Step subcommands share the top-level ``--target-dir`` flag; the shared copy
-    uses a ``SUPPRESS`` default so a value given before the subcommand is not
-    clobbered by the subparser.
-    """
     parser = argparse.ArgumentParser(description="Chronicler Engine build script")
     parser.add_argument(
         "--coverage",
@@ -594,6 +535,7 @@ def parse_args(argv=None):
     sub = parser.add_subparsers(dest="command", metavar="<step>")
     for spec in REGISTRY.values():
         step_parser = sub.add_parser(spec.name, help=spec.help)
+        # SUPPRESS keeps the subparser from overwriting a flag typed before the step name.
         _add_fail_mode_flags(step_parser, default=argparse.SUPPRESS)
         step_parser.add_argument(
             "--target-dir",
@@ -616,9 +558,7 @@ def parse_args(argv=None):
                 ),
             )
         if spec.name == "run":
-            # REMAINDER keeps everything after the step (including a leading
-            # ``--``) so the flags reach the server binary unparsed. Strip the
-            # ``--`` once in _strip_passthrough, not here.
+            # REMAINDER keeps the leading `--`; _strip_passthrough drops it.
             step_parser.add_argument(
                 "server_flags",
                 nargs=argparse.REMAINDER,
@@ -653,7 +593,6 @@ def parse_args(argv=None):
 
 
 def _reject_gate_flags_with_step(parser, args):
-    """Fail at parse time, before any step runs."""
     if args.command is None:
         return
     offenders = [
@@ -669,19 +608,13 @@ def _reject_gate_flags_with_step(parser, args):
 
 
 def _stamp_session_id():
-    """Stamp the log with the originating pi session id, when known.
-
-    Written as the first log line. mrn-context (.pi/extensions/mrn-context)
-    reads this header and only surfaces the build-log pointer to the session
-    that produced the build (unstamped logs stay visible to everyone).
-    """
+    """mrn-context (.pi/extensions/mrn-context) reads this first line to show the log pointer only to the session that built it; unstamped logs stay visible to everyone."""
     session_id = os.environ.get("PI_SESSION_ID", "").strip()
     if session_id:
         log_status(f"Session-Id: {session_id}")
 
 
 def _target_paths(args) -> tuple[Path, Path]:
-    """Return (cargo_target_dir, profile target dir) for the given args."""
     cargo_target_dir = (
         Path(args.target_dir) if getattr(args, "target_dir", None) else Path("target")
     )
@@ -690,7 +623,6 @@ def _target_paths(args) -> tuple[Path, Path]:
 
 
 def _lld_linker_env(host=None, cache_dir=None) -> dict:
-    """Point cargo at the lld wrapper, installed at one path shared by every checkout."""
     if os.environ.get("CHRONICLER_NO_LLD") or not sys.platform.startswith("linux"):
         return {}
     if host is None:
@@ -717,12 +649,7 @@ def _lld_linker_env(host=None, cache_dir=None) -> dict:
 
 
 def _cargo_env_for(args) -> dict:
-    """Cargo environment shared by gate and step runs.
-
-    ``leak`` prints FAIL/RETRY/SLOW/LEAK lines but suppresses the PASS flood, so
-    a passing-but-leaking test is named instead of only counted. The JUnit report,
-    not the PASS lines, gives the ``--test-timings`` durations.
-    """
+    # `leak` prints FAIL/RETRY/SLOW/LEAK lines but no PASS flood, so a leaking test is named, not only counted.
     env = {"NEXTEST_STATUS_LEVEL": "leak", **_lld_linker_env()}
     if getattr(args, "target_dir", None):
         env["CARGO_TARGET_DIR"] = str(Path(args.target_dir).resolve())
@@ -730,7 +657,6 @@ def _cargo_env_for(args) -> dict:
 
 
 def _warn_if_target_locked(cargo_target_dir: Path, custom: bool):
-    """Warn when cargo holds the target directory (another agent may be building)."""
     if not is_target_locked(cargo_target_dir):
         return
     if custom:
@@ -756,12 +682,7 @@ def _step_command(
     extra: list[str] | None = None,
     test_target: str | None = None,
 ) -> str:
-    """Assemble the shell command for a step spec (quotes the nextest pattern).
-
-    ``test_target`` narrows a ``pattern_arg`` step to one test binary, so a
-    targeted run compiles only that binary (``--test <NAME>``, or ``--lib``
-    for ``LIB_TEST_TARGET``). No target keeps the all-binaries command.
-    """
+    """``test_target`` narrows a ``pattern_arg`` step to one test binary, so a targeted run compiles only that binary."""
     if spec.pattern_arg:
         target_flags = _test_target_flags(test_target)
         cmd = f"{spec.cmd}{target_flags} {shlex.quote(pattern)}"
@@ -812,7 +733,7 @@ def clean_old_logs(log_dir: Path, max_age_days: int = 3):
 
 
 def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 30):
-    """Recurses into subdirectories, which are themselves left in place."""
+    """Subdirectories are walked for stale files but never removed."""
     now = time.time()
     max_age_sec = max_age_days * 86400
     for tmp_dir in tmp_dirs:
@@ -834,11 +755,6 @@ def clean_tmp_dirs(tmp_dirs: list[Path], max_age_days: int = 30):
 
 
 def dump_sqlite_to_jsonl(db_path: Path, output_dir: Path):
-    """Dump all tables from a SQLite database to JSONL files.
-
-    One file per table: {output_dir}/{table_name}.jsonl
-    Each line is a JSON object representing one row.
-    """
     if not db_path.exists():
         return
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -876,25 +792,19 @@ def dump_sqlite_to_jsonl(db_path: Path, output_dir: Path):
 
 
 def is_target_locked(target_dir: Path) -> bool:
-    """Check if cargo holds a build lock on a profile dir under ``target_dir``.
-
-    Delegates to target_seed's shared-flock probe, so a target seed in progress (which holds the
-    lock shared) does not read as a cargo build.
-    """
+    """A target seed in progress holds the lock shared, so only an exclusive holder reads as a cargo build."""
     for profile in ["debug", "release"]:
         handle = target_seed.probe_shared_lock(target_dir / profile / ".cargo-lock")
         if handle is None:
-            return True  # An exclusive holder (cargo) has the lock
-        handle.close()  # We got the shared lock, so cargo doesn't hold it
-    return False  # No lock file, or shared holders only, assume not locked
+            return True
+        handle.close()
+    return False
 
 
 
 @dataclass
 class StepResult:
-    """What one step left behind: the outcome, and the facts the epilogue and the journal print.
-
-    ``fatal`` marks the failure that stops the run. ``tail`` holds the cause of a failed step
+    """``fatal`` marks the failure that stops the run. ``tail`` holds the cause of a failed step
     that is not a nextest run and has no compile error: its last output lines.
     """
 
@@ -912,19 +822,14 @@ class StepResult:
 
     @property
     def failed(self) -> bool:
-        """A report-only step that did not complete only warns."""
         return self.rc != 0 and not self.report_only
 
 
 class Step(NamedTuple):
-    """One entry of a run plan: a shell command, or an in-process action.
-
-    A step with neither is a counted marker. ``check=False`` lets the run go on after a
-    failure; the failure still shows and still fails the run's exit code. ``report_only`` makes a
-    failure a warning. ``tier`` names the journal column of a step that runs a whole test tier.
-    ``profile`` is the nextest profile of a nextest run (empty for any other step): the run
-    leaves a JUnit report for that profile. ``output`` is how a failed run is read (``OUTPUT_*``).
-    ``before`` and ``after`` are notes printed around the step.
+    """A step with neither ``cmd`` nor ``action`` is a counted marker. ``check=False`` lets the run
+    go on after a failure, which still fails the exit code. ``report_only`` makes a failure a
+    warning. ``tier`` names the journal column of a step that runs a whole test tier. ``profile``
+    is the nextest profile whose JUnit report the run leaves (empty for any other step).
     """
 
     label: str
@@ -942,8 +847,6 @@ class Step(NamedTuple):
 
 @dataclass
 class Ctx:
-    """The state one run shares between its steps."""
-
     args: argparse.Namespace
     env: dict
     results: list[StepResult]
@@ -951,7 +854,6 @@ class Ctx:
 
 
 def _prelude(args, results, nextest: bool = True) -> Ctx:
-    """Check the toolchain, warn about a busy target dir, and build the run context."""
     check_rust_version()
     if nextest:
         require_nextest()
@@ -964,7 +866,7 @@ def _prelude(args, results, nextest: bool = True) -> Ctx:
 
 
 def _seed_cold_target(ctx: Ctx) -> None:
-    """Seed a cold target dir once per run, inside the slot so the source is idle."""
+    """Called inside the build slot, so the warm source dir is idle."""
     if ctx.seeded:
         return
     ctx.seeded = True
@@ -994,8 +896,7 @@ def _cargo_slot(cmd: str, label: str, ctx: Ctx):
             _stamp_target(ctx)
 
 
-# cargo prints its diagnostics as JSON lines on stdout and its progress on stderr. The flag
-# goes right after the subcommand, so it stays before clippy's `--`.
+# The flag goes right after the subcommand, so it lands before clippy's `--`.
 _JSON_OUTPUT_FLAGS = (
     (re.compile(r"^cargo (?:check|clippy|build)\b"), " --message-format json"),
     (re.compile(r"^cargo (?:nextest run|llvm-cov nextest)\b"), " --cargo-message-format json"),
@@ -1003,7 +904,6 @@ _JSON_OUTPUT_FLAGS = (
 
 
 def _with_json_output(cmd: str) -> str | None:
-    """The command with cargo's JSON message flag, or None when it is not a cargo compile."""
     for pattern, flag in _JSON_OUTPUT_FLAGS:
         match = pattern.match(cmd)
         if match:
@@ -1013,17 +913,11 @@ def _with_json_output(cmd: str) -> str | None:
 
 class _Run(NamedTuple):
     rc: int
-    text: str  # the output as logged: rendered compiler output, then plain lines
-    errors: list[str]  # compile errors read from cargo's JSON stream
+    text: str
+    errors: list[str]
 
 
 def _run_command(cmd: str, env: dict, note: str = "") -> _Run:
-    """Run a shell command and write its output to the log only (not stdout).
-
-    The ``$ {command}`` echo, with the exact command that runs, goes to both. A cargo compile or test command runs with JSON
-    messages: stdout and stderr stay apart, and the rendered compiler output goes to the log
-    in place of the JSON. Any other command has stderr merged into stdout.
-    """
     structured = _with_json_output(cmd)
     both_print(f"$ {structured or cmd}{note}")
     proc = subprocess.run(
@@ -1046,16 +940,13 @@ def _run_command(cmd: str, env: dict, note: str = "") -> _Run:
     return _Run(proc.returncode, text, errors)
 
 
-# nextest writes its JUnit report under the workspace root, whatever CARGO_TARGET_DIR or
-# --target-dir says (also under cargo-llvm-cov), and build.py runs from the repo root. So the
-# target dirs of one checkout share one report file per profile. That is safe because the
-# build slot serializes every nextest step: each step deletes the file, runs, and reads it
-# before the next step starts. (Slot off, or two steps at once, can mix reports.)
+# nextest writes its JUnit report under the workspace root whatever --target-dir says, so one
+# checkout's target dirs share one file per profile. The build slot serializes nextest steps, so
+# each deletes, runs and reads it alone; with the slot off, reports can mix.
 _NEXTEST_DIR = Path("target") / "nextest"
 
 
 def _junit_path(profile: str) -> Path:
-    """Where nextest leaves its JUnit report for a profile."""
     return _NEXTEST_DIR / profile / "junit.xml"
 
 
@@ -1073,13 +964,9 @@ def _unformatted_detail(text: str) -> list[str]:
 
 
 def _run_cmd_step(step: Step, ctx: Ctx, result: StepResult) -> None:
-    """Run a command step and read what it left: counts, leaks, failing tests, compile errors.
-
-    The JUnit report is a file that earlier runs leave behind, so it is deleted before the run
-    and read only when this run wrote it.
-    """
     junit = _junit_path(step.profile) if step.profile else None
     if junit is not None:
+        # A report left by an earlier run must not read as this run's.
         junit.unlink(missing_ok=True)
     run = _run_command(step.cmd, ctx.env, "  (with --test-timings)" if step.timings else "")
     result.rc = run.rc
@@ -1102,7 +989,6 @@ def _run_cmd_step(step: Step, ctx: Ctx, result: StepResult) -> None:
 
 
 def _run_step(step: Step, ctx: Ctx) -> StepResult:
-    """Run one step under the build slot. The recorded time excludes the slot wait."""
     result = StepResult(step.label, report_only=step.report_only, tier=step.tier)
     with _cargo_slot(step.cmd, step.label, ctx):
         start = time.time()
@@ -1123,10 +1009,7 @@ def _run_step(step: Step, ctx: Ctx) -> StepResult:
 
 
 def _run_plan(plan: list[Step], ctx: Ctx) -> bool:
-    """Run the steps in order, one result each. Returns False when a fatal failure stopped it.
-
-    The counter total is len(plan), so the count cannot drift from the steps actually run.
-    """
+    """False when a fatal failure stopped the plan."""
     counter = StepCounter(len(plan))
     for step in plan:
         counter.next(step.label)
@@ -1144,7 +1027,6 @@ def _run_plan(plan: list[Step], ctx: Ctx) -> bool:
 
 
 def _print_timing_report(report: build_report.JunitReport | None) -> None:
-    """The slowest tests (top 30), per-binary totals, and the slowest stub checks inside runners."""
     both_print("")
     both_print("--- Test Timing Report ---")
     if report is None or not report.times:
@@ -1171,10 +1053,6 @@ def _print_timing_report(report: build_report.JunitReport | None) -> None:
 
 
 def _spec_step(name: str, args, *, report_only: bool = False, cmd: str | None = None) -> Step:
-    """The plan step of a registry spec. A report-only step never stops the run.
-
-    ``cmd`` replaces the spec's command, for a step run that adds a pattern or flags.
-    """
     spec = REGISTRY[name]
     return Step(
         spec.label,
@@ -1187,7 +1065,6 @@ def _spec_step(name: str, args, *, report_only: bool = False, cmd: str | None = 
     )
 
 
-# The gate's checks between the formatting and the asset copy, in order.
 _GATE_CHECKS = (
     "validate-data",
     "clippy",
@@ -1202,9 +1079,7 @@ _GATE_CHECKS = (
     "vale",
 )
 
-# The two generated docs, and the spec that rewrites each one. A run with fmt
-# rewrites them, because fmt also rewrites tracked files and a stale doc must
-# not stop the run that would refresh it. A run with --no-fmt checks them.
+# A run with fmt rewrites these docs: fmt rewrites tracked files too, and a stale doc must not stop the run that would refresh it.
 _GATE_DOC_REWRITERS = {
     "http-routes-check": "http-routes",
     "guardrails-doc-check": "guardrails-doc",
@@ -1212,7 +1087,6 @@ _GATE_DOC_REWRITERS = {
 
 
 def _gate_step_name(name: str, args) -> str:
-    """The spec the gate runs at one position of ``_GATE_CHECKS``."""
     if args.no_fmt:
         return name
     return _GATE_DOC_REWRITERS.get(name, name)
@@ -1224,11 +1098,7 @@ _LLM_SKIPPED_NOTE = (
 
 
 def _test_steps(args) -> list[Step]:
-    """The gate runs the test suite as two nextest invocations — the integration tier, then
-    the browser tier — so the browser binary gets its own epilogue verdict and its own
-    fail-fast exit. A tier with coverage or the LLM tests runs a different test set than
-    the fixed tier, so it records no size.
-    """
+    """A tier with coverage or the LLM tests runs a different test set than the fixed tier, so it records no size."""
     if args.coverage:
         tiers = [
             ("integration", _coverage_cmd(_NON_BROWSER_FILTER), None, "default"),
@@ -1262,12 +1132,7 @@ def _test_steps(args) -> list[Step]:
 
 
 def _plan_gate_steps(args) -> list[Step]:
-    """The concrete gate plan.
-
-    The order is load-bearing: the guardrails step (the architecture and guardrails binaries)
-    runs before the ~2-minute full suite and fails the build immediately — otherwise a
-    guardrail failure only surfaces after the full suite has run.
-    """
+    """The guardrails step runs before the full suite, so a guardrail failure fails the build at once."""
     plan = [
         _spec_step("install-hooks", args, report_only=True),
         _spec_step("remove-worktrees", args, report_only=True),
@@ -1318,7 +1183,6 @@ def _copy_deployment_assets(args):
     log_status(f"  Package ready in {target_dir}/")
     log_status(f"  Deployment: copy {target_dir}/ folder to your target machine")
 
-    # DB lives inside the target folder so each build profile has its own instance.
     clean_sqlite_dbs(target_dir / "data")
 
 
@@ -1326,8 +1190,7 @@ def _generate_coverage_report(ctx: Ctx) -> int:
     cargo_target_dir, _ = _target_paths(ctx.args)
     json_path = cargo_target_dir / "llvm-cov" / "coverage.json"
     json_path.parent.mkdir(parents=True, exist_ok=True)
-    # Excluded: code that no test reaches (the process entry, the logging setup, the
-    # real-HTTP LLM client), and test support.
+    # Excluded: code no test reaches, and test support.
     ignore_regex = (
         r"src[\\/]main\.rs|bootstrap[\\/]logging\.rs"
         r"|llm[\\/]transport[\\/]utils[\\/]client\.rs|test_support[\\/].*\.rs"
@@ -1354,9 +1217,7 @@ def run_gate(args, results):
 
 
 def _step_plan(args) -> list[Step]:
-    """One registry step. The narrow ``clippy`` step runs ``cargo fmt --check`` first; the
-    full gate runs ``fmt``, which rewrites the files, so it needs no check.
-    """
+    """The narrow ``clippy`` step checks formatting first; the gate's ``fmt`` step rewrites files, so it needs no check."""
     spec = REGISTRY[args.command]
     command = _step_command(
         spec,
@@ -1371,11 +1232,7 @@ def _step_plan(args) -> list[Step]:
 
 
 def run_step(args, results):
-    """Single-step mode: run one registry step with a minimal prelude.
-
-    Skips the gate-only prelude (asset copy, SQLite cleanup)
-    so quick iteration does not disturb a running dev server.
-    """
+    """Skips the asset copy and SQLite cleanup, so a quick step does not disturb a running dev server."""
     ctx = _prelude(args, results, nextest=REGISTRY[args.command].needs_nextest)
     _run_plan(_step_plan(args), ctx)
 
@@ -1404,28 +1261,19 @@ def _step_extra_args(spec: StepSpec, args) -> list[str] | None:
     return None
 
 
-# Server bind defaults, mirrored from src/utils/cli.rs (--port 3000, --host 0.0.0.0).
-# Kept here so the pre-build port check can run before any cargo command.
+# Server bind defaults, mirrored from src/utils/cli.rs.
 _DEFAULT_PORT = 3000
 _DEFAULT_HOST = "0.0.0.0"
 
 
 def _strip_passthrough(flags: list[str]) -> list[str]:
-    """Drop exactly one leading ``--`` that separates build.py flags from server flags."""
     if flags and flags[0] == "--":
         return flags[1:]
     return list(flags)
 
 
 def _parse_bind_target(flags: list[str]) -> tuple[int, str] | None:
-    """Return the (port, host) the server will bind, or None to skip the check.
-
-    Accepts ``--port N``/``--port=N`` and ``--host H``/``--host=H``; later flags
-    win. Returns None when the flags ask for a non-serving mode
-    (``--list-worlds``, ``--help``, ``--version``) or carry a value the parser
-    cannot understand — the server's own clap parser produces the authoritative
-    error in those cases.
-    """
+    """None skips the check: a non-serving mode, or a value this parser cannot read (the server's clap parser gives the authoritative error)."""
     if any(
         flag in ("--list-worlds", "--help", "-h", "--version", "-V")
         for flag in flags
@@ -1457,13 +1305,10 @@ def _parse_bind_target(flags: list[str]) -> tuple[int, str] | None:
 
 
 def _port_in_use(host: str, port: int) -> bool:
-    """Probe whether the server's bind address is already taken.
+    """SO_REUSEADDR is set as tokio's Unix listener sets it, so the probe reports the conflict the real bind would.
 
-    Sets SO_REUSEADDR, as tokio's Unix listener does, so the probe reports the
-    same conflict the real bind would. Other bind failures (e.g. a host the
-    kernel rejects) read as free: the server's own bind decides. mio omits
-    SO_REUSEADDR on Windows, so there a TIME_WAIT port reads free and the
-    server's own bind stays authoritative.
+    Other bind failures read as free: the server's own bind decides. mio omits SO_REUSEADDR on
+    Windows, so a TIME_WAIT port reads free there.
     """
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     with socket.socket(family, socket.SOCK_STREAM) as probe:
@@ -1490,13 +1335,7 @@ def _require_free_port(bind_target: tuple[int, str] | None) -> None:
 
 
 def _link_main_env(repo_root: Path) -> None:
-    """Link the main checkout's ``.env`` into a linked worktree that has none.
-
-    The server loads ``.env`` from its cwd or a parent dir, and a worktree
-    outside the main checkout finds none. The link gives the server the API
-    keys that a Connection does not store; the agent never reads the file.
-    A broken link is made again.
-    """
+    """A worktree outside the main checkout finds no ``.env``; the link gives the server the API keys a Connection does not store."""
     local = repo_root / ".env"
     if local.is_symlink() and not local.exists():
         local.unlink()
@@ -1519,13 +1358,7 @@ def _link_main_env(repo_root: Path) -> None:
 
 
 def run_server(args, results):
-    """Build the dev server and return the argv to exec once main() finishes.
-
-    No exec happens here: main() must first run its epilogue (summary, banner,
-    log close, history line). The port is checked before the build so a busy
-    port fails fast without invoking cargo. In a linked worktree, the main
-    checkout's ``.env`` is linked in first (``_link_main_env``).
-    """
+    """Returns the argv to exec instead of exec'ing, because main() must first write the epilogue and history line."""
     server_flags = _strip_passthrough(getattr(args, "server_flags", []))
     ctx = _prelude(args, results, nextest=False)
     _require_free_port(_parse_bind_target(server_flags))
@@ -1537,12 +1370,7 @@ def run_server(args, results):
 
 
 def _exec_pending(exit_code: int, argv: list[str] | None) -> None:
-    """Replace this process with the server when a ``run`` step built it.
-
-    Called only from the ``__main__`` block, after main() has written the
-    epilogue and history line. Re-checks the port because the build took
-    time; a port taken meanwhile fails here with the same message.
-    """
+    """Re-checks the port, because the build took time and another process may have taken it."""
     if exit_code != 0 or not argv:
         return
     _require_free_port(_parse_bind_target(argv[1:]))
@@ -1583,7 +1411,6 @@ _LLM_BANNER = "\n".join(
 def run_llm_only(args, results):
     ctx = _prelude(args, results)
     build_cmd = f"cargo build {'--release' if args.release else ''}".strip()
-    # The `--test llm` filter selects the LLM binary inside the llm profile run.
     llm_cmd = _with_fail_flag(f"{_NEXTEST_RUN}{_LLM_ARGS}", args) + " --test llm"
     _run_plan(
         [
@@ -1600,12 +1427,10 @@ _COMPILE_ERROR_LIMIT = 5
 
 
 def _tier_sizes(results) -> dict[str, int]:
-    """The test-set size of each tier the run covered whole."""
     return {r.tier: r.counts.size for r in results if r.tier and r.counts}
 
 
 def _exit_code(results) -> int:
-    """A fatal failure exits with its own code; a recorded test failure exits 1."""
     fatal = next((r for r in results if r.fatal), None)
     if fatal is not None:
         return fatal.rc
@@ -1630,11 +1455,6 @@ def _print_step_summary(results, log_path):
 
 
 def _print_failures(results):
-    """Name the failing tests and the causes of the failed non-nextest steps.
-
-    A report-only step that warned is not a failure. The first ``_FAILURE_LIMIT`` tests print;
-    the rest are counted.
-    """
     failed = [r for r in results if r.failed]
     tests = [(r.label, name, message) for r in failed for name, message in r.failures]
     steps = [(r.label, r.tail) for r in failed if r.tail]
@@ -1660,7 +1480,6 @@ def _print_failures(results):
 
 
 def _epilogue_baselines(sizes: dict[str, int]) -> dict | None:
-    """Load the per-tier baselines for the epilogue; None hides the count change."""
     if not sizes:
         return None
     try:
@@ -1669,8 +1488,14 @@ def _epilogue_baselines(sizes: dict[str, int]) -> dict | None:
         return None  # Best-effort: the plain nextest line still prints.
 
 
+def _staleness_lines() -> list[str]:
+    try:
+        return verify_coverage.warning_lines(Path.cwd())
+    except Exception as e:
+        return [f"verify coverage check failed: {type(e).__name__}: {e}"]
+
+
 def _print_epilogue(results, log_path, browser_skipped: bool) -> None:
-    """The step table, then the verdict lines an agent tailing stdout reads before the banner."""
     _print_step_summary(results, log_path)
     sizes = _tier_sizes(results)
     baselines = _epilogue_baselines(sizes)
@@ -1692,14 +1517,13 @@ def _print_epilogue(results, log_path, browser_skipped: bool) -> None:
         both_print(f"compile errors (first {min(len(errors), _COMPILE_ERROR_LIMIT)} of {len(errors)}):")
         for line in errors[:_COMPILE_ERROR_LIMIT]:
             both_print(f"  {line}")
+    for line in _staleness_lines():
+        both_print(line)
 
 
 def main(argv=None) -> tuple[int, list[str] | None]:
-    """Run the build. Returns the exit code and the argv of the server to exec, if any."""
     args = parse_args(argv)
 
-    # Journal inputs, captured before any chdir so the record reflects
-    # exactly what the caller invoked.
     run_start = time.time()
     history_args = " ".join(sys.argv[1:] if argv is None else argv).strip() or "(full gate)"
 
@@ -1710,7 +1534,7 @@ def main(argv=None) -> tuple[int, list[str] | None]:
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     clean_old_logs(log_dir, max_age_days=3)
-    log_path = log_dir / f"build_{time.strftime('%Y%m%d_%H%M%S')}.log"
+    log_path = log_dir / f"build_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}.log"
     log_fh = open(log_path, "w", encoding="utf-8")
     _set_log_fh(log_fh)
     _stamp_session_id()
@@ -1737,13 +1561,11 @@ def main(argv=None) -> tuple[int, list[str] | None]:
             browser_skipped = bool(args.no_browser)
             run_gate(args, results)
     except SystemExit as e:
-        # A failed precondition (toolchain, busy port). Capture the code so
-        # the finally can print the summary, then propagate.
+        # Keep the code of a failed precondition (toolchain, busy port) for the finally block.
         exit_code = int(e.code) if e.code is not None else 1
         raise
     finally:
-        # Print the epilogue BEFORE closing the log so the summary + banner are
-        # written into the log file, not only to stdout.
+        # The epilogue goes before the log closes, so it reaches the log file.
         _print_epilogue(results, log_path, browser_skipped)
 
         both_print("=" * 60)
@@ -1758,8 +1580,7 @@ def main(argv=None) -> tuple[int, list[str] | None]:
             pass
         _set_log_fh(None)
 
-        # The finally runs on every exit path, so the journal can never disagree with
-        # the process exit code.
+        # The finally runs on every exit path, so the journal cannot disagree with the exit code.
         exit_code = exit_code or _exit_code(results)
 
         try:

@@ -50,6 +50,32 @@ YouSwitchOrDeleteASwipe(g) ==
   /\ g \in exists'''
 
 [[mutant]]
+name = "swipe-switch-keeps-failure-line"
+code = "GameWriter::switch_swipe writes the Swipe but does not clear the failure line"
+config = "jobs"
+breaks = ["SwipeClearsFailures"]
+old = '''
+  /\ failLine' = [failLine EXCEPT ![g] = 0]
+  /\ optFail' = [optFail EXCEPT ![g] = 0]
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, holder, last,'''
+new = '''
+  /\ optFail' = [optFail EXCEPT ![g] = 0]
+  /\ UNCHANGED <<failLine, exists, fresh, active, pointerBy, holder, last,'''
+
+[[mutant]]
+name = "swipe-switch-keeps-options-failure"
+code = "GameWriter::switch_swipe writes the Swipe but does not clear the Options failure"
+config = "jobs"
+breaks = ["SwipeClearsFailures"]
+old = '''
+  /\ failLine' = [failLine EXCEPT ![g] = 0]
+  /\ optFail' = [optFail EXCEPT ![g] = 0]
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, holder, last,'''
+new = '''
+  /\ failLine' = [failLine EXCEPT ![g] = 0]
+  /\ UNCHANGED <<optFail, exists, fresh, active, pointerBy, holder, last,'''
+
+[[mutant]]
 name = "job-writer-without-id-check"
 code = "JobWriter::hold checks only that the Game is busy, not the job id"
 config = "jobs"
@@ -61,33 +87,51 @@ new = '''Own(j) == TRUE'''
 name = "stop-keeps-failure-line"
 code = "GameWriter::stop does not clear the failure line"
 config = "jobs"
-breaks = ["StopNoFailureLine"]
+breaks = ["StopNoFailureLine", "StopLeavesIdle"]
 old = '''
   /\ holder' = [holder EXCEPT ![g] = Idle]
   /\ failLine' = [failLine EXCEPT ![g] = 0]
   /\ optFail' = [optFail EXCEPT ![g] = 0]
   /\ CutOf(g)
-  /\ UNCHANGED <<exists, fresh, active, last,'''
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, last,'''
 new = '''
   /\ holder' = [holder EXCEPT ![g] = Idle]
   /\ optFail' = [optFail EXCEPT ![g] = 0]
   /\ CutOf(g)
-  /\ UNCHANGED <<failLine, exists, fresh, active, last,'''
+  /\ UNCHANGED <<failLine, exists, fresh, active, pointerBy, last,'''
 
 [[mutant]]
 name = "stop-keeps-options-failure"
 code = "GameWriter::stop does not clear the Options failure of the dock"
 config = "jobs"
-breaks = ["StopClearsOptionsFailure"]
+breaks = ["StopClearsOptionsFailure", "StopLeavesIdle"]
 old = '''
   /\ failLine' = [failLine EXCEPT ![g] = 0]
   /\ optFail' = [optFail EXCEPT ![g] = 0]
   /\ CutOf(g)
-  /\ UNCHANGED <<exists, fresh, active, last,'''
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, last,'''
 new = '''
   /\ failLine' = [failLine EXCEPT ![g] = 0]
   /\ CutOf(g)
-  /\ UNCHANGED <<optFail, exists, fresh, active, last,'''
+  /\ UNCHANGED <<optFail, exists, fresh, active, pointerBy, last,'''
+
+[[mutant]]
+name = "idle-stop-keeps-failure-line"
+code = "GameWriter::stop of an idle Game does not clear the failure line"
+config = "jobs"
+breaks = ["StopLeavesIdle"]
+old = '''
+  /\ holder' = [holder EXCEPT ![g] = Idle]
+  /\ failLine' = [failLine EXCEPT ![g] = 0]
+  /\ optFail' = [optFail EXCEPT ![g] = 0]
+  /\ CutOf(g)
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, last,'''
+new = '''
+  /\ holder' = [holder EXCEPT ![g] = Idle]
+  /\ failLine' = IF holder[g].kind = "none" THEN failLine ELSE [failLine EXCEPT ![g] = 0]
+  /\ optFail' = [optFail EXCEPT ![g] = 0]
+  /\ CutOf(g)
+  /\ UNCHANGED <<exists, fresh, active, pointerBy, last,'''
 
 [[mutant]]
 name = "stop-keeps-the-run"
@@ -212,20 +256,44 @@ new = '''
             /\ holder' = [holder EXCEPT ![g] = Idle]'''
 
 [[mutant]]
-name = "delete-check-inside-the-hold"
-code = "the fix: GameWriter::delete refuses the active Game inside its hold"
+name = "switch-without-the-pointer-lock"
+code = "GameCatalogue::switch_game reads the Game and moves the pointer outside ActiveGame::lock"
 config = "delete-race"
-fix = true
-breaks = []
+breaks = ["ActiveExists", "DeleteNotActive"]
 old = '''
-  /\ g \in pending.delete
-  /\ exists' = exists \ {g}
-  /\ holder' = [holder EXCEPT ![g] = Idle]
-  /\ CutOf(g)
-  /\ deletedActive' = (deletedActive \/ (active = g /\ g \in exists))'''
+  /\ TakePointer("switch")'''
 new = '''
-  /\ g \in pending.delete
-  /\ exists' = IF active = g THEN exists ELSE exists \ {g}
-  /\ holder' = IF active = g THEN holder ELSE [holder EXCEPT ![g] = Idle]
-  /\ IF active = g THEN UNCHANGED <<cut, cutRuns>> ELSE CutOf(g)
-  /\ deletedActive' = (deletedActive \/ (active = g /\ g \in exists /\ g \notin exists'))'''
+  /\ UNCHANGED pointerBy'''
+
+[[mutant]]
+name = "delete-without-the-pointer-lock"
+code = "GameCatalogue::delete_game checks the active Game outside ActiveGame::lock"
+config = "delete-race"
+without = ["ActiveExists"]
+breaks = ["DeleteNotActive"]
+old = '''
+  /\ TakePointer("delete")'''
+new = '''
+  /\ UNCHANGED pointerBy'''
+
+[[mutant]]
+name = "reset-without-the-pointer-lock"
+code = "GameCatalogue::reset calls GameWriter::replace and set_new outside ActiveGame::lock"
+config = "delete-race"
+without = ["DeleteNotActive"]
+breaks = ["ActiveExists"]
+old = '''
+  /\ TakePointer("reset")'''
+new = '''
+  /\ UNCHANGED pointerBy'''
+
+[[mutant]]
+name = "create-without-the-pointer-lock"
+code = "GameCatalogue::create_game calls GameWriter::create and set_new outside ActiveGame::lock"
+config = "delete-race"
+without = ["DeleteNotActive"]
+breaks = ["ActiveExists"]
+old = '''
+  /\ TakePointer("create")'''
+new = '''
+  /\ UNCHANGED pointerBy'''

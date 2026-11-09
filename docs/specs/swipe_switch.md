@@ -68,3 +68,14 @@ And the first line of the body is "The last Message changed, so the Swipe was no
 And the second line of the body is "The page showed a Message that is no longer the last one."
 And no Message of the story changes
 ```
+
+#### Scenario 36.7: A swipe switch clears the failure line and the Options failure
+
+```gherkin
+Given a Game whose last Message has two Swipes
+And the dock shows the Options failure of a failed Options run
+And a Retry of that Message failed, so the Game shows a failure line
+When the client switches to the other Swipe
+Then the status display answers Ready
+And the dock renders no Options failure
+```

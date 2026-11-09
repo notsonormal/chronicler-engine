@@ -1,6 +1,6 @@
 ---
 name: statechart
-description: "Check a TLA+ model of a system that moves between states, such as a product flow, a protocol, or a service, and draw it as a Mermaid statechart. The report gives the shortest path to each state that breaks a rule. Use for /statechart, or to show a bug as a path through states."
+description: "Check a TLA+ model of a system that moves between states, such as a product flow, a protocol, or a service, and draw it as a Mermaid statechart. The report gives the shortest path to each state that breaks a rule. Use for /statechart, or to show a bug as a path through states, or to draw a scenario as a Mermaid sequence diagram."
 disable-model-invocation: true
 ---
 
@@ -14,7 +14,10 @@ Work in a scratch folder outside the repo. Write a TLA+ spec and its config. The
 
 ```sh
 <skill dir>/scripts/statechart SPEC.tla [--config FILE] [--view FILE] [--out DIR]
+<skill dir>/scripts/statechart SPEC.tla --scenarios FILE --view FILE [--config FILE] [--out DIR]
 ```
+
+The second form draws sequence diagrams of scenarios, and no chart. See "Draw sequence diagrams".
 
 `scripts/statechart.ts` is TypeScript, so run it with a runtime that can execute TypeScript.
 
@@ -71,12 +74,65 @@ Aim for about 20 arrows or fewer, because a busier chart is hard to read. First 
 
 ## Show the chart
 
-Show `chart.mmd` to the user as a `mermaid` code block. The chart has a budget of 500 states, counted by TLC on the config as written. Above that, the chart draws only the paths to the rules that break, and when no rule breaks, the command writes no `chart.mmd`. It still checks each rule, and the report gives the state count and each bug path. To see the whole graph, make the model smaller.
+Show `chart.mmd` to the user as a `mermaid` code block. The chart has a budget of 500 chart states. A chart state is one state of the chart, after the view merges TLC states. Without a `state()` in the view, each TLC state is a chart state, so a config with more than 500 TLC states is over the budget. With a `state()`, the command draws the whole graph when TLC reaches at most 200,000 distinct states on the config as written, and then counts the chart states. The bound of 200,000 is for the drawing run only: the first run has no bound, and the later runs stop at 100,000 states (see "Read the report").
+
+Above the budget or the bound, the chart draws only the paths to the rules that break, and when no rule breaks, the command writes no `chart.mmd`. The report says which limit the config is over. It still checks each rule, and the report gives the state count and each bug path. To see the whole graph, give a coarser `state()` or make the model smaller.
+
+The first run has no bound, so a large config can run longer than one tool call allows. Run one config per call. Run a config that can reach more than about 1,000,000 states in the background, with its output in a file.
 
 Render charts with Pele. When the user asks for an image, or a chart is too large to read as text, follow `references/render.md`. Do not use a different renderer unless the user asks for it.
 
+## Draw sequence diagrams
+
+A sequence diagram shows one path of the model as messages between lanes, such as the user, a store, and a worker. The command draws two kinds:
+
+- **The path of each broken rule.** With `lanes` and `message()` in the view, a chart run also writes `sequence-RULE.mmd` for each INVARIANT that breaks, and for a deadlock. It draws TLC's counterexample for the rule. The command does not draw the path of a broken PROPERTY, because that path is a loop.
+- **A scenario.** A scenario is a named list of TLA+ actions. With `--scenarios FILE`, TLC takes only those steps, in that order, and checks each INVARIANT of the config in each state on the way. It does not check a PROPERTY, because a scenario is a finite path. The command writes `NAME.mmd` and `tlc-NAME.out` for each scenario, and a `report.md`. It draws no chart.
+
+The view exports these two for a sequence diagram:
+
+- `lanes` is the ordered list of the lanes, such as `[{ id: "You" }, { id: "G", label: "Busy registry" }]`. An id has letters, digits and `_`, starts with a letter, is unique, and is not a Mermaid keyword such as `end` or `box`. The label is what the diagram shows. Without a label, the diagram shows the id. A lane shows only when an item of `message()` uses it, in the order of `lanes`.
+- `message(action, from, to)` gets the TLC action name and the values before and after the step, as `step()` does. It returns a list of items, in order. Each item is one of these:
+  - `{ call: TEXT, from: LANE, to: LANE }`: a call (`->>`).
+  - `{ answer: TEXT, from: LANE, to: LANE }`: an answer (`-->>`).
+  - `{ refused: TEXT, from: LANE, to: LANE }`: a call that the receiver refuses (`-x`).
+  - `{ failed: TEXT, from: LANE, to: LANE }`: an answer that says the call failed (`--x`).
+  - `{ note: TEXT, over: LANE }` or `{ note: TEXT, over: [LANE, LANE] }`: a note over one lane or two.
+
+  Return `[]` for a step that the diagram does not show. `action` has no arguments, also in a scenario, because a counterexample gives none. So read the values that you need, such as the id of a Job, from the change between `from` and `to`. When a rule breaks, the command adds the note `rule RULE breaks here` over all the lanes in use, after the last step.
+
+The scenarios file is a module that exports `scenarios`, an object with one entry for each scenario. The key is the name of the scenario, and the name of its files: lowercase letters, digits and `-`, and a letter first.
+
+```js
+export const scenarios = {
+  "stop-during-the-upload": {
+    title: "A stop while the upload runs",
+    steps: ['YouUpload(1, "photo")', "TheUploadStarts(1)", "YouPressStop(1)", "TheUploadEnds(1)"],
+    constants: { MaxUploads: "1" },
+    rule: "StoppedUploadSavesNothing",
+    spec: "upload.md, scenario 3",
+  },
+};
+```
+
+- `title` and `steps` are required. Write each step on one line, as a TLA+ action of the model that starts with its name, with its arguments.
+- `constants` replace values of the config, as config text. The config must already set each of them with `=`.
+- `rule` and `spec` are for the reader. The report shows them. `rule` must be an INVARIANT or a PROPERTY of the config. `spec` is free text, such as the spec scenario that the diagram shows.
+
+The command adds a module that extends the model with the step counter `ChartStep`. So the model cannot define `ChartStep`, `ChartInit`, `ChartNext`, `ChartSpec` or `ChartEnd`. Each step must also be a step of `Next`. The command takes `Init` and `Next` from the `INIT` and `NEXT` lines of the config. Without them, it reads the definition that `SPECIFICATION` names, which must have the form `Init /\ [][Next]_vars`.
+
+The scenario config keeps the CONSTANTS of the config and its INVARIANTS. It leaves out PROPERTY, CONSTRAINT, ACTION_CONSTRAINT, VIEW, SYMMETRY and CHECK_DEADLOCK. TLC checks for deadlock, so a step that the model does not allow stops the scenario in the state before it. TLC searches every way to take the steps. So when one step can end in more than one state, and the next step is not allowed from one of them, the scenario stops there too. A diagram cannot show an order that the model does not have.
+
+The exit code of a run with `--scenarios`:
+
+- 0: each scenario takes all its steps, and every INVARIANT holds.
+- 1: a rule breaks in a scenario. Its diagram stops in the state that breaks the rule and marks it, and the report names the step.
+- 2: the model does not allow a step, a step does not parse, or the files are wrong. The error names the scenario, and the step when a step is the cause. The command writes no output.
+
+Show each sequence diagram as a `mermaid` code block, and render it with Pele as you do a chart (`references/render.md`).
+
 ## Hand off
 
-Give each chart and its Mermaid text to the person who must decide. Add one line for each bug: the rule, the reader's sentence for that rule, and the path as the report numbers it. Say what the model leaves out. Give the command that makes the files again, with a new `--out` folder.
+Give each chart and each sequence diagram, with its Mermaid text, to the person who must decide. Add one line for each bug: the rule, the reader's sentence for that rule, and the path as the report numbers it. Say what the model leaves out. Give the command that makes the files again, with a new `--out` folder.
 
 When the model describes code, replay each bug path against the real code, as a test or a live repro, one step for each action. If a bug does not occur, think that the model is wrong until you show that it is not.

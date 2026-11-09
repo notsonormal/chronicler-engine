@@ -17,7 +17,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **Evidence is re-checked, not trusted.** A finding is a hypothesis, and the tree moves. Re-check the cited `file:line` before deciding.
 - **Concurrency.** Other efforts edit this checkout at the same time. The user decides the scope of each commit.
 - **Skills.** `/grilling` and `/domain-modeling` for every ticket. `/writing-for-agents` for any skill or `AGENTS.md` edit. `/code-review` for an implementation ticket.
-- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 103.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
+- **Numbering.** A new ticket takes the next number after the highest number used. **Highest number used: 110.** Closed tickets are deleted, so read the number here, and update this line when you file a ticket. Numbers are never reused or reordered.
 - **Audit.** [`audit.md`](./audit.md) (2026-10-25) sorts the open tickets by whether the fix changes what the next agent does.
 
 ## Decisions so far
@@ -37,6 +37,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 - **44 — comment pass applies an in-file rename or gate.** `chronicler-comment-fixer` KEEP test: a rename or a visibility or `cfg` gate in the judged file is made and reported as a rewrite; only a cross-file change or a design call raises a reshape flag.
 - **52 — comment pass lists deleted reasons.** The `chronicler-comment-fixer` output format has a `DELETED REASONS` section: each deleted comment that states a why, in full, with the KEEP part it fails.
 - **57 — docs step after the code steps.** In both after-plan skills, the docs step runs after the steps that change code and before the comment pass and the full build. A fix pass after the reviews is not covered.
+- **104 — each run reads its own build log (2026-11-08).** `build.py` adds the PID to the log name, and the `AGENTS.md` Development Loop recipe sends the output to a file of the agent's own and reads the `Full build log:` line. Source: t10 read another agent's log while four agents built.
 - **83 — moved out (2026-10-25).** The mutation-check script question moved to the [`unclebob-quality-tools`](../unclebob-quality-tools/map.md) map; its evidence is in that map's ticket 03. The file is deleted.
 - **25 — dropped (2026-11-01).** The `tdd` skill is deleted, so its description trigger no longer exists.
 - **74 — `build_slot.py --status` gives one verdict.** A free slot prints only `Build slot: free.`; the stale-holder note is gone from the free branch. The held branch is unchanged.
@@ -143,3 +144,9 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 - [101 — The free-fn guardrail fails only in the full gate](./issues/101-free-fn-guardrail-only-in-the-full-gate.md)
 - [102 — A spec scenario that the ticket's rule changes stays as it was, and the Spec review passes it](./issues/102-spec-scenario-against-the-ticket-rule.md)
 - [103 — A Narration wraps its paragraphs in XML speaker tags](./issues/103-narration-writes-xml-speaker-tags.md) (a product fault, filed here by the owner to track a second case)
+- [105 — A rule quote in a TLA+ model drifts from its spec scenario, and no check finds it](./issues/105-rule-quote-drifts-from-the-spec.md)
+- [106 — The `/statechart` TypeScript has no working type check and no tests](./issues/106-statechart-scripts-have-no-type-check.md)
+- [107 — The first TLC run of `/statechart` has no bound](./issues/107-statechart-first-run-has-no-bound.md)
+- [108 — A doc sentence that fails Vale reaches a commit and blocks every gate after it](./issues/108-vale-runs-only-in-the-gate.md)
+- [109 — The `grep * . *` denial costs a turn because its reason starts with the problem](./issues/109-grep-denial-reason-names-no-fix-first.md)
+- [110 — `test-pattern` cannot select the tests of a spec scenario](./issues/110-test-pattern-cannot-select-a-scenario.md)

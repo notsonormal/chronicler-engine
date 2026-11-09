@@ -29,3 +29,9 @@ Should the check be unconditional in some cases?
 - 2026-10-21, triage pass 2: Ticket 55 (closed; see the map) folded in: widen the trigger to "a test that turns green in a step that changes its subject".
 - 2026-10-25, audit: the user deferred this ticket. Do not implement it yet; it stays open.
 - 2026-11-01: the `tdd` skill was deleted at the user's request. This ticket now decides which *check* replaces the prose rule (option 3, a guardrail, or the mutation tool in `../unclebob-quality-tools/`), not how to reword it.
+
+## Further evidence (2026-11-08, statechart-models tickets 08–16, coordinator `01a1bd22`)
+
+- **known** t12 (`549a889a`) copied `src/application/generation/gate.rs` to `tmp/gate.rs.bak`, ran two scratch mutants with `test-pattern` and restored the file. t11 (`6f1e3893`) wrote `/tmp/mut.py`, which wrote 5 mutants into `gate.rs` while t16 built in the same checkout.
+- **known** Neither agent held the build slot for the whole mutate, test and restore cycle. A build by another agent in that time compiles the mutant, and a killed shell leaves it in place. Both agents wrote the same harness again.
+- **Requirement for a mutation tool:** it takes the old text, the new text, the test pattern and the target. It holds the build slot for the cycle, restores the file in `finally`, and reads its own log.

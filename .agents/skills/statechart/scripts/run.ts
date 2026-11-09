@@ -5,23 +5,38 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { inspect } from "node:util";
-import { boundRun, chartRun, configText } from "./backends/cfg.ts";
+import {
+  boundRun,
+  chartRun,
+  configText,
+  SCENARIO_END,
+  SCENARIO_STEP_LINE,
+  scenarioConfig,
+  scenarioRun,
+} from "./backends/cfg.ts";
 import { plainText } from "./backends/plain-text.ts";
 import { readConfig } from "./frontends/config.ts";
 import { parseDot } from "./frontends/dot.ts";
 import { readCounterexample, readMarks } from "./frontends/marks.ts";
 import { readMessages } from "./frontends/messages.ts";
-import { initialOnlyProperties, readChecks, readSany, readSpec } from "./frontends/spec.ts";
+import {
+  initAndNext,
+  initialOnlyProperties,
+  readChecks,
+  readSany,
+  readSpec,
+} from "./frontends/spec.ts";
 import { readTrace } from "./frontends/trace.ts";
 import { type Break, readVerdict } from "./frontends/verdict.ts";
 import {
   type Bug,
-  CHART_STATES,
+  type BugPaths,
   type CheckResult,
   type ConfigSection,
   hasSection,
   type Lasso,
   LEVEL,
+  list,
   type Mark,
   must,
   type Outcome,
@@ -32,9 +47,13 @@ import {
   RERUN_STATES,
   type Rule,
   ruleKey,
+  type Scenario,
+  type ScenarioResult,
+  type ScenarioRun,
   type Stop,
   stateRules,
   type Trace,
+  type TraceState,
   type Verdict,
 } from "./ir.ts";
 import { addPast, deadEnds, finder, lasso, mark } from "./passes/annotate.ts";
@@ -267,49 +286,58 @@ function* only(marks: Iterable<Mark>, rules: Set<string>) {
   }
 }
 
-export async function check(specFile: string, configFile: string): Promise<CheckResult> {
+async function prepare(specFile: string, configFile: string, dir: string) {
   const cfg = readConfig({ file: configFile, text: fs.readFileSync(configFile, "utf8") });
   const checks = readChecks({ configFile, config: cfg });
   const folder = path.dirname(path.resolve(specFile));
+  const tlc = await findTlc(dir);
+  const config = (name: string, sections: ConfigSection[], extra: string[]) => {
+    fs.writeFileSync(path.join(dir, `${name}.cfg`), configText(sections, extra));
+    return [`-metadir`, path.join(dir, `meta-${name}`), "-config", path.join(dir, `${name}.cfg`)];
+  };
+  const runJava = (name: string, main: string, args: string[], jvm: string[] = []) => {
+    const tmp = path.join(dir, `tmp-${name}`);
+    fs.mkdirSync(tmp);
+    return runToFiles(
+      tlc.java,
+      [
+        `-Djava.io.tmpdir=${tmp}`,
+        `-DTLA-Library=${folder}`,
+        ...jvm,
+        "-cp",
+        tlc.jar,
+        main,
+        ...args,
+      ],
+      {
+        cwd: dir,
+        out: path.join(dir, name),
+        env: process.platform === "darwin" ? process.env : { ...process.env, LC_ALL: "C.UTF-8" },
+      },
+    );
+  };
+  const xml = await runJava(
+    "sany",
+    "tla2sany.xml.XMLExporter",
+    ["-o", "-I", folder, path.resolve(specFile)],
+    ["-XX:TieredStopAtLevel=1"],
+  );
+  if (xml.status !== 0)
+    throw new Error(`SANY could not read ${specFile} (exit ${xml.status}):\n${tail(xml)}`);
+  const sany = readSany(fs.readFileSync(xml.stdout, "utf8"));
+  const module = path.basename(specFile, ".tla");
+  const spec = { ...readSpec({ module, sany, checks }), folder };
+  return { spec, sany, config, runJava };
+}
+
+export async function check(
+  specFile: string,
+  configFile: string,
+  bound: number,
+): Promise<CheckResult> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "statechart-"));
   try {
-    const tlc = await findTlc(dir);
-    const config = (name: string, sections: ConfigSection[], extra: string[]) => {
-      fs.writeFileSync(path.join(dir, `${name}.cfg`), configText(sections, extra));
-      return [`-metadir`, path.join(dir, `meta-${name}`), "-config", path.join(dir, `${name}.cfg`)];
-    };
-    const runJava = (name: string, main: string, args: string[], jvm: string[] = []) => {
-      const tmp = path.join(dir, `tmp-${name}`);
-      fs.mkdirSync(tmp);
-      return runToFiles(
-        tlc.java,
-        [
-          `-Djava.io.tmpdir=${tmp}`,
-          `-DTLA-Library=${folder}`,
-          ...jvm,
-          "-cp",
-          tlc.jar,
-          main,
-          ...args,
-        ],
-        {
-          cwd: dir,
-          out: path.join(dir, name),
-          env: process.platform === "darwin" ? process.env : { ...process.env, LC_ALL: "C.UTF-8" },
-        },
-      );
-    };
-    const xml = await runJava(
-      "sany",
-      "tla2sany.xml.XMLExporter",
-      ["-o", "-I", folder, path.resolve(specFile)],
-      ["-XX:TieredStopAtLevel=1"],
-    );
-    if (xml.status !== 0)
-      throw new Error(`SANY could not read ${specFile} (exit ${xml.status}):\n${tail(xml)}`);
-    const sany = readSany(fs.readFileSync(xml.stdout, "utf8"));
-    const module = path.basename(specFile, ".tla");
-    const spec = { ...readSpec({ module, sany, checks }), folder };
+    const { spec, sany, config, runJava } = await prepare(specFile, configFile, dir);
     const rules = stateRules(spec);
     const all = [...rules];
     for (const name of spec.properties) all.push({ kind: "property", name });
@@ -408,10 +436,21 @@ export async function check(specFile: string, configFile: string): Promise<Check
       states: judged.states,
       messages: messagesOf(judged.first.output),
       rules: checked,
+      bound,
     };
-    if (judged.states.distinct <= CHART_STATES) {
+    const bugPaths = (): BugPaths => {
+      const drawn = pathGraph(spec.variables);
+      const paths: Bug[] = [];
+      for (const rule of rules) {
+        const { outcome, messages } = must(verdicts, ruleKey(rule));
+        if (outcome === "broken" && messages)
+          paths.push(drawn.bug(rule, readCounterexample(messages)));
+      }
+      return { graph: drawn.graph, paths, properties: propertiesWith(drawn.lasso) };
+    };
+    if (judged.states.distinct <= bound) {
       const tag = `chart-${randomBytes(16).toString("hex")}`;
-      fs.writeFileSync(path.join(dir, "ChartRun.tla"), chartRun(spec, tag));
+      fs.writeFileSync(path.join(dir, "ChartRun.tla"), chartRun(spec, tag, bound));
       const drawn = await runJava("ChartRun", "tlc2.TLC", [
         "-tool",
         ...PINNED_FLAGS,
@@ -424,7 +463,7 @@ export async function check(specFile: string, configFile: string): Promise<Check
       ]);
       const file = path.join(dir, "graph.dot");
       if (!fs.existsSync(file)) throw failed(drawn);
-      if (readVerdict(messagesOf(drawn.output)).distinct <= CHART_STATES) {
+      if (readVerdict(messagesOf(drawn.output)).distinct <= bound) {
         const graph = parseDot(fileLines(file));
         const find = finder(graph, spec.variables);
         const drawing = drawn.status === 0 ? undefined : { status: drawn.status };
@@ -458,22 +497,93 @@ export async function check(specFile: string, configFile: string): Promise<Check
           paths: undefined,
           properties,
           drawing,
+          fallback: bugPaths(),
         };
       }
     }
-    const drawn = pathGraph(spec.variables);
-    const paths: Bug[] = [];
-    for (const rule of rules) {
-      const { outcome, messages } = must(verdicts, ruleKey(rule));
-      if (outcome === "broken" && messages)
-        paths.push(drawn.bug(rule, readCounterexample(messages)));
+    return { ...common, ...bugPaths(), drawing: undefined, fallback: undefined };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export async function runScenarios(
+  specFile: string,
+  configFile: string,
+  scenarios: Scenario[],
+): Promise<ScenarioResult> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "statechart-"));
+  try {
+    const { spec, sany, runJava } = await prepare(specFile, configFile, dir);
+    if (spec.variables.includes("ChartStep"))
+      throw new Error(
+        `${specFile} has a variable ChartStep, which is the step counter of a scenario. Rename it.`,
+      );
+    const named = new Set([...spec.invariants, ...spec.properties]);
+    for (const { name, rule } of scenarios)
+      if (rule !== undefined && !named.has(rule))
+        throw new Error(
+          `The scenario ${name} names the rule ${rule}, which ${configFile} does not list as an INVARIANT or a PROPERTY.`,
+        );
+    const parts = initAndNext(sany, spec.written);
+    const runs: ScenarioRun[] = [];
+    for (const [k, scenario] of scenarios.entries()) {
+      const { name, steps } = scenario;
+      const module = `ChartScenario${k + 1}`;
+      fs.writeFileSync(path.join(dir, `${module}.tla`), scenarioRun(spec, module, parts, steps));
+      const { text, missing } = scenarioConfig(spec.written, spec.invariants, scenario.constants);
+      if (missing.length)
+        throw new Error(
+          `The scenario ${name} sets ${list(missing)}, which ${configFile} does not set with =.`,
+        );
+      const cfgFile = path.join(dir, `${module}.cfg`);
+      readConfig({ file: `${cfgFile}, the config of the scenario ${name},`, text });
+      fs.writeFileSync(cfgFile, text);
+      const r = await runJava(module, "tlc2.TLC", [
+        "-tool",
+        ...PINNED_FLAGS,
+        "-metadir",
+        path.join(dir, `meta-${module}`),
+        "-config",
+        cfgFile,
+        module,
+      ]);
+      if (exitClass(r.status) === 2)
+        throw new Error(
+          `TLC could not run the scenario ${name} (exit ${r.status}). In ${module}.tla, step k of the scenario is on line k + ${SCENARIO_STEP_LINE}:\n${tail(r)}`,
+        );
+      const messages = messagesOf(r.output);
+      const { broke } = readVerdict(messages);
+      const trace: TraceState[] = [];
+      for (const [i, { action, vars }] of readCounterexample(messages).entries()) {
+        const { ChartStep, ...rest } = vars;
+        if (ChartStep !== i)
+          throw new Error(`TLC's trace of the scenario ${name} has a state out of step order.`);
+        trace.push({ action, vars: rest });
+      }
+      const reached = trace.length - 1;
+      if (broke?.kind === "deadlock") {
+        const after = reached ? `step ${reached}` : "the start";
+        throw new Error(
+          `The scenario ${name} cannot take step ${reached + 1}, ${steps[reached].trim()}: the TLA+ model does not allow it after ${after}. TLC stops in the state after ${after}.`,
+        );
+      }
+      if (broke?.kind !== "invariant")
+        throw new Error(
+          `TLC ended the scenario ${name} with exit ${r.status}, but the command expected a broken rule or the end of the steps:\n${tail(r)}`,
+        );
+      runs.push({
+        scenario,
+        trace,
+        broken: broke.name === SCENARIO_END ? undefined : broke.name,
+        messages,
+      });
     }
     return {
-      ...common,
-      graph: drawn.graph,
-      paths,
-      properties: propertiesWith(drawn.lasso),
-      drawing: undefined,
+      spec,
+      configFile,
+      runs,
+      exit: runs.some((run) => run.broken !== undefined) ? 1 : 0,
     };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

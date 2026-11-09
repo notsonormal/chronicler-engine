@@ -122,6 +122,17 @@ Then the offered set is empty
 And the dock renders no options strip
 ```
 
+#### Scenario 24.27: A narration message with the toggle off clears the Options failure
+
+```gherkin
+Given a game whose always-on toggle is off
+And the dock shows the Options failure of scenario 24.5
+When the client POST /action with command="look"
+And the Game is no longer busy
+Then the dock renders no Options failure
+And the dock renders no options strip
+```
+
 #### Scenario 24.17: A failed always-on Options run empties the offered set and reports the failure
 
 ```gherkin

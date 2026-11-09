@@ -85,7 +85,7 @@ _Avoid_: Style, tone, personality, narrator persona
 ### Autoplay and the busy state
 
 **Autoplay run**:
-A series of Jobs that the engine starts one after the other, so that the Persona plays by itself. It holds its Game from its start to its end, also between two Jobs.
+A series of Jobs that the engine starts one after the other, so that the Persona plays by itself. It holds its Game from its start until it ends, also between two Jobs. When the budget or an accept that cannot read a record ends the run, that accept lets go of the Game.
 _Avoid_: Run (alone), auto mode, bot, simulation
 
 **Cycle**:

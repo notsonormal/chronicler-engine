@@ -23,6 +23,10 @@ process lives in `ActiveGame` (`application/games/active.rs`).
 `GameCatalogue` is the only reader and the only writer of `ActiveGame`.
 `CurrentGame` reads the active Game through `GameCatalogue` once per request.
 
+The active Game always names a Game that exists.
+A switch, a delete, a create and a reset hold the mutex of `ActiveGame` from their check to their last write.
+The lock order is the `ActiveGame` mutex, then the guard of `GameWriter`, then the backend mutex, then the connection mutex.
+
 ## Records of a Game
 
 | Record | Holds | Lives in |

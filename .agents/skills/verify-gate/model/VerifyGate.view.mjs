@@ -20,6 +20,7 @@ export const state = (v) => {
   const cutLive = Object.keys(v.job).some((j) => v.cut.includes(Number(j)) && live(v.job[j]));
   if (cutLive) words += "; a cut-off Job still runs";
   if (v.pending.delete.length > 0) words += "; a delete passed its check";
+  if (v.pending.switch.length > 0) words += "; a switch read its Game";
   return words;
 };
 
@@ -37,9 +38,12 @@ const labels = {
   YouPressStop: "you press Stop",
   YouResetTheGame: "you reset the Game",
   TheResetMovesThePointer: "the new Game becomes active",
+  YouCreateAGame: "you create a Game",
+  TheCreateMovesThePointer: "the created Game becomes active",
   YouDeleteAGame: "you delete another Game, and it is not the active one",
   TheDeleteRemovesTheGame: "the delete removes the Game",
-  YouSwitchTheGame: "you switch the active Game",
+  YouSwitchTheGame: "you switch to another Game, and it exists",
+  TheSwitchSetsThePointer: "the switch moves the pointer",
   YouEditAMessage: "you edit a Message",
   YouSwitchOrDeleteASwipe: "you switch a Swipe or delete the last Message",
   YouChangeTheConfig: "you change the config",

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 
 use chronicler_engine::adapters::driving::http::AppState;
+use chronicler_engine::domain::model::agent::Role;
 use chronicler_engine::domain::model::state::message_types::MessageType;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, ScriptedModel, TestAppBuilder, TestDataBuilder, TestMap,
@@ -88,8 +89,7 @@ async fn test_switch_swipe_drops_the_offered_option_set_http() {
             .options(OFFERED_SET),
     );
 
-    // The `/options` runs leave the dock a live set, which the switch's own
-    // write must clear: a switch writes the empty dock record.
+    // The `/options` runs leave the dock a live set, which a switch must clear.
     assert!(post_action(&app, "look").await.status().is_success());
     assert!(wait_settled(&state, 1000).await);
     assert!(post_action(&app, "/options").await.status().is_success());
@@ -157,9 +157,8 @@ async fn test_switch_swipe_past_the_last_swipe_is_refused_http() {
 // [docs/specs/swipe_switch.md] SCENARIO: 36.4
 #[tokio::test]
 async fn test_switch_swipe_gives_back_the_state_of_that_swipe_http() {
-    // The Action moves the player into "room2"; the Retry starts from the state
-    // before it and stays put, so the two Swipes of the Narration hold the two
-    // rooms.
+    // The Action moves the player into "room2"; the Retry starts before it, so
+    // the two Swipes hold the two rooms.
     let data = TestDataBuilder::default_test()
         .map(TestMap::two_rooms("room_1", "room2"))
         .build();
@@ -254,5 +253,55 @@ async fn test_switch_swipe_on_a_message_that_is_not_the_last_is_refused_http() {
         story(),
         before,
         "the refused switch changes no story record"
+    );
+}
+
+// [docs/specs/swipe_switch.md] SCENARIO: 36.7
+#[tokio::test]
+async fn test_switch_swipe_clears_the_failure_line_and_the_options_failure_http() {
+    let (app, state, _storage) = app_with_script(
+        ScriptedModel::new()
+            .turn("You look around.")
+            .turn("You look around again.")
+            .options("no parseable options in this response")
+            .options("still nothing parseable here")
+            .failed(Role::Narrator),
+    );
+    let (message_id, target) = last_message_with_two_swipes(&app, &state).await;
+    assert!(post_action(&app, "/options").await.status().is_success());
+    assert!(wait_settled(&state, 1000).await, "/options should complete");
+    assert!(
+        post_on_last_message(&app, "/swipe/new")
+            .await
+            .status()
+            .is_success()
+    );
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the failed Retry should end"
+    );
+    assert_ne!(
+        fetch_status_label(&app).await,
+        "Ready",
+        "the failed Retry leaves a failure line"
+    );
+    let dock = fetch_part(&app, "options-dock").await;
+    assert!(
+        dock.contains("options-notice-line"),
+        "the dock shows the Options failure before the switch: {dock}"
+    );
+
+    let resp = post_empty(&app, &format!("/message/{message_id}/swipe/{target}")).await;
+    assert_answers_nothing(resp).await;
+
+    assert_eq!(
+        fetch_status_label(&app).await,
+        "Ready",
+        "the switch cleared the failure line"
+    );
+    let dock = fetch_part(&app, "options-dock").await;
+    assert!(
+        !dock.contains("options-notice-line"),
+        "the switch cleared the Options failure: {dock}"
     );
 }

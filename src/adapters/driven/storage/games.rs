@@ -30,8 +30,7 @@ impl Storage {
         })
     }
 
-    /// One page of the Games other than the active one, newest `updated_at` first. Equal
-    /// `updated_at` lists the greater id first, so a page is stable.
+    /// The `id` tie-break keeps the pages stable.
     pub fn list_saved_games_page(
         &self,
         active: Option<GameId>,
@@ -81,7 +80,6 @@ impl Storage {
         })
     }
 
-    /// The uniqueness scan keys on `name`, so a rename must not touch it.
     pub fn update_game_display_name(&self, id: u64, display_name: &str) -> Result<(), EngineError> {
         self.with_backend_mut(
             StorageCall::UpdateGameDisplayName,
@@ -133,10 +131,7 @@ impl Storage {
             .ok_or_else(|| EngineError::GameNotFound(id))
     }
 
-    /// The newest Game of a World: the one boot picks up. The order is the
-    /// newest Message of the Game, else the Game's `updated_at`, which
-    /// `ActiveGame::set` touches. The higher Game id breaks a tie in either
-    /// key.
+    /// A Game without Messages falls back to `updated_at`, which `PointerHold::set` touches.
     pub fn newest_game_of_world(&self, world_key: &str) -> Result<Option<GameId>, EngineError> {
         self.with_backend_mut(StorageCall::NewestGameOfWorld, |backend| match backend {
             Backend::Sqlite { pool } => {

@@ -86,8 +86,6 @@ async fn test_two_actions_at_the_same_moment_save_one_input_http() {
     let (app, state) = app_with_model(Arc::clone(&model));
     let barrier = Arc::new(Barrier::new(2));
 
-    // Both clicks carry the same Action, released together, so which of them
-    // wins comes from the Game's job entry and not the scheduler's.
     let click = |app: axum::Router, barrier: Arc<Barrier>| async move {
         barrier.wait().await;
         let resp = post_action(&app, "look").await;
@@ -193,8 +191,6 @@ fn texts_of(state: &AppState, game: GameId, kind: MessageType) -> Vec<String> {
         .collect()
 }
 
-/// The one narration answer both Jobs of a stop case script, so which Job takes
-/// which answer cannot change the assertions.
 const STOPPED_NARRATION: &str = "The stopped Job's narration.";
 const NEXT_NARRATION: &str = "The next Job's narration.";
 
@@ -231,9 +227,7 @@ async fn test_a_stopped_job_writes_nothing_and_the_next_job_saves_its_own_text()
         "the second Job should reach its narrator call"
     );
 
-    // The stopped Job's answer arrives first, and both Jobs end, so the reads
-    // below see what its late answer did write, and not a moment before it
-    // tried. The call released first takes the first scripted answer.
+    // The call released first takes the first scripted answer.
     stopped_hold.release();
     assert!(
         stopped_hold.wait_taken(1000),
@@ -278,8 +272,6 @@ async fn test_reset_while_job_runs_keeps_only_the_new_game_opening() {
     assert!(reset.status().is_success(), "the reset should accept");
 
     hold.release();
-    // The reset ended the Job's Game, so wait for the Job to end before reading
-    // what it wrote.
     assert!(
         wait_for_jobs(&state, 2000).await,
         "the Job the reset ended should end"
@@ -393,8 +385,7 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
         0
     };
 
-    // A continue holds a Job without saving an Input of its own, so the
-    // Narration with two Swipes is still the Message that a switch names.
+    // A continue saves no Input, so the Narration stays the last Message.
     let hold = model.hold(Role::Narrator);
     assert!(post_action(&app, "").await.status().is_success());
     assert!(
@@ -443,8 +434,6 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
         "Game A's Job should reach its narrator call"
     );
 
-    // The client moves to Game B, created from Game A's World, and sends an
-    // Action there, so both Games are busy at the same moment.
     let game_b = create_game_from(&app, &state, &storage, game_a, "test").await;
 
     let hold_b = model.hold(Role::Narrator);
@@ -454,8 +443,7 @@ async fn test_a_job_goes_on_for_its_own_game_while_another_game_is_active() {
         "Game B's Job should reach its narrator call"
     );
 
-    // Game A's answer arrives while Game B is active and busy: it saves into
-    // Game A. The call released first takes the first scripted answer.
+    // The call released first takes the first scripted answer.
     hold_a.release();
     assert!(
         hold_a.wait_taken(1000),
@@ -528,8 +516,6 @@ async fn test_the_event_narration_call_uses_the_preset_active_when_it_runs() {
         "the Job should reach its narrator call"
     );
 
-    // The client's system-preset change lands while the narrator call is held,
-    // so the Job's own Narration started under the preset before it.
     let game_row = storage.require_game(game.0).expect("the Game reads back");
     let changed = post_form(
         &app,
@@ -542,8 +528,9 @@ async fn test_the_event_narration_call_uses_the_preset_active_when_it_runs() {
         ),
     )
     .await;
-    assert!(
-        changed.status().is_success(),
+    assert_eq!(
+        changed.status(),
+        StatusCode::OK,
         "the preset change should save"
     );
 
@@ -581,7 +568,6 @@ async fn test_the_event_narration_call_uses_the_preset_active_when_it_runs() {
     );
 }
 
-/// The World data of the Job whose analysis fires the Character's Trigger.
 fn trigger_world() -> chronicler_engine::test_support::TestData {
     TestDataBuilder::default_test()
         .characters(vec![triggered_character()])
@@ -596,7 +582,6 @@ fn triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
         .after_narration(analysis_report(&["character_1"], None))
 }
 
-/// `triggered_script` for a Job that a stop can end before its later calls.
 fn stoppable_triggered_script(narration: &str, event_narration: &str) -> ScriptedModel {
     ScriptedModel::new()
         .narration(narration)
@@ -639,10 +624,6 @@ impl JobKind {
         }
     }
 
-    /// The text of the Action the Job's request sends, and so the text of the
-    /// Input its plan saves before the generation. `None` for a request that
-    /// sends no Action: an Impersonate and a retry save no Input before their
-    /// generation.
     fn action_input(self) -> Option<&'static str> {
         match self {
             Self::Narration { .. } => Some(ACTION_INPUT),
@@ -656,8 +637,6 @@ const ACTION_INPUT: &str = "look";
 const EVENT_ACTION_INPUT: &str = "enter the shop";
 const EVENT_TEXT: &str = "The event's narration.";
 
-/// What the story log holds after a stop, per the row of the design's
-/// generation table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum StoryLogAfterStop {
     /// The Input of the Job's plan stays, and the generation saved no Narration.
@@ -684,15 +663,12 @@ enum StoryLogAfterStop {
 struct StopRow {
     kind: JobKind,
     held: Role,
-    /// The step the status display load answers while the call is held, where the
-    /// design names the step.
     status: Option<&'static str>,
     after_stop: StoryLogAfterStop,
 }
 
-/// The rows of the design's stop table, one per (kind of Job, model call) the
-/// fake can hold. A transaction takes no time a client can observe, so a stop
-/// just before one leaves the records of the model call before it.
+/// A transaction takes no time a client can observe, so a stop just before one
+/// leaves the records of the model call before it.
 static STOP_ROWS: &[StopRow] = &[
     StopRow {
         kind: JobKind::Narration {
@@ -793,9 +769,6 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             }
         }
         JobKind::Impersonate => {
-            // The always-on World's two-room map lets the scripted analysis move
-            // the player, so the row can show that the pre-analysis state kept
-            // the room. Its opening is the one every arm asserts.
             let model = Arc::new(
                 ScriptedModel::new()
                     .narration(SCRIPTED_NARRATION)
@@ -830,8 +803,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             );
             let (app, state, _storage) = app_with_script(Arc::clone(&model));
             let game = active_game_of(&state);
-            // A typed Input is the last Message of the story, so `/swipe/new` is
-            // a retry of it.
+            // A typed Input is the last Message, so `/swipe/new` retries it.
             assert!(post_action(&app, ACTION_INPUT).await.status().is_success());
             assert!(wait_settled(&state, 2000).await, "the first Job settles");
             assert!(
@@ -859,9 +831,8 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
         JobKind::EventNarration | JobKind::EventNarrationAnalysis => {
             let data = trigger_world();
             let model = Arc::new(stoppable_triggered_script(SCRIPTED_NARRATION, EVENT_TEXT));
-            // The Job's first analysis call comes before its event Narration, so
-            // the hold of the event's own analysis call waits behind a hold of
-            // that first one.
+            // The Job's first analysis call comes before the event's own, so
+            // the hold of the event's call waits behind a hold of the first.
             let first_analysis =
                 (row.kind == JobKind::EventNarrationAnalysis).then(|| model.hold(Role::Quantifier));
             let hold_at_row_call = first_analysis.is_none().then(|| model.hold(row.held));
@@ -901,8 +872,6 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
     }
 }
 
-/// The Character whose Trigger fires on the analysis that first sees it in the
-/// room, which starts an event Narration.
 fn triggered_character() -> chronicler_engine::domain::model::character::CharacterCard {
     use chronicler_engine::domain::model::trigger::{
         ComparisonOperator, Trigger, TriggerNarration, TriggerRequirement,
@@ -932,7 +901,6 @@ fn triggered_character() -> chronicler_engine::domain::model::character::Charact
 // [docs/specs/dashboard.md] SCENARIO: 39.4
 #[tokio::test]
 async fn test_a_stop_at_each_model_call_keeps_the_records_of_that_step() {
-    // Every row runs, so one report names every stop point that broke.
     let mut failures: Vec<String> = Vec::new();
     for row in STOP_ROWS {
         if let Err(join_error) = tokio::spawn(run_stop_row(row)).await {
@@ -980,8 +948,6 @@ async fn run_stop_row(row: &'static StopRow) {
     );
 
     start.hold.release();
-    // The Job ended, so the reads below see what its late answer wrote, and not
-    // a moment before it tried.
     assert!(
         wait_for_jobs(&start.state, 2000).await,
         "{label}: the Job should end"
@@ -1097,8 +1063,6 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
                 None,
                 "{label}: the pre-analysis state is the start state, so the Input shows no room"
             );
-            // The refused state update is what keeps the player where it started,
-            // so the current state still names the starting room.
             let room = start
                 .state
                 .game_view_query
@@ -1174,10 +1138,6 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
     }
 }
 
-/// Points the app at a Game on an always-on World with two rooms: the Job's
-/// Options call exists, the analysis can move the player, and the opening
-/// Narration takes the start state's room. `fires_trigger` seeds the Character
-/// whose Trigger the scripted analysis fires.
 async fn active_game_on_an_always_on_world(
     app: &axum::Router,
     state: &AppState,

@@ -26,3 +26,9 @@ How should a repeat run work, and when must a gate use it?
 ## Further evidence (2026-10-31, generic chat-completions connections, session `01a122c2-4e16-73db-89b0-50a2465e456b`)
 
 - A full gate failed one stub check (`check_escape_closes_an_open_error_detail_before_it_closes_the_dialog`, `logs/build_20261031_011652.log`). The lead wrote two more hand loops of `test-pattern "run_dialog_checks" --test-target browser`: 3 runs to tell a flake from a real failure (0 of 3 passed), then 3 runs to confirm the fix (3 of 3). Root cause is ticket 92.
+
+## Further evidence (2026-11-08, statechart-models tickets 08–16, coordinator `01a1bd22`)
+
+- **known** `changes::test_a_read_moves_no_number` (`tests/http/changes.rs`) failed once in the full gate `logs/build_20261108_232514.log`: "the Job ends", its `wait_settled(&state, 2000)`. It then passed 3 times alone, the integration tier passed, and the next full gate passed.
+- **known** Four agents built at the same time. The full gates took 376 to 532 s, against about 145 s typical, and the browser step took 256 s, against about 92 s. 144 tests in `tests/http/` use the same 2000 ms wait.
+- **inferred** The wait is too short under load. A repeat run under load can measure the rate.

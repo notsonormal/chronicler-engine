@@ -5,6 +5,9 @@ One row for each run of `.agents/skills/verify-gate/` and each maintain pass. Th
 | Date | Commit range | Minutes | Outcome | Gaps by kind |
 |---|---|---|---|---|
 | 2026-11-05 | (none) .. `e6715c60` (first run) | 74 | bug | code 1, model 1, spec 8, test 5, doc 1 |
+| 2026-11-08 | `e6715c60` .. uncommitted work (ticket 10, the active pointer fix) | 40 | updated | none new; closes code 1 |
+
+Ticket 10: the mutex of `ActiveGame` is now the outer lock of a switch, a delete, a create and a reset. The TLA+ model has the switch in two steps, a create action, the lock (`pointerBy`) and the rule `ActiveExists`. Every config holds, and `known_breaks` is empty. The fix mutant `delete-check-inside-the-hold` is gone. Four mutants each take the lock away from one request: `switch-`, `delete-`, `reset-` and `create-without-the-pointer-lock`. The reset and the create mutants show orders 3 and 4 of ticket 10. The two stop mutants were written again for the new variable.
 
 The minutes cover the whole first run: the rule list, the TLA+ model, the configs, the mutants, the skill, the proof run and the five comparisons. One later run of the check takes about 35 s, and the mutants take about 25 s.
 

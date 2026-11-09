@@ -82,13 +82,18 @@ const code = (s: string, ref: (n: number) => string) =>
   encode(s, ref)
     .replace(MARKER, `${ref(0x2060)}"`)
     .replace(HAZARD, (c) => ref(c.charCodeAt(0)));
-const esc = (s: string, quoted = false) => {
+export const esc = (s: string, quoted = false) => {
   const plain = code(s, (n) => `#${n};`);
   const out = quoted ? plain.replaceAll('"', "#34;") : plain;
   if (!out.trim()) return "#32;";
   const turned = out.replace(DIRECTION, "$1#32;");
   const opened = turned.includes("[[") ? turned.replace(DOUBLE_BRACKET, "#91;") : turned;
   return opened.includes("C4") ? opened.replace(C4, "C#52;") : opened;
+};
+
+export const titleLines = (title: string) => {
+  const text = code(title, (n) => `ﬂ°°${n}¶ß`).replaceAll("<", "ﬂ°°60¶ß");
+  return text ? ["---", `title: ${JSON.stringify(text)}`, "---"] : [];
 };
 
 const or = (names: Iterable<string>) => [...names].sort(byText).join(" or ");
@@ -181,8 +186,7 @@ export function mermaidLines(chart: Chart) {
   ])
     if (used.has(entry[1])) legend.push(entry);
   const lines: string[] = [];
-  const title = chart.title && code(chart.title, (n) => `ﬂ°°${n}¶ß`).replaceAll("<", "ﬂ°°60¶ß");
-  if (title) lines.push("---", `title: ${JSON.stringify(title)}`, "---");
+  if (chart.title) lines.push(...titleLines(chart.title));
   lines.push("stateDiagram-v2");
   if (chart.regions.length > 1) lines.push("  direction LR");
   if (legend.length) {

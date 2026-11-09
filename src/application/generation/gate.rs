@@ -37,8 +37,6 @@ pub enum NotAccepted {
 }
 
 impl NotAccepted {
-    /// The line the user reads for the request that was not accepted, also when it surfaces as an error
-    /// outside the HTTP answer.
     pub fn line(&self) -> String {
         match self {
             Self::StillThinking => "Still thinking...".to_string(),
@@ -67,8 +65,6 @@ impl From<GenerationFailure> for JobFailure {
 }
 
 impl JobFailure {
-    /// The failure of the generation of `kind`: an event generation reports the
-    /// event line, wherever it failed.
     pub fn of_generation(self, kind: Kind) -> Self {
         match self {
             Self::Line(line) => Self::Line(line.of_generation(kind)),
@@ -86,9 +82,8 @@ pub enum OptionsResult {
     Unavailable { reason: String, raw: String },
 }
 
-/// No state: `save_state_update` consumes it, so a Swipe's state is written at
-/// most twice, the pre-analysis state and then the analysed one. The Retry of a typed Input
-/// drops it.
+/// `save_state_update` consumes it, so a Swipe's state is written at most twice:
+/// the pre-analysis state, then the analysed one.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SavedText {
     at: SwipeAt,
@@ -100,9 +95,7 @@ impl SavedText {
     }
 }
 
-/// The record of a Job that runs.
 struct JobEntry {
-    /// The Job that owns the entry; a transaction whose id differs is refused.
     id: u64,
     step: Step,
 }
@@ -110,8 +103,7 @@ struct JobEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutoplayRunId(u64);
 
-/// Only the Autoplay loop writes it; the gate stores it with the holder and
-/// applies no rule to it.
+/// The gate applies no rule to it: the budget rule is the Autoplay loop's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutoplayProgress {
     pub done: u32,
@@ -124,7 +116,6 @@ impl AutoplayProgress {
     }
 }
 
-/// What holds a busy Game. Memory only, like the Job entry.
 enum Holder {
     /// A plain Job runs.
     Job(JobEntry),
@@ -167,11 +158,8 @@ impl Holder {
     }
 }
 
-/// Absent means idle.
 type Holders = HashMap<GameId, Holder>;
 
-/// The one registry of holders: a private `Mutex` behind a type whose only method is
-/// `hold`, so no caller takes the lock without a transaction opener in hand.
 struct BusyRegistry {
     busy: Mutex<Holders>,
 }
@@ -183,10 +171,8 @@ impl BusyRegistry {
         }
     }
 
-    /// A writer's check and its transactions happen in one critical section, and the lock
-    /// order stays the guard, then the backend mutex, then the connection mutex.
-    ///
-    /// The busy state is memory only, so this is the one place that sees it change.
+    /// `f` must not take the `ActiveGame` mutex: the lock order is in the doc of `ActiveGame`.
+    /// The busy state is memory only, so its change counters are raised here.
     fn hold<T>(&self, storage: &Arc<Storage>, f: impl FnOnce(&mut Holders, &TxOpener) -> T) -> T {
         let opener = TxOpener {
             storage: Arc::clone(storage),
@@ -234,8 +220,8 @@ impl BusyRegistry {
     }
 }
 
-/// The transaction opener of one hold. Only `BusyRegistry::hold` makes one, so every
-/// transaction of record writes opens inside a hold; a reset opens two in the same hold.
+/// Only `BusyRegistry::hold` makes one, so every transaction of record writes opens
+/// inside a hold.
 struct TxOpener {
     storage: Arc<Storage>,
     token: TxToken,
@@ -250,8 +236,6 @@ impl TxOpener {
         self.storage.transaction(game, self.token.clone(), f)
     }
 
-    /// The create transaction: the Game row goes first, and its id reaches the writes
-    /// that follow it in the same transaction.
     fn open_new_game<T>(
         &self,
         new: &NewGame,
@@ -310,8 +294,6 @@ pub struct AcceptedJob {
     pub plan: JobPlan,
 }
 
-/// The only code that opens a transaction of record writes, and the owner of the busy
-/// state. One registry serves all Games, and a Job keeps the Game it started on.
 #[derive(Clone)]
 pub struct GameWriter {
     storage: Arc<Storage>,
@@ -348,7 +330,7 @@ impl GameWriter {
         )
     }
 
-    /// The busy rule: the busy refusal comes before any other check of the request.
+    /// The busy refusal comes before any other check of the request.
     fn require_idle(holders: &Holders, game: GameId) -> Result<(), NotAccepted> {
         if holders.contains_key(&game) {
             return Err(NotAccepted::StillThinking);
@@ -367,9 +349,7 @@ impl GameWriter {
         })
     }
 
-    /// The Autoplay run's own id passes the holder, and only between two of its Jobs.
-    /// `decide` runs under the registry hold, on
-    /// the end of the story that the accept reads, and calls no `GameWriter`.
+    /// `decide` runs under the registry hold, so it must not call `GameWriter`.
     pub fn accept_for_autoplay(
         &self,
         game: GameId,
@@ -383,8 +363,7 @@ impl GameWriter {
                 .map(|holder| holder.job().is_none());
             match between_jobs {
                 None => return AutoplayAccept::Ended,
-                // The loop accepts one Job at a time, so its own Job in flight is
-                // unreachable; the Game is busy, and nothing is written.
+                // Unreachable: the loop accepts one Job at a time.
                 Some(false) => return AutoplayAccept::NotAccepted(NotAccepted::StillThinking),
                 Some(true) => {}
             }
@@ -431,8 +410,8 @@ impl GameWriter {
         AutoplayAccept::Accepted(self.accepted(game, job_id, plan), progress)
     }
 
-    /// The transaction lands before the caller makes the entry: a refused accept makes
-    /// no entry, so a Game is never busy for a Job that never started.
+    /// The caller inserts the entry only after this returns, so a refused accept leaves
+    /// the Game idle.
     fn plan_and_start(
         &self,
         opener: &TxOpener,
@@ -462,7 +441,6 @@ impl GameWriter {
         }
     }
 
-    /// The budget rule is the loop's own, so the gate stores the budget as it comes.
     pub fn reserve_for_autoplay(
         &self,
         game: GameId,
@@ -494,9 +472,6 @@ impl GameWriter {
         });
     }
 
-    /// The write of the config columns `change` names, refused while an Autoplay run
-    /// holds the Game. The check and the transaction run in one registry hold, so a run
-    /// cannot start between them.
     pub fn save_config(&self, game: GameId, change: &ConfigChange) -> Result<(), ApplicationError> {
         self.hold(|holders, opener| {
             if matches!(holders.get(&game), Some(Holder::Autoplay { .. })) {
@@ -513,8 +488,7 @@ impl GameWriter {
 
     pub fn stop(&self, game: GameId) -> Result<(), EngineError> {
         self.hold(|holders, opener| {
-            // The read goes first: a failed read leaves the Job running, and the stop
-            // answers that it failed.
+            // The read goes before the remove, so a failed read leaves the Job running.
             let record = DockRecord {
                 offered: self.dock_of(game)?.offered,
                 failure: None,
@@ -598,10 +572,7 @@ impl GameWriter {
         self.hold(|_holders, opener| self.create_in_tx(new, &opening, opener))
     }
 
-    /// Both transactions run in one hold, and the old Game's holder ends under the same
-    /// guard, so its next transaction or step is refused by the id
-    /// check; a running model call ends on its own. The create transaction runs first: a
-    /// failure there leaves the old Game, its entry and the pointer as they were.
+    /// The create runs first, so a failed create leaves the old Game and its holder as they were.
     pub fn replace(&self, old: GameId, new: &NewGame) -> Result<GameId, EngineError> {
         let opening = self.opening_message(new)?;
         self.hold(|holders, opener| {
@@ -613,8 +584,6 @@ impl GameWriter {
         .inspect(|_| self.storage.changes().forget_game(old))
     }
 
-    /// One hold: the Game's holder ends under the same guard as its rows, so the
-    /// Job's next transaction or step is refused by the id check before its records go.
     pub fn delete(&self, game: GameId) -> Result<(), EngineError> {
         self.hold(|holders, opener| {
             holders.remove(&game);
@@ -662,7 +631,6 @@ impl GameWriter {
         self.not_accepted_with_failure(game, GenerationFailure::missing(record), opener)
     }
 
-    /// The disclosure holds the read error behind the line that names the record.
     fn unreadable(
         &self,
         game: GameId,
@@ -673,13 +641,10 @@ impl GameWriter {
         self.not_accepted_with_failure(game, GenerationFailure::unreadable(record, error), opener)
     }
 
-    /// The disclosure holds the save error behind the design's save line.
     fn save_failed(&self, game: GameId, error: &EngineError, opener: &TxOpener) -> NotAccepted {
         self.not_accepted_with_failure(game, GenerationFailure::save_failed(error), opener)
     }
 
-    /// The one not-accepted path of a request that cannot run: the Game's failure line
-    /// and the answer come from the same failure.
     fn not_accepted_with_failure(
         &self,
         game: GameId,
@@ -692,7 +657,6 @@ impl GameWriter {
         NotAccepted::Failed(failure)
     }
 
-    /// The records a Job reads, checked before the Game turns busy.
     fn require_records(
         &self,
         game: GameId,
@@ -739,8 +703,6 @@ impl GameWriter {
             .map_err(|error| self.save_failed(game, &error, opener))
     }
 
-    /// `/options` needs a story with text to work from, which is a question about
-    /// every Message.
     fn story_has_text(&self, game: GameId, opener: &TxOpener) -> Result<bool, NotAccepted> {
         self.storage
             .stories()
@@ -748,8 +710,8 @@ impl GameWriter {
             .map_err(|error| self.unreadable(game, Record::Story, &error, opener))
     }
 
-    /// The World and the Persona are read before the transaction opens, because the transaction
-    /// holds the backend mutex.
+    /// These reads run before the transaction opens, because the transaction holds the
+    /// backend mutex.
     fn opening_message(&self, new: &NewGame) -> Result<Message, EngineError> {
         let world_with_map = self.storage.require_world(&new.world_key)?;
         let persona = self.storage.require_persona(&new.persona_key)?;
@@ -773,9 +735,6 @@ impl GameWriter {
     }
 }
 
-/// The only write handle of a running Job: only an accept makes one, and every
-/// method checks the job id under the guard, so a late save of an ended Job lands
-/// nowhere.
 pub struct JobWriter {
     writer: GameWriter,
     game: GameId,
@@ -791,8 +750,6 @@ impl JobWriter {
         self.id
     }
 
-    /// One hold for this Job: the id check and the transactions of `f` run under the same
-    /// lock.
     fn hold<T>(
         &self,
         f: impl FnOnce(&mut JobEntry, &TxOpener) -> Result<T, JobFailure>,
@@ -860,7 +817,6 @@ impl JobWriter {
         })
     }
 
-    /// Takes `saved` by value, so one Swipe's state is written at most twice.
     pub fn save_state_update(&self, saved: SavedText, state: SwipeState) -> Result<(), JobFailure> {
         self.hold(|_entry, opener| {
             opener
@@ -875,8 +831,8 @@ impl JobWriter {
         })
     }
 
-    /// A failed run writes the Options failure only: the set the dock holds stays, and after a
-    /// Narration the text save already emptied it.
+    /// A failed run keeps the offered set; after a Narration the text save has already
+    /// emptied it.
     pub fn save_options(&self, result: OptionsResult) -> Result<(), JobFailure> {
         self.hold(|_entry, opener| match result {
             OptionsResult::Offered(offered) => Self::in_tx(opener, self.game, |tx| {
@@ -891,7 +847,6 @@ impl JobWriter {
         })
     }
 
-    /// The step name of the status line: memory only, and its only writer.
     pub fn step(&self, step: Step) -> Result<(), JobFailure> {
         self.hold(|entry, _opener| {
             entry.step = step;
@@ -944,9 +899,6 @@ impl JobWriter {
 }
 
 impl Drop for JobWriter {
-    /// The entry goes only while it still holds this Job's id: a stop or a reset
-    /// already freed it. A plain Job's holder goes with its entry; an Autoplay
-    /// run's holder stays, without a Job.
     fn drop(&mut self) {
         let (game, id) = (self.game, self.id);
         self.writer.hold(|holders, _opener| {

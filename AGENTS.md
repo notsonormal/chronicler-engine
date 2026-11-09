@@ -325,6 +325,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
   - `validate_docs.py` — Validate markdown docs + DOC anchors under docs/.
   - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
   - `validate_seam_cases.py` — Validate the seam contracts: every test in a declaring file carries one `CASE` tag.
+  - `verify_coverage.py` — The staleness warning of the verify skills, and the command that records the hashes.
 <!-- AUTO-STRUCTURE END -->
 
 ## Your Responsibility
@@ -333,7 +334,7 @@ You are responsible for the overall health of the Chronicler Engine. It is more 
 
 However, during code reviews you should not make code changes to fix problems.
 
-Always build code cleanly, modularly, and with proper architecture and separation of concerns. Never simply bolt on a feature because I asked for it. If you can’t find an easy way to build it naturally, and you'd recommend a refactor to make the whole thing cleanly, stop your work ahead of time and say so.
+Always build code cleanly, modularly, and with proper architecture and separation of concerns. Never simply bolt on a feature because I asked for it. If you cannot find an easy way to build it naturally, stop your work ahead of time. Say so, and recommend the refactor that makes the whole thing clean.
 
 ## Communication
 
@@ -353,10 +354,11 @@ When responding to user feedback or an analysis, explicitly say whether you agre
 
 `tmp/` is the git-ignored scratch folder.
 
-Every build action goes through `build.py`. Each run writes `logs/build_*.log` and appends a row to `logs/build_history.txt`. Run `build.py` in the foreground, with the `timeout` parameter of the bash tool set to 1200. A piped `tail` of stdout loses the result when the run times out, so read the result from the newest log file:
+Every build action goes through `build.py`. Each run writes `logs/build_*.log` and appends a row to `logs/build_history.txt`. Run `build.py` in the foreground, with the `timeout` parameter of the bash tool set to 1200. A piped `tail` of stdout loses the result when the run times out. Other agents can build at the same time, so the newest log can be theirs. Send the output to a file of your own, and read your log from the `Full build log:` line that the run writes first:
 
 ```bash
-tail -n 10 "$(ls -t logs/build_*.log | head -1)"
+python build.py clippy > tmp/build-<tag>.out 2>&1
+tail -n 10 "$(sed -n 's/^Full build log: //p' tmp/build-<tag>.out | head -1)"
 ```
 
 | Command | Covers | Warm cost |

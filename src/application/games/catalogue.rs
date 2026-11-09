@@ -30,7 +30,7 @@ impl GameCatalogue {
         initial_game: Option<GameId>,
     ) -> Result<Self, EngineError> {
         if let Some(initial_game) = initial_game {
-            active_game.set(initial_game)?;
+            active_game.lock().set(initial_game)?;
         }
         Ok(Self {
             storage,
@@ -56,24 +56,26 @@ impl GameCatalogue {
         let request =
             self.new_game_request(&world_with_map, &player, world_key, persona_key, name)?;
 
-        let new_id = self.game_writer.create(&request)?;
-        // The pointer moves only once the unit landed, so a failed create leaves the
+        // The pointer moves only after the create landed, so a failed create leaves the
         // previous Game active.
-        self.active_game.set_new(new_id);
+        let mut pointer = self.active_game.lock();
+        let new_id = self.game_writer.create(&request)?;
+        pointer.set_new(new_id);
 
         Ok(new_id.0)
     }
 
     pub fn switch_game(&self, id: u64) -> Result<(), ApplicationError> {
+        let mut pointer = self.active_game.lock();
         if self.storage.get_game(id)?.is_none() {
             return Err(ApplicationError::validation("Game not found"));
         }
 
-        self.active_game.set(GameId(id))?;
+        pointer.set(GameId(id))?;
         Ok(())
     }
 
-    /// Display names may collide; the generated `name` stays the unique key.
+    /// Display names may collide: the generated `name` is the unique key.
     pub fn rename_game(&self, id: u64, display_name: &str) -> Result<Game, ApplicationError> {
         let display_name = display_name.trim();
         if display_name.is_empty() {
@@ -86,7 +88,8 @@ impl GameCatalogue {
     }
 
     pub fn delete_game(&self, id: u64) -> Result<(), ApplicationError> {
-        if self.active_game.get() == Some(GameId(id)) {
+        let pointer = self.active_game.lock();
+        if pointer.get() == Some(GameId(id)) {
             return Err(ApplicationError::validation(
                 "Cannot delete the active game",
             ));
@@ -99,8 +102,6 @@ impl GameCatalogue {
         self.storage.list_games().map_err(Into::into)
     }
 
-    /// The page of the Games other than the active one that the request names; a page
-    /// past the end is the last page.
     pub fn saved_games_page(
         &self,
         active: Option<GameId>,
@@ -144,8 +145,6 @@ impl GameCatalogue {
         self.storage.get_game(id.0).map_err(Into::into)
     }
 
-    /// Only perspective and tense: a mode switch is `switch_mode`, which also
-    /// retargets presets and nudges perspective.
     pub fn set_posture(
         &self,
         id: u64,
@@ -156,8 +155,6 @@ impl GameCatalogue {
         self.save_config(game, ConfigChange::Posture { perspective, tense })
     }
 
-    /// A deliberately-set perspective survives the switch; only the other mode's
-    /// default is nudged.
     pub fn switch_mode(&self, id: u64, mode: NarratorMode) -> Result<Game, ApplicationError> {
         let game = self.require_game(id)?;
         if game.narrator_mode == mode {
@@ -192,8 +189,6 @@ impl GameCatalogue {
         )
     }
 
-    /// A mode-tagged preset that disallows the game's mode is accepted only when
-    /// unchanged, so a stored selection is never silently invalidated.
     pub fn set_preset_selection(
         &self,
         id: u64,
@@ -201,16 +196,14 @@ impl GameCatalogue {
     ) -> Result<Game, ApplicationError> {
         let game = self.require_game(id)?;
         for (preset_type, new_id) in selection.slots() {
-            // An unchanged stored id skips validation, so saving the form never
-            // fails on a stale or deleted selection.
+            // An unchanged id skips validation, so the form saves even when its stored
+            // preset is stale or deleted.
             if new_id == game.active_preset_id(preset_type) {
                 continue;
             }
             let preset = self.storage.get_preset(new_id)?.ok_or_else(|| {
                 ApplicationError::validation(format!("Preset not found: {new_id}"))
             })?;
-            // Options presets serve both modes from one slot, so their
-            // allowed_modes never gate the selection.
             if preset_type.is_mode_tagged() && !preset.allows(game.narrator_mode) {
                 return Err(ApplicationError::validation(format!(
                     "Preset not allowed for {} mode",
@@ -221,10 +214,6 @@ impl GameCatalogue {
         self.save_config(game, ConfigChange::Presets(selection))
     }
 
-    /// The config rules ran outside the writer's lock; the write goes through the
-    /// writer, which refuses it while an Autoplay run holds the Game. The write
-    /// holds only the columns of `change`, and the returned Game is `game` with
-    /// the same change applied.
     fn save_config(&self, mut game: Game, change: ConfigChange) -> Result<Game, ApplicationError> {
         self.game_writer.save_config(GameId(game.id), &change)?;
         change.apply_to(&mut game);
@@ -252,9 +241,8 @@ impl GameCatalogue {
             .get_persona(&persona_key)?
             .ok_or_else(|| ApplicationError::validation("Persona not found"))?;
 
-        // The Game being replaced is not yet gone when the name is picked, and the
-        // fresh Game takes its place: its name is no more taken than a removed
-        // Game's is.
+        // The old Game still exists here, but the fresh Game replaces it, so its name
+        // counts as free.
         let existing_names: Vec<String> = storage
             .list_games()?
             .into_iter()
@@ -265,16 +253,14 @@ impl GameCatalogue {
         let new_name = generate_game_name(&world_with_map.world_card.name, &existing_names);
         let request =
             self.new_game_request(&world_with_map, &player, &world_key, &persona_key, new_name)?;
-        // The reset creates the fresh Game first and then removes the old one, in
-        // one hold of the writer's guard, so a refused create leaves the old Game
-        // and the pointer as they were.
+        // The pointer moves only after the replace landed, so a failed replace leaves
+        // the old Game active.
+        let mut pointer = self.active_game.lock();
         let new_id = self.game_writer.replace(current_id, &request)?;
-        self.active_game.set_new(new_id);
+        pointer.set_new(new_id);
         Ok(())
     }
 
-    /// The create request both `create_game` and `reset` write. The caller picks the
-    /// name, because the two name scans differ.
     fn new_game_request(
         &self,
         world: &WorldWithMap,
