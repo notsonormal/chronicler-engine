@@ -42,7 +42,7 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-10-25 13:11 UTC*
+*Index last generated: 2026-11-09 21:24 UTC*
 
 ### `docs/diataxis/explanation/`
 
@@ -65,6 +65,21 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 
 - [Guardrails](./diataxis/reference/coding_standards/guardrails.md)
 - [Integration Test Standards](./diataxis/reference/coding_standards/integration_test_standards.md)
+
+### `docs/diataxis/reference/diagrams/`
+
+- [Autoplay Run Of One Cycle](./diataxis/reference/diagrams/autoplay_run_of_one_cycle.md)
+- [Busy State](./diataxis/reference/diagrams/busy_state.md)
+- [Delete During A Job](./diataxis/reference/diagrams/delete_during_a_job.md)
+- [Failure Lines](./diataxis/reference/diagrams/failure_lines.md)
+- [Job Life](./diataxis/reference/diagrams/job_life.md)
+- [Late End Of A Stopped Job](./diataxis/reference/diagrams/late_end_of_a_stopped_job.md)
+- [Late End Of A Stopped Run](./diataxis/reference/diagrams/late_end_of_a_stopped_run.md)
+- [Reset During A Job](./diataxis/reference/diagrams/reset_during_a_job.md)
+- [Run Life](./diataxis/reference/diagrams/run_life.md)
+- [Stop During The Narrator Call](./diataxis/reference/diagrams/stop_during_the_narrator_call.md)
+- [Stop On An Idle Game](./diataxis/reference/diagrams/stop_on_an_idle_game.md)
+- [Switch Then Delete](./diataxis/reference/diagrams/switch_then_delete.md)
 
 ### `docs/diataxis/reference/frontend/`
 

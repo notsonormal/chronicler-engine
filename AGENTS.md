@@ -410,3 +410,5 @@ Delegate a task only when it is substantial, and do a short task yourself: each 
 - an `implementer` run on the same work came back wrong on points its brief had already decided.
 
 Give a substantial investigation to a `scout`. Its result is a finding, such as how a flow works, every place a change must touch, or whether a claim holds. You will not need the raw reads of that work again. Name that finding in the brief.
+
+When delegating work (a) be strict about scope when creating a task, (b) ask for proof of work instead of a summary and (c) do a one step review of the diff to make sure it's not totally off.
