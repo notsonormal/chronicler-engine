@@ -1,0 +1,66 @@
+# The scout brief of the audit
+
+The exact brief of the six scouts (role `scout`, 2026-11-08, commit `8b23151c`). Each scout got the common part with THEME replaced by its theme name, and then its theme section. [Ticket 16](../issues/16-research-outside-check.md) runs the audit again with this brief. Change only the commit, the report folder and the list of findings that it must confirm.
+
+## Common part
+
+Goal: find the invariants that the Chronicler Engine (Rust, /workspace/chronicler-engine) relies on but does not explicitly enforce, inside ONE theme (below). This is a read-only investigation.
+
+Hard rules:
+- Do not edit any file under src/, tests/, docs/, data/, scripts/. Only write your report file.
+- Do not run cargo or build.py (the build slot is shared with other agents). Use grep/rg/read only.
+- Write your report to tmp/invariants/THEME.md (run: mkdir -p tmp/invariants).
+- Five other scouts cover the other themes: story (Messages, Swipes, Swipe state), gate (busy state, Jobs, Autoplay, concurrency), world (World/Scenario/Character/Persona/settings/preset data), llm (model calls, Agents, prompting, LLM output), http (routes, templates, browser JS contract), storage (schema, migrations, row-to-domain mapping). Stay in your theme. When a finding crosses into another theme, report it only if your theme is where it is relied on.
+
+Definitions:
+- Invariant: a property that must always hold for the code to behave correctly. Examples: "every Message has at least one Swipe", "exactly one Swipe of a Message is active", "swipe_index values of a Message are 0..n with no gap", "a Character key in a Swipe state names a Character of the Game's World", "at most one holder per busy Game", "a JS selector names an element id the server renders".
+- Relied on: some code depends on it. Signals to grep for: unwrap(), expect(, unreachable!, panic!, slice index [i], .first()/.last()/.get() followed by a silent default or fallback, 'as' casts between integer widths, unwrap_or_default / unwrap_or / filter_map that hides a missing or bad value, comments or docs saying always / never / every / exactly one / must, match arms that assume a case cannot happen, ordering assumptions (sorted, ascending id, last row = newest), a read that assumes an earlier write happened.
+- Explicitly enforced: something makes the violation impossible, or makes it fail loudly at the point of violation, on EVERY write path: the type system (newtype, enum, non-empty type, private fields + validating constructor), a DB constraint (UNIQUE, CHECK, NOT NULL, FK that is actually active), or a runtime check that returns an error at the write.
+- Report an invariant only when enforcement is missing or partial. Enforcement categories:
+  NONE; PARTIAL (some write paths check, others do not: name them); TEST-ONLY (only a test checks it); BUILD-TIME (only scripts/ or the build checks it, e.g. scripts/validate_data.py, not the running server); DOC-ONLY (only a doc or a comment states it); READ-SIDE-ONLY (the reader silently tolerates or repairs the violation instead of the writer preventing it).
+
+For each finding write:
+1. ID (THEME-NN) and a one-sentence statement of the invariant.
+2. Relied on at: file:line and what breaks there.
+3. Write paths that could violate it: file:line, or external input (user form, World JSON, LLM output, DB edited by hand or by an older version of the app).
+4. Enforcement: one category, with evidence (for PARTIAL: which path checks, which path skips).
+5. Consequence if violated: panic, wrong data stored, silent wrong UI, lost data, stuck busy Game, etc.
+6. Likelihood: can a normal player, an LLM output, or a World author trigger it today? Or only a code bug or a manual DB edit?
+7. Epistemic status: VERIFIED (you read the reliance and every write path) or INFERRED (say what you did not trace).
+8. Suggested enforcement point, one line (type, constructor, DB constraint, or a check in a named function). Do not write code.
+
+Quality rules:
+- Cite file:line for every claim. Quote at most 3 lines of code per finding.
+- Do not report a property the type system already guarantees.
+- Prefer fewer VERIFIED findings over many guesses. Mark guesses INFERRED.
+- Test code (*_tests.rs, src/test_support/, tests/) is not a write path, but note when only a test checks something.
+- Use the terms of CONTEXT.md (Game, Message, Swipe, Swipe state, Job, busy state, Autoplay run, Connection slot, etc.). Read CONTEXT.md first.
+- At the end of the report, add a section "Checked and enforced": one line per invariant you checked and found enforced, so the reader sees what you ruled out.
+
+Your final message (keep it short): the report path, the count of findings by enforcement category, and the 5 findings with the worst consequence, one line each with its ID.
+
+## Theme sections
+
+**story** — Story structure: Messages, Swipes, Swipe state, the end of the story.
+Start with: CONTEXT.md, docs/diataxis/reference/storage.md, docs/diataxis/reference/game_flow.md, docs/specs/swipe_new.md, docs/specs/swipe_switch.md, docs/specs/retrigger.md, src/domain/model/message.rs, src/domain/model/tail.rs, src/domain/model/story_window.rs, src/domain/model/history_cut.rs, src/domain/model/state/*.rs, src/domain/utils/opening.rs, src/adapters/driven/storage/stories.rs, games.rs, transaction.rs, write_guard.rs, utils/records.rs, mappers/message.rs, models/message.rs, models/swipe.rs, the messages / message_swipes / game_state_snapshots schema in utils/plumbing.rs, and src/application/pipeline/job.rs (where Messages and Swipes are written).
+Questions to answer (not limited to): every Message has at least one Swipe; exactly one Swipe is active; the active index is in range; swipe_index values are contiguous from 0; the first Message of a Game is the opening Narration; every Swipe has a Swipe state; Message order is by id; a Retry or Swipe targets the last Message; any assumed Input/Narration alternation; a Message belongs to the Game a request names; an event record exists if and only if the Message is an event Narration; what happens when a Game has zero Messages; the history cut keeps whole blocks.
+
+**gate** — Busy state, Jobs, Autoplay and concurrency.
+Start with: CONTEXT.md, .agents/skills/verify-gate/SKILL.md (find what the model check covers; a model check is verification, not runtime enforcement: say which invariants only the model covers), docs/diataxis/reference/game_flow.md, docs/specs/autoplay.md, docs/specs/reset.md, docs/specs/changes.md, src/application/generation/gate.rs, src/application/generation/job_tasks.rs, src/application/pipeline/job.rs, src/application/autoplay/*.rs, src/application/games/active.rs, src/application/games/catalogue.rs, src/adapters/driven/storage/changes.rs, transaction.rs, write_guard.rs, db.rs, src/adapters/driving/http/utils/request_layers.rs, current_game.rs, src/adapters/driving/http/layout/handlers/endpoints.rs, action_controls.rs, src/bootstrap/wiring.rs, src/bootstrap/run.rs.
+Questions to answer (not limited to): at most one holder per busy Game; every Job and Autoplay run releases its hold on every exit path (error, panic in a spawned or blocking task, client disconnect, server shutdown); only the holder writes (Job id check) on every write path; the active Game pointer names an existing Game; Game delete and reset while a Job runs; change counters only increase and are raised only after commit; Budget is at least 1; Stop semantics; the in-memory busy registry assumes one server process per DB file (is that checked?); SQLite writer concurrency and pool settings (busy_timeout, WAL); Mutex poisoning handling; ordering between the DB commit and the in-memory state change.
+
+**world** — World, Scenario, Room, Character, Trigger, Persona, settings and prompt preset data.
+Start with: CONTEXT.md, data/schemas/*.json, data/worlds/*/world.json and map.json, data/settings.json, scripts/validate_data.py, src/domain/model/world.rs, scenario.rs, map.rs, character.rs, trigger.rs, settings.rs, prompt_preset.rs, llm_backend.rs, game.rs, src/domain/utils/*_defaults.rs, name_uniqueness.rs, game_rules.rs, game_name.rs, template.rs, src/bootstrap/load.rs, src/bootstrap/init_game.rs, src/adapters/driven/storage/worlds.rs, characters.rs, personas.rs, presets.rs, settings.rs, src/application/world_catalogue.rs, settings_service.rs, prompt_preset_service.rs, persona_catalogue.rs, src/application/games/catalogue.rs (Game creation).
+Questions to answer (not limited to): the starting Room of a Scenario exists in the map; Scenario Characters exist in the World; Trigger references (Rooms, Characters, other Triggers) resolve; Room exits name existing Rooms (and any symmetry assumption); keys and names are unique (which checks are trim-and-compare only at some write paths); Display name rules; a Connection slot names an existing Connection (and what happens after a Connection is renamed or deleted); the Persona and World of a saved Game still exist after a re-seed or a delete; the settings singleton; template placeholders are known; which checks exist only in validate_data.py / JSON schema (BUILD-TIME) and not at runtime load or at the HTTP write paths (World upload or edit, settings form, preset form).
+
+**llm** — Model calls, Agents, prompting, and the handling of LLM output.
+Start with: CONTEXT.md, docs/diataxis/reference/narrative/*.md, src/application/agents/** (options, quantifier, runner, trait_def), src/application/prompting/** (assembler, token_budget, prompt_merge, sanitize, builders/sections.rs), src/application/narration/**, src/application/llm_recorder.rs, src/application/connection_test_service.rs, src/application/ports/*.rs, src/adapters/driven/llm/** (providers and transport), src/domain/model/generation.rs, generation_parameters.rs, prompt_part.rs, quantifier.rs, dock.rs, llm_message.rs, agent.rs, src/adapters/driven/storage/llm_messages.rs, docks.rs.
+Questions to answer (not limited to): the Quantifier result names only Characters and Rooms that exist (and the destination is reachable from the current Room); parser fallbacks that hide malformed output; the Options count, non-emptiness and uniqueness; token budget arithmetic (context window larger than reserved output, History space never negative, usize subtraction underflow, saturating vs wrapping); prompt part order (system part first) and non-empty parts; the model response has content (empty string, missing choices[0]); every model call gets an LLM message record (also on failure and timeout); a Connection has a valid address and model; generation parameter ranges (temperature, top_p, max tokens > 0); a token estimate that assumes a tokenizer.
+
+**http** — HTTP routes, inline askama templates, and the browser JS contract.
+Start with: CONTEXT.md, docs/diataxis/reference/frontend/dashboard.md, docs/diataxis/reference/frontend/http_routes.md, docs/specs/screen.md, docs/specs/changes.md, docs/specs/failure_display.md, src/adapters/driving/http/** (all non-test files; templates are inline in Rust via askama source=), assets/index.html, assets/dashboard-*.js (skip *.min.js).
+Questions to answer (not limited to): element ids, classes, data attributes and event names that the JS needs and the server renders, with no shared constant between them (list each pair: JS file:line and Rust file:line); the screen part names in screen/handlers/parts.rs vs the names the JS or index.html sends; HTMX hx-target / hx-swap targets exist; the Game header check (request_layers.rs) covers every route that writes; the revision stamp; forms that name the last Message (a stale form after another tab writes); the answer_words table covers every route; form structs with serde defaults that hide a missing field; ids parsed from path or form (i64 vs u32, negative); the saved Games page number in range; CurrentGame read once per request; the active Game when the browser has a stale Game id.
+
+**storage** — SQLite schema, migrations, and the mapping between rows and domain types.
+Start with: CONTEXT.md, docs/diataxis/reference/storage.md, src/adapters/driven/storage/utils/plumbing.rs (schema, migrations, PRAGMA), db.rs, core.rs, mappers/*.rs, models/*.rs, then the other storage/*.rs files for how they read rows. Leave the Message/Swipe story semantics (active Swipe, contiguous swipe_index, first Message) to the story scout; you cover the schema and the mapping layer.
+Questions to answer (not limited to): PRAGMA foreign_keys = ON on EVERY pooled connection (otherwise every REFERENCES ... ON DELETE CASCADE is a no-op); JSON TEXT columns parsed with a fallback or default that hides corrupt data; datetime text format and parse failures; columns with DEFAULT 1 for game_id (an insert that forgets game_id lands in Game 1); tables with no FK (llm_messages, game_docks, maps) and orphans; enum-like TEXT columns parsed with fallback; integer conversions between i64 and u32/usize/i32 (as casts, try_from); the user_version migrations are ordered, idempotent and atomic (a crash mid-migration); the old game_state_snapshots table and whether anything still reads it; the settings singleton row exists before first read; UNIQUE constraints that the code relies on but the schema lacks (for example prompt preset names, Game names, persona keys); busy_timeout / WAL / pool size.
