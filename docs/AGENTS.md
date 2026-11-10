@@ -29,6 +29,7 @@ Put each fact in exactly one layer:
 | The purpose of a part, its name, or an invariant: an always-true relation between named parts — what owns what, what makes what current, how many of a part exist, where a part shows ("a swipe switch makes the target Swipe active", "role health is engine-wide", "settings is a singleton row") | Diátaxis Reference |
 | Why the system is that way | Diátaxis Explanation |
 | An event rule at feature level ("when X, then Y"), or a property that every request to one route keeps | A spec scenario, a spec section intro, or a spec's Properties section |
+| The order of steps between parts that run at the same time, and the rules that hold in every order | The TLA+ model of a verify skill (`.agents/skills/verify-<area>/model/`). Its generated diagrams go to `docs/diataxis/reference/diagrams/` |
 | Fine-grained behaviour (a rule inside one part, such as how a function reads its input), edge cases, values, copy text, icons, markup, implementation steps | The code and its tests |
 
 In `docs/diataxis/`, a fact has one home per subject: the Reference doc states it, and its Explanation doc gives only the reason. A doc on another subject may restate it in one sentence when its reader needs it.
