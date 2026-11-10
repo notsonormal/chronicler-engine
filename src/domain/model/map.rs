@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! Map and Room data structures
 
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Worlds askama templates.
 
 pub mod worlds;

@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! Game name generation with date-based disambiguation.
 
 use chrono::Utc;

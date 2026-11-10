@@ -156,6 +156,5 @@ Several relationships between clusters are **not** SQL foreign keys. Integrity f
 ## Document References
 
 - [Storage design](../explanation/storage_design.md) — why the storage layer is shaped this way.
-- [Game Flow](./game_flow.md) — the Job that writes these records, and the writer rule.
 - [Startup and Bootstrap](./startup.md) — the bootstrap seeding that writes the first rows.
 - [Dashboard](./frontend/dashboard.md) — the screen that loads when the revision moves.

@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Harper text check adapter implementing TextChecker port
 
 use std::sync::{Arc, Mutex};

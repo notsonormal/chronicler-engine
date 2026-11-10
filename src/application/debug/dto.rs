@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/frontend/http_routes.md]
 //! DebugStateView — debug-state DTO for the HTTP `/debug/state` endpoint.
 
 use std::collections::HashMap;

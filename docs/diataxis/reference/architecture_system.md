@@ -64,5 +64,3 @@ An inherent `impl` of a type lives in the file that defines the type, or in a fo
 ## Document References
 
 - [`../explanation/architecture.md`](../explanation/architecture.md) — hexagonal architecture and dependency invariant.
-- [`./game_flow.md`](./game_flow.md) — the Job and the writer rule.
-- [`./startup.md`](./startup.md) — bootstrap sequence and settings load point.

@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! Message type and entry definitions
 
 use chrono::{DateTime, Utc};

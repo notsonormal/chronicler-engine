@@ -195,4 +195,3 @@ The dashboard is desktop-first. Desktop widths are fully supported, and tablet w
 ## Document References
 
 - [`../../explanation/dashboard_design.md`](../../explanation/dashboard_design.md) — why the dashboard is built this way.
-- [`../storage.md`](../storage.md) — the revision and the change counters that the screen reads.

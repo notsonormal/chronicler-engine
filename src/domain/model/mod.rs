@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/architecture_system.md]
 //! Core data models and domain types
 
 pub mod action;

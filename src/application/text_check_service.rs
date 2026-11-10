@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! TextCheckService orchestrator for text checking
 
 use std::sync::Arc;

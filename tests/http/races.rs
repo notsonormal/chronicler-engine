@@ -1,4 +1,4 @@
-//! HTTP E2E tests for the write path while a Job runs. They cover the races (actions.md 3.4, 3.5 and options.md 24.21) and the stop at each model call (dashboard.md 39.4, 39.5). They cover the reset (reset.md 7.3) and the Job of another Game (games.md 18.4). They cover the edit, delete and swipe switch (story_log.md 8.7 and swipe_switch.md 36.3). They also cover the preset an event Narration uses (actions.md 6.4).
+//! HTTP E2E tests for the write path while a Job runs. They cover the races (actions.md 3.4, 3.5 and options.md 24.21) and the stop at each model call (dashboard.md 39.4, 39.5). They cover the reset (reset.md 7.3) and the Job of another Game (games.md 18.4). They cover the edit, delete and swipe switch, and the busy refusal before their other checks (story_log.md 8.7, 8.18 and swipe_switch.md 36.3, 36.8). They also cover the preset an event Narration uses (actions.md 6.4).
 
 use std::sync::Arc;
 
@@ -23,7 +23,7 @@ use crate::support::http_fixtures::{
 };
 use crate::support::http_requests::{
     fetch_status_label, post_action, post_empty, post_form, response_body, wait_for_jobs,
-    wait_idle, wait_settled, post_on_last_message, fetch_part,
+    wait_idle, wait_settled, post_on_last_message, post_on_message, fetch_part,
 };
 
 fn held_action() -> (Arc<ScriptedModel>, ModelHold) {
@@ -350,9 +350,59 @@ async fn test_edit_and_delete_while_job_runs_are_refused() {
     );
 }
 
-// [docs/specs/swipe_switch.md] SCENARIO: 36.3
+// [docs/specs/story_log.md] SCENARIO: 8.18
 #[tokio::test]
-async fn test_swipe_switch_while_job_runs_is_refused() {
+async fn test_the_busy_refusal_comes_before_the_other_checks_of_an_edit_and_a_delete() {
+    let (model, hold) = held_action();
+    let (app, state) = app_with_model(Arc::clone(&model));
+    let game = active_game_of(&state);
+
+    assert!(post_action(&app, "look").await.status().is_success());
+    assert!(
+        hold.wait_started(1000),
+        "the Job should reach its narrator call"
+    );
+    let before = story_of_game(&state, game);
+    let first = before.first().expect("the Game holds its opening").id;
+    let no_message = before.iter().map(|message| message.id).max().unwrap_or(0) + 1000;
+
+    let edit = post_form(
+        &app,
+        &format!("/history/{no_message}"),
+        "text=An+edited+text",
+    )
+    .await;
+    assert_eq!(edit.status(), StatusCode::CONFLICT);
+    assert_still_thinking(&response_body(edit).await);
+
+    let delete = post_on_message(&app, "/history/delete", first).await;
+    assert_eq!(delete.status(), StatusCode::CONFLICT);
+    assert_still_thinking(&response_body(delete).await);
+
+    assert_eq!(
+        story_of_game(&state, game),
+        before,
+        "a refused edit and a refused delete write nothing"
+    );
+
+    hold.release();
+    assert!(
+        wait_settled(&state, 1000).await,
+        "the held Job should complete once released"
+    );
+}
+
+/// A Game whose last Message is a Narration with two Swipes, and a continue Job of
+/// that Game held at its narrator call.
+struct HeldOnTwoSwipes {
+    app: axum::Router,
+    state: AppState,
+    game: GameId,
+    narration: Message,
+    hold: ModelHold,
+}
+
+async fn held_job_on_two_swipes() -> HeldOnTwoSwipes {
     let model = Arc::new(
         ScriptedModel::new()
             .turn("You look around.")
@@ -379,11 +429,6 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
             message.message_type == MessageType::Narration && message.swipe_count() == 2
         })
         .expect("the retry leaves two Swipes on the Narration");
-    let target = if narration.active_swipe_index == 0 {
-        1
-    } else {
-        0
-    };
 
     // A continue saves no Input, so the Narration stays the last Message.
     let hold = model.hold(Role::Narrator);
@@ -392,13 +437,46 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
         hold.wait_started(1000),
         "the held Job should reach its narrator call"
     );
+    HeldOnTwoSwipes {
+        app,
+        state,
+        game,
+        narration,
+        hold,
+    }
+}
 
-    let resp = post_empty(&app, &format!("/message/{}/swipe/{target}", narration.id)).await;
+impl HeldOnTwoSwipes {
+    async fn release(self) {
+        self.hold.release();
+        assert!(
+            wait_settled(&self.state, 1000).await,
+            "the held Job should complete once released"
+        );
+    }
+}
+
+// [docs/specs/swipe_switch.md] SCENARIO: 36.3
+#[tokio::test]
+async fn test_swipe_switch_while_job_runs_is_refused() {
+    let held = held_job_on_two_swipes().await;
+    let narration = &held.narration;
+    let target = if narration.active_swipe_index == 0 {
+        1
+    } else {
+        0
+    };
+
+    let resp = post_empty(
+        &held.app,
+        &format!("/message/{}/swipe/{target}", narration.id),
+    )
+    .await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     let body = response_body(resp).await;
     assert_still_thinking(&body);
 
-    let after = story_of_game(&state, game)
+    let after = story_of_game(&held.state, held.game)
         .into_iter()
         .find(|message| message.id == narration.id)
         .expect("the Narration stays");
@@ -407,11 +485,39 @@ async fn test_swipe_switch_while_job_runs_is_refused() {
         "a refused swipe switch must not change the active Swipe"
     );
 
-    hold.release();
-    assert!(
-        wait_settled(&state, 1000).await,
-        "the held Job should complete once released"
+    held.release().await;
+}
+
+// [docs/specs/swipe_switch.md] SCENARIO: 36.8
+#[tokio::test]
+async fn test_the_busy_refusal_comes_before_the_other_checks_of_a_swipe_switch() {
+    let held = held_job_on_two_swipes().await;
+    let before = story_of_game(&held.state, held.game);
+    let earlier = before
+        .iter()
+        .find(|message| message.id != held.narration.id)
+        .expect("the story holds a Message before the Narration")
+        .id;
+
+    let past_the_last = post_empty(
+        &held.app,
+        &format!("/message/{}/swipe/2", held.narration.id),
+    )
+    .await;
+    assert_eq!(past_the_last.status(), StatusCode::CONFLICT);
+    assert_still_thinking(&response_body(past_the_last).await);
+
+    let not_the_last = post_empty(&held.app, &format!("/message/{earlier}/swipe/0")).await;
+    assert_eq!(not_the_last.status(), StatusCode::CONFLICT);
+    assert_still_thinking(&response_body(not_the_last).await);
+
+    assert_eq!(
+        story_of_game(&held.state, held.game),
+        before,
+        "a refused swipe switch changes no Message"
     );
+
+    held.release().await;
 }
 
 // [docs/specs/games.md] SCENARIO: 18.4

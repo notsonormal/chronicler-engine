@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/frontend/dashboard.md]
 //! Harper text-check adapter boundary helpers.
 
 use crate::application::ports::text_checker::IssueKind;

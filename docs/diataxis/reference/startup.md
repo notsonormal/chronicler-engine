@@ -52,6 +52,3 @@ The JSON Schema files under `data/schemas/` are authoritative for seed-file fiel
 ## Document References
 
 - [Storage design](../explanation/storage_design.md) — current-understanding rationale for the bootstrap flow, seed ordering, and seed files as templates.
-- [Storage](./storage.md) — seeding contract, storage-layer invariants, schema, and entity persistence (worlds, personas, messages).
-- [Game Flow](./game_flow.md) — the Job, runtime trigger evaluation, and event handling.
-- [Agent System](./narrative/agent_system.md) — quantifier-agent processing.

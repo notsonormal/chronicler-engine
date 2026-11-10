@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/architecture_system.md]
 //! Application layer services and game flow orchestration
 
 pub mod agents;

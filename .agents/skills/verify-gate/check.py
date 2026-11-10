@@ -46,10 +46,6 @@ OUT = REPO / "tmp" / "verify-gate"
 SPEC = "VerifyGate.tla"
 HEAP = "-Xmx2g"
 DIAGRAMS = SKILL / "diagrams"
-MODEL_WORDS = (
-    "The TLA+ model of the gate (`.agents/skills/verify-gate/model/`) describes how one holder at a time"
-    " writes the records of a Game. A holder is a Job or an Autoplay run."
-)
 
 sys.path.insert(0, str(REPO / "scripts"))
 import verify_coverage  # noqa: E402
@@ -224,7 +220,7 @@ def _scenarios(file: Path) -> dict[str, dict]:
 def _page(title: str, marker: str, lead: str, mermaid: str) -> str:
     return "\n".join([
         "---", "diataxis: reference", f"title: {json.dumps(title)}", "---", "",
-        marker, "", lead, "", "```mermaid", mermaid.rstrip("\n"), "```", "",
+        marker, "", lead.strip(), "", "```mermaid", mermaid.rstrip("\n"), "```", "",
         "## Document References", "", "- [Game Flow](../game_flow.md)", "",
     ])
 
@@ -260,11 +256,9 @@ def _chart_page(java: str, jar: str, chart: dict, marker: str) -> str:
     mermaid = _with_fills((out / "chart.mmd").read_text(encoding="utf-8"))
     drawn = _DRAWN.search((out / "report.md").read_text(encoding="utf-8"))
     scope = _SCOPE.search((DIAGRAMS / chart["config"]).read_text(encoding="utf-8"))
-    lead = f"{MODEL_WORDS} This state chart shows one part of it."
-    if scope:
-        lead += f" Its scope: {scope.group(1)}"
+    lead = f"Scope: {scope.group(1)}" if scope else ""
     if drawn:
-        lead += f" The chart merges the {int(drawn.group(1)):,} states that TLC reached into {drawn.group(2)} states."
+        lead += f" The model checker reached {int(drawn.group(1)):,} states. The chart merges them into {drawn.group(2)}."
     return _page(_title(mermaid, chart["page"]), marker, lead, mermaid)
 
 
@@ -282,15 +276,9 @@ def _sequence_pages(java: str, jar: str, sequences: dict, scenarios: dict[str, d
     pages = {}
     for name, scenario in scenarios.items():
         mermaid = (out / f"{name}.mmd").read_text(encoding="utf-8")
-        checked = (
-            "TLC checked this rule in each state of the order."
-            if scenario["rule"] in invariants
-            else "TLC checks this rule in the configs of the model, not along one order."
-        )
-        lead = (
-            f"{MODEL_WORDS} This sequence diagram shows one order of its steps, which TLC took one by one."
-            f" Every invariant of the model held in each state. The order shows this rule: {scenario['says']} {checked}"
-        )
+        lead = f"Rule: {scenario['says']}"
+        if scenario["rule"] not in invariants:
+            lead += " The configs of the model check this rule, not this order."
         pages[_page_name(name)] = _page(scenario["title"], marker, lead, mermaid)
     return pages
 

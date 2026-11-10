@@ -79,3 +79,14 @@ When the client switches to the other Swipe
 Then the status display answers Ready
 And the dock renders no Options failure
 ```
+
+#### Scenario 36.8: While a Job runs, the busy refusal comes before the other checks of a swipe switch
+
+```gherkin
+Given a Game whose last Message has two Swipes
+And a Job of that Game held at its narrator call
+When the client POST /message/:id/swipe/:index with an index past the last Swipe
+And the client POST /message/:id/swipe/0 with the id of a Message that is not the last one
+Then each response is 409 carrying the "Still thinking..." line
+And no Message of the story changes
+```

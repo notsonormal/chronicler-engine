@@ -78,6 +78,3 @@ Two guarantees follow from the shape above and the deployment contract:
 ## Document References
 
 - [`../reference/architecture_system.md`](../reference/architecture_system.md) — dependency invariant, what each part owns, and the storage direct-access carve-out.
-- [`../reference/storage.md`](../reference/storage.md) — SQLite schema and its tables.
-- [`./rust_idioms.md`](./rust_idioms.md) — concrete services + `spawn_blocking` + settings-sharing shape that the hexagonal frame sits inside.
-- [`../reference/coding_standards/guardrails.md`](../reference/coding_standards/guardrails.md) — static guardrails (clippy, arch-lint, syn-based convention tests).

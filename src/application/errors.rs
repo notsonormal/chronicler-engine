@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/architecture_system.md]
 //! ApplicationError — the error envelope of the application services.
 
 use crate::application::generation::gate::NotAccepted;

@@ -31,5 +31,4 @@ The server stops accepting requests when the process receives the shutdown signa
 
 ## Document References
 
-- [`./architecture.md`](./architecture.md) — the dependency rule and the deployment contract that these idioms sit inside.
 - [`../reference/game_flow.md`](../reference/game_flow.md) — the Job, its job entry and the id check that cancellation relies on.

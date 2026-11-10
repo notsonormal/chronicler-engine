@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! World catalogue — world CRUD orchestration at the application layer.
 
 use std::sync::Arc;

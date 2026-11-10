@@ -203,3 +203,13 @@ And the first line of the body is "The last Message changed, so the Message was 
 And the second line of the body is "The page showed a Message that is no longer the last one."
 And the story log still holds every Message
 ```
+
+#### Scenario 8.18: While a Job runs, the busy refusal comes before the other checks of an edit and a delete
+
+```gherkin
+Given a Game whose Job is held at its narrator call
+When the client POST /history/:id with an id that names no Message
+And the client POST /history/delete with the field message set to the id of a Message that is not the last one
+Then each response is 409 carrying the "Still thinking..." line
+And the story log still holds every Message of the Job
+```

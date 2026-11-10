@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/storage.md]
 //! Persona catalogue — persona read-side orchestration at the application layer.
 
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-//! [DOC: docs/diataxis/reference/game_flow.md]
+//! [DOC: docs/diataxis/reference/architecture_system.md]
 //! Domain model utility modules.
 
 pub mod game_name;

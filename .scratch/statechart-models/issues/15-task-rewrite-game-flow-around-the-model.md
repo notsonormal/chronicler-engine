@@ -1,7 +1,7 @@
 # Add the TLA+ model layer to docs/AGENTS.md, and rewrite game_flow.md
 
 Type: task (HITL)
-Status: open
+Status: resolved
 Blocked by: 14
 
 ## Question
@@ -37,3 +37,32 @@ The owner reviews the draft before it lands. The shape of the document is the ow
 - `python build.py` passes.
 - The owner approves the draft.
 - Do not commit.
+
+## Progress (2026-11-10, not resolved)
+
+Draft 2, waiting for the owner's review. Draft 1 (2026-11-09) cut only the gate sentences and linked all 13 diagrams, so it grew from 2,277 to 2,322 words. The owner rejected it: more prose, not less, and the diagrams explain themselves.
+
+- **`game_flow.md`: 821 words (was 2,277).** It holds names, owners and invariants only. One sentence names the TLA+ model, and *Document References* has one diagram link. Cut because a spec holds the rule: the failure lines (`failure_display.md`), the status display (`dashboard.md`, `autoplay.md`), Retry (`swipe_new.md`), when a Retrigger is allowed (`retrigger.md`), the `400`/`500` plan refusals, the busy refusals, the config write, the Options run after a failure. Cut because the TLA+ model holds the order: the stop, reset, delete and Autoplay accept orders, the switch order, the order of the two Swipe-state writes. Cut as code detail: the movement fields, the `GenerationOrder::write` list, the steps list. The `#trigger-evaluation` anchor stays (guardrails.md links it).
+- **The diagram pages.** Each lead was about 50 words of the same text. `check.py` now writes only the part of each page that differs: `Scope: …` and the TLC state count of a chart, `Rule: …` of a sequence, and the PROPERTY note when it applies. The shared text is in two sentences in the first section of `game_flow.md`. `MODEL_WORDS` is gone.
+- **`docs/AGENTS.md` row:** in commit `068b682f` (owner).
+- Checks: `check.py` exit 0, 13 pages written. `python build.py` passes (`logs/build_20261110_183829_3214818.log`).
+- Open: the busy refusal comes before every other check. No spec and no TLA+ model step holds it now. It needs a spec scenario by the gap rule.
+
+### 2026-11-10, round 3 (owner): anchors and cross-document references
+
+- **The owner's view.** An agent sees the whole repo, and `docs/AGENTS.md` is always loaded. So a doc does not need to route to every other doc. Keep only the cross-document references that are useful.
+- **`DOC:` anchors.** 22 modules now point at the doc that names their area: `storage.md` (6: storage `games.rs`, the World and Persona catalogues, `map.rs`, `game_name.rs`, `message_types.rs`), `frontend/dashboard.md` (10: text check, Worlds HTTP), `frontend/http_routes.md` (2: debug), `architecture_system.md` (4: `application/errors.rs`, three `mod.rs`). 26 stay on `game_flow.md`, which names their part.
+- **Document References.** The rule of `docs/AGENTS.md` already allows only the paired Reference or Explanation doc and a doc that the body hands a point to. 13 lines that broke it are gone, in 7 docs. Unchanged: generated `guardrails.md`, the diagram pages, and the pairs.
+- `python build.py` passes (`logs/build_20261110_185130_3241702.log`).
+- Not applied yet: the wording findings 5 to 18 of the review of 2026-11-10.
+
+## Answer
+
+**Done (known).** `game_flow.md` holds the names, the owners and the invariants of the game flow, in 821 words (was 2,277). One sentence names the TLA+ model of the gate, and one link goes to its diagrams. `docs/AGENTS.md` has the TLA+ model row (commit `068b682f`). `python build.py` passes (`logs/build_20261110_190354_3271846.log`).
+
+- **The rewrite.** A rule that a client sees is in its spec. An order between parts that run at the same time is in the TLA+ model. Fine-grained detail is in the code. Draft 1 cut the gate sentences only and linked all 13 diagrams, so it grew. The owner rejected it.
+- **The diagram pages.** `check.py` writes one line on top of each page: `Scope: …` and the state count of a chart, or `Rule: …` of a sequence. The text that was the same on each page is gone. The scopes say "a stop" (the action), not "Stop" (the button).
+- **The review (`/technical-writing`, `/writing-for-agents`).** Findings 5 to 18 are applied: one meaning for "order", "plain Job" only, the hold of the registry defined, no "land nowhere", split sentences, "TLC" named once in `game_flow.md` and "the model checker" on the pages. Findings 1 to 3 (a router section to the specs) are rejected (owner): the agent searches the repo, and `docs/AGENTS.md` is always loaded.
+- **`DOC:` anchors.** 22 modules point at the doc that names their area (`storage.md`, `frontend/dashboard.md`, `frontend/http_routes.md`, `architecture_system.md`). 26 stay on `game_flow.md`.
+- **Document References.** 13 links in 7 docs broke the rule of `docs/AGENTS.md` (only the paired doc and a doc that the body hands a point to), and they are gone.
+- **The busy refusal before the other checks.** It had no spec and no TLA+ model step. New scenarios: story_log.md 8.18 (an edit of no Message, a delete of a Message that is not the last) and swipe_switch.md 36.8 (an index past the last Swipe, a Message that is not the last), each with a test in `tests/http/races.rs`. The setup of 36.3 is now the helper `held_job_on_two_swipes`, shared with 36.8. No code change: `GameWriter::require_idle` already runs first.
