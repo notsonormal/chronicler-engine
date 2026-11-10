@@ -1,0 +1,36 @@
+| Count | pf20 | lt01 | lt03 | lt10 | lt15/reference | lt15/new | ltm09 |
+|---|---|---|---|---|---|---|---|
+| entries | 201 | 201 | 202 | 202 | 202 | 201 | 202 |
+| cached % | 49.5 | 47.6 | 68.9 | 53.3 | 60.0 | 80.4 | 80.1 |
+| tokens out | 43900 | 52637 | 45077 | 48180 | 46138 | 38527 | 39198 |
+| Rooms used | 8 | 12 | 11 | 8 | 14 | 7 | 13 |
+| added Rooms | 0 | 3 | 3 | 0 | 7 | 0 | 5 |
+| Room changes | 17 | 21 | 23 | 10 | 21 | 23 | 21 |
+| state changes on an Input | 19 | 14 | 21 | 19 | 14 | 19 | 17 |
+| Narr. off estate, map Room recorded | 29 | 21 | 9 | 23 | 7 | 18 | 13 |
+| Narr. names other Rooms only | 35 | 22 | 28 | 46 | 23 | 17 | 19 |
+| Narr. with no roster Character | 30 | 27 | 13 | 47 | 41 | 41 | 44 |
+| Narr. names a Character not recorded present | 16 | 23 | 25 | 10 | 13 | 12 | 11 |
+| Narr. with a present Character unnamed for 5 | 6 | 1 | 1 | 30 | 6 | 9 | 11 |
+| titled names not in the World (3+ uses) | 0 | 6 | 3 | 6 | 2 | 1 | 5 |
+| their uses | 0 | 26 | 11 | 135 | 20 | 8 | 55 |
+| modern words | 66 | 30 | 25 | 35 | 14 | 22 | 16 |
+| period words | 2 | 74 | 10 | 17 | 39 | 33 | 25 |
+| first period entry | 174 | 40 | 52 | 89 | 37 | 36 | 29 |
+| last modern entry | 143 | 108 | 67 | 109 | 27 | 192 | 97 |
+| 5-word phrases in 5+ Narrations | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| top 2-word opener | carla took (4) | marenna oakes (5) | carla took (4) | mrs pemberton (5) | carla was (3) | carla took (5) | margaret voss (4) |
+| Narr. ends on a question | 9 | 8 | 12 | 7 | 11 | 9 | 3 |
+| Narr. words, median | 174 | 193 | 169 | 185 | 174 | 138 | 141 |
+| Input words, median | 124 | 162 | 129 | 145 | 135 | 125 | 134 |
+| Inputs that write a Character's reaction | 5 | 8 | 3 | 0 | 1 | 1 | 2 |
+| Inputs | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
+| Narrations | 101 | 101 | 102 | 102 | 102 | 101 | 102 |
+
+pf20: Clemence 2, Harlan 1
+lt01: Vance 7, Pell 5, Doyle 4, Alderman 4, Oakes 3, Coleman 3
+lt03: Bernard 4, Voss 4, Fennick 3, Coleman 2, Muncey 2, Ashby 1
+lt10: Rennick 36, Voss 35, Pemberton 31, Fennick 21, Hallow 8, Coleman 4
+lt15/reference: Tull 17, Jess 3, Coleman 2, Alder 2, Cade 1, The 1
+lt15/new: Hollis 8, Ashworth 2, Campion 1, The 1, When 1
+ltm09: Ashby 27, Aldridge 10, Calloway 8, Voss 5, Dodds 5, Prue 1

@@ -93,3 +93,7 @@ Start the dev server with `python build.py run [-- <server flags>]`. The step bu
 The server reads the API keys that a Connection does not store from `.env`, in its working directory or a parent folder. In a linked worktree with no `.env`, `build.py run` links the main checkout's `.env` into the worktree. Start the server from the worktree itself. A server started from the main checkout reads the main `data/` and writes to the main `logs/`.
 
 The dev server stores its SQLite DB next to its binary (`<target-dir>/debug/chronicler_<port>.db`). It reads `<target-dir>/debug/data` if a full gate copied it there, and otherwise reads the repo's `data/`. A world JSON edit in `data/` therefore does not reach a target dir with a gate copy until the next full gate. The server writes only the DB and `logs/`. It never writes to a data dir.
+
+The DB is a development file. It holds the Games, the stored API keys, the Settings and every prompt preset that the dashboard edited. Two commands delete it with the target dir: `cargo clean`, and the full gate when it removes the target dir of an idle linked worktree. An edited prompt preset has no export, so it is lost with the DB.
+
+The boot copies a data file into the DB only when its record is missing. So an edit of a World, Character, Persona or default prompt preset file reaches a new DB only.

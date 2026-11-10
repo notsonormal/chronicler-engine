@@ -31,6 +31,7 @@ The choices to put to the owner:
 - Known, at `8b23151c`:
   - `WorldManifest::default_scenario` and `WorldCard::default_scenario` return `scenarios.first()`, and `starting_room_id()` falls back to `"start"` (`src/domain/model/world.rs:62-77`).
   - `scripts/validate_data.py` checks the Room of the `default_scenario_id` Scenario, Scenario Characters and Trigger Rooms for the seed files only.
+- **Two more map faults for this validation** (the audit of 2026-11-10, row N4 of [its list](../../fable-audit/assets/findings-not-carried.md)). The World form accepts a map with the same Room id twice, and a map with an exit to a Room that does not exist. Both were run on a probe server, and both answered 200. That audit does not fix them: they belong to the one validation of this ticket.
 - Triggers and Relationships live in the Character files (`data/characters/<group>/`), not in `world.json`. So the validation spans three kinds of file.
 - [Decide and close the wiring and config group](14-task-wiring-and-config-group.md) adds boot checks of the presets. It can use the same mechanism.
 - Blocked by ticket 01 for choice 2 only.
