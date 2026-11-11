@@ -4,7 +4,7 @@ Thin wrapper around `vale` (https://vale.sh) that:
   - Loads the .vale.ini config
   - Restricts scope to STANDARD docs (mirrors scripts/validate_docs.py) and the root docs
     in ROOT_DOCS
-  - Skips TRANSIENT (plans/, old-docs/) and EXCLUDED paths
+  - Skips TRANSIENT (old-docs/, external_applications/) and EXCLUDED paths
   - Supports single-file, multi-file, --all, --json, and --fix modes
 
 Vale itself is responsible for rule evaluation. This wrapper owns:
@@ -50,7 +50,7 @@ VALE_INI = ENGINE_ROOT / ".vale.ini"
 
 # Transient — historical/forward-looking, no prose rules apply.
 # external_applications/ captures third-party prompts and notes, so its text is not ours to rewrite.
-TRANSIENT_DIR_NAMES: set[str] = {"plans", "old-docs", "external_applications"}
+TRANSIENT_DIR_NAMES: set[str] = {"old-docs", "external_applications"}
 
 # Excluded file names — auto-generated indexes, AGENTS meta.
 # AGENTS.mdAUTO-INDEX block is auto-regenerated; prose preamble is owned by
@@ -83,8 +83,8 @@ ROOT_DOCS: tuple[Path, ...] = tuple(
 def is_in_scope(md_file: Path) -> bool:
     """Return True if md_file is a STANDARD doc (in scope for Vale).
 
-    Mirrors validate_docs.py classify_file() — drops TRANSIENT (plans/,
-    old-docs/) and EXCLUDED (auto-indexes, templates, AGENTS.md).
+    Mirrors validate_docs.py classify_file() — drops TRANSIENT (old-docs/,
+    external_applications/) and EXCLUDED (auto-indexes, templates, AGENTS.md).
     """
     try:
         rel = md_file.resolve().relative_to(DOCS_ROOT.resolve())

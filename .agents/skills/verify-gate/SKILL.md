@@ -169,4 +169,4 @@ To add a diagram: add a `[[chart]]` with its `page`, `config` and `view`, or a s
 
 No config breaks at the code of today, so `known_breaks` in `coverage.toml` is empty.
 
-The trial log (`.scratch/statechart-models/assets/trial-log.md`) keeps the past findings and their fixes.
+The trial log (`work/wayfinder-maps/statechart-models/assets/trial-log.md`) keeps the past findings and their fixes.

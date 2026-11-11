@@ -574,9 +574,8 @@ class TestRouteCheck(unittest.TestCase):
     def test_trailing_punctuation_is_not_part_of_the_route(self) -> None:
         self.assertEqual(self.messages("See /status/busy. Also (/fragment/header)."), [])
 
-    def test_collect_route_files_exempts_plans_old_docs_and_the_table(self) -> None:
+    def test_collect_route_files_exempts_old_docs_and_the_table(self) -> None:
         for rel in (
-            "docs/plans/p.md",
             "docs/old-docs/o.md",
             "docs/specs/s.md",
             ".agents/skills/demo/SKILL.md",

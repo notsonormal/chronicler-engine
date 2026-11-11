@@ -129,7 +129,7 @@ Every doc under `docs/diataxis/` carries YAML front-matter at the top of the fil
 - `explanation/` — Explanation docs.
 - `tutorials/` and `how-to/` — create these directories only when a doc earns the mode.
 
-`external_applications/`, `plans/`, and `specs/` live under `docs/`, alongside `diataxis/`. They are not part of the diátaxis tree.
+`external_applications/` and `specs/` live under `docs/`, alongside `diataxis/`. They are not part of the diátaxis tree.
 
 ### Cite symbols, not line numbers
 
@@ -167,7 +167,7 @@ The code documents itself. A doc does not explain how the code works by listing 
 
 **Seam identifiers vs. mechanics leaks.** Keep a name when a reader would grep for it to find the contract that the prose describes (`GameWriter`, `LlmCallRecorder::complete()`, `<ConversationHistory>`). Drop a name that only labels mechanics: a free-function name, a field dump, variant payload syntax (`Variant(String)`), a Rust type in prose (`Option<String>`), or code syntax.
 
-Plans (`docs/plans` and `.scratch`) are exempt.
+The work records in `work/` are exempt.
 
 ### No negative explaining
 

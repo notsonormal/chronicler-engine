@@ -1,19 +1,18 @@
 """Validate markdown docs + DOC anchors under docs/.
 
-Role-aware deterministic checks. Each .md file is classified into one of three
+Role-aware deterministic checks. Each .md file is classified into one of two
 roles which determine which rules apply:
 
   STANDARD  — canonical spec docs (reference/explanation/how-to/tutorials
               under docs/diataxis/). All rules enforced.
-  TRANSIENT — historical or forward-looking docs (plans). Exempt
-              from all checks; they may reference anything historically.
   EXCLUDED  — auto-generated indexes, archives, process notes
               (AGENTS.md, _PILOT_NOTES.md). Exempt from all checks.
 
 Rules (only enforced on STANDARD docs):
 
   BROKEN_MARKDOWN_LINK     — [text](relative/path.md) where target file missing.
-  STANDARD_PLAN_LINK       — link into docs/plans/ or old-docs/archived-plans/.
+  STANDARD_PLAN_LINK       — link into a plans/ folder (work/plans/ or
+                              old-docs/archived-plans/).
                               Standards must be self-contained; plans are transient
                               and cannot be leaned on as canonical reference.
   STANDARD_DOC_BODY_REFERENCE — doc-internal reference in body prose (before the
@@ -50,11 +49,9 @@ Route rule (runs on every `docs/**/*.md` and `.agents/skills/**/SKILL.md`):
                               A `:param` segment of the table matches any one
                               segment. Fenced code blocks are scanned, because
                               `curl` examples there are what an agent copies.
-                              Exempt: `docs/plans/` (transient: plans name
-                              routes that no longer exist), `old-docs/`, and the
-                              table itself. A route followed by `…`, `...`, `*`,
-                              `<` or a trailing `/` names a family, not a route, and is
-                              skipped.
+                              Exempt: `old-docs/` and the table itself. A route
+                              followed by `…`, `...`, `*`, `<` or a trailing `/`
+                              names a family, not a route, and is skipped.
 
 Diátaxis-front-matter rules (only enforced on STANDARD docs under
 docs/diataxis/):
@@ -175,7 +172,7 @@ ROUTE_TABLE_ROW = re.compile(r"^\|\s*[A-Z]+\s*\|\s*`(/[^`]*)`\s*\|")
 ROUTES_DOC = Path("docs") / "diataxis" / "reference" / "frontend" / "http_routes.md"
 
 # Directories under docs/ whose routes are not checked (see UNKNOWN_ROUTE).
-ROUTE_EXEMPT_DIR_NAMES: set[str] = {"plans", "old-docs"}
+ROUTE_EXEMPT_DIR_NAMES: set[str] = {"old-docs"}
 
 # Characters that follow a route and show it is a family or a pattern.
 ROUTE_FAMILY_FOLLOWERS = ("\u2026", "...", "*", "<")
@@ -291,14 +288,13 @@ def relative_to(path: Path, root: Path) -> Path | None:
 
 
 def classify_file(path: Path, docs_root: Path) -> str:
-    """Return one of: 'STANDARD', 'TRANSIENT', 'EXCLUDED'.
+    """Return one of: 'STANDARD', 'EXCLUDED'.
 
     Classification rules (first match wins):
       1. File name in EXCLUDED_FILE_NAMES  → EXCLUDED
       2. Any path segment in EXCLUDED_DIR_NAMES → EXCLUDED
-      3. First segment is 'plans' → TRANSIENT
-      4. First segment in STANDARD_DIR_NAMES → STANDARD
-      5. Otherwise → EXCLUDED (unrecognized top-level doc — be permissive)
+      3. First segment in STANDARD_DIR_NAMES → STANDARD
+      4. Otherwise → EXCLUDED (unrecognized top-level doc — be permissive)
     """
     rel = relative_to(path, docs_root)
     if rel is None:
@@ -314,11 +310,7 @@ def classify_file(path: Path, docs_root: Path) -> str:
     if any(part in EXCLUDED_DIR_NAMES for part in parts):
         return "EXCLUDED"
 
-    first = parts[0]
-    if first == "plans":
-        return "TRANSIENT"
-
-    if first in STANDARD_DIR_NAMES:
+    if parts[0] in STANDARD_DIR_NAMES:
         return "STANDARD"
 
     return "EXCLUDED"
@@ -506,7 +498,7 @@ def check_markdown_links(report: FileReport, docs_root: Path) -> None:
 
 
 def check_standard_plan_links(report: FileReport, docs_root: Path) -> None:
-    """Flag standards linking into docs/plans/ or old-docs/archived-plans/."""
+    """Flag standards linking into a plans/ folder or old-docs/archived-plans/."""
     text = read_text(report)
     if text is None:
         return
@@ -551,10 +543,7 @@ def check_standard_plan_links(report: FileReport, docs_root: Path) -> None:
                 continue
 
             rel_str = rel_to_docs.as_posix()
-            if (
-                rel_str.startswith("plans/")
-                or rel_str.startswith("old-docs/archived-plans/")
-            ):
+            if rel_str.startswith("old-docs/archived-plans/"):
                 report.violations.append(
                     Violation(
                         ERROR,

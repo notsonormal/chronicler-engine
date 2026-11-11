@@ -24,7 +24,7 @@ fn extract_doc_anchor_path(line: &str) -> Option<&str> {
 }
 
 fn is_forbidden_doc_path(doc_path: &str) -> bool {
-    doc_path == "docs/plans" || doc_path.starts_with("docs/plans/")
+    doc_path == "work" || doc_path.starts_with("work/")
 }
 
 fn is_test_file(path: &str) -> bool {
@@ -84,7 +84,7 @@ pub fn check_doc_standards(path: &str, content: &str) -> Vec<Violation> {
                 path,
                 1,
                 format!(
-                    "Module `{path}` DOC anchor `{anchor}` is not allowed. Anchors must point to domain docs, not plans (`docs/plans/*`)."
+                    "Module `{path}` DOC anchor `{anchor}` is not allowed. Anchors must point to domain docs, not work records (`work/*`)."
                 ),
             ));
         }

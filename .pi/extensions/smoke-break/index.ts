@@ -5,8 +5,7 @@
 // repo were marathon-shaped (a 44-minute build chase interrupted manually
 // with "What is the endgoal here?", and a 2.6 h / 233-tool-call run while the
 // user was away). This extension appends one short, model-visible reflection
-// prompt per elapsed interval — see docs/plans/pi-extension-smoke-break-nudge.md
-// for the measured data and the decision history.
+// prompt per elapsed interval.
 //
 // Wiring:
 // - before_agent_start anchors the turn (fires once per user-submitted prompt,

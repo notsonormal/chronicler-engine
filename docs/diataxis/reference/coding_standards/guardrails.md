@@ -30,7 +30,7 @@ Clippy lints are denied at the crate root in `src/lib.rs` via `#![deny(...)]`. T
 Declarative architecture rules in `arch-lint.toml`.
 
 <!-- AUTO-GUARDRAILS: arch-lint START -->
-Scan scope: `root = "./src"`, excluding `**/target/**`, `**/tests/**`, `**/*_tests.rs`, `**/.pi/**`, `**/.scratch/**`, `**/tmp/**`.
+Scan scope: `root = "./src"`, excluding `**/target/**`, `**/tests/**`, `**/*_tests.rs`, `**/.pi/**`, `**/work/**`, `**/tmp/**`.
 
 | From Scope | To Scope(s) | Rationale |
 |------------|-------------|----------|
@@ -134,4 +134,4 @@ Coverage is measured via `cargo-llvm-cov` with file-level exclusions configured 
 
 - [`../../explanation/architecture.md`](../../explanation/architecture.md) — [§Architectural commitments](../../explanation/architecture.md#architectural-commitments) lists the guarantees the static guardrails enforce.
 - [`../game_flow.md#trigger-evaluation`](../game_flow.md#trigger-evaluation) — the order in which the game rules apply a Quantifier result, which the game-rules tests observe.
-- `.scratch/_closed/turn-state-model/assets/sketch-25-new-design.md` §6.2 — the design rule numbers the four table-driven walkers enforce.
+- `work/_closed/turn-state-model/assets/sketch-25-new-design.md` §6.2 — the design rule numbers the four table-driven walkers enforce.

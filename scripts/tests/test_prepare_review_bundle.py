@@ -37,7 +37,7 @@ class ClassifyAreaTests(unittest.TestCase):
         cases = {
             "src/main.rs": "src",
             "tests/foo.rs": "tests",
-            "docs/plans/x.md": "docs",
+            "docs/specs/x.md": "docs",
             "assets/icon.png": "assets",
             "assets/dashboard-slash-menu.js": "assets",
             "scripts/build_slot.py": "tooling",

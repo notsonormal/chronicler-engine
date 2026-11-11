@@ -18,6 +18,6 @@
     "web_search",
     "graphify"
   ],
-  "planFolder": "docs/plans",
-  "scratchFolders": ["tmp", "docs/plans", ".scratch"]
+  "planFolder": "work/plans",
+  "scratchFolders": ["tmp", "work"]
 }

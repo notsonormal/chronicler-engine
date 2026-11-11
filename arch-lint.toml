@@ -15,7 +15,7 @@ exclude = [
     "**/tests/**",
     "**/*_tests.rs",
     "**/.pi/**",
-    "**/.scratch/**",
+    "**/work/**",
     "**/tmp/**",
 ]
 # `*_tests.rs` excluded: arch-lint 0.4.3 cannot distinguish a test fake

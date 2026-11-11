@@ -15,7 +15,7 @@ Existing text earns no credit for being there. Nearby docs are not a model of a 
 
 - **A whole file:** review all of it.
 - **A diff:** the diff is where the review starts, not where it stops. Also review the document that contains the change, the section around it, and every other doc that covers the same concept. Report problems the change did not cause under **Pre-existing**, so the author can tell them apart.
-- Skip `.scratch/`, `docs/plans/` and `old-docs/`. Those are transient documents.
+- Skip the work records (`docs/agents/issue-tracker.md` names their folder) and `old-docs/`. Those are transient documents. The tracker doc and `triage-labels.md` are not work records, so review them.
 
 ## Doc types
 

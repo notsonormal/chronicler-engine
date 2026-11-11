@@ -25,7 +25,7 @@ fn test_check_doc_standards_allows_correct_doc() {
 fn test_check_doc_standards_rejects_forbidden_anchor() {
     let violations = check_doc_standards(
         "src/narrative/parser.rs",
-        "//! [DOC: docs/plans/architecture.md]\n\
+        "//! [DOC: work/plans/architecture.md]\n\
          //! Narrative parser module\n",
     );
     assert_eq!(violations.len(), 2);

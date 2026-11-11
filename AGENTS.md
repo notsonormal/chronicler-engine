@@ -313,6 +313,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
   - `generate_tests_structure_index.py` — Generate tests/AGENTS.md structure index from module summaries.
   - `healthcheck.py` — Chronicler Engine healthcheck dispatcher.
   - `install_git_hooks.py` — Install git hooks from scripts/git-hooks/ to .git/hooks/.
+  - `move_issue.py` — Move a one-off issue to another status folder, and rewrite the links and cited paths to it.
   - `parse_coverage.py` — Parse coverage report from cargo-llvm-cov JSON output.
   - `precommit_regenerate.py` — Regenerate the four generated index files for the git pre-commit hook.
   - `prepare_review_bundle.py` — Assemble a review bundle (stat, per-area patches, untracked/deleted lists) under tmp/.
@@ -325,7 +326,9 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
   - `validate_docs.py` — Validate markdown docs + DOC anchors under docs/.
   - `validate_feature_spec.py` — Validate that every scenario in a feature spec has a covering integration test and every annotated test references a declared scenario.
   - `validate_seam_cases.py` — Validate the seam contracts: every test in a declaring file carries one `CASE` tag.
+  - `validate_work_records.py` — Validate the links of the work records under `work/`, and the `work/` paths that docs and skills cite.
   - `verify_coverage.py` — The staleness warning of the verify skills, and the command that records the hashes.
+  - `work_records.py` — Shared link code of the work records: find relative links and rewrite them through a table of moves.
 <!-- AUTO-STRUCTURE END -->
 
 ## Your Responsibility
@@ -383,11 +386,11 @@ Warm cost is the median of recent runs in `logs/build_history.txt`, including ru
 
 ### Issue tracker
 
-Local markdown under `.scratch/` (per `docs/agents/issue-tracker.md`). No `gh` CLI dependency.
+Local markdown under `work/` (per `docs/agents/issue-tracker.md`). No `gh` CLI dependency.
 
 ### Triage labels
 
-Five canonical role strings, used as `Status:` lines in local-markdown files (per `docs/agents/triage-labels.md`).
+Five canonical role strings, each mapped to a status folder of the one-off issues (per `docs/agents/triage-labels.md`).
 
 ### Domain docs
 

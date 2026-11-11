@@ -369,6 +369,15 @@ REGISTRY: dict[str, StepSpec] = {
             help="Validate markdown docs and DOC anchors under docs/.",
         ),
         StepSpec(
+            "validate-work-records",
+            "Validating work-record links...",
+            "python scripts/validate_work_records.py",
+            help=(
+                "Check that the relative links of the live work records under work/ resolve,"
+                " and that the backticked work/ paths of AGENTS.md, docs/ and the skills exist."
+            ),
+        ),
+        StepSpec(
             "vale",
             "Linting prose with Vale...",
             "python scripts/vale_lint.py --quiet",
@@ -1067,7 +1076,10 @@ def _spec_step(name: str, args, *, report_only: bool = False, cmd: str | None = 
     )
 
 
+# The doc rewrites come first: the Python tests read the generated docs.
 _GATE_CHECKS = (
+    "http-routes-check",
+    "guardrails-doc-check",
     "validate-data",
     "clippy",
     "test-structure",
@@ -1075,9 +1087,8 @@ _GATE_CHECKS = (
     "seam-cases",
     "docstrings",
     "py-tests",
-    "http-routes-check",
-    "guardrails-doc-check",
     "validate-docs",
+    "validate-work-records",
     "vale",
 )
 
