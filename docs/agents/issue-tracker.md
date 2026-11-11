@@ -23,7 +23,7 @@ work/
 - **Map**: the plan of one piece of work, in `work/wayfinder-maps/<map>/map.md`. Its Destination is the end of that piece of work. Here, a map means a wayfinder map, not a game Map. A map that closes gets `Status: closed` and stays in `work/wayfinder-maps/`. No new map goes to `work/_closed/`.
 - **Ticket**: one step of a map, in `work/wayfinder-maps/<map>/issues/NN-<slug>.md`, numbered from `01` in each map.
 - **One-off issue**: an issue that belongs to no map, in `work/issues/<status>/NN-<slug>.md`.
-- **Wiki**: the one wiki of the repo. `work/wiki/index.md` lists its pages. Pages follow the Wiki section of the upstream chief-of-staff skill (`mattpocock/skills`, `skills/in-progress/chief-of-staff/SKILL.md`): its page kinds, the history voice, and the ingest, query and lint operations.
+- **Wiki**: the one wiki of the repo. `work/wiki/index.md` lists its pages. Pages follow the Wiki section of the chief-of-staff skill (`.agents/skills/chief-of-staff/SKILL.md`): its page kinds, the history voice, and the ingest, query and lint operations.
 - **Plan**: a file that plan mode writes in `work/plans/`. A plan that is implemented at once moves to `old-docs/archived-plans/`. A plan that must wait becomes a one-off issue in `work/issues/pending/`.
 - **Closed map of the old layout**: a map in `work/_closed/`. Its text keeps the paths of the old layout, as history.
 
