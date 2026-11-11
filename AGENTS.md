@@ -396,11 +396,9 @@ Five canonical role strings, each mapped to a status folder of the one-off issue
 
 Single-context: one `CONTEXT.md` glossary at the repo root (per `docs/agents/domain.md`).
 
-## Permissions System
+## Permissions
 
-Read `.pi/extensions/pi-permission-system/config.json` to see allowed permissions. Do not circumvent them. You may *recommend* permission changes at the end of a task, but you may not *apply* them without explicit user approval. These restrictions exist to prevent the agent from touching git without supervision.
-
-Don't commit without explicit approval, even if committing is allowed in the permissions config. Normal git commands are fine but destructive git commands should be avoided in general. 
+Don't commit without explicit approval. Normal git commands are fine but destructive git commands should be avoided in general. 
 
 ## Subagents and delegation extra rules
 
