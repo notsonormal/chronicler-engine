@@ -10,3 +10,6 @@ pub mod types;
 
 pub use assembler::{AssembledPrompt, PromptAssembler, PromptContext};
 pub use types::CharacterContext;
+
+#[cfg(test)]
+mod assembler_tests;

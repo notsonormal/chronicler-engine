@@ -1,10 +1,11 @@
 """Validate the seam contracts: every test in a declaring file carries one `CASE` tag.
 
-A **seam contract** is the test file of a black box that sits behind a port
-boundary: the storage adapters, the LLM providers and transport, the Harper
-text checker, each Agent, and the Narrator. Its clauses are declared as
-`CASE`s because no route reaches them, so `validate_feature_spec.py` (which
-pairs `docs/specs/` scenarios with tests) cannot cover them. The rule that
+A **seam contract** is the test file of a black box. The boxes behind a port
+boundary are the storage adapters, the LLM providers and transport, the Harper
+text checker, each Agent, and the Narrator. The PromptAssembler, the pure
+prompt builder inside the Narrator, is a box too. Its clauses are declared as `CASE`s
+because no route reaches them, so `validate_feature_spec.py` (which pairs
+`docs/specs/` scenarios with tests) cannot cover them. The rule that
 places a test is `tests/STRATEGY.md`, "The one rule".
 
 The form is strict, and the tag carries the description. The tag sits on the

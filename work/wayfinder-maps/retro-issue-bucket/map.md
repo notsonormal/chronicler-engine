@@ -56,6 +56,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 
 - **91 — a live test says whether it ran.** The `llm` nextest profile shows the output of passing tests (`success-output = "immediate"`), and each test in `tests/llm/` prints `Running against <provider>` or `Skipping: <KEY> not set`, so the `--llm-only` log names what reached a provider.
 - **97 — a worktree probe gets the API keys.** `build.py run` links the main checkout's `.env` into a linked worktree that has none, so the server reads the keys and the agent does not. The cwd route is rejected: it reads the main `data/`. [Ticket](./issues/97-worktree-probe-server-has-no-api-keys.md).
+- **118 — the prompt assembler has its own seam contract (2026-11-14).** The length cap was a symptom: `narrator_tests.rs` (1,978 lines for a 206-line `narrator.rs`) tested `PromptAssembler` through `narrate()`. The assembly cases moved, with `assembler-` ids, to `src/application/prompting/assembler_tests.rs` (58 cases, 1,482 lines), which call `assemble()` and `plan_cut()` directly. The Narrator keeps its own 27 cases (763 lines). `tests/STRATEGY.md` names the assembler as a box inside the Narrator. No guardrail change: the split-name exemption and a higher cap were not needed.
 
 ## Won't do
 

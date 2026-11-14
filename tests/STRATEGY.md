@@ -1,18 +1,18 @@
 # Test strategy
 
-The rules for placing a test and for writing a spec scenario. Each rule ends
-with its **Check**: the `build.py` step that fails when the rule breaks, or
-**review-only** when no step checks it.
+This file holds the rules for placing a test and for writing a spec scenario.
+Each rule ends with its **Check**: the `build.py` step that fails when the rule
+breaks, or **review-only** when no step checks it.
 
 ## The tiers
 
-Each tier is defined by **what is faked**. Every directory under `tests/` has
-one row. The bold rows are the tiers. The other rows are support code, or
-checks outside the tier model.
+**What a tier fakes** defines it. Every directory under `tests/` has one row.
+The bold rows are the tiers. The other rows are support code, or checks
+outside the tier model.
 
 | Directory | Tier | Faked | Real | Holds |
 |---|---|---|---|---|
-| `src/**/*_tests.rs` | **Unit** | both driven ports (`MockBackend`, SQLite `:memory:` `Storage`) | nothing | [the one rule](#the-one-rule): a seam contract's `CASE`s, a pure `domain/model/` function, or a file on the legacy list |
+| `src/**/*_tests.rs` | **Unit** | LLM (`ScriptedModel`, or `MockBackend` in legacy files) | SQLite `:memory:` `Storage` | [the one rule](#the-one-rule): a seam contract's `CASE`s, a pure `domain/model/` function, or a file on the legacy list |
 | `tests/http/` | **HTTP E2E (tier 1)** | LLM (`ScriptedModel`, one script entry per call) | axum router, SQLite `:memory:` storage | spec scenarios, asserted on [domain outcomes](#domain-outcome-the-tier-1-rule) |
 | `tests/http/requires_migration/` | tier 1, quarantine | as `tests/http/` | as `tests/http/` | legacy tests that wait for a spec, untagged, with size pinned |
 | `tests/http/support/` | support for tier 1 | — | — | request builders, seeding fixtures, HTML assertions, app wiring |
@@ -27,58 +27,61 @@ checks outside the tier model.
 | `tests/test_utils/` | support for the `http`, `browser`, `storage`, `bootstrap` and `llm` binaries | — | — | server, browser, htmx-settle, convergence and wait helpers, and the stub server |
 | `tests/test_utils/stub_fixtures/` | support for tier 2 | — | — | canned fragments the stub server serves |
 
-A `#[tokio::test]` with fakes is a unit test.
+The directory sets the tier, not the test attribute. A `#[tokio::test]` in
+`src/` is a unit test.
 
 ## The one rule
 
-A unit test lives in one of three places, and nowhere else:
+A unit test lives in one of three places:
 
-1. **A seam contract**: the test file of a box behind a port boundary. The
-   boxes are the storage adapters, the LLM providers and the transport, the
-   Harper text checker, each Agent, and the `Narrator`. The storage contract
-   lives at the driven-adapter tier, in `tests/storage/`. The tag above each
-   test declares its case and carries the description:
+1. **A seam contract**: the test file of a box. The boxes behind a port
+   boundary are the storage adapters, the LLM providers and the transport, the
+   Harper text checker, each Agent, and the `Narrator`. The `PromptAssembler`
+   is a box inside the `Narrator`. Its contract pins the prompt, and the
+   `Narrator` contract pins only what the `Narrator` decides. The owner decides
+   each new box. The storage contract lives at the driven-adapter tier, in
+   `tests/storage/`.
+
+   Each test in a seam contract carries one tag, on the comment line above it.
+   The tag declares the case and holds its description:
    `// CASE <id>: <what it pins>`, or `// CASE <id> [<label>]: <what it pins>`.
-   Every test in a declaring file carries one tag. A unit test in a declaring
-   file calls only that box's entry point. **Check:** `seam-cases` and the
-   `guardrails` binary (the `unit test allowlist` rule). The entry-point clause
-   is review-only.
+   A test in a seam contract calls only that box's entry point. **Check:**
+   `seam-cases` and the `guardrails` binary (the `unit test allowlist` rule).
+   The entry-point clause is review-only.
 
-   The shape of a case:
+   Each case has this shape:
    - **One clause**: one input shape, one result, or one failure.
-   - **The entry point only**: the test builds the box as production does. It
-     does not call a helper that production never calls.
-   - **The declared outcome**: assert what the clause promises a caller, not
-     the internal steps.
+   - **The entry point only**: the test builds the box as production does.
+   - **The declared outcome**: assert what the clause promises a caller.
    - **A failure through the box's own seam**: for storage,
-     `Storage::with_failure` with `TestOverride::internal`. Do not mock an
-     internal part.
+     `Storage::with_failure` with `TestOverride::internal`.
    - **The call record**: a box that records its model call through
-     `LlmCallRecorder` has two cases. One case is the record of a good call.
-     One case is the record of a failed call.
+     `LlmCallRecorder` has two cases. They pin the record of a good call and
+     the record of a failed call.
 2. **A pure function in `domain/model/`**, as a plain unit test. The function's
    own branches are its cases. **Check:** the `guardrails` binary checks the
    folder. Purity is review-only.
 3. **A file on the legacy list**, in
    `tests/infrastructure/guardrails/unit_test_allowlist.rs`. The list holds
-   today's `src/**/*_tests.rs` files. It only shrinks, one module at a time.
-   A legacy test that breaks only by a mechanical change (a new parameter, a
+   the `src/**/*_tests.rs` files that are older than this rule. It only
+   shrinks. A legacy test that breaks only by a mechanical change (a new parameter, a
    renamed type) changes in place. A legacy test whose behaviour breaks moves
    to its seam contract or its scenario. **Check:** the `guardrails` binary,
    which also fails a stale entry.
 
-A behaviour a player can see is not a unit test: it is a **scenario** in
-`docs/specs/`, with one test at the tier that sees it. A module that is
-neither a box nor a pure domain function has no unit test of its own. The
-scenarios that pass through it are its coverage.
+Test a behaviour that a player can see as a **scenario** in `docs/specs/`,
+with one test at the tier that sees it. Every other module gets its coverage
+from the scenarios that pass through it.
 
-Why the rule exists. A module between a box and its route has its behaviour
-observed by the scenarios that pass through it. A unit test there repeats the
-implementation, and it breaks at every refactor. A box behind a port boundary
-differs: no route reaches all of its failure modes. So the box writes its
-clauses down as cases, and one test pins each case.
+The coverage percentage is a diagnostic only.
 
-The coverage percentage stays a diagnostic: no step fails on it.
+### Why only a box writes cases
+
+The scenarios that pass through a module between a box and its route already
+observe its behaviour. A unit test there repeats the implementation, and it
+breaks at every refactor. A box behind a port boundary is different, because
+no route reaches all of its failure modes. So the box writes its clauses down
+as cases, and one test pins each case.
 
 ## Domain outcome (the tier-1 rule)
 
@@ -94,9 +97,10 @@ HTTP GET, or a method on an application read service or port
 a read seam.
 
 A read seam that no driving adapter calls is allowed only when a test checks
-a stored fact that no production read returns. An example is the stored inputs of a
-Swipe. Its doc comment names that fact, so a reviewer can see why it exists.
-The same holds for any production method that only tests call.
+a stored fact that no production read returns. The stored inputs of a Swipe
+are one example. Name that fact in the doc comment of the read seam, so a
+reviewer sees why the seam exists. The same holds for any production method
+that only tests call.
 
 Apply the rule to one line of test code. The line reads a domain outcome when
 it reads the HTTP response or calls a read seam. It leaks when it
@@ -106,15 +110,15 @@ calls a `Storage` method to observe state.
   wrap a read seam.
 - **Arrange and wait steps.** The rule governs observations. A test may seed
   state through `Storage` and fixtures. A synchronization wait such as
-  `wait_idle` may read state, because it gates the test and observes no
-  outcome.
+  `wait_idle` may read state, because it only decides when the test goes on.
+  It observes no outcome.
 - **What a model call carried.** A test may read the prompt and the call
   settings of a model call from the LLM port fake (`ScriptedModel::calls()`).
-  The model is the boundary of tier 1. No read seam carries the call settings,
-  because the `raw_request_json` of `ScriptedModel` holds the messages and no
-  call settings.
-- **A persistence fact** that has no read seam (a column of a Swipe row that no view
-  shows) is a driven-adapter or unit assertion, not a tier-1 one.
+  The model is the boundary of tier 1, and no read seam carries the call
+  settings.
+- **A persistence fact** that has no read seam belongs in a driven-adapter or
+  unit test, not at tier 1. A column of a Swipe row that no view shows is one
+  example.
 
 **Check:** review-only.
 
@@ -127,25 +131,26 @@ scenario (`browser_*.md`) maps to at least one tier-2 or tier-3 test.
 Diátaxis doc holds.
 
 A scenario can be a single call ("POST /action with empty input → one
-continuation narration"), or a sequence ("POST /action → POST /retry → POST
-/retry → two swipes"). Both live at tier 1.
+continuation narration"), or a sequence ("POST /action → POST /swipe/new →
+POST /swipe/new → two swipes"). Both live at tier 1.
 
 **Spec vocabulary.** A Given or Then names a domain thing with a `CONTEXT.md`
 term, and a client-seen thing as a response value or a DOM `id` or `class`.
-Plain English is fine when its nouns are glossary terms. When a spec file is
-edited, reword its scenarios that name a Rust identifier, a field path, or a
+Plain English is fine when its nouns are glossary terms. When you edit a spec
+file, reword its scenarios that name a Rust identifier, a field path, or a
 module. **Check:** review-only.
 
 **Markup.** A scenario names markup only as an element's `id` or `class` that
-the frontend or a browser test selects on. A change there breaks the client.
+the frontend or a browser test selects on. A change to that `id` or `class`
+breaks the client.
 **Check:** review-only.
 
 **Complete specs.** A spec covers each distinct response its route can
 return: each success shape, each refusal, each error status. The rule is per
 route. Fine-grained UI behaviour inside one response stays in the code and its
-tests. Behaviour that a spec omits gets no end-to-end coverage. Specs describe the system, not a
-change to it. **Check:** review-only. `spec-coverage` checks the other
-direction: every tagged test cites a declared scenario.
+tests. Behaviour that a spec omits gets no end-to-end coverage. A spec
+describes the system as it is. **Check:** review-only. `spec-coverage` checks
+the other direction: every tagged test cites a declared scenario.
 
 ## Overlap
 
@@ -157,24 +162,24 @@ Within one tier, one behaviour has one test. When two tests at one tier assert
 the same behaviour, keep the test whose failure names the regression more
 precisely, and delete the other. **Check:** review-only.
 
-## Placement rule: which of the three UI tiers
+## The UI placement rule
 
-Place a new UI test by this rule.
+To place a new UI test, ask these questions in order.
 
-### The rule, in order
+### Ask three questions
 
-1. **Is the outcome a domain outcome?** → tier 1. A rendered fragment, a
-   response body, a status code, a header, or state read back through a read
-   seam. The delivered content is a domain outcome. The htmx swap that
-   delivers it is not.
-2. **If the server behind this were fake, does the behaviour change?** No →
-   tier 2, `tests/browser/stub/`. Pure client behaviour: the slash palette,
-   edit-mode activation, toast handling, DOM layout.
-3. Otherwise → **tier 3**, `tests/browser/<surface>.rs`. The test's point is
-   the full-stack hop: a click or a `change` whose effect is real server-side
-   state, read back through a reload.
+1. **Is the outcome a domain outcome?** If yes, use tier 1. A rendered
+   fragment, a response body, a status code, a header, and state read back
+   through a read seam are domain outcomes. The delivered content is a domain
+   outcome. The htmx swap that delivers it is not.
+2. **Would a fake server change the behaviour?** If no, use tier 2,
+   `tests/browser/stub/`. Pure client behaviour goes here: the slash palette,
+   edit-mode activation, toast handling, and DOM layout.
+3. Otherwise, use **tier 3**, `tests/browser/<surface>.rs`. The point of the
+   test is the full-stack hop: a click or a `change` whose effect is real
+   server-side state, read back through a reload.
 
-**Tie-breaker: when in doubt, file down.** A test that can be expressed a tier
+**If two tiers fit, use the lower one.** A test that you can write a tier
 lower belongs there.
 
 **Stub-tier shape.** A tier-2 test is an `async fn check_*(page, stub)` that a
@@ -185,7 +190,7 @@ Split a runner when it becomes the longest browser test by a wide margin.
 
 **Layout-only checks.** A check that asserts only computed style, size or
 position goes in `tests/browser/stub/layout.rs`. It has no spec scenario.
-It puts its markup in place with client-side JS, not through a real failure.
+It builds its markup with client-side JS.
 
 **Check:** review-only.
 
@@ -194,37 +199,34 @@ It puts its markup in place with client-side JS, not through a real failure.
 | Question asked | Answer | Tier | Example |
 |---|---|---|---|
 | Is the outcome a domain outcome? | yes | 1 | A GET of `/screen?parts=games` asserts that the stored posture renders selected and that the auto-save routes are present (games.md 20.8). |
-| Would faking the server change it? | no | 2 | The palette is a document-level `input` listener on the shipped shell. This test needs only the shell, `assets/index.html` (browser_slash_menu.md 31.1). |
-| Would faking the server change it? | no | 2 | `showEditForm` and `cancelEdit` are client JS acting on the canned entry's structural elements (browser_story_log.md 30.2). |
-| Would faking the server change it? | yes | 3 | The select's `change` must reach the server, and a reload must show the persisted tense (browser_worlds.md 29.2). |
-| Would faking the server change it? | yes | 3 | The chain's result is real stored preset state (browser_prompt_presets.md 28.1). |
+| Would a fake server change the behaviour? | no | 2 | The palette is a document-level `input` listener on the shipped shell. This test needs only the shell, `assets/index.html` (browser_slash_menu.md 31.1). |
+| Would a fake server change the behaviour? | no | 2 | `showEditForm` and `cancelEdit` are client JS acting on the canned entry's structural elements (browser_story_log.md 30.2). |
+| Would a fake server change the behaviour? | yes | 3 | The select's `change` must reach the server, and a reload must show the persisted tense (browser_worlds.md 29.2). |
+| Would a fake server change the behaviour? | yes | 3 | The chain's result is real stored preset state (browser_prompt_presets.md 28.1). |
 
-### Stub tier's accepted tax
+### The stub tier's upkeep
 
-The stub server renders some fragments through the real Askama templates and
-serves the rest from `tests/test_utils/stub_fixtures/`. A canned fragment
-drifts from its template, and regenerating it is the upkeep this tier
-demands. The failure is loud. The fixture keeps the structural elements the
-shipped client JS addresses. So editing either side out of sync fails the
-stub-tier test on a missing element.
+The stub server renders some fragments through the real Askama templates. It
+serves the rest from `tests/test_utils/stub_fixtures/`. A canned fragment can
+drift from its template, and regenerating it is the upkeep of this tier. The
+fixture keeps the structural elements that the shipped client JS addresses.
+So a change to only one side fails the stub-tier test on a missing element.
 
-A stub-tier test asserts the client's
-behaviour. A test that asserts a canned fragment's own content belongs a tier
-higher. **Check:** review-only.
+A stub-tier test asserts the behaviour of the client. A test that asserts the
+content of a canned fragment belongs a tier higher. **Check:** review-only.
 
 ### Readiness gates
 
-Full-stack interaction goes through the htmx-settle helpers in
-`tests/test_utils/htmx_settle.rs`, with wrappers in
-`tests/test_utils/browser.rs`. The `stub/` tests drive a stub with no htmx
-swap lifecycle and need no gate. **Check:** `guardrails`
-(`check_browser_interactions_use_htmx_settle` fails a raw interaction call in
-a `tests/browser/` file outside `stub/`, and a line that ends in
-`// settle-guard-exempt: <why>` is exempt).
+In a tier-3 test, interact through the htmx-settle helpers in
+`tests/test_utils/htmx_settle.rs`, or their wrappers in
+`tests/test_utils/browser.rs`. **Check:** `guardrails`.
+`check_browser_interactions_use_htmx_settle` fails a raw interaction call in a
+`tests/browser/` file outside `stub/`. A line that ends in
+`// settle-guard-exempt: <why>` is exempt.
 
-Wait on an htmx-settle helper or a DOM condition. `networkidle` never
-settles: the page asks `GET /changes` every 1 s, so it is banned at
-every tier. **Check:** review-only.
+At every tier, wait on an htmx-settle helper or a DOM condition. The page
+asks `GET /changes` every second, so `networkidle` never settles.
+**Check:** review-only.
 
 ### Convergence check
 
@@ -233,23 +235,24 @@ Every stub check and every tier-3 check ends with the convergence check
 `StubRunner::run` and `with_test_page` run it after the check, before the page
 closes. The check waits until the page is quiet. Then it compares each visible
 part with a fresh `GET /screen?parts=<name>`, and it fails with the part, the route
-and a short diff. It also checks that each part of a closed tab is empty. It checks too that
-each part element has the attributes of the shell. The exceptions are the focus fallback and
-the lock of the entry in edit.
+and a short diff. It also checks that each part of a closed tab is empty, and
+that each part element has the attributes of the shell. The focus fallback
+and the lock of the entry in edit are the exceptions to the attribute check.
 
 The comparison drops what a load keeps or skips by design: the attributes that
 `data-keep` names, the htmx classes, and the story-log
-entry in edit (`data-editing`). It has no allow list.
+entry in edit (`data-editing`).
 
-A check that leaves the page unable to match a fresh render on purpose, for
-example with a stopped server, uses `StubRunner::run_without_convergence` and
-gives the reason. Use it for no other case. **Check:** review-only.
+`StubRunner::run_without_convergence` is only for a check that leaves the page
+unable to match a fresh render on purpose, for example with a stopped server.
+That check gives the reason. **Check:** review-only.
 
 ## SCENARIO tags
 
 `SCENARIO:` tags (format: `// [spec-path] SCENARIO: N.N`) go on tests in
 `tests/http/` and `tests/browser/`. At the unit and driven-adapter tiers, a
-test's name describes the behaviour it covers instead.
+test in a seam contract carries its `CASE` tag. Any other test names its
+behaviour in its function name.
 
 **Per-surface specs.** DOM-observed scenarios live in
 `docs/specs/browser_<feature>.md`, and HTTP-observed scenarios stay in
@@ -268,13 +271,12 @@ panel owns live in `docs/specs/browser_dashboard.md`.
 - a test under `tests/http/` or `tests/browser/` has no tag and no declared
   exemption. The script lists each exemption with its reason.
 - the untagged test count in `tests/http/requires_migration/` differs from
-  its pin. Migrating a test out of the quarantine lowers the pin
-  deliberately.
+  its pin. When a test moves out of the quarantine, lower the pin in the same
+  change.
 
-The validator scans `tests/http/` and `tests/browser/` only, so a tag belongs
-in one of those two folders.
+Two stub-tier files carry no tag. `TAG_EXEMPT_FILES` lists them:
 
-Two kinds of stub-tier file carry no tag. One kind is layout and computed-style checks
-(`layout.rs`), which have no HTTP surface. The other kind is probes of the vendored htmx
-event contract (`htmx_events.rs`). These probes pin the library the page relies on
-and not a scenario. The exemptions are in `TAG_EXEMPT_FILES`.
+- `layout.rs` holds the layout and computed-style checks, which have no HTTP
+  surface.
+- `htmx_events.rs` holds the probes of the vendored htmx event contract. They
+  pin the library that the page relies on, not a scenario.

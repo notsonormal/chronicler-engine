@@ -92,6 +92,8 @@ pub const SEAM_CONTRACT_FILES: &[&str] = &[
     "application/agents/options/agent_tests.rs",
     "application/agents/quantifier/agent_tests.rs",
     "application/narration/narrator_tests.rs",
+    // The PromptAssembler is the pure prompt builder inside the Narrator.
+    "application/prompting/assembler_tests.rs",
 ];
 
 const TEST_MARKERS: &[&str] = &["#[test]", "#[tokio::test", "#[rstest]", "proptest!"];
