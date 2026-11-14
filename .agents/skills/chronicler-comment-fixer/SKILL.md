@@ -7,7 +7,7 @@ description: Remove AI-slop and restating comments from repo Rust, Python, JavaS
 
 ## 1. Find the comments
 
-Pick the finder mode that matches the request. Its output is the scope.
+Pick the finder mode that matches the request. Its output is the scope. The pass cleans whole files, not a diff: every comment in each listed file is in scope, including lines this change did not write.
 
 ```bash
 # Mode 1: Uncommitted and untracked files (most common, after coding)

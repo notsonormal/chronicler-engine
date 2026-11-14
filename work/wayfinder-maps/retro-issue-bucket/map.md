@@ -56,6 +56,7 @@ Every retro finding about how agents work on this repo is dispositioned: decided
 
 - **91 — a live test says whether it ran.** The `llm` nextest profile shows the output of passing tests (`success-output = "immediate"`), and each test in `tests/llm/` prints `Running against <provider>` or `Skipping: <KEY> not set`, so the `--llm-only` log names what reached a provider.
 - **97 — a worktree probe gets the API keys.** `build.py run` links the main checkout's `.env` into a linked worktree that has none, so the server reads the keys and the agent does not. The cwd route is rejected: it reads the main `data/`. [Ticket](./issues/97-worktree-probe-server-has-no-api-keys.md).
+- **96 — whole-file comment scope is intended (2026-11-14).** Decision 12 stands: the changed-lines filter and the outside-the-diff rule are rejected. Step 1 of `chronicler-comment-fixer/SKILL.md` now says the pass cleans whole files, not a diff. The user also ruled that fewer comments is the goal, so a deletion the KEEP test justifies stands, even when the comment states a real rule.
 - **118 — the prompt assembler has its own seam contract (2026-11-14).** The length cap was a symptom: `narrator_tests.rs` (1,978 lines for a 206-line `narrator.rs`) tested `PromptAssembler` through `narrate()`. The assembly cases moved, with `assembler-` ids, to `src/application/prompting/assembler_tests.rs` (58 cases, 1,482 lines), which call `assemble()` and `plan_cut()` directly. The Narrator keeps its own 27 cases (763 lines). `tests/STRATEGY.md` names the assembler as a box inside the Narrator. No guardrail change: the split-name exemption and a higher cap were not needed.
 
 ## Won't do
@@ -139,7 +140,6 @@ All are grilling (HITL) and unblocked. Each ticket names its source session in i
 - [90 — `pkill -f` kills the shell that runs it](./issues/90-pkill-f-kills-its-own-shell.md)
 - [94 — The full gate regenerates the two generated docs instead of failing on them](./issues/94-gate-regenerates-the-two-generated-docs.md) (implementation of 89; not grilling)
 - [95 — A ticket's doc step dictates sentences that break the doc rules](./issues/95-ticket-doc-steps-break-the-doc-rules.md)
-- [96 — The comment finder's branch mode lists every comment of a changed file](./issues/96-comment-finder-branch-mode-scope.md)
 - [98 — New tests land in legacy-list files, and no check stops them](./issues/98-new-tests-in-legacy-files.md)
 - [99 — A delegated agent is told to run `/simple-after-plan`, which it cannot run](./issues/99-delegated-agent-told-to-run-simple-after-plan.md)
 - [100 — The review bundle takes the whole tree, also the files of another session](./issues/100-review-bundle-takes-the-whole-tree.md)
