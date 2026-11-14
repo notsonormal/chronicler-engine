@@ -10,6 +10,7 @@ use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::state::generation_status::Step;
 use crate::domain::model::state::message_types::StoryRow;
+use crate::domain::model::story_memory::StoryMemory;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Role {
@@ -21,14 +22,17 @@ pub enum Role {
     Options,
     /// Fires the configured trigger conditions.
     Trigger,
+    /// Rewrites the story memory when Messages leave the history.
+    StoryMemory,
 }
 
 impl Role {
-    pub const ALL: [Role; 4] = [
+    pub const ALL: [Role; 5] = [
         Role::Narrator,
         Role::Quantifier,
         Role::Options,
         Role::Trigger,
+        Role::StoryMemory,
     ];
 
     pub const fn agent_name(self) -> &'static str {
@@ -37,6 +41,7 @@ impl Role {
             Role::Quantifier => "quantifier",
             Role::Options => "options",
             Role::Trigger => "trigger",
+            Role::StoryMemory => "memory",
         }
     }
 }
@@ -54,7 +59,6 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// The step whose name the status shows while this generation runs.
     pub fn step(self) -> Step {
         match self {
             Self::Event => Step::GeneratingEvent,
@@ -77,7 +81,6 @@ impl Kind {
     }
 }
 
-/// How many of the newest Messages an Agent reads as its history.
 pub const AGENT_HISTORY_WINDOW: usize = 4;
 
 pub struct WorldView<'a> {
@@ -87,6 +90,48 @@ pub struct WorldView<'a> {
     pub persona: &'a PersonaCard,
     pub characters: &'a HashMap<String, CharacterCard>,
     pub present: &'a [CharacterCard],
+}
+
+/// The Messages that leave the history and the story memory they join. `leaving` is
+/// in story order, oldest first, and never empty: with nothing leaving there is no
+/// input, so the writer never runs.
+pub struct StoryMemoryHookInput<'a> {
+    pub previous: Option<&'a StoryMemory>,
+    pub persona_name: &'a str,
+    leaving: &'a [StoryRow],
+    oldest: u64,
+    newest: u64,
+}
+
+impl<'a> StoryMemoryHookInput<'a> {
+    pub fn new(
+        previous: Option<&'a StoryMemory>,
+        leaving: &'a [StoryRow],
+        persona_name: &'a str,
+    ) -> Option<Self> {
+        let oldest = leaving.first()?.id;
+        let newest = leaving.last()?.id;
+        Some(Self {
+            previous,
+            persona_name,
+            leaving,
+            oldest,
+            newest,
+        })
+    }
+
+    pub fn leaving(&self) -> &'a [StoryRow] {
+        self.leaving
+    }
+
+    pub fn oldest(&self) -> u64 {
+        self.oldest
+    }
+
+    /// The new story memory covers the Messages up to this one.
+    pub fn newest(&self) -> u64 {
+        self.newest
+    }
 }
 
 /// The hook step owns every read and write an Agent needs.

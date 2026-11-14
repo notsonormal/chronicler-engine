@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::adapters::driven::llm::providers::{ChatCompletionsBackend, MockBackend};
 use crate::adapters::driven::storage::Storage;
 use crate::adapters::driven::text_check::HarperTextChecker;
+use crate::application::agents::memory::StoryMemoryWriter;
 use crate::application::agents::AgentRunner;
 use crate::application::connection_test_service::ConnectionTestService;
 use crate::application::games::active::ActiveGame;
@@ -109,6 +110,7 @@ fn build_wired_app(
     let game_view_query = GameViewQuery::new(Arc::clone(&storage), game_writer.clone());
     tracing::info!("Narrator: provider={}", recorder.provider_label());
     let job_deps = JobDeps {
+        story_memory_writer: Arc::new(StoryMemoryWriter::new(Arc::clone(&recorder))),
         narrator: Arc::new(Narrator::new(
             PromptAssembler,
             recorder,

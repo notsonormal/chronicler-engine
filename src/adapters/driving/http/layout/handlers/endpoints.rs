@@ -77,6 +77,7 @@ fn status_element(state: &str, class: &str, label: &str) -> String {
 fn step_label(step: &Step) -> &'static str {
     match step {
         Step::Narrating => "Generating narration...",
+        Step::WritingStoryMemory => "Writing the story memory...",
         Step::Quantifying => "Quantifying...",
         Step::GeneratingEvent => "Generating event...",
         Step::Options => "Generating options...",

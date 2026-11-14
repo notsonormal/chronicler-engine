@@ -21,6 +21,7 @@ pub mod saved_games_page;
 pub mod scenario;
 pub mod settings;
 pub mod state;
+pub mod story_memory;
 pub mod story_window;
 pub mod tail;
 pub mod template;
@@ -60,6 +61,8 @@ mod saved_games_page_tests;
 mod scenario_tests;
 #[cfg(test)]
 mod settings_tests;
+#[cfg(test)]
+mod story_memory_tests;
 #[cfg(test)]
 mod story_window_tests;
 #[cfg(test)]

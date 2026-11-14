@@ -9,6 +9,7 @@ use crate::application::prompting::{AssembledPrompt, CharacterContext, PromptAss
 use crate::domain::model::character::PersonaCard;
 use crate::domain::model::generation::Generation;
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::history_cut::HistoryCut;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
@@ -35,11 +36,10 @@ pub struct NarrationValues<'a> {
     pub room: &'a Room,
     pub characters: CharacterContext<'a>,
     pub persona: &'a PersonaCard,
-    /// The entries the narration follows.
     pub history: &'a [StoryRow],
-    /// The text of the request's Input, when it carries one.
     pub input: Option<&'a str>,
     pub tail: &'a Tail,
+    pub story_memory: Option<&'a str>,
 }
 
 pub struct Narrator {
@@ -101,6 +101,20 @@ impl Narrator {
             .assemble(context, preset, &context.world.global_rules, budget)
     }
 
+    /// The history cut that `narrate` would make for the same arguments.
+    pub fn plan_cut(
+        &self,
+        generation: &Generation,
+        values: &NarrationValues,
+        preset: &PromptPreset,
+        budget: TokenBudget,
+    ) -> HistoryCut {
+        let user_message = Self::user_message(generation, values);
+        let context = Self::context(generation, values, &user_message);
+        self.assembler
+            .plan_cut(&context, preset, &context.world.global_rules, budget)
+    }
+
     /// The prompt rules of each kind live here: the user message, the guide and the
     /// Impersonate flag. The role is the one whose health the call feeds: the
     /// narrator's own for a generation, and the Trigger's for an event Narration.
@@ -114,21 +128,7 @@ impl Narrator {
     ) -> Result<Narrated, GenerationFailure> {
         let role = generation.kind().role();
         let user_message = Self::user_message(generation, values);
-        let context = PromptContext::new(
-            values.world,
-            values.narrative_perspective,
-            values.narrative_tense,
-            values.room,
-            values.characters,
-            values.persona,
-            &user_message,
-            values.history,
-        );
-        let context = match generation {
-            Generation::Impersonate { .. } => context.with_impersonate(true),
-            Generation::Narration { guide } => context.with_guide(guide.clone()),
-            Generation::InputRetry | Generation::Event(_) => context,
-        };
+        let context = Self::context(generation, values, &user_message);
         let assembled = self
             .assemble(&context, preset, budget)
             .map_err(|e| GenerationFailure::from_engine_error(&e))?;
@@ -160,6 +160,29 @@ impl Narrator {
             backend_name: narration_result.backend_name,
             model_name: narration_result.model_name,
         })
+    }
+
+    fn context<'a>(
+        generation: &Generation,
+        values: &NarrationValues<'a>,
+        user_message: &'a str,
+    ) -> PromptContext<'a> {
+        let context = PromptContext::new(
+            values.world,
+            values.narrative_perspective,
+            values.narrative_tense,
+            values.room,
+            values.characters,
+            values.persona,
+            user_message,
+            values.history,
+        )
+        .with_story_memory(values.story_memory);
+        match generation {
+            Generation::Impersonate { .. } => context.with_impersonate(true),
+            Generation::Narration { guide } => context.with_guide(guide.clone()),
+            Generation::InputRetry | Generation::Event(_) => context,
+        }
     }
 
     /// The Player's direction for an Impersonate, the Input's own text for the Retry

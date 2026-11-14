@@ -24,7 +24,7 @@ The card probe replays stored calls of story A (`tmp/lt15/new/trial-1`) with fou
 Run from the repo root. The tool uses the model client of [`memory_test.py`](memory_test.py), which reads only `OPENCODE_GO_API_KEY` and never prints it. The answers use `deepseek-v4.1-flash` with `reasoning_effort: none` and temperature 0, as in the trials. The judge is `glm-5.3-flash` at temperature 0, a model of another family.
 
 ```bash
-T=.scratch/long-term-memory-and-state/assets/card_probe.py
+T=work/wayfinder-maps/long-term-memory-and-state/assets/card_probe.py
 python3 $T check                 # each scene: the entry its call wrote, and facts already in the story
 python3 $T show N5 minimal_rule  # the request of one scene and arm (add --judge for the judge prompt)
 python3 $T run today --runs 3    # also minimal, minimal_rule, split; the four can run at the same time

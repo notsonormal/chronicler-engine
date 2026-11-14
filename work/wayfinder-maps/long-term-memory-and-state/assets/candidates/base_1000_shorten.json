@@ -1,0 +1,9 @@
+{
+  "name": "base_1000_shorten",
+  "about": "The base writer prompt with 1000 words and the rule to shorten. Tried in the review round of ticket 14 and not kept: the memory grew faster.",
+  "schedule": "each_cut",
+  "position": "before_history",
+  "max_tokens": 2000,
+  "writer_system": "You keep the memory of an interactive story. The oldest entries of the story are about to leave the narrator's context. Write the notes that the narrator needs to continue the story without contradicting them.",
+  "writer_user": "This is the memory of the story so far.\n\n<PreviousMemory>\n{previous}\n</PreviousMemory>\n\nThese are the story entries #{first} to #{last}, which leave the narrator's context now. Entries marked Julian are written by the player character; entries marked Narration are written by the narrator.\n\n<Entries>\n{entries}\n</Entries>\n\nRewrite the memory so that it holds the previous memory and these entries, in at most 1000 words, as short plain lines. Keep:\n- names, numbers, objects and where they are, places, promises, plans and appointments with their times;\n- the story time: which day of the story it is, the time of day, and how much time passed;\n- who was present at each conversation, and who learned which fact.\nIf the memory would pass 1000 words, shorten the oldest parts first: keep the open promises, plans and appointments, the names, and who knows what, and drop the small steps that are finished.\nWrite only the memory."
+}

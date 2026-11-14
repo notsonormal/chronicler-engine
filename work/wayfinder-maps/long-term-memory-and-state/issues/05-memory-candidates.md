@@ -1,7 +1,7 @@
 # Choose the memory candidates to try
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 01, 02, 08
 
 ## Question
@@ -39,3 +39,43 @@ Which memory designs does this map try in the memory test? For each candidate: w
 ## Output
 
 A resolution with 2 to 4 candidates. Each candidate is sharp enough for one prototype ticket that writes its memory on a stored story and runs the memory test. Name the candidate that the map tries first. Create the prototype tickets.
+
+## Answer
+
+Resolved on 2026-11-11, with the owner. The ticket chooses no candidates on paper. The engine gets a base story memory first, and each variant becomes a change to that base.
+
+**The decision (owner, 2026-11-11).** "We have some things that we know we need to do, and it would be simple if we just did those things and then made modifications on top of them, rather than starting from a zero position." The basics are known: the cut part of the history must not be lost, the history rolls forward, and a summary holds the part that rolled out. The details are open. A variant without the basics in the engine is abstract.
+
+**The base (owner agreed to this list).**
+
+1. **Summarization at the cut.** When Messages leave the history, a writer call first summarizes them into the story memory.
+2. **The story memory is in the prompt.** Every call with a history space shows it, before the history: the Narration, the Impersonate Input and the event Narration. The history is already one chat message for each entry (known: `render_history_entry` in `src/application/prompting/assembler.rs` at `4baba0a4`, and call 1670 of `tmp/ltm09/redmist_julian/trial-1`). So the story memory goes at the end of the first user message, before the history messages.
+3. **Storage for each Game.** The story memory is saved with the Game and tied to the Swipe that caused the cut, so a Retry or a delete removes it.
+4. **A failed writer call loses nothing.** The previous story memory stays ([Keep the state when a state writer fails](../../prompt-flexibility/issues/23-keep-state-when-a-writer-fails.md)).
+5. **A trial shows it.** The trial pack shows the story memory of each Cycle.
+
+**The player's story does not change (owner, 2026-11-11).** The story that the player sees is the chat history, whole, as if nothing was summarized. The story memory goes to the model only. It is not part of the story log. It can be visible for debugging. Known: storage keeps every Message, and the cut changes only what a call sends (map Notes, "The engine today"). In the base, a person reads the story memory in the stored call record and in the trial pack. The view and the edit in the dashboard come later (map, Not yet specified).
+
+**The first form (coordinator).** One summary text that the writer rewrites at each cut from the previous text and the Messages that leave. It is the simplest summarization. The measured figure for one summary of all the dropped entries is 67 % on the memory test ([the memory test](../assets/memory-test.md)).
+
+**The changes on top, in this order (coordinator, from the research).** Each one is a change to the built base. The memory test scores it, and a trial confirms it.
+
+1. The form of the story memory: a list of scene entries that only grows (the time, the place, who was there, what happened), against the one rewritten summary. Marinara Engine writes one recap for each scene ([01](01-marinara-memory.md)). The one summary lost who did small things, reasons and who learned what.
+2. The Character memory: for each Character, what she did, was told and learned. It also changes with what happens to her while she is absent (owner, charting, Q13 of the session of 2026-11-02). The prompt shows it inside her card.
+3. Loading a memory entry by a key, with the mechanism of [Decide how a Character or a lore entry enters the prompt](12-prompt-entry-modes.md).
+
+**What is not in this ticket.** The who-knows-what faults of the baseline are not caused by the cut: in each one the text was still in the history ([baseline faults](../assets/baseline-faults.md), "Kind 3"). A memory of the cut part cannot fix them. They go to [Decide how a Character or a lore entry enters the prompt](12-prompt-entry-modes.md), which decides which card text stays out of which call, and to the fog entry "More of the memory test".
+
+**The draft candidates C1 to C4 of the Context are withdrawn.** C1 is the first form of the base. C2 and C3 are the changes 1 and 2 above. C4 (a word search over the dropped entries) is not planned. The keyed memory entry of change 3 covers its idea.
+
+**How the grilling went (for the next coordinator).** Three question rounds failed before this answer. The owner did not want to choose a test method or a design detail by opinion: at charting the owner had set "research, then trials, then the design". The wiki page [Ask in the terms of the application](../../../wiki/owner-preference-questions-in-application-terms.md) holds the rules from this.
+
+**Evidence.** A scout wrote [the evidence brief of this ticket](../assets/memory-candidates-brief.md) from the research assets. The coordinator did not check it line by line. Three points from it:
+
+- A 100-Cycle story is about 41,000 tokens, and the default history size is 65,536. So at the default nothing leaves the history in 100 Cycles, and the whole-story control scores 95 %. The 16,000 tokens of the trials force the cuts.
+- The memory test cannot score a record of who was present, and it cannot score the "does not know" side.
+- The test's cut points come from story A (`tmp/lt15/new/trial-1`): 5 cuts, the first at entry #611 (Cycle 44). The "5 or 6 cuts, the first at about Cycle 41" of the Context come from `tmp/ltm09/redmist_julian/trial-1`.
+
+**A tool fix.** The move of the work records to `work/` broke `memory_test.py` and `card_probe.py` (the repo root lookup). Fixed on 2026-11-11 ([wiki](../../../wiki/work-record-tools-after-the-move.md)).
+
+**New tickets.** [Find where the base story memory attaches in the engine](13-base-memory-seam.md) and [Build the base story memory](14-build-base-story-memory.md).

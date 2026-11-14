@@ -18,7 +18,7 @@ use chronicler_engine::domain::model::trigger::ComparisonOperator;
 use chronicler_engine::test_support::{
     active_game_of, analysis_report, configured_runner, empty_sqlite_storage, make_test_job_deps,
     test_connection, make_test_recorder_with_storage, seed_game_row, test_new_game, ScriptedModel,
-    TestAppBuilder, TestDataBuilder, TestMap, TestCharacter, TestPersona,
+    TestAppBuilder, TestData, TestDataBuilder, TestMap, TestCharacter, TestPersona,
 };
 
 use crate::support::http_fixtures::{append_narrations, seeded_storage_with_initial_game};
@@ -64,10 +64,27 @@ pub fn app_with_model_and_storage(
     settings: AppSettings,
     agents: impl FnOnce(Arc<LlmCallRecorder>) -> AgentRunner,
 ) -> (axum::Router, AppState, Arc<Storage>) {
+    app_over_data(
+        TestDataBuilder::default_test().build(),
+        storage,
+        model,
+        settings,
+        agents,
+    )
+}
+
+/// The app of `app_with_model_and_storage`, over the World, Persona and Characters of `data`.
+fn app_over_data(
+    data: TestData,
+    storage: Arc<Storage>,
+    model: Arc<ScriptedModel>,
+    settings: AppSettings,
+    agents: impl FnOnce(Arc<LlmCallRecorder>) -> AgentRunner,
+) -> (axum::Router, AppState, Arc<Storage>) {
     let recorder = make_test_recorder_with_storage(model, Arc::clone(&storage));
     let runner = agents(Arc::clone(&recorder));
     let job_deps = make_test_job_deps(Arc::clone(&storage), recorder, runner);
-    let (app, state) = TestAppBuilder::default_test()
+    let (app, state) = TestAppBuilder::with_data(data)
         .storage(Arc::clone(&storage))
         .job_deps(job_deps)
         .settings(settings)
@@ -167,40 +184,76 @@ async fn impersonated_app_with_a_failed_event(
     (app, state)
 }
 
-/// A Game whose story holds the opening Narration and 150 padding Narration
-/// Messages, over one mock connection whose context window is `window`.
 pub fn long_story_app(window: Option<u32>) -> (axum::Router, AppState, Arc<Storage>, GameId) {
+    // A narrow window cuts the history at one of the two Actions, and the cut
+    // calls the story memory writer.
     let model = Arc::new(
         ScriptedModel::new()
             .turn("First narration.")
-            .turn("Second narration."),
+            .turn("Second narration.")
+            .story_memory("The tale of the inn was told at length.")
+            .optional(),
     );
-    let connection = LlmConnection {
+    padded_story_app(model, window, 150)
+}
+
+/// The one connection serves the narration and the analysis.
+pub fn padded_story_app(
+    model: Arc<ScriptedModel>,
+    window: Option<u32>,
+    padding: usize,
+) -> (axum::Router, AppState, Arc<Storage>, GameId) {
+    padded_story_app_over(
+        model,
+        story_connection(window),
+        TestDataBuilder::default_test().build(),
+        padding,
+    )
+}
+
+pub fn story_connection(window: Option<u32>) -> LlmConnection {
+    LlmConnection {
         model: "mock-model".into(),
         max_context_tokens: window,
         ..test_connection("narration-conn", LlmBackendType::Mock)
-    };
+    }
+}
+
+/// `connection` serves the narration and the analysis, and `data` is the Game's World.
+pub fn padded_story_app_over(
+    model: Arc<ScriptedModel>,
+    connection: LlmConnection,
+    data: TestData,
+    padding: usize,
+) -> (axum::Router, AppState, Arc<Storage>, GameId) {
     let settings = AppSettings {
         connections: vec![connection],
         narration_connection_id: "narration-conn".into(),
         quantifier_connection_id: "narration-conn".into(),
         ..AppSettings::default()
     };
-    let (app, state, storage) = app_with_model_and_storage(
+    let (app, state, storage) = app_over_data(
+        data,
         Arc::new(empty_sqlite_storage()),
         model,
         settings,
         configured_runner,
     );
     let game_id = active_game_of(&state);
+    pad_story(&storage, game_id, 0, padding);
+    (app, state, storage, game_id)
+}
 
-    append_narrations(&storage, game_id, 150, |index| {
+/// Each padding Narration starts from the newest Swipe state, so it keeps that
+/// state's story memory.
+pub fn pad_story(storage: &Storage, game: GameId, from: usize, count: usize) {
+    append_narrations(storage, game, count, |index| {
         format!(
-            "Story entry {index}: the long tale of the inn, told again at length \
-             for everyone who came to listen that evening."
+            "Story entry {}: the long tale of the inn, told again at length \
+             for everyone who came to listen that evening.",
+            from + index
         )
     });
-    (app, state, storage, game_id)
 }
 
 /// An app over the seeded storage, which holds the active Game plus a second

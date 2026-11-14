@@ -90,7 +90,7 @@ impl GenerationOrder {
     /// The one home of the Message kind, type, maker, stored inputs and event
     /// header. The new Swipe holds the state the Game rules read: the start state
     /// with no event record, and for an event its one-shot Trigger marked fired.
-    /// The Retry of a typed Input keeps the start state as it is.
+    /// The Retry of a typed Input takes the start state whole, story memory too.
     pub fn write(&self, text: String, start: &SwipeState) -> NewSwipe {
         match &self.generation {
             Generation::Narration { guide } => NewSwipe {
@@ -322,7 +322,6 @@ impl JobPlan {
         ))
     }
 
-    /// The order of the last Message again, of the kind the last Message holds.
     fn redo(tail: &Tail) -> GenerationOrder {
         let last_swipe = tail.last.swipes.get(tail.last.active_swipe_index);
         let generation = match &tail.last.kind {

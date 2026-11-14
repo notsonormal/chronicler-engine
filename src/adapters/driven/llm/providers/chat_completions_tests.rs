@@ -55,6 +55,7 @@ fn chat_completions_complete_answers_with_the_completion_and_its_names() {
         .unwrap();
 
     assert_eq!(result.text, STUB_ANSWER);
+    assert!(!result.stopped_at_limit);
     assert_eq!(result.backend_name, "OpenRouter");
     assert_eq!(result.model_name, "gpt-4o");
     assert_eq!(result.agent_name, "narrator");
@@ -420,6 +421,30 @@ fn chat_completions_empty_answer_names_its_finish_reason() {
         failure.llm_error_string(),
         "LLM Error: empty response (finish_reason: content_filter)"
     );
+}
+
+// CASE chat-completions-answer-stopped-at-limit: an answer the provider stopped at the answer limit is still an answer, and says it stopped there
+#[test]
+fn chat_completions_answer_stopped_at_the_limit_says_so() {
+    let endpoint = ChatCompletionsMock::answering(
+        r#"{"choices":[{"message":{"content":"the door creaks"},"finish_reason":"length"}]}"#,
+    );
+    let backend = ChatCompletionsBackend::from_config(&connection_to(
+        &endpoint,
+        LlmBackendType::OpenRouter,
+        "gpt-4o",
+    ));
+
+    let result = backend
+        .complete(
+            "narrator",
+            &PromptPart::system_and_user("system", "user"),
+            &CallSettings::default(),
+        )
+        .expect("a cut-off text is an answer");
+
+    assert_eq!(result.text, "the door creaks");
+    assert!(result.stopped_at_limit);
 }
 
 fn routed(

@@ -15,7 +15,7 @@ Impersonate call of a trial pack. An arm changes only the card text of that requ
 A judge reads each answer with the scene's facts and the full cards, and quotes its evidence.
 The tool keeps a finding only when its quote is in the answer.
 
-    T=.scratch/long-term-memory-and-state/assets/card_probe.py
+    T=work/wayfinder-maps/long-term-memory-and-state/assets/card_probe.py
     python3 $T check                      # the facts of each scene against the story so far
     python3 $T show I1 minimal_rule       # print the request of one scene and arm
     python3 $T run today --runs 3         # one arm, 3 runs, then the judge

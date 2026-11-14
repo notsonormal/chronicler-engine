@@ -16,7 +16,7 @@ use std::time::Duration;
 use crate::adapters::driven::utils::mock::request_json;
 use crate::application::ports::llm_provider::{
     LlmCallFailure, LlmCallResult, LlmProvider, AGENT_DIALOGUE, AGENT_NARRATOR, AGENT_OPTIONS,
-    AGENT_QUANTIFIER, AGENT_TRIGGER,
+    AGENT_STORY_MEMORY, AGENT_QUANTIFIER, AGENT_TRIGGER,
 };
 use crate::domain::model::agent::Role;
 use crate::domain::model::generation_parameters::CallSettings;
@@ -35,11 +35,11 @@ fn role_of_agent_name(agent_name: &str) -> Option<Role> {
         AGENT_TRIGGER => Some(Role::Trigger),
         AGENT_QUANTIFIER => Some(Role::Quantifier),
         AGENT_OPTIONS => Some(Role::Options),
+        AGENT_STORY_MEMORY => Some(Role::StoryMemory),
         _ => None,
     }
 }
 
-/// The texts of the parts whose role is wanted, joined by a blank line.
 pub fn joined_text_of_parts(parts: &[PromptPart], wanted: impl Fn(PromptRole) -> bool) -> String {
     parts
         .iter()
@@ -72,6 +72,8 @@ impl ModelCall {
 enum Reply {
     /// The answer the call returns.
     Text(String),
+    /// An answer the provider stopped at the answer limit.
+    CutOff(String),
     /// A failure at the transport seam.
     Failed,
 }
@@ -86,7 +88,6 @@ struct Scripted {
 struct Inner {
     replies: HashMap<Role, VecDeque<Scripted>>,
     scripted: HashMap<Role, usize>,
-    /// The role of the reply pushed last, which `optional` marks.
     last_pushed: Option<Role>,
     calls: Vec<ModelCall>,
     stray: Vec<Role>,
@@ -133,6 +134,11 @@ impl ScriptedModel {
     }
 
     #[must_use]
+    pub fn story_memory(self, text: impl Into<String>) -> Self {
+        self.reply(Role::StoryMemory, text)
+    }
+
+    #[must_use]
     pub fn options(self, text: impl Into<String>) -> Self {
         self.reply(Role::Options, text)
     }
@@ -150,13 +156,18 @@ impl ScriptedModel {
     }
 
     #[must_use]
+    pub fn cut_off(self, role: Role, text: impl Into<String>) -> Self {
+        self.push(role, Reply::CutOff(text.into()));
+        self
+    }
+
+    #[must_use]
     pub fn failed(self, role: Role) -> Self {
         self.push(role, Reply::Failed);
         self
     }
 
-    /// Lets the reply scripted last stay unused. For a reply that a stop or a
-    /// cancel can keep a call from taking.
+    /// For a reply that a stop or a cancel can keep a call from taking.
     #[must_use]
     pub fn optional(self) -> Self {
         {
@@ -215,6 +226,7 @@ impl ScriptedModel {
                         let kind = match &scripted.reply {
                             Reply::Text(text) if text.is_empty() => "empty",
                             Reply::Text(_) => "text",
+                            Reply::CutOff(_) => "cut off",
                             Reply::Failed => "failed",
                         };
                         (role.agent_name(), scripted.position, kind)
@@ -234,8 +246,7 @@ impl ScriptedModel {
         );
     }
 
-    /// Holds the next `role` call until the returned hold releases it; calls the
-    /// test scripts after that one pass through.
+    /// Calls the test scripts after the held one pass through.
     #[must_use]
     pub fn hold(&self, role: Role) -> ModelHold {
         let state = Arc::new(HoldState {
@@ -334,23 +345,28 @@ impl LlmProvider for ScriptedModel {
         if let Some(state) = fired {
             state.mark_taken();
         }
-        match reply.map_err(LlmCallFailure::from)? {
-            Reply::Text(text) => Ok(LlmCallResult {
-                text: text.clone(),
-                raw_request_json: request_json(prompt),
-                raw_response_json: format!("{{\"content\":\"{text}\"}}"),
-                backend_name: self.name().to_string(),
-                model_name: self.model().to_string(),
-                agent_name: agent_name.to_string(),
-            }),
-            Reply::Failed => Err(LlmCallFailure {
-                raw_request_json: request_json(prompt),
-                ..LlmCallFailure::from(EngineError::Narration(NarrationFailure::Generation {
-                    stage: "scripted",
-                    reason: "configured_failure",
-                }))
-            }),
-        }
+        let (text, stopped_at_limit) = match reply.map_err(LlmCallFailure::from)? {
+            Reply::Text(text) => (text, false),
+            Reply::CutOff(text) => (text, true),
+            Reply::Failed => {
+                return Err(LlmCallFailure {
+                    raw_request_json: request_json(prompt),
+                    ..LlmCallFailure::from(EngineError::Narration(NarrationFailure::Generation {
+                        stage: "scripted",
+                        reason: "configured_failure",
+                    }))
+                });
+            }
+        };
+        Ok(LlmCallResult {
+            text: text.clone(),
+            stopped_at_limit,
+            raw_request_json: request_json(prompt),
+            raw_response_json: format!("{{\"content\":\"{text}\"}}"),
+            backend_name: self.name().to_string(),
+            model_name: self.model().to_string(),
+            agent_name: agent_name.to_string(),
+        })
     }
 }
 
@@ -399,9 +415,8 @@ pub struct ModelHold {
 }
 
 impl ModelHold {
-    /// Waits until the held call reached the fake. Blocks the calling thread,
-    /// because the held call runs on the blocking pool and never on a runtime
-    /// worker. `false` on timeout.
+    /// Blocks the calling thread, because the held call runs on the blocking pool and
+    /// never on a runtime worker. `false` on timeout.
     pub fn wait_started(&self, timeout_ms: u64) -> bool {
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
         let sync = self.state.sync.lock().expect("scripted model hold lock");
@@ -416,8 +431,7 @@ impl ModelHold {
         sync.started
     }
 
-    /// Waits until the released call has taken its scripted answer. Blocks the
-    /// calling thread, like `wait_started`, and answers `false` on timeout.
+    /// Blocks the calling thread, like `wait_started`, and answers `false` on timeout.
     pub fn wait_taken(&self, timeout_ms: u64) -> bool {
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
         let sync = self.state.sync.lock().expect("scripted model hold lock");
@@ -439,7 +453,6 @@ impl ModelHold {
 }
 
 impl HoldState {
-    /// Records that the released call has taken its scripted answer.
     fn mark_taken(&self) {
         // arch-lint: allow(no-unwrap-expect) reason="test fake: a poisoned hold lock is a broken test"
         let mut sync = self.sync.lock().expect("scripted model hold lock");

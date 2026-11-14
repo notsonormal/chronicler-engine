@@ -22,11 +22,11 @@ The memory test scores a memory candidate on a stored trial story, with no engin
 Run from the repo root. The tool reads `OPENCODE_GO_API_KEY` from the environment, or else from the one line of `.env` that sets it. It never prints or stores the key. It sends `reasoning_effort: none` and temperature 0, as in the trials, to `deepseek-v4.1-flash` on OpenCode Go.
 
 ```bash
-T=.scratch/long-term-memory-and-state/assets/memory_test.py
+T=work/wayfinder-maps/long-term-memory-and-state/assets/memory_test.py
 python3 $T check                       # the call, the cut and the oldest held entry of each question
 python3 $T run none --runs 3           # the no-memory control
 python3 $T run whole --runs 3          # the whole-story control
-python3 $T run .scratch/long-term-memory-and-state/assets/candidates/one_summary.json --runs 3
+python3 $T run work/wayfinder-maps/long-term-memory-and-state/assets/candidates/one_summary.json --runs 3
 python3 $T report --detail             # the score, the spread and the cost of every arm
 python3 $T regrade                     # score the stored answers again after a rule change
 ```

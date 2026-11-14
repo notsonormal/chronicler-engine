@@ -36,9 +36,17 @@ fn token_counts(json_response: &serde_json::Value) -> (Option<u64>, Option<u64>)
     (completion_tokens, reasoning_tokens)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct ChatAnswer {
+    pub text: String,
+    /// A non-empty answer that the provider stopped at the answer limit is still an
+    /// answer. The caller decides whether a cut-off text serves it.
+    pub stopped_at_limit: bool,
+}
+
 /// The one place the "what counts as an answer" rule lives, shared by every provider
 /// that parses a chat-completions body.
-pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Result<String> {
+pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Result<ChatAnswer> {
     match serde_json::from_str::<serde_json::Value>(raw_response.trim_start()) {
         Ok(json_response) => {
             tracing::debug!("[LLM][req:{req_id}] Response JSON: {json_response:#}");
@@ -62,6 +70,8 @@ pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Res
                 return Err(missing_message_error(&json_response, raw_response, req_id));
             };
 
+            let finish_reason = choice.get("finish_reason").and_then(|f| f.as_str());
+
             // `reasoning` and `reasoning_content` are separate channels: only
             // `choices[0].message.content` can become the answer.
             if let Some(content) = message
@@ -73,13 +83,15 @@ pub fn parse_chat_response(raw_response: &str, req_id: u64) -> crate::error::Res
                     "[LLM][req:{req_id}] Extracted content ({} chars)",
                     content.len()
                 );
-                return Ok(content.to_string());
+                return Ok(ChatAnswer {
+                    text: content.to_string(),
+                    stopped_at_limit: finish_reason == Some("length"),
+                });
             }
 
             // `"length"` is its own failure, because only a larger output budget fixes
             // it. Every other reason is an empty answer, and the reason goes into the
             // failure text.
-            let finish_reason = choice.get("finish_reason").and_then(|f| f.as_str());
             if finish_reason == Some("length") {
                 let (completion_tokens, reasoning_tokens) = token_counts(&json_response);
                 tracing::error!(
@@ -146,7 +158,6 @@ pub fn handle_response(
             body: snippet,
         }));
     }
-    // Try to parse JSON response - get raw text first to log on failure
     let raw_response = response.text().map_err(|e| {
         let elapsed = start_time.elapsed();
         tracing::error!(
@@ -170,10 +181,10 @@ pub fn handle_response(
     let result = parse_chat_response(&raw_response, req_id);
     let total_time = start_time.elapsed();
     match &result {
-        Ok(content) => {
+        Ok(answer) => {
             tracing::info!(
                 "[LLM][req:{req_id}] Success: {} chars in {:.2}s total",
-                content.len(),
+                answer.text.len(),
                 total_time.as_secs_f64()
             );
         }
@@ -184,9 +195,10 @@ pub fn handle_response(
             );
         }
     }
-    let text = result?;
+    let answer = result?;
     Ok(super::request::ChatCompletionResult {
-        text,
+        text: answer.text,
+        stopped_at_limit: answer.stopped_at_limit,
         raw_request_json: raw_request_json.to_string(),
         raw_response_json: raw_response,
     })

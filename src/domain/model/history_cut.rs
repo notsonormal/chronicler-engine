@@ -14,7 +14,8 @@ pub struct HistoryBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryCut {
-    len: usize,
+    entry_tokens: Vec<usize>,
+    history_space: usize,
     kept_from: usize,
     blocks: Vec<HistoryBlock>,
 }
@@ -23,7 +24,8 @@ impl HistoryCut {
     pub fn of(entry_tokens: &[usize], history_space: usize) -> Self {
         let keep_after_cut = history_space * KEPT_AFTER_CUT_PERCENT / 100;
         let mut cut = Self {
-            len: entry_tokens.len(),
+            entry_tokens: entry_tokens.to_vec(),
+            history_space,
             kept_from: 0,
             blocks: Vec::new(),
         };
@@ -51,7 +53,7 @@ impl HistoryCut {
     pub fn drop_to_free(&mut self, entry_sizes: &[usize], excess: usize) {
         let block_start = self.kept_from;
         let mut freed = 0;
-        while freed < excess && self.kept_from < self.len {
+        while freed < excess && self.kept_from < self.entry_tokens.len() {
             freed += entry_sizes[self.kept_from];
             self.kept_from += 1;
         }
@@ -64,6 +66,23 @@ impl HistoryCut {
 
     pub fn kept_from(&self) -> usize {
         self.kept_from
+    }
+
+    /// The dropped Messages from `first` on, oldest first, up to one history space
+    /// of tokens: a story memory writer call over more could pass the context
+    /// window. It holds at least one Message, so that the story memory always moves
+    /// on, even past a Message larger than the space.
+    pub fn dropped_within_one_space(&self, first: usize) -> Range<usize> {
+        let mut end = first;
+        let mut tokens = 0;
+        while end < self.kept_from {
+            tokens += self.entry_tokens[end];
+            if tokens > self.history_space && end > first {
+                break;
+            }
+            end += 1;
+        }
+        first..end
     }
 
     /// The blocks that left, oldest first: they cover `0..kept_from` with no gap.

@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use crate::adapters::driven::storage::Storage;
+use crate::application::agents::memory::StoryMemoryWriter;
 use crate::application::agents::AgentRunner;
 use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
@@ -140,6 +141,7 @@ pub fn make_test_job_deps(
 ) -> JobDeps {
     seed_default_preset(&storage);
     JobDeps {
+        story_memory_writer: Arc::new(StoryMemoryWriter::new(Arc::clone(&recorder))),
         narrator: Arc::new(Narrator::new(
             PromptAssembler,
             Arc::clone(&recorder),

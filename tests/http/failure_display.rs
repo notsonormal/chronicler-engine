@@ -80,8 +80,8 @@ async fn test_degraded_role_raises_header_banner_and_clears_on_recovery() {
     );
     assert_eq!(
         body.matches("No calls yet").count(),
-        2,
-        "the two roles with no recorded attempt must read as no calls: {body}"
+        3,
+        "the three roles with no recorded attempt must read as no calls: {body}"
     );
     assert!(
         body.contains(r#"<pre class="error-detail-raw">Characters present kept</pre>"#),

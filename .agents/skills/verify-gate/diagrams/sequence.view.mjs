@@ -178,8 +178,21 @@ export const message = (action, from, to) => {
       ];
     case "AJobStartsAGeneration": {
       const first = from.job[j].kind === "action" && from.job[j].gen === "first";
-      return step(first ? "save the Input, set the step" : "set the step", "narrator call");
+      const writes = to.job[j].pc === "memory";
+      return step(
+        first ? "save the Input, set the step" : "set the step",
+        writes ? "story memory writer call" : "narrator call",
+      );
     }
+    case "TheMemoryWriterAnswers":
+      return [{ answer: "the story memory", from: "L", to: J }];
+    case "TheMemoryWriterFails":
+      return [
+        { failed: "the call fails", from: "L", to: J },
+        { note: "the Job keeps the previous story memory", over: J },
+      ];
+    case "TheNarrationStepReturns":
+      return step("set the step", "narrator call");
     case "TheNarratorAnswers":
       return [{ answer: "the text", from: "L", to: J }];
     case "TheNarratorFails":

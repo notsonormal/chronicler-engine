@@ -173,3 +173,41 @@ fn test_drop_to_free_of_nothing_records_no_block() {
 
     assert!(cut.blocks().is_empty());
 }
+
+#[test]
+fn test_dropped_within_one_space_takes_the_oldest_that_fit() {
+    let cut = HistoryCut::of(&[40; 10], 100);
+    assert_eq!(cut.kept_from(), 8);
+
+    assert_eq!(cut.dropped_within_one_space(0), 0..2);
+}
+
+#[test]
+fn test_dropped_within_one_space_takes_messages_that_fill_it_exactly() {
+    let cut = HistoryCut::of(&[50, 50, 50], 100);
+    assert_eq!(cut.kept_from(), 2);
+
+    assert_eq!(cut.dropped_within_one_space(0), 0..2);
+}
+
+#[test]
+fn test_dropped_within_one_space_ends_at_the_kept_history() {
+    let cut = HistoryCut::of(&[40; 10], 100);
+
+    assert_eq!(cut.dropped_within_one_space(7), 7..8);
+}
+
+#[test]
+fn test_dropped_within_one_space_from_the_kept_history_is_empty() {
+    let cut = HistoryCut::of(&[40; 10], 100);
+
+    assert!(cut.dropped_within_one_space(8).is_empty());
+}
+
+#[test]
+fn test_dropped_within_one_space_takes_one_message_larger_than_the_space() {
+    let cut = HistoryCut::of(&[150, 10], 100);
+    assert_eq!(cut.kept_from(), 1);
+
+    assert_eq!(cut.dropped_within_one_space(0), 0..1);
+}

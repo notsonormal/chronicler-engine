@@ -26,6 +26,17 @@ pub enum LlmFailure {
         completion_tokens: Option<u64>,
         reasoning_tokens: Option<u64>,
     },
+    /// The answer does not fit the size its caller keeps, and a cut text is never an answer.
+    /// `stopped_at_limit` is true when the provider stopped it at the answer limit (finish
+    /// reason `length`); otherwise the answer came back longer than the caller keeps.
+    #[error(
+        "LLM answer is longer than its size limit{}",
+        LlmFailure::stopped_at_limit_suffix(*stopped_at_limit)
+    )]
+    AnswerTooLong {
+        raw_response: String,
+        stopped_at_limit: bool,
+    },
     /// HTTP response carried a non-2xx status; `status`/`body` captured for forensics and retry decisions.
     #[error("LLM API returned HTTP {status}: {body}")]
     Http { status: u16, body: String },
@@ -90,17 +101,21 @@ impl LlmFailure {
         match self {
             Self::EmptyResponse { raw_response, .. }
             | Self::TokenBudgetSpent { raw_response, .. }
+            | Self::AnswerTooLong { raw_response, .. }
             | Self::ParseError { raw_response, .. } => Some(raw_response),
             Self::Http { .. } | Self::Network { .. } | Self::Timeout => None,
         }
     }
 
-    /// Names the provider's own reason for the missing answer, when it gave one.
     fn finish_reason_suffix(finish_reason: Option<&str>) -> String {
         match finish_reason {
             Some(reason) => format!(" (finish_reason: {reason})"),
             None => String::new(),
         }
+    }
+
+    fn stopped_at_limit_suffix(stopped_at_limit: bool) -> String {
+        Self::finish_reason_suffix(stopped_at_limit.then_some("length"))
     }
 
     fn token_counts_suffix(
@@ -271,6 +286,12 @@ impl EngineError {
             }) => format!(
                 "LLM Error: the model spent its whole token budget before writing an answer{}",
                 LlmFailure::token_counts_suffix(*completion_tokens, *reasoning_tokens)
+            ),
+            EngineError::Llm(LlmFailure::AnswerTooLong {
+                stopped_at_limit, ..
+            }) => format!(
+                "LLM Error: the answer is longer than its size limit{}",
+                LlmFailure::stopped_at_limit_suffix(*stopped_at_limit)
             ),
             EngineError::Llm(LlmFailure::Http { status, body }) => {
                 format!("LLM Error: HTTP {status} \u{2014} {body}")

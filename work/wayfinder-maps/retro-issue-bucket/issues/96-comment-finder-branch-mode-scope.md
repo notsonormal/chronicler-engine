@@ -40,3 +40,7 @@ New evidence, 2026-11-03 (long-term-memory ticket 09, comment-fixer session `63d
 
 - **known** The comment fixer (`364f8736`) wrote: "The finder lists 577 comment lines for the full files, and most of them are not part of this work." It classified 41 lines and changed 1.
 - **known** The finder does not read `.ts`. A reviewer checked the comments of the `/statechart` TypeScript by hand and found one to delete.
+
+## Further evidence (2026-11-13, long-term-memory-and-state sessions `8e517da2` and `5a2d0b17`)
+
+- **known** Both comment passes judged only the lines the change added ("The 635 older comments … are not part of this change"). The second did so although its brief said "Classify every line the finder returns"; the lead resumed it for 830 more lines. Decision 12 says every comment in each touched file, and `chronicler-comment-fixer/SKILL.md:10` says only "Its output is the scope". This ticket and Decision 12 now disagree, and an explicit brief did not hold in 2 of 2 runs.

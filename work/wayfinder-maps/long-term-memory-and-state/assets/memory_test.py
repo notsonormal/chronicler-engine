@@ -13,10 +13,10 @@ A candidate is a JSON file: a writer prompt, a schedule (``once``: one call over
 dropped entries; ``each_cut``: one call at each history cut, which gets the previous memory
 and the entries of that cut) and a position (``before_history`` or ``after_history``).
 
-    python .scratch/long-term-memory-and-state/assets/memory_test.py run none --runs 3
-    python .scratch/long-term-memory-and-state/assets/memory_test.py run \\
-        .scratch/long-term-memory-and-state/assets/candidates/one_summary.json --runs 3
-    python .scratch/long-term-memory-and-state/assets/memory_test.py report
+    python work/wayfinder-maps/long-term-memory-and-state/assets/memory_test.py run none --runs 3
+    python work/wayfinder-maps/long-term-memory-and-state/assets/memory_test.py run \\
+        work/wayfinder-maps/long-term-memory-and-state/assets/candidates/one_summary.json --runs 3
+    python work/wayfinder-maps/long-term-memory-and-state/assets/memory_test.py report
 
 The key: the tool reads only ``OPENCODE_GO_API_KEY``, from the environment or else from
 ``.env`` at the repo root. It never prints or stores the key.
@@ -38,7 +38,15 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+
+def _find_repo_root(start: Path) -> Path:
+    for folder in start.parents:
+        if (folder / "scripts" / "trial.py").is_file():
+            return folder
+    raise SystemExit("no repo root with scripts/trial.py above this script")
+
+
+ROOT = _find_repo_root(Path(__file__).resolve())
 sys.path.insert(0, str(ROOT / "scripts"))
 import trial  # noqa: E402  (the pack readers of the trial tool)
 

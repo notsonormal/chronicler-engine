@@ -12,10 +12,13 @@ pub const AGENT_QUANTIFIER: &str = Role::Quantifier.agent_name();
 pub const AGENT_TRIGGER: &str = Role::Trigger.agent_name();
 pub const AGENT_DIALOGUE: &str = "dialogue";
 pub const AGENT_OPTIONS: &str = Role::Options.agent_name();
+pub const AGENT_STORY_MEMORY: &str = Role::StoryMemory.agent_name();
 
 #[derive(Debug)]
 pub struct LlmCallResult {
     pub text: String,
+    /// The provider stopped the answer at the answer limit (finish reason `length`).
+    pub stopped_at_limit: bool,
     pub raw_request_json: String,
     pub raw_response_json: String,
     pub backend_name: String,

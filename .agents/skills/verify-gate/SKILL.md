@@ -14,7 +14,7 @@ The gate lets one holder at a time write the records of a Game. A holder is a Jo
 ## When to use it
 
 - A change touches a function that `coverage.toml` lists, or adds a function that reads or writes the busy state of a Game (`BusyRegistry`, `Holder`, `JobEntry`).
-- A change alters a gate scenario in `docs/specs/` (`dashboard.md` 39.x, `autoplay.md` 41.x, `actions.md` 3.x, `reset.md` 7.3, `games.md` 18.4 and 19.x, `options.md` 24.5, `swipe_switch.md` 36.7).
+- A change alters a gate scenario in `docs/specs/` (`dashboard.md` 39.x, `autoplay.md` 41.x, `actions.md` 3.x, `reset.md` 7.3, `games.md` 18.4 and 19.x, `options.md` 24.5, `story_memory.md` 46.5, `swipe_switch.md` 36.7).
 - The end of a `build.py` run shows `WARNING verify-gate: the TLA+ model may not match the code`. It names each listed function that differs from its hash in `coverage.toml`, has no hash, or is missing. The warning reads the files on disk, so uncommitted work counts. `python scripts/verify_coverage.py check` prints it alone. The agent that changed a listed function runs this skill, or `/maintain-formal-verification-skill`, before it ends its task.
 - The end of a `build.py` run shows `WARNING verify-gate: N of M diagrams are older than their inputs`, or `the skill has no generated diagram`. Run `check.py`: it checks every config, then writes the diagrams (*The diagrams*). The warning `diagrams.toml cannot be read` names the error in the manifest: fix the manifest first.
 
@@ -89,8 +89,10 @@ For the upkeep after changes that skipped this skill (merges, many commits), use
 | `YouEditAMessage` | `GameWriter::edit` |
 | `YouSwitchOrDeleteASwipe` | `GameWriter::switch_swipe`, `GameWriter::delete_last`, with `clear_failure_and_put_dock` |
 | `YouChangeTheConfig` | `GameWriter::save_config` (from `GameCatalogue::save_config`) |
-| `AJobStartsAGeneration` | `Job::run_step` and `JobWriter::step` before the narrator call; for the first generation of an Action, also `JobWriter::save_input` |
-| `TheNarratorAnswers`, `TheNarratorFails` | the narrator call of `Job::generate`, outside every hold |
+| `AJobStartsAGeneration` | `Job::run_step` and `JobWriter::step` before the narrator call; for the first generation of an Action, also `JobWriter::save_input`; when Messages that the story memory does not cover are outside the history (the `cuts` parameter of the action: a history cut, not the ghost variable `cut` of a stop), also the `JobWriter::step(Step::WritingStoryMemory)` hold of `Job::write_story_memory` |
+| `TheMemoryWriterAnswers`, `TheMemoryWriterFails` | the story memory writer call of `Job::write_story_memory`, outside every hold. A failed call keeps the previous story memory, and the Job goes on. A Narration Connection that `Job::story_memory_call` cannot read is the same failed call |
+| `TheNarrationStepReturns` | the `JobWriter::step(kind.step())` hold at the end of `Job::write_story_memory`, before the narrator call |
+| `TheNarratorAnswers`, `TheNarratorFails` | the narrator call of `Job::narrate`, outside every hold |
 | `TheTextIsSaved` | `JobWriter::save_text` (`write_new_message`, `write_new_swipe`) |
 | `TheAnalysisStarts`, `TheAnalysisAnswers` | `run_step(Step::Quantifying)`, then the Quantifier call |
 | `TheStateIsSaved` | `Job::update_state` and `JobWriter::save_state_update`; a fired Trigger orders the event generation |
@@ -119,7 +121,7 @@ Every write of a Job goes through `Own(j)`, the job id check of `JobWriter::hold
 | `RunHoldsItsGame` | autoplay.md: "The run holds its Game from its start until it ends, also between two Jobs."; 41.17; 41.27 | `job-drop-removes-the-run`, `run-end-without-run-check` |
 | `StoppedRunStartsNoJob` | autoplay.md 41.6: "And no further Job of the run starts"; 41.26 | `accept-without-run-check` |
 | `RunRefusesConfig` | autoplay.md 41.12: "the config writes are refused and the config stays" | `config-write-during-a-run` |
-| `RunEndReasons` | autoplay.md: "A run ends for one of these reasons: ..." | `moved-job-ends-as-failure` |
+| `RunEndReasons` | autoplay.md: "A run ends for one of these reasons: ..."; story_memory.md 46.5: "a model whose story memory writer call fails ... Then the Narration is saved" | `moved-job-ends-as-failure`, `memory-writer-failure-fails-the-job` |
 | `BudgetBound` | autoplay.md: "The **budget** is the number of cycles" | `budget-checked-too-late` |
 | `RunFailureLineStays` | autoplay.md 41.4 and 41.23: "the status display answers with the failure line" | `not-accepted-without-failure-line` |
 | `RunEndsIdle` | autoplay.md 41.1: "And the Game is idle" | `run-end-keeps-the-holder` |
@@ -147,6 +149,7 @@ The model leaves out:
 - Storage faults. A refused write of the failure line leaves the run ended with no failure line. That is a storage fault, not a gate order.
 - The stop whose dock read fails (dashboard.md 39.8). `GameWriter::stop` reads the dock before it removes the holder, so the failed branch changes nothing. No rule checks that order.
 - That a Job writes only to its own Game (games.md 18.4). Each Job keeps its Game id from its accept, so the model holds this by construction.
+- That a stopped Job makes no further model call. `TheNarrationStepReturns` ends a Job that a stop cut during its story memory writer call, before its narrator call. No spec sentence promises this, and each later write checks the Job id, so no rule reads it and no mutant can remove it.
 - That a Job always ends (actions.md I.1). TLC checks that no state is stuck, but no rule checks that each Job reaches its end.
 - The story content. The model keeps only the type of the last Message, which is what `AutoplayRun::decide` and the plan read. So no rule counts the writes of one Swipe state.
 - The config. The model keeps no config variable, so `YouChangeTheConfig` changes no variable. It is a step that changes nothing, and TLC finds no new state for it. The same holds for `YouEditAMessage`, which writes only the story content. Both actions stay in the model for their guard: the busy check (`BusyRefusesStory`) and the refusal during a run (`RunRefusesConfig`). The one write of a story action that the model keeps is the clear of the failure line and of the Options failure in `YouSwitchOrDeleteASwipe` (`SwipeClearsFailures`).

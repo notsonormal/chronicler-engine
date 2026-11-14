@@ -22,3 +22,7 @@ Source: `/retro` 2026-11-02, the session of layout-trials ticket 11.
 - **A.** `python build.py clippy` also runs the guardrails binary (about +10 s on each run).
 - **B.** One line in the Development Loop table: run `guardrails` before the full gate when a change adds a type or a function.
 - **C.** Nothing: a second full gate run is a rare cost.
+
+## Further evidence (2026-11-13, build sessions `a09ca82b` and `48a609ae`)
+
+- **known** Five guardrails failed only in the gate, over three failed gate runs: `guardrails_file_length_src`, design rule 7, `guardrails_test_file_location`, `guardrails_free_fn_location` and `guardrails_long_comment_runs`. Neither session ran `python build.py guardrails`. Option A would have caught all five.

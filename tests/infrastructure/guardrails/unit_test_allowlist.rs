@@ -88,6 +88,7 @@ pub const SEAM_CONTRACT_FILES: &[&str] = &[
     // The LLM providers and the transport are boxes behind the LLM port.
     "adapters/driven/llm/providers/chat_completions_tests.rs",
     "adapters/driven/llm/transport/utils/request_tests.rs",
+    "application/agents/memory/agent_tests.rs",
     "application/agents/options/agent_tests.rs",
     "application/agents/quantifier/agent_tests.rs",
     "application/narration/narrator_tests.rs",

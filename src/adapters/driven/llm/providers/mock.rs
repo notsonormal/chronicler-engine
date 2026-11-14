@@ -73,6 +73,7 @@ impl MockBackend {
         let text = text.into();
         LlmCallResult {
             text: text.clone(),
+            stopped_at_limit: false,
             raw_request_json: request_json(prompt),
             raw_response_json: format!("{{\"content\":\"{text}\"}}"),
             backend_name: self.name().to_string(),

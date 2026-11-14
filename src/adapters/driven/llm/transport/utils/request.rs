@@ -21,6 +21,7 @@ const USER_AGENT: &str = concat!("chronicler-engine/", env!("CARGO_PKG_VERSION")
 #[derive(Debug)]
 pub struct ChatCompletionResult {
     pub text: String,
+    pub stopped_at_limit: bool,
     pub raw_request_json: String,
     pub raw_response_json: String,
 }
@@ -38,11 +39,9 @@ pub struct ChatCompletionsEndpoint<'a> {
     pub api_key: Option<&'a str>,
     /// Sent in `X-Title`, with an `HTTP-Referer`.
     pub title: Option<&'a str>,
-    /// The header name and its value.
     pub session: Option<(&'a str, &'a str)>,
 }
 
-/// What one chat-completions call asks of the model.
 #[derive(Debug, Clone, Copy)]
 pub struct ChatCompletionRequest<'a> {
     pub model: &'a str,

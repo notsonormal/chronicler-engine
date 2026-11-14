@@ -38,6 +38,7 @@ fn state_in(room: &str) -> SwipeState {
         scene: SceneState::default(),
         encounters: Encounters::default(),
         event_record: None,
+        story_memory: None,
     }
 }
 
@@ -963,8 +964,6 @@ fn a_failed_read_names_its_method_in_the_database_error() {
     );
 }
 
-/// A Swipe state with the stored keys
-/// `npcs_in_area`, `npc_encounter_log`, `npcs`, `trigger_context` and `npc_id`.
 const SWIPE_STATE_WITH_THE_OLD_KEYS: &str = r#"{
     "movement": {"current_room_id": "room1", "dynamic_rooms": {}},
     "scene": {"npcs_in_area": [

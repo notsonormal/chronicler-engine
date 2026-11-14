@@ -22,7 +22,7 @@ Every card list renders in Character id order. Layers 1 and 6 each sort their li
 The layers sit in these prompt parts, in this order:
 
 1. The system part holds Layer 0.
-2. The first user part holds Layers 1 to 3.
+2. The first user part holds Layers 1 to 3, then the story memory block.
 3. One prompt part for each history entry holds Layer 4.
 4. Layers 5 to 8 and the post-history splice join the last prompt part of the list when it is a `user` part. That part is the last history entry, or the first `user` part when no entry is kept. Otherwise they make one new final `user` part. So the end of the list never has two `user` parts in a row that the blocks made. The assembler does not merge entries of one role. A cut can leave an Input as the first history entry, next to the first `user` part.
 
@@ -58,11 +58,19 @@ An empty history has no message. The first `user` message then holds the marker 
 
 The history cut drops whole Messages from the front of the history, in blocks. The cut walks the history from its first Message. It drops the oldest Messages when the kept Messages pass the history space, the tokens the history may fill. Between two cuts the history start stays where it is, while the history space stays the same.
 
-The history space is the smaller of two sizes: the history size of the Connection (`max_history_tokens`) and the free space in the window. The free space is the input limit, less every part of the prompt except the `<PlayerInput>` layer and the Guide, less a reserve for those two. A Connection with no history size uses `DEFAULT_MAX_HISTORY_TOKENS`. The input limit depends on the window of the Connection and on the response length of the call (see Prompt Presets). A change in the size of another part, such as the room or the Characters present, changes the space and can move the history start. An Input or Guide that still passes the input limit makes the assembler drop more whole Messages, as one block.
+The history space is the smaller of two sizes: the history size of the Connection (`max_history_tokens`) and the free space in the window. The free space is the input limit, less every part of the prompt except the `<PlayerInput>` layer, the Guide and the story memory (see Story memory). A reserve for the Input and the Guide also comes off. A Connection with no history size uses `DEFAULT_MAX_HISTORY_TOKENS`. The input limit depends on the window of the Connection and on the response length of the call (see Prompt Presets).
+
+A change in the size of another part, such as the room or the Characters present, changes the space and can move the history start. An Input or Guide that still passes the input limit makes the assembler drop more whole Messages, as one block.
 
 Each message also costs a few tokens of chat template (`MESSAGE_OVERHEAD_TOKENS`, an estimate). The cut counts that cost for each history entry and for each fixed message, so a long history of short entries still fits.
 
 The cut knows the blocks it dropped. The marker `(History truncated to fit context window)` shows in the first `user` message, inside `<ConversationHistory>`, when Messages exist and none is kept. The sizes stay in `HistoryCut` and the token budget.
+
+## Story memory
+
+The `<StoryMemory>` block holds the story memory of the call: the summary of the Messages that left the history. It follows Layer 3 in the first `user` part, so it stands before the first history entry. A call with no story memory has no block. Every kind of generation shows it.
+
+Once the history passes its space, or once a story memory exists, the history space keeps room for the block at its full size, `STORY_MEMORY_TOKENS`. The cut that the Job plans before the writer call is the cut of the narrator call that shows the new text.
 
 ## Section Definitions
 
@@ -94,7 +102,7 @@ The template engine substitutes template variables — the player persona's fiel
 
 ## Agent Prompts (Separate)
 
-The quantifier and options agents build their own prompts, separate from the layered narrative stack.
+The Quantifier, the Options agent and the story memory writer build their own prompts, separate from the layered narrative stack.
 
 ## Prompt Presets
 
@@ -102,7 +110,7 @@ The prompt system stores presets of four types: system (the narrator voice), qua
 
 A preset carries its generation parameters: the response length (`max_tokens`), the samplers `temperature` and `top_p`, and a free object `custom` for other samplers. The engine owns `model`, `messages`, `stream` and `max_tokens`, so `custom` cannot set them, and the refusal names the key. A key that the engine writes in the request replaces the same key of `custom`.
 
-A Connection can set a ceiling on the response length (`max_tokens_ceiling`). A call asks for the preset value or the default (`DEFAULT_MAX_TOKENS`), and never more than the ceiling. A call of the narrator can ask for less, because the response length cannot pass the free space in the context window.
+A Connection can set a ceiling on the response length (`max_tokens_ceiling`). A call asks for the preset value or the default (`DEFAULT_MAX_TOKENS`), and never more than the ceiling. The story memory writer asks for `STORY_MEMORY_TOKENS`, and never more than the ceiling. A call of the narrator can ask for less, because the response length cannot pass the free space in the context window.
 
 An Options preset can set `option_count`, the number of Options. The count must be at least 1, and no other preset type can set it. The count fills the `{{option_count}}` placeholder and caps the Options that the parser keeps. An Options preset with no count uses `DEFAULT_OPTION_COUNT`.
 

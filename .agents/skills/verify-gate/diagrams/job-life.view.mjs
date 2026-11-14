@@ -8,6 +8,7 @@ const part = (j) => {
   const ev = j.gen === "event";
   switch (j.pc) {
     case "idle": return "Not started";
+    case "memory": case "memstep": return ev ? "Event Narration: story memory writer call" : "Narration: story memory writer call";
     case "start": case "call": case "save": return ev ? "Event Narration" : "Narration";
     case "analyse": case "quant": case "update": return "Quantifier call and state update";
     case "afterGens": return "After the generations";
@@ -41,7 +42,9 @@ export const colors = { Before: "tan", "Holds the Game": "blue", "Cut off": "ora
 const labels = {
   YouStartAJob: "the player sends an Action",
   YouPressStop: "the player presses Stop",
-  AJobStartsAGeneration: "the narrator call starts",
+  TheMemoryWriterAnswers: "the story memory writer answers",
+  TheMemoryWriterFails: "the story memory writer call fails",
+  TheNarrationStepReturns: "the narrator call starts",
   TheNarratorAnswers: "the narrator answers",
   TheNarratorFails: "the narrator call fails",
   TheTextIsSaved: "the text is saved",
@@ -59,6 +62,7 @@ const labels = {
 export const step = (action, from, to) => {
   const a = from.job[J], b = to.job[J];
   if (b.pc === "done" && b.fail === "moved" && a.pc !== "done") return "its next write is refused";
+  if (action === "AJobStartsAGeneration") return b.pc === "memory" ? "the story memory writer call starts" : "the narrator call starts";
   if (action === "TheStateIsSaved") return b.gen === "event" && a.gen === "first" ? "the state is saved, a Trigger fired" : "the state is saved";
   return labels[action] ?? action;
 };

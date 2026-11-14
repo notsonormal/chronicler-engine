@@ -10,15 +10,18 @@ use crate::adapters::driven::storage::stories::STORY_LIMIT;
 use crate::adapters::driven::storage::Storage;
 use crate::application::prompt_preset_service::PromptPresetService;
 use crate::application::agents::runner::AgentRunner;
+use crate::application::agents::trait_def::BeforeNarrationAgent;
 use crate::application::generation::gate::{
     AcceptedJob, GameWriter, JobFailure, JobWriter, OptionsResult, NotAccepted, SavedText,
 };
 use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
-use crate::application::prompting::token_budget::TokenBudget;
+use crate::application::prompting::token_budget::{TokenBudget, STORY_MEMORY_TOKENS};
 use crate::application::prompting::CharacterContext;
-use crate::domain::model::agent::{AgentSettings, HookInput, Kind, AGENT_HISTORY_WINDOW};
+use crate::domain::model::agent::{
+    AgentSettings, HookInput, Kind, StoryMemoryHookInput, AGENT_HISTORY_WINDOW,
+};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::game::{Game, GameId};
 use crate::domain::model::generation_parameters::CallSettings;
@@ -30,6 +33,7 @@ use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
+use crate::domain::model::story_memory::StoryMemory;
 use crate::domain::model::tail::Tail;
 use crate::domain::model::utils::game_rules;
 use crate::error::EngineError;
@@ -38,6 +42,8 @@ use crate::error::EngineError;
 pub struct JobDeps {
     pub narrator: Arc<Narrator>,
     pub agent_runner: Arc<AgentRunner>,
+    /// Outside the agent config: no setting turns the story memory off.
+    pub story_memory_writer: Arc<dyn BeforeNarrationAgent>,
     pub storage: Arc<Storage>,
     pub tasks: Arc<JobTasks>,
     pub pause: Arc<AutoplayPause>,
@@ -53,7 +59,6 @@ pub enum JobEnd {
     EntryMoved,
 }
 
-/// The settings of one model call, and the token budget of the Connection it uses.
 struct CallPlan {
     settings: CallSettings,
     budget: TokenBudget,
@@ -63,6 +68,7 @@ pub struct Job {
     writer: JobWriter,
     narrator: Arc<Narrator>,
     agent_runner: Arc<AgentRunner>,
+    story_memory_writer: Arc<dyn BeforeNarrationAgent>,
     presets: PromptPresetService,
     storage: Arc<Storage>,
 }
@@ -120,6 +126,7 @@ impl Job {
             writer,
             narrator: Arc::clone(&deps.narrator),
             agent_runner: Arc::clone(&deps.agent_runner),
+            story_memory_writer: Arc::clone(&deps.story_memory_writer),
             presets: PromptPresetService::new(Arc::clone(&deps.storage)),
             storage: Arc::clone(&deps.storage),
         }
@@ -188,9 +195,12 @@ impl Job {
             self.run_step(step.clone(), Some(kind), || self.save_input(order, text))?;
         }
 
-        let text = self.run_step(step.clone(), Some(kind), || self.narrate(order, input))?;
+        let (text, memory) =
+            self.run_step(step.clone(), Some(kind), || self.narrate(order, input))?;
 
-        let saved = self.run_step(step, Some(kind), || self.save_text(order, text.clone()))?;
+        let saved = self.run_step(step, Some(kind), || {
+            self.save_text(order, text.clone(), memory)
+        })?;
         let at = saved.at();
         *narration_saved |= kind.saves_a_narration();
 
@@ -236,7 +246,15 @@ impl Job {
         self.writer.save_input(text, &start).map(|_| ())
     }
 
-    fn narrate(&self, order: &GenerationOrder, input: Option<&str>) -> Result<String, JobFailure> {
+    /// One load serves the history cut, the story memory writer and the narrator
+    /// call, so a Connection or preset edited during the writer call cannot move the
+    /// cut between the two. Rule 7 keeps loaded records inside one step, so the
+    /// writer runs inside this step and not as a step of its own in `generate`.
+    fn narrate(
+        &self,
+        order: &GenerationOrder,
+        input: Option<&str>,
+    ) -> Result<(String, Option<StoryMemory>), JobFailure> {
         let game = self.game_row()?;
         let settings = Self::read(Record::Settings, self.storage.get_settings())?;
         let preset = Self::read(
@@ -257,10 +275,11 @@ impl Job {
             },
             STORY_LIMIT,
         )?;
-        let plan = self.call_plan(&settings, order.generation.preset_type(), &preset)?;
+        let call = self.call_plan(&settings, order.generation.preset_type(), &preset)?;
 
         let all_characters: Vec<CharacterCard> = bundle.characters.values().cloned().collect();
-        let values = NarrationValues {
+        let previous = start.story_memory.as_ref();
+        let planned = NarrationValues {
             world: &bundle.world,
             narrative_perspective: game.narrative_perspective,
             narrative_tense: game.narrative_tense,
@@ -273,20 +292,80 @@ impl Job {
             history: &history,
             input,
             tail: &tail,
+            story_memory: previous.map(|memory| memory.text.as_str()),
         };
 
+        let cut = self
+            .narrator
+            .plan_cut(&order.generation, &planned, &preset, call.budget);
+        let dropped = history.get(..cut.kept_from()).unwrap_or_default();
+        let first_uncovered = dropped.len() - StoryMemory::uncovered(previous, dropped).len();
+        let leaving = history
+            .get(cut.dropped_within_one_space(first_uncovered))
+            .unwrap_or_default();
+        let memory = match StoryMemoryHookInput::new(previous, leaving, &bundle.persona.sheet.name)
+        {
+            Some(hook_input) => self.write_story_memory(order.kind(), &settings, &hook_input)?,
+            None => previous.cloned(),
+        };
+
+        let values = NarrationValues {
+            story_memory: memory.as_ref().map(|memory| memory.text.as_str()),
+            ..planned
+        };
         let narrated = self.narrator.narrate(
             &order.generation,
             &values,
             &preset,
-            &plan.settings,
-            plan.budget,
+            &call.settings,
+            call.budget,
         )?;
-        Ok(narrated.text)
+        Ok((narrated.text, memory))
     }
 
-    fn save_text(&self, order: &GenerationOrder, text: String) -> Result<SavedText, JobFailure> {
-        let start = self.start_state(order)?;
+    /// A failed writer keeps the previous story memory, and the Job continues: the
+    /// Messages it missed stay uncovered, so the next cut gives them to the writer
+    /// again.
+    fn write_story_memory(
+        &self,
+        kind: Kind,
+        settings: &AppSettings,
+        hook_input: &StoryMemoryHookInput,
+    ) -> Result<Option<StoryMemory>, JobFailure> {
+        self.writer.step(Step::WritingStoryMemory)?;
+        let written = self
+            .story_memory_call(settings)
+            .and_then(|call| self.story_memory_writer.run(hook_input, &call));
+        let memory = match written {
+            Ok(memory) => Some(memory),
+            Err(error) => {
+                tracing::warn!("Agent {} failed: {error}", self.story_memory_writer.name());
+                hook_input.previous.cloned()
+            }
+        };
+        self.writer.step(kind.step())?;
+        Ok(memory)
+    }
+
+    /// The writer records its call through the Narration slot, so the Connection of
+    /// that slot sets the ceiling for every kind of generation.
+    fn story_memory_call(&self, settings: &AppSettings) -> Result<CallSettings, EngineError> {
+        let connection = settings.connection_for(PresetType::System)?;
+        Ok(CallSettings {
+            max_tokens: connection.max_tokens_for(Some(STORY_MEMORY_TOKENS)),
+            game: Some(self.writer.game()),
+            ..CallSettings::default()
+        })
+    }
+
+    fn save_text(
+        &self,
+        order: &GenerationOrder,
+        text: String,
+        memory: Option<StoryMemory>,
+    ) -> Result<SavedText, JobFailure> {
+        let mut start = self.start_state(order)?;
+        start.story_memory = memory;
         let tail = self.tail()?;
         self.writer.save_text(order, text, &start, &tail)
     }

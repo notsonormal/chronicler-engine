@@ -11,7 +11,7 @@ use crate::application::games::view_query::RoleHealth;
 use crate::domain::model::agent::Role;
 use crate::error::{EngineError, Result};
 
-/// Options and Trigger have no Settings row, so their health appears only in the
+/// Options, Trigger and Memory have no Settings row, so their health appears only in the
 /// failure banner.
 const SETTINGS_ROLE_ROWS: [Role; 2] = [Role::Narrator, Role::Quantifier];
 
@@ -21,6 +21,7 @@ pub fn role_label(role: Role) -> &'static str {
         Role::Quantifier => "Quantifier",
         Role::Options => "Options",
         Role::Trigger => "Trigger",
+        Role::StoryMemory => "Story memory",
     }
 }
 
@@ -30,6 +31,7 @@ pub fn role_failure_effect(role: Role) -> &'static str {
         Role::Quantifier => "keeping the Room and the Characters present",
         Role::Options => "showing no options",
         Role::Trigger => "skipping the trigger",
+        Role::StoryMemory => "keeping the previous story memory",
     }
 }
 

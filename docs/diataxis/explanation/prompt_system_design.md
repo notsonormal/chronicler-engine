@@ -25,6 +25,12 @@ The history tags cost a little of the cache. `</ConversationHistory>` and `<Last
 
 The history space leaves out the `<PlayerInput>` layer and the Guide. The Input changes on every call, and the Guide shows only on a Guided Generation. A space that depended on them would move the history start on every call. A reserve for them keeps the history start still on an ordinary Input.
 
+## The story memory before the history
+
+The story memory stands before the history, after Layer 3 in the first `user` message. It changes only at a cut, and a cut already moves the history start. So between two cuts the cache still reaches the history.
+
+The Job plans the cut before the story memory writer answers, and the narrator call that shows the new text makes the same cut again. Both read one load of the narration inputs, so a Connection edited during the writer call cannot move the cut. A cut that measured the text would differ between the two. A call with no story memory and a history inside its space keeps no room, so a short story keeps its whole history.
+
 ## The history as chat messages
 
 The engine follows Marinara Engine here. Each history entry is one chat message with a role. A Narration is the assistant's own turn, and an Input is the user's turn. The model then reads the story as a conversation that it already took part in.

@@ -7,7 +7,7 @@ title: Narration System
 
 LLM connections are stored as a list on the `settings` singleton row.
 
-Four Connection slots name the Connection of each kind of call. The Narration slot (`narration_connection_id`) serves a Narration, an event Narration and the Retry of a typed Input. The Impersonate slot (`impersonate_connection_id`) serves an Impersonate and the Retry of an Impersonate Input. The Quantifier slot (`quantifier_connection_id`) serves the Quantifier. The Options slot (`options_connection_id`) serves the Options agent.
+Four Connection slots name the Connection of each kind of call. The Narration slot (`narration_connection_id`) serves a Narration, an event Narration, the Retry of a typed Input and the story memory writer. The Impersonate slot (`impersonate_connection_id`) serves an Impersonate and the Retry of an Impersonate Input. The Quantifier slot (`quantifier_connection_id`) serves the Quantifier. The Options slot (`options_connection_id`) serves the Options agent.
 
 The Impersonate and Options slots are optional. An empty slot uses the Narration Connection. Two slots may name the same Connection.
 
@@ -19,7 +19,7 @@ The wiring builds one `LlmCallRecorder` for each slot. The recorder resolves its
 
 ## The Model Port
 
-`LlmProvider::complete` takes the agent name, a list of prompt parts and the call settings. A prompt part is a role (`system`, `user` or `assistant`) and a text. The Quantifier, the Options agent and the connection test send two parts: a system part and a user part. The narrator sends one part for each message of its prompt (see Prompt System).
+`LlmProvider::complete` takes the agent name, a list of prompt parts and the call settings. A prompt part is a role (`system`, `user` or `assistant`) and a text. The Quantifier, the Options agent, the story memory writer and the connection test send two parts: a system part and a user part. The narrator sends one part for each message of its prompt (see Prompt System).
 
 A provider answers with the text and the payload that it sent. A failed call answers with its error and the payload that it sent before the failure. The payload is empty when the call failed before any send. `LlmCallRecorder::complete` stores the payload in `raw_request_json` on a good row and on a failed row.
 

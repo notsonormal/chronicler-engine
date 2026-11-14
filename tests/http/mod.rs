@@ -30,6 +30,7 @@ mod screen_load;
 mod settings;
 mod settings_connection_form;
 mod story_log;
+mod story_memory;
 mod support;
 mod swipe_new;
 mod swipe_switch;

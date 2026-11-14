@@ -1,0 +1,9 @@
+{
+  "name": "base_two_part",
+  "about": "Tried in the review round of ticket 14 and not kept (33 %). It bounds the size by structure: a section Earlier (the previous memory retold in fewer words) and a section Latest (the entries of this cut). The model returned the previous memory unchanged at three of five cuts. Its run files were deleted; the score row is in assets/story-memory-size.md.",
+  "schedule": "each_cut",
+  "position": "before_history",
+  "max_tokens": 2000,
+  "writer_system": "You keep the memory of an interactive story. The oldest entries of the story are about to leave the narrator's context. Write the notes that the narrator needs to continue the story without contradicting them.",
+  "writer_user": "This is the memory of the story so far.\n\n<PreviousMemory>\n{previous}\n</PreviousMemory>\n\nThese are the story entries #{first} to #{last}, which leave the narrator's context now. Entries marked Julian are written by the player character; entries marked Narration are written by the narrator.\n\n<Entries>\n{entries}\n</Entries>\n\nWrite the new memory in two sections, as short plain lines.\n\n## Earlier\nAt most 400 words. Retell the whole previous memory, both of its sections, in fewer words. Merge what belongs together and drop the small steps that are finished. Keep the names, the open promises, plans and appointments with their times, the objects and where they are, and who knows which fact. If there is no previous memory, write \"(nothing)\".\n\n## Latest\nAt most 400 words. The notes on these entries. Keep:\n- names, numbers, objects and where they are, places, promises, plans and appointments with their times;\n- the story time: which day of the story it is, the time of day, and how much time passed;\n- who was present at each conversation, and who learned which fact.\n\nWrite only the memory."
+}

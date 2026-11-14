@@ -1,6 +1,6 @@
 //! Unit tests for the transport's "what counts as an answer" rule.
 
-use crate::adapters::driven::llm::transport::utils::response::parse_chat_response;
+use crate::adapters::driven::llm::transport::utils::response::{parse_chat_response, ChatAnswer};
 use crate::error::{EngineError, LlmFailure};
 
 fn empty_response_body(error: EngineError) -> String {
@@ -25,13 +25,22 @@ fn token_budget_spend(error: EngineError) -> (String, Option<u64>, Option<u64>) 
 fn test_parse_chat_response_success_content() {
     let raw = r#"{"choices":[{"message":{"content":"hello"}}]}"#;
     let result = parse_chat_response(raw, 1);
-    assert_eq!(result.unwrap(), "hello");
+    assert_eq!(
+        result.unwrap(),
+        ChatAnswer {
+            text: "hello".to_string(),
+            stopped_at_limit: false,
+        }
+    );
 }
 
 #[test]
 fn test_parse_chat_response_keeps_content_verbatim() {
     let raw = r#"{"choices":[{"message":{"content":"  padded answer  "}}]}"#;
-    assert_eq!(parse_chat_response(raw, 1).unwrap(), "  padded answer  ");
+    assert_eq!(
+        parse_chat_response(raw, 1).unwrap().text,
+        "  padded answer  "
+    );
 }
 
 #[test]
@@ -106,9 +115,15 @@ fn test_length_finish_reason_with_usage_but_no_reasoning_details() {
 }
 
 #[test]
-fn test_length_finish_reason_with_content_is_an_answer() {
+fn test_length_finish_reason_with_content_is_an_answer_that_says_it_stopped_at_the_limit() {
     let raw = r#"{"choices":[{"message":{"content":"the door creaks"},"finish_reason":"length"}]}"#;
-    assert_eq!(parse_chat_response(raw, 1).unwrap(), "the door creaks");
+    assert_eq!(
+        parse_chat_response(raw, 1).unwrap(),
+        ChatAnswer {
+            text: "the door creaks".to_string(),
+            stopped_at_limit: true,
+        }
+    );
 }
 
 #[test]

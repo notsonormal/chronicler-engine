@@ -16,6 +16,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -163,7 +164,6 @@ def make_db():
 
 
 def insert_entry(conn, game_id, message_type, text="text"):
-    """One story entry of the Game, with the one Swipe it shows."""
     kind = "ImpersonateInput" if message_type == "Input" else "Narration"
     cursor = conn.execute(
         """insert into messages (game_id, message_type, kind, timestamp,
@@ -215,7 +215,6 @@ def write_setup(directory, data=None, **changes):
 
 
 def without(*names):
-    """The example setup without the named fields."""
     return {name: value for name, value in EXAMPLE_SETUP.items() if name not in names}
 
 
@@ -566,6 +565,60 @@ class PackTests(unittest.TestCase):
         )
 
 
+    def test_a_memory_call_is_its_own_kind_and_no_story_call(self):
+        call = {"agent_name": "memory", "parsed_response": "Mara waits at the gate."}
+        self.assertEqual(trial.call_kind(call, []), "memory")
+        self.assertFalse(trial.is_story_call(call))
+
+    def test_the_kind_table_counts_the_memory_calls(self):
+        calls = [
+            {"kind": "memory", "error_message": None, "usage": {"prompt": 900, "completion": 80}},
+            {"kind": "memory", "error_message": "timed out", "usage": {}},
+        ]
+        self.assertEqual(
+            trial.kind_totals(calls)["memory"],
+            {"n": 2, "failed": 1, "in": 900, "out": 80, "cached": 0},
+        )
+
+
+def entry_with_memory(entry_id, memory):
+    entry = story_entry(entry_id, f"Entry {entry_id}.", "Narration")
+    entry["event_header"] = None
+    state = {"movement": {"current_room_id": "hall"}}
+    if memory is not None:
+        state["story_memory"] = memory
+    entry["state"] = json.dumps(state)
+    return entry
+
+
+class StoryMemoryLineTests(unittest.TestCase):
+    def story_text(self, story):
+        pack = types.SimpleNamespace(run={}, story=story, by_entry={}, trailing=[])
+        return "\n".join(trial.story_lines(pack))
+
+    def test_an_entry_shows_its_memory_in_full_where_it_changes_and_short_where_it_stays(self):
+        first = {"text": "Mara waits at the gate.\nThe porter knows.", "covers_up_to": 4}
+        second = {"text": "The caravan left at noon.", "covers_up_to": 9}
+
+        text = self.story_text(
+            [
+                entry_with_memory(1, None),
+                entry_with_memory(5, first),
+                entry_with_memory(6, first),
+                entry_with_memory(10, second),
+            ]
+        )
+
+        self.assertIn(
+            "> Story memory (covers up to #4):\n>\n> Mara waits at the gate.\n> The porter knows.",
+            text,
+        )
+        self.assertIn("> Story memory: unchanged (covers up to #4)", text)
+        self.assertIn("> Story memory (covers up to #9):\n>\n> The caravan left at noon.", text)
+        before_memory = text.split("### #5")[0]
+        self.assertNotIn("Story memory", before_memory.split("### #1")[1])
+
+
 CONTENT_FILTER_TEXT = "LLM returned an empty response (finish_reason: content_filter)"
 GAME_HEADER = {"X-Chronicler-Game": "2"}
 
@@ -709,6 +762,16 @@ class PlayTrialTests(unittest.TestCase):
         self.assertEqual(server.autoplay_cycles(), ["5"])
         self.assertEqual(run["restarts"], [])
         self.assertEqual(run["stop"]["reason"], "failed")
+
+    def test_a_failed_memory_call_at_the_end_of_a_run_does_not_restart(self):
+        def memory_failed_last(conn):
+            play_cycles(conn, 2)
+            add_call(conn, "memory", "content_filter", CONTENT_FILTER_TEXT, completion=0)
+
+        server, run, _ = self.play([memory_failed_last])
+
+        self.assertEqual(server.autoplay_cycles(), ["5"])
+        self.assertEqual(run["restarts"], [])
 
     def test_a_filtered_quantifier_call_before_a_good_call_does_not_restart(self):
         def quantifier_filtered_earlier(conn):

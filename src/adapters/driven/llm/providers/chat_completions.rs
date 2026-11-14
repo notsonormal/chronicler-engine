@@ -152,6 +152,7 @@ impl LlmProvider for ChatCompletionsBackend {
             })?;
         Ok(LlmCallResult {
             text: chat.text,
+            stopped_at_limit: chat.stopped_at_limit,
             raw_request_json: chat.raw_request_json,
             raw_response_json: chat.raw_response_json,
             backend_name: self.name().to_string(),

@@ -55,8 +55,20 @@ impl LlmCallRecorder {
         prompt: &[PromptPart],
         settings: &CallSettings,
     ) -> Result<LlmCallResult, EngineError> {
+        self.complete_checked(agent_name, prompt, settings, |_| Ok(()))
+    }
+
+    /// `check` judges the sanitized answer before the save. An answer it refuses is
+    /// recorded as a failed call, so the role health shows the failure.
+    pub fn complete_checked(
+        &self,
+        agent_name: &str,
+        prompt: &[PromptPart],
+        settings: &CallSettings,
+        check: impl FnOnce(&LlmCallResult) -> Result<(), EngineError>,
+    ) -> Result<LlmCallResult, EngineError> {
         let provider = self.provider()?;
-        let result = match provider.complete(agent_name, prompt, settings) {
+        let mut result = match provider.complete(agent_name, prompt, settings) {
             Ok(result) => result,
             Err(LlmCallFailure {
                 error,
@@ -78,15 +90,17 @@ impl LlmCallRecorder {
             }
         };
 
-        let sanitized_text = sanitize_llm_output(&result.text);
+        result.text = sanitize_llm_output(&result.text);
+        let refusal = check(&result).err();
 
         let mut message = result.to_message();
-        message.parsed_response = sanitized_text.clone();
+        message.error_message = refusal.as_ref().map(EngineError::llm_error_string);
         (*self.save_fn)(&message)?;
 
-        let mut sanitized_result = result;
-        sanitized_result.text = sanitized_text;
-        Ok(sanitized_result)
+        match refusal {
+            Some(error) => Err(error),
+            None => Ok(result),
+        }
     }
 
     fn failed_message(

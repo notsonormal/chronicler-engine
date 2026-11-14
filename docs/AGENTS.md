@@ -43,7 +43,7 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 ## Folder Structure
 
 <!-- AUTO-INDEX START -->
-*Index last generated: 2026-11-09 22:51 UTC*
+*Index last generated: 2026-11-12 00:55 UTC*
 
 ### `docs/diataxis/explanation/`
 
@@ -80,6 +80,7 @@ An invariant stays true through the next fix, restyle or copy edit in its area. 
 - [Reset During A Job](./diataxis/reference/diagrams/reset_during_a_job.md)
 - [Run Life](./diataxis/reference/diagrams/run_life.md)
 - [Stop During The Narrator Call](./diataxis/reference/diagrams/stop_during_the_narrator_call.md)
+- [Stop During The Story Memory Writer Call](./diataxis/reference/diagrams/stop_during_the_story_memory_writer_call.md)
 - [Stop On An Idle Game](./diataxis/reference/diagrams/stop_on_an_idle_game.md)
 - [Switch Then Delete](./diataxis/reference/diagrams/switch_then_delete.md)
 

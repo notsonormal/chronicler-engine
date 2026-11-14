@@ -93,6 +93,7 @@ fn test_quantifier_no_retry_when_high_confidence() {
 fn make_test_llm_result(text: &str) -> LlmCallResult {
     LlmCallResult {
         text: text.to_string(),
+        stopped_at_limit: false,
         raw_request_json: "".to_string(),
         raw_response_json: "".to_string(),
         backend_name: "Test".to_string(),

@@ -28,7 +28,6 @@ pub struct TokenBudget {
     pub max_context_tokens: u32,
     /// The Connection's size of the history. The room in the window can be smaller.
     pub max_history_tokens: u32,
-    /// The response length the call asks for.
     pub max_tokens: u32,
 }
 
@@ -90,6 +89,12 @@ impl TokenBudget {
 }
 
 pub const CHARS_PER_TOKEN: usize = 4;
+
+/// The size of the story memory: the room a history space keeps for its block,
+/// the answer limit of its writer, and the cap of its saved text.
+pub const STORY_MEMORY_TOKENS: u32 = 2_000;
+
+pub const STORY_MEMORY_CHARS: usize = STORY_MEMORY_TOKENS as usize * CHARS_PER_TOKEN;
 
 pub fn estimate_tokens(text: &str) -> usize {
     text.chars().count().div_ceil(CHARS_PER_TOKEN)

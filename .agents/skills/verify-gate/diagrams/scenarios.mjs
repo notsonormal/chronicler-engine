@@ -11,10 +11,24 @@ export const scenarios = {
     constants: { MaxJobs: "1", Env: '{"plain", "stop"}' },
     steps: [
       'YouStartAJob(1, "action")',
-      "AJobStartsAGeneration(1)",
+      "AJobStartsAGeneration(1, FALSE)",
       "YouPressStop(1)",
       "TheNarratorAnswers(1)",
       "TheTextIsSaved(1)",
+    ],
+  },
+  "stop-during-the-story-memory-writer-call": {
+    title: "A stop during the story memory writer call",
+    says: "After a stop, no write of the stopped Job lands.",
+    rule: "StoppedJobWritesNothing",
+    spec: "dashboard.md 39.4",
+    constants: { MaxJobs: "1", Env: '{"plain", "stop"}' },
+    steps: [
+      'YouStartAJob(1, "action")',
+      "AJobStartsAGeneration(1, TRUE)",
+      "YouPressStop(1)",
+      "TheMemoryWriterAnswers(1)",
+      "TheNarrationStepReturns(1)",
     ],
   },
   "late-end-of-a-stopped-job": {
@@ -25,14 +39,14 @@ export const scenarios = {
     constants: { Env: '{"plain", "stop"}' },
     steps: [
       'YouStartAJob(1, "action")',
-      "AJobStartsAGeneration(1)",
+      "AJobStartsAGeneration(1, FALSE)",
       "TheNarratorFails(1)",
       "TheJobSkipsTheOptionsRun(1)",
       "TheFailureLineIsSaved(1)",
       "YouPressStop(1)",
       'YouStartAJob(1, "action")',
       "TheJobEnds(1)",
-      "AJobStartsAGeneration(2)",
+      "AJobStartsAGeneration(2, FALSE)",
     ],
   },
   "config-write-during-a-job": {
@@ -43,7 +57,7 @@ export const scenarios = {
     constants: { MaxJobs: "1", Env: '{"plain", "config"}' },
     steps: [
       'YouStartAJob(1, "action")',
-      "AJobStartsAGeneration(1)",
+      "AJobStartsAGeneration(1, FALSE)",
       "YouChangeTheConfig(1)",
       "TheNarratorAnswers(1)",
       "TheTextIsSaved(1)",
@@ -57,7 +71,7 @@ export const scenarios = {
     constants: { MaxJobs: "1", Env: '{"plain", "stop"}' },
     steps: [
       'YouStartAJob(1, "action")',
-      "AJobStartsAGeneration(1)",
+      "AJobStartsAGeneration(1, FALSE)",
       "TheNarratorFails(1)",
       "TheJobSkipsTheOptionsRun(1)",
       "TheFailureLineIsSaved(1)",
@@ -73,7 +87,7 @@ export const scenarios = {
     constants: { NewGames: "{2}", MaxJobs: "1", Env: '{"plain", "reset"}' },
     steps: [
       'YouStartAJob(1, "action")',
-      "AJobStartsAGeneration(1)",
+      "AJobStartsAGeneration(1, FALSE)",
       "YouResetTheGame(2)",
       "TheResetMovesThePointer",
       "TheNarratorAnswers(1)",
@@ -88,7 +102,7 @@ export const scenarios = {
     constants: { Games0: "{1, 2}", MaxJobs: "1", Env: '{"plain", "delete"}' },
     steps: [
       'YouStartAJob(2, "action")',
-      "AJobStartsAGeneration(1)",
+      "AJobStartsAGeneration(1, FALSE)",
       "YouDeleteAGame(2)",
       "TheDeleteRemovesTheGame(2)",
       "TheNarratorAnswers(1)",
@@ -117,7 +131,7 @@ export const scenarios = {
     steps: [
       "YouStartAutoplay(1)",
       "TheRunAccepts(1, TRUE)",
-      "AJobStartsAGeneration(1)",
+      "AJobStartsAGeneration(1, FALSE)",
       "TheNarratorAnswers(1)",
       "TheTextIsSaved(1)",
       "TheAnalysisStarts(1)",
@@ -127,7 +141,7 @@ export const scenarios = {
       "TheJobEnds(1)",
       "TheRunSeesItsJobEnd(1)",
       "TheRunAccepts(1, TRUE)",
-      "AJobStartsAGeneration(2)",
+      "AJobStartsAGeneration(2, FALSE)",
       "TheNarratorAnswers(2)",
       "TheTextIsSaved(2)",
       "TheAnalysisStarts(2)",
@@ -149,7 +163,7 @@ export const scenarios = {
     steps: [
       "YouStartAutoplay(1)",
       "TheRunAccepts(1, TRUE)",
-      "AJobStartsAGeneration(1)",
+      "AJobStartsAGeneration(1, FALSE)",
       "YouPressStop(1)",
       "YouStartAutoplay(1)",
       "TheNarratorAnswers(1)",

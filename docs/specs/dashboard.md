@@ -72,13 +72,14 @@ Then the story log holds exactly the records of that row
 Examples:
 | Kind of Job | Model call | Status while held | Records in the story log after the stop |
 | Narration | the narrator call | Generating narration... | the Input of the Job, and no Narration |
-| Narration | the analysis call | quantifying | the Input of the Job and the Narration, with no room on the Narration and no event Narration |
-| Narration | the Options call | options | the Input of the Job, the Narration, and the room the Narration arrived in |
-| Impersonate | the narrator call | narrating | no Message of the Job |
-| Impersonate | the analysis call | quantifying | the Input of the Job and no Narration |
-| Retry of a typed Input | the narrator call | narrating | the Messages of the story before the Retry |
-| event Narration | the event narrator call | generating-event | the Narration that fired the Trigger, and no event Narration |
-| event Narration | the analysis call | quantifying | the Input of the Job, the Narration that fired the Trigger and the event Narration, with the one-shot Trigger fired in the state of the event Narration |
+| Narration | the analysis call | Quantifying... | the Input of the Job and the Narration, with no room on the Narration and no event Narration |
+| Narration | the Options call | Generating options... | the Input of the Job, the Narration, and the room the Narration arrived in |
+| Narration at a history cut | the story memory writer call | Writing the story memory... | the Input of the Job, and no Narration |
+| Impersonate | the narrator call | Generating narration... | no Message of the Job |
+| Impersonate | the analysis call | Quantifying... | the Input of the Job and no Narration |
+| Retry of a typed Input | the narrator call | Generating narration... | the Messages of the story before the Retry |
+| event Narration | the event narrator call | Generating event... | the Narration that fired the Trigger, and no event Narration |
+| event Narration | the analysis call | Quantifying... | the Input of the Job, the Narration that fired the Trigger and the event Narration, with the one-shot Trigger fired in the state of the event Narration |
 
 A stop inside a transaction is not observable: a transaction takes milliseconds, so a stop just before one leaves the records of the model call before it.
 ```

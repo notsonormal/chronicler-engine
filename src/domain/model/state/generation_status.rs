@@ -227,6 +227,10 @@ impl GenerationFailure {
 pub enum Step {
     /// Narrator LLM writing the Narration.
     Narrating,
+    /// The story memory writer summarizing the Messages that leave the history.
+    /// Clients of `/debug/state` read the serialized name.
+    #[serde(rename = "WritingMemory")]
+    WritingStoryMemory,
     /// Quantifier LLM evaluating which Characters are present, and movement.
     Quantifying,
     /// Event-generation LLM producing derived side effects.

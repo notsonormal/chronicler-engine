@@ -244,6 +244,16 @@ old = '''                              [] OTHER -> "stopped"]'''
 new = '''                              [] OTHER -> "jobFailed"]'''
 
 [[mutant]]
+name = "memory-writer-failure-fails-the-job"
+code = "Job::write_story_memory turns a failed writer call into a failure of the Job"
+config = "runs"
+breaks = ["RunEndReasons"]
+old = '''
+  /\ job' = [job EXCEPT ![j].pc = "memstep"]          \* the previous story memory stays'''
+new = '''
+  /\ job' = [job EXCEPT ![j].pc = "afterGens", ![j].fail = "line", ![j].lineBy = "memory"]'''
+
+[[mutant]]
 name = "not-accepted-without-failure-line"
 code = "GameWriter::accept_for_autoplay ends the run with no failure line"
 config = "runs"

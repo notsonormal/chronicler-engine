@@ -5,7 +5,7 @@ title: Agent System Design
 
 ## The agent abstraction
 
-The trait-plus-runner shape keeps the Job indifferent to which post-processing concerns exist. Adding an agent of a known type is a wiring change in bootstrap. A new agent type also needs an arm in `AgentRunner::from_configs`. Removing one is removing it from the runner. None of these changes require editing the Job itself.
+The trait-plus-runner shape keeps the Job indifferent to which optional Agents exist. Adding an agent of a known type is a wiring change in bootstrap. A new agent type also needs an arm in `AgentRunner::from_configs`. Removing one is removing it from the runner. None of these changes require editing the Job itself.
 
 Each Agent gives one kind of result, and each kind of result has one landing. The compiler rejects an Agent whose answer the hook cannot save.
 
@@ -15,9 +15,15 @@ The narration LLM call and the quantifier LLM call have different needs. Narrati
 
 Each Connection slot therefore has its own recorder, and each recorder resolves its own Connection.
 
-## Two hooks
+## The hooks
 
-The two hooks separate what a generation's own result lands in (the Quantifier result that the game rules apply) from what outlives the generation (the offered set that the Options dock shows). A before-narration hook gets code with its first Agent, because a hook with no Agent never runs.
+The after-narration and end-of-Job hooks separate what a generation's own result lands in (the Quantifier result that the game rules apply) from what outlives the generation (the offered set that the Options dock shows).
+
+The before-narration hook exists for the story memory. The story memory writer must answer before the narrator call, because that call shows its text. The Narrator holds no storage, so it can neither read the previous story memory nor save the new one. So the Job calls the writer and carries its result. The writer has its own Role, so the role health shows a failed writer call as a story memory failure.
+
+The story memory writer reads the previous story memory and only the Messages after the newest Message that the story memory covers. So its prompt does not grow with the story. A failed writer call keeps the previous story memory, so the next writer call gets the Messages that the failed call missed.
+
+The wiring builds the story memory writer outside `AppSettings` because the seed of the agent configuration adds no entry to an existing database. A writer configured in `AppSettings` would leave every older database with no story memory.
 
 ## The quantifier's role
 

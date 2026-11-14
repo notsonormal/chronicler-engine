@@ -21,3 +21,7 @@ Source: `/retro` 2026-11-08, the coordinator session of statechart-models ticket
 
 - **A.** The owner changes the reason to start with "Use `rg` for a recursive search (it skips target/)." The rule stays.
 - **B.** Nothing: one turn per denial is a small cost.
+
+## Recurrence (2026-11-13, document reviews `df29da40` and `c027c6d4`)
+
+- **known** Each lost one turn to the repo-root `grep` denial before it switched to `rg`.

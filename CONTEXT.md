@@ -52,6 +52,10 @@ _Avoid_: Free action, player text
 A Message that the narrator writes. An event Narration is a Narration that a fired Trigger causes, and the opening Narration is the first Message of a Game.
 _Avoid_: Narrative
 
+**Story memory**:
+A summary of the Messages that left the history space. A Swipe state holds it, and every call with a history space shows it before the history. The story that the player reads keeps every Message.
+_Avoid_: Recap, long-term memory
+
 **Swipe**:
 One of the texts of a Message, with its own Swipe state. Every Message has at least one Swipe, and exactly one of them is active.
 _Avoid_: Variant, version, alternate
@@ -107,7 +111,7 @@ The Agent that reads the new text of a generation and gives the Quantifier resul
 _Avoid_: Scorer, evaluator
 
 **Role**:
-A kind of model call that the engine makes, with its own health: Narrator, Quantifier, Options or Trigger. Each Agent has a Role, but not every Role belongs to an Agent.
+A kind of model call that the engine makes, with its own health: Narrator, Quantifier, Options, Trigger or Story memory. Each Agent has a Role, but not every Role belongs to an Agent.
 _Avoid_: Agent (for the Narrator)
 
 **Connection**:
@@ -133,7 +137,7 @@ The background work of one accepted request, such as an Action or a Retry. A pla
 _Avoid_: Turn
 
 **Step**:
-One named part of a Job that the player sees while the Job runs: narrating, quantifying, generating an event, or making Options.
+One named part of a Job that the player sees while the Job runs. The Steps are writing the story memory, narrating, quantifying, generating an event, and making Options.
 _Avoid_: Phase, stage, hook
 
 **Budget**:
@@ -143,12 +147,15 @@ _Avoid_: Limit, quota, count
 ### Agents and the Game rules
 
 **Agent**:
-An LLM helper that runs at a Hook and gives one kind of result. The Quantifier and the Options Agent are Agents.
+An LLM helper that runs at a Hook and gives one kind of result. The Quantifier, the Options Agent and the story memory writer are Agents.
 _Avoid_: Bot, assistant, operator
 
 **Hook**:
-A fixed point in a Job where the Agents registered for it run, named by its position: the after-narration hook or the end-of-Job hook.
+A fixed point in a Job where its Agents run, named by its position. The hooks are the before-narration hook, the after-narration hook and the end-of-Job hook.
 _Avoid_: Phase, stage, step, analysis hook, Options hook
+
+**State writer**:
+An Agent whose result decides one part of the Swipe state of the new Swipe. When it fails, the Job keeps that part of the previous Swipe state. The Quantifier and the story memory writer are state writers.
 
 **Game rules**:
 The code that applies the Quantifier result of a generation to its Swipe state: movement, the Characters present, encounters, and which Trigger fires. It makes no model call.
@@ -167,7 +174,7 @@ _Avoid_: History cap, history limit, history budget
 ### State
 
 **Swipe state**:
-The part of a Game's state that one Swipe holds. It has the Room, the added Rooms, the Characters present, the encounters with Characters, the fired Triggers and the event record, if any. Every Swipe has one.
+The part of a Game's state that one Swipe holds. It has the Room, the added Rooms, the Characters present, the encounters with Characters and the fired Triggers. It can also have an event record and a story memory. Every Swipe has one.
 _Avoid_: Snapshot, save, checkpoint
 
 **Current state**:

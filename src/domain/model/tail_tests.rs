@@ -18,6 +18,7 @@ fn state_in(room: &str, event_record: Option<EventRecord>) -> SwipeState {
         scene: SceneState::default(),
         encounters: Encounters::default(),
         event_record,
+        story_memory: None,
     }
 }
 

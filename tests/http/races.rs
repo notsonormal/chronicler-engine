@@ -16,7 +16,7 @@ use chronicler_engine::test_support::{
     TestDataBuilder,
 };
 
-use crate::support::app_wiring::{app_with_model, app_with_script};
+use crate::support::app_wiring::{app_with_model, app_with_script, padded_story_app};
 use crate::support::http_assertions::{assert_still_thinking, llm_call_count, STILL_THINKING};
 use crate::support::http_fixtures::{
     create_game_from, room_header_of, story_of, story_of_game, OFFERED_SET,
@@ -704,6 +704,9 @@ enum JobKind {
     /// A free-text Action: an Input save, then a Narration generation. A row
     /// whose analysis fires a Trigger runs an event Narration after it.
     Narration { fires_trigger: bool },
+    /// The same Narration over a story longer than the history space, so the Job
+    /// calls the story memory writer before the narrator.
+    NarrationAtCut,
     /// `/impersonate`: an Impersonate generation, whose Input comes at its text save.
     Impersonate,
     /// The Retry of a typed Input, which ends at its text save.
@@ -724,6 +727,7 @@ impl JobKind {
             Self::Narration {
                 fires_trigger: false,
             } => "Narration".to_string(),
+            Self::NarrationAtCut => "Narration at a history cut".to_string(),
             Self::Impersonate => "Impersonate".to_string(),
             Self::InputRetry => "Retry of a typed Input".to_string(),
             Self::EventNarration | Self::EventNarrationAnalysis => "event Narration".to_string(),
@@ -732,7 +736,7 @@ impl JobKind {
 
     fn action_input(self) -> Option<&'static str> {
         match self {
-            Self::Narration { .. } => Some(ACTION_INPUT),
+            Self::Narration { .. } | Self::NarrationAtCut => Some(ACTION_INPUT),
             Self::EventNarration | Self::EventNarrationAnalysis => Some(EVENT_ACTION_INPUT),
             Self::Impersonate | Self::InputRetry => None,
         }
@@ -758,6 +762,8 @@ enum StoryLogAfterStop {
     ImpersonateInput,
     /// No Message of the Job.
     NoMessage,
+    /// The Input of the Job joins the story, and no Narration of the Job.
+    InputOnly,
     /// The Narration that fired the Trigger stays, and the event Narration
     /// does not join it.
     MainNarrationOnly,
@@ -801,6 +807,12 @@ static STOP_ROWS: &[StopRow] = &[
         after_stop: StoryLogAfterStop::InRoom { room: MOVED_ROOM },
     },
     StopRow {
+        kind: JobKind::NarrationAtCut,
+        held: Role::StoryMemory,
+        status: Some("Writing the story memory..."),
+        after_stop: StoryLogAfterStop::InputOnly,
+    },
+    StopRow {
         kind: JobKind::Impersonate,
         held: Role::Narrator,
         status: Some("Generating narration..."),
@@ -836,6 +848,9 @@ const SCRIPTED_NARRATION: &str = "The Job's narration.";
 const WORLD_OPENING_TEXT: &str = "The World begins.";
 const MOVED_ROOM: &str = "room2";
 const STARTING_ROOM: &str = "room_1";
+/// A story this long passes the history space of this window.
+const CUTTING_WINDOW: u32 = 8192;
+const CUTTING_PADDING: usize = 300;
 
 struct StopJob {
     app: axum::Router,
@@ -864,6 +879,21 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             let (app, state, storage) = app_with_script(Arc::clone(&model));
             let game =
                 active_game_on_an_always_on_world(&app, &state, &storage, fires_trigger).await;
+            let story_before = story_of_game(&state, game);
+            assert!(post_action(&app, ACTION_INPUT).await.status().is_success());
+            StopJob {
+                app,
+                state,
+                game,
+                hold,
+                story_before,
+            }
+        }
+        JobKind::NarrationAtCut => {
+            let model = Arc::new(ScriptedModel::new().story_memory("The tale of the inn."));
+            let hold = model.hold(row.held);
+            let (app, state, _storage, game) =
+                padded_story_app(Arc::clone(&model), Some(CUTTING_WINDOW), CUTTING_PADDING);
             let story_before = story_of_game(&state, game);
             assert!(post_action(&app, ACTION_INPUT).await.status().is_success());
             StopJob {
@@ -1178,6 +1208,15 @@ async fn assert_story_log_after_stop(row: &StopRow, label: &str, start: &StopJob
             assert_eq!(
                 room, STARTING_ROOM,
                 "{label}: the refused state update leaves the player in the room the Job started in"
+            );
+        }
+        StoryLogAfterStop::InputOnly => {
+            let input = plan_input.expect("this row's Job saves a plan Input");
+            let mut expected = before_texts.clone();
+            expected.push(input.to_string());
+            assert_eq!(
+                after_texts, expected,
+                "{label}: the Input of the Job joins the story, and no Narration"
             );
         }
         StoryLogAfterStop::NoMessage => {

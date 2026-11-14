@@ -28,7 +28,7 @@ RunIds == 1..MaxRuns
 NoJob == 0
 
 \* The values of the fields below. `fail` is the failure that the Job carries to its end.
-JobPcs == {"idle", "start", "call", "save", "analyse", "quant", "update",
+JobPcs == {"idle", "start", "memory", "memstep", "call", "save", "analyse", "quant", "update",
            "afterGens", "optstart", "optcall", "optsave", "endfail", "drop", "done"}
 JobKinds == {"none", "action", "options", "impersonate", "continue"}
 RunPcs == {"idle", "accept", "job", "end", "over"}
@@ -325,20 +325,50 @@ YouChangeTheConfig(g) ==
 
 \* `run_step` and its `JobWriter::step` hold before the narrator call. For the first
 \* generation of an Action, this action also covers the room check (a read) and the
-\* hold of `JobWriter::save_input`.
-AJobStartsAGeneration(j) ==
+\* hold of `JobWriter::save_input`. `cuts` is the branch of `Job::narrate` where
+\* Messages that the story memory does not cover leave the history: the action then
+\* also covers the hold of `JobWriter::step(Step::WritingStoryMemory)` in
+\* `Job::write_story_memory`, because only reads sit between these holds. The model
+\* keeps no story content, so either branch can happen in each generation.
+AJobStartsAGeneration(j, cuts) ==
   /\ job[j].pc = "start"
+  /\ cuts \in BOOLEAN
   /\ IF Own(j)
        THEN /\ IF job[j].kind = "action" /\ job[j].gen = "first"
                  THEN /\ last' = [last EXCEPT ![job[j].g] = "input"]
                       /\ Wrote(j)
                  ELSE UNCHANGED <<last, late>>
-            /\ job' = [job EXCEPT ![j].pc = "call"]
+            /\ job' = [job EXCEPT ![j].pc = IF cuts THEN "memory" ELSE "call"]
        ELSE /\ Moved(j)
             /\ UNCHANGED <<last, late>>
   /\ UNCHANGED <<holder, failLine, optFail, nextJob>>
   /\ JobSide
   /\ UNCHANGED <<cut, cutRuns, storyBusy, cfgRun, badAccept, deletedActive>>
+
+\* `Job::write_story_memory`: the story memory writer call, outside every hold. It
+\* writes no record: its answer goes to the narrator call and to the text save.
+TheMemoryWriterAnswers(j) ==
+  /\ job[j].pc = "memory"
+  /\ job' = [job EXCEPT ![j].pc = "memstep"]
+  /\ UNCHANGED <<holder, failLine, optFail, last, nextJob>>
+  /\ JobSide /\ GhostsSame
+
+\* `Job::write_story_memory`, a failed writer call: the Job keeps the previous story
+\* memory and goes on to its narrator call. It saves no failure line.
+TheMemoryWriterFails(j) ==
+  /\ job[j].pc = "memory"
+  /\ job' = [job EXCEPT ![j].pc = "memstep"]          \* the previous story memory stays
+  /\ UNCHANGED <<holder, failLine, optFail, last, nextJob>>
+  /\ JobSide /\ GhostsSame
+
+\* `Job::write_story_memory`, its last line: the `JobWriter::step(kind.step())` hold
+\* sets the name of the narration step again. A stop, a reset or a delete during the
+\* writer call ends the Job here, before its narrator call.
+TheNarrationStepReturns(j) ==
+  /\ job[j].pc = "memstep"
+  /\ IF Own(j) THEN job' = [job EXCEPT ![j].pc = "call"] ELSE Moved(j)
+  /\ UNCHANGED <<holder, failLine, optFail, last, nextJob>>
+  /\ JobSide /\ GhostsSame
 
 \* `Job::narrate`: the model call, outside every hold.
 TheNarratorAnswers(j) ==
@@ -577,7 +607,10 @@ Next ==
   \/ \E g \in AllGames : YouSwitchOrDeleteASwipe(g)
   \/ \E g \in AllGames : YouChangeTheConfig(g)
   \/ \E j \in JobIds :
-       \/ AJobStartsAGeneration(j)
+       \/ \E cuts \in BOOLEAN : AJobStartsAGeneration(j, cuts)
+       \/ TheMemoryWriterAnswers(j)
+       \/ TheMemoryWriterFails(j)
+       \/ TheNarrationStepReturns(j)
        \/ TheNarratorAnswers(j)
        \/ TheNarratorFails(j)
        \/ TheTextIsSaved(j)
@@ -641,7 +674,9 @@ StoppedRunStartsNoJob == ~badAccept
 RunRefusesConfig == ~cfgRun
 
 \* autoplay.md intro: "A run ends for one of these reasons: ... A failed Options run
-\* and a fallback of the Quantifier do not stop it."
+\* and a fallback of the Quantifier do not stop it." story_memory.md 46.5: "And a model
+\* whose story memory writer call fails ... Then the Narration is saved": a failed writer
+\* call gives no failure line, so it does not end the run either.
 RunEndReasons ==
   \A r \in RunIds : run[r].pc = "over" =>
     /\ run[r].end = "stopped" => r \in cutRuns

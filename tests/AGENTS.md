@@ -115,6 +115,7 @@ Recurring HTTP/spec-test seams — the exemplar file is the documentation. Keep 
     - `settings.rs` — HTTP E2E tests for the settings endpoints: sub-tabs, role rows, and the text-check auto-save.
     - `settings_connection_form.rs` — HTTP E2E tests for the connection form: the context window, the reasoning effort and the provider order the Add, Edit and Test requests take.
     - `story_log.rs` — HTTP E2E tests for the story-log fragment: delete flows through POST /history/delete, the fragment's shape, and the controls each entry renders.
+    - `story_memory.rs` — HTTP tests of the story memory: the summary a history cut writes, and the block the narrator sees.
     - `swipe_new.rs` — HTTP E2E tests for the retry endpoint (POST /swipe/new).
     - `swipe_switch.rs` — HTTP E2E tests for switching swipes (POST /message/:id/swipe/:index).
     - `visual_sidebar.rs` — HTTP E2E tests for the visual sidebar part of the screen — the portrait labels.

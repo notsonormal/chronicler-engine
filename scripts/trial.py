@@ -90,6 +90,7 @@ CALL_KINDS = {
     "event-narration": CallKind("trigger", True),
     "quantifier": CallKind("quantifier", False),
     "options": CallKind("options", False),
+    "memory": CallKind("memory", False),
 }
 STORY_AGENTS = frozenset(kind.agent for kind in CALL_KINDS.values() if kind.story)
 STORY_KINDS = frozenset(name for name, kind in CALL_KINDS.items() if kind.story)
@@ -158,7 +159,6 @@ class RunInterrupted(TrialError):
 
 
 class TrialRequest(NamedTuple):
-    """One setup request: the method, the path and the form it sends."""
 
     method: str
     path: str
@@ -216,7 +216,6 @@ class ProbeClient:
         return body.strip() == "true"
 
     def start_autoplay(self, cycles):
-        """Start one Autoplay run on the trial's Game."""
         self.send(TrialRequest("POST", "/autoplay", {"cycles": str(cycles)}), quiet=True)
         print(f"Autoplay {cycles} cycles started on Game {self.game_id}")
 
@@ -528,7 +527,7 @@ def game_header(game_id):
 
 
 def apply_setup(client, setup, conn):
-    """Apply the setup through the routes. Answers the client bound to the new Game."""
+    """Answers the client bound to the new Game."""
     for request in connection_requests(setup):
         client.send(request)
     before = newest_game_id(conn)
@@ -662,8 +661,8 @@ def poll_run(client, conn, state, deadline, clock):
 
 def is_story_call(call):
     """A call whose answer becomes a story entry: the Narrator (Narration or Impersonate)
-    and the `trigger` agent (Event Narration) write one. The Quantifier and the Options
-    agent write none."""
+    and the `trigger` agent (Event Narration) write one. The Quantifier, the Options
+    agent and the story memory writer write none."""
     return call["agent_name"] not in NON_STORY_AGENTS
 
 
@@ -700,7 +699,6 @@ def last_cycle_entries(story):
 
 
 def play_trial(client, conn, setup, pack, timeout, clock):
-    """One trial: apply the setup, play its runs, and write its reading pack."""
     pack.mkdir(parents=True, exist_ok=True)
     client = apply_setup(client, setup, conn)
     game_id = client.game_id
@@ -816,7 +814,6 @@ def cmd_run(
 
 
 def words(text):
-    """The number of words of a text."""
     return len(text.split())
 
 
@@ -962,14 +959,34 @@ def history_cover(call, story_before):
     return {"held": held, "dropped": dropped, "chars": len(block)}
 
 
-def state_line(entry):
+def swipe_state(entry):
     try:
-        state = json.loads(entry["state"])
+        return json.loads(entry["state"])
     except (TypeError, json.JSONDecodeError):
+        return None
+
+
+def state_line(entry):
+    state = swipe_state(entry)
+    if state is None:
         return "?", []
     room = (state.get("movement") or {}).get("current_room_id", "?")
     present = [npc.get("id") for npc in (state.get("scene") or {}).get("npcs_in_area", [])]
     return room, present
+
+
+def story_memory_of(entry):
+    return (swipe_state(entry) or {}).get("story_memory")
+
+
+def memory_lines(memory, previous):
+    if memory is None:
+        return []
+    covers = f'covers up to #{memory["covers_up_to"]}'
+    if memory == previous:
+        return [f"> Story memory: unchanged ({covers})"]
+    quoted = [f"> {line}".rstrip() for line in memory["text"].strip().splitlines()]
+    return [f"> Story memory ({covers}):", ">", *quoted]
 
 
 def failed_call_line(call, summary=""):
@@ -983,12 +1000,11 @@ def failed_call_line(call, summary=""):
 
 
 def entry_label(entry):
-    """The heading word of a story entry."""
     return "Impersonate Input" if entry["impersonated"] else entry["message_type"]
 
 
 def median_of(values):
-    """The median of a list of numbers, or `-` for an empty list."""
+    """`-` for an empty list."""
     return sorted(values)[len(values) // 2] if values else "-"
 
 
@@ -1115,7 +1131,6 @@ def write_call_files(pack):
 
 
 def setup_lines(pack):
-    """The test setup table of the pack."""
     setup = pack.setup
     narration_connection = setup["narration_connection"] or {}
     quantifier_connection = setup["quantifier_connection"] or {}
@@ -1259,7 +1274,6 @@ def failure_and_cut_lines(pack):
 
 
 def call_line(call):
-    """The line of a call under its story entry."""
     usage = call["usage"]
     cover = ""
     if call["cover"]:
@@ -1285,11 +1299,13 @@ def story_lines(pack):
     lines = ["## Story\n"]
     lines.append(
         "Each entry shows the Room and the Characters present of its Swipe state "
-        "(Δ marks a change), then the call that wrote it and the Quantifier call that "
-        "judged it. A failed call with no entry is listed under the last entry before it.\n"
+        "(Δ marks a change), and its story memory once the story has one (in full where "
+        "it changes), then the call that wrote it and the Quantifier call that judged it. "
+        "A failed call with no entry is listed under the last entry before it.\n"
     )
     cut = set(pack.run.get("cut_entries", []))
     prev_room, prev_present = None, None
+    prev_memory = None
     for entry in pack.story:
         label = entry_label(entry)
         if entry["event_header"]:
@@ -1306,6 +1322,9 @@ def story_lines(pack):
         )
         lines.append(f'> State: room `{room}`, present {present or "nobody"}{mark}')
         prev_room, prev_present = room, present
+        memory = story_memory_of(entry)
+        lines.extend(memory_lines(memory, prev_memory))
+        prev_memory = memory
         lines.extend(call_line(call) for call in pack.by_entry.get(entry["id"], []))
         lines.append("")
     if pack.trailing:
@@ -1368,7 +1387,6 @@ def export_pack(folder):
 
 
 def cmd_export(args):
-    """Write the pack of one trial folder."""
     pack = export_pack(args.pack)
     print(f"Wrote {pack.folder / 'pack.md'}")
 
@@ -1421,7 +1439,6 @@ def compare_packs(packs, out):
 
 
 def cmd_compare(args):
-    """Write the summary of two or more packs side by side."""
     print(f"Wrote {compare_packs(args.packs, args.out)}")
 
 
