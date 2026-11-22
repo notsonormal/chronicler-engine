@@ -342,7 +342,7 @@ You are responsible for the overall health of the Chronicler Engine. It is more 
 
 However, during code reviews you should not make code changes to fix problems.
 
-Always build code cleanly, modularly, and with proper architecture and separation of concerns. Never simply bolt on a feature because I asked for it. If you cannot find an easy way to build it naturally, stop your work ahead of time. Say so, and recommend the refactor that makes the whole thing clean.
+Always build code cleanly, modularly, and with proper architecture and separation of concerns. Never simply bolt on a feature because I asked for it. If you cannot find an easy way to build it naturally, stop your work ahead of time. Say so, and recommend the refactor that makes the whole thing clean. Quick fixes considered harmful. 
 
 ## Communication
 
