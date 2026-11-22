@@ -80,6 +80,9 @@ rebuilt container drops it. Install it with::
 
     curl -sSL https://github.com/vale-cli/vale/releases/download/v3.25.1/vale_3.25.1_Linux_64-bit.tar.gz \
         | tar -xz -C ~/.local/bin vale
+
+The ``pi-tests`` step needs Node 22 or later, which strips the TypeScript types of the
+extension tests.
 """
 
 from __future__ import annotations
@@ -328,6 +331,15 @@ REGISTRY: dict[str, StepSpec] = {
             "Running Python tests...",
             "python -m unittest discover scripts/tests -v",
             help="Run the Python unit tests under scripts/tests.",
+        ),
+        StepSpec(
+            "pi-tests",
+            "Running pi extension tests...",
+            "node --test '.pi/extensions/**/*.test.ts'",
+            help=(
+                "Run every test file under .pi/extensions with Node's test runner. Needs Node 22"
+                " or later, for the TypeScript type stripping."
+            ),
         ),
         StepSpec(
             "duplicates",
@@ -1087,6 +1099,7 @@ _GATE_CHECKS = (
     "seam-cases",
     "docstrings",
     "py-tests",
+    "pi-tests",
     "validate-docs",
     "validate-work-records",
     "vale",
