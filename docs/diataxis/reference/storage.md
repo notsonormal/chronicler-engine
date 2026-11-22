@@ -34,6 +34,7 @@ The lock order is the `ActiveGame` mutex, then the guard of `GameWriter`, then t
 | Game | The World, the Persona, the prompt presets, the always-on toggle, the names, and the **failure line** | `games` |
 | Message | The place in the story, its kind (typed Input, Impersonate Input, Narration or event Narration) and the active Swipe. An event Narration also holds its event record. | `messages` |
 | Swipe | The text, the stored inputs of its generation, the maker and the **Swipe state** | `message_swipes` |
+| Memory entry | One scene of the Messages that left the history. It belongs to the Swipe whose Job wrote it. | `memory_entries` |
 | Dock record | The offered set and at most one Options failure. A Game has one. | `game_docks` |
 
 The holder of a busy Game lives in memory and holds the busy mark.
@@ -42,7 +43,7 @@ The holder of a busy Game lives in memory and holds the busy mark.
 
 `Storage::stories()` and `Storage::docks()` return read handles. Each read names its Game.
 
-- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, the entries before a Message, and the story window. The story window is the newest entries, each with its Swipe state, and the end-of-story facts, in one read. It reads no more of the story than its answer needs.
+- **`StoryReads`** (`stories.rs`) reads the end of the story as a `Tail`, one Swipe state, the entries before a Message, and the story window. It also reads the memory entries of the active Swipes before a Message. The story window is the newest entries, each with its Swipe state, and the end-of-story facts, in one read. It reads no more of the story than its answer needs.
 - **`DockReads`** (`docks.rs`) reads the dock record of a Game.
 
 ## Transactions
@@ -101,6 +102,7 @@ The tables form three logical clusters:
 - **`games`** — top-level Game record. It holds the failure line of the Game.
 - **`messages`** — the story of a Game in order. There is exactly one story per game.
 - **`message_swipes`** — the Swipes of a Message. A Retry of a Swipe re-applies the steering that the Swipe stores.
+- **`memory_entries`** — the memory entries of a Swipe: the story memory that the Job of that Swipe wrote. A delete of the Swipe removes them.
 - **`game_docks`** — the dock record of a Game.
 
 ### World catalogue cluster
@@ -124,14 +126,16 @@ flowchart TD
     games["games<br/>Game record"]
     messages["messages<br/>the story"]
     swipes["message_swipes<br/>texts and Swipe states"]
+    entries["memory_entries<br/>story memory of a cut"]
     docks["game_docks<br/>dock record"]
 
     games -->|"1 → ∞, cascades"| messages
     games -->|"1 → 1, cascades"| docks
     messages -->|"1 → ∞, cascades, UNIQUE(message_id, swipe_index)"| swipes
+    swipes -->|"1 → ∞, cascades"| entries
 ```
 
-A Swipe holds its own Swipe state, so a swipe switch needs no second record. The active Swipe of the last Message gives the current state.
+A Swipe holds its own Swipe state, so a swipe switch needs no second record. The active Swipe of the last Message gives the current state. The memory entries of a Swipe sit in their own table, and the text save writes them in the transaction of their Swipe.
 
 ### World catalogue cluster
 

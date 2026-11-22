@@ -16,7 +16,9 @@ use chronicler_engine::test_support::{
     TestDataBuilder,
 };
 
-use crate::support::app_wiring::{app_with_model, app_with_script, padded_story_app};
+use crate::support::app_wiring::{
+    app_with_model, app_with_script, padded_story_app, TALE_OF_THE_INN_ENTRIES,
+};
 use crate::support::http_assertions::{assert_still_thinking, llm_call_count, STILL_THINKING};
 use crate::support::http_fixtures::{
     create_game_from, room_header_of, story_of, story_of_game, OFFERED_SET,
@@ -890,7 +892,7 @@ async fn start_stop_job(row: &StopRow) -> StopJob {
             }
         }
         JobKind::NarrationAtCut => {
-            let model = Arc::new(ScriptedModel::new().story_memory("The tale of the inn."));
+            let model = Arc::new(ScriptedModel::new().story_memory(TALE_OF_THE_INN_ENTRIES));
             let hold = model.hold(row.held);
             let (app, state, _storage, game) =
                 padded_story_app(Arc::clone(&model), Some(CUTTING_WINDOW), CUTTING_PADDING);

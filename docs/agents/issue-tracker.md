@@ -47,6 +47,8 @@ A one-off issue has no `Status:` line. Its folder is its status. `triage-labels.
 
 ## One-off issues
 
+A follow-up that comes from the build of a map ticket is not a one-off issue. It goes on that map, and it blocks the next ticket that it touches (owner, 2026-11-22).
+
 The number of a one-off issue is unique across all of `work/issues/`. A new issue takes one more than the highest number in `work/issues/`. The number stays with the issue when it moves, so `work/issues/*/NN-*` finds it.
 
 A change of status is a move to another folder. Move the file with the script, which also rewrites the links to it:

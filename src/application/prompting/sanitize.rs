@@ -28,3 +28,10 @@ pub fn sanitize_llm_output(text: &str) -> String {
         .trim()
         .to_string()
 }
+
+/// Drops a code fence and any text around the one JSON object an answer holds.
+pub fn json_object_in(text: &str) -> Option<&str> {
+    let start = text.find('{')?;
+    let end = text.rfind('}')?;
+    text.get(start..=end)
+}

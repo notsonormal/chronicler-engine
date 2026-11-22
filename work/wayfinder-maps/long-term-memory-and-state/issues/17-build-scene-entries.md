@@ -1,7 +1,7 @@
 # Build the scene entries
 
 Type: task (AFK)
-Status: open
+Status: resolved
 Blocked by: 16
 
 ## Question
@@ -75,3 +75,34 @@ From the Answer of ticket 16, the Answer of [Decide how the story memory keeps i
 | An old saved Game | The first cut after the change | The writer gets the oldest uncovered history space of Messages: 4 calls at 16,000 tokens, up to 16 at the default size, before one Narration. Later cuts catch up the rest | Accepted; the report gives the time |
 | The reserve on a small window | The window leaves less room than history plus list | The history and the list split the room evenly (decision 1) | Yes |
 | The storage write | The transaction fails | The text and the entries are lost together, as any failed save | Yes |
+
+## Answer
+
+Built on `long-term-memory-2`, uncommitted on top of `4832b0fa` (2026-11-22). After two review rounds, a doc review and a comment pass, the full `python build.py` passed on the final tree (`logs/build_20261122_233539_1300277.log`: 1,751 integration, 309 guardrail and 44 browser tests, 0 failed). The check trial passed.
+
+**What the engine does now.**
+- **The writer.** At a history cut, the Job splits the uncovered Messages of one history space into writer calls of at most 4,000 tokens of Messages (`HistoryCut::writer_calls`). The calls run one after the other in the step `WritingStoryMemory`, before the narrator call. Each call gets its Messages numbered by id, the cast (a `Cast` value: the Persona, then the Characters of the World), and the last entry written before. Its prompt is the candidate's text, word for word (`src/application/agents/memory/prompt.rs`).
+- **The read.** `src/application/agents/memory/parser.rs` reads the one JSON object, even inside a fence or with text around it. A key written twice keeps its last value, as the memory test tool's reader did. The engine reads only `from`. The first `from` is not checked, and the first scene starts at the first Message of the call (coordinator, 2026-11-22, after both reviews found that the check tested a value the engine throws away). Later starts must be Messages of the call, after the first Message, and must go up. The engine sets every `to`.
+- **A failed call.** It is an empty answer, a cut-off answer, an answer that does not read, an answer with bad starts, or a provider error. The Agent tries it once more with the same prompt, and both tries are recorded. If both fail, the run of calls stops: the entries of the earlier calls stay, and the rest go to the next cut.
+- **Storage.** A new table `scene_entries` (migration 35) has one row for each entry. The row points at the `message_swipes` row of the new Swipe, with `ON DELETE CASCADE`. `JobWriter::save_text` writes the entries in the transaction of the text. The narrator reads the entries of the active Swipes before the Job's place, so Retry, swipe switch and delete need no code of their own.
+- **The block.** `<StoryMemory>` is the last part before the history. It holds `<Opening>` (the first Message, word for word) and `<SceneEntries>` under the candidate's head line. It shows only after the first cut. Its space is half the history space of the first cut pass, and it holds the whole block. One exception: an opening larger than the space is kept whole with no entries, so on a small window the block can pass its space and shorten the narrator's answer (plan, no case covers it). When the room is at least 1.5 times the history size, the history keeps its full size. When the room is at most the history size, the two split it evenly. Between those two, the list keeps its half of the history size and the history gets the rest (plan, accepted by the coordinator). The oldest entries leave the prompt first and stay stored. The block gets the room that the rest of the prompt leaves under the input limit, up to its space, so the history keeps its priority and a long Player Input can shrink the block down to 0. A case sweeps the input length from 0 to 600 repeats. `ReservedCut` and `CutPrompt` carry the shrunk room, so the planned cut and the narrator call agree (coordinator, after the review).
+- **The base is gone.** The rewritten summary, its `SwipeState` key, its prompt and `STORY_MEMORY_TOKENS` are removed. An old saved Swipe state with the key still loads (storage case `story-swipe-state-old-story-memory-key`).
+- **Spec and docs.** `docs/specs/story_memory.md` holds 46.1 to 46.16, all covered by `tests/http/story_memory.rs`. The docs under `docs/diataxis/` and `CONTEXT.md` ("Scene entry") are updated. `/verify-gate`: the model got one new action for the next writer call. All 7 configs hold, all 25 mutants are caught, and the hashes are recorded.
+
+**The check trial** ([report](../assets/scene-entries-build/trial-report.md), [compare](../assets/scene-entries-build/compare.md), [writer calls](../assets/scene-entries-build/writer-calls.jsonl)). One 100-Cycle trial of `redmist_julian` at 16,000 tokens. The pack is at `tmp/ltm17/redmist_julian/trial-1`.
+- **Writer calls.** 5 cuts gave 12 writer calls and 36 entries, with no gap or overlap.
+- **One failed call.** Both tries of the first call at the first cut failed, because the model wrote the key `others` twice in one entry. So the Impersonate call of that cut showed only `<Opening>`, and the next Job wrote the entries. The parser fix above accepts that answer now. A seam case covers it (`memory-repeated-key`), but no trial has run with the fix.
+- **Cost.** The writer used 45,981 tokens, which is 1.3 % of the trial. 10,288 of those tokens went on the two failed tries.
+- **The list after each cut.** 6, 13, 17, 27 and 36 entries, or about 1.4k, 2.9k, 4.0k, 6.1k and 8.0k tokens.
+- **The cache.** The Narrator-role calls were 86.0 % cached, against 85.5 % in the reference trial (`summary.json`; the ticket's 85.6 % was a misread).
+- **The removal (check 2).** Unlike the forecast, the list passed its space at the last cut: the prompt showed 34 of the 36 entries. So the trial also exercised the removal. A smaller-history trial is not needed for the removal. It would be useful only to see whether the story contradicts the facts of entries that left the prompt, and that belongs to the judged check trial of the map.
+- **The entry size.** The median entry has 129 words, and 13 of 36 entries are over the candidate's 150-word guide.
+
+**Left open.**
+- A failed read gives only "scene entries" or the starts text as its failure text. The serde error is not kept, so a reader of the call record cannot see the cause.
+- The writer's second try is the third copy of the two-try loop.
+- Both go to [Share the retry of the Agent calls and keep the cause of a refused answer](20-retry-frame-and-refusal-cause.md) (owner, 2026-11-22), which blocks the memory view.
+- After a delete or a wider window, the history can hold Message 1 again while entries exist. The block then still shows, so `<Opening>` repeats the first history entry. It is cosmetic and rare.
+- `trial.py compare` writes `compare.md` beside its first pack, so it overwrote `tmp/ltm09/redmist_julian/compare.md`.
+
+The term became Memory entry (owner, 2026-11-22); the table, the types and the `<MemoryEntries>` tag use it.

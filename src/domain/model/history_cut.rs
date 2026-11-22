@@ -73,11 +73,30 @@ impl HistoryCut {
     /// window. It holds at least one Message, so that the story memory always moves
     /// on, even past a Message larger than the space.
     pub fn dropped_within_one_space(&self, first: usize) -> Range<usize> {
+        self.dropped_within(first, self.kept_from, self.history_space)
+    }
+
+    /// `range` split into the writer calls of one cut, oldest first. Each call holds at
+    /// most `limit` tokens of Messages, and at least one Message, so that a Message
+    /// larger than `limit` is a call alone. The calls cover `range` with no gap. `range`
+    /// must lie inside the Messages of the cut.
+    pub fn writer_calls(&self, range: Range<usize>, limit: usize) -> Vec<Range<usize>> {
+        let mut calls = Vec::new();
+        let mut first = range.start;
+        while first < range.end {
+            let call = self.dropped_within(first, range.end, limit);
+            first = call.end;
+            calls.push(call);
+        }
+        calls
+    }
+
+    fn dropped_within(&self, first: usize, end_bound: usize, limit: usize) -> Range<usize> {
         let mut end = first;
         let mut tokens = 0;
-        while end < self.kept_from {
+        while end < end_bound {
             tokens += self.entry_tokens[end];
-            if tokens > self.history_space && end > first {
+            if tokens > limit && end > first {
                 break;
             }
             end += 1;

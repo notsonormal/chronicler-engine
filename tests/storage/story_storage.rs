@@ -5,6 +5,7 @@ use chronicler_engine::adapters::driven::storage::{Storage, TestOverride, TxWrit
 use chronicler_engine::domain::model::dock::{DockRecord, OptionsFailure};
 use chronicler_engine::domain::model::game::{GameId, NewGame};
 use chronicler_engine::domain::model::message::{Maker, Message, Swipe, SwipeAt};
+use chronicler_engine::domain::model::memory_entry::MemoryEntry;
 use chronicler_engine::domain::model::state::generation_status::{
     GenerationFailure, GenerationFailureKind,
 };
@@ -38,7 +39,6 @@ fn state_in(room: &str) -> SwipeState {
         scene: SceneState::default(),
         encounters: Encounters::default(),
         event_record: None,
-        story_memory: None,
     }
 }
 
@@ -1017,6 +1017,40 @@ fn a_swipe_state_stored_with_the_old_keys_still_loads() {
     assert_eq!(record.header_name, "The gate opens");
 }
 
+// CASE story-swipe-state-old-story-memory-key: a Swipe state stored with the removed `story_memory` key still loads, and the key is ignored
+#[test]
+fn a_swipe_state_stored_with_the_removed_story_memory_key_still_loads() {
+    let pool = DbPool::new(":memory:").expect("in-memory db should open");
+    let storage = Storage::new_sqlite(pool.clone());
+    let (game_id, message_id) = game_with_message(&storage, "Story", "text", "room1");
+    let with_the_key = SWIPE_STATE_WITH_THE_OLD_KEYS.replacen(
+        '{',
+        r#"{"story_memory": {"text": "Mara waits at the gate.", "covers_up_to": 40},"#,
+        1,
+    );
+    pool.conn()
+        .execute(
+            "UPDATE message_swipes SET state = ?1 WHERE message_id = ?2 AND swipe_index = 0",
+            rusqlite::params![with_the_key, message_id as i64],
+        )
+        .expect("the state column should update");
+
+    let state = storage
+        .stories()
+        .swipe_state(
+            game_id,
+            SwipeAt {
+                message: message_id,
+                swipe: 0,
+            },
+        )
+        .expect("the state read should succeed")
+        .expect("the Swipe holds a state");
+
+    assert_eq!(state.movement.current_room_id, "room1");
+    assert_eq!(state.scene.characters_present.len(), 1);
+}
+
 // CASE story-swipe-state-old-keys-written: a Swipe state is written with the old keys
 #[test]
 fn a_swipe_state_is_written_with_the_old_keys() {
@@ -1078,5 +1112,269 @@ fn a_dock_stored_in_the_notice_column_still_loads() {
             reason: "the model wrote no option".to_string(),
             raw: "a raw text".to_string(),
         })
+    );
+}
+
+fn memory_entry(from: u64, to: u64, place: &str) -> MemoryEntry {
+    MemoryEntry {
+        from,
+        to,
+        time: "Late evening".to_string(),
+        place: place.to_string(),
+        took_part: vec!["Mara".to_string(), "Julian".to_string()],
+        others: vec!["The porter".to_string()],
+        what_happened: format!("What happened at {place}."),
+    }
+}
+
+fn write_memory_entries(storage: &Storage, game: GameId, at: SwipeAt, entries: &[MemoryEntry]) {
+    storage
+        .transaction(game, tx_token(), |tx| tx.insert_memory_entries(at, entries))
+        .expect("the memory entry unit should succeed");
+}
+
+fn read_memory_entries(storage: &Storage, game: GameId, before: Option<u64>) -> Vec<MemoryEntry> {
+    storage
+        .stories()
+        .memory_entries(game, before)
+        .expect("the memory entry read should succeed")
+        .entries()
+        .to_vec()
+}
+
+// CASE story-memory-entries-with-swipe: the entries written in the unit of a Swipe read back in order with every field
+#[test]
+fn the_memory_entries_written_with_a_swipe_read_back_in_order_with_every_field() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, first) = game_with_message(&storage, "Story", "first", "room1");
+    let second = add_message(&storage, game_id, "second", "room1");
+    let entries = [
+        memory_entry(1, 3, "The gate"),
+        memory_entry(4, 6, "The hall"),
+    ];
+    write_memory_entries(
+        &storage,
+        game_id,
+        SwipeAt {
+            message: first,
+            swipe: 0,
+        },
+        &entries[..1],
+    );
+    write_memory_entries(
+        &storage,
+        game_id,
+        SwipeAt {
+            message: second,
+            swipe: 0,
+        },
+        &entries[1..],
+    );
+
+    assert_eq!(
+        read_memory_entries(&storage, game_id, None),
+        entries,
+        "the entries come back whole, oldest Message first"
+    );
+}
+
+// CASE story-memory-entries-same-swipe-order: the entries of one Swipe keep the order they were written in
+#[test]
+fn the_memory_entries_of_one_swipe_keep_their_written_order() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, message) = game_with_message(&storage, "Story", "text", "room1");
+    let entries = [
+        memory_entry(1, 2, "The gate"),
+        memory_entry(3, 4, "The hall"),
+        memory_entry(5, 9, "The cellar"),
+    ];
+    write_memory_entries(&storage, game_id, SwipeAt { message, swipe: 0 }, &entries);
+
+    assert_eq!(read_memory_entries(&storage, game_id, None), entries);
+}
+
+// CASE story-memory-entries-active-swipes: the read leaves out the entries of an inactive Swipe and of a Message at or after `before`
+#[test]
+fn the_memory_entries_read_takes_only_active_swipes_before_the_place() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, first) = game_with_message(&storage, "Story", "first", "room1");
+    let second = add_message(&storage, game_id, "second", "room1");
+    write_memory_entries(
+        &storage,
+        game_id,
+        SwipeAt {
+            message: first,
+            swipe: 0,
+        },
+        &[memory_entry(1, 2, "The gate")],
+    );
+    write_memory_entries(
+        &storage,
+        game_id,
+        SwipeAt {
+            message: second,
+            swipe: 0,
+        },
+        &[memory_entry(3, 4, "The hall")],
+    );
+
+    assert_eq!(
+        read_memory_entries(&storage, game_id, Some(second)),
+        [memory_entry(1, 2, "The gate")],
+        "a Message at `before` is left out"
+    );
+
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.insert_swipe(
+                SwipeAt {
+                    message: second,
+                    swipe: 1,
+                },
+                &swipe("a retry"),
+            )?;
+            tx.set_active_swipe(SwipeAt {
+                message: second,
+                swipe: 1,
+            })
+        })
+        .expect("the retry unit should succeed");
+    assert_eq!(
+        read_memory_entries(&storage, game_id, None),
+        [memory_entry(1, 2, "The gate")],
+        "the entries of the Swipe that is no longer active are left out"
+    );
+
+    storage
+        .transaction(game_id, tx_token(), |tx| {
+            tx.set_active_swipe(SwipeAt {
+                message: second,
+                swipe: 0,
+            })
+        })
+        .expect("the switch unit should succeed");
+    assert_eq!(
+        read_memory_entries(&storage, game_id, None).len(),
+        2,
+        "a switch back shows its entries again"
+    );
+}
+
+// CASE story-memory-entries-other-games: the read holds only the entries of the Game it names
+#[test]
+fn the_memory_entries_read_holds_only_the_entries_of_its_game() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, message) = game_with_message(&storage, "Story", "text", "room1");
+    let (other_game, other_message) = game_with_message(&storage, "Other", "text", "room1");
+    write_memory_entries(
+        &storage,
+        game_id,
+        SwipeAt { message, swipe: 0 },
+        &[memory_entry(1, 2, "The gate")],
+    );
+    write_memory_entries(
+        &storage,
+        other_game,
+        SwipeAt {
+            message: other_message,
+            swipe: 0,
+        },
+        &[memory_entry(7, 8, "Elsewhere")],
+    );
+
+    assert_eq!(
+        read_memory_entries(&storage, game_id, None),
+        [memory_entry(1, 2, "The gate")]
+    );
+}
+
+// CASE story-memory-entries-delete: a delete of the Message removes the entries of its Swipes
+#[test]
+fn a_delete_of_the_message_removes_its_memory_entries() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, first) = game_with_message(&storage, "Story", "first", "room1");
+    let second = add_message(&storage, game_id, "second", "room1");
+    write_memory_entries(
+        &storage,
+        game_id,
+        SwipeAt {
+            message: first,
+            swipe: 0,
+        },
+        &[memory_entry(1, 2, "The gate")],
+    );
+    write_memory_entries(
+        &storage,
+        game_id,
+        SwipeAt {
+            message: second,
+            swipe: 0,
+        },
+        &[memory_entry(3, 4, "The hall")],
+    );
+
+    storage
+        .transaction(game_id, tx_token(), |tx| tx.delete_message(second))
+        .expect("the delete unit should succeed");
+
+    assert_eq!(
+        read_memory_entries(&storage, game_id, None),
+        [memory_entry(1, 2, "The gate")],
+        "the entries of the deleted Message are gone"
+    );
+}
+
+// CASE story-memory-entries-other-game-message [failure]: a write of entries to another Game's Message is refused
+#[test]
+fn a_memory_entry_write_to_another_game_message_is_refused() {
+    let storage = chronicler_engine::test_support::empty_sqlite_storage();
+    let (game_id, message) = game_with_message(&storage, "Story", "text", "room1");
+    let other_game = game_without_messages(&storage, "Other");
+
+    let result = storage.transaction(other_game, tx_token(), |tx| {
+        tx.insert_memory_entries(SwipeAt { message, swipe: 0 }, &[memory_entry(1, 2, "Gate")])
+    });
+
+    assert!(
+        matches!(result, Err(EngineError::MessageNotFound(_))),
+        "a write names its Game, so another Game's Message is refused"
+    );
+    assert!(read_memory_entries(&storage, game_id, None).is_empty());
+}
+
+// CASE story-memory-entries-injection [failure]: a unit whose entry write fails leaves no Swipe and no entry
+#[test]
+fn the_failed_memory_entry_write_rolls_the_whole_unit_back() {
+    let (storage, handle) =
+        chronicler_engine::test_support::empty_sqlite_storage().with_test_failures();
+    let (game_id, _first) = game_with_message(&storage, "Story", "text", "room1");
+    handle.set_write(
+        TxWrite::InsertMemoryEntries,
+        TestOverride::internal("the entry write fails"),
+    );
+
+    let result = storage.transaction(game_id, tx_token(), |tx| {
+        let id = tx.insert_message(&narration_message("rolled back"))?;
+        let at = SwipeAt {
+            message: id,
+            swipe: 0,
+        };
+        tx.insert_swipe(at, &swipe("rolled back"))?;
+        tx.insert_memory_entries(at, &[memory_entry(1, 2, "The gate")])
+    });
+
+    assert!(
+        matches!(result, Err(EngineError::Internal(_))),
+        "the injected failure fails the unit"
+    );
+    let tail = storage
+        .stories()
+        .tail(game_id)
+        .expect("the story read should succeed")
+        .expect("the first Message stays");
+    assert_eq!(tail.count, 1, "the Message and its Swipe rolled back");
+    assert!(
+        read_memory_entries(&storage, game_id, None).is_empty(),
+        "no entry stays"
     );
 }

@@ -249,7 +249,7 @@ code = "Job::write_story_memory turns a failed writer call into a failure of the
 config = "runs"
 breaks = ["RunEndReasons"]
 old = '''
-  /\ job' = [job EXCEPT ![j].pc = "memstep"]          \* the previous story memory stays'''
+  /\ job' = [job EXCEPT ![j].pc = "memstep"]          \* the earlier memory entries stay'''
 new = '''
   /\ job' = [job EXCEPT ![j].pc = "afterGens", ![j].fail = "line", ![j].lineBy = "memory"]'''
 

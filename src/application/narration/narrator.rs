@@ -12,6 +12,7 @@ use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::history_cut::HistoryCut;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::memory_entry::MemoryEntries;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::generation_status::{GenerationFailure, GenerationFailureKind};
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
@@ -39,7 +40,8 @@ pub struct NarrationValues<'a> {
     pub history: &'a [StoryRow],
     pub input: Option<&'a str>,
     pub tail: &'a Tail,
-    pub story_memory: Option<&'a str>,
+    /// The memory entries of the active Swipes before the Job's place.
+    pub memory_entries: &'a MemoryEntries,
 }
 
 pub struct Narrator {
@@ -177,7 +179,7 @@ impl Narrator {
             user_message,
             values.history,
         )
-        .with_story_memory(values.story_memory);
+        .with_memory_entries(values.memory_entries);
         match generation {
             Generation::Impersonate { .. } => context.with_impersonate(true),
             Generation::Narration { guide } => context.with_guide(guide.clone()),

@@ -184,6 +184,10 @@ async fn impersonated_app_with_a_failed_event(
     (app, state)
 }
 
+/// One memory entry from the first Message of the story, the oldest Message of the
+/// first cut.
+pub const TALE_OF_THE_INN_ENTRIES: &str = r#"{"entries": [{"from": 1, "to": 1, "time": "Day 1, evening", "place": "The inn", "took_part": [], "others": [], "what_happened": "The tale of the inn was told at length."}]}"#;
+
 pub fn long_story_app(window: Option<u32>) -> (axum::Router, AppState, Arc<Storage>, GameId) {
     // A narrow window cuts the history at one of the two Actions, and the cut
     // calls the story memory writer.
@@ -191,7 +195,7 @@ pub fn long_story_app(window: Option<u32>) -> (axum::Router, AppState, Arc<Stora
         ScriptedModel::new()
             .turn("First narration.")
             .turn("Second narration.")
-            .story_memory("The tale of the inn was told at length.")
+            .story_memory(TALE_OF_THE_INN_ENTRIES)
             .optional(),
     );
     padded_story_app(model, window, 150)

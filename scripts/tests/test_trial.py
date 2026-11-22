@@ -33,6 +33,7 @@ READ_TABLES = (
     "prompt_presets",
     "messages",
     "message_swipes",
+    "memory_entries",
     "llm_messages",
 )
 
@@ -581,13 +582,24 @@ class PackTests(unittest.TestCase):
         )
 
 
-def entry_with_memory(entry_id, memory):
+def memory_entry(first, last, place="The gate", what_happened="Mara waited."):
+    return {
+        "from": first,
+        "to": last,
+        "time": "Evening",
+        "place": place,
+        "took_part": ["Mara"],
+        "others": [],
+        "what_happened": what_happened,
+    }
+
+
+def entry_with_memory_entries(entry_id, memory_entries):
     entry = story_entry(entry_id, f"Entry {entry_id}.", "Narration")
     entry["event_header"] = None
-    state = {"movement": {"current_room_id": "hall"}}
-    if memory is not None:
-        state["story_memory"] = memory
-    entry["state"] = json.dumps(state)
+    entry["state"] = json.dumps({"movement": {"current_room_id": "hall"}})
+    if memory_entries is not None:
+        entry["memory_entries"] = memory_entries
     return entry
 
 
@@ -596,27 +608,98 @@ class StoryMemoryLineTests(unittest.TestCase):
         pack = types.SimpleNamespace(run={}, story=story, by_entry={}, trailing=[])
         return "\n".join(trial.story_lines(pack))
 
-    def test_an_entry_shows_its_memory_in_full_where_it_changes_and_short_where_it_stays(self):
-        first = {"text": "Mara waits at the gate.\nThe porter knows.", "covers_up_to": 4}
-        second = {"text": "The caravan left at noon.", "covers_up_to": 9}
+    def test_an_entry_with_no_memory_entries_has_no_memory(self):
+        self.assertEqual(trial.story_memory_of(entry_with_memory_entries(1, None)), [])
+        self.assertEqual(trial.story_memory_of(entry_with_memory_entries(1, [])), [])
+
+    def test_an_entry_shows_the_memory_entries_written_with_it_and_the_size_of_the_list(self):
+        first = [memory_entry(1, 4, what_happened="Mara waits at the gate.")]
+        second = [
+            memory_entry(5, 6, "The hall", "The caravan left at noon."),
+            memory_entry(7, 9, "The cellar", "The porter lied."),
+        ]
 
         text = self.story_text(
             [
-                entry_with_memory(1, None),
-                entry_with_memory(5, first),
-                entry_with_memory(6, first),
-                entry_with_memory(10, second),
+                entry_with_memory_entries(1, None),
+                entry_with_memory_entries(5, first),
+                entry_with_memory_entries(6, None),
+                entry_with_memory_entries(10, second),
             ]
         )
 
         self.assertIn(
-            "> Story memory (covers up to #4):\n>\n> Mara waits at the gate.\n> The porter knows.",
+            "> Memory entries written here: 1 (list after this cut: 1 entry, ~",
             text,
         )
-        self.assertIn("> Story memory: unchanged (covers up to #4)", text)
-        self.assertIn("> Story memory (covers up to #9):\n>\n> The caravan left at noon.", text)
-        before_memory = text.split("### #5")[0]
-        self.assertNotIn("Story memory", before_memory.split("### #1")[1])
+        self.assertIn(
+            "> [#1-#4] Evening. The gate. Took part: Mara.\n> Mara waits at the gate.",
+            text,
+        )
+        self.assertIn("> Memory entries written here: 2 (list after this cut: 3 entries, ~", text)
+        self.assertIn("> [#7-#9] Evening. The cellar. Took part: Mara.\n> The porter lied.", text)
+        self.assertEqual(
+            text.count("Memory entries written here"), 2, "an entry with none shows nothing"
+        )
+        self.assertNotIn("Memory entries", text.split("### #1")[1].split("### #5")[0])
+
+    def test_the_size_of_the_list_counts_four_characters_to_a_token(self):
+        entries = [memory_entry(1, 2, what_happened="x" * 400)]
+
+        lines = trial.memory_lines(entries, entries)
+
+        size = trial.estimate_tokens(trial.render_memory_entry(entries[0]))
+        self.assertGreaterEqual(size, 100)
+        self.assertIn(f"~{size} tokens", lines[0])
+
+
+class MemoryEntryReadTests(unittest.TestCase):
+    def insert_swipe_with_entries(self, conn, message, swipe_index, entries):
+        cursor = conn.execute(
+            """insert into message_swipes (message_id, swipe_index, text, state, maker)
+               values (?, ?, 'text', '{}', '{}')""",
+            (message, swipe_index),
+        )
+        for position, entry in enumerate(entries):
+            conn.execute(
+                """insert into memory_entries
+                   (swipe_id, position, from_message, to_message, story_time, place,
+                    took_part, others, what_happened)
+                   values (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    cursor.lastrowid,
+                    position,
+                    entry["from"],
+                    entry["to"],
+                    entry["time"],
+                    entry["place"],
+                    json.dumps(entry["took_part"]),
+                    json.dumps(entry["others"]),
+                    entry["what_happened"],
+                ),
+            )
+
+    def test_only_the_memory_entries_of_the_active_swipes_reach_the_story(self):
+        conn = make_db()
+        insert_entry(conn, 1, "Narration")
+        insert_entry(conn, 1, "Input")
+        self.insert_swipe_with_entries(conn, 1, 1, [memory_entry(1, 2, "Retried")])
+        self.insert_swipe_with_entries(
+            conn, 2, 1, [memory_entry(3, 4, "The hall"), memory_entry(5, 6, "The cellar")]
+        )
+        conn.execute("update messages set active_swipe_index = 1 where id = 2")
+
+        story = trial.with_memory_entries(conn, 1, trial.story_rows(conn, 1))
+
+        self.assertEqual([entry["id"] for entry in story], [1, 2])
+        self.assertEqual(story[0]["memory_entries"], [], "its Swipe 0 is the active one")
+        self.assertEqual(
+            [found["place"] for found in story[1]["memory_entries"]],
+            ["The hall", "The cellar"],
+            "the entries come back in the order they were written, as read lists",
+        )
+        self.assertEqual(story[1]["memory_entries"][0]["took_part"], ["Mara"])
+        self.assertEqual(story[1]["memory_entries"][0]["from"], 3)
 
 
 CONTENT_FILTER_TEXT = "LLM returned an empty response (finish_reason: content_filter)"

@@ -3,6 +3,7 @@
 
 use crate::domain::model::character::{CharacterCard, Relationship};
 use crate::domain::model::prompt_preset::{PresetField, PromptPreset};
+use crate::domain::model::memory_entry::MemoryEntry;
 use crate::domain::model::template::TemplateVars;
 
 pub(crate) fn sanitize_for_prompt(input: &str) -> String {
@@ -66,6 +67,30 @@ pub(crate) fn build_post_history_prompt(preset: &PromptPreset, vars: &TemplateVa
         .map(|(_, rendered)| rendered)
         .collect::<Vec<_>>()
         .join("\n\n")
+}
+
+/// The text of one memory entry in the prompt: its Message range, its place in the story
+/// and who took part, then what happened. The memory entries block and the writer prompt
+/// share it.
+pub(crate) fn render_memory_entry(entry: &MemoryEntry) -> String {
+    let took_part = if entry.took_part.is_empty() {
+        "nobody of the cast".to_string()
+    } else {
+        entry.took_part.join(", ")
+    };
+    let others = if entry.others.is_empty() {
+        String::new()
+    } else {
+        format!(" Others: {}.", entry.others.join(", "))
+    };
+    format!(
+        "[#{}-#{}] {}. {}. Took part: {took_part}.{others}\n{}",
+        entry.from,
+        entry.to,
+        entry.time,
+        entry.place,
+        entry.what_happened.trim()
+    )
 }
 
 pub(crate) fn render_known_character_entry(

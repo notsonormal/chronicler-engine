@@ -1,8 +1,8 @@
 //! Unit tests for the Role agent names and the Agent configuration
 
-use crate::domain::model::agent::{AgentConfig, StoryMemoryHookInput, Role};
+use crate::domain::model::agent::{AgentConfig, Cast, Role, StoryMemoryHookInput};
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
-use crate::test_support::fixtures::default_story_row;
+use crate::test_support::fixtures::{default_story_row, TestCharacter};
 
 #[test]
 fn test_role_agent_names_are_the_recorded_names() {
@@ -39,7 +39,7 @@ fn test_agent_config_stored_with_a_backend_key_still_loads() {
 
 #[test]
 fn test_memory_hook_input_needs_a_leaving_message() {
-    assert!(StoryMemoryHookInput::new(None, &[], "Julian").is_none());
+    assert!(StoryMemoryHookInput::new(None, &Cast::new("Julian", &[]), &[]).is_none());
 }
 
 #[test]
@@ -49,8 +49,22 @@ fn test_memory_hook_input_names_its_oldest_and_newest_message() {
         ..default_story_row(MessageType::Narration)
     });
 
-    let input = StoryMemoryHookInput::new(None, &leaving, "Julian").expect("Messages leave");
+    let cast = Cast::new("Julian", &[]);
+    let input = StoryMemoryHookInput::new(None, &cast, &leaving).expect("Messages leave");
 
     assert_eq!((input.oldest(), input.newest()), (12, 15));
     assert_eq!(input.leaving().len(), 3);
+}
+
+#[test]
+fn test_the_cast_names_the_persona_first_then_the_characters_in_id_order() {
+    let characters = [
+        TestCharacter::named("mara", "Mara"),
+        TestCharacter::named("anna", "Anna"),
+    ];
+
+    let cast = Cast::new("Julian", &characters);
+
+    assert_eq!(cast.persona_name(), "Julian");
+    assert_eq!(cast.names(), ["Julian", "Anna", "Mara"]);
 }

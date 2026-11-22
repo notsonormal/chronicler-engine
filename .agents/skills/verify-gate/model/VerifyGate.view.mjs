@@ -50,6 +50,7 @@ const labels = {
   AJobStartsAGeneration: "the Job starts its narrator call or its story memory writer call",
   TheMemoryWriterAnswers: "the story memory writer answers",
   TheMemoryWriterFails: "the story memory writer call fails",
+  TheNextMemoryCallStarts: "the Job starts its next story memory writer call",
   TheNarrationStepReturns: "the Job starts its narrator call",
   TheNarratorAnswers: "the narrator answers",
   TheNarratorFails: "the narrator call fails",

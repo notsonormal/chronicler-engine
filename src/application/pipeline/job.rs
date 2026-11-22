@@ -17,10 +17,12 @@ use crate::application::generation::gate::{
 use crate::application::autoplay::pause::AutoplayPause;
 use crate::application::generation::job_tasks::JobTasks;
 use crate::application::narration::narrator::{NarrationValues, Narrator};
-use crate::application::prompting::token_budget::{TokenBudget, STORY_MEMORY_TOKENS};
+use crate::application::prompting::token_budget::{
+    TokenBudget, MEMORY_WRITER_ANSWER_TOKENS, MEMORY_WRITER_CALL_TOKENS,
+};
 use crate::application::prompting::CharacterContext;
 use crate::domain::model::agent::{
-    AgentSettings, HookInput, Kind, StoryMemoryHookInput, AGENT_HISTORY_WINDOW,
+    AgentSettings, Cast, HookInput, Kind, StoryMemoryHookInput, AGENT_HISTORY_WINDOW,
 };
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::game::{Game, GameId};
@@ -33,7 +35,7 @@ use crate::domain::model::settings::AppSettings;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
-use crate::domain::model::story_memory::StoryMemory;
+use crate::domain::model::memory_entry::{MemoryEntries, MemoryEntry};
 use crate::domain::model::tail::Tail;
 use crate::domain::model::utils::game_rules;
 use crate::error::EngineError;
@@ -132,7 +134,6 @@ impl Job {
         }
     }
 
-    /// Fills the fields of the current span that only the accepted Job knows.
     fn record_on_span(writer: &JobWriter, plan: &JobPlan) {
         let span = tracing::Span::current();
         span.record("job", writer.job_id());
@@ -178,8 +179,7 @@ impl Job {
 
     /// The request's Input save runs after the room check, so an invalid room saves
     /// no Input. Each step loads by id what it uses and returns its result; only
-    /// ids, texts and step results move between steps. A fired Trigger gives the
-    /// event order that follows.
+    /// ids, texts and step results move between steps.
     fn generate(
         &self,
         order: &GenerationOrder,
@@ -195,11 +195,11 @@ impl Job {
             self.run_step(step.clone(), Some(kind), || self.save_input(order, text))?;
         }
 
-        let (text, memory) =
+        let (text, memory_entries) =
             self.run_step(step.clone(), Some(kind), || self.narrate(order, input))?;
 
         let saved = self.run_step(step, Some(kind), || {
-            self.save_text(order, text.clone(), memory)
+            self.save_text(order, text.clone(), &memory_entries)
         })?;
         let at = saved.at();
         *narration_saved |= kind.saves_a_narration();
@@ -254,7 +254,7 @@ impl Job {
         &self,
         order: &GenerationOrder,
         input: Option<&str>,
-    ) -> Result<(String, Option<StoryMemory>), JobFailure> {
+    ) -> Result<(String, Vec<MemoryEntry>), JobFailure> {
         let game = self.game_row()?;
         let settings = Self::read(Record::Settings, self.storage.get_settings())?;
         let preset = Self::read(
@@ -276,9 +276,12 @@ impl Job {
             STORY_LIMIT,
         )?;
         let call = self.call_plan(&settings, order.generation.preset_type(), &preset)?;
+        let memory_entries = self.memory_entries_before(match order.place {
+            Place::NewMessage => None,
+            Place::NewSwipeOnLast => Some(tail.last.id),
+        })?;
 
         let all_characters: Vec<CharacterCard> = bundle.characters.values().cloned().collect();
-        let previous = start.story_memory.as_ref();
         let planned = NarrationValues {
             world: &bundle.world,
             narrative_perspective: game.narrative_perspective,
@@ -292,59 +295,80 @@ impl Job {
             history: &history,
             input,
             tail: &tail,
-            story_memory: previous.map(|memory| memory.text.as_str()),
+            memory_entries: &memory_entries,
         };
 
         let cut = self
             .narrator
             .plan_cut(&order.generation, &planned, &preset, call.budget);
         let dropped = history.get(..cut.kept_from()).unwrap_or_default();
-        let first_uncovered = dropped.len() - StoryMemory::uncovered(previous, dropped).len();
-        let leaving = history
-            .get(cut.dropped_within_one_space(first_uncovered))
-            .unwrap_or_default();
-        let memory = match StoryMemoryHookInput::new(previous, leaving, &bundle.persona.sheet.name)
-        {
-            Some(hook_input) => self.write_story_memory(order.kind(), &settings, &hook_input)?,
-            None => previous.cloned(),
-        };
+        let first_uncovered = dropped.len() - memory_entries.uncovered(dropped).len();
+        let leaving_calls: Vec<&[StoryRow]> = cut
+            .writer_calls(
+                cut.dropped_within_one_space(first_uncovered),
+                MEMORY_WRITER_CALL_TOKENS,
+            )
+            .into_iter()
+            .map(|range| history.get(range).unwrap_or_default())
+            .collect();
+        let cast = Cast::new(&bundle.persona.sheet.name, &all_characters);
+        let written = self.write_story_memory(
+            order.kind(),
+            &settings,
+            &leaving_calls,
+            memory_entries.last(),
+            &cast,
+        )?;
 
-        let values = NarrationValues {
-            story_memory: memory.as_ref().map(|memory| memory.text.as_str()),
-            ..planned
-        };
+        let shown = memory_entries.with_written(&written);
         let narrated = self.narrator.narrate(
             &order.generation,
-            &values,
+            &NarrationValues {
+                memory_entries: &shown,
+                ..planned
+            },
             &preset,
             &call.settings,
             call.budget,
         )?;
-        Ok((narrated.text, memory))
+        Ok((narrated.text, written))
     }
 
-    /// A failed writer keeps the previous story memory, and the Job continues: the
-    /// Messages it missed stay uncovered, so the next cut gives them to the writer
-    /// again.
+    /// Each later call reads the last entry of the call before. A failed call ends the
+    /// run: its Messages and the later ones stay uncovered, so the next cut gives them
+    /// to the writer again and the entries keep covering the story with no gap.
     fn write_story_memory(
         &self,
         kind: Kind,
         settings: &AppSettings,
-        hook_input: &StoryMemoryHookInput,
-    ) -> Result<Option<StoryMemory>, JobFailure> {
-        self.writer.step(Step::WritingStoryMemory)?;
-        let written = self
-            .story_memory_call(settings)
-            .and_then(|call| self.story_memory_writer.run(hook_input, &call));
-        let memory = match written {
-            Ok(memory) => Some(memory),
-            Err(error) => {
-                tracing::warn!("Agent {} failed: {error}", self.story_memory_writer.name());
-                hook_input.previous.cloned()
+        leaving_calls: &[&[StoryRow]],
+        previous_entry: Option<&MemoryEntry>,
+        cast: &Cast,
+    ) -> Result<Vec<MemoryEntry>, JobFailure> {
+        let mut written: Vec<MemoryEntry> = Vec::new();
+        if leaving_calls.is_empty() {
+            return Ok(written);
+        }
+        for leaving in leaving_calls {
+            self.writer.step(Step::WritingStoryMemory)?;
+            let Some(hook_input) =
+                StoryMemoryHookInput::new(written.last().or(previous_entry), cast, leaving)
+            else {
+                break;
+            };
+            let entries = self
+                .story_memory_call(settings)
+                .and_then(|call| self.story_memory_writer.run(&hook_input, &call));
+            match entries {
+                Ok(entries) => written.extend(entries),
+                Err(error) => {
+                    tracing::warn!("Agent {} failed: {error}", self.story_memory_writer.name());
+                    break;
+                }
             }
-        };
+        }
         self.writer.step(kind.step())?;
-        Ok(memory)
+        Ok(written)
     }
 
     /// The writer records its call through the Narration slot, so the Connection of
@@ -352,7 +376,7 @@ impl Job {
     fn story_memory_call(&self, settings: &AppSettings) -> Result<CallSettings, EngineError> {
         let connection = settings.connection_for(PresetType::System)?;
         Ok(CallSettings {
-            max_tokens: connection.max_tokens_for(Some(STORY_MEMORY_TOKENS)),
+            max_tokens: connection.max_tokens_for(Some(MEMORY_WRITER_ANSWER_TOKENS)),
             game: Some(self.writer.game()),
             ..CallSettings::default()
         })
@@ -362,12 +386,12 @@ impl Job {
         &self,
         order: &GenerationOrder,
         text: String,
-        memory: Option<StoryMemory>,
+        memory_entries: &[MemoryEntry],
     ) -> Result<SavedText, JobFailure> {
-        let mut start = self.start_state(order)?;
-        start.story_memory = memory;
+        let start = self.start_state(order)?;
         let tail = self.tail()?;
-        self.writer.save_text(order, text, &start, &tail)
+        self.writer
+            .save_text(order, text, &start, &tail, memory_entries)
     }
 
     /// The Quantifier must not see the new text, so its window ends at the Message
@@ -423,8 +447,6 @@ impl Job {
             let current = tail
                 .current_state()
                 .ok_or_else(|| GenerationFailure::missing(Record::CurrentState))?;
-            // The run reads the four newest Messages, the Narration it serves among
-            // them.
             let story = self.window_before(None, AGENT_HISTORY_WINDOW)?;
             let world = bundle.view(current);
             let hook_input = HookInput {
@@ -446,6 +468,15 @@ impl Job {
             };
             self.writer.save_options(outcome)
         })
+    }
+
+    fn memory_entries_before(&self, before: Option<u64>) -> Result<MemoryEntries, JobFailure> {
+        Self::read(
+            Record::Story,
+            self.storage
+                .stories()
+                .memory_entries(self.writer.game(), before),
+        )
     }
 
     fn window_before(
@@ -494,8 +525,6 @@ impl Job {
         }
     }
 
-    /// The room the state stands in is not on the map; no engine error lies behind
-    /// the line.
     fn invalid_room(room_id: &str) -> JobFailure {
         GenerationFailure::invalid_room(room_id).into()
     }

@@ -71,7 +71,7 @@ fn test_fresh_database_has_game_posture_columns() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 34);
+    assert_eq!(version, 35);
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn test_v22_is_noop_on_fresh_databases() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 34);
+    assert_eq!(version, 35);
 }
 
 #[test]
@@ -465,7 +465,7 @@ fn test_v28_deletes_saved_games_and_drops_the_snapshot_tables() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 34);
+    assert_eq!(version, 35);
 }
 
 #[test]
@@ -800,7 +800,7 @@ fn test_v34_adds_the_preset_parameters_and_option_count_and_keeps_the_rows() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 34);
+    assert_eq!(version, 35);
 }
 
 #[test]
@@ -818,5 +818,79 @@ fn test_v34_runs_over_a_database_that_already_has_the_columns() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 34);
+    assert_eq!(version, 35);
+}
+
+fn insert_game(conn: &Connection) {
+    conn.execute(
+        "INSERT INTO games (world_name, world_key, name, created_at, updated_at) \
+         VALUES ('W', 'w', 'G', '2026-11-22T00:00:00Z', '2026-11-22T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+}
+
+fn insert_message_with_swipe(conn: &Connection) -> i64 {
+    conn.execute(
+        "INSERT INTO messages (game_id, message_type, kind, timestamp, active_swipe_index) \
+         VALUES (1, '\"Narration\"', '\"Narration\"', '2026-11-22T00:00:00Z', 0)",
+        [],
+    )
+    .unwrap();
+    let message = conn.last_insert_rowid();
+    conn.execute(
+        "INSERT INTO message_swipes (message_id, swipe_index, text, state, maker) \
+         VALUES (?1, 0, 'text', '{}', '{}')",
+        [message],
+    )
+    .unwrap();
+    conn.last_insert_rowid()
+}
+
+#[test]
+fn test_v35_adds_the_memory_entries_table_and_keeps_the_stored_story() {
+    let conn = Connection::open_in_memory().unwrap();
+    migrate_up_to(&conn, 34).unwrap();
+    insert_game(&conn);
+    insert_message_with_swipe(&conn);
+
+    run_migrations(&conn).unwrap();
+
+    assert_eq!(
+        columns_of(&conn, "memory_entries"),
+        [
+            "id",
+            "swipe_id",
+            "position",
+            "from_message",
+            "to_message",
+            "story_time",
+            "place",
+            "took_part",
+            "others",
+            "what_happened"
+        ]
+    );
+    let messages: i64 = conn
+        .query_row("SELECT COUNT(*) FROM messages", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(messages, 1, "the saved Game stays");
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 35);
+}
+
+#[test]
+fn test_v35_runs_over_a_database_that_already_has_the_table() {
+    let conn = Connection::open_in_memory().unwrap();
+    run_migrations(&conn).unwrap();
+    conn.pragma_update(None, "user_version", 34).unwrap();
+
+    run_migrations(&conn).unwrap();
+
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 35);
 }

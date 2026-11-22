@@ -52,7 +52,6 @@ fn swipe_in(room_id: &str) -> SwipeState {
 fn swipe_with(room_id: &str, present: Vec<CharacterCard>, log: Encounters) -> SwipeState {
     SwipeState {
         event_record: None,
-        story_memory: None,
         movement: MovementState {
             current_room_id: room_id.to_string(),
             dynamic_rooms: HashMap::new(),

@@ -15,7 +15,6 @@ use crate::error::EngineError;
 pub type ProviderResolver =
     Arc<dyn Fn() -> Result<Arc<dyn LlmProvider>, EngineError> + Send + Sync>;
 
-/// Persists one LLM message; injected so a test can capture or fail a save.
 pub type SaveLlmMessageFn = Arc<dyn Fn(&LlmMessage) -> Result<(), EngineError> + Send + Sync>;
 
 pub struct LlmCallRecorder {
@@ -24,7 +23,6 @@ pub struct LlmCallRecorder {
 }
 
 impl LlmCallRecorder {
-    /// Test and fixture constructor: the provider never changes.
     pub fn new(provider: Arc<dyn LlmProvider>, save_fn: SaveLlmMessageFn) -> Self {
         Self {
             resolve: Arc::new(move || Ok(Arc::clone(&provider))),
@@ -67,6 +65,29 @@ impl LlmCallRecorder {
         settings: &CallSettings,
         check: impl FnOnce(&LlmCallResult) -> Result<(), EngineError>,
     ) -> Result<LlmCallResult, EngineError> {
+        self.complete_judged(agent_name, prompt, settings, check)
+            .map(|(result, ())| result)
+    }
+
+    /// A refusal by `read` is recorded as a failed call, as in `complete_checked`.
+    pub fn complete_read<T>(
+        &self,
+        agent_name: &str,
+        prompt: &[PromptPart],
+        settings: &CallSettings,
+        read: impl FnOnce(&LlmCallResult) -> Result<T, EngineError>,
+    ) -> Result<T, EngineError> {
+        self.complete_judged(agent_name, prompt, settings, read)
+            .map(|(_, value)| value)
+    }
+
+    fn complete_judged<T>(
+        &self,
+        agent_name: &str,
+        prompt: &[PromptPart],
+        settings: &CallSettings,
+        judge: impl FnOnce(&LlmCallResult) -> Result<T, EngineError>,
+    ) -> Result<(LlmCallResult, T), EngineError> {
         let provider = self.provider()?;
         let mut result = match provider.complete(agent_name, prompt, settings) {
             Ok(result) => result,
@@ -91,16 +112,13 @@ impl LlmCallRecorder {
         };
 
         result.text = sanitize_llm_output(&result.text);
-        let refusal = check(&result).err();
+        let verdict = judge(&result);
 
         let mut message = result.to_message();
-        message.error_message = refusal.as_ref().map(EngineError::llm_error_string);
+        message.error_message = verdict.as_ref().err().map(EngineError::llm_error_string);
         (*self.save_fn)(&message)?;
 
-        match refusal {
-            Some(error) => Err(error),
-            None => Ok(result),
-        }
+        verdict.map(|value| (result, value))
     }
 
     fn failed_message(

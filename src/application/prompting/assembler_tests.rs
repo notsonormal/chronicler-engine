@@ -1,14 +1,14 @@
 //! Seam contract of the PromptAssembler, the pure box that turns one prompt context into the prompt of one call.
 
 use crate::application::prompting::token_budget::{
-    estimate_tokens, TokenBudget, MAX_CONTEXT_TOKENS, MESSAGE_OVERHEAD_TOKENS,
-    SAFETY_MARGIN_TOKENS, STORY_MEMORY_CHARS,
+    estimate_tokens, TokenBudget, MAX_CONTEXT_TOKENS, MESSAGE_OVERHEAD_TOKENS, SAFETY_MARGIN_TOKENS,
 };
 use crate::application::prompting::{AssembledPrompt, CharacterContext, PromptAssembler, PromptContext};
 use crate::domain::model::character::{CharacterSheet, CharacterCard, PersonaCard, Relationship};
 use crate::domain::model::map::MapDef;
 use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::memory_entry::{MemoryEntries, MemoryEntry};
 use crate::domain::model::settings::{
     NarrativePerspective, NarrativeTense, DEFAULT_MAX_HISTORY_TOKENS, DEFAULT_MAX_TOKENS,
 };
@@ -506,7 +506,9 @@ fn test_a_small_budget_drops_the_oldest_history() {
         fitted.user_prompt()
     );
     assert!(
-        !fitted.user_prompt().contains("Entry 0 "),
+        !history_entries(&fitted)
+            .iter()
+            .any(|entry| entry.starts_with("Entry 0 ")),
         "the oldest entry goes first"
     );
 }
@@ -1506,41 +1508,122 @@ fn test_nested_braces_in_the_players_text_filter_the_outer_pattern() {
     assert!(prompt.contains("[FILTERED]"), "{prompt}");
 }
 
-const STORY_MEMORY: &str = "The innkeeper promised a room for three nights.";
+const MEMORY_HEAD: &str = "Past scenes, oldest first. Each entry records what happened then. A state that an entry describes (a place, a mood, an object, a plan) may have changed since.";
+const INNKEEPER_PROMISE: &str = "The innkeeper promised a room for three nights.";
+/// The error of the room that `unreserved_history_space` measures from a prompt, in tokens.
+const ROOM_MEASURE_TOLERANCE_TOKENS: usize = 24;
+/// The tokens of the longest memory entry that the space cases render.
+const LONGEST_SCENE_TOKENS: usize = 60;
+
+fn memory_entry(from: u64, to: u64, what_happened: &str) -> MemoryEntry {
+    MemoryEntry {
+        from,
+        to,
+        time: "Day 1, evening".to_string(),
+        place: "The Rusty Anchor".to_string(),
+        took_part: vec!["Mara".to_string(), "Orin".to_string()],
+        others: Vec::new(),
+        what_happened: what_happened.to_string(),
+    }
+}
+
+fn innkeeper_scene() -> MemoryEntries {
+    MemoryEntries::new(vec![memory_entry(1, 4, INNKEEPER_PROMISE)])
+}
+
+/// `count` entries whose text names their number, oldest first.
+fn numbered_scenes(count: u64) -> MemoryEntries {
+    MemoryEntries::new(
+        (0..count)
+            .map(|number| {
+                memory_entry(
+                    number * 10,
+                    number * 10 + 9,
+                    &format!(
+                        "Scene {number}: the party argued about the road and settled on the north pass at last."
+                    ),
+                )
+            })
+            .collect(),
+    )
+}
+
+fn scenes_shown(block: &str, count: u64) -> Vec<u64> {
+    (0..count)
+        .filter(|number| block.contains(&format!("Scene {number}:")))
+        .collect()
+}
 
 fn assembled_remembering(
     fixture: &Fixture,
     history: &[StoryRow],
     input: &str,
-    story_memory: &str,
+    entries: &MemoryEntries,
     budget: TokenBudget,
 ) -> AssembledPrompt {
-    let context = fixture
-        .context(history, input)
-        .with_story_memory(Some(story_memory));
+    let context = fixture.context(history, input).with_memory_entries(entries);
     assemble_under(fixture, &context, &preset(), budget).expect("the prompt fits its window")
 }
 
-fn full_size_story_memory() -> String {
-    "m".repeat(STORY_MEMORY_CHARS)
+fn story_memory_block(prompt: &AssembledPrompt) -> String {
+    prompt_block(&prompt.user_prompt(), "<StoryMemory>", "</StoryMemory>")
 }
 
-// CASE assembler-story-memory-before-history: the story memory is the last block of the first user message, so it stands before the first history entry.
+fn kept_history_tokens(prompt: &AssembledPrompt) -> usize {
+    history_entries(prompt)
+        .iter()
+        .map(|entry| estimate_tokens(entry) + MESSAGE_OVERHEAD_TOKENS)
+        .sum()
+}
+
+/// The history space of a window before the story memory reserves any of it, read from
+/// the prompt of an empty history. The reading is close to the cut's own, by the
+/// tolerance above.
+fn unreserved_history_space(fixture: &Fixture, budget: TokenBudget) -> usize {
+    let prompt = assemble_under(fixture, &fixture.context(&[], ""), &preset(), budget)
+        .expect("the prompt fits its window");
+    let system_tokens = estimate_tokens(&prompt.parts[0].text) + MESSAGE_OVERHEAD_TOKENS;
+    let fixed_tokens = estimate_tokens(&prompt.parts[1].text) + 2 * MESSAGE_OVERHEAD_TOKENS;
+    budget.history_space(system_tokens, fixed_tokens)
+}
+
+/// A window with a long story, a list that passes its space, and the history size that
+/// the case sets.
+const LARGE_WINDOW_HISTORY_TOKENS: u32 = 4_000;
+
+fn large_window() -> TokenBudget {
+    TokenBudget {
+        max_context_tokens: MAX_CONTEXT_TOKENS,
+        max_history_tokens: LARGE_WINDOW_HISTORY_TOKENS,
+        max_tokens: 500,
+    }
+}
+
+// CASE assembler-story-memory-before-history: the story memory is the last block of the first user message, so it stands before the first history entry. It holds the opening word for word, then the head line and the memory entries.
 #[test]
 fn test_the_story_memory_ends_the_first_user_message() {
     let fixture = Fixture::new();
+    let entries = MemoryEntries::new(vec![MemoryEntry {
+        others: vec!["a drunk sailor".to_string()],
+        ..memory_entry(1, 4, INNKEEPER_PROMISE)
+    }]);
 
     let prompt = assembled_remembering(
         &fixture,
         &fixture.history,
         "I look around.",
-        STORY_MEMORY,
+        &entries,
         TokenBudget::fallback(),
     );
 
     let first_user = &prompt.parts[1].text;
+    let expected = format!(
+        "<StoryMemory>\n<Opening>\nYou enter the inn.\n</Opening>\n\n<MemoryEntries>\n{MEMORY_HEAD}\n\n\
+         [#1-#4] Day 1, evening. The Rusty Anchor. Took part: Mara, Orin. Others: a drunk sailor.\n\
+         {INNKEEPER_PROMISE}\n</MemoryEntries>\n</StoryMemory>"
+    );
     assert!(
-        first_user.ends_with(&format!("<StoryMemory>\n{STORY_MEMORY}\n</StoryMemory>")),
+        first_user.ends_with(&expected),
         "the story memory ends the first user message: {first_user}"
     );
     assert!(
@@ -1554,7 +1637,7 @@ fn test_the_story_memory_ends_the_first_user_message() {
     );
 }
 
-// CASE assembler-story-memory-absent: a context with no story memory renders no story memory block.
+// CASE assembler-story-memory-absent: a context with no memory entries and a history that fits renders no story memory block.
 #[test]
 fn test_no_story_memory_renders_no_block() {
     let fixture = Fixture::new();
@@ -1562,31 +1645,150 @@ fn test_no_story_memory_renders_no_block() {
 
     assert!(
         !user.contains("<StoryMemory>"),
-        "no story memory, no block: {user}"
+        "no memory entries and no cut, no block: {user}"
     );
 }
 
-// CASE assembler-plan-cut-matches-the-assembly: the planned cut keeps the entries the assembled prompt holds, with a story memory and without, and when a long Player Input drops more.
+// CASE assembler-story-memory-opening-only: a history that is cut while no memory entry exists renders the opening and no memory entries block.
+#[test]
+fn test_a_cut_history_with_no_entries_shows_only_the_opening() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+
+    let prompt = assembled_cutting(&fixture, &history, "I look around.");
+
+    let block = story_memory_block(&prompt);
+    assert!(
+        block.starts_with(
+            "<StoryMemory>\n<Opening>\nEntry 0 of the story, told at length so it spends tokens.\n</Opening>"
+        ),
+        "the opening is the first Message of the story: {block}"
+    );
+    assert!(
+        !block.contains("<MemoryEntries>"),
+        "no entry, no entries block: {block}"
+    );
+}
+
+// CASE assembler-story-memory-drops-oldest: a list that passes its space drops its oldest entries, shows the newest ones in order, and the block fits the space.
+#[test]
+fn test_a_list_over_its_space_drops_the_oldest_entries() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+    let entries = numbered_scenes(300);
+
+    let prompt = assembled_remembering(
+        &fixture,
+        &history,
+        "I look around.",
+        &entries,
+        large_window(),
+    );
+
+    let block = story_memory_block(&prompt);
+    let shown = scenes_shown(&block, 300);
+    let first_shown = *shown.first().expect("the newest entries fit");
+    assert!(
+        0 < first_shown,
+        "the oldest entry left the prompt: {first_shown}"
+    );
+    assert_eq!(
+        shown,
+        (first_shown..300).collect::<Vec<_>>(),
+        "the entries that stay are the newest ones, in order"
+    );
+    assert!(
+        estimate_tokens(&block) <= LARGE_WINDOW_HISTORY_TOKENS as usize / 2,
+        "the block fits its space"
+    );
+}
+
+// CASE assembler-story-memory-space-large-window: when the window leaves room for the history and its list, the history keeps its full size and the list gets half of it.
+#[test]
+fn test_a_large_window_gives_the_list_half_the_history_size() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+    let history_size = LARGE_WINDOW_HISTORY_TOKENS as usize;
+
+    let prompt = assembled_remembering(
+        &fixture,
+        &history,
+        "I look around.",
+        &numbered_scenes(300),
+        large_window(),
+    );
+
+    let kept = kept_history_tokens(&prompt);
+    assert!(
+        history_size * 3 / 4 - LONGEST_SCENE_TOKENS < kept && kept <= history_size,
+        "the history keeps its full size: {kept} of {history_size}"
+    );
+    let block = estimate_tokens(&story_memory_block(&prompt));
+    assert!(
+        history_size / 2 - LONGEST_SCENE_TOKENS < block && block <= history_size / 2,
+        "the list gets half of the history size: {block}"
+    );
+}
+
+// CASE assembler-story-memory-space-small-window: when the window leaves less room than the history size, the history and the list split that room evenly, so the history never drops to zero.
+#[test]
+fn test_a_small_window_splits_its_room_evenly() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+    let budget = window(2600, 200);
+    let room = unreserved_history_space(&fixture, budget);
+    assert!(
+        (800..DEFAULT_MAX_HISTORY_TOKENS as usize).contains(&room),
+        "the window is the small kind: its room is {room}"
+    );
+
+    let prompt = assembled_remembering(
+        &fixture,
+        &history,
+        "I look around.",
+        &numbered_scenes(300),
+        budget,
+    );
+
+    let tolerance = ROOM_MEASURE_TOLERANCE_TOKENS;
+    let history_space = room - room / 2;
+    let kept = kept_history_tokens(&prompt);
+    assert!(
+        history_space * 3 / 4 - LONGEST_SCENE_TOKENS < kept && kept <= history_space + tolerance,
+        "the history gets half of the room: {kept} of {room}"
+    );
+    let block = estimate_tokens(&story_memory_block(&prompt));
+    assert!(
+        room / 2 - LONGEST_SCENE_TOKENS - tolerance < block && block <= room / 2 + tolerance,
+        "the list gets the other half: {block} of {room}"
+    );
+}
+
+// CASE assembler-plan-cut-matches-the-assembly: the planned cut keeps the entries the assembled prompt holds, with a list of memory entries and without, and when a long Player Input drops more.
 #[test]
 fn test_the_planned_cut_keeps_the_entries_the_prompt_holds() {
     let fixture = Fixture::new();
     let history = fixture.history_of(2000);
     let long_input = "I look around the room slowly. ".repeat(600);
-    let memory = full_size_story_memory();
-    let rows: [(&str, Option<&str>, TokenBudget); 3] = [
-        ("I look around.", None, history_size(CUTTING_HISTORY_TOKENS)),
+    let full = numbered_scenes(300);
+    let rows: [(&str, &MemoryEntries, TokenBudget); 3] = [
         (
             "I look around.",
-            Some(&memory),
+            MemoryEntries::none(),
             history_size(CUTTING_HISTORY_TOKENS),
         ),
-        (&long_input, Some(STORY_MEMORY), window(8192, 500)),
+        (
+            "I look around.",
+            &full,
+            history_size(CUTTING_HISTORY_TOKENS),
+        ),
+        (&long_input, &full, window(8192, 500)),
     ];
 
-    for (input, story_memory, budget) in rows {
+    for (input, entries, budget) in rows {
         let context = fixture
             .context(&history, input)
-            .with_story_memory(story_memory);
+            .with_memory_entries(entries);
 
         let planned = PromptAssembler.plan_cut(&context, &preset(), &fixture.global_rules, budget);
         let prompt =
@@ -1601,30 +1803,46 @@ fn test_the_planned_cut_keeps_the_entries_the_prompt_holds() {
     }
 }
 
-// CASE assembler-story-memory-size-does-not-move-the-cut: a short story memory and one at its full size leave the history start in one place.
+// CASE assembler-story-memory-size-does-not-move-the-cut: a short list and a full list leave the history start in one place.
 #[test]
-fn test_the_size_of_the_story_memory_does_not_move_the_history_start() {
+fn test_the_size_of_the_list_does_not_move_the_history_start() {
     let fixture = Fixture::new();
     let history = fixture.history_of(2000);
-    let full = full_size_story_memory();
     let input = "I look around.";
 
-    let short = assembled_remembering(&fixture, &history, input, STORY_MEMORY, window(8192, 500));
-    let long = assembled_remembering(&fixture, &history, input, &full, window(8192, 500));
+    let short = assembled_remembering(
+        &fixture,
+        &history,
+        input,
+        &innkeeper_scene(),
+        window(8192, 500),
+    );
+    let long = assembled_remembering(
+        &fixture,
+        &history,
+        input,
+        &numbered_scenes(300),
+        window(8192, 500),
+    );
 
     assert!(first_kept_entry(&short).is_some_and(|start| 0 < start));
     assert_eq!(first_kept_entry(&short), first_kept_entry(&long));
 }
 
-// CASE assembler-story-memory-fits-the-limit: a story memory at its full size and a long Player Input still fit the input limit.
+// CASE assembler-story-memory-fits-the-limit: a full list and a long Player Input still fit the input limit.
 #[test]
-fn test_a_full_size_story_memory_fits_the_input_limit() {
+fn test_a_full_list_fits_the_input_limit() {
     let fixture = Fixture::new();
     let history = fixture.history_of(2000);
     let long_input = "I look around the room slowly. ".repeat(600);
-    let full = full_size_story_memory();
 
-    let prompt = assembled_remembering(&fixture, &history, &long_input, &full, window(8192, 500));
+    let prompt = assembled_remembering(
+        &fixture,
+        &history,
+        &long_input,
+        &numbered_scenes(300),
+        window(8192, 500),
+    );
 
     let input_limit = 8192 - SAFETY_MARGIN_TOKENS as usize - 500;
     let sent = prompt_tokens(&prompt);
@@ -1638,7 +1856,32 @@ fn test_a_full_size_story_memory_fits_the_input_limit() {
     );
 }
 
-// CASE assembler-history-cut-reserves-the-story-memory: a history inside its space and with no story memory keeps every entry. Once the context has a story memory or the history passes its space, the window keeps the room of the story memory.
+// CASE assembler-story-memory-fits-beside-any-input: a full list fits the input limit beside a Player Input of any length.
+#[test]
+fn test_a_full_list_fits_beside_a_player_input_of_any_length() {
+    let fixture = Fixture::new();
+    let history = fixture.history_of(2000);
+    let input_limit = 8192 - SAFETY_MARGIN_TOKENS as usize - 500;
+
+    for repeats in (0..=600).step_by(25) {
+        let input = "I look around the room slowly. ".repeat(repeats);
+        let prompt = assembled_remembering(
+            &fixture,
+            &history,
+            &input,
+            &numbered_scenes(300),
+            window(8192, 500),
+        );
+
+        let sent = prompt_tokens(&prompt);
+        assert!(
+            sent <= input_limit,
+            "with {repeats} repeats the prompt fits the input limit: {sent} of {input_limit}"
+        );
+    }
+}
+
+// CASE assembler-history-cut-reserves-the-story-memory: a history inside its space and with no memory entries keeps every entry. Once the context has memory entries or the history passes its space, the window keeps the space of the list.
 #[test]
 fn test_the_history_space_keeps_room_for_the_story_memory_once_it_is_needed() {
     let fixture = Fixture::new();
@@ -1647,10 +1890,10 @@ fn test_the_history_space_keeps_room_for_the_story_memory_once_it_is_needed() {
     let input = "I look around.";
 
     let without = assembled_under(&fixture, &history, input, budget);
-    let with = assembled_remembering(&fixture, &history, input, STORY_MEMORY, budget);
+    let with = assembled_remembering(&fixture, &history, input, &innkeeper_scene(), budget);
     let longer = fixture.history_of(2000);
     let cut_without = assembled_under(&fixture, &longer, input, budget);
-    let cut_with = assembled_remembering(&fixture, &longer, input, STORY_MEMORY, budget);
+    let cut_with = assembled_remembering(&fixture, &longer, input, &innkeeper_scene(), budget);
 
     assert_eq!(
         first_kept_entry(&without),
@@ -1659,11 +1902,11 @@ fn test_the_history_space_keeps_room_for_the_story_memory_once_it_is_needed() {
     );
     assert!(
         first_kept_entry(&with).is_some_and(|start| 0 < start),
-        "with a story memory, the same history makes room for its block"
+        "with memory entries, the same history makes room for its block"
     );
     assert_eq!(
         first_kept_entry(&cut_without),
         first_kept_entry(&cut_with),
-        "a history past its space keeps the room whether the story memory exists yet or not"
+        "a history past its space keeps the room whether the list exists yet or not"
     );
 }

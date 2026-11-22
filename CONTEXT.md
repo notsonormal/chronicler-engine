@@ -53,8 +53,12 @@ A Message that the narrator writes. An event Narration is a Narration that a fir
 _Avoid_: Narrative
 
 **Story memory**:
-A summary of the Messages that left the history space. A Swipe state holds it, and every call with a history space shows it before the history. The story that the player reads keeps every Message.
-_Avoid_: Recap, long-term memory
+The first Message of the story and the memory entries of the Messages that left the history space. Every call with a history space shows it before the history. The story that the player reads keeps every Message.
+_Avoid_: Recap, summary, long-term memory
+
+**Memory entry**:
+One written record in the story memory, covering a range of the Messages that left the history space and what happened in them. It is written once, and it belongs to the Swipe whose Job wrote it.
+_Avoid_: Scene entry, Summary, recap, chapter
 
 **Swipe**:
 One of the texts of a Message, with its own Swipe state. Every Message has at least one Swipe, and exactly one of them is active.
@@ -155,7 +159,7 @@ A fixed point in a Job where its Agents run, named by its position. The hooks ar
 _Avoid_: Phase, stage, step, analysis hook, Options hook
 
 **State writer**:
-An Agent whose result decides one part of the Swipe state of the new Swipe. When it fails, the Job keeps that part of the previous Swipe state. The Quantifier and the story memory writer are state writers.
+An Agent whose result decides one part of the state that the new Swipe holds: the Swipe state, or the memory entries. When it fails, the Job keeps that part of the previous state. The Quantifier and the story memory writer are state writers.
 
 **Game rules**:
 The code that applies the Quantifier result of a generation to its Swipe state: movement, the Characters present, encounters, and which Trigger fires. It makes no model call.
@@ -174,7 +178,7 @@ _Avoid_: History cap, history limit, history budget
 ### State
 
 **Swipe state**:
-The part of a Game's state that one Swipe holds. It has the Room, the added Rooms, the Characters present, the encounters with Characters and the fired Triggers. It can also have an event record and a story memory. Every Swipe has one.
+The part of a Game's state that one Swipe holds. It has the Room, the added Rooms, the Characters present, the encounters with Characters and the fired Triggers. It can also have an event record. Every Swipe has one.
 _Avoid_: Snapshot, save, checkpoint
 
 **Current state**:

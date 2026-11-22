@@ -7,16 +7,17 @@ use crate::domain::model::history_cut::HistoryCut;
 use crate::domain::model::map::Room;
 use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::domain::model::prompt_preset::PromptPreset;
+use crate::domain::model::memory_entry::MemoryEntries;
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense};
 use crate::domain::model::state::message_types::{StoryRow, MessageType};
 use crate::domain::model::template::TemplateVars;
 use crate::domain::model::world::WorldCard;
 use crate::application::prompting::token_budget::{
-    estimate_tokens, TokenBudget, CHARS_PER_TOKEN, MESSAGE_OVERHEAD_TOKENS, STORY_MEMORY_TOKENS,
+    estimate_tokens, TokenBudget, CHARS_PER_TOKEN, MESSAGE_OVERHEAD_TOKENS,
 };
 use crate::application::prompting::builders::sections::{
     build_post_history_prompt, build_system_prompt, render_known_character_entry,
-    render_present_relationships, sanitize_for_prompt,
+    render_present_relationships, render_memory_entry, sanitize_for_prompt,
 };
 use crate::application::prompting::types::CharacterContext;
 
@@ -45,7 +46,8 @@ pub struct PromptContext<'a> {
     pub guide: Option<String>,
     /// Drops the player-character layer; the impersonate preset supplies the voice.
     pub impersonate: bool,
-    pub story_memory: Option<&'a str>,
+    /// Oldest first.
+    pub memory_entries: &'a MemoryEntries,
 }
 
 #[derive(Default)]
@@ -102,7 +104,7 @@ impl PromptAssembler {
             template_vars,
             guide: context.guide.as_deref(),
             impersonate: context.impersonate,
-            story_memory: context.story_memory,
+            memory_entries: context.memory_entries,
         }
     }
 
@@ -141,12 +143,12 @@ impl<'a> PromptContext<'a> {
             template_vars: TemplateVars::from_persona(persona),
             guide: None,
             impersonate: false,
-            story_memory: None,
+            memory_entries: MemoryEntries::none(),
         }
     }
 
-    pub fn with_story_memory(mut self, story_memory: Option<&'a str>) -> Self {
-        self.story_memory = story_memory;
+    pub fn with_memory_entries(mut self, memory_entries: &'a MemoryEntries) -> Self {
+        self.memory_entries = memory_entries;
         self
     }
 
@@ -176,15 +178,22 @@ struct LayerRenderer<'a> {
     template_vars: TemplateVars,
     guide: Option<&'a str>,
     impersonate: bool,
-    story_memory: Option<&'a str>,
+    memory_entries: &'a MemoryEntries,
 }
 
 const HISTORY_OPEN: &str = "<ConversationHistory>\n";
 const HISTORY_CLOSE: &str = "\n</ConversationHistory>";
 const LAST_MESSAGE_OPEN: &str = "<LastMessage>\n";
 const LAST_MESSAGE_CLOSE: &str = "\n</LastMessage>";
-const STORY_MEMORY_OPEN: &str = "<StoryMemory>";
-const STORY_MEMORY_CLOSE: &str = "</StoryMemory>";
+const STORY_MEMORY_OPEN: &str = "<StoryMemory>\n";
+const STORY_MEMORY_CLOSE: &str = "</StoryMemory>\n";
+const OPENING_OPEN: &str = "<Opening>\n";
+const OPENING_CLOSE: &str = "\n</Opening>\n";
+const MEMORY_ENTRIES_OPEN: &str = "<MemoryEntries>\n";
+const MEMORY_ENTRIES_CLOSE: &str = "\n</MemoryEntries>\n";
+const MEMORY_ENTRIES_HEAD: &str = "Past scenes, oldest first. Each entry records what happened then. \
+    A state that an entry describes (a place, a mood, an object, a plan) may have changed since.";
+const LAYER_SEPARATOR: &str = "\n\n";
 /// The user parts that exist whatever the history: the first one with the blocks
 /// before the history, and a closing one with the blocks after it. The closing
 /// part counts as a new part, the worst case, though it can join the last entry.
@@ -195,6 +204,16 @@ struct CutPrompt {
     system_tokens: usize,
     entries: Vec<PromptPart>,
     cut: HistoryCut,
+    /// The tokens that the cut keeps for the `<StoryMemory>` block. The block renders
+    /// when this is not zero.
+    memory_space: usize,
+}
+
+/// The cut of the history, with the tokens that the cut keeps for the `<StoryMemory>` block,
+/// after the overflow guard has shrunk them.
+struct ReservedCut {
+    cut: HistoryCut,
+    memory_space: usize,
 }
 
 impl<'a> LayerRenderer<'a> {
@@ -204,14 +223,11 @@ impl<'a> LayerRenderer<'a> {
             system_tokens,
             entries,
             cut,
+            memory_space,
         } = self.cut_prompt(budget);
-        let parts = self.render_prompt(&system, &entries, &cut, self.story_memory);
+        let parts = self.render_prompt(&system, &entries, &cut, memory_space);
 
-        let tokens_after_system = parts
-            .iter()
-            .skip(1)
-            .map(|part| Self::part_tokens(&part.text))
-            .sum();
+        let tokens_after_system = Self::tokens_after_system(&parts);
         let max_tokens = budget.response_tokens(system_tokens, tokens_after_system)?;
         Ok((parts, max_tokens))
     }
@@ -224,12 +240,14 @@ impl<'a> LayerRenderer<'a> {
         let system = self.render_system_layer();
         let system_tokens = Self::part_tokens(&system);
         let entries = self.render_history_entries();
-        let cut = self.cut_of(&system, &entries, budget, system_tokens);
+        let ReservedCut { cut, memory_space } =
+            self.cut_of(&system, &entries, budget, system_tokens);
         CutPrompt {
             system,
             system_tokens,
             entries,
             cut,
+            memory_space,
         }
     }
 
@@ -240,39 +258,37 @@ impl<'a> LayerRenderer<'a> {
             .collect()
     }
 
-    /// The story memory takes no room while the history fits its space and no
-    /// memory exists yet. After that the cut counts the memory at its full size and
-    /// never measures its text, so the cut that plans the memory and the cut of the
-    /// call that shows it are one.
+    /// The story memory takes no room while the history fits its space and no scene
+    /// entry exists. After that the cut reserves half of the history space that it
+    /// measures with no reserve. The reserve never reads the list, so the planned cut
+    /// and the cut of the call that shows the list are one. The guard can shrink it.
     fn cut_of(
         &self,
         system: &str,
         entries: &[PromptPart],
         budget: TokenBudget,
         system_tokens: usize,
-    ) -> HistoryCut {
-        let unreserved = self.cut_with_reserve(system, entries, budget, system_tokens, 0);
-        if self.story_memory.is_none() && unreserved.blocks().is_empty() {
-            return unreserved;
+    ) -> ReservedCut {
+        let unreserved_space = budget.history_space(system_tokens, self.fixed_tokens());
+        let unreserved = self
+            .cut_with_reserve(system, entries, budget, system_tokens, 0)
+            .cut;
+        if self.memory_entries.entries().is_empty() && unreserved.blocks().is_empty() {
+            return ReservedCut {
+                cut: unreserved,
+                memory_space: 0,
+            };
         }
-        let reserve = Self::story_memory_layout_tokens() + STORY_MEMORY_TOKENS as usize;
-        self.cut_with_reserve(system, entries, budget, system_tokens, reserve)
+        // Half: a large window leaves the history its full size, and a small window
+        // splits the room, so the history never drops to zero.
+        let memory_space = unreserved_space / 2;
+        self.cut_with_reserve(system, entries, budget, system_tokens, memory_space)
     }
 
-    /// What the `<StoryMemory>` block adds to the prompt besides its text: its tags
-    /// and its separator among the layers, measured on the render path itself.
-    fn story_memory_layout_tokens() -> usize {
-        const BODY: &str = "x";
-        let without = Self::join_layers([BODY.to_string(), BODY.to_string()]);
-        let with = Self::join_layers([
-            BODY.to_string(),
-            Self::render_story_memory_layer(Some(BODY)),
-            BODY.to_string(),
-        ]);
-        let layout_chars = with.chars().count() - without.chars().count() - BODY.len();
-        layout_chars.div_ceil(CHARS_PER_TOKEN)
-    }
-
+    /// The cut with `reserve_tokens` kept for the `<StoryMemory>` block. The history
+    /// keeps priority over the list. The overflow guard drops history only for what
+    /// the prompt passes with the opening alone as the block, which stays whole. The
+    /// block then gets the room that is left, up to the reserve, and it saturates at 0.
     fn cut_with_reserve(
         &self,
         system: &str,
@@ -280,7 +296,7 @@ impl<'a> LayerRenderer<'a> {
         budget: TokenBudget,
         system_tokens: usize,
         reserve_tokens: usize,
-    ) -> HistoryCut {
+    ) -> ReservedCut {
         let entry_tokens: Vec<usize> = entries.iter().map(|e| Self::part_tokens(&e.text)).collect();
         let space = budget.history_space(system_tokens, self.fixed_tokens() + reserve_tokens);
         let mut cut = HistoryCut::of(&entry_tokens, space);
@@ -289,27 +305,62 @@ impl<'a> LayerRenderer<'a> {
         // still pass the input limit. It drops more whole Messages, once. It counts
         // characters, because a token cost rounds each entry up and the sum of those
         // would drop too few.
-        let allowed_chars = budget
-            .input_limit()
-            .saturating_sub(system_tokens + reserve_tokens)
-            * CHARS_PER_TOKEN;
-        let parts = self.render_prompt(system, entries, &cut, None);
-        let excess_chars = Self::chars_after_system(&parts).saturating_sub(allowed_chars);
+        let allowed_chars = budget.input_limit().saturating_sub(system_tokens) * CHARS_PER_TOKEN;
+        let opening_chars = if reserve_tokens == 0 {
+            0
+        } else {
+            Self::story_memory_block(&self.opening_text(), &[])
+                .chars()
+                .count()
+                + LAYER_SEPARATOR.len()
+        };
+        let guard_chars = allowed_chars.saturating_sub(opening_chars);
+        let excess_chars = self.excess_chars(system, entries, &cut, guard_chars);
         if excess_chars > 0 {
             let entry_chars: Vec<usize> =
                 entries.iter().map(|e| Self::part_chars(&e.text)).collect();
             cut.drop_to_free(&entry_chars, excess_chars);
         }
-        cut
+        // Counted in the whole tokens of each part, as the input limit counts them,
+        // so the rounding of a part cannot push the list over the limit.
+        let room_tokens = budget.input_limit().saturating_sub(
+            system_tokens
+                + Self::tokens_after_system(&self.render_prompt(system, entries, &cut, 0)),
+        );
+        ReservedCut {
+            cut,
+            memory_space: reserve_tokens.min(room_tokens),
+        }
+    }
+
+    /// The characters by which the prompt, with no `<StoryMemory>` block, passes `allowed_chars`.
+    fn excess_chars(
+        &self,
+        system: &str,
+        entries: &[PromptPart],
+        cut: &HistoryCut,
+        allowed_chars: usize,
+    ) -> usize {
+        let parts = self.render_prompt(system, entries, cut, 0);
+        // The input limit counts each part in whole tokens, so each part can round up by one.
+        let rounding_chars = parts.len().saturating_sub(1) * CHARS_PER_TOKEN;
+        (Self::chars_after_system(&parts) + rounding_chars).saturating_sub(allowed_chars)
     }
 
     fn part_tokens(text: &str) -> usize {
         estimate_tokens(text) + MESSAGE_OVERHEAD_TOKENS
     }
 
-    /// `part_tokens` in characters, for the overflow guard.
     fn part_chars(text: &str) -> usize {
         text.chars().count() + MESSAGE_OVERHEAD_TOKENS * CHARS_PER_TOKEN
+    }
+
+    fn tokens_after_system(parts: &[PromptPart]) -> usize {
+        parts
+            .iter()
+            .skip(1)
+            .map(|part| Self::part_tokens(&part.text))
+            .sum()
     }
 
     fn chars_after_system(parts: &[PromptPart]) -> usize {
@@ -336,11 +387,11 @@ impl<'a> LayerRenderer<'a> {
         system: &str,
         entries: &[PromptPart],
         cut: &HistoryCut,
-        story_memory: Option<&str>,
+        memory_space: usize,
     ) -> Vec<PromptPart> {
         let kept = entries.get(cut.kept_from()..).unwrap_or_default();
         let mut before = self.before_layers();
-        before.push(Self::render_story_memory_layer(story_memory));
+        before.push(self.render_story_memory_layer(memory_space));
         if kept.is_empty() {
             before.push(Self::empty_history_layer(entries.is_empty()));
         }
@@ -414,7 +465,7 @@ impl<'a> LayerRenderer<'a> {
             .into_iter()
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
-            .join("\n\n")
+            .join(LAYER_SEPARATOR)
             .trim_end()
             .to_string()
     }
@@ -547,13 +598,53 @@ impl<'a> LayerRenderer<'a> {
         }
     }
 
-    fn render_story_memory_layer(story_memory: Option<&str>) -> String {
-        Self::render_non_blank_layer(
-            STORY_MEMORY_OPEN,
-            "",
-            story_memory.unwrap_or_default().trim(),
-            STORY_MEMORY_CLOSE,
-        )
+    /// The opening is the first Message of the story, word for word. The entries that fit
+    /// `memory_space` follow, oldest first: the oldest entries leave the prompt first and
+    /// stay stored. An opening larger than the space stays whole, with no entries.
+    fn render_story_memory_layer(&self, memory_space: usize) -> String {
+        if memory_space == 0 {
+            return String::new();
+        }
+        let opening = self.opening_text();
+        let rendered: Vec<String> = self
+            .memory_entries
+            .entries()
+            .iter()
+            .map(render_memory_entry)
+            .collect();
+        (0..=rendered.len())
+            .map(|dropped| Self::story_memory_block(&opening, &rendered[dropped..]))
+            .find(|block| Self::layer_tokens(block) <= memory_space)
+            .unwrap_or_else(|| Self::story_memory_block(&opening, &[]))
+    }
+
+    fn opening_text(&self) -> String {
+        self.history
+            .first()
+            .map(|first| format!("{OPENING_OPEN}{}{OPENING_CLOSE}", first.text.trim()))
+            .unwrap_or_default()
+    }
+
+    fn story_memory_block(opening: &str, rendered_entries: &[String]) -> String {
+        if opening.is_empty() && rendered_entries.is_empty() {
+            return String::new();
+        }
+        let mut block = format!("{STORY_MEMORY_OPEN}{opening}");
+        if !rendered_entries.is_empty() {
+            if !opening.is_empty() {
+                block.push('\n');
+            }
+            block.push_str(&format!(
+                "{MEMORY_ENTRIES_OPEN}{MEMORY_ENTRIES_HEAD}{LAYER_SEPARATOR}{}{MEMORY_ENTRIES_CLOSE}",
+                rendered_entries.join(LAYER_SEPARATOR)
+            ));
+        }
+        block.push_str(STORY_MEMORY_CLOSE);
+        block
+    }
+
+    fn layer_tokens(layer: &str) -> usize {
+        (layer.chars().count() + LAYER_SEPARATOR.len()).div_ceil(CHARS_PER_TOKEN)
     }
 
     fn empty_history_layer(no_history_yet: bool) -> String {

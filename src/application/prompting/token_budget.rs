@@ -90,11 +90,11 @@ impl TokenBudget {
 
 pub const CHARS_PER_TOKEN: usize = 4;
 
-/// The size of the story memory: the room a history space keeps for its block,
-/// the answer limit of its writer, and the cap of its saved text.
-pub const STORY_MEMORY_TOKENS: u32 = 2_000;
+/// The most tokens of Messages that one writer call of a history cut gets, so the
+/// calls of a large cut stay far inside any context window.
+pub const MEMORY_WRITER_CALL_TOKENS: usize = 4_000;
 
-pub const STORY_MEMORY_CHARS: usize = STORY_MEMORY_TOKENS as usize * CHARS_PER_TOKEN;
+pub const MEMORY_WRITER_ANSWER_TOKENS: u32 = 2_000;
 
 pub fn estimate_tokens(text: &str) -> usize {
     text.chars().count().div_ceil(CHARS_PER_TOKEN)

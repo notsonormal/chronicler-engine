@@ -74,7 +74,7 @@ Examples:
 | Narration | the narrator call | Generating narration... | the Input of the Job, and no Narration |
 | Narration | the analysis call | Quantifying... | the Input of the Job and the Narration, with no room on the Narration and no event Narration |
 | Narration | the Options call | Generating options... | the Input of the Job, the Narration, and the room the Narration arrived in |
-| Narration at a history cut | the story memory writer call | Writing the story memory... | the Input of the Job, and no Narration |
+| Narration at a history cut | the story memory writer calls | Writing the story memory... | the Input of the Job, and no Narration |
 | Impersonate | the narrator call | Generating narration... | no Message of the Job |
 | Impersonate | the analysis call | Quantifying... | the Input of the Job and no Narration |
 | Retry of a typed Input | the narrator call | Generating narration... | the Messages of the story before the Retry |

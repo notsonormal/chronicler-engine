@@ -51,6 +51,8 @@ BUDGET_DEFAULT = 10
 # Mirrors `DEFAULT_MAX_HISTORY_TOKENS` of `domain/model/settings.rs`: the history size of
 # a Connection whose field is empty.
 HISTORY_TOKENS_DEFAULT = 65_536
+# `CHARS_PER_TOKEN` of `src/application/prompting/token_budget.rs`.
+CHARS_PER_TOKEN = 4
 
 POLL_SECONDS = 2
 IDLE_POLLS = 2
@@ -270,6 +272,44 @@ def story_rows(conn, game_id):
            where m.game_id = ? order by m.id""",
         (game_id,),
     )
+
+
+def memory_entry_rows(conn, game_id):
+    """The memory entries of the active Swipes of the Game, in the order of the prompt:
+    oldest Message first, and the written order inside one Swipe."""
+    found = rows(
+        conn,
+        """select m.id as message_id, e.from_message, e.to_message, e.story_time,
+                  e.place, e.took_part, e.others, e.what_happened
+           from memory_entries e
+           join message_swipes s on s.id = e.swipe_id
+           join messages m on m.id = s.message_id
+                and s.swipe_index = m.active_swipe_index
+           where m.game_id = ? order by m.id, e.position""",
+        (game_id,),
+    )
+    return [
+        {
+            "message_id": row["message_id"],
+            "from": row["from_message"],
+            "to": row["to_message"],
+            "time": row["story_time"],
+            "place": row["place"],
+            "took_part": json.loads(row["took_part"]),
+            "others": json.loads(row["others"]),
+            "what_happened": row["what_happened"],
+        }
+        for row in found
+    ]
+
+
+def with_memory_entries(conn, game_id, story):
+    """`story` with the memory entries written with each entry's active Swipe, which
+    `story.json` then carries."""
+    by_message = {}
+    for memory_entry in memory_entry_rows(conn, game_id):
+        by_message.setdefault(memory_entry["message_id"], []).append(memory_entry)
+    return [{**entry, "memory_entries": by_message.get(entry["id"], [])} for entry in story]
 
 
 def message_type_of(raw):
@@ -752,7 +792,7 @@ def play_trial(client, conn, setup, pack, timeout, clock):
             continue
         stop = decision
 
-    story = story_rows(conn, game_id)
+    story = with_memory_entries(conn, game_id, story_rows(conn, game_id))
     failed = state.run_failed_call
     run = {
         "game_id": game_id,
@@ -976,17 +1016,40 @@ def state_line(entry):
 
 
 def story_memory_of(entry):
-    return (swipe_state(entry) or {}).get("story_memory")
+    """The memory entries written with the active Swipe of the entry."""
+    return entry.get("memory_entries") or []
 
 
-def memory_lines(memory, previous):
-    if memory is None:
+def estimate_tokens(text):
+    """The engine's estimate: four characters to a token, rounded up."""
+    return -(-len(text) // CHARS_PER_TOKEN)
+
+
+def render_memory_entry(memory_entry):
+    """The form of a memory entry in a prompt."""
+    others = f" Others: {', '.join(memory_entry['others'])}." if memory_entry["others"] else ""
+    took_part = ", ".join(memory_entry["took_part"]) or "nobody of the cast"
+    return (
+        f"[#{memory_entry['from']}-#{memory_entry['to']}] {memory_entry['time']}. "
+        f"{memory_entry['place']}. Took part: {took_part}.{others}\n"
+        f"{memory_entry['what_happened'].strip()}"
+    )
+
+
+def memory_lines(written, listed):
+    """The memory entries written at one cut, and the size of the whole list after it.
+    `listed` holds every active entry up to and including `written`."""
+    if not written:
         return []
-    covers = f'covers up to #{memory["covers_up_to"]}'
-    if memory == previous:
-        return [f"> Story memory: unchanged ({covers})"]
-    quoted = [f"> {line}".rstrip() for line in memory["text"].strip().splitlines()]
-    return [f"> Story memory ({covers}):", ">", *quoted]
+    size = estimate_tokens("\n\n".join(render_memory_entry(found) for found in listed))
+    noun = "entry" if len(listed) == 1 else "entries"
+    lines = [
+        f"> Memory entries written here: {len(written)} "
+        f"(list after this cut: {len(listed)} {noun}, ~{size} tokens)"
+    ]
+    for memory_entry in written:
+        lines.extend(f"> {line}".rstrip() for line in render_memory_entry(memory_entry).splitlines())
+    return lines
 
 
 def failed_call_line(call, summary=""):
@@ -1299,13 +1362,13 @@ def story_lines(pack):
     lines = ["## Story\n"]
     lines.append(
         "Each entry shows the Room and the Characters present of its Swipe state "
-        "(Δ marks a change), and its story memory once the story has one (in full where "
-        "it changes), then the call that wrote it and the Quantifier call that judged it. "
+        "(Δ marks a change), and the memory entries written with it, with the size of the "
+        "list after them, then the call that wrote it and the Quantifier call that judged it. "
         "A failed call with no entry is listed under the last entry before it.\n"
     )
     cut = set(pack.run.get("cut_entries", []))
     prev_room, prev_present = None, None
-    prev_memory = None
+    listed = []
     for entry in pack.story:
         label = entry_label(entry)
         if entry["event_header"]:
@@ -1322,9 +1385,9 @@ def story_lines(pack):
         )
         lines.append(f'> State: room `{room}`, present {present or "nobody"}{mark}')
         prev_room, prev_present = room, present
-        memory = story_memory_of(entry)
-        lines.extend(memory_lines(memory, prev_memory))
-        prev_memory = memory
+        written = story_memory_of(entry)
+        listed = listed + written
+        lines.extend(memory_lines(written, listed))
         lines.extend(call_line(call) for call in pack.by_entry.get(entry["id"], []))
         lines.append("")
     if pack.trailing:

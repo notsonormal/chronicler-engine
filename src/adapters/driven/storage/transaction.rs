@@ -9,6 +9,7 @@ use crate::domain::model::change::ChangeKind;
 use crate::domain::model::dock::{DockRecord, OptionsFailure};
 use crate::domain::model::game::{ConfigChange, GameId, NewGame};
 use crate::domain::model::message::{Message, Swipe, SwipeAt};
+use crate::domain::model::memory_entry::MemoryEntry;
 use crate::domain::model::state::generation_status::GenerationFailure;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::error::{DatabaseContext, EngineError};
@@ -25,6 +26,7 @@ pub enum TxWrite {
     InsertSwipe,
     SetSwipeText,
     SetSwipeState,
+    InsertMemoryEntries,
     SetGameFailure,
     SetGameConfig,
     PutDock,
@@ -199,6 +201,44 @@ impl<'a> Tx<'a> {
                 ],
             )
             .db_context("Failed to insert swipe")?;
+            Ok(())
+        })
+    }
+
+    /// The memory entries a cut wrote, tied to the Swipe of `at`. `position` is the index
+    /// in `entries`, so a read gives them back in the order they were written. The unit
+    /// that writes the Swipe writes its entries.
+    pub fn insert_memory_entries(
+        &mut self,
+        at: SwipeAt,
+        entries: &[MemoryEntry],
+    ) -> Result<(), EngineError> {
+        self.write(TxWrite::InsertMemoryEntries, |conn, game| {
+            require_message_of_game(conn, at.message, game)?;
+            let mut insert = conn
+                .prepare(
+                    "INSERT INTO memory_entries \
+                     (swipe_id, position, from_message, to_message, story_time, place, took_part, others, what_happened) \
+                     VALUES ((SELECT id FROM message_swipes WHERE message_id = ?1 AND swipe_index = ?2), \
+                             ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                )
+                .db_context("Failed to prepare the memory entry")?;
+            for (position, entry) in entries.iter().enumerate() {
+                insert
+                    .execute(rusqlite::params![
+                        at.message as i64,
+                        at.swipe as i64,
+                        position as i64,
+                        entry.from as i64,
+                        entry.to as i64,
+                        &entry.time,
+                        &entry.place,
+                        serde_json::to_string(&entry.took_part)?,
+                        serde_json::to_string(&entry.others)?,
+                        &entry.what_happened,
+                    ])
+                    .db_context("Failed to insert the memory entry")?;
+            }
             Ok(())
         })
     }

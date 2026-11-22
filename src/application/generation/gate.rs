@@ -16,6 +16,7 @@ use crate::domain::model::generation::{
     GenerationOrder, JobPlan, JobRequest, NewSwipe, PlanError, Place, StoryEnd,
 };
 use crate::domain::model::message::{Maker, Message, Swipe, SwipeAt};
+use crate::domain::model::memory_entry::MemoryEntry;
 use crate::domain::model::state::generation_status::{GenerationFailure, Record, Step};
 use crate::domain::model::state::message_types::{MessageKind, MessageType};
 use crate::domain::model::state::swipe_state::SwipeState;
@@ -796,6 +797,7 @@ impl JobWriter {
         text: String,
         start: &SwipeState,
         tail: &Tail,
+        memory_entries: &[MemoryEntry],
     ) -> Result<SavedText, JobFailure> {
         self.hold(|_entry, opener| {
             let empties_the_dock = order.kind().saves_a_narration();
@@ -807,10 +809,16 @@ impl JobWriter {
             let at = match order.place {
                 Place::NewMessage => {
                     let message = Message::new(message_type, kind, swipe.clone());
-                    self.write_new_message(&message, &swipe, empties_the_dock, opener)?
+                    self.write_new_message(
+                        &message,
+                        &swipe,
+                        memory_entries,
+                        empties_the_dock,
+                        opener,
+                    )?
                 }
                 Place::NewSwipeOnLast => {
-                    self.write_new_swipe(tail, &swipe, empties_the_dock, opener)?
+                    self.write_new_swipe(tail, &swipe, memory_entries, empties_the_dock, opener)?
                 }
             };
             Ok(SavedText { at })
@@ -858,6 +866,7 @@ impl JobWriter {
         &self,
         message: &Message,
         swipe: &Swipe,
+        memory_entries: &[MemoryEntry],
         empties_the_dock: bool,
         opener: &TxOpener,
     ) -> Result<SwipeAt, JobFailure> {
@@ -867,10 +876,7 @@ impl JobWriter {
                 message: message_id,
                 swipe: 0,
             };
-            tx.insert_swipe(at, swipe)?;
-            if empties_the_dock {
-                tx.put_dock(&DockRecord::default())?;
-            }
+            Self::write_swipe(tx, at, swipe, memory_entries, empties_the_dock)?;
             Ok(at)
         })
     }
@@ -879,6 +885,7 @@ impl JobWriter {
         &self,
         tail: &Tail,
         swipe: &Swipe,
+        memory_entries: &[MemoryEntry],
         empties_the_dock: bool,
         opener: &TxOpener,
     ) -> Result<SwipeAt, JobFailure> {
@@ -887,14 +894,29 @@ impl JobWriter {
             swipe: tail.last.swipes.len(),
         };
         Self::in_tx(opener, self.game, |tx| {
-            tx.insert_swipe(at, swipe)?;
-            tx.set_active_swipe(at)?;
-            if empties_the_dock {
-                tx.put_dock(&DockRecord::default())?;
-            }
-            Ok(())
+            Self::write_swipe(tx, at, swipe, memory_entries, empties_the_dock)?;
+            tx.set_active_swipe(at)
         })?;
         Ok(at)
+    }
+
+    /// The memory entries land in the unit of their Swipe, so a failed save loses
+    /// both and a Swipe never holds half of its cut.
+    fn write_swipe(
+        tx: &mut Tx<'_>,
+        at: SwipeAt,
+        swipe: &Swipe,
+        memory_entries: &[MemoryEntry],
+        empties_the_dock: bool,
+    ) -> Result<(), EngineError> {
+        tx.insert_swipe(at, swipe)?;
+        if !memory_entries.is_empty() {
+            tx.insert_memory_entries(at, memory_entries)?;
+        }
+        if empties_the_dock {
+            tx.put_dock(&DockRecord::default())?;
+        }
+        Ok(())
     }
 }
 

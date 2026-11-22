@@ -37,13 +37,13 @@ functions = [
   { name = "GameWriter::delete", hash = "2739d26a015587d4" },
   { name = "JobWriter::hold", hash = "19042e283611ba3c" },
   { name = "JobWriter::save_input", hash = "0472126e63595b94" },
-  { name = "JobWriter::save_text", hash = "fee42271ceee61a0" },
+  { name = "JobWriter::save_text", hash = "c0b2313456926bab" },
   { name = "JobWriter::save_state_update", hash = "de0796be4afef56c" },
   { name = "JobWriter::save_failure", hash = "081d52236b32c01e" },
   { name = "JobWriter::save_options", hash = "13d543ccbacb038b" },
   { name = "JobWriter::step", hash = "f4dae8de877d9aca" },
-  { name = "JobWriter::write_new_message", hash = "4440df60d6c84a1f" },
-  { name = "JobWriter::write_new_swipe", hash = "87148be6b6a574e1" },
+  { name = "JobWriter::write_new_message", hash = "3eb98d9c74974255" },
+  { name = "JobWriter::write_new_swipe", hash = "3044ffe3e298b94c" },
   { name = "Drop for JobWriter", hash = "ef27c6fcc4c317db" },
 ]
 
@@ -53,12 +53,12 @@ functions = [
   { name = "Job::start", hash = "823ba4a5efcfba57" },
   { name = "Job::run_accepted", hash = "1a7afb960127ca4e" },
   { name = "Job::run", hash = "33d16377c62aa1d3" },
-  { name = "Job::generate", hash = "fc7a85e0cd18070e" },
-  { name = "Job::narrate", hash = "fb5cde3359a89beb" },
-  { name = "Job::write_story_memory", hash = "16aaedaad9fb7772" },
+  { name = "Job::generate", hash = "40224edea44d394b" },
+  { name = "Job::narrate", hash = "c2d98fb4674ffe04" },
+  { name = "Job::write_story_memory", hash = "2a2a53f5a2c6090d" },
   { name = "Job::run_step", hash = "822d3aebb4bba412" },
   { name = "Job::update_state", hash = "83a8b5a7c6cac44f" },
-  { name = "Job::options_step", hash = "9b986b078495fe8d" },
+  { name = "Job::options_step", hash = "ac34ed90917a5634" },
   { name = "Job::end", hash = "f624fbdfd788acce" },
 ]
 

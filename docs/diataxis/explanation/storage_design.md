@@ -59,6 +59,10 @@ Narration changes state: the Quantifier detects Characters and movement, and the
 
 The current state is the Swipe state of the active Swipe of the last Message. A swipe switch and a delete change the current state by changing which Swipe is active. Nothing is copied or restored.
 
+### Memory entries beside the Swipe state
+
+The memory entries of the story memory form a list that grows with the story. The entries sit in their own table, tied to the Swipe whose Job wrote them. A Swipe state is copied into every new Swipe, and the table holds each entry once. The same rule that picks the current state also picks the entries. A swipe switch, a Retry or a delete changes the active Swipes, and the prompt shows the entries of the active Swipes only. The database cascade removes the entries of a deleted Swipe together with it.
+
 ### Two writes to one Swipe state
 
 The story log shows a new text as soon as the narrator call returns, and the analysis follows a few seconds later. The Job therefore saves the text with its pre-analysis state first, and writes the analysed state after. The pre-analysis state says that the player has not moved and no Trigger fired, which is true until the analysis lands.

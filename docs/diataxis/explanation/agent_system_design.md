@@ -19,9 +19,13 @@ Each Connection slot therefore has its own recorder, and each recorder resolves 
 
 The after-narration and end-of-Job hooks separate what a generation's own result lands in (the Quantifier result that the game rules apply) from what outlives the generation (the offered set that the Options dock shows).
 
-The before-narration hook exists for the story memory. The story memory writer must answer before the narrator call, because that call shows its text. The Narrator holds no storage, so it can neither read the previous story memory nor save the new one. So the Job calls the writer and carries its result. The writer has its own Role, so the role health shows a failed writer call as a story memory failure.
+The before-narration hook exists for the story memory. The story memory writer must answer before the narrator call, because that call shows its memory entries. The Narrator holds no storage, so it can neither read the earlier memory entries nor save the new ones. So the Job calls the writer and carries its entries to the text save. The writer has its own Role, so the role health shows a failed writer call as a story memory failure.
 
-The story memory writer reads the previous story memory and only the Messages after the newest Message that the story memory covers. So its prompt does not grow with the story. A failed writer call keeps the previous story memory, so the next writer call gets the Messages that the failed call missed.
+The story memory writer reads the Messages that leave, the cast names and only the last memory entry written before. So its prompt does not grow with the story. A cut of many Messages goes to several writer calls of at most `MEMORY_WRITER_CALL_TOKENS` each, one after the other. Each call stays far inside any context window. Each later call reads the last entry of the call before it, so the scenes stay one story.
+
+The model names only where each scene starts. The engine sets where each scene ends, so the entries of one call cover its Messages with no gap and no overlap. A model that misjudges an end cannot leave a Message out of the story memory.
+
+A failed call adds nothing, and the calls after it wait. Its Messages go to the next cut, so the entries keep covering the story with no gap and the earlier entries stay. The writer tries a failed call once more with the same prompt, as the Quantifier and the Options agent do. A provider error or a malformed answer is often a one-off, and a failed call costs the Messages a wait.
 
 The wiring builds the story memory writer outside `AppSettings` because the seed of the agent configuration adds no entry to an existing database. A writer configured in `AppSettings` would leave every older database with no story memory.
 

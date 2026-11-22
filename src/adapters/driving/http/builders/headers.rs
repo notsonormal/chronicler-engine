@@ -31,7 +31,7 @@ pub fn role_failure_effect(role: Role) -> &'static str {
         Role::Quantifier => "keeping the Room and the Characters present",
         Role::Options => "showing no options",
         Role::Trigger => "skipping the trigger",
-        Role::StoryMemory => "keeping the previous story memory",
+        Role::StoryMemory => "keeping the earlier memory entries",
     }
 }
 

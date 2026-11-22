@@ -27,7 +27,7 @@ export const scenarios = {
       'YouStartAJob(1, "action")',
       "AJobStartsAGeneration(1, TRUE)",
       "YouPressStop(1)",
-      "TheMemoryWriterAnswers(1)",
+      "TheMemoryWriterAnswers(1, FALSE)",
       "TheNarrationStepReturns(1)",
     ],
   },

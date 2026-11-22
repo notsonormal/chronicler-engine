@@ -64,6 +64,7 @@ pub enum StorageCall {
     StoriesEntries,
     StoriesHasText,
     StoriesMessages,
+    StoriesMemoryEntries,
     StoriesSwipeState,
     StoriesTail,
     StoriesWindow,

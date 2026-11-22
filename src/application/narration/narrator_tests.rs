@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::application::llm_recorder::LlmCallRecorder;
 use crate::application::narration::{NarrationValues, Narrated, Narrator};
-use crate::application::prompting::token_budget::{TokenBudget, MAX_CONTEXT_TOKENS, STORY_MEMORY_CHARS};
+use crate::application::prompting::token_budget::{TokenBudget, MAX_CONTEXT_TOKENS};
 use crate::application::prompting::{CharacterContext, PromptAssembler};
 use crate::domain::model::agent::Role;
 use crate::domain::model::character::{CharacterCard, PersonaCard};
@@ -17,6 +17,7 @@ use crate::domain::model::map::MapDef;
 use crate::domain::model::message::{Maker, Message, Swipe};
 use crate::domain::model::prompt_part::{PromptPart, PromptRole};
 use crate::domain::model::prompt_preset::{PresetType, PromptPreset};
+use crate::domain::model::memory_entry::{MemoryEntries, MemoryEntry};
 use crate::domain::model::settings::{NarrativePerspective, NarrativeTense, DEFAULT_MAX_HISTORY_TOKENS};
 use crate::domain::model::state::message_types::{MessageKind, MessageType, StoryRow};
 use crate::domain::model::state::swipe_state::SwipeState;
@@ -163,7 +164,7 @@ impl Fixture {
                 history,
                 input,
                 tail: &self.tail,
-                story_memory: None,
+                memory_entries: MemoryEntries::none(),
             },
         }
     }
@@ -189,8 +190,8 @@ impl NarrationCase<'_> {
 }
 
 impl<'a> NarrationCase<'a> {
-    fn with_story_memory(mut self, story_memory: &'a str) -> Self {
-        self.values.story_memory = Some(story_memory);
+    fn with_memory_entries(mut self, memory_entries: &'a MemoryEntries) -> Self {
+        self.values.memory_entries = memory_entries;
         self
     }
 }
@@ -786,7 +787,23 @@ fn test_a_preset_without_parameters_sends_no_sampler() {
     assert!(sent.custom.is_empty());
 }
 
-const STORY_MEMORY: &str = "The innkeeper promised a room for three nights.";
+const INNKEEPER_PROMISE: &str = "The innkeeper promised a room for three nights.";
+
+fn scenes(count: u64) -> MemoryEntries {
+    MemoryEntries::new(
+        (0..count)
+            .map(|number| MemoryEntry {
+                from: number * 10,
+                to: number * 10 + 9,
+                time: "Day 1, evening".to_string(),
+                place: "The Rusty Anchor".to_string(),
+                took_part: vec!["Mara".to_string()],
+                others: Vec::new(),
+                what_happened: format!("Scene {number}: {INNKEEPER_PROMISE}"),
+            })
+            .collect(),
+    )
+}
 
 fn sent_with_memory(case: NarrationCase, preset: &PromptPreset, budget: TokenBudget) -> ModelCall {
     let model = Arc::new(match case.generation {
@@ -797,10 +814,11 @@ fn sent_with_memory(case: NarrationCase, preset: &PromptPreset, budget: TokenBud
     prompt_of(&model)
 }
 
-// CASE narrator-story-memory-every-kind: a Narration, an Impersonate, the Retry of a typed Input and an event Narration all show the story memory.
+// CASE narrator-story-memory-every-kind: a Narration, an Impersonate, the Retry of a typed Input and an event Narration all show the memory entries.
 #[test]
 fn test_every_generation_shows_the_story_memory() {
     let fixture = Fixture::new();
+    let entries = scenes(1);
     for generation in [
         Generation::Narration { guide: None },
         Generation::Impersonate { direction: None },
@@ -809,26 +827,27 @@ fn test_every_generation_shows_the_story_memory() {
     ] {
         let case = fixture
             .case_for(generation, &fixture.history, Some(TYPED_INPUT))
-            .with_story_memory(STORY_MEMORY);
+            .with_memory_entries(&entries);
         let kind = case.generation.kind();
 
         let call = sent_with_memory(case, &preset(), TokenBudget::fallback());
 
         assert!(
-            call.parts[1].text.contains(STORY_MEMORY),
-            "{kind:?} shows the story memory: {}",
+            call.parts[1].text.contains("<MemoryEntries>")
+                && call.parts[1].text.contains(INNKEEPER_PROMISE),
+            "{kind:?} shows the memory entries: {}",
             call.parts[1].text
         );
     }
 }
 
-// CASE narrator-plan-cut-matches-the-call: the planned cut keeps the entries the call sends, with the user message and the story memory of the call.
+// CASE narrator-plan-cut-matches-the-call: the planned cut keeps the entries the call sends, with the user message and the memory entries of the call.
 #[test]
 fn test_the_planned_cut_keeps_the_entries_the_call_sends() {
     let fixture = Fixture::new();
     let history = fixture.history_of(2000);
     let long_input = "I look around the room slowly. ".repeat(600);
-    let memory = "m".repeat(STORY_MEMORY_CHARS);
+    let entries = scenes(300);
     let budget = TokenBudget {
         max_context_tokens: 8192,
         max_history_tokens: DEFAULT_MAX_HISTORY_TOKENS,
@@ -836,7 +855,7 @@ fn test_the_planned_cut_keeps_the_entries_the_call_sends() {
     };
     let case = fixture
         .narration(&history, &long_input)
-        .with_story_memory(&memory);
+        .with_memory_entries(&entries);
     let model = Arc::new(ScriptedModel::new().narration("Narration."));
     let narrator = narrator(Arc::clone(&model));
 

@@ -15,7 +15,7 @@ A free-text Action, `/guide`, `/impersonate`, `/options`, Retry and Retrigger st
 
 - A Job runs on the Game that its request named, and every write of the Job names that Game.
 - A Job runs at most two generations: the Narration, and the event Narration of a fired Trigger. Then it runs at most one Options run.
-- A part that fails ends the Job. A failed state writer is the exception: the Job keeps that part of the previous Swipe state and continues. Every transaction that landed before the failure stays.
+- A part that fails ends the Job. A failed state writer is the exception: the Job keeps that part of the previous state and continues. Every transaction that landed before the failure stays.
 
 `JobPlan::for_request` makes the plan of a request, as a pure function of the request and the end of the story. A `GenerationOrder` holds the ids and the texts of one generation. `GenerationOrder::write` is the one place that decides the new Swipe of a generation.
 
@@ -35,7 +35,7 @@ Every kind of generation runs the same parts. The kind changes the inputs and sk
 flowchart TD
     Start([Request accepted]) --> Room[room check]
     Room --> Input[Input save: free text only]
-    Input --> Narrate[narration: the story memory writer call when Messages the story memory does not cover are outside the history space, then the narrator call]
+    Input --> Narrate[narration: the story memory writer calls when Messages that no memory entry covers are outside the history space, then the narrator call]
     Narrate --> TextSave[text save]
     TextSave --> AfterNarration[after-narration hook]
     AfterNarration --> Rules[game rules]
@@ -46,17 +46,17 @@ flowchart TD
     Options --> End([Job ends])
 ```
 
-Each part loads by id the records it uses and returns its result. The narration part makes the story memory writer call, when it runs, and the narrator call from one load. Between parts only ids, texts and part results move.
+Each part loads by id the records it uses and returns its result. The narration part makes the story memory writer calls, when they run, and the narrator call from one load. Between parts only ids, texts and part results move.
 
 ## The State of a Game
 
-Each Swipe holds one **Swipe state**: the room, the added rooms, the Characters present, the encounters and the fired one-shot Triggers. It can also hold the event record and the story memory. No separate record holds the current state of the Game.
+Each Swipe holds one **Swipe state**: the room, the added rooms, the Characters present, the encounters and the fired one-shot Triggers. It can also hold the event record. No separate record holds the current state of the Game.
 
 - The **current state** is the Swipe state of the active Swipe of the last Message.
 - The **start state** of a Message is the Swipe state of the active Swipe of the Message before it. `Tail` derives both.
 - Only the Job that makes a Swipe writes its Swipe state. It writes the **pre-analysis state** at the text save, then the **analysed state** at the state update.
 - A Retry adds a Swipe to the last Message, from the start state of that Message.
-- The story memory of a Swipe state names the newest Message it covers. The new Swipe of a generation keeps the story memory that its narrator call showed.
+- The **memory entries** that a cut writes belong to the Swipe that the Job saves, beside its Swipe state. The Job saves them in the transaction of the text save. A call reads the memory entries of the active Swipes of the Messages before its place. So a swipe switch or a delete changes them with the Swipe.
 
 The story log shows the **story window**, the newest Messages of the Game. The entries of the window and the end-of-story facts always come from the same moment of the story.
 

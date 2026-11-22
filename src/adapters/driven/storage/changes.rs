@@ -170,6 +170,7 @@ impl ChangeCounters {
             | StorageCall::StoriesEntries
             | StorageCall::StoriesHasText
             | StorageCall::StoriesMessages
+            | StorageCall::StoriesMemoryEntries
             | StorageCall::StoriesSwipeState
             | StorageCall::StoriesTail
             | StorageCall::StoriesWindow
@@ -188,6 +189,7 @@ impl ChangeCounters {
             TxWrite::InsertSwipe
             | TxWrite::SetSwipeText
             | TxWrite::SetSwipeState
+            | TxWrite::InsertMemoryEntries
             | TxWrite::SetActiveSwipe => &[ChangeKind::STORY],
             TxWrite::PutDock | TxWrite::PutOptionsFailure | TxWrite::ClearDock => {
                 &[ChangeKind::OPTIONS]

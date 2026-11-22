@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use crate::domain::model::character::{CharacterCard, PersonaCard};
 use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::map::{MapDef, Room};
+use crate::domain::model::memory_entry::MemoryEntry;
 use crate::domain::model::state::generation_status::Step;
 use crate::domain::model::state::message_types::StoryRow;
-use crate::domain::model::story_memory::StoryMemory;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Role {
@@ -22,7 +22,7 @@ pub enum Role {
     Options,
     /// Fires the configured trigger conditions.
     Trigger,
-    /// Rewrites the story memory when Messages leave the history.
+    /// Writes the memory entries of the Messages that leave the history.
     StoryMemory,
 }
 
@@ -92,12 +92,46 @@ pub struct WorldView<'a> {
     pub present: &'a [CharacterCard],
 }
 
-/// The Messages that leave the history and the story memory they join. `leaving` is
-/// in story order, oldest first, and never empty: with nothing leaving there is no
-/// input, so the writer never runs.
+/// The names a memory entry can use: the Persona first, then the Characters of the World
+/// in id order, so the list is the same on every writer call. The Characters present are
+/// not the cast: a memory entry names whoever took part.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cast {
+    persona_name: String,
+    names: Vec<String>,
+}
+
+impl Cast {
+    pub fn new(persona_name: &str, characters: &[CharacterCard]) -> Self {
+        let names = std::iter::once(persona_name.to_string())
+            .chain(
+                CharacterCard::in_id_order(characters)
+                    .into_iter()
+                    .map(|character| character.sheet.name.clone()),
+            )
+            .collect();
+        Self {
+            persona_name: persona_name.to_string(),
+            names,
+        }
+    }
+
+    pub fn persona_name(&self) -> &str {
+        &self.persona_name
+    }
+
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
+}
+
+/// What one writer call gets: the Messages that leave, the cast, and the last scene
+/// entry written before them. `leaving` is in story order, oldest first, and never
+/// empty: with nothing leaving there is no input, so the writer never runs.
 pub struct StoryMemoryHookInput<'a> {
-    pub previous: Option<&'a StoryMemory>,
-    pub persona_name: &'a str,
+    /// Read for the story time and the place only.
+    pub previous_entry: Option<&'a MemoryEntry>,
+    pub cast: &'a Cast,
     leaving: &'a [StoryRow],
     oldest: u64,
     newest: u64,
@@ -105,15 +139,15 @@ pub struct StoryMemoryHookInput<'a> {
 
 impl<'a> StoryMemoryHookInput<'a> {
     pub fn new(
-        previous: Option<&'a StoryMemory>,
+        previous_entry: Option<&'a MemoryEntry>,
+        cast: &'a Cast,
         leaving: &'a [StoryRow],
-        persona_name: &'a str,
     ) -> Option<Self> {
         let oldest = leaving.first()?.id;
         let newest = leaving.last()?.id;
         Some(Self {
-            previous,
-            persona_name,
+            previous_entry,
+            cast,
             leaving,
             oldest,
             newest,
@@ -128,7 +162,6 @@ impl<'a> StoryMemoryHookInput<'a> {
         self.oldest
     }
 
-    /// The new story memory covers the Messages up to this one.
     pub fn newest(&self) -> u64 {
         self.newest
     }

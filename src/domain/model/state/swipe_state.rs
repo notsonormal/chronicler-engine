@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use crate::domain::model::character::CharacterCard;
 use crate::domain::model::map::{MapDef, Room};
 use crate::domain::model::scenario::StartingScenario;
-use crate::domain::model::story_memory::StoryMemory;
 use crate::domain::model::trigger::Encounters;
 use super::movement::MovementState;
 use super::scene_state::SceneState;
@@ -27,9 +26,6 @@ pub struct SwipeState {
         skip_serializing_if = "Option::is_none"
     )]
     pub event_record: Option<EventRecord>,
-    /// The game rules never read it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub story_memory: Option<StoryMemory>,
 }
 
 impl SwipeState {
@@ -46,7 +42,6 @@ impl SwipeState {
             scene: SceneState::default(),
             encounters: Encounters::default(),
             event_record: None,
-            story_memory: None,
         };
         if let Some(scenario) = scenario {
             state.init_scenario_characters(scenario, characters);

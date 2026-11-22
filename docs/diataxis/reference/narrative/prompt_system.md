@@ -68,9 +68,13 @@ The cut knows the blocks it dropped. The marker `(History truncated to fit conte
 
 ## Story memory
 
-The `<StoryMemory>` block holds the story memory of the call: the summary of the Messages that left the history. It follows Layer 3 in the first `user` part, so it stands before the first history entry. A call with no story memory has no block. Every kind of generation shows it.
+The `<StoryMemory>` block holds the story memory of the call. It follows Layer 3 in the first `user` part, so it stands before the first history entry. `<Opening>` holds the first Message of the story, word for word. `<MemoryEntries>` holds the memory entries of the Messages that left the history, oldest first. A story with no cut and no memory entry has no block. Every kind of generation shows it.
 
-Once the history passes its space, or once a story memory exists, the history space keeps room for the block at its full size, `STORY_MEMORY_TOKENS`. The cut that the Job plans before the writer call is the cut of the narrator call that shows the new text.
+A call shows the memory entries of the active Swipes of the Messages before its place. For a Retry, that is the Messages before the last Message.
+
+Once the history passes its space, or once a memory entry exists, the history space keeps room for the block. The room is half of the history space that the cut measures with no reserve. The room holds the whole block: the tags, `<Opening>` and the entries. When the entries pass the room, the oldest entries leave the prompt and stay stored. The cut never reads the entries. So the cut that the Job plans before the writer calls is the cut of the narrator call that shows the new entries.
+
+The history keeps its priority over the block. The block gets the room that the rest of the prompt leaves under the input limit, up to its space. A long Player Input can shrink that room down to 0. The block then drops its oldest entries to fit the smaller room. The `<Opening>` stays whole, and the overflow guard counts it.
 
 ## Section Definitions
 
@@ -110,7 +114,7 @@ The prompt system stores presets of four types: system (the narrator voice), qua
 
 A preset carries its generation parameters: the response length (`max_tokens`), the samplers `temperature` and `top_p`, and a free object `custom` for other samplers. The engine owns `model`, `messages`, `stream` and `max_tokens`, so `custom` cannot set them, and the refusal names the key. A key that the engine writes in the request replaces the same key of `custom`.
 
-A Connection can set a ceiling on the response length (`max_tokens_ceiling`). A call asks for the preset value or the default (`DEFAULT_MAX_TOKENS`), and never more than the ceiling. The story memory writer asks for `STORY_MEMORY_TOKENS`, and never more than the ceiling. A call of the narrator can ask for less, because the response length cannot pass the free space in the context window.
+A Connection can set a ceiling on the response length (`max_tokens_ceiling`). A call asks for the preset value or the default (`DEFAULT_MAX_TOKENS`), and never more than the ceiling. The story memory writer asks for `MEMORY_WRITER_ANSWER_TOKENS`, and never more than the ceiling. A call of the narrator can ask for less, because the response length cannot pass the free space in the context window.
 
 An Options preset can set `option_count`, the number of Options. The count must be at least 1, and no other preset type can set it. The count fills the `{{option_count}}` placeholder and caps the Options that the parser keeps. An Options preset with no count uses `DEFAULT_OPTION_COUNT`.
 

@@ -35,7 +35,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
         - `personas.rs` — Persona storage operations
         - `presets.rs` — Preset storage operations
         - `settings.rs` — Settings storage operations
-        - `stories.rs` — The story reads: the end of the story, one Swipe state, and the entries of a window
+        - `stories.rs` — The story reads: the end of the story, one Swipe state, the entries of a window, and the memory entries
         - `test_support.rs` — Test infrastructure types for storage failure injection
         - `transaction.rs` — The transaction: one unit of record writes that lands whole
         - `worlds.rs` — World storage backend operations
@@ -180,7 +180,8 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
       - `trait_def.rs` — Agent hook traits: one trait per hook, each giving its own kind of result
       - **memory/**
         - `agent.rs` — Story memory writer implementation.
-        - `mod.rs` — Story memory writer — rewrites the story memory when Messages leave the history.
+        - `mod.rs` — Story memory writer — writes the memory entries of the Messages that leave the history.
+        - `parser.rs` — The read of a writer answer: the one JSON object, the check of the scene starts, and the ranges the engine sets
         - `prompt.rs` — Story memory writer prompt construction
       - **options/**
         - `agent.rs` — Options agent implementation.
@@ -257,6 +258,7 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
       - `llm_backend.rs` — LLM backend provider types
       - `llm_message.rs` — LLM message DTO: the stored record of one model call
       - `map.rs` — Map and Room data structures
+      - `memory_entry.rs` — The memory entries: the written record of the Messages that left the history, and the newest Message they cover
       - `message.rs` — Message types and conversation history (Message, Swipe)
       - `mod.rs` — Core data models and domain types
       - `prompt_part.rs` — The prompt part: one text with a role, an item of the list that a model call carries
@@ -265,7 +267,6 @@ Interactive fiction/text adventure engine in Rust. HTTP server with HTMX dashboa
       - `saved_games_page.rs` — The pages of saved Games: the page size, and the rule that names the page a request gets.
       - `scenario.rs` — Scenario definitions and world data
       - `settings.rs` — Settings and configuration types
-      - `story_memory.rs` — The story memory: the summary of the Messages that left the history, and the newest Message it covers
       - `story_window.rs` — The story window: the newest entries of the story, with the room each one shows, and the end-of-story facts that go with them
       - `tail.rs` — The end of the story, and the rules derived from it
       - `template.rs` — Template placeholder substitution for author-controlled text fields.

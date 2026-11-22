@@ -211,3 +211,59 @@ fn test_dropped_within_one_space_takes_one_message_larger_than_the_space() {
 
     assert_eq!(cut.dropped_within_one_space(0), 0..1);
 }
+
+#[test]
+fn test_a_range_that_fits_one_call_is_one_call() {
+    let cut = HistoryCut::of(&[10; 8], 20);
+
+    assert_eq!(cut.writer_calls(0..3, 100), vec![0..3]);
+}
+
+#[test]
+fn test_a_range_over_the_bound_splits_into_calls_that_each_fit_it() {
+    let cut = HistoryCut::of(&[10; 8], 20);
+
+    let calls = cut.writer_calls(0..6, 25);
+
+    assert_eq!(calls, vec![0..2, 2..4, 4..6]);
+}
+
+#[test]
+fn test_the_calls_cover_the_range_with_no_gap_and_no_overlap() {
+    let tokens = [7, 30, 5, 5, 40, 1, 1, 1, 9];
+    let cut = HistoryCut::of(&tokens, 10);
+
+    let calls = cut.writer_calls(1..9, 35);
+
+    let mut next = 1;
+    for call in &calls {
+        assert_eq!(call.start, next);
+        assert!(call.end > call.start, "a call is not empty");
+        next = call.end;
+    }
+    assert_eq!(next, 9, "no call ends before or past the range end");
+}
+
+#[test]
+fn test_one_message_over_the_bound_is_a_call_alone() {
+    let tokens = [5, 50, 5];
+    let cut = HistoryCut::of(&tokens, 10);
+
+    let calls = cut.writer_calls(0..3, 20);
+
+    assert_eq!(calls, vec![0..1, 1..2, 2..3]);
+}
+
+#[test]
+fn test_a_range_that_starts_late_splits_only_its_own_messages() {
+    let cut = HistoryCut::of(&[10; 8], 20);
+
+    assert_eq!(cut.writer_calls(3..6, 20), vec![3..5, 5..6]);
+}
+
+#[test]
+fn test_an_empty_range_makes_no_call() {
+    let cut = HistoryCut::of(&[10; 4], 20);
+
+    assert!(cut.writer_calls(2..2, 100).is_empty());
+}

@@ -8,7 +8,7 @@ const part = (j) => {
   const ev = j.gen === "event";
   switch (j.pc) {
     case "idle": return "Not started";
-    case "memory": case "memstep": return ev ? "Event Narration: story memory writer call" : "Narration: story memory writer call";
+    case "memory": case "memnext": case "memstep": return ev ? "Event Narration: story memory writer call" : "Narration: story memory writer call";
     case "start": case "call": case "save": return ev ? "Event Narration" : "Narration";
     case "analyse": case "quant": case "update": return "Quantifier call and state update";
     case "afterGens": return "After the generations";
@@ -44,6 +44,7 @@ const labels = {
   YouPressStop: "the player presses Stop",
   TheMemoryWriterAnswers: "the story memory writer answers",
   TheMemoryWriterFails: "the story memory writer call fails",
+  TheNextMemoryCallStarts: "the next story memory writer call starts",
   TheNarrationStepReturns: "the narrator call starts",
   TheNarratorAnswers: "the narrator answers",
   TheNarratorFails: "the narrator call fails",
@@ -64,5 +65,6 @@ export const step = (action, from, to) => {
   if (b.pc === "done" && b.fail === "moved" && a.pc !== "done") return "its next write is refused";
   if (action === "AJobStartsAGeneration") return b.pc === "memory" ? "the story memory writer call starts" : "the narrator call starts";
   if (action === "TheStateIsSaved") return b.gen === "event" && a.gen === "first" ? "the state is saved, a Trigger fired" : "the state is saved";
+  if (action === "TheMemoryWriterAnswers") return b.pc === "memnext" ? "the story memory writer answers, a further call follows" : "the story memory writer answers";
   return labels[action] ?? action;
 };

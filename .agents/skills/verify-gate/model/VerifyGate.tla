@@ -28,7 +28,7 @@ RunIds == 1..MaxRuns
 NoJob == 0
 
 \* The values of the fields below. `fail` is the failure that the Job carries to its end.
-JobPcs == {"idle", "start", "memory", "memstep", "call", "save", "analyse", "quant", "update",
+JobPcs == {"idle", "start", "memory", "memnext", "memstep", "call", "save", "analyse", "quant", "update",
            "afterGens", "optstart", "optcall", "optsave", "endfail", "drop", "done"}
 JobKinds == {"none", "action", "options", "impersonate", "continue"}
 RunPcs == {"idle", "accept", "job", "end", "over"}
@@ -327,9 +327,9 @@ YouChangeTheConfig(g) ==
 \* generation of an Action, this action also covers the room check (a read) and the
 \* hold of `JobWriter::save_input`. `cuts` is the branch of `Job::narrate` where
 \* Messages that the story memory does not cover leave the history: the action then
-\* also covers the hold of `JobWriter::step(Step::WritingStoryMemory)` in
-\* `Job::write_story_memory`, because only reads sit between these holds. The model
-\* keeps no story content, so either branch can happen in each generation.
+\* also covers the hold of `JobWriter::step(Step::WritingStoryMemory)` before the first
+\* writer call of `Job::write_story_memory`, because only reads sit between these holds.
+\* The model keeps no story content, so either branch can happen in each generation.
 AJobStartsAGeneration(j, cuts) ==
   /\ job[j].pc = "start"
   /\ cuts \in BOOLEAN
@@ -345,19 +345,34 @@ AJobStartsAGeneration(j, cuts) ==
   /\ JobSide
   /\ UNCHANGED <<cut, cutRuns, storyBusy, cfgRun, badAccept, deletedActive>>
 
-\* `Job::write_story_memory`: the story memory writer call, outside every hold. It
-\* writes no record: its answer goes to the narrator call and to the text save.
-TheMemoryWriterAnswers(j) ==
+\* `Job::write_story_memory`: one story memory writer call, outside every hold. It
+\* writes no record: its memory entries go to the next writer call, the narrator call
+\* and the text save, which writes them in the transaction of the text. `more` is the
+\* branch where the cut has a further writer call: the Job runs the calls one after
+\* the other.
+TheMemoryWriterAnswers(j, more) ==
   /\ job[j].pc = "memory"
-  /\ job' = [job EXCEPT ![j].pc = "memstep"]
+  /\ more \in BOOLEAN
+  /\ job' = [job EXCEPT ![j].pc = IF more THEN "memnext" ELSE "memstep"]
   /\ UNCHANGED <<holder, failLine, optFail, last, nextJob>>
   /\ JobSide /\ GhostsSame
 
-\* `Job::write_story_memory`, a failed writer call: the Job keeps the previous story
-\* memory and goes on to its narrator call. It saves no failure line.
+\* `Job::write_story_memory`, a failed writer call: it ends the run of writer calls.
+\* The Job keeps the earlier memory entries and goes on to its narrator call. It saves
+\* no failure line.
 TheMemoryWriterFails(j) ==
   /\ job[j].pc = "memory"
-  /\ job' = [job EXCEPT ![j].pc = "memstep"]          \* the previous story memory stays
+  /\ job' = [job EXCEPT ![j].pc = "memstep"]          \* the earlier memory entries stay
+  /\ UNCHANGED <<holder, failLine, optFail, last, nextJob>>
+  /\ JobSide /\ GhostsSame
+
+\* `Job::write_story_memory`, the `JobWriter::step(Step::WritingStoryMemory)` hold
+\* before each later writer call. A stop, a reset or a delete during the call before
+\* ends the Job here. The branch where `StoryMemoryHookInput::new` gives no input ends
+\* the run of calls with no model call: it reaches the same state as a call that fails.
+TheNextMemoryCallStarts(j) ==
+  /\ job[j].pc = "memnext"
+  /\ IF Own(j) THEN job' = [job EXCEPT ![j].pc = "memory"] ELSE Moved(j)
   /\ UNCHANGED <<holder, failLine, optFail, last, nextJob>>
   /\ JobSide /\ GhostsSame
 
@@ -608,8 +623,9 @@ Next ==
   \/ \E g \in AllGames : YouChangeTheConfig(g)
   \/ \E j \in JobIds :
        \/ \E cuts \in BOOLEAN : AJobStartsAGeneration(j, cuts)
-       \/ TheMemoryWriterAnswers(j)
+       \/ \E more \in BOOLEAN : TheMemoryWriterAnswers(j, more)
        \/ TheMemoryWriterFails(j)
+       \/ TheNextMemoryCallStarts(j)
        \/ TheNarrationStepReturns(j)
        \/ TheNarratorAnswers(j)
        \/ TheNarratorFails(j)

@@ -1,34 +1,24 @@
 //! [DOC: docs/diataxis/reference/narrative/agent_system.md]
 //! Story memory writer prompt construction
 
+use crate::application::prompting::builders::sections::render_memory_entry;
 use crate::domain::model::agent::StoryMemoryHookInput;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
 
-const WRITER_SYSTEM: &str = "You keep the memory of an interactive story. The oldest entries of the story are about to leave the narrator's context. Write the notes that the narrator needs to continue the story without contradicting them.";
+const WRITER_SYSTEM: &str = "You write the memory entries of the memory of an interactive story. The oldest Messages of the story leave the narrator's context now. You record them as memory entries, so that the narrator can continue the story without contradicting them. An entry is written once and never changes. Answer with one JSON object only.";
 
-const NO_PREVIOUS_MEMORY: &str = "(none)";
+const NO_PREVIOUS_ENTRY: &str = "(none: these are the first Messages of the story)";
 
 const NARRATION_LABEL: &str = "Narration";
 
-/// The writer's instructions. No preset type holds them, so they are code.
+/// No preset type holds the writer's instructions, so they are code.
 pub struct StoryMemoryPrompt<'a> {
     input: &'a StoryMemoryHookInput<'a>,
-    words: u32,
 }
 
 impl<'a> StoryMemoryPrompt<'a> {
-    /// `response_tokens` is the response length of the writer call.
-    pub fn new(input: &'a StoryMemoryHookInput<'a>, response_tokens: u32) -> Self {
-        Self {
-            input,
-            words: Self::words_for(response_tokens),
-        }
-    }
-
-    /// The model writes about twice the words the prompt asks for (measured on five
-    /// cuts of a stored story), so the prompt asks for well under the response length.
-    fn words_for(response_tokens: u32) -> u32 {
-        response_tokens * 3 / 10
+    pub fn new(input: &'a StoryMemoryHookInput<'a>) -> Self {
+        Self { input }
     }
 
     pub fn build(&self) -> (String, String) {
@@ -36,14 +26,14 @@ impl<'a> StoryMemoryPrompt<'a> {
     }
 
     fn build_user_prompt(&self) -> String {
+        let cast = self.input.cast.names().join(", ");
+        let persona = self.input.cast.persona_name();
+        let previous_entry = self
+            .input
+            .previous_entry
+            .map_or_else(|| NO_PREVIOUS_ENTRY.to_string(), render_memory_entry);
         let first = self.input.oldest();
         let last = self.input.newest();
-        let previous = self
-            .input
-            .previous
-            .map_or(NO_PREVIOUS_MEMORY, |memory| memory.text.as_str());
-        let persona = self.input.persona_name;
-        let words = self.words;
         let entries = self
             .input
             .leaving()
@@ -52,28 +42,13 @@ impl<'a> StoryMemoryPrompt<'a> {
             .collect::<Vec<_>>()
             .join("\n\n");
         format!(
-            "This is the memory of the story so far.\n\n\
-             <PreviousMemory>\n{previous}\n</PreviousMemory>\n\n\
-             These are the story entries #{first} to #{last}, which leave the narrator's context now. \
-             Entries marked {persona} are written by the player character; entries marked \
-             {NARRATION_LABEL} are written by the narrator.\n\n\
-             <Entries>\n{entries}\n</Entries>\n\n\
-             Rewrite the memory so that it holds the previous memory and these entries, in at most \
-             {words} words, as short plain lines. Keep:\n\
-             - names, numbers, objects and where they are, places, promises, plans and appointments \
-             with their times;\n\
-             - the story time: which day of the story it is, the time of day, and how much time passed;\n\
-             - who was present at each conversation, and who learned which fact.\n\
-             If the memory would pass {words} words, shorten the oldest parts first: keep \
-             the open promises, plans and appointments, the names, and who knows what, and drop the \
-             small steps that are finished.\n\
-             Write only the memory."
+            "The cast: {cast}. {persona} is the player character.\n\nThe last memory entry written before these Messages. Use it only for the story time and the place. Do not repeat it.\n\n<PreviousEntry>\n{previous_entry}\n</PreviousEntry>\n\nThese are the story Messages #{first} to #{last}, which leave the narrator's context now. Messages marked {persona} are written by the player character. Messages marked {NARRATION_LABEL} are written by the narrator.\n\n<Messages>\n{entries}\n</Messages>\n\nSplit the Messages into scenes. A new scene starts when the place changes, when the story time jumps, or when the people who take part change. The first Messages can continue the scene of the previous entry, and the last scene can go on after #{last}. Write each part as its own entry.\n\nFor each scene, write one entry with these fields:\n- \"from\", \"to\": the numbers of its first and its last Message. The entries cover #{first} to #{last} in order, with no gap and no overlap.\n- \"time\": the story time, as the day of the story and the time of day, for example \"Day 1, evening\". Count the days from the start of the story. If the Messages do not say, carry on from the previous entry.\n- \"place\": where the scene happens.\n- \"took_part\": the names of the people who were in the scene, or spoke in it by phone. Use only names from the cast. A character merely mentioned, remembered, discussed, or addressed while absent is NOT a participant.\n- \"others\": the people outside the cast who took part, by the name the story uses. An empty list if none.\n- \"what_happened\": 60 to 150 words, in the past tense. Record what happened and its outcomes without treating past states as current. Keep the exact names, numbers, sums, dates and times, the objects and where they were left, the promises, plans and appointments with their times, the reasons that people gave, and who learned which fact (who was told, who overheard, who was not there).\n\nAnswer with this JSON object and nothing else:\n{{\"entries\": [{{\"from\": 0, \"to\": 0, \"time\": \"\", \"place\": \"\", \"took_part\": [], \"others\": [], \"what_happened\": \"\"}}]}}"
         )
     }
 
     fn transcript_entry(&self, row: &StoryRow) -> String {
         let label = match row.message_type {
-            MessageType::Input => self.input.persona_name,
+            MessageType::Input => self.input.cast.persona_name(),
             MessageType::Narration => NARRATION_LABEL,
             MessageType::System => "System",
         };

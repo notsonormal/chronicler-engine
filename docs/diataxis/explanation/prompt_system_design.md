@@ -27,9 +27,9 @@ The history space leaves out the `<PlayerInput>` layer and the Guide. The Input 
 
 ## The story memory before the history
 
-The story memory stands before the history, after Layer 3 in the first `user` message. It changes only at a cut, and a cut already moves the history start. So between two cuts the cache still reaches the history.
+The story memory stands before the history, after Layer 3 in the first `user` message. The memory entries only grow at a cut, and a cut already moves the history start. So between two cuts the cache still reaches the history.
 
-The Job plans the cut before the story memory writer answers, and the narrator call that shows the new text makes the same cut again. Both read one load of the narration inputs, so a Connection edited during the writer call cannot move the cut. A cut that measured the text would differ between the two. A call with no story memory and a history inside its space keeps no room, so a short story keeps its whole history.
+The Job plans the cut before the story memory writer answers, and the narrator call that shows the new entries makes the same cut again. Both read one load of the narration inputs, so a Connection edited during the writer call cannot move the cut. A cut that measured the list would differ between the two, because the writer adds entries between them. So the cut reserves a share of the history space and never reads the list. The list drops its oldest entries to fit the share, and a dropped entry stays stored. A call with no memory entry and a history inside its space keeps no room, so a short story keeps its whole history.
 
 ## The history as chat messages
 

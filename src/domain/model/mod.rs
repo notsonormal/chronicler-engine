@@ -13,6 +13,7 @@ pub mod history_cut;
 pub mod llm_backend;
 pub mod llm_message;
 pub mod map;
+pub mod memory_entry;
 pub mod message;
 pub mod prompt_part;
 pub mod prompt_preset;
@@ -21,7 +22,6 @@ pub mod saved_games_page;
 pub mod scenario;
 pub mod settings;
 pub mod state;
-pub mod story_memory;
 pub mod story_window;
 pub mod tail;
 pub mod template;
@@ -50,6 +50,8 @@ mod llm_message_tests;
 #[cfg(test)]
 mod map_tests;
 #[cfg(test)]
+mod memory_entry_tests;
+#[cfg(test)]
 mod message_tests;
 #[cfg(test)]
 mod prompt_preset_tests;
@@ -61,8 +63,6 @@ mod saved_games_page_tests;
 mod scenario_tests;
 #[cfg(test)]
 mod settings_tests;
-#[cfg(test)]
-mod story_memory_tests;
 #[cfg(test)]
 mod story_window_tests;
 #[cfg(test)]

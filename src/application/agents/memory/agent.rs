@@ -3,16 +3,18 @@
 
 use std::sync::Arc;
 
-use crate::application::agents::trait_def::BeforeNarrationAgent;
+use crate::application::agents::memory::parser::MemoryEntriesAnswer;
 use crate::application::agents::memory::prompt::StoryMemoryPrompt;
+use crate::application::agents::trait_def::BeforeNarrationAgent;
 use crate::application::llm_recorder::LlmCallRecorder;
-use crate::application::ports::llm_provider::{LlmCallResult, AGENT_STORY_MEMORY};
-use crate::application::prompting::token_budget::STORY_MEMORY_CHARS;
+use crate::application::ports::llm_provider::AGENT_STORY_MEMORY;
 use crate::domain::model::agent::StoryMemoryHookInput;
 use crate::domain::model::generation_parameters::CallSettings;
 use crate::domain::model::prompt_part::PromptPart;
-use crate::domain::model::story_memory::StoryMemory;
-use crate::error::{EngineError, LlmFailure};
+use crate::domain::model::memory_entry::MemoryEntry;
+use crate::error::EngineError;
+
+const MAX_ATTEMPTS: u32 = 2;
 
 pub struct StoryMemoryWriter {
     recorder: Arc<LlmCallRecorder>,
@@ -29,25 +31,16 @@ impl StoryMemoryWriter {
         Self { recorder }
     }
 
-    /// A cut text loses the newest events, which sit at its end, so an answer that
-    /// does not fit fails whole and the previous story memory stays.
-    fn check_answer(answer: &LlmCallResult) -> Result<(), EngineError> {
-        let text = answer.text.trim();
-        if text.is_empty() {
-            return Err(LlmFailure::EmptyResponse {
-                raw_response: answer.raw_response_json.clone(),
-                finish_reason: None,
-            }
-            .into());
-        }
-        if answer.stopped_at_limit || text.chars().count() > STORY_MEMORY_CHARS {
-            return Err(LlmFailure::AnswerTooLong {
-                raw_response: answer.raw_response_json.clone(),
-                stopped_at_limit: answer.stopped_at_limit,
-            }
-            .into());
-        }
-        Ok(())
+    fn attempt(
+        &self,
+        prompt: &[PromptPart],
+        call: &CallSettings,
+        answer: &MemoryEntriesAnswer,
+    ) -> Result<Vec<MemoryEntry>, EngineError> {
+        self.recorder
+            .complete_read(AGENT_STORY_MEMORY, prompt, call, |result| {
+                answer.read(result)
+            })
     }
 }
 
@@ -60,23 +53,25 @@ impl BeforeNarrationAgent for StoryMemoryWriter {
         &self,
         input: &StoryMemoryHookInput,
         call: &CallSettings,
-    ) -> Result<StoryMemory, EngineError> {
-        let (system_prompt, user_prompt) = StoryMemoryPrompt::new(input, call.max_tokens).build();
+    ) -> Result<Vec<MemoryEntry>, EngineError> {
+        let (system_prompt, user_prompt) = StoryMemoryPrompt::new(input).build();
         let prompt = PromptPart::system_and_user(system_prompt, user_prompt);
+        let answer = MemoryEntriesAnswer::new(input);
         tracing::info!(
-            "[Memory] Calling provider: {} for entries up to #{}",
+            "[Memory] Calling provider: {} for Messages #{} to #{}",
             self.recorder.provider_label(),
+            input.oldest(),
             input.newest()
         );
-        let answer = self.recorder.complete_checked(
-            AGENT_STORY_MEMORY,
-            &prompt,
-            call,
-            Self::check_answer,
-        )?;
-        Ok(StoryMemory {
-            text: answer.text.trim().to_string(),
-            covers_up_to: input.newest(),
-        })
+        let mut outcome = self.attempt(&prompt, call, &answer);
+        for attempt in 2..=MAX_ATTEMPTS {
+            let Err(error) = &outcome else { break };
+            tracing::warn!(
+                "[Memory] try {} of {MAX_ATTEMPTS} failed: {error}",
+                attempt - 1
+            );
+            outcome = self.attempt(&prompt, call, &answer);
+        }
+        outcome
     }
 }

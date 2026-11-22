@@ -5,6 +5,7 @@ use chronicler_engine::domain::model::change::{ChangeKind, ChangeVersions};
 use chronicler_engine::domain::model::dock::{DockRecord, OptionsFailure};
 use chronicler_engine::domain::model::game::{ConfigChange, GameId, NewGame};
 use chronicler_engine::domain::model::message::SwipeAt;
+use chronicler_engine::domain::model::memory_entry::MemoryEntry;
 use chronicler_engine::domain::model::settings::{AppSettings, NarrativePerspective, NarrativeTense};
 use chronicler_engine::domain::model::state::generation_status::GenerationFailure;
 use chronicler_engine::test_support::{
@@ -19,6 +20,18 @@ fn new_game(name: &str) -> NewGame {
         "Seam Persona",
         name,
     )
+}
+
+fn gate_memory_entry() -> MemoryEntry {
+    MemoryEntry {
+        from: 1,
+        to: 2,
+        time: "Evening".to_string(),
+        place: "The gate".to_string(),
+        took_part: vec!["Mara".to_string()],
+        others: Vec::new(),
+        what_happened: "Mara waited.".to_string(),
+    }
 }
 
 fn versions_of(storage: &Storage, game: GameId) -> ChangeVersions {
@@ -42,7 +55,7 @@ fn write_message_with_two_swipe_writes(
 
 /// Every kind of write, each once. `write_case` has no wildcard arm, so a new `TxWrite`
 /// does not compile until it has a case there, and the slots keep this list whole.
-const ALL_WRITES: [TxWrite; 13] = [
+const ALL_WRITES: [TxWrite; 14] = [
     TxWrite::InsertGame,
     TxWrite::DeleteGame,
     TxWrite::InsertMessage,
@@ -56,6 +69,7 @@ const ALL_WRITES: [TxWrite; 13] = [
     TxWrite::PutDock,
     TxWrite::PutOptionsFailure,
     TxWrite::ClearDock,
+    TxWrite::InsertMemoryEntries,
 ];
 
 /// A write, the kinds its commit must raise, and the position of the write in
@@ -80,6 +94,7 @@ fn write_case(write: TxWrite) -> WriteCase {
         TxWrite::PutDock => (10, &[ChangeKind::OPTIONS]),
         TxWrite::PutOptionsFailure => (11, &[ChangeKind::OPTIONS]),
         TxWrite::ClearDock => (12, &[ChangeKind::OPTIONS]),
+        TxWrite::InsertMemoryEntries => (13, &[ChangeKind::STORY]),
     };
     WriteCase { slot, raises }
 }
@@ -123,6 +138,9 @@ fn commit_alone(storage: &Storage, game: GameId, message: u64, write: TxWrite) {
             })
         }),
         TxWrite::ClearDock => unit(&|tx| tx.clear_dock()),
+        TxWrite::InsertMemoryEntries => {
+            unit(&|tx| tx.insert_memory_entries(at, &[gate_memory_entry()]))
+        }
     }
 }
 

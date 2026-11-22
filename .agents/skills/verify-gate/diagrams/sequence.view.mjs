@@ -185,12 +185,14 @@ export const message = (action, from, to) => {
       );
     }
     case "TheMemoryWriterAnswers":
-      return [{ answer: "the story memory", from: "L", to: J }];
+      return [{ answer: "the memory entries", from: "L", to: J }];
     case "TheMemoryWriterFails":
       return [
         { failed: "the call fails", from: "L", to: J },
-        { note: "the Job keeps the previous story memory", over: J },
+        { note: "the Job keeps the earlier memory entries", over: J },
       ];
+    case "TheNextMemoryCallStarts":
+      return step("set the step", "story memory writer call");
     case "TheNarrationStepReturns":
       return step("set the step", "narrator call");
     case "TheNarratorAnswers":

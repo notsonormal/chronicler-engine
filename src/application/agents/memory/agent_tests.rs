@@ -2,29 +2,37 @@
 
 use std::sync::Arc;
 
+use serde_json::json;
+
 use crate::adapters::driven::storage::Storage;
 use crate::application::agents::memory::agent::StoryMemoryWriter;
+use crate::application::agents::memory::parser::SCENE_STARTS_FORMAT;
 use crate::application::agents::trait_def::BeforeNarrationAgent;
-use crate::application::prompting::token_budget::{STORY_MEMORY_CHARS, STORY_MEMORY_TOKENS};
-use crate::domain::model::agent::{StoryMemoryHookInput, Role};
+use crate::domain::model::agent::{Cast, Role, StoryMemoryHookInput};
 use crate::domain::model::game::GameId;
 use crate::domain::model::generation_parameters::CallSettings;
+use crate::domain::model::llm_message::LlmMessage;
+use crate::domain::model::memory_entry::MemoryEntry;
 use crate::domain::model::state::message_types::{MessageType, StoryRow};
-use crate::domain::model::story_memory::StoryMemory;
 use crate::error::{EngineError, LlmFailure};
-use crate::test_support::fixtures::default_story_row;
+use crate::test_support::fixtures::{default_story_row, TestCharacter};
 use crate::test_support::{
     make_test_recorder, make_test_recorder_with_storage, sent_user_text, ScriptedModel,
 };
 
 const PERSONA: &str = "Julian";
-const PREVIOUS: &str = "Julian rented a room at the inn for three nights.";
-const ANSWER: &str = "Julian rented a room. Mara promised to meet him at dawn.";
+const NOT_JSON: &str = "Julian asked Mara when they would leave.";
+const MEMORY_ENTRIES_FORMAT: &str = "memory entries";
+
+fn cast() -> Cast {
+    Cast::new(PERSONA, &[TestCharacter::named("mara", "Mara")])
+}
 
 fn writer(model: Arc<ScriptedModel>) -> StoryMemoryWriter {
     StoryMemoryWriter::new(make_test_recorder(model))
 }
 
+/// Message ids have a gap, as after a delete: 14 is no Message of the call.
 fn leaving() -> Vec<StoryRow> {
     vec![
         StoryRow {
@@ -37,51 +45,115 @@ fn leaving() -> Vec<StoryRow> {
             text: "Mara says she will wait at the gate at dawn.".to_string(),
             ..default_story_row(MessageType::Narration)
         },
+        StoryRow {
+            id: 15,
+            text: "At dawn, the gate is empty.".to_string(),
+            ..default_story_row(MessageType::Narration)
+        },
     ]
 }
 
-fn previous() -> StoryMemory {
-    StoryMemory {
-        text: PREVIOUS.to_string(),
-        covers_up_to: 11,
+fn previous_entry() -> MemoryEntry {
+    MemoryEntry {
+        from: 8,
+        to: 11,
+        time: "Day 1, evening".to_string(),
+        place: "The inn".to_string(),
+        took_part: vec![PERSONA.to_string()],
+        others: vec![],
+        what_happened: "Julian rented a room for three nights.".to_string(),
     }
-}
-
-fn input<'a>(
-    previous: Option<&'a StoryMemory>,
-    leaving: &'a [StoryRow],
-) -> StoryMemoryHookInput<'a> {
-    StoryMemoryHookInput::new(previous, leaving, PERSONA).expect("Messages leave")
 }
 
 fn settings() -> CallSettings {
     CallSettings {
         temperature: Some(0.3),
-        max_tokens: 700,
+        max_tokens: 2_000,
         game: Some(GameId(7)),
         ..CallSettings::default()
     }
 }
 
-fn run_once(model: &Arc<ScriptedModel>, previous: Option<&StoryMemory>) -> StoryMemory {
-    let rows = leaving();
-    writer(Arc::clone(model))
-        .run(&input(previous, &rows), &settings())
-        .expect("a good answer is a story memory")
+fn answer_entry(from: u64, to: u64) -> serde_json::Value {
+    json!({
+        "from": from,
+        "to": to,
+        "time": format!("Day 2, scene at #{from}"),
+        "place": format!("Place of #{from}"),
+        "took_part": [PERSONA, "Mara"],
+        "others": ["the guard"],
+        "what_happened": format!("What happened from #{from}."),
+    })
 }
 
-fn prompt_for_response_length(max_tokens: u32) -> String {
-    let model = Arc::new(ScriptedModel::new().story_memory(ANSWER));
+/// One JSON answer, with the `from` and `to` the model gives for each scene.
+fn answer(scenes: &[(u64, u64)]) -> String {
+    let entries: Vec<_> = scenes
+        .iter()
+        .map(|&(from, to)| answer_entry(from, to))
+        .collect();
+    json!({ "entries": entries }).to_string()
+}
+
+/// The entry the engine keeps for the scene the model started at `answered_from`.
+fn kept_entry(answered_from: u64, from: u64, to: u64) -> MemoryEntry {
+    MemoryEntry {
+        from,
+        to,
+        time: format!("Day 2, scene at #{answered_from}"),
+        place: format!("Place of #{answered_from}"),
+        took_part: vec![PERSONA.to_string(), "Mara".to_string()],
+        others: vec!["the guard".to_string()],
+        what_happened: format!("What happened from #{answered_from}."),
+    }
+}
+
+fn run_with(
+    model: &Arc<ScriptedModel>,
+    previous: Option<&MemoryEntry>,
+) -> Result<Vec<MemoryEntry>, EngineError> {
     let rows = leaving();
-    writer(Arc::clone(&model))
-        .run(
-            &input(Some(&previous()), &rows),
-            &CallSettings {
-                max_tokens,
-                ..settings()
-            },
-        )
-        .expect("a good answer is a story memory");
+    let cast = cast();
+    let input = StoryMemoryHookInput::new(previous, &cast, &rows).expect("Messages leave");
+    writer(Arc::clone(model)).run(&input, &settings())
+}
+
+fn entries_of(model: ScriptedModel) -> Vec<MemoryEntry> {
+    run_with(&Arc::new(model), Some(&previous_entry())).expect("a good answer gives entries")
+}
+
+/// A model that gives the same answer on both tries.
+fn twice(answer: impl Into<String>) -> ScriptedModel {
+    let answer = answer.into();
+    ScriptedModel::new()
+        .story_memory(answer.clone())
+        .story_memory(answer)
+}
+
+fn failure_of(model: ScriptedModel) -> (EngineError, usize) {
+    let model = Arc::new(model);
+    let error = run_with(&model, Some(&previous_entry())).expect_err("the writer fails");
+    (error, model.calls().len())
+}
+
+/// The records of the calls that one run of the writer makes, oldest first. The run may fail.
+fn recorded_run(model: ScriptedModel) -> Vec<LlmMessage> {
+    let storage = Arc::new(Storage::new_in_memory());
+    let rows = leaving();
+    let cast = cast();
+    let input = StoryMemoryHookInput::new(None, &cast, &rows).expect("Messages leave");
+    let recorder = make_test_recorder_with_storage(Arc::new(model), Arc::clone(&storage));
+    let _ = StoryMemoryWriter::new(recorder).run(&input, &settings());
+    let mut recorded = storage
+        .list_latest_llm_messages(10)
+        .expect("the forensics read back");
+    recorded.sort_by_key(|call| call.id);
+    recorded
+}
+
+fn first_user_prompt(previous: Option<&MemoryEntry>) -> String {
+    let model = Arc::new(ScriptedModel::new().story_memory(answer(&[(12, 15)])));
+    run_with(&model, previous).expect("a good answer gives entries");
     model
         .calls()
         .into_iter()
@@ -90,242 +162,334 @@ fn prompt_for_response_length(max_tokens: u32) -> String {
         .user_prompt()
 }
 
-// CASE memory-result: the answer, trimmed, is the new story memory, and it covers the Messages up to the newest one that left.
-#[test]
-fn test_the_answer_is_the_story_memory_up_to_the_newest_leaving_message() {
-    let model = Arc::new(ScriptedModel::new().story_memory(format!("\n  {ANSWER}  \n")));
+fn is_parse_error(error: &EngineError, format: &str) -> bool {
+    matches!(
+        error,
+        EngineError::Llm(LlmFailure::ParseError { expected_format, .. }) if *expected_format == format
+    )
+}
 
-    let memory = run_once(&model, Some(&previous()));
+// CASE memory-result: a good answer gives its entries in order, and their ranges cover the first to the last Message of the call with no gap.
+#[test]
+fn test_a_good_answer_gives_its_entries_over_the_call() {
+    let entries = entries_of(ScriptedModel::new().story_memory(answer(&[(12, 13), (15, 15)])));
 
     assert_eq!(
-        memory,
-        StoryMemory {
-            text: ANSWER.to_string(),
-            covers_up_to: 13,
-        }
+        entries,
+        vec![kept_entry(12, 12, 13), kept_entry(15, 15, 15)]
     );
 }
 
-// CASE memory-prompt-rewrite: the prompt holds the previous story memory and each leaving Message with its id and its label, the Persona's name for an Input and Narration for a Narration.
+// CASE memory-ranges-from-starts: the model's `to` numbers are ignored; each `to` is the Message before the next scene's start, and the last is the last Message of the call.
 #[test]
-fn test_the_prompt_holds_the_previous_memory_and_the_leaving_messages() {
-    let model = Arc::new(ScriptedModel::new().story_memory(ANSWER));
+fn test_the_ranges_come_from_the_scene_starts() {
+    let entries = entries_of(ScriptedModel::new().story_memory(answer(&[(12, 15), (15, 13)])));
 
-    run_once(&model, Some(&previous()));
+    assert_eq!(
+        entries,
+        vec![kept_entry(12, 12, 13), kept_entry(15, 15, 15)]
+    );
+}
+
+// CASE memory-first-from-set: the `from` of the first scene is not checked, even when it is no Message of the call; the first scene starts at the first Message.
+#[test]
+fn test_the_first_scene_starts_at_the_first_message() {
+    let entries = entries_of(ScriptedModel::new().story_memory(answer(&[(8, 15)])));
+
+    assert_eq!(entries, vec![kept_entry(8, 12, 15)]);
+}
+
+// CASE memory-fenced-answer: an answer inside a Markdown code fence is read.
+#[test]
+fn test_a_fenced_answer_is_read() {
+    let fenced = format!("```json\n{}\n```", answer(&[(12, 15)]));
+
+    let entries = entries_of(ScriptedModel::new().story_memory(fenced));
+
+    assert_eq!(entries, vec![kept_entry(12, 12, 15)]);
+}
+
+// CASE memory-text-around-answer: text before and after the one JSON object is ignored.
+#[test]
+fn test_text_around_the_answer_is_ignored() {
+    let wrapped = format!(
+        "Here are the entries:\n{}\nI hope they help.",
+        answer(&[(12, 15)])
+    );
+
+    let entries = entries_of(ScriptedModel::new().story_memory(wrapped));
+
+    assert_eq!(entries, vec![kept_entry(12, 12, 15)]);
+}
+
+// CASE memory-repeated-key: a key written twice in one entry is read, and the last value counts.
+#[test]
+fn test_a_key_written_twice_keeps_the_last_value() {
+    let repeated = answer(&[(12, 15)]).replacen(
+        r#""others":["the guard"]"#,
+        r#""others":["a stranger"],"others":["the guard"]"#,
+        1,
+    );
+    assert!(repeated.contains("a stranger"), "the answer repeats a key");
+
+    let entries = entries_of(ScriptedModel::new().story_memory(repeated));
+
+    assert_eq!(entries, vec![kept_entry(12, 12, 15)]);
+}
+
+// CASE memory-prompt: the prompt holds the cast, the player character, the previous entry in the entry form, the range of the call, and each leaving Message with its id and its label.
+#[test]
+fn test_the_prompt_holds_the_cast_the_previous_entry_and_the_messages() {
+    let model = Arc::new(ScriptedModel::new().story_memory(answer(&[(12, 15)])));
+
+    run_with(&model, Some(&previous_entry())).expect("a good answer gives entries");
 
     let call = model.calls().into_iter().next().expect("one call");
     let user = call.user_prompt();
     assert!(
-        user.contains(&format!("<PreviousMemory>\n{PREVIOUS}\n</PreviousMemory>")),
-        "the previous story memory: {user}"
+        user.starts_with("The cast: Julian, Mara. Julian is the player character."),
+        "the cast and the player character: {user}"
     );
     assert!(
-        user.contains("[#12 Julian]\nI ask Mara when we leave.")
-            && user.contains("[#13 Narration]\nMara says she will wait at the gate at dawn."),
+        user.contains(
+            "<PreviousEntry>\n[#8-#11] Day 1, evening. The inn. Took part: Julian.\n\
+             Julian rented a room for three nights.\n</PreviousEntry>"
+        ),
+        "the previous entry: {user}"
+    );
+    assert!(
+        user.contains("These are the story Messages #12 to #15,"),
+        "the range of the call: {user}"
+    );
+    assert!(
+        user.contains(
+            "<Messages>\n[#12 Julian]\nI ask Mara when we leave.\n\n\
+             [#13 Narration]\nMara says she will wait at the gate at dawn.\n\n\
+             [#15 Narration]\nAt dawn, the gate is empty.\n</Messages>"
+        ),
         "each leaving Message with its id and label: {user}"
     );
     assert!(
-        user.contains("#12 to #13"),
-        "the range of the entries: {user}"
+        user.ends_with(
+            "{\"entries\": [{\"from\": 0, \"to\": 0, \"time\": \"\", \"place\": \"\", \
+             \"took_part\": [], \"others\": [], \"what_happened\": \"\"}]}"
+        ),
+        "the answer shape: {user}"
     );
     assert!(
         call.system_prompt()
-            .contains("You keep the memory of an interactive story."),
+            .starts_with("You write the memory entries of the memory of an interactive story."),
         "the writer's instructions: {}",
         call.system_prompt()
     );
 }
 
-// CASE memory-prompt-size: the prompt asks for at most three tenths of the call's response length in words, and says what to shorten when the memory would pass it.
+// CASE memory-prompt-first-cut: with no previous entry, the prompt says these are the first Messages of the story.
 #[test]
-fn test_the_prompt_states_the_size_and_how_to_shorten() {
-    let user = prompt_for_response_length(STORY_MEMORY_TOKENS);
+fn test_the_first_cut_has_no_previous_entry() {
+    let user = first_user_prompt(None);
 
     assert!(
-        user.contains("in at most 600 words"),
-        "the word limit comes from the response length: {user}"
-    );
-    assert!(
-        user.contains("If the memory would pass 600 words, shorten the oldest parts first"),
-        "the rule to shorten: {user}"
-    );
-}
-
-// CASE memory-prompt-size-follows-call: a smaller response length gives a smaller word count, in the limit and in the rule to shorten.
-#[test]
-fn test_a_smaller_response_length_asks_for_fewer_words() {
-    let user = prompt_for_response_length(700);
-
-    assert!(
-        user.contains("in at most 210 words")
-            && user.contains("If the memory would pass 210 words"),
-        "the word count follows the response length: {user}"
-    );
-}
-
-// CASE memory-prompt-first-cut: with no previous story memory, the prompt says there is none.
-#[test]
-fn test_the_first_cut_has_no_previous_memory() {
-    let model = Arc::new(ScriptedModel::new().story_memory(ANSWER));
-
-    run_once(&model, None);
-
-    let user = model
-        .calls()
-        .into_iter()
-        .next()
-        .expect("one call")
-        .user_prompt();
-    assert!(
-        user.contains("<PreviousMemory>\n(none)\n</PreviousMemory>"),
-        "no previous story memory: {user}"
+        user.contains(
+            "<PreviousEntry>\n(none: these are the first Messages of the story)\n</PreviousEntry>"
+        ),
+        "no previous entry: {user}"
     );
 }
 
 // CASE memory-call-settings: the call keeps the call settings it gets.
 #[test]
 fn test_the_call_keeps_the_call_settings_it_gets() {
-    let model = Arc::new(ScriptedModel::new().story_memory(ANSWER));
+    let model = Arc::new(ScriptedModel::new().story_memory(answer(&[(12, 15)])));
 
-    run_once(&model, None);
+    run_with(&model, None).expect("a good answer gives entries");
 
     let call = model.calls().into_iter().next().expect("one call");
     assert_eq!(call.role, Role::StoryMemory);
-    assert_eq!(call.settings.max_tokens, 700);
+    assert_eq!(call.settings.max_tokens, 2_000);
     assert_eq!(call.settings.temperature, Some(0.3));
     assert_eq!(call.settings.game, Some(GameId(7)));
 }
 
-// CASE memory-at-size: an answer of exactly the story memory's size is the story memory, whole.
+// CASE memory-second-try: a first try that fails and a second that succeeds give the entries of the second try, from the same prompt.
 #[test]
-fn test_an_answer_of_the_size_is_kept_whole() {
-    let answer = "w".repeat(STORY_MEMORY_CHARS);
-    let model = Arc::new(ScriptedModel::new().story_memory(answer.clone()));
+fn test_a_second_try_after_a_failed_one_gives_its_entries() {
+    let model = Arc::new(
+        ScriptedModel::new()
+            .story_memory(NOT_JSON)
+            .story_memory(answer(&[(12, 15)])),
+    );
 
-    let memory = run_once(&model, None);
+    let entries = run_with(&model, Some(&previous_entry())).expect("the second try is good");
 
-    assert_eq!(memory.text, answer);
+    assert_eq!(entries, vec![kept_entry(12, 12, 15)]);
+    let calls = model.calls();
+    assert_eq!(calls.len(), 2, "two tries");
+    assert_eq!(
+        calls[0].parts, calls[1].parts,
+        "the same prompt on both tries"
+    );
 }
 
-fn run_recorded(model: ScriptedModel) -> (Result<StoryMemory, EngineError>, Option<String>) {
-    let storage = Arc::new(Storage::new_in_memory());
-    let rows = leaving();
-    let result = StoryMemoryWriter::new(make_test_recorder_with_storage(
-        Arc::new(model),
-        Arc::clone(&storage),
-    ))
-    .run(&input(Some(&previous()), &rows), &settings());
-    let recorded = storage
-        .list_latest_llm_messages(10)
-        .expect("the forensics read back");
-    let call = recorded.last().expect("the call is recorded");
-    assert_eq!(call.agent_name, "memory");
-    (result, call.error_message.clone())
-}
-
-// CASE memory-stopped-at-limit [failure]: an answer that the provider stopped at the answer limit fails, and its record names the failure, so the role health shows it.
+// CASE memory-stopped-at-limit [failure]: an answer stopped at the answer limit, on both tries, fails the writer.
 #[test]
 fn test_an_answer_stopped_at_the_limit_fails() {
-    let (result, failure) = run_recorded(
-        ScriptedModel::new().cut_off(Role::StoryMemory, "Julian rented a room. Mara prom"),
+    let cut = "{\"entries\": [{\"from\": 12, \"time\": \"Day 2";
+    let (error, calls) = failure_of(
+        ScriptedModel::new()
+            .cut_off(Role::StoryMemory, cut)
+            .cut_off(Role::StoryMemory, cut),
     );
 
     assert!(
         matches!(
-            result,
-            Err(EngineError::Llm(LlmFailure::AnswerTooLong {
+            error,
+            EngineError::Llm(LlmFailure::AnswerTooLong {
                 stopped_at_limit: true,
                 ..
-            }))
+            })
         ),
-        "a cut-off text is not a story memory: {result:?}"
+        "a cut-off answer gives no entries: {error:?}"
     );
-    assert_eq!(
-        failure.as_deref(),
-        Some("LLM Error: the answer is longer than its size limit (finish_reason: length)")
-    );
+    assert_eq!(calls, 2);
 }
 
-// CASE memory-past-size [failure]: an answer longer than the story memory's size fails, and the writer never cuts it.
-#[test]
-fn test_an_answer_past_the_size_fails() {
-    let (result, failure) =
-        run_recorded(ScriptedModel::new().story_memory("w".repeat(STORY_MEMORY_CHARS + 1)));
-
-    assert!(
-        matches!(
-            result,
-            Err(EngineError::Llm(LlmFailure::AnswerTooLong {
-                stopped_at_limit: false,
-                ..
-            }))
-        ),
-        "a text past the size is not a story memory: {result:?}"
-    );
-    assert_eq!(
-        failure.as_deref(),
-        Some("LLM Error: the answer is longer than its size limit")
-    );
-}
-
-// CASE memory-empty-answer [failure]: an empty answer fails, so a blank text never replaces a story memory.
+// CASE memory-empty-answer [failure]: an empty answer, on both tries, fails the writer.
 #[test]
 fn test_an_empty_answer_fails() {
-    let model = Arc::new(ScriptedModel::new().story_memory("   \n"));
-    let rows = leaving();
+    let (error, calls) = failure_of(ScriptedModel::new().story_memory("   \n").story_memory(""));
 
-    let result = writer(model).run(&input(Some(&previous()), &rows), &settings());
-
-    assert!(result.is_err(), "a blank answer is not a story memory");
+    assert!(
+        matches!(error, EngineError::Llm(LlmFailure::EmptyResponse { .. })),
+        "a blank answer gives no entries: {error:?}"
+    );
+    assert_eq!(calls, 2);
 }
 
-// CASE memory-transport-failure [failure]: a failed call fails the writer.
+// CASE memory-unparseable [failure]: an answer with no JSON object, on both tries, fails the writer.
 #[test]
-fn test_a_failed_call_fails_the_writer() {
-    let model = Arc::new(ScriptedModel::new().failed(Role::StoryMemory));
-    let rows = leaving();
+fn test_an_answer_that_does_not_parse_fails() {
+    let (error, calls) = failure_of(twice(NOT_JSON));
 
-    let result = writer(model).run(&input(None, &rows), &settings());
-
-    assert!(result.is_err());
+    assert!(is_parse_error(&error, MEMORY_ENTRIES_FORMAT), "{error:?}");
+    assert_eq!(calls, 2);
 }
 
-// CASE memory-call-record: a good call is recorded with its agent name and prompts.
+// CASE memory-missing-field [failure]: an entry with a missing field, on both tries, fails the writer.
+#[test]
+fn test_an_entry_with_a_missing_field_fails() {
+    let missing = json!({ "entries": [{ "from": 12, "to": 15, "time": "Day 2", "place": "The gate",
+        "took_part": [], "others": [] }] })
+    .to_string();
+    let (error, _) = failure_of(twice(missing));
+
+    assert!(is_parse_error(&error, MEMORY_ENTRIES_FORMAT), "{error:?}");
+}
+
+// CASE memory-empty-list [failure]: an answer with no entry, on both tries, fails the writer.
+#[test]
+fn test_an_answer_with_no_entry_fails() {
+    let empty = json!({ "entries": [] }).to_string();
+    let (error, _) = failure_of(twice(empty));
+
+    assert!(is_parse_error(&error, MEMORY_ENTRIES_FORMAT), "{error:?}");
+}
+
+// CASE memory-from-outside-call [failure]: a scene start that is no Message of the call, on both tries, fails the writer.
+#[test]
+fn test_a_scene_start_outside_the_call_fails() {
+    let outside = answer(&[(12, 13), (14, 15)]);
+    let (error, _) = failure_of(twice(outside));
+
+    assert!(is_parse_error(&error, SCENE_STARTS_FORMAT), "{error:?}");
+}
+
+// CASE memory-from-not-rising [failure]: later scene starts that do not go up, on both tries, fail the writer.
+#[test]
+fn test_scene_starts_that_do_not_go_up_fail() {
+    let falling = answer(&[(12, 13), (15, 15), (13, 13)]);
+    let (error, _) = failure_of(twice(falling));
+
+    assert!(is_parse_error(&error, SCENE_STARTS_FORMAT), "{error:?}");
+}
+
+// CASE memory-later-start-at-first-message [failure]: a later scene that starts at the first Message of the call, on both tries, fails the writer.
+#[test]
+fn test_a_later_scene_start_at_the_first_message_fails() {
+    let doubled = answer(&[(13, 15), (12, 12)]);
+    let (error, _) = failure_of(twice(doubled));
+
+    assert!(is_parse_error(&error, SCENE_STARTS_FORMAT), "{error:?}");
+}
+
+// CASE memory-transport-failure [failure]: two failed calls fail the writer.
+#[test]
+fn test_two_failed_calls_fail_the_writer() {
+    let (_, calls) = failure_of(
+        ScriptedModel::new()
+            .failed(Role::StoryMemory)
+            .failed(Role::StoryMemory),
+    );
+
+    assert_eq!(calls, 2);
+}
+
+// CASE memory-call-record: a good call is recorded with its agent name, its prompt and its answer.
 #[test]
 fn test_a_good_call_is_recorded_with_its_prompts() {
     let storage = Arc::new(Storage::new_in_memory());
-    let model = Arc::new(ScriptedModel::new().story_memory(ANSWER));
+    let good = answer(&[(12, 15)]);
+    let model = Arc::new(ScriptedModel::new().story_memory(good.clone()));
     let rows = leaving();
+    let cast = cast();
+    let input = StoryMemoryHookInput::new(None, &cast, &rows).expect("Messages leave");
     StoryMemoryWriter::new(make_test_recorder_with_storage(model, Arc::clone(&storage)))
-        .run(&input(None, &rows), &settings())
-        .expect("a good answer is a story memory");
+        .run(&input, &settings())
+        .expect("a good answer gives entries");
 
     let recorded = storage
         .list_latest_llm_messages(10)
         .expect("the forensics read back");
-    let call = recorded.last().expect("the call is recorded");
+    assert_eq!(recorded.len(), 1);
+    let call = &recorded[0];
     assert_eq!(call.agent_name, "memory");
     assert!(call.error_message.is_none());
-    assert_eq!(call.parsed_response, ANSWER);
+    assert_eq!(call.parsed_response, good);
     assert!(sent_user_text(call).contains("[#13 Narration]"));
 }
 
-// CASE memory-call-record-failure: a failed call is recorded with its failure text.
+// CASE memory-call-record-failure [failure]: a refused try is recorded with its agent name and its failure text.
 #[test]
-fn test_a_failed_call_is_recorded_with_its_failure_text() {
-    let storage = Arc::new(Storage::new_in_memory());
-    let model = Arc::new(ScriptedModel::new().failed(Role::StoryMemory));
-    let rows = leaving();
-    let _ = StoryMemoryWriter::new(make_test_recorder_with_storage(model, Arc::clone(&storage)))
-        .run(&input(None, &rows), &settings());
+fn test_a_refused_try_is_recorded_with_its_failure_text() {
+    let recorded = recorded_run(twice(answer(&[(12, 13), (14, 15)])));
 
-    let recorded = storage
-        .list_latest_llm_messages(10)
-        .expect("the forensics read back");
-    let failure = recorded.last().expect("the failed attempt is recorded");
-    assert_eq!(failure.agent_name, "memory");
-    assert_eq!(
-        failure.error_message.as_deref(),
-        Some("LLM Error: Narration generation failed at stage 'scripted': configured_failure")
+    let failures: Vec<_> = recorded
+        .iter()
+        .map(|call| (call.agent_name.as_str(), call.error_message.as_deref()))
+        .collect();
+    let refused = Some(
+        "LLM Error: unexpected response format (expected scene starts that are Messages of the call, in story order)",
     );
+    assert_eq!(failures, vec![("memory", refused), ("memory", refused)]);
+}
+
+// CASE memory-call-record-second-try: a good second try after a refused one is recorded as a good call, after the record of the refused try.
+#[test]
+fn test_a_good_second_try_is_recorded_after_the_refused_one() {
+    let good = answer(&[(12, 15)]);
+
+    let recorded = recorded_run(
+        ScriptedModel::new()
+            .story_memory(NOT_JSON)
+            .story_memory(good.clone()),
+    );
+
+    assert_eq!(recorded.len(), 2);
+    assert!(
+        recorded[0].error_message.is_some(),
+        "the refused try comes first"
+    );
+    assert_eq!(recorded[1].agent_name, "memory");
+    assert!(recorded[1].error_message.is_none());
+    assert_eq!(recorded[1].parsed_response, good);
 }

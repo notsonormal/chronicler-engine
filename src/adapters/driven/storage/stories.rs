@@ -1,5 +1,5 @@
 //! [DOC: docs/diataxis/reference/storage.md]
-//! The story reads: the end of the story, one Swipe state, and the entries of a window
+//! The story reads: the end of the story, one Swipe state, the entries of a window, and the memory entries
 
 use crate::adapters::driven::storage::models::message::DbMessage;
 use crate::adapters::driven::storage::models::swipe::DbSwipe;
@@ -7,6 +7,7 @@ use crate::adapters::driven::storage::utils::{parse_datetime, require_message_of
 use crate::adapters::driven::storage::{Backend, Storage, StorageCall};
 use crate::domain::model::game::GameId;
 use crate::domain::model::message::{Message, SwipeAt};
+use crate::domain::model::memory_entry::{MemoryEntries, MemoryEntry};
 use crate::domain::model::state::message_types::StoryRow;
 use crate::domain::model::state::swipe_state::SwipeState;
 use crate::domain::model::tail::Tail;
@@ -178,6 +179,68 @@ impl StoryReads<'_> {
             .with_backend_mut(StorageCall::StoriesEntries, |backend| match backend {
                 Backend::Sqlite { pool } => Self::entries_of(&pool.conn(), game, before, limit),
             })
+    }
+
+    /// The memory entries of the active Swipes of the Messages before `before` (exclusive),
+    /// oldest first.
+    pub fn memory_entries(
+        &self,
+        game: GameId,
+        before: Option<u64>,
+    ) -> Result<MemoryEntries, EngineError> {
+        self.storage
+            .with_backend_mut(StorageCall::StoriesMemoryEntries, |backend| match backend {
+                Backend::Sqlite { pool } => Self::memory_entries_of(&pool.conn(), game, before),
+            })
+    }
+
+    fn memory_entries_of(
+        conn: &rusqlite::Connection,
+        game: GameId,
+        before: Option<u64>,
+    ) -> Result<MemoryEntries, EngineError> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT e.from_message, e.to_message, e.story_time, e.place, e.took_part, e.others, e.what_happened \
+                 FROM memory_entries e \
+                 JOIN message_swipes s ON s.id = e.swipe_id \
+                 JOIN messages m ON m.id = s.message_id AND s.swipe_index = m.active_swipe_index \
+                 WHERE m.game_id = ?1 AND m.id < ?2 \
+                 ORDER BY m.id, e.position",
+            )
+            .db_context("Failed to prepare the memory entries")?;
+        let rows = stmt
+            .query_map(
+                rusqlite::params![game.0 as i64, Self::before_bound(before)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)? as u64,
+                        row.get::<_, i64>(1)? as u64,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
+                    ))
+                },
+            )
+            .db_context("Failed to read the memory entries")?;
+
+        let mut entries = Vec::new();
+        for row in rows {
+            let (from, to, time, place, took_part, others, what_happened) =
+                row.db_context("Failed to read a memory entry")?;
+            entries.push(MemoryEntry {
+                from,
+                to,
+                time,
+                place,
+                took_part: serde_json::from_str(&took_part)?,
+                others: serde_json::from_str(&others)?,
+                what_happened,
+            });
+        }
+        Ok(MemoryEntries::new(entries))
     }
 
     fn entries_of(

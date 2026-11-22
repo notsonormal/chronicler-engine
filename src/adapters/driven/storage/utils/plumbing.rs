@@ -14,7 +14,7 @@ pub(crate) fn parse_datetime(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
-const LATEST_VERSION: i32 = 34;
+const LATEST_VERSION: i32 = 35;
 
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), EngineError> {
     migrate_up_to(conn, LATEST_VERSION)
@@ -792,6 +792,29 @@ pub(crate) fn migrate_up_to(conn: &Connection, up_to: i32) -> Result<(), EngineE
         }
 
         conn.pragma_update(None, "user_version", 34)
+            .db_context("Failed to set user_version")?;
+    }
+
+    if due(35) {
+        // A list that grows cannot live in the Swipe state, which every Swipe copies. The
+        // entries hang on the Swipe whose cut wrote them, so a delete of its Message takes them.
+        exec(
+            "CREATE TABLE IF NOT EXISTS memory_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                swipe_id INTEGER NOT NULL REFERENCES message_swipes(id) ON DELETE CASCADE,
+                position INTEGER NOT NULL,
+                from_message INTEGER NOT NULL,
+                to_message INTEGER NOT NULL,
+                story_time TEXT NOT NULL,
+                place TEXT NOT NULL,
+                took_part TEXT NOT NULL,
+                others TEXT NOT NULL,
+                what_happened TEXT NOT NULL,
+                UNIQUE(swipe_id, position)
+            )",
+        )?;
+
+        conn.pragma_update(None, "user_version", 35)
             .db_context("Failed to set user_version")?;
     }
 

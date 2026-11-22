@@ -7,6 +7,7 @@ use crate::application::agents::quantifier::types::{
     MovementParseResult, MovementType, QuantifierConfidence, QuantifierParseResult,
     QuantifierReading,
 };
+use crate::application::prompting::sanitize::json_object_in;
 
 #[derive(Deserialize, Debug)]
 struct QuantifierJsonResponse {
@@ -90,21 +91,18 @@ pub(crate) fn try_parse_json_full(
             }
         }
     }
-    if let Some(start) = response.find('{') {
-        if let Some(end) = response.rfind('}') {
-            let json_str = &response[start..=end];
-            match serde_json::from_str::<QuantifierJsonResponse>(json_str) {
-                Ok(parsed) => {
-                    tracing::debug!(
-                        "[Quantifier] Extracted JSON parsed: characters={:?}, movement={:?}",
-                        parsed.characters_present,
-                        parsed.movement
-                    );
-                    return Ok((parsed.characters_present, parsed.movement));
-                }
-                Err(e) => {
-                    tracing::debug!("[Quantifier] Extracted JSON parse failed: {}", e);
-                }
+    if let Some(json_str) = json_object_in(response) {
+        match serde_json::from_str::<QuantifierJsonResponse>(json_str) {
+            Ok(parsed) => {
+                tracing::debug!(
+                    "[Quantifier] Extracted JSON parsed: characters={:?}, movement={:?}",
+                    parsed.characters_present,
+                    parsed.movement
+                );
+                return Ok((parsed.characters_present, parsed.movement));
+            }
+            Err(e) => {
+                tracing::debug!("[Quantifier] Extracted JSON parse failed: {}", e);
             }
         }
     }
