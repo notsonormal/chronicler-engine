@@ -20,3 +20,7 @@ Source: `/retro` 2026-11-13, the long-term-memory-and-state session `01a1cc56` (
 - **A.** When the default path exists, use a free one with a numeric suffix and print it.
 - **B.** Keep the marker after a successful run, so a rerun may clear it.
 - **C.** Nothing.
+
+## More evidence (2026-11-22)
+
+Source: `/retro` 2026-11-22 of [Build the scene entries](../../long-term-memory-and-state/issues/17-build-scene-entries.md), retro session `e91f4262`. The coordinator ran `rm -rf tmp/review/4832b0fa-uncommitted` before the second bundle of the same tree, to avoid the refusal.
