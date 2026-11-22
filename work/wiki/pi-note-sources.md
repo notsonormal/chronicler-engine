@@ -1,6 +1,6 @@
 # The pi-note sources of `mrn-context`, and the usage note that left
 
-These claims describe the working tree on 2026-11-22. The change that made them is `d90e9821`, committed on that day.
+These claims describe the working tree on 2026-11-22. The change that made them is `ff93cd9e`, committed on that day.
 
 - From 2026-10-21 to 2026-11-22, `mrn-context` posted three notes into a pi turn: the model of the turn, the newest build log of the session, and the Anthropic 5h and 7d usage. From 2026-11-22 it posts the first two.
 - On 2026-10-21, commit `a925fed1` added the usage source to `.pi/extensions/mrn-context/index.ts`. It read the cache that `@sreetej510/pi-usage` writes (`~/.pi/agent/usage-cache.json`) and posted a note whenever the 5h or 7d window crossed a bucket of `[0, 30, 60, 80, 90, 100]`. The aim was that the agent would change its behaviour under budget pressure.

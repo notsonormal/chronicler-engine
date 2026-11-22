@@ -1,6 +1,6 @@
 # The Node tests beside the pi extensions run in the gate
 
-These claims describe the working tree on 2026-11-22. The change that made them is `d90e9821`, committed on that day.
+These claims describe the working tree on 2026-11-22. The change that made them is `ff93cd9e`, committed on that day.
 
 - As of `a39ef8d0`, no gate step ran the TypeScript unit tests under `.pi/extensions/`. `node --test <file>` ran them, and a test could break while the gate stayed green.
 - On 2026-11-22, `build.py` gained the step `pi-tests`: `node --test '.pi/extensions/**/*.test.ts'`, placed in `_GATE_CHECKS` after `py-tests`. The full gate and `--no-browser` run it.
