@@ -1,0 +1,47 @@
+{
+ "first": 382,
+ "last": 400,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4675,
+ "completion_tokens": 699,
+ "answer": "{\"entries\":[{\"from\":382,\"to\":385,\"time\":\"Day 1, midday\",\"place\":\"Redmist Estate, the small dining room off the kitchen\",\"took_part\":[\"Julian\",\"Louise\"],\"others\":[],\"what_happened\":\"Julian told Louise that Gabriella's sending food back began before the funeral and had continued since, and asked whether anyone had ever told her it wasn't her fault. Louise said nobody had, that the kitchen doesn't do that, and that you learn to tell yourself or go home. She admitted the chicken was the safe choice, made because she had one evening to learn his temper, and promised something with a temper tomorrow, her own cooking, not Bernard's table or Gabriella's. Julian said to save the gherkins for that dish, asked for suppers that would hold a man doing attic, bank and Harbor Row work, and asked her to tell him plainly whenever food went back. Louise agreed to tell him twice, including about his own temper, and told him to come to the kitchen tomorrow morning before the attic for something that isn't safe.\"},{\"from\":386,\"to\":393,\"time\":\"Day 1, evening\",\"place\":\"Redmist Estate, the service stairs, Lisette's door, the linen store and the attic stair\",\"took_part\":[\"Julian\",\"Lisette\"],\"others\":[],\"what_happened\":\"Julian took the pantry key from its nail and knocked at Lisette's door, offering to wait for morning. Lisette, changed into a grey work dress, chose tonight and fetched the bolt-cutter from the tool store. Julian told her Jezebel's meeting had covered debts, a loan Bernard stopped paying and a lump of gold nobody could account for. Lisette said the gold was the second loan, what the tradesmen were paid with. In the linen store she cut the painted seam of the ceiling hatch and lifted it; the boarded stair above was opened by cutting the nails. Julian insisted on going first up the stair, over Lisette's protest, and she told him the third step past the turn was soft. The attic held crates along the east wall, a workbench and an iron-banded chest with a fist-sized padlock, all under thirty years of dust.\"},{\"from\":394,\"to\":400,\"time\":\"Day 1, evening\",\"place\":\"Redmist Estate, the attic above the west wing\",\"took_part\":[\"Julian\",\"Lisette\"],\"others\":[],\"what_happened\":\"Julian asked Lisette whether to open the crates or the chest first; she chose the crates. The first, stencilled HOSPITAL SUPPLY, ISLAPORT, held small wax-sealed bottles labelled PHYSICIANS' SUPPLY \u2014 NOT FOR RETAIL, dated eighteen years past, with a ledger sheet in Bernard's hand listing quantities and dates. Lisette found fourteen crates of the hospital supply, all the same date, and five plainer crates of the same year but a different month, holding smaller unlabelled bottles with pencil notes reading One quarter grain. Hourly as tolerated. Julian reasoned the hospital crates were cover and the plain ones the real cargo, and that Bernard might have made, sold or held the stuff. He crouched at the chest and compared the pantry key to its padlock before forcing anything.\"}]}",
+ "entries": [
+  {
+   "from": 382,
+   "to": 385,
+   "time": "Day 1, midday",
+   "place": "Redmist Estate, the small dining room off the kitchen",
+   "took_part": [
+    "Julian",
+    "Louise"
+   ],
+   "others": [],
+   "what_happened": "Julian told Louise that Gabriella's sending food back began before the funeral and had continued since, and asked whether anyone had ever told her it wasn't her fault. Louise said nobody had, that the kitchen doesn't do that, and that you learn to tell yourself or go home. She admitted the chicken was the safe choice, made because she had one evening to learn his temper, and promised something with a temper tomorrow, her own cooking, not Bernard's table or Gabriella's. Julian said to save the gherkins for that dish, asked for suppers that would hold a man doing attic, bank and Harbor Row work, and asked her to tell him plainly whenever food went back. Louise agreed to tell him twice, including about his own temper, and told him to come to the kitchen tomorrow morning before the attic for something that isn't safe."
+  },
+  {
+   "from": 386,
+   "to": 393,
+   "time": "Day 1, evening",
+   "place": "Redmist Estate, the service stairs, Lisette's door, the linen store and the attic stair",
+   "took_part": [
+    "Julian",
+    "Lisette"
+   ],
+   "others": [],
+   "what_happened": "Julian took the pantry key from its nail and knocked at Lisette's door, offering to wait for morning. Lisette, changed into a grey work dress, chose tonight and fetched the bolt-cutter from the tool store. Julian told her Jezebel's meeting had covered debts, a loan Bernard stopped paying and a lump of gold nobody could account for. Lisette said the gold was the second loan, what the tradesmen were paid with. In the linen store she cut the painted seam of the ceiling hatch and lifted it; the boarded stair above was opened by cutting the nails. Julian insisted on going first up the stair, over Lisette's protest, and she told him the third step past the turn was soft. The attic held crates along the east wall, a workbench and an iron-banded chest with a fist-sized padlock, all under thirty years of dust."
+  },
+  {
+   "from": 394,
+   "to": 400,
+   "time": "Day 1, evening",
+   "place": "Redmist Estate, the attic above the west wing",
+   "took_part": [
+    "Julian",
+    "Lisette"
+   ],
+   "others": [],
+   "what_happened": "Julian asked Lisette whether to open the crates or the chest first; she chose the crates. The first, stencilled HOSPITAL SUPPLY, ISLAPORT, held small wax-sealed bottles labelled PHYSICIANS' SUPPLY \u2014 NOT FOR RETAIL, dated eighteen years past, with a ledger sheet in Bernard's hand listing quantities and dates. Lisette found fourteen crates of the hospital supply, all the same date, and five plainer crates of the same year but a different month, holding smaller unlabelled bottles with pencil notes reading One quarter grain. Hourly as tolerated. Julian reasoned the hospital crates were cover and the plain ones the real cargo, and that Bernard might have made, sold or held the stuff. He crouched at the chest and compared the pantry key to its padlock before forcing anything."
+  }
+ ]
+}

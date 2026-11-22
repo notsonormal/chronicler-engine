@@ -1,0 +1,75 @@
+{
+ "first": 615,
+ "last": 637,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4744,
+ "completion_tokens": 1176,
+ "answer": "{\"entries\":[{\"from\":615,\"to\":618,\"time\":\"Day 1, evening\",\"place\":\"The Redmist estate, the corridor at the top of the stairs\",\"took_part\":[\"Julian\",\"Louise\"],\"others\":[],\"what_happened\":\"Julian met Louise at the corridor's end and told her he wanted something hot, honest and not heavy before his eight o'clock at a lawyer's office, and asked her to make what she would make if nobody were watching. Louise said that would be her mother's fish stew with mussels and cream, but for eight o'clock she would make fish, greens and a clear broth instead. She explained the kitchen kept a pot going from six in the morning till ten at night, with cold plates under cloth between, and asked him to ring down before seven if he would be out past ten and to tell her where he was going. Julian told her he would be at Halvorsen's office on King Street at eight and at the Islaport Trust at one, and that if he had not rung by seven he would want hot food on his return. Louise wrote it all in her notebook and said a pot would be on at six.\"},{\"from\":619,\"to\":622,\"time\":\"Day 1, night\",\"place\":\"The Redmist estate, the master quarters\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian went up to the master quarters, where the windows had been opened to air the room and a dark wool suit and spare shirt had been laid out on the bed for the morning. He shut the windows, changed in the lit dressing room, and sat at the writing table with paper and ink, undecided what to write. The pen dripped once onto the blotter and he blotted it with his thumb. Later a carriage turned in at the gate, and Carla knocked at his door to say the boy had come to the house himself, would not wait for morning or hand the codicil to her in the lane, and was in the library with the key.\"},{\"from\":623,\"to\":630,\"time\":\"Day 1, night\",\"place\":\"The Redmist estate, the library\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"Tomas\"],\"what_happened\":\"Julian had Carla walk ahead of him to the library, where Tomas stood by the reading chair with the key in his fist. Tomas said Carla had told him what the codicil said and he had decided not to sleep on it, and gave Julian a folded paper in his own hand recording what his father had told him about the winter of the Draught, corroborated by his mother. Julian read it and asked to hear it aloud. Tomas said the harbor froze, the boats came in half-starved, and Bernard came one night with a young doctor from the hospital and a list; the three spent till dawn deciding who was short of coal, who had children, and which boats were worth saving, and his father kept the accounts in a book, the only honest ledger of his life. Julian said the father's ledger was the paper they needed, alongside Bernard's journals, and asked whether it still existed. Tomas said it was in his mother's chest with the letters and death notices and she had never let him read it in twelve years. Julian told him to ask her as a son, not for a banker's desk, and said the strongbox would go to the Trust at one o'clock whether or not she gave up the book. Tomas left by the side gate.\"},{\"from\":631,\"to\":634,\"time\":\"Day 1, night\",\"place\":\"The Redmist estate, the library\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian asked Carla whether he had any right to want a widow's private ledger. Carla said he had a right to ask but not to have, that a widow's bedroom was still her bedroom, and advised him to want it, ask for it, and take no for an answer until he had a court or the son's word that the book was his father's to give, since a Redmist who took a book from a woman's chest would be talked about on the east side by breakfast. Julian agreed, put out the lamp, and said that in the morning before Halvorsen they would go to Marchand Street not for the book but to ask for it to her face. Carla said they would leave at half six and told him to take a no gently. She closed the library and went to her quarters.\"},{\"from\":635,\"to\":637,\"time\":\"Day 2, early morning\",\"place\":\"The Redmist estate hall, then Marchand Street\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"the driver\"],\"what_happened\":\"Julian came down before the hall lamps were up, in the dark suit, and checked the proper clock: half past five. He stood before a portrait of the Redmist who built the east wing until Carla came from the kitchen corridor with a lantern, saying the carriage was at the gate early. She remarked that the family had cut people open for four generations and none could keep a house in order. They drove through the dark city along Marchand Street, where one window in the house at the green gate was lit. Julian stepped down and came up to the gate but did not unlatch it, calling up to the lit window that he had come to ask a thing to her face and to hear the no to his face, and that nobody's arm needed twisting on his account.\"}]}",
+ "entries": [
+  {
+   "from": 615,
+   "to": 618,
+   "time": "Day 1, evening",
+   "place": "The Redmist estate, the corridor at the top of the stairs",
+   "took_part": [
+    "Julian",
+    "Louise"
+   ],
+   "others": [],
+   "what_happened": "Julian met Louise at the corridor's end and told her he wanted something hot, honest and not heavy before his eight o'clock at a lawyer's office, and asked her to make what she would make if nobody were watching. Louise said that would be her mother's fish stew with mussels and cream, but for eight o'clock she would make fish, greens and a clear broth instead. She explained the kitchen kept a pot going from six in the morning till ten at night, with cold plates under cloth between, and asked him to ring down before seven if he would be out past ten and to tell her where he was going. Julian told her he would be at Halvorsen's office on King Street at eight and at the Islaport Trust at one, and that if he had not rung by seven he would want hot food on his return. Louise wrote it all in her notebook and said a pot would be on at six."
+  },
+  {
+   "from": 619,
+   "to": 622,
+   "time": "Day 1, night",
+   "place": "The Redmist estate, the master quarters",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian went up to the master quarters, where the windows had been opened to air the room and a dark wool suit and spare shirt had been laid out on the bed for the morning. He shut the windows, changed in the lit dressing room, and sat at the writing table with paper and ink, undecided what to write. The pen dripped once onto the blotter and he blotted it with his thumb. Later a carriage turned in at the gate, and Carla knocked at his door to say the boy had come to the house himself, would not wait for morning or hand the codicil to her in the lane, and was in the library with the key."
+  },
+  {
+   "from": 623,
+   "to": 630,
+   "time": "Day 1, night",
+   "place": "The Redmist estate, the library",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "Tomas"
+   ],
+   "what_happened": "Julian had Carla walk ahead of him to the library, where Tomas stood by the reading chair with the key in his fist. Tomas said Carla had told him what the codicil said and he had decided not to sleep on it, and gave Julian a folded paper in his own hand recording what his father had told him about the winter of the Draught, corroborated by his mother. Julian read it and asked to hear it aloud. Tomas said the harbor froze, the boats came in half-starved, and Bernard came one night with a young doctor from the hospital and a list; the three spent till dawn deciding who was short of coal, who had children, and which boats were worth saving, and his father kept the accounts in a book, the only honest ledger of his life. Julian said the father's ledger was the paper they needed, alongside Bernard's journals, and asked whether it still existed. Tomas said it was in his mother's chest with the letters and death notices and she had never let him read it in twelve years. Julian told him to ask her as a son, not for a banker's desk, and said the strongbox would go to the Trust at one o'clock whether or not she gave up the book. Tomas left by the side gate."
+  },
+  {
+   "from": 631,
+   "to": 634,
+   "time": "Day 1, night",
+   "place": "The Redmist estate, the library",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian asked Carla whether he had any right to want a widow's private ledger. Carla said he had a right to ask but not to have, that a widow's bedroom was still her bedroom, and advised him to want it, ask for it, and take no for an answer until he had a court or the son's word that the book was his father's to give, since a Redmist who took a book from a woman's chest would be talked about on the east side by breakfast. Julian agreed, put out the lamp, and said that in the morning before Halvorsen they would go to Marchand Street not for the book but to ask for it to her face. Carla said they would leave at half six and told him to take a no gently. She closed the library and went to her quarters."
+  },
+  {
+   "from": 635,
+   "to": 637,
+   "time": "Day 2, early morning",
+   "place": "The Redmist estate hall, then Marchand Street",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "the driver"
+   ],
+   "what_happened": "Julian came down before the hall lamps were up, in the dark suit, and checked the proper clock: half past five. He stood before a portrait of the Redmist who built the east wing until Carla came from the kitchen corridor with a lantern, saying the carriage was at the gate early. She remarked that the family had cut people open for four generations and none could keep a house in order. They drove through the dark city along Marchand Street, where one window in the house at the green gate was lit. Julian stepped down and came up to the gate but did not unlatch it, calling up to the lit window that he had come to ask a thing to her face and to hear the no to his face, and that nobody's arm needed twisting on his account."
+  }
+ ]
+}

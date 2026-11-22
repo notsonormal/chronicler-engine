@@ -53,12 +53,31 @@ A candidate is a JSON file with these fields:
 | Field | Meaning |
 |---|---|
 | `name` | The name of the result files. |
-| `schedule` | `once`: one writer call over all the dropped entries at each ask point. `each_cut`: one writer call at each history cut, with the previous memory and the entries of that cut only (a rolling memory). |
+| `schedule` | `once`: one writer call over all the dropped entries at each ask point. `each_cut`: one writer call at each history cut, with the previous memory and the entries of that cut only (a rolling memory). `append_cut`: one writer call at each history cut, whose scene entries are added to a list that is never rewritten (see below). |
 | `position` | `before_history` or `after_history`. |
 | `writer_system`, `writer_user` | The writer prompt. `writer_user` can use `{entries}` (the entries as `[#id Narration]` or `[#id Julian]` and their text), `{previous}` (the previous memory, `each_cut` only), `{first}` and `{last}`. |
 | `max_tokens` | The cap on the writer answer. The default is 2048. |
+| `list_head` | `append_cut` only. The line at the head of the scene entries in the memory block. |
+| `list_space` | `append_cut` only, optional. The space of the list in tokens. The oldest entries leave the memory block until the list fits. No space means every entry shows. |
 
 The tool keeps each written memory in `memory/<name>-r<run>/`. The questions of one run that share a dropped range share one memory. A new run writes a new memory, so the spread includes the noise of the writer.
+
+### The `append_cut` schedule
+
+Added for [Decide the form of the scene entries](../issues/16-scene-entries.md). The tool calls each Message of the stored story an "entry"; a *scene entry* is one item that the writer writes.
+
+- **The writer prompt.** `writer_user` can use `{entries}`, `{first}`, `{last}`, `{cast}` (the Persona name, then the names of the World cast, read from `data/` through the `setup.json` of the pack), `{persona}`, and `{previous_entry}` (the last scene entry written before, as one rendered line, or a note that these are the first Messages).
+- **The answer.** One JSON object `{"entries": [...]}`. Each scene entry has `from`, `to`, `time`, `place`, `took_part`, `others` and `what_happened`. A Markdown code fence around the object is allowed.
+- **The rules of the engine** (`docs/specs/story_memory.md`). An answer with the finish reason `length` is a failed call. An answer that the tool cannot read is also a failed call. A failed call adds nothing, and its Messages go to the next call. One call holds at most one history space of Messages (`HISTORY_SPACE`, 16,000 tokens, the trial size, counted at 4.2 characters per token).
+- **The memory block.** The opening Narration (the first Message of the stored story) word for word in `<Opening>`, then `<SceneEntries>` with `list_head` and every scene entry, oldest first.
+- **The stored record.** `memory/<name>-r<run>/cut-<id>.json` for each cut: the range, the answer, the finish reason, the failure, the token usage and the parsed scene entries.
+
+Two more commands work on the scene entries:
+
+```bash
+python3 $T write <candidate> <folder> [--pack <pack>]   # the scene entries of every cut, with no question
+python3 $T scenes <memory folder> ... [--markdown <file>]  # the form checks, the sizes and the cost; a readable file of the first folder
+```
 
 A candidate that needs more than a prompt and a schedule (for example, a memory for each Character, or a list of who was present) needs a new schedule in `Memories.for_call`. Keep the result one text for the `<StoryMemory>` block, or add a position.
 

@@ -38,7 +38,7 @@ Put three changes in place (owner, 2026-11-10, D6 and D17 of [the decisions](../
 ## Not in scope
 
 - The listen address (D2: waits for a release).
-- A stored key in the HTML of the Connection edit form, and `GET /data/settings.json`. The report names both. No decision accepted them.
+- A stored key in the HTML of the Connection edit form (D22: no change), and `GET /data/settings.json` (D24: no change).
 - A `Content-Security-Policy` header.
 
 ## What already exists

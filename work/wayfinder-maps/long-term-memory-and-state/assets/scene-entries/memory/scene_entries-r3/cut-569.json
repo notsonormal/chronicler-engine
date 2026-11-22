@@ -1,0 +1,140 @@
+{
+ "first": 549,
+ "last": 568,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4826,
+ "completion_tokens": 1643,
+ "answer": "{\"entries\":[{\"from\":549,\"to\":550,\"time\":\"Day 1, morning\",\"place\":\"Jezebel's office and the study in the east wing\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian said the login and the locksmith were cause enough to open Bernard's log, and asked Jezebel to come with him. Jezebel agreed, saying Carla could stay at the door and that if the log was gone or rearranged they would go straight to Campion, not the police, to avoid scandal. She led them to the study, unlocked the bottom drawer of Bernard's desk, and found it empty, with not even a scrap of paper left.\"},{\"from\":551,\"to\":552,\"time\":\"Day 1, morning\",\"place\":\"The study and the library\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian checked the empty drawer for a false bottom and found nothing, and asked whether it had been locked. He reasoned that a man who wrote everything down would not leave one empty drawer unaccounted for, and asked where else Bernard kept things. Jezebel said the desk and the reading chair in the library, where Bernard kept a cushion he refused to have mended. In the library she lifted the green cushion and found a small brass key with a tag stamped in Bernard's hand.\"},{\"from\":553,\"to\":554,\"time\":\"Day 1, morning\",\"place\":\"The library\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian read the name on the tag, Hollis, and said a small brass key with a name was a key to something specific, not the master key. Jezebel identified Hollis as Marguerite Hollis, the widow of Bernard's brother Edmund, who lived on Marchand Street in town and had taken Edmund's death hard. She said Bernard barely spoke of her but sent money to the house every quarter quietly, and she never wrote back. Jezebel concluded Bernard wanted the key found by one of them, not a stranger.\"},{\"from\":555,\"to\":556,\"time\":\"Day 1, morning\",\"place\":\"The library\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian decided to go to Marchand Street that day, before word spread that the drawer had been opened, and asked one or both of them to come as a witness. He asked what they knew of her. Jezebel described Marguerite Hollis as sixty-odd, a former hospital nurse whom the family took badly when Edmund married her late; she kept to herself in a widow's house on Marchand with a green garden gate and did not attend estate functions. Carla warned Marchand was not a street to walk blind and they needed a reason for the visit that held up. Jezebel advised saying Bernard left Julian the key with her name on it, and not mentioning the drawer.\"},{\"from\":557,\"to\":558,\"time\":\"Day 1, morning\",\"place\":\"The study\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian agreed to the line that Bernard left him the key, and said he would tell her honestly that her name turned up among Bernard's things. He asked whether there was a record of the money sent to her. Jezebel found in a ledger that payments had gone quarterly for twelve years without a miss, a few thousand each quarter, enough to keep a small household but not to live without care. Beside the last payment Bernard had written 'For the boy's schooling.' Jezebel said Hollis had a son.\"},{\"from\":559,\"to\":560,\"time\":\"Day 1, morning\",\"place\":\"The study\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian worked out the boy would be Edmund's son and his own second cousin, and said he would tell Marguerite her son's name was in Bernard's hand in a ledger nobody else had read. He asked who held the payments and whether they had stopped, fearing someone might reach for the boy's tuition. Jezebel wrote the name of the paying bank, Marchand Mutual, on a slip and gave it to Julian, and said she would ring them before noon quietly. Carla said Marchand Street was a forty-minute walk or a short carriage ride and advised taking the carriage, and restated the agreed line about the key. Jezebel said the boy would be near eighteen now.\"},{\"from\":561,\"to\":562,\"time\":\"Day 1, morning\",\"place\":\"The study, the corridor and the entrance hall\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian said he would hear the boy out if he was there, and told Jezebel to ring Marchand Mutual before they returned, since an uncollected payment would show whether the house still expected money. He confirmed the key's story to Carla and went into the corridor. In the entrance hall Carla went out to have the carriage brought round and told Julian to stay where there was a wall at his back. Jezebel said she would ring the bank from her office and warned that Marguerite, a former nurse, would read his face faster than his words.\"},{\"from\":563,\"to\":564,\"time\":\"Day 1, morning\",\"place\":\"The drive outside the house and the carriage on the road into town\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian stepped out into the haze, climbed into the carriage once Carla was seated, and asked how to handle a stranger's door, including whether to offer the boy a chair. Carla advised offering the chair and letting the widow decide whether he sat in it: knock, say who he was and why he had come in one breath, and leave a gap of silence afterward. She said if the door did not open at all, they would still learn something. The carriage drove toward the city and the harbor.\"},{\"from\":565,\"to\":566,\"time\":\"Day 1, morning\",\"place\":\"The carriage on Marchand Street\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian said he would keep his voice low and his hands visible, and asked whether he should still leave a gap if the son answered. Carla said a widow got the gap but a son got the cards down plain and early, since an eighteen-year-old kept quiet for twelve years would suspect a story he was eased into. She told him to give the boy the fact of the key and the fact of the money and let him decide what to feel. The carriage slowed into Marchand Street, rows of modest brick houses with painted doors and gardens behind low walls.\"},{\"from\":567,\"to\":568,\"time\":\"Day 1, morning\",\"place\":\"The pavement and the green gate of the Hollis house on Marchand Street\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"Marguerite Hollis's son\"],\"what_happened\":\"Julian got down and decided they would go to the door together with Carla hanging back a step, close enough if it turned ugly. They reached the house with the chalky green gate and the blue door, its brass knocker recently polished, and a neat garden of clipped hedges, a vegetable bed and pots along the step. Before Julian reached the door it opened and a tall, thin young man came out with a pruning knife in his hand and dirt to the wrist, looking at Julian and then at Carla at the gate, and asked if he could help them.\"}]}",
+ "entries": [
+  {
+   "from": 549,
+   "to": 550,
+   "time": "Day 1, morning",
+   "place": "Jezebel's office and the study in the east wing",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian said the login and the locksmith were cause enough to open Bernard's log, and asked Jezebel to come with him. Jezebel agreed, saying Carla could stay at the door and that if the log was gone or rearranged they would go straight to Campion, not the police, to avoid scandal. She led them to the study, unlocked the bottom drawer of Bernard's desk, and found it empty, with not even a scrap of paper left."
+  },
+  {
+   "from": 551,
+   "to": 552,
+   "time": "Day 1, morning",
+   "place": "The study and the library",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian checked the empty drawer for a false bottom and found nothing, and asked whether it had been locked. He reasoned that a man who wrote everything down would not leave one empty drawer unaccounted for, and asked where else Bernard kept things. Jezebel said the desk and the reading chair in the library, where Bernard kept a cushion he refused to have mended. In the library she lifted the green cushion and found a small brass key with a tag stamped in Bernard's hand."
+  },
+  {
+   "from": 553,
+   "to": 554,
+   "time": "Day 1, morning",
+   "place": "The library",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian read the name on the tag, Hollis, and said a small brass key with a name was a key to something specific, not the master key. Jezebel identified Hollis as Marguerite Hollis, the widow of Bernard's brother Edmund, who lived on Marchand Street in town and had taken Edmund's death hard. She said Bernard barely spoke of her but sent money to the house every quarter quietly, and she never wrote back. Jezebel concluded Bernard wanted the key found by one of them, not a stranger."
+  },
+  {
+   "from": 555,
+   "to": 556,
+   "time": "Day 1, morning",
+   "place": "The library",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian decided to go to Marchand Street that day, before word spread that the drawer had been opened, and asked one or both of them to come as a witness. He asked what they knew of her. Jezebel described Marguerite Hollis as sixty-odd, a former hospital nurse whom the family took badly when Edmund married her late; she kept to herself in a widow's house on Marchand with a green garden gate and did not attend estate functions. Carla warned Marchand was not a street to walk blind and they needed a reason for the visit that held up. Jezebel advised saying Bernard left Julian the key with her name on it, and not mentioning the drawer."
+  },
+  {
+   "from": 557,
+   "to": 558,
+   "time": "Day 1, morning",
+   "place": "The study",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian agreed to the line that Bernard left him the key, and said he would tell her honestly that her name turned up among Bernard's things. He asked whether there was a record of the money sent to her. Jezebel found in a ledger that payments had gone quarterly for twelve years without a miss, a few thousand each quarter, enough to keep a small household but not to live without care. Beside the last payment Bernard had written 'For the boy's schooling.' Jezebel said Hollis had a son."
+  },
+  {
+   "from": 559,
+   "to": 560,
+   "time": "Day 1, morning",
+   "place": "The study",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian worked out the boy would be Edmund's son and his own second cousin, and said he would tell Marguerite her son's name was in Bernard's hand in a ledger nobody else had read. He asked who held the payments and whether they had stopped, fearing someone might reach for the boy's tuition. Jezebel wrote the name of the paying bank, Marchand Mutual, on a slip and gave it to Julian, and said she would ring them before noon quietly. Carla said Marchand Street was a forty-minute walk or a short carriage ride and advised taking the carriage, and restated the agreed line about the key. Jezebel said the boy would be near eighteen now."
+  },
+  {
+   "from": 561,
+   "to": 562,
+   "time": "Day 1, morning",
+   "place": "The study, the corridor and the entrance hall",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian said he would hear the boy out if he was there, and told Jezebel to ring Marchand Mutual before they returned, since an uncollected payment would show whether the house still expected money. He confirmed the key's story to Carla and went into the corridor. In the entrance hall Carla went out to have the carriage brought round and told Julian to stay where there was a wall at his back. Jezebel said she would ring the bank from her office and warned that Marguerite, a former nurse, would read his face faster than his words."
+  },
+  {
+   "from": 563,
+   "to": 564,
+   "time": "Day 1, morning",
+   "place": "The drive outside the house and the carriage on the road into town",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian stepped out into the haze, climbed into the carriage once Carla was seated, and asked how to handle a stranger's door, including whether to offer the boy a chair. Carla advised offering the chair and letting the widow decide whether he sat in it: knock, say who he was and why he had come in one breath, and leave a gap of silence afterward. She said if the door did not open at all, they would still learn something. The carriage drove toward the city and the harbor."
+  },
+  {
+   "from": 565,
+   "to": 566,
+   "time": "Day 1, morning",
+   "place": "The carriage on Marchand Street",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian said he would keep his voice low and his hands visible, and asked whether he should still leave a gap if the son answered. Carla said a widow got the gap but a son got the cards down plain and early, since an eighteen-year-old kept quiet for twelve years would suspect a story he was eased into. She told him to give the boy the fact of the key and the fact of the money and let him decide what to feel. The carriage slowed into Marchand Street, rows of modest brick houses with painted doors and gardens behind low walls."
+  },
+  {
+   "from": 567,
+   "to": 568,
+   "time": "Day 1, morning",
+   "place": "The pavement and the green gate of the Hollis house on Marchand Street",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "Marguerite Hollis's son"
+   ],
+   "what_happened": "Julian got down and decided they would go to the door together with Carla hanging back a step, close enough if it turned ugly. They reached the house with the chalky green gate and the blue door, its brass knocker recently polished, and a neat garden of clipped hedges, a vegetable bed and pots along the step. Before Julian reached the door it opened and a tall, thin young man came out with a pruning knife in his hand and dirt to the wrist, looking at Julian and then at Carla at the gate, and asked if he could help them."
+  }
+ ]
+}

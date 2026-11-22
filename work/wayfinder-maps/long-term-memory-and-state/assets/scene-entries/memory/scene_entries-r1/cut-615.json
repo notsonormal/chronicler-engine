@@ -1,0 +1,92 @@
+{
+ "first": 591,
+ "last": 614,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4937,
+ "completion_tokens": 1423,
+ "answer": "{\"entries\":[{\"from\":591,\"to\":594,\"time\":\"Day 1, morning\",\"place\":\"The Redmist estate, the gate and the drive\",\"took_part\":[\"Julian\",\"Carla\",\"Lisette\"],\"others\":[\"the gatekeeper\"],\"what_happened\":\"Julian read Jezebel's note twice, then had Carla read it. The note said the draught had cleared three weeks before, after the funeral and before the will was read, sent on Bernard's standing and not collected since; it advised keeping the account open, because a closed account leaves a trail and an open one a door. It named Halvorsen, an old, methodical lawyer who had beaten the Trust's rulebook, and said Jezebel would ring him that night. Carla said they could watch the open account to learn who signed the draughts now. She planned to have Halvorsen see Julian before one o'clock the next day. Lisette met them at the doors with a card: Mr. Campion, the solicitor, had rung and asked for a call back before the evening.\"},{\"from\":595,\"to\":596,\"time\":\"Day 1, morning\",\"place\":\"The Redmist estate, the hall and the study off the south corridor\",\"took_part\":[\"Julian\",\"Carla\",\"Lisette\"],\"others\":[],\"what_happened\":\"Lisette said Campion had been crisp on the telephone and wanted to speak to Julian rather than a diary, and that after six he took the receiver off. She led Julian and Carla to a study off the south corridor, Bernard's old sitting room, unused since the spring, with a fire lit and a decanter and glass at hand; Carla had had it sorted that morning. Lisette said the telephone was on the desk and asked whether to bring anything. Julian asked for a glass of cold water, nothing stronger, and told Carla to stay and listen in case Campion said something that mattered.\"},{\"from\":597,\"to\":604,\"time\":\"Day 1, late afternoon\",\"place\":\"The Redmist estate, the study off the south corridor\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"Campion\"],\"what_happened\":\"Julian rang Campion, who said two matters could not wait. The master-key handoff had to happen that week, since a credential with a dead holder and no heir on record could be argued improperly transferred. And Bernard had added a six-line codicil in his last month, naming no one and granting nothing, but speaking of a trust established years before off the estate's books, whose beneficiaries were known only to Bernard and his banker, and saying no inquiry into it was suspicious. Campion said he had known nothing of it until that afternoon and had sat on it since three. Asked about the Draught, he said it meant the winter the Islaport harbor froze, nineteen-oh-five. He noted Bernard kept accounts at Marchand Mutual until it closed, then at Islaport Trust, and that an old account left open meant the old door still worked. The handoff was set for Friday at ten in the morning; Julian needed to bring only himself, and the vault wanted Campion's key and Jezebel's. Campion said the codicil had not left his desk and would next be discussed in Julian's presence, then hung up without goodbye. Carla, by the fire, asked whether Tomas should be told of the codicil before the meeting.\"},{\"from\":605,\"to\":608,\"time\":\"Day 1, evening\",\"place\":\"The Redmist estate, the study off the south corridor\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian decided Tomas must be told before the meeting, and better from the paper itself than from Julian's mouth, so the boy could see Bernard's hand. Carla agreed and said she would take the codicil that evening while it was still light, having Tomas at the bench opposite the Trust door at half past twelve for the one o'clock meeting. She reported that Halvorsen's clerk had rung: the lawyer would see Julian at eight in the morning at his office on King Street, for one hour. Julian told her to send word to the estate as soon as she knew whether Tomas would come, and to tell Tomas honestly why Julian had not brought the codicil himself. He asked her to take the boy out through the garden and the side gate by the kitchen, not the front drive, in case the gatekeeper's cousin was watching the street. Carla said she would not spend the evening persuading Tomas if his mother had talked him out of it, and warned Julian to eat before Halvorsen, leaving by half past seven.\"},{\"from\":609,\"to\":612,\"time\":\"Day 1, evening\",\"place\":\"The Redmist estate, the study and the corridor\",\"took_part\":[\"Julian\",\"Carla\",\"Lisette\"],\"others\":[],\"what_happened\":\"Julian said he would send for Louise about supper and Lisette about clothes, not wanting to look like a man who had been chasing keys around the city. He asked Carla what to expect of Halvorsen as a man. She said Halvorsen was old money and older manners, would offer tea he did not want and judge how he held the cup, measured people rather than warming to them, and would hear a shortened story across the room; Julian should tell the whole of Marchand and not fill the silences, and if Halvorsen liked him he would start talking about next week. Julian told her to eat before the cold walk with the codicil. Carla left toward the kitchens. Lisette found Julian before he reached the stairs and said Louise had sent word about supper and would come herself with her notebook and a list of what the kitchen had.\"},{\"from\":613,\"to\":614,\"time\":\"Day 1, evening\",\"place\":\"The Redmist estate, the stairs and corridor\",\"took_part\":[\"Julian\",\"Lisette\"],\"others\":[\"Louise\"],\"what_happened\":\"Julian told Lisette to have Louise come up with her list, and asked for a sober, dark change of clothes for the morning, nothing that shone. He then asked Lisette, who had served the house ten years, for anything a new master ought to know. She told him the east corridor clock ran nine minutes fast, as Bernard had set it, and the staff kept time by the kitchen clock, so he should not trust it for an eight o'clock appointment. She also said the study's west window did not shut true, and when harbor fog came in the wind through it sounded like a knocking. She went to see about the clothes. Louise's footsteps came up the corridor below, her notebook already open.\"}]}",
+ "entries": [
+  {
+   "from": 591,
+   "to": 594,
+   "time": "Day 1, morning",
+   "place": "The Redmist estate, the gate and the drive",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Lisette"
+   ],
+   "others": [
+    "the gatekeeper"
+   ],
+   "what_happened": "Julian read Jezebel's note twice, then had Carla read it. The note said the draught had cleared three weeks before, after the funeral and before the will was read, sent on Bernard's standing and not collected since; it advised keeping the account open, because a closed account leaves a trail and an open one a door. It named Halvorsen, an old, methodical lawyer who had beaten the Trust's rulebook, and said Jezebel would ring him that night. Carla said they could watch the open account to learn who signed the draughts now. She planned to have Halvorsen see Julian before one o'clock the next day. Lisette met them at the doors with a card: Mr. Campion, the solicitor, had rung and asked for a call back before the evening."
+  },
+  {
+   "from": 595,
+   "to": 596,
+   "time": "Day 1, morning",
+   "place": "The Redmist estate, the hall and the study off the south corridor",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Lisette"
+   ],
+   "others": [],
+   "what_happened": "Lisette said Campion had been crisp on the telephone and wanted to speak to Julian rather than a diary, and that after six he took the receiver off. She led Julian and Carla to a study off the south corridor, Bernard's old sitting room, unused since the spring, with a fire lit and a decanter and glass at hand; Carla had had it sorted that morning. Lisette said the telephone was on the desk and asked whether to bring anything. Julian asked for a glass of cold water, nothing stronger, and told Carla to stay and listen in case Campion said something that mattered."
+  },
+  {
+   "from": 597,
+   "to": 604,
+   "time": "Day 1, late afternoon",
+   "place": "The Redmist estate, the study off the south corridor",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "Campion"
+   ],
+   "what_happened": "Julian rang Campion, who said two matters could not wait. The master-key handoff had to happen that week, since a credential with a dead holder and no heir on record could be argued improperly transferred. And Bernard had added a six-line codicil in his last month, naming no one and granting nothing, but speaking of a trust established years before off the estate's books, whose beneficiaries were known only to Bernard and his banker, and saying no inquiry into it was suspicious. Campion said he had known nothing of it until that afternoon and had sat on it since three. Asked about the Draught, he said it meant the winter the Islaport harbor froze, nineteen-oh-five. He noted Bernard kept accounts at Marchand Mutual until it closed, then at Islaport Trust, and that an old account left open meant the old door still worked. The handoff was set for Friday at ten in the morning; Julian needed to bring only himself, and the vault wanted Campion's key and Jezebel's. Campion said the codicil had not left his desk and would next be discussed in Julian's presence, then hung up without goodbye. Carla, by the fire, asked whether Tomas should be told of the codicil before the meeting."
+  },
+  {
+   "from": 605,
+   "to": 608,
+   "time": "Day 1, evening",
+   "place": "The Redmist estate, the study off the south corridor",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian decided Tomas must be told before the meeting, and better from the paper itself than from Julian's mouth, so the boy could see Bernard's hand. Carla agreed and said she would take the codicil that evening while it was still light, having Tomas at the bench opposite the Trust door at half past twelve for the one o'clock meeting. She reported that Halvorsen's clerk had rung: the lawyer would see Julian at eight in the morning at his office on King Street, for one hour. Julian told her to send word to the estate as soon as she knew whether Tomas would come, and to tell Tomas honestly why Julian had not brought the codicil himself. He asked her to take the boy out through the garden and the side gate by the kitchen, not the front drive, in case the gatekeeper's cousin was watching the street. Carla said she would not spend the evening persuading Tomas if his mother had talked him out of it, and warned Julian to eat before Halvorsen, leaving by half past seven."
+  },
+  {
+   "from": 609,
+   "to": 612,
+   "time": "Day 1, evening",
+   "place": "The Redmist estate, the study and the corridor",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Lisette"
+   ],
+   "others": [],
+   "what_happened": "Julian said he would send for Louise about supper and Lisette about clothes, not wanting to look like a man who had been chasing keys around the city. He asked Carla what to expect of Halvorsen as a man. She said Halvorsen was old money and older manners, would offer tea he did not want and judge how he held the cup, measured people rather than warming to them, and would hear a shortened story across the room; Julian should tell the whole of Marchand and not fill the silences, and if Halvorsen liked him he would start talking about next week. Julian told her to eat before the cold walk with the codicil. Carla left toward the kitchens. Lisette found Julian before he reached the stairs and said Louise had sent word about supper and would come herself with her notebook and a list of what the kitchen had."
+  },
+  {
+   "from": 613,
+   "to": 614,
+   "time": "Day 1, evening",
+   "place": "The Redmist estate, the stairs and corridor",
+   "took_part": [
+    "Julian",
+    "Lisette"
+   ],
+   "others": [
+    "Louise"
+   ],
+   "what_happened": "Julian told Lisette to have Louise come up with her list, and asked for a sober, dark change of clothes for the morning, nothing that shone. He then asked Lisette, who had served the house ten years, for anything a new master ought to know. She told him the east corridor clock ran nine minutes fast, as Bernard had set it, and the staff kept time by the kitchen clock, so he should not trust it for an eight o'clock appointment. She also said the study's west window did not shut true, and when harbor fog came in the wind through it sounded like a knocking. She went to see about the clothes. Louise's footsteps came up the corridor below, her notebook already open."
+  }
+ ]
+}

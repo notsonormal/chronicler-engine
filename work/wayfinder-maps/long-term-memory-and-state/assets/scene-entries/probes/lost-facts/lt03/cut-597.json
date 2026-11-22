@@ -1,0 +1,64 @@
+{
+ "first": 585,
+ "last": 596,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4860,
+ "completion_tokens": 1103,
+ "answer": "{\"entries\":[{\"from\":585,\"to\":586,\"time\":\"Day 1, afternoon\",\"place\":\"Outside Euclid & Sons, harbour front\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[\"Voss\"],\"what_happened\":\"Voss took back the closed ledger and said he would know the boy's note from any other boy's note, and would be counting on Julian's word. Jezebel said she would lodge a copy with the foundation's solicitor that afternoon, so that a private address would find a page at the bank and with them. Outside, Carla waited in the running car and pushed the rear door open herself, saying the sky was turning and they had maybe an hour before rain slicked the roads. She asked whether they would take the guest wing that night or try the clinic first. Julian said the clinic was a fool's errand, since Voss had said trustees sit Tuesday and Thursday mornings, and chose the guest wing. He asked Jezebel for a sealed, dated copy of the counter-instruction, and for something in Bernard's own words on the trust and probate. He asked Carla whether there was a back way into the guest wing.\"},{\"from\":587,\"to\":589,\"time\":\"Day 1, late afternoon\",\"place\":\"Car on the estate drive, then the hall of the house\",\"took_part\":[\"Julian\",\"Jezebel\",\"Carla\"],\"others\":[],\"what_happened\":\"Jezebel found a tabbed clause in the ledger: Bernard's estate papers gave Gabriella the guest wing to occupy, not to alter, with furnishings and repairs needing Jezebel's or the estate's approval. She promised a sealed, notarized note on that and on the probate date, delivered by her own hand. Carla drove off before Julian's door was shut and described a service passage off the kitchen corridor, through a pantry with a door onto Gabriella's sitting room, past the front room and library. She said the staff owned that passage and that Lisette knew it best, having avoided it all week. Rain struck the windshield as they came up the drive. Julian said Lisette should be at the passage before he knocked, and asked whether Gabriella kept a servant. Carla said Gabriella's girl Mira had quit a month after the funeral without notice, so no servant remained. Jezebel went to draft the notes by the fire in the east parlor; Carla went down the kitchen corridor.\"},{\"from\":590,\"to\":593,\"time\":\"Day 1, evening\",\"place\":\"The house, corridor to the guest wing\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Julian said he would go up to the guest wing by the front way like any guest, and would read every line before touching a pen, preferring Gabriella's no with his name intact to her yes with his signature bought. Carla returned from the kitchen corridor, checked that her sidearm was in the desk drawer, and said Gabriella had had an hour to polish whatever she had rehearsed. She offered to walk him to the wing's door and wait in the hall while he went in alone. Jezebel promised her sealed, dated, signed notes in his room within half an hour. Julian asked Carla to wait in the hall and not come through the door, and to give him a quarter of an hour. Carla walked a pace behind him to the guest wing, whose outer door stood open, and put her back to the wall beside the frame, saying she would be right there.\"},{\"from\":594,\"to\":596,\"time\":\"Day 1, evening\",\"place\":\"Gabriella's sitting room, guest wing\",\"took_part\":[\"Julian\",\"Gabriella\"],\"others\":[],\"what_happened\":\"Julian knocked three times on the door frame and stayed at the threshold, saying he had spent the afternoon with Bernard's papers and wanted plain talk. Gabriella invited him in, poured him a drink he did not touch, and said she had sent him to the study hoping he would find Bernard's reason there rather than hear it from others. Julian said Bernard had left one secret written down and another he would not read out, and that the house and money were a debt, not a gift. Gabriella showed him a life estate drawn by her solicitor: the wing for her life and a modest provision for its upkeep. Julian said Bernard's clause already let her occupy the wing, and that the folder would seal it against courts and heirs, then asked whether it was what she wanted or her solicitor's cage. She said both, admitting she had no family or dowry. A floorboard creaked off the pantry; Julian said it was probably Lisette, whom he had asked to be near the passage. He asked whether Gabriella had written the unsigned letters to the bank about the trust keeping two beds lit. She denied it, saying she did not write to banks, and suggested someone clever with a pen and the run of the house paper wanted them at each other's throats before probate. She pushed the folder to him. Julian took it closed, asked who emptied her wastepaper basket and who had the run of Bernard's study before it was locked, then opened it to the first page and began reading.\"}]}",
+ "entries": [
+  {
+   "from": 585,
+   "to": 586,
+   "time": "Day 1, afternoon",
+   "place": "Outside Euclid & Sons, harbour front",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [
+    "Voss"
+   ],
+   "what_happened": "Voss took back the closed ledger and said he would know the boy's note from any other boy's note, and would be counting on Julian's word. Jezebel said she would lodge a copy with the foundation's solicitor that afternoon, so that a private address would find a page at the bank and with them. Outside, Carla waited in the running car and pushed the rear door open herself, saying the sky was turning and they had maybe an hour before rain slicked the roads. She asked whether they would take the guest wing that night or try the clinic first. Julian said the clinic was a fool's errand, since Voss had said trustees sit Tuesday and Thursday mornings, and chose the guest wing. He asked Jezebel for a sealed, dated copy of the counter-instruction, and for something in Bernard's own words on the trust and probate. He asked Carla whether there was a back way into the guest wing."
+  },
+  {
+   "from": 587,
+   "to": 589,
+   "time": "Day 1, late afternoon",
+   "place": "Car on the estate drive, then the hall of the house",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Jezebel found a tabbed clause in the ledger: Bernard's estate papers gave Gabriella the guest wing to occupy, not to alter, with furnishings and repairs needing Jezebel's or the estate's approval. She promised a sealed, notarized note on that and on the probate date, delivered by her own hand. Carla drove off before Julian's door was shut and described a service passage off the kitchen corridor, through a pantry with a door onto Gabriella's sitting room, past the front room and library. She said the staff owned that passage and that Lisette knew it best, having avoided it all week. Rain struck the windshield as they came up the drive. Julian said Lisette should be at the passage before he knocked, and asked whether Gabriella kept a servant. Carla said Gabriella's girl Mira had quit a month after the funeral without notice, so no servant remained. Jezebel went to draft the notes by the fire in the east parlor; Carla went down the kitchen corridor."
+  },
+  {
+   "from": 590,
+   "to": 593,
+   "time": "Day 1, evening",
+   "place": "The house, corridor to the guest wing",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Julian said he would go up to the guest wing by the front way like any guest, and would read every line before touching a pen, preferring Gabriella's no with his name intact to her yes with his signature bought. Carla returned from the kitchen corridor, checked that her sidearm was in the desk drawer, and said Gabriella had had an hour to polish whatever she had rehearsed. She offered to walk him to the wing's door and wait in the hall while he went in alone. Jezebel promised her sealed, dated, signed notes in his room within half an hour. Julian asked Carla to wait in the hall and not come through the door, and to give him a quarter of an hour. Carla walked a pace behind him to the guest wing, whose outer door stood open, and put her back to the wall beside the frame, saying she would be right there."
+  },
+  {
+   "from": 594,
+   "to": 596,
+   "time": "Day 1, evening",
+   "place": "Gabriella's sitting room, guest wing",
+   "took_part": [
+    "Julian",
+    "Gabriella"
+   ],
+   "others": [],
+   "what_happened": "Julian knocked three times on the door frame and stayed at the threshold, saying he had spent the afternoon with Bernard's papers and wanted plain talk. Gabriella invited him in, poured him a drink he did not touch, and said she had sent him to the study hoping he would find Bernard's reason there rather than hear it from others. Julian said Bernard had left one secret written down and another he would not read out, and that the house and money were a debt, not a gift. Gabriella showed him a life estate drawn by her solicitor: the wing for her life and a modest provision for its upkeep. Julian said Bernard's clause already let her occupy the wing, and that the folder would seal it against courts and heirs, then asked whether it was what she wanted or her solicitor's cage. She said both, admitting she had no family or dowry. A floorboard creaked off the pantry; Julian said it was probably Lisette, whom he had asked to be near the passage. He asked whether Gabriella had written the unsigned letters to the bank about the trust keeping two beds lit. She denied it, saying she did not write to banks, and suggested someone clever with a pen and the run of the house paper wanted them at each other's throats before probate. She pushed the folder to him. Julian took it closed, asked who emptied her wastepaper basket and who had the run of Bernard's study before it was locked, then opened it to the first page and began reading."
+  }
+ ]
+}

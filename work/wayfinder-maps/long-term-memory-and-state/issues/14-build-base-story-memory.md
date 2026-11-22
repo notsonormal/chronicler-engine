@@ -141,6 +141,6 @@ All three pass conditions of the Check hold. An earlier trial, with a prompt tha
 
 ### Open
 
-- **The size of the story memory is not under control.** In five of nine runs of the memory test, the text reached the response length at the fourth or fifth cut. In both trials it stayed under it. In the engine, such an answer is a failed writer call, and the story memory stays at its last good text. The ticket is [Decide how the story memory keeps its size](15-story-memory-size.md).
+- **The size of the story memory is not under control.** In five of nine runs of the memory test, the text reached the response length at the fourth or fifth cut. In both trials it stayed under it. In the engine, such an answer is a failed writer call, and the story memory stays at its last good text. The ticket is [Decide how the story memory keeps its size](15-story-memory-size.md). Its answer of 2026-11-14 replaces the rewritten text with scene entries that never change.
 - **Every Swipe after the first cut holds a copy of the story memory text** (choice 1, accepted for the base).
 - **The outside check of the map did not run on the base.** No judge counted the three memory faults. This ticket did not ask for it.

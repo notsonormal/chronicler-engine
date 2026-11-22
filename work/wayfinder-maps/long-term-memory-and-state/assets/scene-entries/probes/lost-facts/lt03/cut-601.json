@@ -1,0 +1,23 @@
+{
+ "first": 597,
+ "last": 600,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 1739,
+ "completion_tokens": 348,
+ "answer": "{\"entries\": [{\"from\": 597, \"to\": 600, \"time\": \"Day 1, evening\", \"place\": \"Gabriella's sitting room, guest wing\", \"took_part\": [\"Julian\", \"Gabriella\"], \"others\": [], \"what_happened\": \"Gabriella said Lisette emptied her wastepaper basket and had the run of Bernard's study before he locked it, trusted for years to keep his papers and pens without reading anything he had not asked her to file, which made her either incurious or worth watching. She also raised Louise, the cook, who had been soused in Paris, received monthly letters from her mother, and knew how to melt and seal wax. Julian said Louise had cooked for him since his arrival and pleased him without asking anything, so he would neither condemn nor dismiss her over a wax seal. He refused to sign the folder that night, saying he would wait until probate was done and a lawyer had read it against Bernard's clause, and told Gabriella to show that answer to her solicitor. She agreed it was fair, set the folder on the writing desk under a paperweight shaped like a fishing boat, and asked for one written line confirming the wing stayed hers pending review, for herself rather than her solicitor. She said she would listen for servants' talk and warned him to watch how the cook took his praise at supper. Julian wrote on desk paper that the guest wing remained Gabriella Redmist's to occupy pending review of estate terms, signed J. Redmist and dated it, and had her read it before he signed, asking that a copy stay in the room rather than go to her solicitor.\"}]}",
+ "entries": [
+  {
+   "from": 597,
+   "to": 600,
+   "time": "Day 1, evening",
+   "place": "Gabriella's sitting room, guest wing",
+   "took_part": [
+    "Julian",
+    "Gabriella"
+   ],
+   "others": [],
+   "what_happened": "Gabriella said Lisette emptied her wastepaper basket and had the run of Bernard's study before he locked it, trusted for years to keep his papers and pens without reading anything he had not asked her to file, which made her either incurious or worth watching. She also raised Louise, the cook, who had been soused in Paris, received monthly letters from her mother, and knew how to melt and seal wax. Julian said Louise had cooked for him since his arrival and pleased him without asking anything, so he would neither condemn nor dismiss her over a wax seal. He refused to sign the folder that night, saying he would wait until probate was done and a lawyer had read it against Bernard's clause, and told Gabriella to show that answer to her solicitor. She agreed it was fair, set the folder on the writing desk under a paperweight shaped like a fishing boat, and asked for one written line confirming the wing stayed hers pending review, for herself rather than her solicitor. She said she would listen for servants' talk and warned him to watch how the cook took his praise at supper. Julian wrote on desk paper that the guest wing remained Gabriella Redmist's to occupy pending review of estate terms, signed J. Redmist and dated it, and had her read it before he signed, asking that a copy stay in the room rather than go to her solicitor."
+  }
+ ]
+}

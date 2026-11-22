@@ -1,0 +1,60 @@
+{
+ "first": 366,
+ "last": 381,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4827,
+ "completion_tokens": 1095,
+ "answer": "{\"entries\": [{\"from\": 366, \"to\": 373, \"time\": \"Day 1, morning\", \"place\": \"Redmist Estate main hall, at the wide desk\", \"took_part\": [\"Julian\", \"Jezebel\"], \"others\": [], \"what_happened\": \"Julian could not recall any clause about a strongbox in the will and asked who had drawn it up and whether that solicitor would take Jezebel's word that he was the heir. Jezebel named Ambrose Pell, who had handled the Redmist account thirty years and would want Julian in his office in person with a birth record, his mother's name, and possibly a magistrate's seal; she would write to Pell that the heir had arrived and ask plainly whether the strongbox could be opened before the estate was settled. Asked why Bernard stopped paying eight weeks before he died, she recalled Bernard saying four months back that he had got something wrong and could only stop paying for it, and she noted Gabriella's spending had risen since the death. The will gave Gabriella only a year in the guest wing, a modest allowance and use of the horses; her own money came from a settlement from her first husband's shipping family, yet two months ago she sold a necklace through a jeweler on Harbor Row for six figures, bought a carriage the same week, and bought more jewels through the same jeweler three weeks later. Jezebel named the jeweler Corvin, three doors from the chandlery, and suggested Julian go as a customer with Bernard's watch fob to polish; she said Corvin would not carry tales to Gabriella but wrote everything in his own ledger. She left to write to Pell before supper, saying Julian should be at the bank with papers by end of week.\", \"others\": []}, {\"from\": 374, \"to\": 375, \"time\": \"Day 1, morning\", \"place\": \"Redmist Estate, corridor and back-stair pantry\", \"took_part\": [\"Julian\", \"Jezebel\"], \"others\": [], \"what_happened\": \"Julian said he had Bernard's watch, still ticking, and would use it as an errand at Corvin's; he asked whether Pell's office arranged the magistrate's seal, and Jezebel said Pell arranged it and Julian paid the clerk's fee. He then asked for the house key that fitted no door, saying there was a painted-shut hatch in the linen store ceiling above a wet patch, that Bernard had boarded the stair and paid the workmen himself, and that Lisette had watched it for a decade and would go up with him in daylight and have a say in who heard what they found. Jezebel said the house ring was hers to give out since the housekeeper died two winters back, and led him down to the pantry, where she took Bernard's private key from its own nail and put it in his palm, to be returned by Sunday. She said she would want Lisette's trust eventually and warned him not to explain Bernard to himself, since buried things have reasons.\", \"others\": []}, {\"from\": 376, \"to\": 377, \"time\": \"Day 1, midday\", \"place\": \"Redmist Estate, back-stair corridor and the small dining room off the kitchen\", \"took_part\": [\"Julian\", \"Jezebel\", \"Louise\"], \"others\": [], \"what_happened\": \"Julian promised the key back on its hook by Sunday and said Lisette's telling would be hers to choose, not carried by him. He asked where he was expected to eat supper. Jezebel said Gabriella took supper most nights alone at the head of the dining room, in Bernard's chair, while Louise had set Julian a place in the small room off the kitchen; she advised the small room tonight and the great table tomorrow, then left for her letter to Pell and her column on the jewels. In the small dining room, Louise served chicken with the skin taken off and asked what he honestly ate, saying she would take notes and not be insulted unless he lied.\", \"others\": []}, {\"from\": 378, \"to\": 381, \"time\": \"Day 1, midday\", \"place\": \"Redmist Estate, the small dining room off the kitchen\", \"took_part\": [\"Julian\", \"Louise\"], \"others\": [], \"what_happened\": \"Julian said he ate what was put before him, disliked food fussed over until cold, and liked a plain roast, good bread and something sharp such as pickles or hard cheese. Louise said alone she ate bread and leftovers over the sink and liked it, and promised warm bread and the jar of good gherkins from the cellar tomorrow. Julian said he had grown up at a city table, his mother working long hours, and he had learned to cook early and to stretch a thin purse. He asked what it had been like cooking in a house with no one at the top. Louise said Gabriella sent dishes back once or twice, calling soup cold when it was not, and that this began long before the funeral; Bernard ate what he was given, said thank you, told her plainly if he disliked something, and wanted sauces simple.\", \"others\": []}]}",
+ "entries": [
+  {
+   "from": 366,
+   "to": 373,
+   "time": "Day 1, morning",
+   "place": "Redmist Estate main hall, at the wide desk",
+   "took_part": [
+    "Julian",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Julian could not recall any clause about a strongbox in the will and asked who had drawn it up and whether that solicitor would take Jezebel's word that he was the heir. Jezebel named Ambrose Pell, who had handled the Redmist account thirty years and would want Julian in his office in person with a birth record, his mother's name, and possibly a magistrate's seal; she would write to Pell that the heir had arrived and ask plainly whether the strongbox could be opened before the estate was settled. Asked why Bernard stopped paying eight weeks before he died, she recalled Bernard saying four months back that he had got something wrong and could only stop paying for it, and she noted Gabriella's spending had risen since the death. The will gave Gabriella only a year in the guest wing, a modest allowance and use of the horses; her own money came from a settlement from her first husband's shipping family, yet two months ago she sold a necklace through a jeweler on Harbor Row for six figures, bought a carriage the same week, and bought more jewels through the same jeweler three weeks later. Jezebel named the jeweler Corvin, three doors from the chandlery, and suggested Julian go as a customer with Bernard's watch fob to polish; she said Corvin would not carry tales to Gabriella but wrote everything in his own ledger. She left to write to Pell before supper, saying Julian should be at the bank with papers by end of week."
+  },
+  {
+   "from": 374,
+   "to": 375,
+   "time": "Day 1, morning",
+   "place": "Redmist Estate, corridor and back-stair pantry",
+   "took_part": [
+    "Julian",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Julian said he had Bernard's watch, still ticking, and would use it as an errand at Corvin's; he asked whether Pell's office arranged the magistrate's seal, and Jezebel said Pell arranged it and Julian paid the clerk's fee. He then asked for the house key that fitted no door, saying there was a painted-shut hatch in the linen store ceiling above a wet patch, that Bernard had boarded the stair and paid the workmen himself, and that Lisette had watched it for a decade and would go up with him in daylight and have a say in who heard what they found. Jezebel said the house ring was hers to give out since the housekeeper died two winters back, and led him down to the pantry, where she took Bernard's private key from its own nail and put it in his palm, to be returned by Sunday. She said she would want Lisette's trust eventually and warned him not to explain Bernard to himself, since buried things have reasons."
+  },
+  {
+   "from": 376,
+   "to": 377,
+   "time": "Day 1, midday",
+   "place": "Redmist Estate, back-stair corridor and the small dining room off the kitchen",
+   "took_part": [
+    "Julian",
+    "Jezebel",
+    "Louise"
+   ],
+   "others": [],
+   "what_happened": "Julian promised the key back on its hook by Sunday and said Lisette's telling would be hers to choose, not carried by him. He asked where he was expected to eat supper. Jezebel said Gabriella took supper most nights alone at the head of the dining room, in Bernard's chair, while Louise had set Julian a place in the small room off the kitchen; she advised the small room tonight and the great table tomorrow, then left for her letter to Pell and her column on the jewels. In the small dining room, Louise served chicken with the skin taken off and asked what he honestly ate, saying she would take notes and not be insulted unless he lied."
+  },
+  {
+   "from": 378,
+   "to": 381,
+   "time": "Day 1, midday",
+   "place": "Redmist Estate, the small dining room off the kitchen",
+   "took_part": [
+    "Julian",
+    "Louise"
+   ],
+   "others": [],
+   "what_happened": "Julian said he ate what was put before him, disliked food fussed over until cold, and liked a plain roast, good bread and something sharp such as pickles or hard cheese. Louise said alone she ate bread and leftovers over the sink and liked it, and promised warm bread and the jar of good gherkins from the cellar tomorrow. Julian said he had grown up at a city table, his mother working long hours, and he had learned to cook early and to stretch a thin purse. He asked what it had been like cooking in a house with no one at the top. Louise said Gabriella sent dishes back once or twice, calling soup cold when it was not, and that this began long before the funeral; Bernard ate what he was given, said thank you, told her plainly if he disliked something, and wanted sauces simple."
+  }
+ ]
+}

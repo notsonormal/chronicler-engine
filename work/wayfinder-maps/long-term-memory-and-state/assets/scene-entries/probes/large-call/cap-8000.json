@@ -1,0 +1,243 @@
+{
+ "first": 524,
+ "last": 614,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 16383,
+ "completion_tokens": 3120,
+ "answer": "{\"entries\":[{\"from\":524,\"to\":532,\"time\":\"Day 1, morning\",\"place\":\"Gravel drive outside the Redmist Estate gate\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Carla introduced herself as Julian's bodyguard and asked to borrow his phone for a threat assessment. Julian insisted on holding it himself and unlocking only what she needed. In the login history they found a sign-in from three days earlier, after Julian booked his train and before he had told anyone but his mother he was coming. Carla told him not to clear the history and explained the master key: one passcode Bernard held that opens every estate lock, accounts, foundation books and vault, to be handed over in a witnessed procedure run by Jezebel with the lawyer Campion. She said the login might mean the handoff was being studied in advance.\"},{\"from\":533,\"to\":537,\"time\":\"Day 1, morning\",\"place\":\"Gatehouse and marble hallway of the Redmist Estate\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Carla said Jezebel did not yet know about the login and that they would keep it from her for a day to see if it leaked from her office. She judged Jezebel honest but the procedure suspect. In the gatehouse, which smelled of coffee and gun oil and held monitors for the drive, service road and pier gate, she advised telling Jezebel the key needed a review before the handoff and letting her assume nerves. Julian agreed to listen while Jezebel explained the procedure and to leave any mismatch to Carla's cue. They left for Jezebel's office in the east wing.\"},{\"from\":538,\"to\":541,\"time\":\"Day 1, morning\",\"place\":\"Marble hallway of the Redmist Estate\",\"took_part\":[\"Julian\",\"Carla\",\"Gabriella\"],\"others\":[],\"what_happened\":\"Gabriella, dressed in lavender silk and pearls, intercepted them and offered to show Julian the house, claiming she knew every leak and cold room. Julian declined politely, saying he had business with Jezebel first and would walk the house on his own time. Gabriella warned him the east wing had a draft, then said she would be in the west parlor that afternoon and went upstairs. Carla told him there was no draft in the east wing and read the remark as a warning or a lure. Julian decided not to investigate it that day and to keep the login secret from Jezebel.\"},{\"from\":542,\"to\":550,\"time\":\"Day 1, morning\",\"place\":\"Jezebel's office and Bernard's study in the east wing\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Julian told Jezebel he wanted to see the master-key handoff end to end before setting a new code, calling himself the worried kind of heir. Jezebel described the procedure: the vault room off the old dispensary, Campion and herself as witnesses, a sealed slip destroyed once the new code is set. She recalled a retired locksmith four years earlier who had the slip in hand with the door propped open. Julian revealed the three-day-old login. Jezebel named Bernard's dead brother Edmund, Campion, and Bernard's nurse Marguerite, and said Bernard kept a private log in the bottom drawer of his study desk. In the study the drawer was locked but empty. Jezebel said they would go to Campion, not the police, if the log was gone.\"},{\"from\":551,\"to\":556,\"time\":\"Day 1, morning\",\"place\":\"Bernard's study and library\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Julian found no false bottom in the empty drawer and asked where else Bernard kept things. Jezebel led them to the library reading chair, where under the green cushion lay a small brass key tagged with the name Hollis. Jezebel identified Hollis as Marguerite, widow of Bernard's brother Edmund, living on Marchand Street, to whom Bernard had sent money quarterly for twelve years without reply. Julian decided to visit her that day with a witness. Jezebel advised saying only that Bernard left Julian the key, not mentioning the drawer, and letting her wonder what else he left. Carla suggested taking the carriage rather than arriving on foot.\"},{\"from\":557,\"to\":561,\"time\":\"Day 1, morning\",\"place\":\"Bernard's study and library\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Jezebel checked a ledger: quarterly payments for twelve years, modest sums, the last annotated 'For the boy's schooling.' She said there was a son, near eighteen now. Julian said he would tell Marguerite her son's name was in Bernard's hand rather than ask what Bernard owed her, and asked Jezebel to find who held the paying account and whether payments had stopped. Jezebel wrote down Marchand Mutual and said she would ring them quietly before noon. Carla set the line that Bernard left Julian the key, with nothing about the drawer or the tag, and they left for the carriage.\"},{\"from\":562,\"to\":566,\"time\":\"Day 1, morning\",\"place\":\"Redmist Estate entrance hall and carriage to Marchand Street\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Carla went to have the carriage brought round and told Julian to stay where there was a wall at his back. Jezebel said she would ring Marchand Mutual from her office and warned that Marguerite, a former nurse, would read his face faster than his words. In the carriage Carla advised: knock, say who he is and why he has come in one breath, then leave a gap. For a son of eighteen she advised laying the facts of the key and the money down plainly and early. The carriage reached Marchand Street, a row of modest brick houses with painted doors and low walls.\"},{\"from\":567,\"to\":572,\"time\":\"Day 1, morning\",\"place\":\"Marchand Street, outside the Hollis house\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"Tomas\",\"maid\",\"gatekeeper\"],\"what_happened\":\"Julian told Carla to hang back a step at the widow's door. Tomas Hollis, tall and thin with dirt on his hands and a pruning knife, answered and asked what he wanted. Julian gave his name, said Bernard had left him a key bearing Marguerite's name, and asked whether she was home. Tomas recognized the name, set the knife down, said his mother was home, and let him in, telling him to wipe his feet. Julian said the key would stay with him whether or not she received him, and Tomas went to ask her, then returned and said she would see him.\"},{\"from\":573,\"to\":578,\"time\":\"Day 1, morning\",\"place\":\"The Hollis parlor, Marchand Street\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[\"Marguerite\",\"Tomas\"],\"what_happened\":\"Julian told Marguerite the will was real and that Bernard's ledger recorded twelve years of quarterly payments, the last marked for the boy's schooling, and set the brass key with her name on the table. Marguerite said the key was to Edmund's strongbox, held by the bank after his death and never opened because she lacked the money and stomach for a court. She said Bernard promised to sort it before illness stopped him, and that the contents belonged to Tomas. Julian said Tomas should turn the key and asked which bank held it.\"},{\"from\":579,\"to\":586,\"time\":\"Day 1, morning\",\"place\":\"The Hollis parlor and doorstep, Marchand Street\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"Marguerite\",\"Tomas\"],\"what_happened\":\"Marguerite said Marchand Mutual held Edmund's accounts but the strongbox went to the Islaport Trust when the old branch closed, and that the Trust would want a court order unless the paper named Julian. Julian admitted he did not know whether the will named the box or Tomas. He proposed going to the Trust with Tomas at his side and paying for a lawyer if paper was needed. Tomas took the key and set the meeting for one o'clock the next day, saying afternoons were quieter than the nine o'clock clerk's queue. On the step he told Julian his mother would spend the night arguing against hope, and that this was not opposition to Julian but fear of hoping.\"},{\"from\":587,\"to\":590,\"time\":\"Day 1, late morning\",\"place\":\"Carriage from Marchand Street to the Redmist Estate\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"gatekeeper\"],\"what_happened\":\"Julian left the Hollis house and told Carla the street was quiet. In the carriage he said Tomas had taken the key on his own decision and would hold to it, but had no experience with men like deputy managers, so Julian would watch the deputy rather than the box. Carla said they needed a lawyer who knew the Trust's rulebook and that Jezebel would know who. At the estate the gatekeeper handed Julian a folded note from Jezebel and reported that the staff had been told about Marchand straight, as Julian asked.\"},{\"from\":591,\"to\":594,\"time\":\"Day 1, late morning\",\"place\":\"Redmist Estate drive and entrance hall\",\"took_part\":[\"Julian\",\"Carla\",\"Lisette\"],\"others\":[\"gatekeeper\"],\"what_happened\":\"Julian had Carla read Jezebel's note. It said the last payment cleared three weeks earlier, after the funeral and before the will was read, sent on Bernard's standing rather than Julian's; the account was never formally closed and should not be closed yet. It named the lawyer Halvorsen, who would take the Trust but would want the will in hand and a client he could name without flinching, and said Jezebel would ring him that night. Julian noted the advice to keep the account open as a door. Lisette met them at the doors and said Campion had rung and wanted a call back before the evening.\"},{\"from\":595,\"to\":598,\"time\":\"Day 1, late afternoon\",\"place\":\"Bernard's old sitting room, south corridor, Redmist Estate\",\"took_part\":[\"Julian\",\"Carla\",\"Lisette\"],\"others\":[\"Campion\"],\"what_happened\":\"Lisette said Campion was crisp on the telephone and wanted to speak to Julian rather than a diary, and that he took the receiver off after six. She led them to a study off the south corridor, Bernard's old sitting room, with a fire lit and a decanter, prepared by Carla that morning. Julian asked for cold water and had Carla stay to listen, then rang Campion. Campion said the master-key handoff could not wait past the week and that Bernard had added a six-line codicil in his last month naming no one but referring to a trust established off the estate's books.\"},{\"from\":599,\"to\":604,\"time\":\"Day 1, late afternoon\",\"place\":\"Bernard's old sitting room, Redmist Estate\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"Campion\"],\"what_happened\":\"Campion read the codicil: the trust established in the winter of the year of the Draught belongs to no name on the estate's books, its beneficiaries known only to Bernard and his banker, and inquiries are not to be treated as suspicious. He admitted he had known of it only since three o'clock that afternoon. He explained the Draught as the winter of 1905 when the harbor froze, and said Bernard kept accounts at Marchand Mutual until it closed and then at Islaport Trust, leaving the old account open. The handoff was set for Friday at ten in the morning, with only Campion's and Jezebel's keys needed. Campion said the codicil had not left his desk and hung up without farewell.\"},{\"from\":605,\"to\":608,\"time\":\"Day 1, evening\",\"place\":\"Bernard's old sitting room and corridor, Redmist Estate\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian decided Tomas should hear the codicil from the paper itself before the Trust meeting, not across a banker's desk. Carla agreed and said she would take the note to Tomas that evening, having him at the bench opposite the Trust by half past twelve for the one o'clock meeting. She reported that Halvorsen's clerk had rung: the lawyer would see Julian at eight in the morning at his King Street office for one hour. Julian told her to tell Tomas the truth if asked why Julian did not bring the codicil himself, and to walk the boy out through the garden side gate by the kitchen rather than the front drive.\"},{\"from\":609,\"to\":611,\"time\":\"Day 1, evening\",\"place\":\"Bernard's old sitting room and corridor, Redmist Estate\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian said he would leave by half past seven, send for Louise about supper and Lisette about clothes, and not appear at Halvorsen's looking like a man chasing keys around a city. He asked Carla what to expect of Halvorsen as a man. She said Halvorsen was old money with old manners, would offer tea he did not want and judge how he held the cup, measured rather than warmed to people, and left silences on purpose; Julian should tell the whole Marchand story and not fill the gaps. If Halvorsen liked him, he would start talking about next week. Carla left for the kitchens.\"},{\"from\":612,\"to\":614,\"time\":\"Day 1, evening\",\"place\":\"Redmist Estate stairs and corridor\",\"took_part\":[\"Julian\",\"Lisette\"],\"others\":[\"Louise\"],\"what_happened\":\"Lisette told Julian that Louise had sent word about supper and would come herself with her notebook and a list of what the kitchen had. Julian asked for sober, dark clothes for the morning that a lawyer would not read as a man chasing keys, and asked Lisette, ten years in the house, for anything a new master should know. She told him the east corridor clock runs nine minutes fast, set so by Bernard, and the staff keep kitchen time; and that a bell rings when harbor fog comes through the study's ill-fitting west window, sounding like knocking but caused by wind. She left to see about the clothes, and Louise's footsteps came up the corridor.\"}]}",
+ "entries": [
+  {
+   "from": 524,
+   "to": 532,
+   "time": "Day 1, morning",
+   "place": "Gravel drive outside the Redmist Estate gate",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Carla introduced herself as Julian's bodyguard and asked to borrow his phone for a threat assessment. Julian insisted on holding it himself and unlocking only what she needed. In the login history they found a sign-in from three days earlier, after Julian booked his train and before he had told anyone but his mother he was coming. Carla told him not to clear the history and explained the master key: one passcode Bernard held that opens every estate lock, accounts, foundation books and vault, to be handed over in a witnessed procedure run by Jezebel with the lawyer Campion. She said the login might mean the handoff was being studied in advance."
+  },
+  {
+   "from": 533,
+   "to": 537,
+   "time": "Day 1, morning",
+   "place": "Gatehouse and marble hallway of the Redmist Estate",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Carla said Jezebel did not yet know about the login and that they would keep it from her for a day to see if it leaked from her office. She judged Jezebel honest but the procedure suspect. In the gatehouse, which smelled of coffee and gun oil and held monitors for the drive, service road and pier gate, she advised telling Jezebel the key needed a review before the handoff and letting her assume nerves. Julian agreed to listen while Jezebel explained the procedure and to leave any mismatch to Carla's cue. They left for Jezebel's office in the east wing."
+  },
+  {
+   "from": 538,
+   "to": 541,
+   "time": "Day 1, morning",
+   "place": "Marble hallway of the Redmist Estate",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Gabriella"
+   ],
+   "others": [],
+   "what_happened": "Gabriella, dressed in lavender silk and pearls, intercepted them and offered to show Julian the house, claiming she knew every leak and cold room. Julian declined politely, saying he had business with Jezebel first and would walk the house on his own time. Gabriella warned him the east wing had a draft, then said she would be in the west parlor that afternoon and went upstairs. Carla told him there was no draft in the east wing and read the remark as a warning or a lure. Julian decided not to investigate it that day and to keep the login secret from Jezebel."
+  },
+  {
+   "from": 542,
+   "to": 550,
+   "time": "Day 1, morning",
+   "place": "Jezebel's office and Bernard's study in the east wing",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Julian told Jezebel he wanted to see the master-key handoff end to end before setting a new code, calling himself the worried kind of heir. Jezebel described the procedure: the vault room off the old dispensary, Campion and herself as witnesses, a sealed slip destroyed once the new code is set. She recalled a retired locksmith four years earlier who had the slip in hand with the door propped open. Julian revealed the three-day-old login. Jezebel named Bernard's dead brother Edmund, Campion, and Bernard's nurse Marguerite, and said Bernard kept a private log in the bottom drawer of his study desk. In the study the drawer was locked but empty. Jezebel said they would go to Campion, not the police, if the log was gone."
+  },
+  {
+   "from": 551,
+   "to": 556,
+   "time": "Day 1, morning",
+   "place": "Bernard's study and library",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Julian found no false bottom in the empty drawer and asked where else Bernard kept things. Jezebel led them to the library reading chair, where under the green cushion lay a small brass key tagged with the name Hollis. Jezebel identified Hollis as Marguerite, widow of Bernard's brother Edmund, living on Marchand Street, to whom Bernard had sent money quarterly for twelve years without reply. Julian decided to visit her that day with a witness. Jezebel advised saying only that Bernard left Julian the key, not mentioning the drawer, and letting her wonder what else he left. Carla suggested taking the carriage rather than arriving on foot."
+  },
+  {
+   "from": 557,
+   "to": 561,
+   "time": "Day 1, morning",
+   "place": "Bernard's study and library",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Jezebel checked a ledger: quarterly payments for twelve years, modest sums, the last annotated 'For the boy's schooling.' She said there was a son, near eighteen now. Julian said he would tell Marguerite her son's name was in Bernard's hand rather than ask what Bernard owed her, and asked Jezebel to find who held the paying account and whether payments had stopped. Jezebel wrote down Marchand Mutual and said she would ring them quietly before noon. Carla set the line that Bernard left Julian the key, with nothing about the drawer or the tag, and they left for the carriage."
+  },
+  {
+   "from": 562,
+   "to": 566,
+   "time": "Day 1, morning",
+   "place": "Redmist Estate entrance hall and carriage to Marchand Street",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Carla went to have the carriage brought round and told Julian to stay where there was a wall at his back. Jezebel said she would ring Marchand Mutual from her office and warned that Marguerite, a former nurse, would read his face faster than his words. In the carriage Carla advised: knock, say who he is and why he has come in one breath, then leave a gap. For a son of eighteen she advised laying the facts of the key and the money down plainly and early. The carriage reached Marchand Street, a row of modest brick houses with painted doors and low walls."
+  },
+  {
+   "from": 567,
+   "to": 572,
+   "time": "Day 1, morning",
+   "place": "Marchand Street, outside the Hollis house",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "Tomas",
+    "maid",
+    "gatekeeper"
+   ],
+   "what_happened": "Julian told Carla to hang back a step at the widow's door. Tomas Hollis, tall and thin with dirt on his hands and a pruning knife, answered and asked what he wanted. Julian gave his name, said Bernard had left him a key bearing Marguerite's name, and asked whether she was home. Tomas recognized the name, set the knife down, said his mother was home, and let him in, telling him to wipe his feet. Julian said the key would stay with him whether or not she received him, and Tomas went to ask her, then returned and said she would see him."
+  },
+  {
+   "from": 573,
+   "to": 578,
+   "time": "Day 1, morning",
+   "place": "The Hollis parlor, Marchand Street",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [
+    "Marguerite",
+    "Tomas"
+   ],
+   "what_happened": "Julian told Marguerite the will was real and that Bernard's ledger recorded twelve years of quarterly payments, the last marked for the boy's schooling, and set the brass key with her name on the table. Marguerite said the key was to Edmund's strongbox, held by the bank after his death and never opened because she lacked the money and stomach for a court. She said Bernard promised to sort it before illness stopped him, and that the contents belonged to Tomas. Julian said Tomas should turn the key and asked which bank held it."
+  },
+  {
+   "from": 579,
+   "to": 586,
+   "time": "Day 1, morning",
+   "place": "The Hollis parlor and doorstep, Marchand Street",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "Marguerite",
+    "Tomas"
+   ],
+   "what_happened": "Marguerite said Marchand Mutual held Edmund's accounts but the strongbox went to the Islaport Trust when the old branch closed, and that the Trust would want a court order unless the paper named Julian. Julian admitted he did not know whether the will named the box or Tomas. He proposed going to the Trust with Tomas at his side and paying for a lawyer if paper was needed. Tomas took the key and set the meeting for one o'clock the next day, saying afternoons were quieter than the nine o'clock clerk's queue. On the step he told Julian his mother would spend the night arguing against hope, and that this was not opposition to Julian but fear of hoping."
+  },
+  {
+   "from": 587,
+   "to": 590,
+   "time": "Day 1, late morning",
+   "place": "Carriage from Marchand Street to the Redmist Estate",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "gatekeeper"
+   ],
+   "what_happened": "Julian left the Hollis house and told Carla the street was quiet. In the carriage he said Tomas had taken the key on his own decision and would hold to it, but had no experience with men like deputy managers, so Julian would watch the deputy rather than the box. Carla said they needed a lawyer who knew the Trust's rulebook and that Jezebel would know who. At the estate the gatekeeper handed Julian a folded note from Jezebel and reported that the staff had been told about Marchand straight, as Julian asked."
+  },
+  {
+   "from": 591,
+   "to": 594,
+   "time": "Day 1, late morning",
+   "place": "Redmist Estate drive and entrance hall",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Lisette"
+   ],
+   "others": [
+    "gatekeeper"
+   ],
+   "what_happened": "Julian had Carla read Jezebel's note. It said the last payment cleared three weeks earlier, after the funeral and before the will was read, sent on Bernard's standing rather than Julian's; the account was never formally closed and should not be closed yet. It named the lawyer Halvorsen, who would take the Trust but would want the will in hand and a client he could name without flinching, and said Jezebel would ring him that night. Julian noted the advice to keep the account open as a door. Lisette met them at the doors and said Campion had rung and wanted a call back before the evening."
+  },
+  {
+   "from": 595,
+   "to": 598,
+   "time": "Day 1, late afternoon",
+   "place": "Bernard's old sitting room, south corridor, Redmist Estate",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Lisette"
+   ],
+   "others": [
+    "Campion"
+   ],
+   "what_happened": "Lisette said Campion was crisp on the telephone and wanted to speak to Julian rather than a diary, and that he took the receiver off after six. She led them to a study off the south corridor, Bernard's old sitting room, with a fire lit and a decanter, prepared by Carla that morning. Julian asked for cold water and had Carla stay to listen, then rang Campion. Campion said the master-key handoff could not wait past the week and that Bernard had added a six-line codicil in his last month naming no one but referring to a trust established off the estate's books."
+  },
+  {
+   "from": 599,
+   "to": 604,
+   "time": "Day 1, late afternoon",
+   "place": "Bernard's old sitting room, Redmist Estate",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "Campion"
+   ],
+   "what_happened": "Campion read the codicil: the trust established in the winter of the year of the Draught belongs to no name on the estate's books, its beneficiaries known only to Bernard and his banker, and inquiries are not to be treated as suspicious. He admitted he had known of it only since three o'clock that afternoon. He explained the Draught as the winter of 1905 when the harbor froze, and said Bernard kept accounts at Marchand Mutual until it closed and then at Islaport Trust, leaving the old account open. The handoff was set for Friday at ten in the morning, with only Campion's and Jezebel's keys needed. Campion said the codicil had not left his desk and hung up without farewell."
+  },
+  {
+   "from": 605,
+   "to": 608,
+   "time": "Day 1, evening",
+   "place": "Bernard's old sitting room and corridor, Redmist Estate",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian decided Tomas should hear the codicil from the paper itself before the Trust meeting, not across a banker's desk. Carla agreed and said she would take the note to Tomas that evening, having him at the bench opposite the Trust by half past twelve for the one o'clock meeting. She reported that Halvorsen's clerk had rung: the lawyer would see Julian at eight in the morning at his King Street office for one hour. Julian told her to tell Tomas the truth if asked why Julian did not bring the codicil himself, and to walk the boy out through the garden side gate by the kitchen rather than the front drive."
+  },
+  {
+   "from": 609,
+   "to": 611,
+   "time": "Day 1, evening",
+   "place": "Bernard's old sitting room and corridor, Redmist Estate",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian said he would leave by half past seven, send for Louise about supper and Lisette about clothes, and not appear at Halvorsen's looking like a man chasing keys around a city. He asked Carla what to expect of Halvorsen as a man. She said Halvorsen was old money with old manners, would offer tea he did not want and judge how he held the cup, measured rather than warmed to people, and left silences on purpose; Julian should tell the whole Marchand story and not fill the gaps. If Halvorsen liked him, he would start talking about next week. Carla left for the kitchens."
+  },
+  {
+   "from": 612,
+   "to": 614,
+   "time": "Day 1, evening",
+   "place": "Redmist Estate stairs and corridor",
+   "took_part": [
+    "Julian",
+    "Lisette"
+   ],
+   "others": [
+    "Louise"
+   ],
+   "what_happened": "Lisette told Julian that Louise had sent word about supper and would come herself with her notebook and a list of what the kitchen had. Julian asked for sober, dark clothes for the morning that a lawyer would not read as a man chasing keys, and asked Lisette, ten years in the house, for anything a new master should know. She told him the east corridor clock runs nine minutes fast, set so by Bernard, and the staff keep kitchen time; and that a bell rings when harbor fog comes through the study's ill-fitting west window, sounding like knocking but caused by wind. She left to see about the clothes, and Louise's footsteps came up the corridor."
+  }
+ ]
+}

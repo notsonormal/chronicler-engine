@@ -1,0 +1,133 @@
+{
+ "first": 567,
+ "last": 584,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4753,
+ "completion_tokens": 1903,
+ "answer": "{\"entries\":[{\"from\":567,\"to\":568,\"time\":\"Day 1, afternoon\",\"place\":\"Jezebel's office in the west wing of the Redmist mansion\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[\"the bank's secretary\"],\"what_happened\":\"The bank's secretary phoned Jezebel to confirm a standing instruction Mr. Voss supposedly received 'from the household' transferring the Harborlight trustees' correspondence to a private address. The instruction came by post, unsigned, and the bank could not say whose address it was. Jezebel told the secretary the estate's position was unchanged and nothing moves until probate, then said she would be in touch. She told Julian and Carla that someone had been writing letters with the estate's letterhead or close enough to fool a clerk. Carla said Voss might know the handwriting. Julian said they would not give the letter-writer time to get clever, and asked Jezebel to find out what name the bank filed the instruction under, in writing if needed. He also asked that this conversation stay between them until after he had spoken with Gabriella that night. Carla said the bank closes at five and the harbour front is twenty minutes by car.\",\"others_note\":\"\"},{\"from\":569,\"to\":571,\"time\":\"Day 1, afternoon\",\"place\":\"Jezebel's office, the corridor and the front steps of the Redmist mansion\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[\"the estate driver\"],\"what_happened\":\"Jezebel said she would note the estate's request in the ledger in Julian's name, dated, and would tell Gabriella only that they discussed probate timelines. Carla said the bank closes at five, it was a bit past two, and the harbour front is twenty minutes by car, longer if the fish market was still shouting; she would have the car brought round, leaving about an hour with Voss. She noted the Harborlight clinic on Cutter's Row was Voss's regular route. Julian said they should lead with the clinic, not the letters, and asked whether offering Voss money was the wrong play. Carla said greasing a clerk would buy a witness who would sell him out, and that Voss was honest; she advised buying a box of decent tea and leaving it on his counter. Jezebel came down with her coat half on and her ledger, saying she was coming because Voss had known her eleven years and trusted her. Carla said she would drive and nobody would get out until she had looked at the pavement.\",\"others_note\":\"\"},{\"from\":572,\"to\":573,\"time\":\"Day 1, afternoon\",\"place\":\"The car, from the Redmist mansion to the harbour front\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Julian let Jezebel into the car first, saying the man who knew Voss should walk in ahead of him. He agreed to tea and a thank-you instead of money, and asked for an early sign, even a look, if Voss clammed up. He said if the letters were coming from inside the house, from the guest wing, he wanted to hear it from Jezebel rather than work it out from the way Gabriella smiled at him that night. Jezebel said she would say so inside the car, not in front of Voss, and that frightening Voss would make him deny everything out of habit. Carla drove through narrowing streets to the harbour front, past the fish market. They arrived at Euclid & Sons, a narrow stone building between a chandlery and a pub, its brass sign green with salt; through the window a stooped man in a brown waistcoat was stacking ledgers on a shelf.\",\"others_note\":\"\"},{\"from\":574,\"to\":575,\"time\":\"Day 1, afternoon\",\"place\":\"Outside and inside Euclid & Sons, harbour front\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[\"Voss\"],\"what_happened\":\"Julian asked Carla to describe the counter and the shelf behind it before he went in. Carla said the counter was long oak with a brass rail, the shelf held ledgers and a clock, and within reach were only a bell and an inkwell; six feet behind the counter an old shotgun leaned barrel-down in the corner, probably unloaded. Julian asked whether to lead with tea or the clinic. Jezebel said clinic first, because the clinic was Voss's small pride and the trust kept it lit, and he should let Voss talk about the children's ward before any mention of letters. They crossed the cobbles and entered; the door bell rattled. Inside it smelled of paper and lamp oil. Voss, on a ladder, did not turn around and said the shelf was not finished.\",\"others_note\":\"\"},{\"from\":576,\"to\":577,\"time\":\"Day 1, afternoon\",\"place\":\"Inside Euclid & Sons, harbour front\",\"took_part\":[\"Julian\",\"Jezebel\"],\"others\":[\"Voss\"],\"what_happened\":\"Julian told Voss to take his time with the shelf and noted he had kept the counter forty years. Voss said forty-one, and that the street had been standing longer and just got new bricks. He came down the ladder, wiped his palms on his waistcoat, and looked past Julian to Jezebel, his shoulders easing a fraction. Jezebel introduced Julian as the estate's new owner. Voss took his place behind the counter with one hand on the brass rail, the shotgun left where it was, and said everyone had had Harborlight business that fortnight.\",\"others_note\":\"\"},{\"from\":578,\"to\":579,\"time\":\"Day 1, afternoon\",\"place\":\"Inside Euclid & Sons, harbour front\",\"took_part\":[\"Julian\",\"Jezebel\"],\"others\":[\"Voss\"],\"what_happened\":\"Julian asked Voss what happens to the Cutter's Row clinic and the children's ward beds if the trust is dissolved, and said someone had been writing to the bank about the Harborlight. Voss said two beds, the little ones, would go dark and the nurse who knew croupy infants would go on the dole queue. He pulled out the visitor's log and showed Julian two unsigned letters, posted in Islaport, on Greyfriar stock, a watermark the mill's cutter would know; the estate had bought a crate of it years back and Voss signs for the crates. He said the postmark was dated a week after Mr. Bernard died. Jezebel drew a breath.\",\"others_note\":\"\"},{\"from\":580,\"to\":581,\"time\":\"Day 1, afternoon\",\"place\":\"Inside Euclid & Sons, harbour front\",\"took_part\":[\"Julian\",\"Jezebel\"],\"others\":[\"Voss\"],\"what_happened\":\"Julian said whoever wrote the letters was in the house after Bernard was gone, with his paper and postage, and asked under what name the instruction about transferring the trustees' correspondence had been filed. Voss found it in the log: 'Redmist Estate, c/o secretary,' with no given name or initials. The young clerk who took it down said the lady's voice on the telephone was crisp and would not be kept waiting. Voss said he had told the clerk a hundred times that a voice is not a name. Jezebel said quietly to Julian that this was exactly how Gabriella talks to tradesmen.\",\"others_note\":\"\"},{\"from\":582,\"to\":584,\"time\":\"Day 1, afternoon\",\"place\":\"Inside Euclid & Sons, harbour front\",\"took_part\":[\"Julian\",\"Jezebel\"],\"others\":[\"Voss\"],\"what_happened\":\"Julian told Voss he would not ask him to swear to a name, but asked that if another letter came on that stock or another clerk took down that voice, word should reach Jezebel before anyone else, as a man asking rather than the estate. He kept his bank draft folded and said he would not offer it to Voss, having been told it would be an insult, but wanted to give to the Harborlight to keep the two beds lit. Voss gave him a printed leaflet: trustees take gifts at the office on Cutter's Row, Tuesday and Thursday mornings, and will write a receipt on the spot; the money would not be quick but would land where pointed. Voss said he would remember it was put as a man asking, and would have a boy take a note to Miss Coleman's door before filing any further grey sheet, without putting his name in it. Jezebel opened her ledger and wrote a counter-instruction that the estate's trustees' correspondence stays with the bank until probate, with no transfers and no private addresses. Julian read the wording twice, signed it alongside her, dated that day, and told Voss that a boy with an unnamed note would be him paying Voss back, not the estate.\",\"others_note\":\"\"}]}",
+ "entries": [
+  {
+   "from": 567,
+   "to": 568,
+   "time": "Day 1, afternoon",
+   "place": "Jezebel's office in the west wing of the Redmist mansion",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [
+    "the bank's secretary"
+   ],
+   "what_happened": "The bank's secretary phoned Jezebel to confirm a standing instruction Mr. Voss supposedly received 'from the household' transferring the Harborlight trustees' correspondence to a private address. The instruction came by post, unsigned, and the bank could not say whose address it was. Jezebel told the secretary the estate's position was unchanged and nothing moves until probate, then said she would be in touch. She told Julian and Carla that someone had been writing letters with the estate's letterhead or close enough to fool a clerk. Carla said Voss might know the handwriting. Julian said they would not give the letter-writer time to get clever, and asked Jezebel to find out what name the bank filed the instruction under, in writing if needed. He also asked that this conversation stay between them until after he had spoken with Gabriella that night. Carla said the bank closes at five and the harbour front is twenty minutes by car.",
+   "others_note": ""
+  },
+  {
+   "from": 569,
+   "to": 571,
+   "time": "Day 1, afternoon",
+   "place": "Jezebel's office, the corridor and the front steps of the Redmist mansion",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [
+    "the estate driver"
+   ],
+   "what_happened": "Jezebel said she would note the estate's request in the ledger in Julian's name, dated, and would tell Gabriella only that they discussed probate timelines. Carla said the bank closes at five, it was a bit past two, and the harbour front is twenty minutes by car, longer if the fish market was still shouting; she would have the car brought round, leaving about an hour with Voss. She noted the Harborlight clinic on Cutter's Row was Voss's regular route. Julian said they should lead with the clinic, not the letters, and asked whether offering Voss money was the wrong play. Carla said greasing a clerk would buy a witness who would sell him out, and that Voss was honest; she advised buying a box of decent tea and leaving it on his counter. Jezebel came down with her coat half on and her ledger, saying she was coming because Voss had known her eleven years and trusted her. Carla said she would drive and nobody would get out until she had looked at the pavement.",
+   "others_note": ""
+  },
+  {
+   "from": 572,
+   "to": 573,
+   "time": "Day 1, afternoon",
+   "place": "The car, from the Redmist mansion to the harbour front",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Julian let Jezebel into the car first, saying the man who knew Voss should walk in ahead of him. He agreed to tea and a thank-you instead of money, and asked for an early sign, even a look, if Voss clammed up. He said if the letters were coming from inside the house, from the guest wing, he wanted to hear it from Jezebel rather than work it out from the way Gabriella smiled at him that night. Jezebel said she would say so inside the car, not in front of Voss, and that frightening Voss would make him deny everything out of habit. Carla drove through narrowing streets to the harbour front, past the fish market. They arrived at Euclid & Sons, a narrow stone building between a chandlery and a pub, its brass sign green with salt; through the window a stooped man in a brown waistcoat was stacking ledgers on a shelf.",
+   "others_note": ""
+  },
+  {
+   "from": 574,
+   "to": 575,
+   "time": "Day 1, afternoon",
+   "place": "Outside and inside Euclid & Sons, harbour front",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [
+    "Voss"
+   ],
+   "what_happened": "Julian asked Carla to describe the counter and the shelf behind it before he went in. Carla said the counter was long oak with a brass rail, the shelf held ledgers and a clock, and within reach were only a bell and an inkwell; six feet behind the counter an old shotgun leaned barrel-down in the corner, probably unloaded. Julian asked whether to lead with tea or the clinic. Jezebel said clinic first, because the clinic was Voss's small pride and the trust kept it lit, and he should let Voss talk about the children's ward before any mention of letters. They crossed the cobbles and entered; the door bell rattled. Inside it smelled of paper and lamp oil. Voss, on a ladder, did not turn around and said the shelf was not finished.",
+   "others_note": ""
+  },
+  {
+   "from": 576,
+   "to": 577,
+   "time": "Day 1, afternoon",
+   "place": "Inside Euclid & Sons, harbour front",
+   "took_part": [
+    "Julian",
+    "Jezebel"
+   ],
+   "others": [
+    "Voss"
+   ],
+   "what_happened": "Julian told Voss to take his time with the shelf and noted he had kept the counter forty years. Voss said forty-one, and that the street had been standing longer and just got new bricks. He came down the ladder, wiped his palms on his waistcoat, and looked past Julian to Jezebel, his shoulders easing a fraction. Jezebel introduced Julian as the estate's new owner. Voss took his place behind the counter with one hand on the brass rail, the shotgun left where it was, and said everyone had had Harborlight business that fortnight.",
+   "others_note": ""
+  },
+  {
+   "from": 578,
+   "to": 579,
+   "time": "Day 1, afternoon",
+   "place": "Inside Euclid & Sons, harbour front",
+   "took_part": [
+    "Julian",
+    "Jezebel"
+   ],
+   "others": [
+    "Voss"
+   ],
+   "what_happened": "Julian asked Voss what happens to the Cutter's Row clinic and the children's ward beds if the trust is dissolved, and said someone had been writing to the bank about the Harborlight. Voss said two beds, the little ones, would go dark and the nurse who knew croupy infants would go on the dole queue. He pulled out the visitor's log and showed Julian two unsigned letters, posted in Islaport, on Greyfriar stock, a watermark the mill's cutter would know; the estate had bought a crate of it years back and Voss signs for the crates. He said the postmark was dated a week after Mr. Bernard died. Jezebel drew a breath.",
+   "others_note": ""
+  },
+  {
+   "from": 580,
+   "to": 581,
+   "time": "Day 1, afternoon",
+   "place": "Inside Euclid & Sons, harbour front",
+   "took_part": [
+    "Julian",
+    "Jezebel"
+   ],
+   "others": [
+    "Voss"
+   ],
+   "what_happened": "Julian said whoever wrote the letters was in the house after Bernard was gone, with his paper and postage, and asked under what name the instruction about transferring the trustees' correspondence had been filed. Voss found it in the log: 'Redmist Estate, c/o secretary,' with no given name or initials. The young clerk who took it down said the lady's voice on the telephone was crisp and would not be kept waiting. Voss said he had told the clerk a hundred times that a voice is not a name. Jezebel said quietly to Julian that this was exactly how Gabriella talks to tradesmen.",
+   "others_note": ""
+  },
+  {
+   "from": 582,
+   "to": 584,
+   "time": "Day 1, afternoon",
+   "place": "Inside Euclid & Sons, harbour front",
+   "took_part": [
+    "Julian",
+    "Jezebel"
+   ],
+   "others": [
+    "Voss"
+   ],
+   "what_happened": "Julian told Voss he would not ask him to swear to a name, but asked that if another letter came on that stock or another clerk took down that voice, word should reach Jezebel before anyone else, as a man asking rather than the estate. He kept his bank draft folded and said he would not offer it to Voss, having been told it would be an insult, but wanted to give to the Harborlight to keep the two beds lit. Voss gave him a printed leaflet: trustees take gifts at the office on Cutter's Row, Tuesday and Thursday mornings, and will write a receipt on the spot; the money would not be quick but would land where pointed. Voss said he would remember it was put as a man asking, and would have a boy take a note to Miss Coleman's door before filing any further grey sheet, without putting his name in it. Jezebel opened her ledger and wrote a counter-instruction that the estate's trustees' correspondence stays with the bank until probate, with no transfers and no private addresses. Julian read the wording twice, signed it alongside her, dated that day, and told Voss that a boy with an unnamed note would be him paying Voss back, not the estate.",
+   "others_note": ""
+  }
+ ]
+}

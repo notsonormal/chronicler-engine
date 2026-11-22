@@ -22,6 +22,7 @@ Which parts of a Character card can change in one Game? Which call writes a chan
 - **The link to memory (open).** The coordinator's draft at charting: a card change is a durable change to who a Character is (a relationship, a role or a trait), not an event. The owner did not confirm it. Is a card change the durable part of a Character memory, or a separate thing? If [Choose the memory candidates to try](05-memory-candidates.md) is resolved, read it first.
 - **The Persona.** A Persona belongs to no World and plays many Games. Can its card change inside one Game too?
 - **The card structure (owner, 2026-11-03).** [Decide the structure of a Character card and who knows each part](10-card-structure.md) decided the minimal form: the SillyTavern fields as written, and one new field `secrets` for what she hides. A card change says which field it changes, and it can change `secrets` too. Read the Answer of ticket 10 first.
+- **The world facts and the Character memory (2026-11-14).** The memory gets two lists beside the scene entries: world facts (what is true) and the Character memory (what a Character carries). Each is a list of dated lines that never change ([Decide how the story memory keeps its size](15-story-memory-size.md), Answer). This ticket must draw the line between a card change and those two lists.
 
 ## Output
 

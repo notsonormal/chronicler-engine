@@ -10,7 +10,7 @@ Each change that the owner accepted in the audit of 2026-11-10 is in place and `
 ## Notes
 
 - **Origin.** A whole-product audit at commit `b0c8fe41`: five reports, a list of 32 questions, and a grilling session of five rounds on those questions (owner, 2026-11-10).
-- **The decisions** are in [decisions.md](decisions.md), D1 to D21. A ticket names the decisions that it puts in place.
+- **The decisions** are in [decisions.md](decisions.md), D1 to D29. A ticket names the decisions that it puts in place.
 - **The reports** are in `assets/`. Start with [the questions](assets/questions-for-the-owner.md). The raw evidence is in `assets/local-only/evidence/`, which git ignores.
 - **How a finding was proved.** A report marks each finding "ran it" (on a probe server with a scripted model), "read it" (in the source), "measured" (in stored trials) or "scout only". Trust them in that order.
 - **Autoplay only.** Every story finding comes from Autoplay, where the model writes the Inputs of the Persona. No person played a session for the audit (D16).
@@ -23,13 +23,15 @@ Each change that the owner accepted in the audit of 2026-11-10 is in place and `
 - **Waits for a release.** The licence, streaming, the listen address (D2).
 - **Waits for model credit.** `example_dialogue` in the prompt, the analysis of an Impersonate Input, the present day, three runs of one setup, the value of each mechanism (D4).
 - **Not decided.** Whether the Redmist World gives the story a plot (D12).
-- **Accepted work.** Six tickets:
+- **Accepted work.** Eight tickets:
   1. [Close the key leak and the links in the story log](issues/01-task-security.md) (D6, D17)
   2. [Engine fixes](issues/02-task-engine-fixes.md) (D7, D13, D17)
   3. [The notice for a cut Narration and the Retry of the opening](issues/03-task-story-entries.md) (D8 a, D9)
   4. [Two checks](issues/04-task-checks.md) (D14 b, c)
   5. [Correct the wrong text](issues/05-task-text.md) (D17, D19)
-  6. [Engine fixes, second group](issues/06-task-engine-fixes-second-group.md) (D19, D20, D21)
+  6. [Engine fixes, second group](issues/06-task-engine-fixes-second-group.md) (D19, D20, D21, D25)
+  7. [Pin what the mutation run missed](issues/07-task-pin-what-the-mutation-run-missed.md) (D23)
+  8. [The build journal records which step failed](issues/08-task-failed-step-in-the-build-journal.md) (D27)
 
 ## Not yet specified
 
@@ -38,4 +40,7 @@ Each change that the owner accepted in the audit of 2026-11-10 is in place and `
 ## Out of scope
 
 - Every row under "Stays as it is", "Waits" and "Not decided" above.
-- The findings that no question asked: rows N15 to N18 of [the list](assets/findings-not-carried.md), and the three parts that ticket 06 names as not in scope. The owner has not decided on them.
+- The stored key in the HTML of the Connection edit form (D22), and the three parts of D24: no change.
+- The preset proposals of row N18 of [the list](assets/findings-not-carried.md): they need a trial (D4).
+- A `<think>` block in model text (D26), and four optional rows of the environment report (D28, D29): no change.
+- Not decided: two points of row N17 of the list (a `Content-Security-Policy` header, and a boot check for an unreadable stored row).

@@ -12,7 +12,8 @@ Put two changes in place (owner, 2026-11-10, D8 a and D9 of [the decisions](../d
 
 - **The fault (ran it).** The model answered `…there is one thing you must` with `finish_reason: "length"`. The story log showed the cut text as a finished Narration, and the status read "Ready".
 - **Read it.** `parse_chat_response` accepts every answer that has text, and reads `finish_reason` only when the text is empty. The test `test_length_finish_reason_with_content_is_an_answer` pins that, and it stays. Nothing carries the fact to the Job or to the record.
-- **The change.** Carry the fact out of the transport in the result of the call. The Narration keeps its text. The story log shows a small line under that Swipe, such as "The model stopped at its token limit."
+- **What exists since this ticket was written.** Commit `a9801e4a` carries the fact out of the transport: `LlmCallResult.stopped_at_limit` (`application/ports/llm_provider.rs`). The narrator does not read it.
+- **The change.** Read that fact in the narrator and carry it to the Swipe record. The Narration keeps its text. The story log shows a small line under that Swipe, such as "The model stopped at its token limit."
 - **The open design point.** The line must still be there after a reload, and it belongs to one Swipe. So the fact needs a home in the Swipe record. Choose the home and write the reason in `## Answer`. It is not a failure line of the Game: the status stays "Ready" (D3).
 - **The failing test first.** An HTTP test with a scripted answer that has text and `finish_reason: "length"`: the story log has the line on that entry, and a second Swipe with a complete answer has none.
 
@@ -37,7 +38,7 @@ Put two changes in place (owner, 2026-11-10, D8 a and D9 of [the decisions](../d
 
 ## Not in scope
 
-- A cut answer of the Quantifier or of the Options Agent. The report recommends to treat it as a failed attempt. No decision accepted that.
+- A cut answer of the Quantifier or of the Options Agent. Change 17 of [ticket 06](06-task-engine-fixes-second-group.md) holds it (D25).
 - A message after a hard stop (D8 b).
 - The prompt of an event Narration (finding 6 of the engine report).
 

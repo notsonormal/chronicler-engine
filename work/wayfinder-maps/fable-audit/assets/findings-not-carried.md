@@ -5,10 +5,16 @@ Written on 2026-11-10, after the grilling session, at commit `e8d6512a`. The own
 ## State
 
 - **N1 to N14: accepted** (owner, 2026-11-10, D19). [Ticket 06](../issues/06-task-engine-fixes-second-group.md) holds N1 to N12 and N14. [Ticket 05](../issues/05-task-text.md) holds N13.
-- **Three parts of those rows are in no ticket.** Ticket 06 names them under "Not in scope", each with its reason: the provider `mock` (N11), a JSON mode for the Quantifier (N10), and two map checks that went to the invariant audit (N4).
+- **Two parts of those rows: no change** (D24). The provider `mock` in the Connection form (N11), and a JSON mode for the Quantifier (N10).
+- **Two map checks (N4)** went to ticket 02 of the invariant audit.
 - **The map edit that removes a Room (N4): decided** (D21, refuse the edit). Ticket 06, change 16.
 - **Section 5, the conflict: decided** (D20, the banner shows). Ticket 06, change 15.
-- **N15 to N18: not decided.**
+- **N15: accepted** (D23). [Ticket 07](../issues/07-task-pin-what-the-mutation-run-missed.md).
+- **N17, in part: no change.** The stored key in the edit form (D22), and `GET /data/settings.json` (D24).
+- **N18: proposals** that need a trial (D4).
+- **N16: decided.** The "failed step" column is accepted (D27): [ticket 08](../issues/08-task-failed-step-in-the-build-journal.md). The other four rows: no change (D28, D29).
+- **N17, two more points: decided.** A cut answer of the Quantifier or of the Options Agent is a failed attempt (D25): ticket 06, change 17. A `<think>` block: no change until a model shows the problem (D26).
+- **Not decided:** two points of N17 (a `Content-Security-Policy` header, and a boot check for an unreadable stored row).
 
 ## How the list was made
 

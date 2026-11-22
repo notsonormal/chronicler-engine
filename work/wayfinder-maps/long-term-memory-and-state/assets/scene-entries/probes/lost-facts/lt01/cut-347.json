@@ -1,0 +1,51 @@
+{
+ "first": 323,
+ "last": 346,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4578,
+ "completion_tokens": 651,
+ "answer": "{\"entries\":[{\"from\":323,\"to\":337,\"time\":\"Day 1, morning\",\"place\":\"Outside the Redmist Estate gates and driveway\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Carla introduced herself as Julian's bodyguard and asked to borrow his phone. Julian refused until she explained, then agreed on condition he watched every tap and she explained every change. She disabled a weather app's location access and revoked a preinstalled finance app's account permissions. Julian asked about Bernard's death; Carla said the official story was heart failure, but she found him face-down with a brow cut that didn't match, and the constables wrote it up as a fall. Gabriella had loudly backed that version. Carla said only Gabriella and the housekeeper were on the premises that night, that Lisette called it in, and that the housekeeper said Lisette found the body first, though the constables recorded Gabriella as discovering it. Carla advised getting Lisette comfortable rather than interrogating her, and told Julian to tell Gabriella he'd think about things and never meet her alone. She said Gabriella should believe she is only suspicious hired muscle. They walked to the front doors.\"},{\"from\":338,\"to\":343,\"time\":\"Day 1, morning\",\"place\":\"Redmist Estate entry hall\",\"took_part\":[\"Julian\",\"Carla\",\"Gabriella\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Gabriella opened the doors and introduced herself as Bernard's wife, remarking Julian was taller than expected. Julian asked whether he should look to her for guidance on the household. Gabriella said the staff handle the staff, recommended keeping Lisette close because quiet people hear everything, and noted Jezebel was coming about the finances, warning Julian not to sign anything before tea. Julian said he would hear everyone out before deciding, then asked where to find Lisette. Gabriella directed him up the service stairs. Jezebel appeared in the corridor and said she wanted an hour to explain that the inheritance was more complicated than the will suggested. Julian asked how, and said it could wait until after Lisette unless something couldn't keep.\"},{\"from\":344,\"to\":346,\"time\":\"Day 1, morning\",\"place\":\"Redmist Estate entry hall and service stairs to the second landing\",\"took_part\":[\"Julian\",\"Carla\",\"Gabriella\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Jezebel said the complication was debts: Bernard had borrowed against the estate years ago and never cleared it, so much of the fortune was promised to others. She said it had kept two weeks and would keep an hour, then directed Julian up the service stair to the second landing, left, to the door with the plain latch, warning that Lisette startles easily and he should speak before entering. Julian noted the directions, said he'd be back down shortly, and climbed the stairs. At the plain-latched door he knocked twice and called through it that he was Julian, Bernard's grandson, and would like to meet the person keeping his rooms.\"}]}",
+ "entries": [
+  {
+   "from": 323,
+   "to": 337,
+   "time": "Day 1, morning",
+   "place": "Outside the Redmist Estate gates and driveway",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Carla introduced herself as Julian's bodyguard and asked to borrow his phone. Julian refused until she explained, then agreed on condition he watched every tap and she explained every change. She disabled a weather app's location access and revoked a preinstalled finance app's account permissions. Julian asked about Bernard's death; Carla said the official story was heart failure, but she found him face-down with a brow cut that didn't match, and the constables wrote it up as a fall. Gabriella had loudly backed that version. Carla said only Gabriella and the housekeeper were on the premises that night, that Lisette called it in, and that the housekeeper said Lisette found the body first, though the constables recorded Gabriella as discovering it. Carla advised getting Lisette comfortable rather than interrogating her, and told Julian to tell Gabriella he'd think about things and never meet her alone. She said Gabriella should believe she is only suspicious hired muscle. They walked to the front doors."
+  },
+  {
+   "from": 338,
+   "to": 343,
+   "time": "Day 1, morning",
+   "place": "Redmist Estate entry hall",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Gabriella",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Gabriella opened the doors and introduced herself as Bernard's wife, remarking Julian was taller than expected. Julian asked whether he should look to her for guidance on the household. Gabriella said the staff handle the staff, recommended keeping Lisette close because quiet people hear everything, and noted Jezebel was coming about the finances, warning Julian not to sign anything before tea. Julian said he would hear everyone out before deciding, then asked where to find Lisette. Gabriella directed him up the service stairs. Jezebel appeared in the corridor and said she wanted an hour to explain that the inheritance was more complicated than the will suggested. Julian asked how, and said it could wait until after Lisette unless something couldn't keep."
+  },
+  {
+   "from": 344,
+   "to": 346,
+   "time": "Day 1, morning",
+   "place": "Redmist Estate entry hall and service stairs to the second landing",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Gabriella",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Jezebel said the complication was debts: Bernard had borrowed against the estate years ago and never cleared it, so much of the fortune was promised to others. She said it had kept two weeks and would keep an hour, then directed Julian up the service stair to the second landing, left, to the door with the plain latch, warning that Lisette startles easily and he should speak before entering. Julian noted the directions, said he'd be back down shortly, and climbed the stairs. At the plain-latched door he knocked twice and called through it that he was Julian, Bernard's grandson, and would like to meet the person keeping his rooms."
+  }
+ ]
+}

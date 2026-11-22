@@ -1,0 +1,83 @@
+{
+ "first": 569,
+ "last": 590,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4606,
+ "completion_tokens": 967,
+ "answer": "{\"entries\":[{\"from\":569,\"to\":572,\"time\":\"Day 1, morning\",\"place\":\"The gravel drive and gate of the Redmist estate\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"the maid\",\"the gatekeeper\"],\"what_happened\":\"Julian told the maid and the gatekeeper he was going to Marchand Street, east side, and asked them to say plainly if they would send word to friends there. The maid admitted half the staff is from the east side and that by tonight they would know he went to Marchand. Julian told her to tell it straight: their master went to call on a widow of the family name and would say more when done, but the telling should wait until the carriage was out of sight. The gatekeeper opened the gate. Carla told Julian the gatekeeper had a cousin on the east side.\"},{\"from\":573,\"to\":576,\"time\":\"Day 1, morning\",\"place\":\"The carriage on the way to Marchand Street, then the pavement and green gate of the Hollis house\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"the driver\",\"Tomas Hollis\"],\"what_happened\":\"In the carriage Julian said a small city meant fast gossip, and asked whether to stop at Marchand Mutual first. Carla said Jezebel had the bank and would ask as the estate's accountant, and that two strangers asking after a widow's account would make a story. Julian had the driver stop short of the house and walked up the path alone, Carla waiting at the gate. Tomas Hollis answered with a trowel in his hand and said whatever Julian was selling they had enough of it.\"},{\"from\":577,\"to\":580,\"time\":\"Day 1, morning\",\"place\":\"The hall and parlor of the Hollis house on Marchand Street\",\"took_part\":[\"Julian\"],\"others\":[\"Tomas Hollis\",\"Marguerite Hollis\"],\"what_happened\":\"Julian gave his name as Julian Redmist and said Bernard left him a key with Marguerite's name on it, and that he came to learn what it opens and what the name meant to Bernard. Tomas let him in and told him to wipe his feet. Julian said that if Marguerite did not want him past the hall he would go, and the key would stay with him either way. Tomas brought word to his mother and then showed Julian in. Marguerite said she had begun to think the will was a rumor the city made up to pass the winter.\"},{\"from\":581,\"to\":586,\"time\":\"Day 1, morning\",\"place\":\"The parlor of the Hollis house on Marchand Street\",\"took_part\":[\"Julian\"],\"others\":[\"Marguerite Hollis\",\"Tomas Hollis\"],\"what_happened\":\"Julian told Marguerite of twelve years of quarterly payments, the last noted 'for the boy's schooling,' and set the key on the table. Marguerite said it was Edmund's strongbox, held by the bank after his death and never opened to her without a court; Bernard had promised to sort it, and the payments came without a line. She said whatever is inside belongs to Tomas. She said Marchand Mutual held Edmund's accounts but the box went to the Islaport Trust, which wants a court order unless the paper names Julian. Julian admitted he did not know whose name was on the box, and proposed going to the Trust with Tomas, paying for a lawyer himself. Tomas took the key and set a meeting at the Trust at one o'clock the next day, and warned Julian that his mother would spend the night arguing against hoping.\"},{\"from\":587,\"to\":590,\"time\":\"Day 1, morning\",\"place\":\"The path and gate of the Hollis house, then the carriage and the drive of the Redmist estate\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[\"the gatekeeper\"],\"what_happened\":\"Julian told Tomas that if Marguerite talked him round by one o'clock, he should send word to the estate and Julian would not hold it against him. Outside, Carla reported the street quiet and asked about the boy. In the carriage Julian said Tomas was steady and would hold to a decision, but had no experience with men like deputy managers, so Julian would watch the deputy and make sure nobody talked Tomas out of holding the key. Carla said they needed a lawyer who knew the Trust's rulebook and that Jezebel would know who. At the estate the gatekeeper handed Julian a folded note from Jezebel and said the staff had been told about Marchand straight, as Julian asked.\"}]}",
+ "entries": [
+  {
+   "from": 569,
+   "to": 572,
+   "time": "Day 1, morning",
+   "place": "The gravel drive and gate of the Redmist estate",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "the maid",
+    "the gatekeeper"
+   ],
+   "what_happened": "Julian told the maid and the gatekeeper he was going to Marchand Street, east side, and asked them to say plainly if they would send word to friends there. The maid admitted half the staff is from the east side and that by tonight they would know he went to Marchand. Julian told her to tell it straight: their master went to call on a widow of the family name and would say more when done, but the telling should wait until the carriage was out of sight. The gatekeeper opened the gate. Carla told Julian the gatekeeper had a cousin on the east side."
+  },
+  {
+   "from": 573,
+   "to": 576,
+   "time": "Day 1, morning",
+   "place": "The carriage on the way to Marchand Street, then the pavement and green gate of the Hollis house",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "the driver",
+    "Tomas Hollis"
+   ],
+   "what_happened": "In the carriage Julian said a small city meant fast gossip, and asked whether to stop at Marchand Mutual first. Carla said Jezebel had the bank and would ask as the estate's accountant, and that two strangers asking after a widow's account would make a story. Julian had the driver stop short of the house and walked up the path alone, Carla waiting at the gate. Tomas Hollis answered with a trowel in his hand and said whatever Julian was selling they had enough of it."
+  },
+  {
+   "from": 577,
+   "to": 580,
+   "time": "Day 1, morning",
+   "place": "The hall and parlor of the Hollis house on Marchand Street",
+   "took_part": [
+    "Julian"
+   ],
+   "others": [
+    "Tomas Hollis",
+    "Marguerite Hollis"
+   ],
+   "what_happened": "Julian gave his name as Julian Redmist and said Bernard left him a key with Marguerite's name on it, and that he came to learn what it opens and what the name meant to Bernard. Tomas let him in and told him to wipe his feet. Julian said that if Marguerite did not want him past the hall he would go, and the key would stay with him either way. Tomas brought word to his mother and then showed Julian in. Marguerite said she had begun to think the will was a rumor the city made up to pass the winter."
+  },
+  {
+   "from": 581,
+   "to": 586,
+   "time": "Day 1, morning",
+   "place": "The parlor of the Hollis house on Marchand Street",
+   "took_part": [
+    "Julian"
+   ],
+   "others": [
+    "Marguerite Hollis",
+    "Tomas Hollis"
+   ],
+   "what_happened": "Julian told Marguerite of twelve years of quarterly payments, the last noted 'for the boy's schooling,' and set the key on the table. Marguerite said it was Edmund's strongbox, held by the bank after his death and never opened to her without a court; Bernard had promised to sort it, and the payments came without a line. She said whatever is inside belongs to Tomas. She said Marchand Mutual held Edmund's accounts but the box went to the Islaport Trust, which wants a court order unless the paper names Julian. Julian admitted he did not know whose name was on the box, and proposed going to the Trust with Tomas, paying for a lawyer himself. Tomas took the key and set a meeting at the Trust at one o'clock the next day, and warned Julian that his mother would spend the night arguing against hoping."
+  },
+  {
+   "from": 587,
+   "to": 590,
+   "time": "Day 1, morning",
+   "place": "The path and gate of the Hollis house, then the carriage and the drive of the Redmist estate",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [
+    "the gatekeeper"
+   ],
+   "what_happened": "Julian told Tomas that if Marguerite talked him round by one o'clock, he should send word to the estate and Julian would not hold it against him. Outside, Carla reported the street quiet and asked about the boy. In the carriage Julian said Tomas was steady and would hold to a decision, but had no experience with men like deputy managers, so Julian would watch the deputy and make sure nobody talked Tomas out of holding the key. Carla said they needed a lawyer who knew the Trust's rulebook and that Jezebel would know who. At the estate the gatekeeper handed Julian a folded note from Jezebel and said the staff had been told about Marchand straight, as Julian asked."
+  }
+ ]
+}

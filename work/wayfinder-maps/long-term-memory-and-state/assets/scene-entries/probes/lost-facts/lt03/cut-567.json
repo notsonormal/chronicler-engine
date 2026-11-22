@@ -1,0 +1,36 @@
+{
+ "first": 547,
+ "last": 566,
+ "failed": null,
+ "finish_reason": "stop",
+ "prompt_tokens": 4827,
+ "completion_tokens": 781,
+ "answer": "{\"entries\":[{\"from\":547,\"to\":556,\"time\":\"Day 1, afternoon\",\"place\":\"The third-floor study of the Redmist mansion\",\"took_part\":[\"Julian\",\"Carla\"],\"others\":[],\"what_happened\":\"Julian turned the key and the third drawer slid open, revealing a felt tray holding a thick unsealed envelope, a leather-bound book under a rubber band, and a loaded old revolver. Carla said it was a man leaving him options, not a trap, and noted the gun was kept in a desk drawer, not a safe. Julian cleared the revolver's chambers, set it on the blotter, and chose the papers first, asking Carla to watch the door. The envelope held an inventory in Bernard's hand \u2014 properties, shares, two charitable trusts, numbered accounts at a harbour-front bank \u2014 plus a bank draft. One line was underlined twice: the third trust could not be closed by Bernard, and Julian should ask Jezebel to her face. The book was a diary: entries said J wanted out of the trust and was refused, that G. asked about money and smiled in a way Bernard disliked, and a final shaky entry warned that if the third trust opened before probate the money would go where he could not follow, that someone had been asking the bank about it, that it was not Jezebel's doing, and to watch the harbour. Carla suggested Euclid & Sons on the harbour front and its visitor log, and proposed finding Jezebel first. Julian said he would not quote the letter or show the diary at once, and asked whether Jezebel had ever hidden anything from Bernard. Carla said she was straight with him, argued over numbers, and held things back only as armor against the old-money crowd. Julian decided to go to her office now.\"},{\"from\":557,\"to\":566,\"time\":\"Day 1, afternoon\",\"place\":\"Jezebel's office in the west wing of the Redmist mansion\",\"took_part\":[\"Julian\",\"Carla\",\"Jezebel\"],\"others\":[],\"what_happened\":\"Carla led Julian past the kitchens to Jezebel's office, where Jezebel was on the telephone refusing to discuss a draft that could not clear until probate finished. Julian knocked, announced himself, and said there was something in the study she should hear. Jezebel ended the call and let them in, noting he was earlier than expected. Julian told her the letter said the ledgers were the only thing to trust and that she kept them honestly, if she still lived; Jezebel was stung at being written as a hypothetical. He then asked about the third trust. She named it the Harborlight Fund, which paid for the Cutter's Row free clinic and children's ward beds, and said its principal reverted to Bernard's estate on his death; someone had been pushing the board to dissolve it before probate so the money would walk. She said the clerk old Mr. Voss at Euclid & Sons would know the name but would never put it in writing, so Julian should ask him in person at the harbour. On Gabriella, Jezebel said her allowance stops at probate and what she wants is Julian's signature: likely a notarized life estate in the guest wing plus a modest provision, which would not beat the will but would cost years of probate to undo, and she warned him not to sign anything that night because a notary would be on call. The telephone rang; Jezebel answered, said Julian was there, and asked on whose instruction. Julian said whoever it was must not hear he was coming, that the answer should be nothing until he had seen Mr. Voss, and that he wanted to know if Gabriella was on the line before visiting her that night.\"}]}",
+ "entries": [
+  {
+   "from": 547,
+   "to": 556,
+   "time": "Day 1, afternoon",
+   "place": "The third-floor study of the Redmist mansion",
+   "took_part": [
+    "Julian",
+    "Carla"
+   ],
+   "others": [],
+   "what_happened": "Julian turned the key and the third drawer slid open, revealing a felt tray holding a thick unsealed envelope, a leather-bound book under a rubber band, and a loaded old revolver. Carla said it was a man leaving him options, not a trap, and noted the gun was kept in a desk drawer, not a safe. Julian cleared the revolver's chambers, set it on the blotter, and chose the papers first, asking Carla to watch the door. The envelope held an inventory in Bernard's hand \u2014 properties, shares, two charitable trusts, numbered accounts at a harbour-front bank \u2014 plus a bank draft. One line was underlined twice: the third trust could not be closed by Bernard, and Julian should ask Jezebel to her face. The book was a diary: entries said J wanted out of the trust and was refused, that G. asked about money and smiled in a way Bernard disliked, and a final shaky entry warned that if the third trust opened before probate the money would go where he could not follow, that someone had been asking the bank about it, that it was not Jezebel's doing, and to watch the harbour. Carla suggested Euclid & Sons on the harbour front and its visitor log, and proposed finding Jezebel first. Julian said he would not quote the letter or show the diary at once, and asked whether Jezebel had ever hidden anything from Bernard. Carla said she was straight with him, argued over numbers, and held things back only as armor against the old-money crowd. Julian decided to go to her office now."
+  },
+  {
+   "from": 557,
+   "to": 566,
+   "time": "Day 1, afternoon",
+   "place": "Jezebel's office in the west wing of the Redmist mansion",
+   "took_part": [
+    "Julian",
+    "Carla",
+    "Jezebel"
+   ],
+   "others": [],
+   "what_happened": "Carla led Julian past the kitchens to Jezebel's office, where Jezebel was on the telephone refusing to discuss a draft that could not clear until probate finished. Julian knocked, announced himself, and said there was something in the study she should hear. Jezebel ended the call and let them in, noting he was earlier than expected. Julian told her the letter said the ledgers were the only thing to trust and that she kept them honestly, if she still lived; Jezebel was stung at being written as a hypothetical. He then asked about the third trust. She named it the Harborlight Fund, which paid for the Cutter's Row free clinic and children's ward beds, and said its principal reverted to Bernard's estate on his death; someone had been pushing the board to dissolve it before probate so the money would walk. She said the clerk old Mr. Voss at Euclid & Sons would know the name but would never put it in writing, so Julian should ask him in person at the harbour. On Gabriella, Jezebel said her allowance stops at probate and what she wants is Julian's signature: likely a notarized life estate in the guest wing plus a modest provision, which would not beat the will but would cost years of probate to undo, and she warned him not to sign anything that night because a notary would be on call. The telephone rang; Jezebel answered, said Julian was there, and asked on whose instruction. Julian said whoever it was must not hear he was coming, that the answer should be nothing until he had seen Mr. Voss, and that he wanted to know if Gabriella was on the line before visiting her that night."
+  }
+ ]
+}

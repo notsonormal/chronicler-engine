@@ -1,6 +1,6 @@
 # Audit of 2026-11-10: decisions of the owner
 
-This file records each answer that the owner gave in the grilling session on `assets/questions-for-the-owner.md`. A row is added when the answer is given. The grilling session ended on 2026-11-10 with D18, and D19 to D21 followed on the same day: the accepted work is five task tickets in `issues/`, and [the map](map.md) lists them.
+This file records each answer that the owner gave in the grilling session on `assets/questions-for-the-owner.md`. A row is added when the answer is given. The grilling session ended on 2026-11-10 with D18. D19 to D21 followed on the same day, and D22 to D29 on 2026-11-22: the accepted work is five task tickets in `issues/`, and [the map](map.md) lists them.
 
 - **Reports:** `assets/`. Start with `assets/questions-for-the-owner.md`.
 - **Row numbers** in the column "Rows" are the rows of that file.
@@ -31,6 +31,14 @@ This file records each answer that the owner gave in the grilling session on `as
 | D19 | 2026-11-10 | The findings that no question asked (N1 to N14 of `assets/findings-not-carried.md`) | **All go ahead**, as in D17. The owner accepted the group and did not read each row. Ticket 06 holds N1 to N12 and N14, and ticket 05 holds N13. Four parts are not in a ticket, because a closer look showed that each is not a local fix: the provider `mock` in the Connection form, a JSON mode for the Quantifier call, two map checks that belong to the invariant audit, and a map edit that removes the Room where a Game stands (decided later as D21). N15 to N18 stay in the list | The same | — |
 | D20 | 2026-11-10 | A Quantifier answer that the parser cannot read: banner or no banner? | **The banner shows.** A result that keeps the Room and the Characters present, because no attempt gave a usable reading, counts as a failure of the Quantifier role. The status line still reads "Ready", so D3 stays. This puts the owner's earlier decision in place (prompt-flexibility ticket 10: "the banner shows"). Ticket 06, change 15 | The same | 18 |
 | D21 | 2026-11-10 | An author saves a map without the Room where a Game stands. What must happen? | **Refuse the edit.** The answer names the Games that stand in that Room. Ticket 06, change 16 | The same | — |
+| D22 | 2026-11-22 | A stored API key is written into the HTML of the Connection edit form. Change it? | **No change.** The form keeps writing the stored key into the key field | The form never writes the key | — |
+| D23 | 2026-11-22 | The mutation run found dead code and checks that no test pins. Make a ticket? | **One ticket:** delete the code-fence step of the Quantifier parser, and add tests for the four state checks, the boundaries of the token budget and the sanitize functions. Ticket 07 | The same | — |
+| D24 | 2026-11-22 | Three parts to drop | **Drop all three: no change.** The Connection form accepts the provider `mock`. The Quantifier call has no JSON mode. `GET /data/settings.json` answers 200 (the shipped file holds no key) | The same | — |
+| D25 | 2026-11-22 | The model stops in the middle of a Quantifier answer. Must the engine ask again? | **Yes.** A cut answer of the Quantifier or of the Options Agent is not read. It counts as a failed attempt, so the second attempt runs. Ticket 06, change 17 | The same | — |
+| D26 | 2026-11-22 | A model writes its thinking inside `<think>` tags. Must the engine remove it? | **No change until a model shows the problem** | Remove it | — |
+| D27 | 2026-11-22 | When a full gate fails, must the build journal record which step failed? | **Yes.** One more column: the name of the first step that failed. Ticket 08 | The same | — |
+| D28 | 2026-11-22 | Must `CODING_STANDARDS.md` point to the generated list of limits that the gate enforces? | **No** | Yes, one sentence | — |
+| D29 | 2026-11-22 | Three optional rows of the environment report: an end date on a claimed ticket, ten written rules as checks, three document-review skills with one task | **Drop all three: no change** | The same | — |
 
 ## What follows from the decisions
 
@@ -44,7 +52,13 @@ This file records each answer that the owner gave in the grilling session on `as
 | D10 | The Trigger faults of finding 5 in `assets/story-damage-and-false-screen.md` | Open. The random order among Characters is fixed by D7 (e), world-04. The other faults wait with D10 |
 | Earlier decision of the owner (2026-10-31) | 21 (LLM messages stay a debug record of 50 rows) | No change. The agent recommended a change only when the link from a story entry to its call is built. Stated in round 3 |
 | D11 | A later Character form in the dashboard | Note for that effort: a Swipe state stores whole Character cards (`scene_state.rs:11`), so a Retry would write with the old card. Store the ids first. The long-term-memory map lists "authoring cards in the dashboard" as out of scope for that effort only |
-| D19 | N15 (the mutation run), N16 (optional rows of the environment report), N17 (points that a ticket excludes), N18 (preset changes that need a trial) | Not decided. They are in `assets/findings-not-carried.md` |
+| D23 | N15 (the mutation run) | Ticket 07 |
+| D22, D24 | N17: the stored key in the edit form, and `GET /data/settings.json` | No change |
+| D25 | Of N17: a cut answer of the Quantifier or of the Options Agent | Ticket 06, change 17 |
+| D26 | Of N17: a `<think>` block in model text | No change until a model shows the problem |
+| D27, D28, D29 | N16 (optional rows of the environment report) | The "failed step" column: ticket 08. The other four rows: no change |
+| D19 | Of N17: a `Content-Security-Policy` header, and a boot check for an unreadable stored row | Not decided. They are in `assets/findings-not-carried.md` |
+| D4 | N18: the preset proposals (the length and the echo of the Persona's Inputs, one dry voice for every speaker, the Quantifier question "in the current room", Carla's line "will never speak for Julian") | Proposals. Each needs a trial. The agent stated this on 2026-11-22, and the owner did not object |
 | D19 | An exit to a missing Room, and a duplicate Room id, in the World form | Routed to ticket 02 of the invariant audit, which decides the one World validation |
 
 ## Changes to `CONTEXT.md`

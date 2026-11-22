@@ -11,7 +11,9 @@ memory part of that request, and the tool adds the question as the last user tur
 
 A candidate is a JSON file: a writer prompt, a schedule (``once``: one call over all the
 dropped entries; ``each_cut``: one call at each history cut, which gets the previous memory
-and the entries of that cut) and a position (``before_history`` or ``after_history``).
+and the entries of that cut; ``append_cut``: one call at each history cut, whose scene
+entries are added to a list that is never rewritten, with the opening at its head) and a
+position (``before_history`` or ``after_history``).
 
     python work/wayfinder-maps/long-term-memory-and-state/assets/memory_test.py run none --runs 3
     python work/wayfinder-maps/long-term-memory-and-state/assets/memory_test.py run \\
@@ -115,6 +117,10 @@ class Model:
         self.cost = {"calls": 0, "prompt": 0, "cached": 0, "completion": 0, "failed": 0}
 
     def call(self, messages, max_tokens):
+        return self.call_full(messages, max_tokens)["content"]
+
+    def call_full(self, messages, max_tokens):
+        """The answer text, the finish reason and the token usage of one call."""
         body = {
             "model": self.model,
             "messages": messages,
@@ -160,7 +166,13 @@ class Model:
             self.cost["cached"] += (usage.get("prompt_tokens_details") or {}).get(
                 "cached_tokens", 0
             )
-        return (answer["choices"][0]["message"].get("content") or "").strip()
+        choice = answer["choices"][0]
+        return {
+            "content": (choice["message"].get("content") or "").strip(),
+            "finish_reason": choice.get("finish_reason"),
+            "prompt": usage.get("prompt_tokens", 0),
+            "completion": usage.get("completion_tokens", 0),
+        }
 
 
 # ---------------------------------------------------------------- the pack
@@ -231,6 +243,16 @@ class Pack:
                 seen.append(oldest)
         return seen
 
+    def cast(self):
+        """The names of the World cast and the Persona of this pack, from `data/`."""
+        setup = json.loads((self.folder / "setup.json").read_text(encoding="utf-8"))
+        world_file = ROOT / "data/worlds" / setup["world"] / "world.json"
+        world = json.loads(world_file.read_text(encoding="utf-8"))
+        folder = ROOT / "data/characters" / world["characters_dir"]
+        names = [json.loads(p.read_text(encoding="utf-8"))["name"] for p in sorted(folder.glob("*.json"))]
+        persona = json.loads((ROOT / "data/personas" / f"{setup['persona']}.json").read_text(encoding="utf-8"))
+        return persona["name"], names
+
     def transcript(self, entries):
         return "\n\n".join(f"[#{e['id']} {self.label(e)}]\n{e['text'].strip()}" for e in entries)
 
@@ -286,9 +308,75 @@ def load_candidate(path):
     for field in ("name", "schedule", "position", "writer_system", "writer_user"):
         if field not in candidate:
             raise SystemExit(f"candidate {path} has no `{field}`")
-    if candidate["schedule"] not in ("once", "each_cut"):
-        raise SystemExit("schedule must be `once` or `each_cut`")
+    if candidate["schedule"] not in SCHEDULES:
+        raise SystemExit("schedule must be one of " + ", ".join(f"`{s}`" for s in SCHEDULES))
     return candidate
+
+
+SCHEDULES = ("once", "each_cut", "append_cut")
+# The history space of the trial Connection. One writer call holds at most this many tokens
+# of Messages (the engine rule of `docs/specs/story_memory.md`, Scenario 46.13).
+HISTORY_SPACE = 16000
+# Characters per token of `deepseek-v4.1-flash`: the last five Narration requests of story A
+# have 4.18 to 4.22 characters for each prompt token of their usage (known).
+CHARS_PER_TOKEN = 4.2
+
+
+def tokens_of(text):
+    return round(len(text) / CHARS_PER_TOKEN)
+
+
+def parse_scene_answer(text):
+    """The scene entries of a writer answer, or None when the tool cannot read it.
+
+    The answer is one JSON object `{"entries": [...]}`. A Markdown code fence around it is
+    allowed. Each entry needs `from`, `to` (Message numbers), `time`, `place`, `took_part`
+    (a list), `others` (a list) and `what_happened`.
+    """
+    body = text.strip()
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", body, re.S)
+    if fence:
+        body = fence.group(1)
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    entries = data.get("entries") if isinstance(data, dict) else None
+    if not isinstance(entries, list) or not entries:
+        return None
+    fields = {"from": int, "to": int, "time": str, "place": str, "took_part": list,
+              "others": list, "what_happened": str}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+        for field, kind in fields.items():
+            if not isinstance(entry.get(field), kind):
+                return None
+    return entries
+
+
+def render_scene(entry):
+    others = f" Others: {', '.join(entry['others'])}." if entry["others"] else ""
+    return (
+        f"[#{entry['from']}-#{entry['to']}] {entry['time']}. {entry['place']}. "
+        f"Took part: {', '.join(entry['took_part']) or 'nobody of the cast'}.{others}\n"
+        f"{entry['what_happened'].strip()}"
+    )
+
+
+def render_scene_memory(opening, entries, head, space=None):
+    """The opening word for word, then the scene entries, oldest first.
+
+    With a space (in tokens), the oldest entries leave until the list fits it.
+    """
+    blocks = [render_scene(e) for e in entries]
+    if space:
+        while blocks and tokens_of("\n\n".join(blocks)) > space:
+            blocks.pop(0)
+    text = f"<Opening>\n{opening.strip()}\n</Opening>"
+    if blocks:
+        text += f"\n\n<SceneEntries>\n{head}\n\n" + "\n\n".join(blocks) + "\n</SceneEntries>"
+    return text
 
 
 class Memories:
@@ -329,6 +417,8 @@ class Memories:
             return ""
         if self.candidate["schedule"] == "once":
             return self.stored(f"to-{dropped[-1]['id']}", lambda: self.write(None, dropped))
+        if self.candidate["schedule"] == "append_cut":
+            return self.scene_memory(entry_id)
         memory, start = None, self.pack.story[0]["id"]
         for oldest in self.pack.cuts(entry_id):
             part = [e for e in self.pack.story if start <= e["id"] < oldest]
@@ -337,6 +427,87 @@ class Memories:
             )
             start = oldest
         return memory or ""
+
+    # ------------------------------------------------ the `append_cut` schedule
+
+    def scene_call(self, part, previous_entry):
+        """One writer call over the Messages of one cut. Returns its stored record."""
+        c = self.candidate
+        persona, cast = self.pack.cast()
+        user = c["writer_user"].format(
+            persona=persona,
+            cast=", ".join([persona] + cast),
+            previous_entry=render_scene(previous_entry) if previous_entry else "(none: these are the first Messages of the story)",
+            entries=self.pack.transcript(part),
+            first=part[0]["id"],
+            last=part[-1]["id"],
+        )
+        messages = [{"role": "system", "content": c["writer_system"]}, {"role": "user", "content": user}]
+        answer = self.model.call_full(messages, c.get("max_tokens", 2048))
+        entries = parse_scene_answer(answer["content"])
+        if answer["finish_reason"] == "length":
+            failed = "cut off at the response length"
+        elif entries is None:
+            failed = "the tool cannot read the answer"
+        else:
+            failed = None
+        return {
+            "first": part[0]["id"],
+            "last": part[-1]["id"],
+            "failed": failed,
+            "finish_reason": answer["finish_reason"],
+            "prompt_tokens": answer["prompt"],
+            "completion_tokens": answer["completion"],
+            "answer": answer["content"],
+            "entries": entries if not failed else [],
+        }
+
+    def stored_json(self, key, make):
+        path = self.folder / f"{key}.json"
+        with self.lock:
+            lock = self.locks.setdefault(key, threading.Lock())
+        with lock:
+            if path.exists():
+                return json.loads(path.read_text(encoding="utf-8"))
+            record = make()
+            path.write_text(json.dumps(record, indent=1), encoding="utf-8")
+            return record
+
+    def scene_records(self, entry_id):
+        """The writer record of each cut up to this call, under the rules of the engine.
+
+        A failed call (cut off, or not readable) adds nothing, and its Messages go to the
+        next call. One call holds at most one history space of Messages.
+        """
+        records, entries = [], []
+        start = self.pack.story[0]["id"]
+        for oldest in self.pack.cuts(entry_id):
+            part, size = [], 0
+            for e in self.pack.story:
+                if start <= e["id"] < oldest:
+                    size += tokens_of(e["text"])
+                    if part and size > HISTORY_SPACE:
+                        break
+                    part.append(e)
+            if not part:
+                continue
+            previous = entries[-1] if entries else None
+            record = self.stored_json(
+                f"cut-{oldest}", lambda part=part, previous=previous: self.scene_call(part, previous)
+            )
+            record["cut"] = oldest
+            records.append(record)
+            if not record["failed"]:
+                entries.extend(record["entries"])
+                start = record["last"] + 1
+        return records
+
+    def scene_memory(self, entry_id):
+        entries = [e for r in self.scene_records(entry_id) for e in r["entries"]]
+        head = self.candidate.get("list_head", "")
+        return render_scene_memory(
+            self.pack.story[0]["text"], entries, head, self.candidate.get("list_space")
+        )
 
 
 # ---------------------------------------------------------------- the score
@@ -542,6 +713,114 @@ def report(args):
             print()
 
 
+# ---------------------------------------------------------------- the scene entries
+
+
+def write_scenes(args):
+    """Write the scene entries of every cut of a pack, with no question."""
+    pack = Pack(args.pack)
+    candidate = load_candidate(args.candidate)
+    if candidate["schedule"] != "append_cut":
+        raise SystemExit("`write` needs an `append_cut` candidate")
+    model = Model(args.model, args.temperature, f"ltm16-write-{uuid.uuid4().hex[:8]}")
+    memories = Memories(pack, candidate, model, Path(args.folder))
+    records = memories.scene_records(max(pack.narration))
+    print(f"{len(records)} writer calls, cost {model.cost}")
+
+
+def scene_checks(pack, records):
+    """The form checks of each writer record: ranges and names."""
+    persona, cast = pack.cast()
+    names = {persona, *cast}
+    position = {e["id"]: i for i, e in enumerate(pack.story)}
+    rows = []
+    for record in records:
+        row = {"gaps": [], "overlaps": [], "outside": [], "bad_names": []}
+        if not record["failed"]:
+            expected = record["first"]
+            for entry in record["entries"]:
+                if entry["from"] > expected:
+                    row["gaps"].append(f"#{expected}-#{entry['from'] - 1}")
+                elif entry["from"] < expected:
+                    row["overlaps"].append(f"#{entry['from']}-#{expected - 1}")
+                if entry["from"] not in position or entry["to"] not in position or entry["to"] < entry["from"]:
+                    row["outside"].append(f"#{entry['from']}-#{entry['to']}")
+                expected = max(expected, entry["to"] + 1)
+                row["bad_names"] += [n for n in entry["took_part"] if n not in names]
+            if expected <= record["last"]:
+                row["gaps"].append(f"#{expected}-#{record['last']}")
+            elif expected > record["last"] + 1:
+                row["outside"].append(f"past #{record['last']}")
+        rows.append(row)
+    return rows
+
+
+def scenes_report(args):
+    """The form checks, the sizes and the cost of the scene entries of stored runs."""
+    pack = Pack(args.pack)
+    for folder in args.folders:
+        paths = sorted(Path(folder).glob("cut-*.json"), key=lambda p: int(p.stem.split("-")[1]))
+        records = [json.loads(p.read_text(encoding="utf-8")) for p in paths]
+        for path, record in zip(paths, records):
+            record["cut"] = int(path.stem.split("-")[1])
+        checks = scene_checks(pack, records)
+        print(f"## {folder}\n")
+        print("| Cut | Messages | Message tokens | Failed | Entries | Gaps | Overlaps | Out of range | Names not in cast | Prompt tokens | Answer tokens | Entry tokens (each) | List tokens after the cut |")
+        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        listed = []
+        for path, record, check in zip(paths, records, checks):
+            listed += record["entries"]
+            part = [e for e in pack.story if record["first"] <= e["id"] <= record["last"]]
+            sizes = [tokens_of(render_scene(e)) for e in record["entries"]]
+            list_tokens = tokens_of("\n\n".join(render_scene(e) for e in listed))
+            print(
+                f"| {path.stem} | #{record['first']}-#{record['last']} ({len(part)}) | "
+                f"{sum(tokens_of(e['text']) for e in part)} | {record['failed'] or 'no'} | "
+                f"{len(record['entries'])} | {', '.join(check['gaps']) or '-'} | "
+                f"{', '.join(check['overlaps']) or '-'} | {', '.join(check['outside']) or '-'} | "
+                f"{', '.join(check['bad_names']) or '-'} | {record['prompt_tokens']} | "
+                f"{record['completion_tokens']} | {', '.join(map(str, sizes))} | {list_tokens} |"
+            )
+        print(f"\nOpening tokens: {tokens_of(pack.story[0]['text'])}\n")
+        if args.markdown and folder == args.folders[0]:
+            write_entries_markdown(pack, records, Path(args.markdown))
+
+
+def write_entries_markdown(pack, records, path):
+    """A readable file of the scene entries of one run, for the owner."""
+    lines = [
+        "# The scene entries of story A",
+        "",
+        f"Story: `{pack.folder.resolve().relative_to(ROOT)}`, Messages #{pack.story[0]['id']} to #{pack.story[-1]['id']}.",
+        "The narrator sees the opening and then these entries, oldest first, before the history.",
+        "",
+        "## The opening, word for word",
+        "",
+        "> " + pack.story[0]["text"].strip().replace("\n", "\n> "),
+        "",
+    ]
+    for record in records:
+        lines += [f"## History cut at #{record['cut']}: "
+                  f"Messages #{record['first']} to #{record['last']}", ""]
+        if record["failed"]:
+            lines += [f"The writer call failed: {record['failed']}. Its Messages go to the next call.", ""]
+            continue
+        for entry in record["entries"]:
+            people = ", ".join(entry["took_part"]) or "nobody of the cast"
+            others = f"; also {', '.join(entry['others'])}" if entry["others"] else ""
+            lines += [
+                f"### #{entry['from']} to #{entry['to']}: {entry['time']}, {entry['place']}",
+                "",
+                f"*Took part: {people}{others}.*",
+                "",
+                entry["what_happened"].strip(),
+                "",
+            ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"wrote {path}")
+
+
 # ---------------------------------------------------------------- the commands
 
 
@@ -567,7 +846,24 @@ def main():
     regrade.add_argument("--model", default="deepseek-v4.1-flash")
     check = sub.add_parser("check", help="print the call, the cut and the dropped range of each question")
     check.add_argument("--pack", default=str(DEFAULT_PACK))
+    write = sub.add_parser("write", help="write the scene entries of every cut of a pack, with no question")
+    write.add_argument("candidate")
+    write.add_argument("folder")
+    write.add_argument("--pack", default=str(DEFAULT_PACK))
+    write.add_argument("--model", default="deepseek-v4.1-flash")
+    write.add_argument("--temperature", type=float, default=0.0)
+    scenes = sub.add_parser("scenes", help="the form checks, sizes and cost of stored scene entries")
+    scenes.add_argument("folders", nargs="+", help="memory folders of `append_cut` runs")
+    scenes.add_argument("--pack", default=str(DEFAULT_PACK))
+    scenes.add_argument("--markdown", help="also write the entries of the first folder as Markdown")
     args = parser.parse_args()
+
+    if args.command == "write":
+        write_scenes(args)
+        return
+    if args.command == "scenes":
+        scenes_report(args)
+        return
 
     if args.command == "report":
         report(args)

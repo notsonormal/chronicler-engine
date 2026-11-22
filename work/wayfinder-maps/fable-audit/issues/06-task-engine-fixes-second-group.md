@@ -6,9 +6,9 @@ Blocked by: —
 
 ## Question
 
-Put the changes below in place (owner, 2026-11-10, D19, D20 and D21 of [the decisions](../decisions.md)). They are the rows N1 to N12 and N14 of [the list of findings that were not carried](../assets/findings-not-carried.md). The owner accepted them as a group and did not read each one. So a change that needs a choice of product behaviour stops, and the choice goes to the owner.
+Put the changes below in place (owner, 2026-11-10, D19, D20, D21 and D25 of [the decisions](../decisions.md)). They are the rows N1 to N12 and N14 of [the list of findings that were not carried](../assets/findings-not-carried.md). The owner accepted them as a group and did not read each one. So a change that needs a choice of product behaviour stops, and the choice goes to the owner.
 
-The changes are in five groups, and one agent can take one group. The owner decided the two changes of group E one by one.
+The changes are in five groups, and one agent can take one group. The owner decided the three changes of group E one by one.
 
 ### Group A: the prompt and the model call
 
@@ -73,7 +73,7 @@ The changes are in five groups, and one agent can take one group. The owner deci
     - `libsqlite3-sys` 0.32.0 has RUSTSEC-2026-0459. The fix is `rusqlite` 0.41, which needs Rust 1.89, and `rust-toolchain.toml` pins 1.88.0. Do not change the toolchain here. Write the advisory into `ENVIRONMENT.md`.
     - An audit step in the gate needs `cargo-audit` on the machine and a network call. Check both. If one is missing, say so in `## Answer` and add no step.
 
-### Group E: two decisions of the owner
+### Group E: three decisions of the owner
 
 15. **A Quantifier answer that the engine cannot use raises the Quantifier banner (D20).**
     - Ran it: the Quantifier answered "I cannot help with that request." on both attempts. The Room and the Characters present stayed, the status read "Ready", and no banner showed. An HTTP 500 of the same call does raise the banner "Quantifier failed — keeping the Room and the Characters present".
@@ -89,6 +89,12 @@ The changes are in five groups, and one agent can take one group. The owner deci
     - The site: `WorldCatalogue::update_world` (`application/world_catalogue.rs:52`). [Ticket 07 of the invariant audit](../../invariant-audit/issues/07-task-all-or-nothing-world-edit-and-reset.md) puts the World edit in one transaction (storage-04). The check and the write belong in the same unit. If that ticket is not done, say in `## Answer` what gap stays.
     - A Job that runs during the edit can move its Game after the check. Say in `## Answer` how the change handles that case, or that it does not.
     - The failing test first: the run above as an HTTP test. The answer is a 400, and the stored map still has `yard`.
+17. **A cut answer of the Quantifier or of the Options Agent is a failed attempt (D25).**
+    - Read it, not run: the model runs out of tokens in the middle of a Quantifier answer, for example `{"characters_present": ["carla", "jezeb`. The text is not valid JSON, so the parser searches it for known ids (`extract_character_ids_from_text`, `quantifier/utils/parser.rs`). It finds `carla` and accepts the reading with Medium confidence. Jezebel leaves the scene, and nothing says so. A cut list of Options gives fewer Options, or one that stops in the middle of a sentence.
+    - What exists: the result of a call carries the fact since commit `a9801e4a` (`LlmCallResult.stopped_at_limit`, `application/ports/llm_provider.rs`). The story memory writer reads it (`agents/memory/agent.rs:43`). The Quantifier and the Options Agent do not.
+    - The change: in `quantify_room_with_llm_call` (`quantifier/utils/orchestration.rs`) and in `options_call_attempt` (`options/utils/orchestration.rs`), an answer with `stopped_at_limit` is not parsed. It counts as a failed attempt, so the second attempt runs.
+    - When both attempts are cut, the result is a failure of the role. For the Quantifier, that is the banner of change 15. For the Options Agent, that is the dock notice that a failed Options call has today. The failure sentence says that the answer limit was reached, because only a larger limit of the Connection fixes it.
+    - The failing tests first: a scripted Quantifier answer that is cut and names one of two present Characters, then a complete answer that names both. The Swipe state holds both Characters, and the model got two calls. The same shape for the Options Agent: a cut list, then a complete list.
 
 ## Rules for every change
 
@@ -101,12 +107,12 @@ The changes are in five groups, and one agent can take one group. The owner deci
 
 ## Not in scope
 
-- **The form accepts the provider `mock` (part of N11).** Five tests in `tests/http/settings_connection_form.rs` send `conn_provider=mock` through the form. So the refusal is not a local change: the tests need another way to make a Connection first.
-- **A JSON mode for the Quantifier call (part of N10).** A provider that does not know `response_format` can refuse the request. No provider was tested, and all 602 Quantifier answers of the three trials were valid JSON.
+- **The form accepts the provider `mock` (part of N11). D24: no change.** Five tests in `tests/http/settings_connection_form.rs` send `conn_provider=mock` through the form. So the refusal is not a local change: the tests need another way to make a Connection first.
+- **A JSON mode for the Quantifier call (part of N10). D24: no change.** A provider that does not know `response_format` can refuse the request. No provider was tested, and all 602 Quantifier answers of the three trials were valid JSON.
 - **An exit to a Room that does not exist, and the same Room id twice (part of N4).** They belong to the one World validation of [ticket 02 of the invariant audit](../../invariant-audit/issues/02-grilling-runtime-world-validation.md). A note there names them.
 - A change to the status line for change 15 (D3: "Ready" stays).
 - N13 (two wrong texts): [ticket 05](05-task-text.md) holds them.
-- N15 to N18 of the list. The owner has not decided on them.
+- N15 of the list: [ticket 07](07-task-pin-what-the-mutation-run-missed.md) holds it. N16 to N18: see the state at the top of the list.
 
 ## What already exists
 
