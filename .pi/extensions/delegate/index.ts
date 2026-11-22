@@ -27,11 +27,14 @@ import {
 	childCommand,
 	formatResult,
 	type JobStatus,
+	MAX_RUNNING_JOBS,
 	mergeRoles,
 	modelLabel,
 	pickModel,
 	pickSplit,
+	queueNotice,
 	resultStatus,
+	startsNow,
 	summarizeEntries,
 	taskText,
 } from "./lib.ts";
@@ -141,6 +144,10 @@ function parentMode(pi) {
 	const roles = loadRoles(process.cwd());
 	if (!roles.size) return;
 	const jobs = new Map();
+	// Tasks whose pane is opening: they hold a place, and are reachable by id.
+	const starting = new Map();
+	// Tasks that wait for a free place, oldest first.
+	const pending = [];
 	let ctxRef;
 	let timer;
 	let polling = false;
@@ -149,18 +156,86 @@ function parentMode(pi) {
 
 	const save = (job) => writeJson(path.join(job.dir, "job.json"), job);
 
-	const finish = (job, status: JobStatus, content) => {
-		if (!jobs.has(job.id)) return;
+	const heldJobs = () => [...pending, ...starting.values(), ...jobs.values()];
+	const findJob = (id) => jobs.get(id) ?? starting.get(id) ?? pending.find((job) => job.id === id);
+	const freePlace = () => startsNow(jobs.size + starting.size);
+
+	const startJob = async (job) => {
+		// Serialized, so that parallel calls never split the same pane.
+		const opened = paneQueue.then(() => openPane(job.cwd));
+		paneQueue = opened.catch(() => {});
+		const paneId = await opened;
+		// A cancel during the pane open leaves nothing to run.
+		if (job.settled) {
+			await herdr("pane", "close", paneId).catch(() => {});
+			throw new Error("cancelled before it started");
+		}
+		const pick = pickModel(job.role, readState(), Date.now() / 1000);
+		job.role = pick.spare ? { ...job.role, model: pick.model } : job.role;
+		job.pick = pick;
+		const command = childCommand({
+			jobDir: job.dir,
+			role: job.role,
+			sessionId: job.sessionId,
+			resume: job.resume,
+			sessionName: `delegate · ${job.role.name} · ${job.label}`,
+			taskFile: path.join(job.dir, "task.md"),
+		});
+		await herdr("pane", "rename", paneId, job.label).catch(() => {});
+		// Recorded before the run, so that a restart mid-start cannot start it twice.
+		job.paneId = paneId;
+		job.status = "starting";
+		save(job);
+		await herdr("pane", "run", paneId, command);
+		job.status = "running";
+		job.startedAt = Date.now();
+		save(job);
+		jobs.set(job.id, job);
+		watch();
+		return paneId;
+	};
+
+	// Holds a place while a task starts, and gives the place back when it cannot.
+	const startReserved = async (job) => {
+		starting.set(job.id, job);
+		try {
+			return await startJob(job);
+		} finally {
+			if (starting.get(job.id) === job) starting.delete(job.id);
+			startWaiting();
+		}
+	};
+
+	const startWaiting = () => {
+		while (pending.length && freePlace()) {
+			const job = pending.shift();
+			startReserved(job).catch((error) =>
+				finish(job, "failed", `Delegate failed · ${job.label} (${job.id}): it could not start. ${error.message}`),
+			);
+		}
+	};
+
+	// Drops a task from every queue, so that nothing can start it again.
+	const release = (job) => {
+		job.settled = true;
 		jobs.delete(job.id);
+		starting.delete(job.id);
+		const at = pending.indexOf(job);
+		if (at >= 0) pending.splice(at, 1);
+	};
+
+	const finish = (job, status: JobStatus, content) => {
+		if (job.settled) return;
+		release(job);
 		job.status = status;
 		save(job);
 		pi.sendMessage(
 			{ customType: "delegate-result", content, display: true, details: { id: job.id, status } },
 			{ triggerTurn: true, deliverAs: "followUp" },
 		);
+		startWaiting();
 	};
 
-	// Finishes the job if its child left a result or an exit code.
 	const settleFromFiles = (job) => {
 		const resultFile = path.join(job.dir, "result.json");
 		const result = readJson(resultFile);
@@ -252,15 +327,25 @@ function parentMode(pi) {
 		if (!fs.existsSync(JOBS_ROOT)) return;
 		for (const id of fs.readdirSync(JOBS_ROOT)) {
 			const job = readJson(path.join(JOBS_ROOT, id, "job.json"));
-			if (job?.status === "running" && job.parentSessionId === parent) jobs.set(job.id, job);
+			if (job?.parentSessionId !== parent) continue;
+			if (job.status === "running") jobs.set(job.id, job);
+			else if (job.status === "queued") pending.push(job);
+			else if (job.status === "starting") {
+				// The parent stopped while the pane opened, so the run was never recorded.
+				finish(job, "failed", `Delegate failed · ${job.label} (${job.id}): the parent stopped while its pane was opening, so it was not restarted. Pane ${job.paneId} stays open.`);
+			}
 		}
+		pending.sort((a, b) => a.queuedAt - b.queuedAt);
 		if (jobs.size) watch();
+		startWaiting();
 	});
 
 	pi.on("session_shutdown", () => {
 		if (timer) clearInterval(timer);
 		timer = undefined;
 		jobs.clear();
+		starting.clear();
+		pending.length = 0;
 	});
 
 	const roleList = [...roles.values()]
@@ -274,7 +359,7 @@ function parentMode(pi) {
 		name: "delegate",
 		label: "Delegate",
 		description: [
-			"Start an agent in its own herdr pane on one task. The call returns at once. The agent's last message comes back later as a delegate-result message, which starts your next turn. Calls in one message run in parallel.",
+			`Start an agent in its own herdr pane on one task. The call returns at once. The agent's last message comes back later as a delegate-result message, which starts your next turn. Calls in one message start together, but at most ${MAX_RUNNING_JOBS} agents run at once; the rest wait in a queue and start in the order they were asked for, and the answer of such a task says it is queued.`,
 			"The agent sees `task`, `files` and the project instructions, but not this conversation.",
 			"Roles (model, thinking, tools):",
 			roleList,
@@ -294,53 +379,54 @@ function parentMode(pi) {
 			ctxRef = ctx;
 			const roleDef = roles.get(params.role);
 			if (!roleDef) throw new Error(`Unknown role ${params.role}`);
-			const pick = pickModel(roleDef, readState(), Date.now() / 1000);
-			const role = pick.spare ? { ...roleDef, model: pick.model } : roleDef;
-			const running = params.resume && [...jobs.values()].find((j) => j.sessionId === params.resume);
-			if (running) throw new Error(`Session ${params.resume} is still running as ${running.label} (${running.id}).`);
+			const running = params.resume && heldJobs().find((j) => j.sessionId === params.resume);
+			if (running) {
+				throw new Error(`Session ${params.resume} is still running or queued as ${running.label} (${running.id}).`);
+			}
 			const id = randomUUID().slice(0, 8);
 			const dir = path.join(JOBS_ROOT, id);
 			fs.mkdirSync(dir, { recursive: true });
-			const taskFile = path.join(dir, "task.md");
-			fs.writeFileSync(taskFile, taskText(params.task, params.files));
-			const label = params.label || `${role.name}-${id}`;
-			const sessionId = params.resume || randomUUID();
-			// Serialized, so that parallel calls never split the same pane.
-			const opened = paneQueue.then(() => openPane(ctx.cwd));
-			paneQueue = opened.catch(() => {});
-			const paneId = await opened;
-			const command = childCommand({
-				jobDir: dir,
-				role,
-				sessionId,
-				resume: Boolean(params.resume),
-				sessionName: `delegate · ${role.name} · ${label}`,
-				taskFile,
-			});
-			await herdr("pane", "rename", paneId, label).catch(() => {});
-			await herdr("pane", "run", paneId, command);
+			fs.writeFileSync(path.join(dir, "task.md"), taskText(params.task, params.files));
+			const label = params.label || `${roleDef.name}-${id}`;
 			const job = {
 				id,
 				label,
-				role,
-				sessionId,
-				paneId,
+				role: roleDef,
+				sessionId: params.resume || randomUUID(),
 				dir,
-				status: "running" as JobStatus,
+				cwd: ctx.cwd,
+				resume: Boolean(params.resume),
+				status: "queued" as JobStatus,
 				parentSessionId: ctx.sessionManager.getSessionId(),
-				startedAt: Date.now(),
+				queuedAt: Date.now(),
 			};
-			save(job);
-			jobs.set(id, job);
-			watch();
+			if (!freePlace()) {
+				pending.push(job);
+				save(job);
+				return {
+					content: [{ type: "text", text: queueNotice(label, id, pending.length) }],
+					details: { id, role: roleDef.name, sessionId: job.sessionId, queued: true },
+				};
+			}
+			let paneId;
+			try {
+				paneId = await startReserved(job);
+			} catch (error) {
+				// A cancel already recorded its own status.
+				if (!job.settled) {
+					job.status = "failed";
+					save(job);
+				}
+				throw error;
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: `Started ${label} (${id}) as ${role.name} on ${role.model}${roleDef.spareModel ? ` (spare capacity ${pick.spare ? "used" : "not used"}: ${pick.reason})` : ""} in pane ${paneId}. The result arrives as a message.`,
+						text: `Started ${label} (${id}) as ${roleDef.name} on ${job.role.model}${roleDef.spareModel ? ` (spare capacity ${job.pick.spare ? "used" : "not used"}: ${job.pick.reason})` : ""} in pane ${paneId}. The result arrives as a message.`,
 					},
 				],
-				details: { id, paneId, role: role.name, sessionId },
+				details: { id, paneId, role: roleDef.name, sessionId: job.sessionId },
 			};
 		},
 	});
@@ -348,16 +434,18 @@ function parentMode(pi) {
 	pi.registerTool({
 		name: "delegate_cancel",
 		label: "Delegate cancel",
-		description: "Stop a running delegate by its id and close its pane. No result message follows.",
+		description: "Stop a running or queued delegate by its id and close its pane. No result message follows.",
 		parameters: Type.Object({ id: Type.String() }),
 		async execute(_id, params) {
-			const job = jobs.get(params.id);
+			const job = findJob(params.id);
 			if (!job) throw new Error(`No running delegate ${params.id}`);
-			jobs.delete(job.id);
+			release(job);
 			job.status = "cancelled";
 			save(job);
-			await herdr("pane", "close", job.paneId).catch(() => {});
-			return { content: [{ type: "text", text: `Cancelled ${job.label} (${job.id}).` }], details: { id: job.id } };
+			if (job.paneId) await herdr("pane", "close", job.paneId).catch(() => {});
+			startWaiting();
+			const where = job.paneId ? "" : " It had not started.";
+			return { content: [{ type: "text", text: `Cancelled ${job.label} (${job.id}).${where}` }], details: { id: job.id } };
 		},
 	});
 }

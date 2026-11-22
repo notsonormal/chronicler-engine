@@ -1,6 +1,6 @@
-// Pure helpers of the delegate extension: roles, the child command, the
-// result text and the pane split. index.ts holds the Pi and herdr wiring.
-// Tests: node --test .pi/extensions/delegate/lib.test.ts
+// Pure helpers of the delegate extension: roles, the run limit, the child
+// command, the result text and the pane split. index.ts holds the Pi and herdr
+// wiring. Tests: node --test .pi/extensions/delegate/lib.test.ts
 
 import { FIVE_HOUR_S, type LimitState, pct, SEVEN_DAY_S, windowEnded } from "../rate-limit-wait/state.ts";
 
@@ -13,7 +13,19 @@ export interface Role {
 	spareModel?: string;
 }
 
-export type JobStatus = "running" | "done" | "failed" | "cancelled";
+export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+
+// One place count for every role: further tasks wait in a queue, oldest first.
+export const MAX_RUNNING_JOBS = 5;
+
+export function startsNow(taken: number): boolean {
+	return taken < MAX_RUNNING_JOBS;
+}
+
+// The answer to a task that waits: its place in the line, counted from 1.
+export function queueNotice(label: string, id: string, place: number): string {
+	return `Queued ${label} (${id}) at place ${place}: all ${MAX_RUNNING_JOBS} agent places are busy. It starts when one ends, and its result arrives as a message.`;
+}
 
 const unquote = (value: string) => value.trim().replace(/^["']|["']$/g, "");
 

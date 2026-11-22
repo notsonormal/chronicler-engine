@@ -11,7 +11,9 @@ import {
 	parseRole,
 	pickModel,
 	pickSplit,
+	queueNotice,
 	resultStatus,
+	startsNow,
 	summarizeEntries,
 	taskText,
 } from "./lib.ts";
@@ -222,4 +224,17 @@ test("pickModel keeps the base model when the 5h reset time is unknown", () => {
 	// A state with no 5h reset says nothing about the 5h window, so the spare
 	// model has no proven room.
 	assert.equal(pickModel(spareRole, limits(0.5, 0.6, { fiveReset: undefined }), NOW).model, "go/x");
+});
+
+test("startsNow holds five agents and queues the rest", () => {
+	assert.equal(startsNow(0), true);
+	assert.equal(startsNow(4), true);
+	assert.equal(startsNow(5), false);
+	assert.equal(startsNow(6), false);
+});
+
+test("queueNotice says the task waits, its place and that the limit is full", () => {
+	const text = queueNotice("scout-a1b2", "a1b2", 2);
+	assert.match(text, /^Queued scout-a1b2 \(a1b2\) at place 2: all 5 agent places are busy\./);
+	assert.match(text, /It starts when one ends, and its result arrives as a message\.$/);
 });
